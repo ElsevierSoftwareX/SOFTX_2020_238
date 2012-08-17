@@ -1,3 +1,29 @@
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
+
+# controls psd segments, should set it to the analysis time intended
+IFOS = H1 L1 H2
+PSDSTART = 869622409
+PSDSTOP =  870227209
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+
+# reference psd file names
+psd_suffix := _psd.xml.gz
+PSD_FILES  := $(addsuffix $(psd_suffix),$(IFOS))
+
+TRIM = 16
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+# data for lalapps_tmpltbank, note this is just to be able to run the program, the psd is replaced withe the design psd
 START = 871147452
 STOP =  871247452
 IFOS = H
@@ -11,22 +37,17 @@ LOW_FREQUENCY_CUTOFF = 40.0
 HIGH_PASS_FREQ = 30.0
 HIGH_FREQUENCY_CUTOFF = 2048.0
 SAMPLE_RATE = 4096
-NUM_SPLIT_TEMPLATES = 500
-MM = 0.97
+NUM_SPLIT_TEMPLATES = 100
 
+MM = 0.97
 EPSILON = 0.02
 
-H1BASENAME = mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4
-H2BASENAME = mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4
-L1BASENAME = mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4
-
-all : dag
+all : dag plots
 
 frame.H.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
 
-
-H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
+H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache 
 	lalapps_tmpltbank \
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
@@ -67,22 +88,47 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--order twoPN \
 		--verbose \
 		--spectrum-type LIGO \
+		&& gzip H1-TMPLTBANK-871154847-2048.xml \
 		&& gstlal_bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 		&& gstlal_bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
-		&& gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
+                && gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 
-${H1BASENAME}.xml.gz :
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output ${H1BASENAME}.xml.gz ${H1BASENAME}.txt
+reference_psd.xml.gz : $(PSD_FILES)
+	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
 
-${H2BASENAME}.xml.gz :
-	gstlal_psd_xml_from_asd_txt --instrument H2 --output ${H2BASENAME}.xml.gz ${H2BASENAME}.txt
+V1_psd.xml.gz : frame.cache segments.xml
+	gstlal_reference_psd --channel h_16384Hz --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument V1 --write-psd $@ --verbose
 
-${L1BASENAME}.xml.gz :
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output ${L1BASENAME}.xml.gz ${L1BASENAME}.txt
+%_psd.xml.gz : frame.cache segments.xml
+	gstlal_reference_psd --channel LSC-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
 
-reference_psd.xml.gz: ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz
-	ligolw_add --output reference_psd.xml.gz ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz
 
+V1_segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=V1:ITF_SCIENCEMODE --result-name=datasegments > V1segments.xml
+	ligolw_segments_compat V1segments.xml
+	gstlal_segments_trim V1segments.xml --trim $(TRIM) --output $@
+
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=$*:Science --result-name=datasegments > $*segments.xml
+	ligolw_segments_compat $*segments.xml
+	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
+
+V1_frame.cache:
+	ligo_data_find -o V -t HrecV2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > V1_frame.cache
+
+%_frame.cache:
+	#FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	ligo_data_find -o $(OBS) -t $*_RDS_C03_L2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+
+segments.xml: $(SEGMENTS_FILES)
+	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :
 	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
@@ -90,14 +136,17 @@ sql :
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
 	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
-dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml.gz sql
-	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
-	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
+dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql
+	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
+	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H2_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
 	gstlal_inspiral_iir_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H1_bank
 	gstlal_inspiral_iir_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H2_bank
 	gstlal_inspiral_iir_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name L1_bank
-	cat H1_bank.dag H2_bank.dag L1_bank.dag > bank.dag
+	cat H2_bank.dag H1_bank.dag L1_bank.dag > bank.dag
+
+plots : reference_psd.xml.gz
+	gstlal_plot_psd reference_psd.xml.gz psd_plot
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml *.xml.gz logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache *_psd.xml.gz *segments.xml *_segmentspadded.xml
