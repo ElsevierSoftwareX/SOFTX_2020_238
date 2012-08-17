@@ -143,6 +143,7 @@ def parse_command_line():
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
 	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 	parser.add_option("--stagger", action = "store_true", help = "A hacky way to stagger the number of samples used in the SVD if you have a broad mass range and the cache is organized by chirp mass from small to big.  The first half gets 1024 the second gets 2048. This helps balance the number of slices with the number of principle components when the template duration varies wildly through the cache.  Using this option disables the samples-* options.  FIXME this will be removed once we know how to automate this in a better way.")
+	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9995, help = "set the SVD tolerance, default 0.9995")
 	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
 	parser.add_option("--output-name", help = "set the base name of the output, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
@@ -183,9 +184,9 @@ for i, f in enumerate(files):
 		clipright = 0
 	if options.stagger:
 		samps = stagger[int(float(i) / len(files) * len(stagger))]
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3], autocorrelation_length = options.autocorrelation_length, bank_id = i)
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3], autocorrelation_length = options.autocorrelation_length, bank_id = i)
 	else:
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = i)
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = i)
 
 dag.write_sub_files()
 dag.write_dag()
