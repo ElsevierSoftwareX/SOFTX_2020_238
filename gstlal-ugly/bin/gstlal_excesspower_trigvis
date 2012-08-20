@@ -42,6 +42,7 @@ from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue import segments
 from glue.lal import LIGOTimeGPS
+from glue.lal import Cache
 
 from optparse import OptionParser
 
@@ -49,6 +50,7 @@ parser = OptionParser()
 parser.add_option("-c", "--channels", action="store", help="Comma separated list of channels. Will plot triggers only from the channels indicated. Otherwise, all channels will be plotted.")
 parser.add_option("-o", "--output-file", action="store", help="File to output image to. Default: trigmap.png")
 parser.add_option("-i", "--instruments", action="store", help="Comma separates list of instruments. Will plot channels only from the instruments indicated. Otherwise, all no instrument selection is done.")
+parser.add_option("-I", "--input-cache", action="store", help="Use this argument as the file list rather than specifying on the command line.")
 parser.add_option("-s", "--gps-start", action="store", type=float, help="Plot triggers only after indicated gps time. Default is to infer from triggers.")
 parser.add_option("-e", "--gps-end", action="store", type=float, help="Plot triggers only before indicated gps time. Default is to infer from triggers.")
 parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 32.")
@@ -89,6 +91,9 @@ if( opts.overlay_segments is not None ):
 	segment_defs = opts.overlay_segments.split(",")
 else:
 	segment_defs = None
+
+if( opts.input_cache is not None ):
+	args = Cache.fromfile( open(opts.input_cache) ).pfnlist()
 
 ######## HACK ALERT ###########
 # This is only done so that sim events can be treated more like SnglBurst entries
