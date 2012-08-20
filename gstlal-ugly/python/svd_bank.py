@@ -124,7 +124,8 @@ class BankFragment(object):
 
 		if self.singular_values is not None:
 			self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
-
+		else:
+			self.sum_of_squares_weights = None
 		if verbose:
 			print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 			print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
@@ -160,7 +161,10 @@ class Bank(object):
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
 			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity_transform = identity_transform, verbose = verbose)
 
-		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
+		if bank_fragment.sum_of_squares_weights is not None:
+			self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
+		else:
+			self.gate_threshold = 0
 		if verbose:
 			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
 
@@ -281,7 +285,8 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 		el.appendChild(array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
 		if frag.singular_values is not None:
 			el.appendChild(array.from_array('singular_values', frag.singular_values))
-		el.appendChild(array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
+		if frag.sum_of_squares_weights is not None:
+			el.appendChild(array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
 
 		# Add bank fragment container to root container
 		root.appendChild(el)
@@ -342,8 +347,10 @@ def read_bank(filename, verbose = False):
 			frag.singular_values = array.get_array(el, 'singular_values').array
 		except ValueError:
 			frag.singular_values = None
-		frag.sum_of_squares_weights = array.get_array(el, 'sum_of_squares_weights').array
-
+		try:
+			frag.sum_of_squares_weights = array.get_array(el, 'sum_of_squares_weights').array
+		except ValueError:
+			frag.sum_of_squares_weights = None
 		bank_fragments.append(frag)
 
 	bank.bank_fragments = bank_fragments
