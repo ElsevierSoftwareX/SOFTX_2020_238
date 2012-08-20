@@ -613,6 +613,10 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	rates = sorted(bank.get_rates())
 	output_rate = max(rates)
 
+	# work out the upsample factors for the attack and hold calculations below
+	upsample_factor = dict((rate, rates[i+1] / rate) for i, rate in list(enumerate(rates))[:-1])
+	upsample_factor[output_rate] = 0
+
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
@@ -622,6 +626,21 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 
 	branch_heads = dict((rate, set()) for rate in rates)
 	for bank_fragment in bank.bank_fragments:
+		# The attack and hold width has three parts
+		#
+		# 1) The audio resampler filter: 16 comes from the size of
+		# the audioresampler filter in samples for the next highest
+		# rate at quality 1. Note it must then be converted to the size
+		# at the current rate using the upsample_factor dictionary
+		# (which is 0 if you are at the max rate).
+		#
+		# 2) The chisq latency.  You must have at least latency number
+		# of points before and after (at the maximum sample rate) to
+		# compute the chisq
+		#
+		# 3) A fudge factor to get the width of the peak.  FIXME this
+		# is just set to 1/8th of a second
+		peak_half_width = upsample_factor[bank_fragment.rate] * 16 + int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))) + int(math.ceil(bank_fragment.rate / 8.))
 		branch_heads[bank_fragment.rate].add(mkLLOIDbranch(
 			pipeline,
 			# FIXME:  the size isn't ideal:  the correct value
@@ -633,8 +652,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			32 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for 1/2 the audioresample filter with qual=4 FIXME tune these windows
-			32 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for 1/2 the audioresample filter with qual=4
+			peak_half_width,
+			peak_half_width,
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
