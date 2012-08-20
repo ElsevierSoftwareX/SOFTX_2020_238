@@ -67,7 +67,7 @@ opts, args = parser.parse_args()
 
 plotting_types = ["tiles", "marker", "both"]
 if( opts.plotting_type not in plotting_types ):
-	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types)) )
+	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types))
 	exit()
 
 plot_sim = False
