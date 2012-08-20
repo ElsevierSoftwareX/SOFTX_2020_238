@@ -122,7 +122,8 @@ class BankFragment(object):
 
 		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance, identity = identity_transform)
 
-		self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
+		if self.singular_values is not None:
+			self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
 
 		if verbose:
 			print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
@@ -264,7 +265,8 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 		el = ligolw.LIGO_LW()
 
 		# Apply clipping option
-		frag.mix_matrix = frag.mix_matrix[:,clipleft*2:clipright*2]
+		if frag.mix_matrix is not None:
+			frag.mix_matrix = frag.mix_matrix[:,clipleft*2:clipright*2]
 		frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 		# Add scalar params
@@ -274,9 +276,11 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 
 		# Add arrays
 		el.appendChild(array.from_array('chifacs', frag.chifacs))
-		el.appendChild(array.from_array('mix_matrix', frag.mix_matrix))
+		if frag.mix_matrix is not None:
+			el.appendChild(array.from_array('mix_matrix', frag.mix_matrix))
 		el.appendChild(array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
-		el.appendChild(array.from_array('singular_values', frag.singular_values))
+		if frag.singular_values is not None:
+			el.appendChild(array.from_array('singular_values', frag.singular_values))
 		el.appendChild(array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
 
 		# Add bank fragment container to root container
@@ -329,9 +333,15 @@ def read_bank(filename, verbose = False):
 
 		# Read arrays
 		frag.chifacs = array.get_array(el, 'chifacs').array
-		frag.mix_matrix = array.get_array(el, 'mix_matrix').array
+		try:
+			frag.mix_matrix = array.get_array(el, 'mix_matrix').array
+		except ValueError:
+			frag.mix_matrix = None
 		frag.orthogonal_template_bank = array.get_array(el, 'orthogonal_template_bank').array
-		frag.singular_values = array.get_array(el, 'singular_values').array
+		try:
+			frag.singular_values = array.get_array(el, 'singular_values').array
+		except ValueError:
+			frag.singular_values = None
 		frag.sum_of_squares_weights = array.get_array(el, 'sum_of_squares_weights').array
 
 		bank_fragments.append(frag)
