@@ -172,7 +172,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# Add a peak finder on the control signal sample number
 	#
 
-	if control_peak_samples is not None:
+	if control_peak_samples > 0:
 		src = pipeparts.mkpeak(pipeline, src, control_peak_samples)
 
 	#
@@ -547,7 +547,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# aggregator
 	#
 
-	if control_snk is not None:
+	if control_snk is not None and control_src is not None:
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
 		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights), max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare" % logname)
@@ -559,23 +559,22 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
-	#
-	# use sum-of-squares aggregate as gate control for orthogonal SNRs
-	#
-	# FIXME This queue has to be large for the peak finder on the control
-	# signal if that element gets smarter maybe this could be made smaller
-	# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
-	#
+		#
+		# use sum-of-squares aggregate as gate control for orthogonal SNRs
+		#
+		# FIXME This queue has to be large for the peak finder on the control
+		# signal if that element gets smarter maybe this could be made smaller
+		# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
+		#
+		# FIXME since peakfinding is done, or control is based on
+		# injections only, we ignore the bank.gate_threshold parameter
+		# and just use 1e-100
 
-	# if control_peak_time is None, set it to 0
-	if control_peak_time is None:
-		control_peak_time = 0
-
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)))
-	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
+		src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)), threshold = 1e-100, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)))
+		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
-	# buffer orthogonal SNRs
+	# buffer orthogonal SNRs / or actual SNRs if SVD is not used
 	#
 	# FIXME:  teach the collectpads object not to wait for buffers on pads
 	# whose segments have not yet been reached by the input on the other
@@ -589,8 +588,9 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# reconstruct physical SNRs
 	#
 
-	src = pipeparts.mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix)
-	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_matrixmixer" % logname)
+	if bank_fragment.mix_matrix is not None:
+		src = pipeparts.mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix)
+		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_matrixmixer" % logname)
 
 	#
 	# done
@@ -887,13 +887,16 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# build gate control branches
 	#
 
-	control_branch = {}
-	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-		if instrument != "H2":
-			control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
+	if control_peak_time > 0 or inj_seg_list is not None:
+		control_branch = {}
+		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+			if instrument != "H2":
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
+	else:
+		control_branch = None
 	#
 	# construct trigger generators
 	#
@@ -901,10 +904,13 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	triggersrcs = set()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-		if instrument != "H2":
-			control_snksrc = control_branch[(instrument, bank.bank_id)]
+		if control_branch is not None:
+			if instrument != "H2":
+				control_snksrc = control_branch[(instrument, bank.bank_id)]
+			else:
+				control_snksrc = (None, control_branch[("H1", bank.bank_id)][1])
 		else:
-			control_snksrc = (None, control_branch[("H1", bank.bank_id)][1])
+			control_snksrc = (None, None)
 		if chisq_type == 'timeslicechisq':
 			snrslices = {}
 		else:
