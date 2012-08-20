@@ -531,97 +531,6 @@ FROM
 					axes.set_ylim((min(minx, miny), max(maxx, maxy)))
 				yield fig, name % (waveform), False
 
-#
-# =============================================================================
-#
-#                              MVSC-related Plots
-#
-# =============================================================================
-#
-
-class MVSCPlots(object):
-	def __init__(self):
-		self.timeslide_likelihood = []
-		self.injection_likelihood = []
-		self.zerolag_likelihood = []
-		self.timeslide_combined_eff_snr = []
-		self.injection_combined_eff_snr = []
-		self.zerolag_combined_eff_snr = []
-
-	def add_contents(self,contents):
-		if contents.sim_inspiral_table:
-			for likelihood, combined_eff_snr in contents.connection.cursor().execute("""
-SELECT
-	insp_coinc_event.likelihood, 
-	coinc_inspiral.snr
-FROM
-	coinc_inspiral 
-	JOIN coinc_event_map AS mapC ON (mapC.event_id == coinc_inspiral.coinc_event_id)
-	JOIN coinc_event_map AS mapD ON (mapD.coinc_event_id == mapC.coinc_event_id)
-	JOIN sim_inspiral ON (sim_inspiral.simulation_id == mapD.event_id)
-	JOIN coinc_event AS sim_coinc_event ON (sim_coinc_event.coinc_event_id == mapD.coinc_event_id)
-	JOIN coinc_event AS insp_coinc_event ON (insp_coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)
-WHERE
-	sim_coinc_event.coinc_def_id == 'coinc_definer:coinc_def_id:2'
-	AND insp_coinc_event.coinc_def_id == 'coinc_definer:coinc_def_id:0'
-	AND mapC.table_name == 'coinc_event'
-	AND mapD.table_name == 'sim_inspiral'
-			"""):
-				self.injection_likelihood.append(likelihood)
-				self.injection_combined_eff_snr.append(combined_eff_snr)
-		else:
-			for likelihood, combined_eff_snr, is_background in contents.connection.cursor().execute("""
-SELECT 
-	insp_coinc_event.likelihood, 
-	coinc_inspiral.snr,
-	EXISTS (
-		SELECT
-			* 
-		FROM 
-			time_slide 
-		WHERE
-		 time_slide.time_slide_id == insp_coinc_event.time_slide_id
-		 AND time_slide.offset != 0
-	 )
-FROM
-	coinc_inspiral 
-	JOIN coinc_event AS insp_coinc_event ON (insp_coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)
-			"""):
-				if is_background:
-					self.timeslide_likelihood.append(likelihood)
-					self.timeslide_combined_eff_snr.append(combined_eff_snr)
-				else:
-					self.zerolag_likelihood.append(likelihood)
-					self.zerolag_combined_eff_snr.append(combined_eff_snr)
-# map all the 0 likelihoods to lowest non-zero likelihood and all 'inf' likelihoods to the highest non-infinity likelihood 
-
-	def finish(self):
-		all_likelihoods = numpy.array(self.timeslide_likelihood + self.zerolag_likelihood + self.injection_likelihood, dtype=float)
-		timeslide_likelihoods = numpy.array(self.timeslide_likelihood)
-		zerolag_likelihoods = numpy.array(self.zerolag_likelihood)
-		injection_likelihoods = numpy.array(self.injection_likelihood)
-		timeslide_snrs = numpy.array(self.timeslide_combined_eff_snr)
-		zerolag_snrs = numpy.array(self.zerolag_combined_eff_snr)
-		injection_snrs = numpy.array(self.injection_combined_eff_snr)
-# set all zero likelihoods to the next lowest calculated likelihood, and all infinity likelihoods to the next highest, so plotting can work
-		plottable_likelihoods = all_likelihoods[~numpy.isinf(all_likelihoods) & (all_likelihoods > 0)]
-		min_likelihood = plottable_likelihoods.min()
-		max_likelihood = plottable_likelihoods.max()
-		timeslide_likelihoods.clip(min_likelihood, max_likelihood, out=timeslide_likelihoods)
-		zerolag_likelihoods.clip(min_likelihood, max_likelihood, out=zerolag_likelihoods)
-		injection_likelihoods.clip(min_likelihood, max_likelihood, out=injection_likelihoods)
-# to find the 'threshold,' which here is the likelihood or combined effective snr of the 100th loudest timeslide
-		sorted_timeslide_likelihoods = numpy.sort(timeslide_likelihoods)
-		sorted_timeslide_snrs = numpy.sort(timeslide_snrs)
-		fig, axes = create_plot(r"MVSC Likelihood", r"Combined Effective SNR", aspect = 1.0)
-		axes.hold(1)
-		axes.loglog(injection_likelihoods,injection_snrs,'rx',label='injections')	
-		axes.loglog(timeslide_likelihoods,timeslide_snrs,'k.',label='timeslides')	
-		axes.axvline(x=sorted_timeslide_likelihoods[-100], color='g', label='100th loudest timeslide, by MVSCL')
-		axes.axhline(y=sorted_timeslide_snrs[-100], label='100th loudest timeslide, by SNR')
-		axes.legend(loc='lower right')
-		axes.hold(0)
-		yield fig, "MVSC_likelihood_scatterplot" , False
 
 #
 # =============================================================================
@@ -1228,7 +1137,6 @@ def new_plots(plots = None):
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
 		RateVsThreshold(),
 		InjectionParameterDistributionPlots(),
-		#MVSCPlots()
 	)
 	max_plot_groups = len(l)
 	if plots is None:
