@@ -4,8 +4,8 @@ space:= $(empty) $(empty)
 comma:= ,
 
 # external info
-H1_COH_CACHE := ../frames/H1H2_coherent_frames.cache
-H1_COH_SEGS := ../frames/H1H2_coherent_frames_segments.xml
+H1_COH_CACHE := /home/wademc/H1H2_COHERENT/H1H2_coherent_frames.cache
+H1_COH_SEGS := /home/wademc/H1H2_COHERENT/H1H2_coherent_frames_segments.xml
 
 # controls psd segments, should set it to the analysis time intended
 IFOS = H1 L1
@@ -99,6 +99,9 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 
 reference_psd.xml.gz : $(PSD_FILES)
 	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
+
+H1_psd.xml.gz :
+	gstlal_reference_psd --channel LSC-STRAIN --frame-cache $(H1_COH_CACHE) --frame-segments-file $(H1_COH_SEGS) --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument H1 --write-psd H1_psd.xml.gz --verbose
 
 %_psd.xml.gz : frame.cache segments.xml
 	gstlal_reference_psd --channel LSC-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
