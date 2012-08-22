@@ -1,6 +1,6 @@
 MIN_SEG_LENGTH = 600 # seconds, i.e. 10 minutes
 START = 871147452
-STOP =  871247452
+STOP =  871752252
 TRIM = 16
 
 all : dag
@@ -31,7 +31,7 @@ dag : segments.xml frame.cache
 	./gstlal_H1H2_coherent_frames_pipe --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache frame.cache
 
 finish :
-	ls H-H1_LHO_COHERENT*.gwf | lalapps_path2cache > H1H2_coherent_frames.cache
+	ls LHO_COHERENT*.gwf | lalapps_path2cache > H1H2_coherent_frames.cache
 	ligolw_add --output H1H2_null_vetoes.xml.gz H1H2-NULL_VETOES-*.xml.gz
 	sed '0,/H/s/H/datasegments/' H1H2_coherent_frames.cache > tmp.cache
 	ligolw_segments --insert-from-lal-cache tmp.cache > H1H2_coherent_frames_segments.xml

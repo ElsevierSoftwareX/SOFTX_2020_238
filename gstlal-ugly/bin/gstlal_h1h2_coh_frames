@@ -419,7 +419,8 @@ nullhead = coherent_null_bin.get_pad("NULLsrc")
 #
 
 cohhead = pipeparts.mkprogressreport(pipeline, cohhead, "progress_coherent")
-pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2:LAL-STRAIN_HPLUS", duration = 4096)
+cohhead = pipeparts.mktaginject(pipeline, cohhead, "instrument=H1H2, channel-name=LAL-STRAIN_HPLUS")
+pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "LHO_COHERENT", duration = 4096)
 
 # null veto
 nullhead = pipeparts.mkprogressreport(pipeline, nullhead, "progress_null")
