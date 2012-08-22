@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	lib/skymap/Makefile \
 	python/Makefile \
 	python/pyzeroconf/Makefile \
+	share/Makefile \
 	gst/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
