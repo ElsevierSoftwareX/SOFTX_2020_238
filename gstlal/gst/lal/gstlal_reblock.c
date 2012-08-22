@@ -536,7 +536,7 @@ GType gstlal_reblock_get_type(void)
 			.instance_size = sizeof(GSTLALReblock),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_reblock", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALReblock", &info, 0);
 	}
 
 	return type;

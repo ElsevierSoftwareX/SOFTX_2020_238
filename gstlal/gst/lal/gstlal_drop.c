@@ -485,7 +485,7 @@ GType gstlal_drop_get_type(void)
 			.instance_size = sizeof(GSTLALDrop),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_drop", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALDrop", &info, 0);
 	}
 
 	return type;

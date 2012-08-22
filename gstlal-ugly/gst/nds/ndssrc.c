@@ -946,7 +946,7 @@ GType gstlal_ndssrc_get_type(void)
 			.instance_size = sizeof(GSTLALNDSSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "ndssrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_BASE_SRC, "GSTLALNDSSrc", &info, 0);
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "ndssrc", 0, "ndssrc element");
 	}
 

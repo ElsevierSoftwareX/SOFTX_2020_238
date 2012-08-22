@@ -84,7 +84,7 @@ GType gab_media_mapping_get_type()
 			.instance_size = sizeof(GabMediaMapping),
 			.instance_init = gab_media_mapping_instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_RTSP_MEDIA_MAPPING, "gab_media_mapping", &info, 0);
+		type = g_type_register_static(GST_TYPE_RTSP_MEDIA_MAPPING, "GabMediaMapping", &info, 0);
 	}
 
 	return type;
@@ -192,7 +192,7 @@ GType gab_media_factory_get_type()
 			.class_init = gab_media_factory_class_init,
 			.instance_size = sizeof(GabMediaFactory),
 		};
-		type = g_type_register_static(GST_TYPE_RTSP_MEDIA_FACTORY, "gab_media_factory", &info, 0);
+		type = g_type_register_static(GST_TYPE_RTSP_MEDIA_FACTORY, "GabMediaFactory", &info, 0);
 	}
 
 	return type;

@@ -902,7 +902,7 @@ GType gstlal_skymap_get_type(void)
 			.instance_size = sizeof(GSTLALSkymap),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_skymap", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALSkymap", &info, 0);
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_skymap", 0, "skymap element");
 	}
 

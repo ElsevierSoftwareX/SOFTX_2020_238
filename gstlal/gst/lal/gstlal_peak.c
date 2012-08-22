@@ -518,7 +518,7 @@ GType gstlal_peak_get_type(void)
 			.instance_size = sizeof(GSTLALPeak),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_peak", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALPeak", &info, 0);
 	}
 
 	return type;

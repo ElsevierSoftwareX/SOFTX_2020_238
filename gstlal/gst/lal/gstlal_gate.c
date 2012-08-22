@@ -1548,7 +1548,7 @@ GType gstlal_gate_get_type(void)
 			.instance_init = instance_init,
 		};
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_gate", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALGate", &info, 0);
 	}
 
 	return type;

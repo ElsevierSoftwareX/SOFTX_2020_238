@@ -821,7 +821,7 @@ GType gstlal_burst_triggergen_get_type(void)
 			.instance_size = sizeof(GSTLALBurst_Triggergen),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_burst_triggergen", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALBurst_Triggergen", &info, 0);
 	}
 
 	return type;

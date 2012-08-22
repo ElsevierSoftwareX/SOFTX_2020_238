@@ -1532,7 +1532,7 @@ GType gstlal_timeslicechisquare_get_type(void)
 			.instance_init = instance_init,
 		};
 
-		element_type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALTimeSliceChisq", &element_info, 0);
+		element_type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALTimeSliceChiSquare", &element_info, 0);
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gstlal_timeslicechisq", 0, "");
 	}
 

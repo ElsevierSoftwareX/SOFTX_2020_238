@@ -1388,7 +1388,7 @@ GType gstlal_framesrc_get_type(void)
 			.instance_size = sizeof(GSTLALFrameSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_framesrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_BASE_SRC, "GSTLALFrameSrc", &info, 0);
 	}
 
 	return type;

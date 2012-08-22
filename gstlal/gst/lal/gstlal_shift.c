@@ -548,7 +548,7 @@ GType gstlal_shift_get_type(void)
 			.instance_size = sizeof(GSTLALShift),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_shift", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALShift", &info, 0);
 	}
 
 	return type;

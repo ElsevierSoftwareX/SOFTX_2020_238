@@ -1445,7 +1445,7 @@ GType gstlal_blcbc_triggergen_get_type(void)
 			.instance_size = sizeof(GSTLALBLCBCTriggerGen),
 			.instance_init = gen_instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_blcbctriggergen", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALBLCBCTriggerGen", &info, 0);
 	}
 
 	return type;

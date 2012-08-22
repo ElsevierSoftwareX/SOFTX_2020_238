@@ -952,7 +952,7 @@ GType gstlal_simulation_get_type(void)
 			.instance_size = sizeof(GSTLALSimulation),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_simulation", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALSimulation", &info, 0);
 	}
 
 	return type;

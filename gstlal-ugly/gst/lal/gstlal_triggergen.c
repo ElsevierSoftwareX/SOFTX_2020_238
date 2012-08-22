@@ -1081,7 +1081,7 @@ GType gstlal_triggergen_get_type(void)
 			.instance_init = instance_init,
 		};
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_triggergen", 0, "lal_triggergen element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALTriggerGen", &info, 0);
 	}
 
 	return type;
