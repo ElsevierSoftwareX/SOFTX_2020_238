@@ -265,7 +265,7 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 	 * construct the pad
 	 */
 
-	srcpad = gst_pad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src"), name);
+	srcpad = gst_pad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src_%d"), name);
 	g_assert(srcpad != NULL);
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
@@ -1065,7 +1065,7 @@ static void finalize(GObject * object)
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src",
+	"src_%d",
 	GST_PAD_SRC,
 	GST_PAD_SOMETIMES,
 	GST_STATIC_CAPS(
