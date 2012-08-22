@@ -140,6 +140,8 @@ static const char *get_frame_library_name(FrameCPP::IFrameStream *ifs)
 
 struct pad_state {
 	gboolean need_discont;
+	gboolean need_new_segment;
+	gboolean need_tags;
 	GstClockTime next_timestamp;
 	guint64 next_out_offset;
 };
@@ -214,7 +216,6 @@ done:
 
 static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 {
-	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 
 	/*
@@ -222,31 +223,14 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	 */
 
 	pad_state->need_discont = TRUE;
+	pad_state->need_new_segment = TRUE;
+	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
 
 	/*
-	 * forward most recent new segment event
-	 */
-
-	if(element->last_new_segment) {
-		gst_event_ref(element->last_new_segment);
-		if(!gst_pad_push_event(pad, element->last_new_segment))
-			GST_ERROR_OBJECT(pad, "failed to push newsegment");
-	}
-
-	/*
-	 * send tags
-	 */
-
-	if(!send_tags(pad))
-		GST_ERROR_OBJECT(pad, "failed to push tags");
-
-	/*
 	 * done
 	 */
-
-	gst_object_unref(element);
 }
 
 
@@ -282,6 +266,8 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 	pad_state = g_new(struct pad_state, 1);
 	g_assert(pad_state != NULL);
 	pad_state->need_discont = TRUE;
+	pad_state->need_new_segment = TRUE;
+	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
 	gst_pad_set_element_private(srcpad, pad_state);
@@ -499,13 +485,18 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
 	/*
 	 * if the format matches the pad's replace the buffer's caps with
 	 * the pad's to reduce the number of objects in memory and simplify
-	 * subsequent comparisons
+	 * subsequent comparisons.  NOTE:  the caps on the source pad get
+	 * set explicitly, here, to trigger any pipeline graph adjustments
+	 * that might happen as a result of the format discovery before
+	 * pending segments and tags are pushed downstream.
 	 */
 
 	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
 		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
-	else
+	else {
 		GST_LOG_OBJECT(pad, "new caps for %s: %P", name, GST_BUFFER_CAPS(buffer));
+		gst_pad_set_caps(pad, GST_BUFFER_CAPS(buffer));
+	}
 
 	/*
 	 * check for disconts
@@ -522,6 +513,31 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
 
 	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
 	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+	/*
+	 * forward most recent new segment event
+	 */
+
+	if(pad_state->need_new_segment) {
+		GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+		if(element->last_new_segment) {
+			gst_event_ref(element->last_new_segment);
+			if(!gst_pad_push_event(pad, element->last_new_segment))
+				GST_ERROR_OBJECT(pad, "failed to push newsegment");
+		}
+		pad_state->need_new_segment = FALSE;
+		gst_object_unref(element);
+	}
+
+	/*
+	 * send tags
+	 */
+
+	if(pad_state->need_tags) {
+		if(!send_tags(pad))
+			GST_ERROR_OBJECT(pad, "failed to push tags");
+		pad_state->need_tags = FALSE;
+	}
 
 	/*
 	 * push buffer downstream
