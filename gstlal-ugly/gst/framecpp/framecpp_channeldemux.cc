@@ -1117,9 +1117,9 @@ static void base_init(gpointer klass)
 
 	gst_element_class_set_details_simple(
 		element_class,
-		"IGWD frame channel demuxer",
+		"IGWD frame file channel demuxer",
 		"Codec/Demuxer",
-		"IGWD frame channel demuxer",
+		"demux streams from IGWD frame files (https://dcc.ligo.org/cgi-bin/DocDB/ShowDocument?docid=329)",
 		"Kipp Cannon <kipp.cannon@ligo.org>, Ed Maros <ed.maros@ligo.org>"
 	);
 

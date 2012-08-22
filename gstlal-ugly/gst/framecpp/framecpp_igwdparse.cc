@@ -482,7 +482,7 @@ static void framecpp_igwdparse_base_init(gpointer klass)
 		element_class,
 		"IGWD frame file parser",
 		"Codec/Parser",
-		"Parse byte streams into whole IGWD frame files",
+		"parse byte streams into whole IGWD frame files (https://dcc.ligo.org/cgi-bin/DocDB/ShowDocument?docid=329)",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
 
