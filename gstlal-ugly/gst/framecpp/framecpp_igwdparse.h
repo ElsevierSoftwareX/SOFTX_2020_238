@@ -38,9 +38,9 @@ G_BEGIN_DECLS
 #define FRAMECPP_IGWDPARSE_TYPE \
 	(framecpp_igwdparse_get_type())
 #define FRAMECPP_IGWDPARSE(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), FRAMECPP_IGWDPARSE_TYPE, GSTFrameCPPIGWDParse))
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), FRAMECPP_IGWDPARSE_TYPE, GstFrameCPPIGWDParse))
 #define FRAMECPP_IGWDPARSE_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), FRAMECPP_IGWDPARSE_TYPE, GSTFrameCPPIGWDParseClass))
+	(G_TYPE_CHECK_CLASS_CAST((klass), FRAMECPP_IGWDPARSE_TYPE, GstFrameCPPIGWDParseClass))
 #define GST_IS_FRAMECPP_IGWDPARSE(obj) \
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), FRAMECPP_IGWDPARSE_TYPE))
 #define GST_IS_FRAMECPP_IGWDPARSE_CLASS(klass) \
@@ -49,7 +49,7 @@ G_BEGIN_DECLS
 
 typedef struct {
 	GstBaseParseClass parent_class;
-} GSTFrameCPPIGWDParseClass;
+} GstFrameCPPIGWDParseClass;
 
 
 typedef struct {
@@ -66,7 +66,7 @@ typedef struct {
 	GstClockTime file_start_time;
 	GstClockTime file_stop_time;
 	size_t offset;
-} GSTFrameCPPIGWDParse;
+} GstFrameCPPIGWDParse;
 
 
 GType framecpp_igwdparse_get_type(void);

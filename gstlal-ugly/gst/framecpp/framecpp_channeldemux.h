@@ -38,9 +38,9 @@ G_BEGIN_DECLS
 #define FRAMECPP_CHANNELDEMUX_TYPE \
 	(framecpp_channeldemux_get_type())
 #define FRAMECPP_CHANNELDEMUX(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), FRAMECPP_CHANNELDEMUX_TYPE, GSTFrameCPPChannelDemux))
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), FRAMECPP_CHANNELDEMUX_TYPE, GstFrameCPPChannelDemux))
 #define FRAMECPP_CHANNELDEMUX_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), FRAMECPP_CHANNELDEMUX_TYPE, GSTFrameCPPChannelDemuxClass))
+	(G_TYPE_CHECK_CLASS_CAST((klass), FRAMECPP_CHANNELDEMUX_TYPE, GstFrameCPPChannelDemuxClass))
 #define GST_IS_FRAMECPP_CHANNELDEMUX(obj) \
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), FRAMECPP_CHANNELDEMUX_TYPE))
 #define GST_IS_FRAMECPP_CHANNELDEMUX_CLASS(klass) \
@@ -49,7 +49,7 @@ G_BEGIN_DECLS
 
 typedef struct {
 	GstElementClass parent_class;
-} GSTFrameCPPChannelDemuxClass;
+} GstFrameCPPChannelDemuxClass;
 
 
 typedef struct {
@@ -60,7 +60,7 @@ typedef struct {
 	gboolean do_file_checksum;
 	gboolean skip_bad_files;
 	GHashTable *channel_list;
-} GSTFrameCPPChannelDemux;
+} GstFrameCPPChannelDemux;
 
 
 GType framecpp_channeldemux_get_type(void);

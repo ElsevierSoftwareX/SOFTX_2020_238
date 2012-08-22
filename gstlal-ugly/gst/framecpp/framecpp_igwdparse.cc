@@ -121,25 +121,25 @@ static guint64 fr_get_int_u(GstByteReader *reader, gint endianness, gint size)
 }
 
 
-static guint16 fr_get_int_2u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+static guint16 fr_get_int_2u(GstFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	return fr_get_int_u(reader, element->endianness, element->sizeof_int_2);
 }
 
 
-static guint64 fr_get_int_4u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+static guint64 fr_get_int_4u(GstFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	return fr_get_int_u(reader, element->endianness, element->sizeof_int_4);
 }
 
 
-static guint64 fr_get_int_8u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+static guint64 fr_get_int_8u(GstFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	return fr_get_int_u(reader, element->endianness, element->sizeof_int_8);
 }
 
 
-static double fr_get_real_8(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+static double fr_get_real_8(GstFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	switch(element->endianness) {
 	case G_LITTLE_ENDIAN:
@@ -153,7 +153,7 @@ static double fr_get_real_8(GSTFrameCPPIGWDParse *element, GstByteReader *reader
 }
 
 
-static const gchar *fr_get_string(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+static const gchar *fr_get_string(GstFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	const gchar *str;
 	gst_byte_reader_skip_unchecked(reader, 2);	/* length */
@@ -162,7 +162,7 @@ static const gchar *fr_get_string(GSTFrameCPPIGWDParse *element, GstByteReader *
 }
 
 
-static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
+static void parse_table_6(GstFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data, element->sizeof_table_6);
 	*length = fr_get_int_8u(element, &reader);
@@ -170,7 +170,7 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint length, guint16 *eof_klass, guint16 *frameh_klass)
+static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, guint length, guint16 *eof_klass, guint16 *frameh_klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
 	const gchar *name = fr_get_string(element, &reader);
@@ -185,7 +185,7 @@ static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, guint length, GstClockTime *start, GstClockTime *stop)
+static void parse_table_9(GstFrameCPPIGWDParse *element, const guint8 *data, guint length, GstClockTime *start, GstClockTime *stop)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
 	const gchar *name = fr_get_string(element, &reader);
@@ -214,7 +214,7 @@ static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 
 static gboolean start(GstBaseParse *parse)
 {
-	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
+	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
 
 	/*
 	 * GstBaseParse lobotomizes itself on paused-->ready transitions,
@@ -242,7 +242,7 @@ static gboolean start(GstBaseParse *parse)
 
 static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 {
-	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
+	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
 	GstStructure *s;
 	gint endianness;
 	gboolean success = TRUE;
@@ -274,7 +274,7 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 
 static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame, guint *framesize, gint *skipsize)
 {
-	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
+	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
 	const guchar *data = GST_BUFFER_DATA(frame->buffer);
 	gboolean file_is_complete = FALSE;
 
@@ -413,7 +413,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 {
-	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
+	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
 	GstBuffer *buffer = frame->buffer;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -501,7 +501,7 @@ static void framecpp_igwdparse_base_init(gpointer klass)
  */
 
 
-static void framecpp_igwdparse_class_init(GSTFrameCPPIGWDParseClass *klass)
+static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 {
 }
 
@@ -511,7 +511,7 @@ static void framecpp_igwdparse_class_init(GSTFrameCPPIGWDParseClass *klass)
  */
 
 
-static void framecpp_igwdparse_init(GSTFrameCPPIGWDParse *object, GSTFrameCPPIGWDParseClass *klass)
+static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *object, GstFrameCPPIGWDParseClass *klass)
 {
 }
 
@@ -528,7 +528,7 @@ static void additional_initializations(GType type)
 
 
 GST_BOILERPLATE_FULL(
-	GSTFrameCPPIGWDParse,
+	GstFrameCPPIGWDParse,
 	framecpp_igwdparse,
 	GstBaseParse,
 	GST_TYPE_BASE_PARSE,

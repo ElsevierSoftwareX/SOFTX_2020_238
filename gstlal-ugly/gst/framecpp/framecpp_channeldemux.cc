@@ -214,7 +214,7 @@ done:
 
 static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 
 	/*
@@ -256,7 +256,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
  */
 
 
-static GstPad *add_pad(GSTFrameCPPChannelDemux *element, const char *name)
+static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
 	GstPad *srcpad;
 	struct pad_state *pad_state;
@@ -310,7 +310,7 @@ static GstPad *add_pad(GSTFrameCPPChannelDemux *element, const char *name)
  */
 
 /* NOT USED
-static gboolean remove_pad(GSTFrameCPPChannelDemux *element, const char *name)
+static gboolean remove_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
 	GstPad *srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 	g_assert(srcpad != NULL);
@@ -326,7 +326,7 @@ static gboolean remove_pad(GSTFrameCPPChannelDemux *element, const char *name)
  */
 
 
-static gboolean is_requested_channel(GSTFrameCPPChannelDemux *element, const char *name)
+static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const char *name)
 {
 	return !g_hash_table_size(element->channel_list) || g_hash_table_lookup(element->channel_list, name);
 }
@@ -337,7 +337,7 @@ static gboolean is_requested_channel(GSTFrameCPPChannelDemux *element, const cha
  */
 
 
-static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name, gboolean *pad_added)
+static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, gboolean *pad_added)
 {
 	GstPad *srcpad;
 
@@ -570,7 +570,7 @@ static void forward_sink_event(gpointer object, gpointer data)
 
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	GstIterator *iter;
 	gboolean success = TRUE;
 
@@ -654,7 +654,7 @@ static void do_heart_beat(gpointer object, gpointer data)
 }
 
 
-static GstFlowReturn forward_heart_beat(GSTFrameCPPChannelDemux *element, GstClockTime t)
+static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClockTime t)
 {
 	GstIterator *iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
 	GstFlowReturn result = GST_FLOW_OK;
@@ -674,7 +674,7 @@ static GstFlowReturn forward_heart_beat(GSTFrameCPPChannelDemux *element, GstClo
 static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
 	using FrameCPP::Common::MemoryBuffer;
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	FrameCPP::IFrameStream::frame_h_type frame;
 	gboolean pads_added = FALSE;
 	GstPad *srcpad = NULL;
@@ -944,7 +944,7 @@ enum property {
 
 static void set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -982,7 +982,7 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 static void get_property(GObject *object, guint id, GValue *value, GParamSpec *pspec)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -1047,7 +1047,7 @@ static GstElementClass *parent_class = NULL;
 
 static void finalize(GObject * object)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 
 	if(element->last_new_segment)
 		gst_event_unref(element->last_new_segment);
@@ -1208,7 +1208,7 @@ static void class_init(gpointer klass, gpointer klass_data)
 
 static void instance_init(GTypeInstance *object, gpointer klass)
 {
-	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -1236,19 +1236,19 @@ GType framecpp_channeldemux_get_type(void)
 
 	if(!type) {
 		static const GTypeInfo info = {
-			sizeof(GSTFrameCPPChannelDemuxClass), /* class_size */
+			sizeof(GstFrameCPPChannelDemuxClass), /* class_size */
 			base_init, /* base_init */
 			NULL, /* base_finalize */
 			class_init, /* class_init */
 			NULL, /* class_finalize */
 			NULL, /* class_data */
-			sizeof(GSTFrameCPPChannelDemux), /* instance_size */
+			sizeof(GstFrameCPPChannelDemux), /* instance_size */
 			0, /* n_preallocs */
 			instance_init, /* instance_init */
 			NULL /* value_table */
 		};
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "framecpp_channeldemux", &info, (GTypeFlags) 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "GstFrameCPPChannelDemux", &info, (GTypeFlags) 0);
 	}
 
 	return type;
