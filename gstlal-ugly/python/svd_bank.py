@@ -56,32 +56,31 @@ from gstlal import templates
 #
 
 #
-# Read Approximant
+# Read approximant
 #
 
 def read_approximant(xmldoc):
+	programs = ("tmpltbank", "ligolw_cbc_sbank")
 	approximant = set()
-	try:
-		approximant.add(ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")[0])
-	except:
-		pass
-	try:
-		approximant.add(ligolw_process.get_process_params(xmldoc, "ligolw_cbc_sbank", "--approximant")[0])
-	except:
-		pass
+	for program in programs:
+		# FIXME:  replace with
+		# approximant |= set(ligolw_process.get_process_params(xmldoc, program, "--approximant"))
+		# when we can rely on the version of glue that allows non-unique programs
+		process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
+		approximant |= set(row.pyvalue for row in lsctables.table.get_table(lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
 
-	supported_approximants=[u'FindChirpSP', u'TaylorF2', u'IMRPhenomB']
+	supported_approximants = (u"FindChirpSP", u"TaylorF2", u"IMRPhenomB")
 	if not approximant:
-		raise ValueError, "file must contain a process params entry for approximant in either tmpltbank or makeBank"
-	if len(approximant)>1:
-		raise ValueError, "file must contain only one approximant"
-	approximant=approximant.pop()
+		raise ValueError, "document must contain an approximant process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs)
+	if len(approximant) > 1:
+		raise ValueError, "document must contain only one approximant"
+	approximant = approximant.pop()
 	if approximant not in supported_approximants:
-		raise ValueError, "unsupported approximant %s"% approximant
+		raise ValueError, "unsupported approximant '%s'" % approximant
 	return approximant
 
 #
-#check final frequency is populated and return the max final frequency
+# check final frequency is populated and return the max final frequency
 #
 
 def check_ffinal_and_find_max_ffinal(xmldoc):
