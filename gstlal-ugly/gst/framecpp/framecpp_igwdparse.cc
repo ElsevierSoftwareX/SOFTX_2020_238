@@ -223,7 +223,7 @@ static gboolean start(GstBaseParse *parse)
 
 	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
 	gst_base_parse_set_syncable(parse, FALSE);
-	gst_base_parse_set_has_timing_info(parse, FALSE);	/* FIXME:  should be TRUE, but breaks element.  why? */
+	gst_base_parse_set_has_timing_info(parse, TRUE);
 
 	/*
 	 * everything else will be reset when the header is parsed
