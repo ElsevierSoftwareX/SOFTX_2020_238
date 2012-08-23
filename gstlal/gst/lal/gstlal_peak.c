@@ -248,7 +248,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		element->maxdata = gstlal_double_peak_samples_and_values_new(channels);
+		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
 	}
 
 	/*
@@ -287,7 +288,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
-		element->data = (double *) malloc(maxsize);
+		element->data = malloc(maxsize);
 
 	/*
 	 * check validity of timestamp and offsets
@@ -324,16 +325,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if (gapsamps > 0) {
 			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			/* Clearing the max data structure causes the resulting buffer to be a GAP */
-			gstlal_double_peak_samples_and_values_clear(element->maxdata);
+			gstlal_peak_state_clear(element->maxdata);
 		}
 		else {
 			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
-			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
+			gst_audioadapter_copy(element->adapter, element->data, outsamps, &copied_gap, &copied_nongap);
+			gstlal_peak_over_window(element->maxdata, (const void*) element->data, outsamps);
 		}	
 		
-		srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+		srcbuf = gstlal_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 
 		/* set the time stamp and offset state */
 		update_state(element, srcbuf);
