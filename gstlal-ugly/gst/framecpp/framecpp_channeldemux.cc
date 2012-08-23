@@ -144,6 +144,7 @@ struct pad_state {
 	gboolean need_tags;
 	GstClockTime next_timestamp;
 	guint64 next_out_offset;
+	GstTagList *tag_list;
 };
 
 
@@ -176,11 +177,10 @@ static int split_name(const char *name, char **instrument, char **channel)
  */
 
 
-static gboolean send_tags(GstPad *pad)
+static GstTagList *get_pad_tag_list(GstPad *pad)
 {
 	char *instrument, *channel;
-	GstTagList *taglist;
-	gboolean success = TRUE;
+	GstTagList *tag_list = NULL;
 
 	split_name(GST_PAD_NAME(pad), &instrument, &channel);
 	if(!instrument || !channel) {
@@ -191,21 +191,17 @@ static gboolean send_tags(GstPad *pad)
 		goto done;
 	}
 
-	taglist = gst_tag_list_new_full(
+	tag_list = gst_tag_list_new_full(
 		GSTLAL_TAG_INSTRUMENT, instrument,
 		GSTLAL_TAG_CHANNEL_NAME, channel,
 		GSTLAL_TAG_UNITS, strstr(channel, "STRAIN") ? "strain" : " ",	/* FIXME */
 		NULL
 	);
-	g_assert(taglist != NULL);
-	GST_LOG_OBJECT(pad, "pushing %P", taglist);
-
-	success = gst_pad_push_event(pad, gst_event_new_tag(taglist));
 
 done:
 	free(instrument);
 	free(channel);
-	return success;
+	return tag_list;
 }
 
 
@@ -225,7 +221,6 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	pad_state->need_discont = TRUE;
 	pad_state->need_new_segment = TRUE;
 	pad_state->need_tags = TRUE;
-	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
 
 	/*
@@ -270,6 +265,7 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
+	pad_state->tag_list = get_pad_tag_list(srcpad);
 	gst_pad_set_element_private(srcpad, pad_state);
 
 	/*
@@ -534,7 +530,9 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
 	 */
 
 	if(pad_state->need_tags) {
-		if(!send_tags(pad))
+		g_assert(pad_state->tag_list != NULL);
+		GST_LOG_OBJECT(pad, "pushing %P", pad_state->tag_list);
+		if(!gst_pad_push_event(pad, gst_event_new_tag(gst_tag_list_copy(pad_state->tag_list))))
 			GST_ERROR_OBJECT(pad, "failed to push tags");
 		pad_state->need_tags = FALSE;
 	}
@@ -621,13 +619,15 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 /*
  * forward_heart_beat()
+ *
+ * FIXME:  should check if we need to forward any pending events
  */
 
 
 static void do_heart_beat(gpointer object, gpointer data)
 {
 	GstPad *pad = GST_PAD(object);
-	GstClockTime t = *(GstClockTime *) data;
+	GstClockTime timestamp = *(GstClockTime *) data;
 
 	if(gst_pad_is_linked(pad)) {
 		struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
@@ -638,7 +638,7 @@ static void do_heart_beat(gpointer object, gpointer data)
 		 */
 
 		buffer = gst_buffer_new();
-		GST_BUFFER_TIMESTAMP(buffer) = t;
+		GST_BUFFER_TIMESTAMP(buffer) = timestamp;
 		GST_BUFFER_DURATION(buffer) = 0;
 		GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
 		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
