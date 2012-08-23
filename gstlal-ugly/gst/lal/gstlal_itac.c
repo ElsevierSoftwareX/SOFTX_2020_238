@@ -54,7 +54,6 @@
 
 #define DEFAULT_SNR_THRESH 5.5
 
-
 static unsigned autocorrelation_channels(const GSTLALItac *element)
 {
 	return gstlal_autocorrelation_chi2_autocorrelation_channels(element->autocorrelation_matrix);
@@ -99,6 +98,16 @@ static void free_bank(GSTLALItac *element)
 	element->bank_filename = NULL;
 	free(element->bankarray);
 	element->bankarray = NULL;
+}
+
+static void update_peak_info_from_autocorrelation_properties(GSTLALItac *element)
+{
+	if (element->maxdata && element->autocorrelation_matrix) {
+		element->maxdata->pad = autocorrelation_length(element) / 2;
+		if (element->snr_mat)
+			free(element->snr_mat);
+		element->snr_mat = calloc(autocorrelation_channels(element) * autocorrelation_length(element), element->maxdata->unit);
+	}
 }
 
 /*
@@ -237,14 +246,9 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
 		channels = autocorrelation_channels(element);
-		/* FIXME doesn't support changing the number of channels dynamically !!! */
-		if (! element->maxdata)
-			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
-		element->maxdata->pad = autocorrelation_length(element) / 2;
-		if (element->snr_mat) {
-			free(element->snr_mat);
-			}
-		element->snr_mat = (complex double *) calloc(channels * autocorrelation_length(element), sizeof(complex double));
+
+		/* This should be called any time caps change too */
+		update_peak_info_from_autocorrelation_properties(element);
 
 		/*
 		 * induce norms to be recomputed
@@ -362,8 +366,13 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		if (! element->maxdata)
-			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
+		/* FIXME support single precision and get it from caps */
+		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		if (element->maxdata)
+			gstlal_peak_state_free(element->maxdata);
+		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
+		/* This should be called any time the autocorrelation property is updated */
+		update_peak_info_from_autocorrelation_properties(element);
 	}
 
 	/*
@@ -399,7 +408,7 @@ static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
-	gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
+	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
 	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL);
 	/* set the time stamp and offset state */
@@ -420,9 +429,10 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
 	/* put the data pointer one pad length in */
-	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
-	/* Find the peak */
-	gstlal_double_complex_peak_over_window(element->maxdata, dataptr, outsamps);
+	/* FIXME support single precision too */
+	dataptr = (double complex *) element->data + element->maxdata->pad * element->maxdata->channels;
+	/* Find the peak FIXME support single precision too */
+	gstlal_peak_over_window(element->maxdata, (const void *) dataptr, outsamps);
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
 		/* FIXME preallocate? */
@@ -430,10 +440,11 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		/* compute the chisq norm if it doesn't exist */
 		if (!element->autocorrelation_norm)
 			element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
-		/* extract data around peak for chisq calculation */
-		gstlal_double_complex_series_around_peak(element->maxdata, dataptr, element->snr_mat, element->maxdata->pad);
+		/* extract data around peak for chisq calculation FIXME support single precision too */
+		gstlal_series_around_peak(element->maxdata, (void *) dataptr, element->snr_mat, element->maxdata->pad);
 		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
-		gstlal_autocorrelation_chi2(chi2, element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+		/* FIXME support single precision too */
+		gstlal_autocorrelation_chi2(chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, chi2);
 		}
@@ -512,7 +523,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
-		element->data = (double complex *) malloc(maxsize);
+		element->data = malloc(maxsize);
 
 	/*
 	 * check validity of timestamp, offsets, tags, bank array
