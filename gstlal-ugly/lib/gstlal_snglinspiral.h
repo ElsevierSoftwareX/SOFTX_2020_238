@@ -23,7 +23,7 @@ int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument);
 int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq);
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, double *chi2);
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, double *chi2);
 
 G_END_DECLS
 #endif	/* __GSTLAL_SNGLINSPIRAL_H__ */
