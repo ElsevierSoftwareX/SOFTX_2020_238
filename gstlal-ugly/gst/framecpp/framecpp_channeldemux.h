@@ -60,6 +60,7 @@ typedef struct {
 	gboolean do_file_checksum;
 	gboolean skip_bad_files;
 	GHashTable *channel_list;
+	GstTagList *tag_list;
 } GstFrameCPPChannelDemux;
 
 
