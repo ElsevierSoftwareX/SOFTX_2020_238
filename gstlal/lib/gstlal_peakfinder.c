@@ -7,87 +7,79 @@
 #include <math.h>
 
 /*
- * Double precision
+ * Type agnostic functions
  */
 
-/* Init a structure to hold peak times and values */
-struct gstlal_double_peak_samples_and_values *gstlal_double_peak_samples_and_values_new(guint channels)
+
+/* Init a structure to hold peak state */
+struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type_specifier type)
 {
-	struct gstlal_double_peak_samples_and_values *new = g_new0(struct gstlal_double_peak_samples_and_values,1);
+	struct gstlal_peak_state *new = g_new0(struct gstlal_peak_state, 1);
 	if (!new) return NULL;
 	new->channels = channels;
 	new->samples = g_malloc0(sizeof(guint) * channels);
-	new->values = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
 	new->pad = 0;
 	new->thresh = 0;
+	new->type = type;
+
+	switch (new->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		new->unit = sizeof(float);
+		new->values.as_float = (float *) g_malloc0(new->unit * channels);
+		break;
+		
+		case GSTLAL_PEAK_DOUBLE:
+		new->unit = sizeof(double);
+		new->values.as_double = (double *) g_malloc0(new->unit * channels);
+		break;
+		
+		case GSTLAL_PEAK_COMPLEX:
+		new->unit = sizeof(float complex);
+		new->values.as_float_complex = (float complex *) g_malloc0(new->unit * channels);
+		break;
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		new->unit = sizeof(double complex);
+		new->values.as_double_complex = (double complex *) g_malloc0(new->unit * channels);
+		break;
+
+		default:
+		g_assert(new->type < GSTLAL_PEAK_TYPE_COUNT);
+		return NULL;
+	}
+	
 	return new;
 }
 
-/* Clear a structure to hold peak times and values */
-int gstlal_double_peak_samples_and_values_clear(struct gstlal_double_peak_samples_and_values *val)
+/* Free a structure to hold peak state */
+int gstlal_peak_state_free(struct gstlal_peak_state *val)
+{
+	g_free(val->samples);
+	g_free(val->values.as_float);
+	return 0;
+}
+
+/* Clear a structure to hold peak state */
+int gstlal_peak_state_clear(struct gstlal_peak_state *val)
 {
 	memset(val->samples, 0.0, val->channels * sizeof(guint));
-	memset(val->values, 0.0, val->channels * sizeof(double));
+	memset(val->values.as_float, 0.0, val->channels * val->unit);
 	val->num_events = 0;
 	return 0;
 }
 
-/* Simple peak over window algorithm */
-int gstlal_double_peak_over_window(struct gstlal_double_peak_samples_and_values *output, const double *data, guint64 length)
-{
-	guint sample, channel;
-	double *maxdata = output->values;
-	guint *maxsample = output->samples;
-	
-	/* clear the output array */
-	gstlal_double_peak_samples_and_values_clear(output);
-	
-	/* Find maxima of the data */
-	for(sample = 0; sample < length; sample++) {
-		for(channel = 0; channel < output->channels; channel++) {
-			if(fabs(*data) > fabs(maxdata[channel]) && fabs(*data) > output->thresh) {
-				/* only increment events if the previous value was 0 */
-				if (fabs(maxdata[channel]) == 0)
-					output->num_events += 1;
-				maxdata[channel] = *data;
-				maxsample[channel] = sample;
-			}
-		data++;
-		}
-	}
-	
-	return 0;
-}
-
-/* simple function to fill a buffer with the max values */
-int gstlal_double_fill_output_with_peak(struct gstlal_double_peak_samples_and_values *input, double *data, guint64 length)
-{
-
-	guint channel, index;
-	double *maxdata = input->values;
-	guint *maxsample = input->samples;
-	
-	/* clear the output data */
-	memset(data, 0.0, length * sizeof(double));
-
-	/* Decide if there are any events to keep */
-	for(channel = 0; channel < input->channels; channel++) {
-		if ( maxdata[channel] ) {
-			index = maxsample[channel] * input->channels + channel;
-			data[index] = maxdata[channel];
-		}
-	}
-	return 0;
-}
-
-/* A convenience function to make a new buffer of doubles and populate it with peaks */
-GstBuffer *gstlal_double_new_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+/* A convenience function to make a new buffer and populate it with peaks */
+GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
 {
 	/* FIXME check errors */
 	
-	/* size is length in samples times number of channels times number of bytes per sample */
-	gint size = sizeof(double) * length * input->channels;
+	/* Size is length in samples times number of channels times number of
+	 * bytes per sample
+	 */
+
+	gint size = state->unit * length * state->channels;
 	GstBuffer *srcbuf = NULL;
 	GstCaps *caps = GST_PAD_CAPS(pad);
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
@@ -98,7 +90,7 @@ GstBuffer *gstlal_double_new_buffer_from_peak(struct gstlal_double_peak_samples_
 	 * zeros 
 	 */
 	
-	if (input->num_events == 0)
+	if (state->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
        	if (result != GST_FLOW_OK)
@@ -112,147 +104,125 @@ GstBuffer *gstlal_double_new_buffer_from_peak(struct gstlal_double_peak_samples_
         GST_BUFFER_TIMESTAMP(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 	
-	if (srcbuf)
-		gstlal_double_fill_output_with_peak(input, (double *) GST_BUFFER_DATA(srcbuf), length);
+	switch (state->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		gstlal_float_fill_output_with_peak(state, (float *) GST_BUFFER_DATA(srcbuf), length);
+		break;
+		
+		case GSTLAL_PEAK_DOUBLE:
+		gstlal_double_fill_output_with_peak(state, (double *) GST_BUFFER_DATA(srcbuf), length);
+		break;
+		
+		case GSTLAL_PEAK_COMPLEX:
+		gstlal_float_complex_fill_output_with_peak(state, (float complex *) GST_BUFFER_DATA(srcbuf), length);
+		break;
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		gstlal_double_complex_fill_output_with_peak(state, (double complex *) GST_BUFFER_DATA(srcbuf), length);
+		break;
+
+		default:
+		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
+	}
 
 	return srcbuf;
 }
+
+/* A convenience function to find the peak over a window based on the type specified by state */
+int gstlal_peak_over_window(struct gstlal_peak_state *state, const void *data, guint64 length)
+{	
+	switch (state->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		return gstlal_float_peak_over_window(state, (float *) data, length);
+		break;
+		
+		case GSTLAL_PEAK_DOUBLE:
+		return gstlal_double_peak_over_window(state, (double *) data, length);
+		break;
+		
+		case GSTLAL_PEAK_COMPLEX:
+		return gstlal_float_complex_peak_over_window(state, (float complex *) data, length);
+		break;
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		return gstlal_double_complex_peak_over_window(state, (double complex *) data, length);
+		break;
+
+		default:
+		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
+	}
+
+	return 1;
+}
+
+/* A convenience function to find the series around a peak based on the type specified by state */
+int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void *outputmat, guint n)
+{	
+	switch (state->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		return gstlal_float_series_around_peak(state, (float *) data, (float *) outputmat, n);
+		break;
+		
+		case GSTLAL_PEAK_DOUBLE:
+		return gstlal_double_series_around_peak(state, (double *) data, (double *) outputmat, n);
+		break;
+		
+		case GSTLAL_PEAK_COMPLEX:
+		return gstlal_float_complex_series_around_peak(state, (float complex *) data, (float complex *) outputmat, n);
+		break;
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		return gstlal_double_complex_series_around_peak(state, (double complex *) data, (double complex *) outputmat, n);
+		break;
+
+		default:
+		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
+	}
+
+	return 1;
+}
+
 
 /*
- * Complex double precision
+ * Type specific functions
  */
 
-/* Init a structure to hold peak times and values */
-struct gstlal_double_complex_peak_samples_and_values *gstlal_double_complex_peak_samples_and_values_new(guint channels)
-{
-	struct gstlal_double_complex_peak_samples_and_values *new = g_new0(struct gstlal_double_complex_peak_samples_and_values,1);
-	if (!new) return NULL;
-	new->channels = channels;
-	new->samples = g_malloc0(sizeof(guint) * channels);
-	new->values = g_malloc0(sizeof(double complex) * channels);
-	new->num_events = 0;
-	new->pad = 0;
-	new->thresh = 0;
-	return new;
-}
+/* float */
+#define ABSFUNC(x) (fabsf(x))
+#define TYPE_STRING float
+#define TYPE float
+#include "gstlal_peakfinder.ct"
+#undef TYPE
+#undef TYPE_STRING
+#undef ABSFUNC
 
-/* Clear a structure to hold peak times and values */
-int gstlal_double_complex_peak_samples_and_values_clear(struct gstlal_double_complex_peak_samples_and_values *val)
-{
-	memset(val->samples, 0.0, val->channels * sizeof(guint));
-	memset(val->values, 0.0, val->channels * sizeof(double complex));
-	val->num_events = 0;
-	return 0;
-}
+/* double */
+#define ABSFUNC(x) (fabs(x))
+#define TYPE_STRING double
+#define TYPE double
+#include "gstlal_peakfinder.ct"
+#undef TYPE
+#undef TYPE_STRING
+#undef ABSFUNC
 
-/* Simple peak over window algorithm */
-int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_samples_and_values *output, const double complex *data, guint64 length)
-{
-	guint sample, channel;
-	double complex *maxdata = output->values;
-	guint *maxsample = output->samples;
-	
-	/* clear the output array */
-	gstlal_double_complex_peak_samples_and_values_clear(output);
-	
-	/* Find maxima of the data */
-	for(sample = 0; sample < length; sample++) {
-		for(channel = 0; channel < output->channels; channel++) {
-			if(cabs(*data) > cabs(maxdata[channel]) && cabs(*data) > output->thresh) {
-				/* only increment events if the previous value was 0 */
-				if (cabs(maxdata[channel]) == 0)
-					output->num_events += 1;
-				maxdata[channel] = *data;
-				maxsample[channel] = sample;
-			}
-		data++;
-		}
-	}
-	
-	return 0;
-}
+/* float complex */
+#define ABSFUNC(x) (cabsf(x))
+#define TYPE_STRING float_complex
+#define TYPE float complex
+#include "gstlal_peakfinder.ct"
+#undef TYPE
+#undef TYPE_STRING
+#undef ABSFUNC
 
-/* Assumes that you can index the data being given, if not expect a segfault or
- * worse.  Data pointer must exist be valid outputmat->size2 / 2 samples in past and future of the time over which the peak was computed
- */
-
-int gstlal_double_complex_series_around_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, double complex *outputmat, guint n)
-{
-	guint channel, sample;
-	gint index;
-	guint *maxsample = input->samples;
-	double complex *maxdata = input->values;
-	double complex *peakdata = NULL;
-	memset(outputmat, 0, sizeof(double) * input->channels * (2 * n + 1));
-
-	for (channel = 0; channel < input->channels; channel++) {
-		if (maxdata[channel]) {
-			index = (maxsample[channel] - n) * input->channels + channel;
-			for (sample = 0, peakdata = data+index; sample < (2*n + 1); sample++, peakdata += input->channels)
-				outputmat[sample * input->channels + channel] = *peakdata;
-			}
-		}
-
-	return 0;
-}
-
-
-
-/* simple function to fill a buffer with the max values */
-int gstlal_double_complex_fill_output_with_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, guint64 length)
-{
-
-	guint channel, index;
-	double complex *maxdata = input->values;
-	guint *maxsample = input->samples;
-	
-	/* clear the output data */
-	memset(data, 0.0, length * sizeof(double complex));
-
-	/* Decide if there are any events to keep */
-	for(channel = 0; channel < input->channels; channel++) {
-		if ( maxdata[channel] ) {
-			index = maxsample[channel] * input->channels + channel;
-			data[index] = maxdata[channel];
-		}
-	}
-	return 0;
-}
-
-/* A convenience function to make a new buffer of doubles and populate it with peaks */
-GstBuffer *gstlal_double_complex_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
-{
-	/* FIXME check errors */
-	
-	/* size is length in samples times number of channels times number of bytes per sample */
-	gint size = sizeof(double complex) * length * input->channels;
-	GstBuffer *srcbuf = NULL;
-	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
-
-	/* FIXME someday with better gap support don't actually allocate data
-	 * in this case.  For now we just mark it as a gap but let the rest of
-	 * this function do its thing so that we get a buffer allocated with
-	 * zeros 
-	 */
-	
-	if (input->num_events == 0)
-		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-
-       	if (result != GST_FLOW_OK)
-		return srcbuf;
-
-	/* set the offset */
-        GST_BUFFER_OFFSET(srcbuf) = offset;
-        GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
-
-        /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = time;
-        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
-	
-	if (srcbuf)
-		gstlal_double_complex_fill_output_with_peak(input, (double complex *) GST_BUFFER_DATA(srcbuf), length);
-
-	return srcbuf;
-}
+/* double complex */
+#define ABSFUNC(x) (cabs(x))
+#define TYPE_STRING double_complex
+#define TYPE double complex
+#include "gstlal_peakfinder.ct"
+#undef TYPE
+#undef TYPE_STRING
+#undef ABSFUNC
 

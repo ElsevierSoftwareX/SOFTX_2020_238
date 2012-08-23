@@ -1,0 +1,95 @@
+#define PASTER3(x,y,z) x ## _ ## y ## _ ## z
+#define EVALUATOR3(x,y,z)  PASTER3(x,y,z)
+#define NAME(fun1,fun2) EVALUATOR3(fun1, TYPE_STRING, fun2)
+
+#define PASTER2(x,y) x ## _ ## y
+#define EVALUATOR2(x,y)  PASTER2(x,y)
+#define MEMBER(structure) EVALUATOR2(structure, TYPE_STRING)
+
+
+/*
+ * Simple peak over window algorithm
+ */
+
+int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *data, guint64 length)
+{
+	guint sample, channel;
+	TYPE *maxdata = MEMBER(state->values.as);
+	guint *maxsample = state->samples;
+	
+	/* clear the state array */
+	gstlal_peak_state_clear(state);
+	
+	/* Find maxima of the data */
+	for(sample = 0; sample < length; sample++) {
+		for(channel = 0; channel < state->channels; channel++) {
+			if(ABSFUNC(*data) > ABSFUNC(maxdata[channel]) && ABSFUNC(*data) > state->thresh) {
+				/* only increment events if the previous value was 0 */
+				if (ABSFUNC(maxdata[channel]) == 0)
+					state->num_events += 1;
+				maxdata[channel] = *data;
+				maxsample[channel] = sample;
+			}
+		data++;
+		}
+	}
+	
+	return 0;
+}
+
+/*
+ * simple function to fill a buffer with the max values
+ */
+
+int NAME(gstlal,fill_output_with_peak)(struct gstlal_peak_state *state, TYPE *data, guint64 length)
+{
+	guint channel, index;
+	TYPE *maxdata = MEMBER(state->values.as);
+	guint *maxsample = state->samples;
+	
+	/* clear the output data */
+	memset(data, 0.0, length * sizeof(TYPE));
+
+	/* Decide if there are any events to keep */
+	for(channel = 0; channel < state->channels; channel++) {
+		if ( maxdata[channel] ) {
+			index = maxsample[channel] * state->channels + channel;
+			data[index] = maxdata[channel];
+		}
+	}
+	return 0;
+}
+
+/*
+ * Function to return the series around a peak
+ * Assumes that you can index the data being given, if not expect a segfault or
+ * worse.  Data pointer must exist be valid outputmat->size2 / 2 samples in
+ * past and future of the time over which the peak was computed
+ */
+
+int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data, TYPE *outputmat, guint n)
+{
+	guint channel, sample;
+	gint index;
+	guint *maxsample = state->samples;
+	TYPE *maxdata = MEMBER(state->values.as);
+	TYPE *peakdata = NULL;
+	memset(outputmat, 0, sizeof(TYPE) * state->channels * (2 * n + 1));
+
+	for (channel = 0; channel < state->channels; channel++) {
+		if (maxdata[channel]) {
+			index = (maxsample[channel] - n) * state->channels + channel;
+			for (sample = 0, peakdata = data+index; sample < (2*n + 1); sample++, peakdata += state->channels)
+				outputmat[sample * state->channels + channel] = *peakdata;
+			}
+		}
+
+	return 0;
+}
+
+#undef PASTER3
+#undef EVALUATOR3
+#undef NAME
+#undef PASTER2
+#undef EVALUATOR2
+#undef MEMBER
