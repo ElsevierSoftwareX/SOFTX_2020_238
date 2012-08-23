@@ -93,7 +93,7 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, double *chi2)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, double *chi2)
 {
 	/* FIXME check errors */
 
@@ -104,7 +104,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
 	SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
 	guint channel;
-	double complex *maxdata = input->values;
+	double complex maxdata_channel;
 	guint *maxsample = input->samples;
 
 	if (result != GST_FLOW_OK) {
@@ -127,13 +127,28 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
 	/* FIXME do error checking */
 	if (srcbuf && size) {
 		for(channel = 0; channel < input->channels; channel++) {
-			if ( maxdata[channel] ) {
+	
+			switch (input->type)
+				{
+				case GSTLAL_PEAK_COMPLEX:
+				maxdata_channel = (double complex) input->values.as_float_complex[channel];
+				break;
+		
+				case GSTLAL_PEAK_DOUBLE_COMPLEX:
+				maxdata_channel = (double complex) input->values.as_double_complex[channel];
+				break;
+
+				default:
+				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
+				}
+
+			if ( maxdata_channel ) {
 				LIGOTimeGPS end_time;
 				XLALINT8NSToGPS(&end_time, time);
 				XLALGPSAdd(&end_time, (double) maxsample[channel] / rate);
 				memcpy(output, &(bankarray[channel]), sizeof(SnglInspiralTable));
-				output->snr = cabs(maxdata[channel]);
-				output->coa_phase = carg(maxdata[channel]);
+				output->snr = cabs(maxdata_channel);
+				output->coa_phase = carg(maxdata_channel);
 				output->chisq = 0.0;
 				output->chisq_dof = 1;
 				output->end_time = end_time;
