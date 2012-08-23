@@ -1,0 +1,16 @@
+#define PASTER(x,y,z) x ## _ ## y ## _ ## z
+#define EVALUATOR(x,y,z)  PASTER(x,y,z)
+#define NAME(fun1,fun2) EVALUATOR(fun1, TYPE_STRING, fun2)
+
+/* find a peak over a fixed window */
+int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *data, guint64 length);
+
+/* Pull out peak snippets */
+int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data, TYPE *outputmat, guint n);
+
+/* fill the output */
+int NAME(gstlal,fill_output_with_peak)(struct gstlal_peak_state *state, TYPE *data, guint64 length);
+
+#undef PASTER
+#undef EVALUATOR
+#undef NAME
