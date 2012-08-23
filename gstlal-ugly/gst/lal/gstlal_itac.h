@@ -70,8 +70,9 @@ typedef struct {
 	guint n;
 	guint channels;
 	gdouble snr_thresh;
-	struct gstlal_double_complex_peak_samples_and_values *maxdata;
-	double complex *data;
+	gstlal_peak_type_specifier peak_type;
+	struct gstlal_peak_state *maxdata;
+	void *data;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	SnglInspiralTable *bankarray;
@@ -80,7 +81,7 @@ typedef struct {
 	char * channel_name;
 	gboolean last_gap;
 	gboolean EOS;
-	double complex *snr_mat;
+	void *snr_mat;
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_vector *autocorrelation_norm;
 	
