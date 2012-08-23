@@ -192,6 +192,7 @@ static GstTagList *get_pad_tag_list(GstPad *pad)
 	}
 
 	tag_list = gst_tag_list_new_full(
+		GST_TAG_TITLE, GST_PAD_NAME(pad),
 		GSTLAL_TAG_INSTRUMENT, instrument,
 		GSTLAL_TAG_CHANNEL_NAME, channel,
 		GSTLAL_TAG_UNITS, strstr(channel, "STRAIN") ? "strain" : " ",	/* FIXME */
