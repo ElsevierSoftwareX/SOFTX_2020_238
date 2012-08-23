@@ -67,9 +67,9 @@ typedef struct {
 	guint n;
 	guint channels;
 	GstAudioAdapter *adapter;
-
-	struct gstlal_double_peak_samples_and_values *maxdata;
-	double *data;
+	gstlal_peak_type_specifier peak_type;
+	struct gstlal_peak_state *maxdata;
+	void *data;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 
