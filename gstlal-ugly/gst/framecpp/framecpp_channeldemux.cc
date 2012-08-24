@@ -776,6 +776,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				break;
 			}
 
+			/*
+			 * determine frame timestamp.  GPS epoch - Unix epoch = 315964800 s
+			 *
+			 * from pylal.xlal.datatypes import LIGOTimeGPS
+			 * from pylal import date
+			 * import calendar
+			 * print calendar.timegm(date.XLALGPSToUTC(LIGOTimeGPS(0)))
+			 */
+
+			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
+			/*GstDateTime *date_time = gst_date_time_new_from_unix_epoch_utc(frame_timestamp / GST_SECOND + 315964800);*/
+
 			gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_ORGANIZATION, frame->GetName().c_str(), NULL);
 			/* FIXME:  gst_tag_list_is_equal() is only in >0.10.36
 			if(!gst_tag_list_is_equal(element->tag_list, tag_list)) {
@@ -784,8 +796,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				need_tags = TRUE;
 			}
 			*/
-
-			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 
 			GST_LOG_OBJECT(element, "found frame %d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), GST_TIME_SECONDS_ARGS(frame_timestamp));
 
