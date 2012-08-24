@@ -26,19 +26,22 @@ import sys
 import time
 import numpy
 import scipy
+from scipy import integrate
+import math
+from pylal import lalconstants
 import pdb
 import csv
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
 def Theta(eta, Mtot, t):
-	Tsun = 4.925491e-6
+	Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
 	theta = eta / (5.0 * Mtot * Tsun) * -t
         return theta
 
 def freq(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
-        Tsun = 4.925491e-6
+        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
                 theta**(-3.0/8.0) +
                 (743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
@@ -57,9 +60,9 @@ def Phase(eta, Mtot, t, phic = 0.0):
 
 def Amp(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
-        c = 3.0e10
-        Tsun = 4.925491e-6
-	Mpc = 3.08568025e24
+        c = lalconstants.LAL_C_SI #3.0e10
+        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
+	Mpc = 1e6 * lalconstants.LAL_PC_SI #3.08568025e24
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
         amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
         return amp
@@ -78,6 +81,15 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
         amp = Amp(eta, Mtot, t);
         phase = Phase(eta, Mtot, t);
         return amp, phase, f
+
+def sigmasq2(mchirp, fLow, fhigh, psd_interp):
+	c = lalconstants.LAL_C_SI #299792458
+	G = lalconstants.LAL_G_SI #6.67259e-11
+	M = lalconstants.LAL_MSUN_SI #1.98892e30
+	Mpc =1e6 * lalconstants.LAL_PC_SI #3.0856775807e22
+	#mchirp = 1.221567#30787
+	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
+	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
 
 # FIX ME: Change the following to actually read in the XML file
 #
@@ -220,7 +232,9 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 h *= numpy.sqrt(2 / norm2)
 		if output_to_xml: row.sigmasq = 1.0 * norm2 / sampleRate
 		if verbose:
-			print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
+			newsigma = sigmasq2(row.mchirp, flower, fFinal, psd_interp)
+			print>>sys.stderr, "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma)
+			print>>sys.stderr, "mchirp %fm, fFinal %f, row.f_final %f" % (row.mchirp, fFinal, row.f_final)
 			start = time.time()
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
