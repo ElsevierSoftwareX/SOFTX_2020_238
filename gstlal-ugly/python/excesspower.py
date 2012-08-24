@@ -446,12 +446,12 @@ def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "g
 
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild( ligolw.LIGO_LW() )
-	xmldoc.childNodes[0].appendChild( sb_event_table  )
+	xmldoc.childNodes[0].appendChild( sb_event_table )
 	strbuf = StringIO.StringIO()
 	table_str = utils.write_fileobj( xmldoc, strbuf, trap_signals=None )
 
 	# Open a pipe to the process and pipe in the XML as stdin
-	proc = subprocess.Popen( shlex.split(cmd), stdin=subprocess.PIPE )
+	proc = subprocess.Popen( shlex.split(str(cmd)), stdin=subprocess.PIPE )
 	proc.communicate( strbuf.getvalue() )
 	if( proc.returncode != 0 ):
 		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.retcode

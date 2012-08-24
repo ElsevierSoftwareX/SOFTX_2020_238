@@ -48,6 +48,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import param
 from glue.ligolw import lsctables
+from glue.ligolw import table
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
@@ -159,6 +160,7 @@ class EPHandler( LLOIDHandler ):
 		self.max_events = 1e4
 		self.time_since_dump = self.start
 		self.db_thresh = None  # off
+		self.db_client = None  # off
 
 		self.trigger_segment = None
 
@@ -492,6 +494,7 @@ class EPHandler( LLOIDHandler ):
 			utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 			self.lock.release()
 
+		# TODO: Determine the right number to put here
 		self.discard_segment = segment( 
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + 300)
@@ -510,17 +513,23 @@ class EPHandler( LLOIDHandler ):
 		if( flush ): self.make_output_table()
 		if( self.db_thresh is None ): return
 
-		clus_triggers = utils.get_table( output, lsctables.SnglBurstTable.tableName )
+		# FIXME: get_table doesn't return the type of table you want it just returns
+		# a "Table" this is probbably why the upload_tbl needs the full definition
+		clus_triggers = table.get_table( output, lsctables.SnglBurstTable.tableName )
 
 		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, clus_triggers ):
 			# TODO: Merge these two
 			if( sb.peak_time in self.discard_segment ): continue
 			if( sb.peak_time not in analysis_segment ): continue
-			upload_tbl = lsctables.SnglBurstTable()
-			upload_tbl.append( sb )
-			upload_to_db( upload_tbl, search = "EP", db = "./glitchdb" )
-		
+			upload_tbl = lsctables.New(lsctables.SnglBurstTable,
+			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
+			"duration",  "search", "event_id", "process_id",
+			"central_freq", "channel", "amplitude", "snr", "confidence",
+			"chisq", "chisq_dof", "bandwidth"])
 
+			upload_tbl.append( sb )
+			upload_to_db( upload_tbl, search = "EP", db = self.db_client )
+		
 	def shutdown( self, signum, frame ):
 		"""
 		Method called to flush buffers and shutdown the pipeline.
@@ -792,8 +801,12 @@ handler.outfile = cfg.get( "triggering", "output-file" )
 handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 if( options.db_uploads ):
 	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
+	handler.db_client = cfg.get( "triggering", "db-client" )
 	if( handler.db_thresh is None ):
 		print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
+	if( handler.db_thresh is None ):
+		print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
+		handler.db_thresh = None
 
 if( cfg.has_option( "triggering", "events_per_file" ) ):
 	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
