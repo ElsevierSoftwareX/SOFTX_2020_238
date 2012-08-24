@@ -20,8 +20,8 @@ BANK_CACHE_STRING:= $(join $(IFOS),$(BANK_CACHE_STRING))
 BANK_CACHE_STRING:= $(strip $(BANK_CACHE_STRING))
 BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
 
-CLUSTER_SQL := $(addprefix $(BANK_CACHE_PREFIX),simplify_and_cluster.sql)
-INJ_CLUSTER_SQL := $(addprefix $(BANK_CACHE_PREFIX),inj_simplify_and_cluster.sql)
+CLUSTER_SQL = simplify_and_cluster.sql
+INJ_CLUSTER_SQL = inj_simplify_and_cluster.sql
 
 # Segments file names
 segments_suffix := _segmentspadded.xml
@@ -66,7 +66,7 @@ tisi.xml :
 		--instrument=V1=0:0:0 \
 		tisi.xml
 
-dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
+dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS) $(INJ_CLUSTER_SQL)
 	gstlal_s5_pbh_trigger_pipe --do-iir-pipeline --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
 
 %_vetoes.xml:
@@ -74,7 +74,7 @@ dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
 	ligolw_segments_compat $@
 
 %_segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Science --result-name=datasegments > $*segments.xml
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Science,$*:Injection --result-name=datasegments > $*segments.xml
 	ligolw_segments_compat $*segments.xml
 	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
@@ -94,6 +94,14 @@ frame.cache: $(FRAME_CACHE_FILES)
 segments.xml: $(SEGMENTS_FILES)
 	ligolw_add --output segments.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
+
+simplify_and_cluster.sql :
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
+	cat simplify.sql cluster.sql > simplify_and_cluster.sql
+	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
+
+inj_simplify_and_cluster.sql : simplify_and_cluster.sql
+	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
 %_injections.xml: 
 	lalapps_inspinj \
@@ -122,4 +130,4 @@ segments.xml: $(SEGMENTS_FILES)
 		--disable-spin
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh logs *.xml *.gz *.sqlite plots $(WEBDIR) *.html Images *.css *.js
+	rm -r simplify.sql simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql *.sub *.dag* *.cache *.sh logs *.xml *.gz *.sqlite plots $(WEBDIR) *.html Images *.css *.js
