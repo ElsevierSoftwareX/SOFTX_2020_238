@@ -4,7 +4,7 @@ space:= $(empty) $(empty)
 comma:= ,
 
 # controls psd segments, should set it to the analysis time intended
-IFOS = H1 L1 H2
+IFOS = H1 L1
 PSDSTART = 869622409
 PSDSTOP =  870227209
 
@@ -23,9 +23,9 @@ TRIM = 16
 frame_suffix      := _frame.cache
 FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
 
-# data for lalapps_tmpltbank, note this is just to be able to run the program, the psd is replaced withe the design psd
-START = 871147452
-STOP =  871247452
+# data for lalapps_tmpltbank, note this is just to be able to run the program
+START = 871153823
+STOP =  871157919
 IFOS = H
 
 # Template bank parameters
@@ -44,8 +44,10 @@ EPSILON = 0.02
 
 all : dag plots
 
+# This creates a frame cache which is gaussian colored by the design psd. It is only used for lalapps_tmpltbank
 frame.H.cache:
-	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
+	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --fake-data LIGO --verbose --frame-type test -v
+	ls H1/*/*.gwf | lalapps_path2cache > frame.H.cache
 
 H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache 
 	lalapps_tmpltbank \
@@ -65,7 +67,7 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		--calibrated-data real_8 \
 		--candle-mass1 1 \
 		--candle-mass2 1 \
-		--channel-name H1:LSC-STRAIN \
+		--channel-name H1:FAKE-STRAIN \
 		--space Tau0Tau3 \
 		--number-of-segments 15 \
 		--minimal-match $(MM) \
@@ -87,7 +89,7 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		--approximant TaylorF2 \
 		--order twoPN \
 		--verbose \
-		--spectrum-type LIGO \
+		--spectrum-type median \
 		&& gzip H1-TMPLTBANK-871154847-2048.xml \
 		&& gstlal_bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 		&& gstlal_bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
@@ -149,4 +151,4 @@ plots : reference_psd.xml.gz
 	gstlal_plot_psd reference_psd.xml.gz psd_plot
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache *_psd.xml.gz *segments.xml *_segmentspadded.xml
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql *_psd.xml.gz *segments.xml *_segmentspadded.xml
