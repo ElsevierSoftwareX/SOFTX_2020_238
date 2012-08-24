@@ -104,7 +104,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow = 40, reference_psd = "psd.xml", tolerance = 0.9995, FAP = 0.5, snr = 4.0, clipleft = 0, clipright = 0, samples_min = 1024, samples_max_256 = 1024, samples_max_64 =  2048, samples_max = 4096, p_node=[], autocorrelation_length = None, bank_id = None):
+	def __init__(self, job, dag, template_bank, ifo, flow = 40, reference_psd = "psd.xml", tolerance = 0.9995, FAP = 0.5, snr = 4.0, clipleft = 0, clipright = 0, samples_min = 1024, samples_max_256 = 1024, samples_max_64 =  2048, samples_max = 4096, p_node=[], autocorrelation_length = None, bank_id = None, identity_transform = False):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
@@ -123,6 +123,8 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 			self.add_var_opt("bank-id", bank_id)
 		if autocorrelation_length is not None:
 			self.add_var_opt("autocorrelation-length", autocorrelation_length)
+		if identity_transform:
+			self.add_var_arg("--identity-transform")
 		svd_bank_name_path = os.path.split(template_bank)
 		svd_bank_name = svd_bank_name_path[0] + "/svd_" + svd_bank_name_path[1]
 		self.add_var_opt("write-svd-bank", svd_bank_name)
@@ -137,6 +139,7 @@ def parse_command_line():
 	parser.add_option("--reference-psd", metavar = "file", help = "Set the name of the reference psd file, required")
 	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache, required")
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
+	parser.add_option("--identity-transform", default = False, action = "store_true", help = "turn off the SVD and use the identity reconstruction matrix")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
 	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
@@ -161,13 +164,12 @@ options, filenames = parse_command_line()
 ifo = options.instrument
 ref_psd = options.reference_psd
 input_cache = options.bank_cache
-psdname = ref_psd.split('.')[0]
 
 try: os.mkdir("logs")
 except: pass
 dag = bank_DAG(options.output_name)
 
-svdJob = gstlal_svd_bank_job(tag_base=psdname + "_gstlal_svd_bank")
+svdJob = gstlal_svd_bank_job(tag_base="gstlal_svd_bank")
 svdNode = {}
 
 stagger = ((2048, 2048, 2048, 4096), (1024, 1024, 2048, 4096))
@@ -184,9 +186,9 @@ for i, f in enumerate(files):
 		clipright = 0
 	if options.stagger:
 		samps = stagger[int(float(i) / len(files) * len(stagger))]
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3], autocorrelation_length = options.autocorrelation_length, bank_id = i)
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3], autocorrelation_length = options.autocorrelation_length, bank_id = i, identity_transform = options.identity_transform)
 	else:
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = i)
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, tolerance = options.tolerance, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = i, identity_transform = options.identity_transform)
 
 dag.write_sub_files()
 dag.write_dag()
