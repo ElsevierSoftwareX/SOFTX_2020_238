@@ -418,12 +418,28 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * offset and offset end are automatically set to the byte offsets
-	 * spanned by this file
+	 * the base class sets offset and offset end to the byte offsets
+	 * spanned by this file.  we are responsible for the timestamp and
+	 * duration
 	 */
 
 	GST_BUFFER_TIMESTAMP(buffer) = element->file_start_time;
 	GST_BUFFER_DURATION(buffer) = element->file_stop_time - element->file_start_time;
+
+	/*
+	 * mark this frame file's timestamp in the bytestream.  the start
+	 * of a file is equivalent to the concept of a "key frame"
+	 */
+
+	gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(buffer), GST_BUFFER_TIMESTAMP(buffer), TRUE, FALSE);
+
+	/*
+	 * in practice, a collection of frame files will all be the same
+	 * duration, so once we've measured the duration of one we've got a
+	 * good guess for the mean frame rate
+	 */
+
+	gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(buffer), 0, 0);
 
 	GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	return result;
