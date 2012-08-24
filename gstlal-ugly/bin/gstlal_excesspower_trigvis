@@ -304,9 +304,9 @@ for channel, selected_events in event_iter:
 			#color = colormap.to_rgba( event.snr )
 		)
 		#ax.add_patch( tile )
-		if( options.plotting_type in ["tile", "both"] ):
+		if( opts.plotting_type in ["tile", "both"] ):
 			tiles.append( tile )
-		if( options.plotting_type in ["marker", "both"] ):
+		if( opts.plotting_type in ["marker", "both"] ):
 			tiles.append( (start, event.central_freq, event.snr) )
 		snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
