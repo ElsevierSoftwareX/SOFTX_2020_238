@@ -4,12 +4,12 @@ space:= $(empty) $(empty)
 comma:= ,
 
 # controls triggers
-IFOS = H2 H1 L1
-START = 869622409
-STOP =  869708809
-WEBDIR = /home/shooper/public_html/PBH/869622409-869708809
+IFOS = H1 L1
+START = 870227209
+STOP =  870832009
+WEBDIR = /home/shooper/public_html/IIR/LOW_MASS/S5/870227209-870832009/
 NUMBANKS = 5
-BANK_CACHE_PREFIX = ../subbank6/
+BANK_CACHE_PREFIX = /home/shooper/scratch/IIR/LOW_MASS/S5/bank/
 BANK_CACHE_SUFFIX = _bank.cache
 PSD_FILE:= $(addprefix $(BANK_CACHE_PREFIX),reference_psd.xml.gz)
 # the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
@@ -42,13 +42,13 @@ INJECTIONS := 1_injections.xml
 injections:=--injections $(space)
 INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
 MIN_DIST = 770
-MAX_DIST = 10000
-MIN_MASS1 = 1.2
-MAX_MASS1 = 1.6
-MIN_MASS2 = 1.2
-MAX_MASS2 = 1.6
-MIN_TOTAL_MASS = 2.4
-MAX_TOTAL_MASS = 3.4
+MAX_DIST = 40000
+MIN_MASS1 = 1.39
+MAX_MASS1 = 1.41
+MIN_MASS2 = 1.39
+MAX_MASS2 = 1.41
+MIN_TOTAL_MASS = 2.78
+MAX_TOTAL_MASS = 2.82
 FLOW = 39
 TRIM = 16
 
@@ -59,7 +59,12 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:0:0 tisi.xml
+	ligolw_tisi \
+		--instrument=H1=0:0:0 \
+		--instrument=H2=0:0:0 \
+		--instrument=L1=0:30.14159:30.14159 \
+		--instrument=V1=0:0:0 \
+		tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
 	gstlal_s5_pbh_trigger_pipe --do-iir-pipeline --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
