@@ -764,11 +764,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			}
 
 			gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_ORGANIZATION, frame->GetName().c_str(), NULL);
+			/* FIXME:  gst_tag_list_is_equal() is only in >0.10.36
 			if(!gst_tag_list_is_equal(element->tag_list, tag_list)) {
 				gst_tag_list_free(element->tag_list);
 				element->tag_list = gst_tag_list_copy(tag_list);
 				need_tags = TRUE;
 			}
+			*/
 
 			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 
