@@ -87,8 +87,9 @@ class gstlal_inspiral_plotsummary_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral_plotsummary_node
 	"""
-	def __init__(self, job, dag, base, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
+	def __init__(self, job, dag, base, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[], segments_name="datasegments"):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("segments-name",segments_name)
 		self.add_var_opt("base", base)
 		self.add_var_opt("tmp-space", tmp_space)
 		for f in input:
@@ -401,7 +402,7 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", action = "append", help = "Set the name of the xml file for injections, can be called multiple times")
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
 	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
-	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name", default="datasegments")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
@@ -607,7 +608,7 @@ farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComput
 
 # make plots
 name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
-plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode])
+plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode], segments_name=options.frame_segments_name)
 
 # make a web page
 gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
