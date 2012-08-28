@@ -158,6 +158,19 @@ page.subpages["missed_found"].add_section("found_missed_time","Found / Missed Ti
 imgtable = cbcwebpage.image_glob(base_name+'1_deff_vs_t_*.png')
 page.subpages["missed_found"].sections["found_missed_time"].add_table(imgtable, "Missed Found vs Time", "Effective distance of found and missed injections as a function of time")
 
+# SEARCH SENSITIVITY PLOTS #
+page.add_subpage("search_sensitivity","Search Sensitivity", "Search Sensitivity")
+page.subpages["search_sensitivity"].div("""
+<big><b>OVERVIEW:</b></big><br><br>
+This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of total mass and component mass.
+""")
+page.subpages["search_sensitivity"].add_section("total_mass","Binned by total mass")
+imgtable = cbcwebpage.image_glob(base_name+'*BINNED_BY_TOTAL_MASS*.png')
+page.subpages["search_sensitivity"].sections["total_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance", "Binned by total mass")
+page.subpages["search_sensitivity"].add_section("mass1_mass2","Binned by mass1-mass2")
+imgtable = cbcwebpage.image_glob(base_name+'*BINNED_BY_MASS1_MASS2*.png')
+page.subpages["search_sensitivity"].sections["mass1_mass2"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance", "Binned by component mass")
+
 
 #
 # CLOSED BOX
