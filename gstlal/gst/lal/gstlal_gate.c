@@ -594,11 +594,9 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
+	success &= gst_structure_get_int(structure, "rate", &rate);
+	success &= gst_structure_get_int(structure, "width", &width);
 	media_type = gst_structure_get_name(structure);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
 	if(!strcmp(media_type, "audio/x-raw-float")) {
 		switch(width) {
 		case 32:
@@ -625,8 +623,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-int")) {
 		gboolean is_signed;
-		if(!gst_structure_get_boolean(structure, "signed", &is_signed))
-			success = FALSE;
+		success &= gst_structure_get_boolean(structure, "signed", &is_signed);
 		switch(width) {
 		case 8:
 			control_sample_func = is_signed ? control_sample_int8 : control_sample_uint8;
@@ -653,7 +650,8 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 		element->control_sample_func = control_sample_func;
 		element->control_rate = rate;
 		g_mutex_unlock(element->control_lock);
-	}
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
 	/*
 	 * done.
@@ -874,12 +872,9 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	success &= gst_structure_get_int(structure, "rate", &rate);
+	success &= gst_structure_get_int(structure, "width", &width);
+	success &= gst_structure_get_int(structure, "channels", &channels);
 
 	/*
 	 * try setting caps on downstream element
@@ -898,7 +893,8 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 		element->unit_size = width / 8 * channels;
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(element), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
-	}
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
 	/*
 	 * done
