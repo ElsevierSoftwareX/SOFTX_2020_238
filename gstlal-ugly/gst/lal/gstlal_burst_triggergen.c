@@ -354,12 +354,15 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
+		gstlal_peak_type_specifier type;
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
+		type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		element->maxdata = gstlal_peak_state_new(channels, type);
 		element->maxdata->pad = 0;
-		element->maxdatad = gstlal_double_peak_samples_and_values_new(channels);
+		type = GSTLAL_PEAK_DOUBLE;
+		element->maxdatad = gstlal_peak_state_new(channels, type);
 		element->maxdatad->pad = 0;
 	}
 
@@ -393,8 +396,8 @@ static GstFlowReturn push_gap(GSTLALBurst_Triggergen *element, guint samps)
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
-	gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
-	gstlal_double_peak_samples_and_values_clear(element->maxdatad);
+	gstlal_peak_state_clear(element->maxdata);
+	gstlal_peak_state_clear(element->maxdatad);
 	/* create the output buffer */
 	switch(element->data_type){
 		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE:
