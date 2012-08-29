@@ -90,13 +90,6 @@ static guint get_input_uint32(void **in)
 }
 
 
-/* FIXME:  remove this when state vector is an int */
-static guint get_input_float32(void **in)
-{
-	return *(*(float **) in)++;
-}
-
-
 /*
  * ============================================================================
  *
@@ -110,7 +103,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(	/* FIXME:  remove float when state vector is an int */
+	GST_STATIC_CAPS(
 		"audio/x-raw-int, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
@@ -131,12 +124,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 8, " \
 		"depth = (int) 8, " \
-		"signed = {true, false}; " \
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 32"
+		"signed = {true, false}"
 	)
 );
 
@@ -199,16 +187,17 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 {
 	GstStructure *str;
 	gint width;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(str, "width", &width)) {
-		GST_ERROR_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(str, "width", &width);
 
-	*size = width / 8;
+	if(success)
+		*size = width / 8;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -271,26 +260,17 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
 	GstStructure *s;
 	gint width;
+	gboolean success = TRUE;
 
 	/*
 	 * parse the caps
 	 */
 
 	s = gst_caps_get_structure(incaps, 0);
-	/* FIXME:  remove this when statevector is an int */
-	if(!strcmp(gst_structure_get_name(s), "audio/x-raw-float")) {
-		GST_WARNING_OBJECT(element, "using 32-bit float --> 16 bit int translator.  this will be removed in future versions!");
-		element->get_input = get_input_float32;
-		element->mask = 0xffff;
-		return TRUE;
-	}
-	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(s, "width", &width);
 
 	/*
-	 * set the sum-of-squares function
+	 * set the sample value function
 	 */
 
 	switch(width) {
@@ -310,11 +290,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		break;
 
 	default:
-		g_assert_not_reached();
+		success = FALSE;
 		break;
 	}
 
-	return TRUE;
+	if(!success)
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
+
+	return success;
 }
 
 
@@ -358,13 +341,15 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		guint required_on = element->required_on & element->mask;
 		guint required_off = element->required_off | ~element->mask;
 
-		while(in < end) {
+		for(; in < end; out++) {
 			guint input = element->get_input(&in);
-			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0x80: 0x00;
-			if(*(out - 1))
+			if(((input & required_on) == required_on) && ((~input & required_off) == required_off)) {
+				*out = 0x80;
 				element->on_samples++;
-			else
+			} else {
+				*out = 0x00;
 				element->off_samples++;
+			}
 		}
 	} else {
 		/*
