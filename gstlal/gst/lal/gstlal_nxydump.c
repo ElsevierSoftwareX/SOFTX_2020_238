@@ -318,25 +318,23 @@ enum property {
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
 {
 	GstStructure *str;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
 	if(gst_structure_has_name(str, "text/plain")) {
 		*size = 1;
 	} else {
 		gint channels, width;
-		if(!gst_structure_get_int(str, "channels", &channels)) {
-			GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-			return FALSE;
-		}
-		if(!gst_structure_get_int(str, "width", &width)) {
-			GST_ERROR_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-			return FALSE;
-		}
+		success &= gst_structure_get_int(str, "channels", &channels);
+		success &= gst_structure_get_int(str, "width", &width);
 
-		*size = width / 8 * channels;
+		if(success)
+			*size = width / 8 * channels;
+		else
+			GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 	}
 
-	return TRUE;
+	return success;
 }
 
 
@@ -472,7 +470,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->channels = channels;
 		element->printsample = printsample;
 	} else
-		GST_DEBUG_OBJECT(element, "unsupported or unable to parse caps %" GST_PTR_FORMAT, incaps);
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
 	return success;
 }
