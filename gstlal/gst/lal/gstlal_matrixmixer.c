@@ -340,20 +340,18 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 	GstStructure *str;
 	gint width;
 	gint channels;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(str, "width", &width)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_structure_get_int(str, "width", &width);
 
-	*size = channels * width / 8;
+	if(success)
+		*size = channels * width / 8;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -429,22 +427,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	gint in_channels;
 	gint out_channels;
 	gint width;
+	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(incaps, 0);
 	media_type = gst_structure_get_name(s);
-	if(!gst_structure_get_int(s, "channels", &in_channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(s, "channels", &in_channels);
+	success &= gst_structure_get_int(s, "width", &width);
 	s = gst_caps_get_structure(outcaps, 0);
-	if(!gst_structure_get_int(s, "channels", &out_channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(s, "channels", &out_channels);
 
 	if(!strcmp(media_type, "audio/x-raw-float")) {
 		switch(width) {
@@ -455,7 +445,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 			data_type = GSTLAL_MATRIXMIXER_DOUBLE;
 			break;
 		default:
-			return FALSE;
+			success = FALSE;
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
 		switch(width) {
@@ -466,20 +456,21 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 			data_type = GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
 			break;
 		default:
-			return FALSE;
+			success = FALSE;
 		}
 	} else
-		return FALSE;
+		success = FALSE;
 
-
-	if(!element->mixmatrix.as_void)
+	if(!success)
+		GST_ERROR_OBJECT(element, "unable to parse incaps %" GST_PTR_FORMAT ", outcaps %" GST_PTR_FORMAT, incaps, outcaps);
+	else if(!element->mixmatrix.as_void)
 		element->data_type = data_type;
 	else if(in_channels != num_input_channels(element) || out_channels != num_output_channels(element) || data_type != element->data_type) {
-		GST_DEBUG_OBJECT(element, "caps %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT " not accepted:  incorrect data type or wrong channel counts", incaps, outcaps);
-		return FALSE;
+		GST_WARNING_OBJECT(element, "caps %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT " not accepted:  incorrect data type or wrong channel counts", incaps, outcaps);
+		success = FALSE;
 	}
 
-	return TRUE;
+	return success;
 }
 
 
