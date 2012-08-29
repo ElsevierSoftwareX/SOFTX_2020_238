@@ -65,7 +65,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 
 #define TYPE_STRING float
 #define TYPE float
-#include <gstlal/gstlal_peakfinder.ht>
+#include "gstlal_peakfinder.ht"
 #undef TYPE
 #undef TYPE_STRING
 
@@ -73,7 +73,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 
 #define TYPE_STRING double
 #define TYPE double
-#include <gstlal/gstlal_peakfinder.ht>
+#include "gstlal_peakfinder.ht"
 #undef TYPE
 #undef TYPE_STRING
 
@@ -81,7 +81,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 
 #define TYPE_STRING float_complex
 #define TYPE float complex
-#include <gstlal/gstlal_peakfinder.ht>
+#include "gstlal_peakfinder.ht"
 #undef TYPE
 #undef TYPE_STRING
 
@@ -89,7 +89,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 
 #define TYPE_STRING double_complex
 #define TYPE double complex
-#include <gstlal/gstlal_peakfinder.ht>
+#include "gstlal_peakfinder.ht"
 #undef TYPE
 #undef TYPE_STRING
 
