@@ -20,7 +20,7 @@
 import sys
 
 import matplotlib
-import matplotlib.gridspec
+#import matplotlib.gridspec
 matplotlib.use("Agg")
 from matplotlib import pyplot
 from matplotlib.collections import PatchCollection
@@ -53,24 +53,27 @@ parser.add_option("-i", "--instruments", action="store", help="Comma separates l
 parser.add_option("-I", "--input-cache", action="store", help="Use this argument as the file list rather than specifying on the command line.")
 parser.add_option("-s", "--gps-start", action="store", type=float, help="Plot triggers only after indicated gps time. Default is to infer from triggers.")
 parser.add_option("-e", "--gps-end", action="store", type=float, help="Plot triggers only before indicated gps time. Default is to infer from triggers.")
-parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 32.")
-parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 2000.")
+parser.add_option("-f", "--low-frequency", action="store", type=float, default=None, help="Plot only trigggers with central frequency above this frequency. Default is 0.")
+parser.add_option("-F", "--high-frequency", action="store", type=float, default=None, help="Plot only trigggers with central frequency below this frequency.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
 parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
-#parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 
 opts, args = parser.parse_args()
 
-plotting_types = ["tiles", "marker", "both"]
+plotting_types = ["tile", "marker", "both"]
 if( opts.plotting_type not in plotting_types ):
 	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types))
 	exit()
 
-plot_sim = False
+if( opts.low_frequency is None ):
+	opts.low_frequency = 0
+
+if( opts.high_frequency is None ):
+	opts.high_frequency = 1e10
 
 if( opts.mark_loudest not in [None, 'snr', 'conf'] ):
 	exit( "Invalid argument to '--mark-loudest', please choose one of 'snr' or 'conf'" )
@@ -78,10 +81,6 @@ if( opts.mark_loudest not in [None, 'snr', 'conf'] ):
 if( opts.channels is not None ):
 	channels = opts.channels.split(",")
 else: channels = None
-
-if( plot_sim ):
-	channels = [ "Simulation" ]
-	instruments = [ "Z" ]
 
 if( opts.instruments is not None ):
 	print instruments
@@ -95,38 +94,27 @@ else:
 if( opts.input_cache is not None ):
 	args = Cache.fromfile( open(opts.input_cache) ).pfnlist()
 
-######## HACK ALERT ###########
-# This is only done so that sim events can be treated more like SnglBurst entries
-# TODO: Doesn't work.
-#lsctables.SimBurst = lsctables.table.RowType
-###############################
-
 events = lsctables.SnglBurstTable()
+analyzed_segments = segments.segmentlistdict()
 for arg in args:
 	xmldoc = utils.load_filename( arg )
-	if( not plot_sim ):
-		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
-			events += tbl 
-	else:
-		# TODO: Fix this -- see hack alert above
-		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SimBurstTable ):
-			tbl.validcolumns['snr'] = 'real_8'
-			tbl.appendColumn( "amplitude" )
-			events += tbl 
-		events.validcolumns['snr'] = 'real_8'
-		events.appendColumn( "snr" )
-		for e in events:
-			e.snr = 0
-			try:
-				if( e.amplitude is not None ): continue
-			except AttributeError: pass # This is annoying!
-			try:
-				e.amplitude = e.hrss
-			except AttributeError: pass
-			try: 
-				e.amplitude = e.egw_over_rsquared
-			except AttributeError: 
-				sys.exit( "Can't find a valid energy/amplitude for injection.")
+	all_events = lsctables.SnglBurstTable()
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
+		all_events += tbl
+
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable ):
+		# search segment data and event filtering
+		for search in tbl:
+			pid, oseg = search.process_id, search.get_out()
+			for i in range(len(all_events))[::-1]:
+				# TODO: Check we don't mess up the internal list structure doing this
+				if( all_events[i].process_id == pid and not all_events[i].peak_time in oseg ):
+					del all_events[i]
+		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
+	events += all_events 
+	
+	# Get the upper frequency
+	
 
 if( instruments is None and channels is None ):
 	instruments = {}
@@ -143,7 +131,7 @@ print "Examining instruments: %s" % str(instruments)
 
 # Segment information
 segs = segments.segmentlistdict()
-analyzed_segments = segments.segmentlistdict()
+searches = lsctables.SearchSummaryTable()
 for arg in args:
 	xmldoc = utils.load_filename( arg )
 	def_id_pair = []
@@ -172,21 +160,9 @@ for arg in args:
 			if seg.segment_def_id in def_id_pair.keys() and viewseg.intersects(segm):
 				segs[def_id_pair[seg.segment_def_id]].append( segm )
 
-	# search segment data and event filtering
-	try:
-		searches = lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable )[0]
-		# FIXME: This is gonna be slow for lots of runs need to partition on pid and reconstitute the event list after filtering
-		for search in searches:
-			pid, oseg = search.process_id, search.get_out()
-			for i in range(len(events))[::-1]:
-				if( events[i].process_id == pid and not events[i].peak_time in oseg ):
-				# TODO: Check we don't mess up the internal list structure doing this
-					del events[i]
-
-		analyzed_segments = searches.get_out_segmentlistdict()
-
-	except IndexError: 
-		pass
+if( len(events) == 0 ):
+	print "No events remain."
+	exit()
 
 viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
 if( opts.gps_start is None ):
@@ -196,6 +172,7 @@ if( opts.gps_end is None ):
 	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
 else: viewseg = segments.segment( viewseg[0], opts.gps_end )
 viewseg = segments.segment( viewseg[0], viewseg[1] )
+
 
 # FIXME: Return to this when the ifos situation is sorted out
 analyzed_segments.coalesce()
@@ -220,42 +197,33 @@ fig = pyplot.figure(figsize=(15,len(channels)*7), dpi=160)
 gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
 
 pn=0
-if( not plot_sim ):
-	events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
-	event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
-else:
-	event_iter = [["Simulation", events]]
+events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
+event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
 
 for channel, selected_events in event_iter:
 	if( channel not in channels ): continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	if( plot_sim ):
-		selected_events = filter( lambda event: event.frequency <= opts.high_frequency and event.frequency >= opts.low_frequency and event.amplitude >= opts.snr_thresh and event.time_geocent_gps in viewseg, selected_events )
-	else:
-		selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
+	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
 	#selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg ]
 	print "%d events remain." % len(selected_events)
 	if( len(selected_events) == 0 ):
 		print "No events remain, skipping."
 		continue
 
-	if( plot_sim ):
-		inst, channel = "Sim", "Simulation"
-	else:
-		inst, channel = channel.split(":")
+	high_frequency = max( [e.peak_frequency for e in selected_events] )
+	low_frequency = opts.low_frequency or 0
+
+	inst, channel = channel.split(":")
 
 	ax = pyplot.subplot(gs[pn])
 	# Extent in time
 	ax.set_xlim(viewseg[0], viewseg[1])
 	# Extent in frequency
 	# FIXME: Different channels won't have the same frequency settings
-	ax.set_ylim(opts.low_frequency, opts.high_frequency)
+	ax.set_ylim(low_frequency, high_frequency)
 
-	if( plot_sim ):
-		selected_events.sort(key=lambda e: e.amplitude)
-	else:
-		selected_events.sort(key=lambda e: e.snr)
+	selected_events.sort(key=lambda e: e.snr)
 	selected_events = numpy.array( selected_events )
 
 	# what's our snr scale
@@ -327,13 +295,13 @@ for channel, selected_events in event_iter:
 
 
 	# TODO: See if replacing data speeds up the process
-	if( plotting_type in ["tile", "both"] ):
+	if( opts.plotting_type in ["tile", "both"] ):
 		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
-	if( plotting_type == "marker" ):
+	if( opts.plotting_type == "marker" ):
 		ax.cplot( markers ) # with circles
-	elif( plotting_type == "both" ):
+	elif( opts.plotting_type == "both" ):
 		ax.plot( markers ) # with crosses
 
 	lastwrite = viewseg[0]
@@ -359,7 +327,7 @@ for channel, selected_events in event_iter:
 				( start, 0 ),
 				# tile extent
 				(end-start),
-				opts.high_frequency,
+				high_frequency,
 				color = 'k',
 				alpha = 0.1, hatch = "/"
 			)
@@ -373,7 +341,7 @@ for channel, selected_events in event_iter:
 			else:
 				lastwrite = start
 				t = 0
-			ax.text( lastwrite, 0.95*opts.high_frequency, name, rotation = "vertical" )
+			ax.text( lastwrite, 0.95*high_frequency, name, rotation = "vertical" )
 			ax.add_patch( tile )
 
 	for (ifo, aseg) in analyzed_segments.iteritems():
@@ -397,7 +365,7 @@ for channel, selected_events in event_iter:
 				( start, 0 ),
 				# tile extent
 				(end-start),
-				opts.high_frequency,
+				high_frequency,
 				color = 'k',
 				alpha = 0.1, hatch = "/"
 			)
@@ -411,7 +379,7 @@ for channel, selected_events in event_iter:
 			else:
 				lastwrite = start
 				t = 0
-			ax.text( lastwrite, 0.95*opts.high_frequency, name, rotation = "vertical" )
+			ax.text( lastwrite, 0.95*high_frequency, name, rotation = "vertical" )
 			ax.add_patch( tile )
 
 	# Add colorbar
@@ -428,7 +396,7 @@ for channel, selected_events in event_iter:
 		#pyplot.hist( selected_events**2, log=True )
 		pyplot.hist( snrs*0.62, log=True )
 		dof = events[0].chisq_dof
-		tfmap_area = abs(viewseg)*(opts.high_frequency-opts.low_frequency)
+		tfmap_area = abs(viewseg)*(high_frequency-low_frequency)
 		#dist = chi2(dof).pdf( selected_events**2 )*tfmap_area/dof
 		# magic number to get the effective DOF = 0.62
 		dist = chi2(dof*0.62).pdf( snrs*0.62 )*tfmap_area/dof
@@ -447,4 +415,5 @@ for channel, selected_events in event_iter:
 # Drop the file
 filename = opts.output_file or "trigmap"
 if( opts.mark_time ): filename += "_%d" % int(opts.mark_time)
+print "Saving " + filename
 fig.savefig( "%s.png" % filename )
