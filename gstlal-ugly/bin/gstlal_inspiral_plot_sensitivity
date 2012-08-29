@@ -1,0 +1,383 @@
+#!/usr/bin/python
+
+import numpy
+
+try:
+  import sqlite3
+except ImportError:
+  # pre 2.5.x
+  from pysqlite2 import dbapi2 as sqlite3
+
+import matplotlib
+matplotlib.use("agg")
+from matplotlib import pyplot
+
+import os
+import sys
+import copy
+from optparse import OptionParser
+
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import dbtables
+from glue.ligolw import utils
+from glue.ligolw import table
+from glue.ligolw import array
+from glue import segmentsUtils
+from glue import lal
+from glue import iterutils
+
+from pylal import db_thinca_rings
+from pylal import llwapp
+from pylal import rate
+from pylal import InspiralUtils
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+
+from pylal.xlal import constants
+from pylal import imr_utils
+
+from pylal import git_version
+__author__ = "Stephen Privitera <sprivite@caltech.edu>, Chad Hanna <channa@perimeterinstitute.ca>, Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % git_version.id
+__date__ = git_version.date
+
+pyplot.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
+matplotlib.rcParams.update({"text.usetex": True})
+
+
+def chirp_mass(m1,m2):
+    m1 = numpy.array(m1)
+    m2 = numpy.array(m2)
+    mu = (m1*m2)/(m1+m2)
+    mtotal = m1+m2
+    return mu**(3./5) *mtotal**(2./5)
+
+class upper_limit(object):
+    """
+    The upper_limit class organizes the calculation of the sensitive search volume
+    for a search described by the input database.
+    """
+    def __init__(self, opts):
+        ## Instance variables ######################################
+        self.opts = opts
+        self.instruments = []
+        self.segments = segments.segmentlistdict()
+        self.zero_lag_segments = segments.segmentlistdict()
+        ############################################################
+
+        # read the zero lag databases first
+        for f in self.opts.zero_lag_database:
+            if opts.verbose:
+                print >> sys.stdout, "\nGathering search data from zero-lag database: %s...." % (f,)
+            working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
+            connection = sqlite3.connect(working_filename)
+            dbtables.DBTable_set_connection(connection)
+
+            # find out which instruments were on and when
+            self.get_on_instruments(connection)
+            self.get_segments(connection)                   #get single ifo segments with vetoes applied
+
+            # done with zl database
+            connection.commit()
+            dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
+
+        # derived quantities
+        self.get_zero_lag_segments()          #make coincident ifo segments from single ifo segments
+        self.get_livetime()                   #get the livetime for the chosen set of instruments
+
+        # open up injection databases
+        self.found_injections = {}
+        self.total_injections = {}
+        for f in self.opts.injection_database:
+            if opts.verbose:
+                print "Reading results of injection analysis from %s ..."%f
+            working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
+            connection = sqlite3.connect(working_filename)
+            for inst in self.instruments:
+                self.found_injections.setdefault(inst,[])
+                self.total_injections.setdefault(inst,[])
+                found, total = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                self.found_injections[inst] += found
+                self.total_injections[inst] += total
+            dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
+
+        # remove injections that violate user-imposed constraints
+        for instr in self.instruments:
+            self.found_injections[instr] = self.filter_injections(self.found_injections[instr])
+
+
+    def get_on_instruments(self,connection):
+        '''
+        Retrieve the sets of instruments which were on during the search.
+        '''
+        # get instruments with sngl-sngl coincidences in zero lag
+        sngl_sngl_id, = connection.cursor().execute("SELECT coinc_def_id FROM coinc_definer WHERE search == 'inspiral' AND description == 'sngl_inspiral<-->sngl_inspiral coincidences';").fetchone()
+        time_slide_ids = connection.cursor().execute("SELECT distinct(time_slide_id) FROM time_slide;").fetchone()
+
+        zero_lag_ids = []
+        for tsid in time_slide_ids:
+            if float(connection.cursor().execute("SELECT max(offset) FROM time_slide WHERE time_slide_id == ?;",(tsid,)).fetchone()[0]) == 0:
+                zero_lag_ids.append(tsid)
+
+        for zlid in zero_lag_ids:
+            instruments_query = """ SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id == ?; """
+
+        for inst in connection.cursor().execute(instruments_query, (sngl_sngl_id, zlid) ):
+            inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
+            if not inst in self.instruments:
+                self.instruments.append(inst)
+
+        return self.instruments
+
+
+    def get_segments(self,connection):
+        '''
+        Retrieve raw single IFO segments from the database.
+        Actually for now we just set segments to span wall times
+        '''
+        start_time = int( connection.cursor().execute('SELECT MIN(start_time) FROM segment').fetchone()[0] )
+        end_time = int( connection.cursor().execute('SELECT MAX(end_time) FROM segment').fetchone()[0] )
+
+        # get single ifos from ifo sets
+        ifos = set()
+        for inst in self.instruments:
+            ifos |= inst
+
+        # for each ifo, define a single segment that spans the whole time
+        for ifo in ifos:
+            self.segments.setdefault(ifo,segments.segmentlist())
+            self.segments[ifo] |=  segments.segmentlist([segments.segment(start_time,end_time)])
+
+        self.start_time, self.end_time = self.segments.union(self.segments.keys()).extent()
+
+        return self.segments
+
+
+    def get_zero_lag_segments(self):
+        '''
+        Compute multi-ifo (coincident) segment list from single ifo segments.
+        '''
+        if self.opts.verbose:
+            print >>sys.stdout,"\nForming coincident segments from single IFO segments..."
+
+        for inst in self.instruments[:]:
+            # intersect single ifo segments
+            self.zero_lag_segments.setdefault(inst,segments.segmentlist())
+            self.segments.union(set(self.segments.keys()) - inst)
+            self.zero_lag_segments[inst] = self.segments.intersection(inst) - self.segments.union(set(self.segments.keys()) - inst)
+            if self.opts.verbose:
+                print >>sys.stdout,"\t%s were on for %d seconds (after vetoes, including playground)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
+
+            # subtract playground segments
+            if not self.opts.include_play:
+                self.zero_lag_segments[inst] -= segmentsUtils.S2playground(self.zero_lag_segments[inst].extent())
+                if self.opts.verbose:
+                    print >>sys.stdout,"\t%s were on for %d seconds (after vetoes, excluding playground)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
+
+            # remove instrument sets that were never on
+            if abs(self.zero_lag_segments[inst]) == 0:
+                print >>sys.stderr, "No livetime for in %s observation time. Skipping..."%("".join(sorted(list(inst))))
+                self.instruments.remove(inst)
+
+        return self.zero_lag_segments
+
+
+    def get_livetime(self):
+        '''Compute the instrument livetimes from the search segments.'''
+        self.livetime = {}
+        for inst in self.zero_lag_segments.keys():
+            self.livetime[inst] = float(abs(self.zero_lag_segments[inst]))/constants.LAL_YRJUL_SI
+
+        return True
+
+
+    def set_bins(self, bin_type, inst):
+        if bin_type == "Total_Mass":
+            self.bins = imr_utils.guess_distance_total_mass_bins_from_sims(self.total_injections[inst], nbins = opts.mass_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_total_mass_bins_function
+        if bin_type == "Mass1_Mass2":
+            self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
+
+        return self.bins, self.sim_to_bins
+
+
+    def filter_injections(self, sims):
+        '''
+        Remove injections from those found in the database based on
+        user-imposed restrictions.
+        '''
+        for inst in self.instruments:
+            newinjs = []
+            for far, sim in sims:
+                # exclude simulations from certain waveform families
+                if sim.waveform in self.opts.exclude_sim_type:
+                    continue
+
+                if not self.opts.min_mtotal < sim.mass1 + sim.mass2 < self.opts.max_mtotal:
+                    continue
+
+                if self.opts.max_mass_ratio and not (1.0/self.opts.max_mass_ratio <= sim.mass1/sim.mass2 <= self.opts.max_mass_ratio):
+                    continue
+
+                # passed all constraint tests, we can use it
+                newinjs.append((far,sim))
+
+        return newinjs
+
+
+def parse_command_line():
+
+    description = '''
+   description:
+
+The program lalapps_cbc_svim computes the sensitive volume of a CBC search from a database containing triggers from simulation experiments. These triggers need to be ranked by false alarm rate, the detection statistic used in S6 searches. Then injections which register a trigger louder than the loudest event, by false alarm rate, are considered found. All others are considered missed. The efficiency of detecting an event depends on the source parameters, such as its component masses, distance, spin, inclination, sky position, etc. However, lalapps_cbc_svim only considers the dependency of the efficiency on distance and mass, marginalizing over the other parameters. Injections are binned in distance and mass and the estimated efficiency is integrated over distance to convert the efficiency into a physical volume.
+
+The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the loudest event statistic method (Biswas, Creighton, Fairhurst, 2007) to compute a posterior on the rate, given the observed volumes.
+'''
+
+    parser = OptionParser(version = git_version.verbose_msg, usage = description)
+
+    # FAR range and resolution
+    parser.add_option("--far-points", default = 50, type = "int", help = "Specify the number of FARs to compute the efficiency/search volume for.")
+    parser.add_option("--min-far", default = 1e-15, type = "float", help = "Specify the minimum FAR (Hz)")
+    parser.add_option("--max-far", default = 1e-5, type = "float", help = "Specify the maximum FAR (Hz)")
+
+    # Input data options
+    parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
+    parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
+    parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
+    parser.add_option("--live-time-program", default = "thinca", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"thinca\".")
+    parser.add_option("--veto-segments-name", default = None, help = "Set the name of the veto segments to use from the XML document.")
+
+    # Output data options
+    parser.add_option("--user-tag", default = "SEARCH", metavar = "name", help = "Add a descriptive tag to the names of output files.")
+    parser.add_option("--output-dir", default = "./", metavar = "name", help = "Select a directory to place output files.")
+    parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+    parser.add_option("--output-path", default = "./", action = "store", help="Choose directory to save output files.")
+    parser.add_option("--output-cache", default = None, help = "Name of output cache file. If not specified, then no cache file will be written.")
+    parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+
+    #
+    # Binning options
+    #
+    parser.add_option("--mass-bins", default = 3, metavar = "integer", type = "int", help = "Number of mass bins (per dimension), if mass bin boundaries are not explicitly set.") 
+    parser.add_option("--dist-bins", default = 15, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
+
+    # injection filters
+    parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 2.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--max-mtotal", metavar = "m", type = 'float', default = 100.0, help = "Specify the maximum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--min-mass", metavar = "MM", type = 'float', default = 1.0, help = "Specify the minimum component mass to consider among the injections found in the DB. This filters all injectionswith any component lighter than MM.")
+    parser.add_option("--max-mass", metavar = "MM", type = 'float', default = 99.0, help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
+    parser.add_option("--max-mass-ratio", metavar = "q", type = 'float', default = None, help = "Specify the maximum allowed mass ratio. Should be >= 1.")
+    parser.add_option("--exclude-sim-type", default = [], action = "append", metavar = "SIM", help = "When computing the search volume, exclude injections made using the SIM waveform family. Example: SpinTaylorthreePointFivePN. Use this option multiple times to exclude more than one injection type.")
+
+    # more options
+    # Bin injections in mass by m1-m2
+    parser.add_option("--bin-by-mass1-mass2", default = False, action = "store_true", help = "Bin injections by component mass in two dimensions when estimating the search efficiency.")
+
+    # Bin injections by total mass
+    parser.add_option("--bin-by-total-mass", default = False, action = "store_true", help = "Bin injections by total mass when estimating the search efficiency.")
+
+    opts, filenames = parser.parse_args()
+    opts.injection_database.extend(filenames)
+
+    opts.bin_types = []
+    if opts.bin_by_total_mass:
+        opts.bin_types.append("Total_Mass")
+    if opts.bin_by_mass1_mass2:
+        opts.bin_types.append("Mass1_Mass2")
+
+    if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
+        raise ValueError, "The maximum mass ratio must be >=1!"
+
+    return opts, filenames
+
+
+############################ MAIN PROGRAM #####################################
+###############################################################################
+###############################################################################
+
+#create an empty cache which will store the output files/metadata
+cache_list = []
+
+
+def write_cache(cache_list, fileout):
+    # write cache file
+    if opts.output_cache is not None:
+        fd = open( fileout, "w" )
+        for l in cache_list:
+            fd.write( str(l) + "\n")
+        fd.close()
+    return
+
+#
+# MAIN
+#
+
+
+# read in command line opts
+opts, database = parse_command_line()
+
+# read in data from input database, store in upper limit object
+if opts.verbose: print "\n\nSetting up the upper limit calculation...\n"
+UL = upper_limit(opts)
+
+# loop over the requested instruments and mass bin types,
+# compute the search volume and volume derivative at the specified
+# FAR for the given mass bin
+#
+for bin_type in opts.bin_types:
+    for instr in UL.instruments:
+        if opts.verbose:
+            print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
+
+        # set up mass distance bins
+        bins, s2b = UL.set_bins(bin_type,instr)
+
+        #compute volume first and second moments above the loudest event
+        fars = numpy.logspace(numpy.log10(opts.min_far),numpy.log10(opts.max_far),opts.far_points)
+        vols, errs = [],[]
+        for k,far in enumerate(fars):
+            found = imr_utils.found_injections_below_far(UL.found_injections[instr],far)
+            vol, err = imr_utils.compute_search_volume_in_bins(found, UL.total_injections[instr], bins, s2b)
+            vol.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            err.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols.append(vol)
+            errs.append(err)
+
+        # plot the volume versus far for each bin
+        mbins = rate.NDBins(bins[1:])
+        for j,mbin in enumerate(iterutils.MultiIter(*mbins.centres())):
+            label = '-'.join(["%.1f"%ma for ma in mbin])+"M$_\odot$"
+            pyplot.errorbar( fars, [v[mbin] for v in vols], yerr = [e[mbin] for e in errs], label=label )
+
+        tag = "%s-%s_VOLUME_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        pyplot.semilogx()
+        pyplot.legend(loc='upper left')
+        pyplot.xlim([min(fars),max(fars)])
+        pyplot.xlabel("FAR (Hz)")
+        pyplot.ylabel("Volume*T (Mpc$^3$ yr)")
+        pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
+        pyplot.close()
+
+        # plot the sensitive range versus far for each bin
+        dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols ]
+        derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs,vols,dist) ]
+        for j,mbin in enumerate(iterutils.MultiIter(*mbins.centres())):
+            label = '-'.join(["%.1f"%ma for ma in mbin])+"M$_\odot$"
+            pyplot.errorbar( fars, [d[mbin] for d in dist], yerr = [e[mbin] for e in derr], label=label )
+
+        tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        pyplot.semilogx()
+        pyplot.legend(loc='upper left')
+        pyplot.xlim([min(fars),max(fars)])
+        pyplot.xlabel("FAR (Hz)")
+        pyplot.ylabel("Mean Sensitive Range (Mpc)")
+        pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
+        pyplot.close()
+
+# write a cache file describing the files generated during by this program
+if opts.output_cache:
+    write_cache(cache_list, opts.output_cache)
