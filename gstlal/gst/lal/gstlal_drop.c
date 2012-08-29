@@ -207,12 +207,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	success &= gst_structure_get_int(structure, "rate", &rate);
+	success &= gst_structure_get_int(structure, "width", &width);
+	success &= gst_structure_get_int(structure, "channels", &channels);
 
 	/*
 	 * try setting caps on downstream element
@@ -228,7 +225,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	if(success) {
 		element->rate = rate;
 		element->unit_size = width / 8 * channels;
-	}
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
 	/*
 	 * done
