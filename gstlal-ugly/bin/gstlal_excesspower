@@ -733,7 +733,7 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-if( options.disable_triggers ): handler.output = None
+#if( options.disable_triggers ): handler.output = None
 if( options.disable_file_cache ): handler.output_cache = None
 
 handler.rate = options.sample_rate
@@ -1221,7 +1221,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	if( options.disable_triggers ):
-		head = mkfakesink( pipeline, head )
+		mkfakesink( pipeline, head )
+		continue
 
 	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, ndof, 
