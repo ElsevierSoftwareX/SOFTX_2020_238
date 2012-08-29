@@ -896,16 +896,17 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 {
 	GstStructure *str;
 	gint channels;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(str, "channels", &channels);
 
-	*size = sizeof(double) * channels;
+	if(success)
+		*size = sizeof(double) * channels;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -1046,16 +1047,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(outcaps, 0);
-	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_ERROR_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
-		success = FALSE;
-	} else if(!gst_structure_get_int(s, "width", &width)) {
-		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, outcaps);
-		success = FALSE;
-	} else if(!gst_structure_get_int(s, "rate", &rate)) {
-		GST_ERROR_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
-		success = FALSE;
-	} else if(element->fir_matrix && (channels != (gint) fir_channels(element))) {
+	success &= gst_structure_get_int(s, "channels", &channels);
+	success &= gst_structure_get_int(s, "width", &width);
+	success &= gst_structure_get_int(s, "rate", &rate);
+
+	if(success && element->fir_matrix && (channels != (gint) fir_channels(element))) {
 		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
 		success = FALSE;
 	}
@@ -1066,7 +1062,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 		g_object_set(element->adapter, "unit-size", width / 8 * 1, NULL);	/* input has 1 channel */
-	}
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
 
 	return success;
 }
