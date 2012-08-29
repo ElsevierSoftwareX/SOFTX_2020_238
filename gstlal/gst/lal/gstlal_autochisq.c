@@ -352,20 +352,18 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 	GstStructure *str;
 	gint width;
 	gint channels;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(str, "width", &width)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_structure_get_int(str, "width", &width);
 
-	*size = width / 8 * channels;
+	if(success)
+		*size = width / 8 * channels;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -509,21 +507,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(incaps, 0);
-	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
-		success = FALSE;
-	}
-	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
-		success = FALSE;
-	}
-	if(!gst_structure_get_int(s, "rate", &rate)) {
-		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, incaps);
-		success = FALSE;
-	}
+	success &= gst_structure_get_int(s, "channels", &channels);
+	success &= gst_structure_get_int(s, "width", &width);
+	success &= gst_structure_get_int(s, "rate", &rate);
 
-	if(element->autocorrelation_matrix && (channels != (gint) autocorrelation_channels(element))) {
-		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, autocorrelation_channels(element), incaps);
+	if(success && element->autocorrelation_matrix && (channels != (gint) autocorrelation_channels(element))) {
+		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, autocorrelation_channels(element), incaps);
 		success = FALSE;
 	}
 
@@ -533,7 +522,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-	}
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
 	return success;
 }
