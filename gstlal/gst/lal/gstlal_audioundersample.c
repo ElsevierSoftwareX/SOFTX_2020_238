@@ -232,20 +232,18 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 	GstStructure *str;
 	gint channels;
 	gint width;
+	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(str, "width", &width)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-		return FALSE;
-	}
+	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_structure_get_int(str, "width", &width);
 
-	*size = width / 8 * channels;
+	if(success)
+		*size = width / 8 * channels;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	return TRUE;
+	return success;
 }
 
 
