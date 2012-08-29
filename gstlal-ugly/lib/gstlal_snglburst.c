@@ -69,7 +69,7 @@ int gstlal_set_instrument_in_snglburst_array(SnglBurst *bankarray, int length, c
 	return 0;
 }
 
-GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
+GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
 {
 	/* FIXME check errors */
 
@@ -80,7 +80,7 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
 	SnglBurst *output = (SnglBurst *) GST_BUFFER_DATA(srcbuf);
 	guint channel;
-	double *maxdata = input->values;
+	double *maxdata = input->values.as_double;
 	guint *maxsample = input->samples;
 
 	if (result != GST_FLOW_OK)
@@ -121,7 +121,7 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 	return srcbuf;
 }
 
-GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
+GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
 {
 	/* FIXME check errors */
 
@@ -132,7 +132,7 @@ GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_pe
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
 	SnglBurst *output = (SnglBurst *) GST_BUFFER_DATA(srcbuf);
 	guint channel;
-	double complex *maxdata = input->values;
+	double complex *maxdata = input->values.as_double_complex;
 	guint *maxsample = input->samples;
 
 	if (result != GST_FLOW_OK)
