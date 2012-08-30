@@ -62,9 +62,10 @@ AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
 # Check for programs
 #
 
-# check for c99 compiler
+# check for C99 compiler and C preprocessor
 m4_pattern_allow([AC_PROG_CC_C99])
 m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
+AC_PROG_CPP
 
 AC_PROG_INSTALL
 # libtool incorrectly determines library path on SL6.  FIXME:  remove when
