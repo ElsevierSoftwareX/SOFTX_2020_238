@@ -151,6 +151,10 @@ def mklvshmsrc(pipeline, **properties):
 	return elem
 
 
+def mkigwdparse(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "framecpp_igwdparse", **properties)
+
+
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
