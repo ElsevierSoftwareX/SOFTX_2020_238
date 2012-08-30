@@ -86,11 +86,20 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 #
 
 
-def src_deferred_link(src, srcpadname, sinkpad):
-	def pad_added(element, pad, (srcpadname, sinkpad)):
+class src_deferred_link(object):
+	def __init__(self, src, srcpadname, sinkpad):
+		no_more_pads_handler_id = src.connect("no-more-pads", self.no_more_pads, srcpadname)
+		src.connect("pad-added", self.pad_added, (srcpadname, sinkpad, no_more_pads_handler_id))
+
+	@staticmethod
+	def pad_added(element, pad, (srcpadname, sinkpad, no_more_pads_handler_id)):
 		if pad.get_name() == srcpadname:
+			pad.get_parent().handler_disconnect(no_more_pads_handler_id)
 			pad.link(sinkpad)
-	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
+
+	@staticmethod
+	def no_more_pads(element, srcpadname):
+		raise ValueError("<%s>: no pad named '%s'" % (element.get_name(), srcpadname))
 
 
 #
