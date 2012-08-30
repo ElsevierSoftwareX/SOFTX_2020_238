@@ -19,6 +19,8 @@
 
 import sys
 
+from collections import defaultdict
+
 import matplotlib
 #import matplotlib.gridspec
 matplotlib.use("Agg")
@@ -92,30 +94,43 @@ else:
 	segment_defs = None
 
 if( opts.input_cache is not None ):
-	args = Cache.fromfile( open(opts.input_cache) ).pfnlist()
+	args += Cache.fromfile( open(opts.input_cache) ).pfnlist()
 
 events = lsctables.SnglBurstTable()
 analyzed_segments = segments.segmentlistdict()
+
+search_map = defaultdict(list)
+event_map = defaultdict(list)
 for arg in args:
 	xmldoc = utils.load_filename( arg )
-	all_events = lsctables.SnglBurstTable()
+	all_events = []
+
 	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
-		all_events += tbl
+		for sb in tbl:
+			event_map[sb.process_id].append( sb )
 
 	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable ):
 		# search segment data and event filtering
-		for search in tbl:
-			pid, oseg = search.process_id, search.get_out()
-			for i in range(len(all_events))[::-1]:
-				# TODO: Check we don't mess up the internal list structure doing this
-				if( all_events[i].process_id == pid and not all_events[i].peak_time in oseg ):
-					del all_events[i]
 		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
-	events += all_events 
-	
-	# Get the upper frequency
-	
+		for ss in tbl:
+			search_map[ss.process_id].append( ss )
 
+	# Map events to their searches, and ensure they are in the proper "out" segment
+	for pid, eventlist in event_map.iteritems():
+		try:
+			search_map[pid]
+		except ValueError:
+			continue # not mapped to a search
+		for ss in search_map[pid]:
+			all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
+
+	events += all_events 
+
+if( len(events) == 0 ):
+	print "No events remain."
+	exit()
+
+# Get instrument and channel information
 if( instruments is None and channels is None ):
 	instruments = {}
 	for event in events:
@@ -133,6 +148,7 @@ print "Examining instruments: %s" % str(instruments)
 segs = segments.segmentlistdict()
 searches = lsctables.SearchSummaryTable()
 for arg in args:
+
 	xmldoc = utils.load_filename( arg )
 	def_id_pair = []
 	if( segment_defs is not None ):
@@ -149,20 +165,17 @@ for arg in args:
 		for i, ids in def_id_pair.iteritems(): 
 			segs[ids] = segments.segmentlist()
 
-		segtables = lsctables.SegmentSumTable()
-		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentSumTable ):
+		segtables = lsctables.SegmentTable()
+		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentTable ):
 			segtables += tbl 
 
 		for seg in segtables:
-			# FIXME: Doesn't work because Segment table doesn't have ns
-			#segm = seg.get()
-			segm = segments.segment(LIGOTimeGPS(seg.start_time), LIGOTimeGPS(seg.end_time)) 
-			if seg.segment_def_id in def_id_pair.keys() and viewseg.intersects(segm):
+			try:
+				segm = seg.get()
+			except AttributeError:
+				segm = segments.segment(LIGOTimeGPS(seg.start_time), LIGOTimeGPS(seg.end_time)) 
+			if seg.segment_def_id in def_id_pair.keys():
 				segs[def_id_pair[seg.segment_def_id]].append( segm )
-
-if( len(events) == 0 ):
-	print "No events remain."
-	exit()
 
 viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
 if( opts.gps_start is None ):
@@ -173,6 +186,11 @@ if( opts.gps_end is None ):
 else: viewseg = segments.segment( viewseg[0], opts.gps_end )
 viewseg = segments.segment( viewseg[0], viewseg[1] )
 
+for key, segl in segs.iteritems():
+	try:
+		segs[key] = segs[key] & segments.segmentlist([viewseg])
+	except ValueError:
+		segs[key] = segments.segmentlistdict()
 
 # FIXME: Return to this when the ifos situation is sorted out
 analyzed_segments.coalesce()
@@ -275,7 +293,7 @@ for channel, selected_events in event_iter:
 		if( opts.plotting_type in ["tile", "both"] ):
 			tiles.append( tile )
 		if( opts.plotting_type in ["marker", "both"] ):
-			tiles.append( (start, event.central_freq, event.snr) )
+			markers.append( (start, event.central_freq, event.snr) )
 		snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
 			loudest = [event.snr, float(event.get_peak()), event.central_freq]
