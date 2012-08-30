@@ -90,22 +90,12 @@ static void typefind(GstTypeFind *find, gpointer data)
 		GST_DEBUG("unable to retrieve 40 byte header");
 	else if(memcmp(header, "IGWD", 5))
 		GST_DEBUG("bytes 0--4 are not {'I', 'G', 'W', 'D', '\\0'}");
-	else {
-		GstCaps *caps = gst_caps_new_simple(
+	else
+		gst_type_find_suggest(find, GST_TYPE_FIND_MAXIMUM, gst_caps_new_simple(
 			"application/x-igwd-frame",
 			"framed", G_TYPE_BOOLEAN, FALSE,
 			NULL
-		);
-		/* bytes 12--15 store 0x1234 */
-		if(GST_READ_UINT16_LE(header + 12) == 0x1234)
-			gst_caps_set_simple(caps, "endianness", G_TYPE_INT, G_LITTLE_ENDIAN, NULL);
-		else if(GST_READ_UINT16_BE(header + 12) == 0x1234)
-			gst_caps_set_simple(caps, "endianness", G_TYPE_INT, G_BIG_ENDIAN, NULL);
-		else
-			GST_DEBUG("unable to determine endianness");
-
-		gst_type_find_suggest(find, GST_TYPE_FIND_MAXIMUM, caps);
-	}
+		));
 }
 
 
@@ -121,7 +111,6 @@ static gboolean register_typefind(GstPlugin *plugin)
 		extensions,
 		gst_caps_from_string(
 			"application/x-igwd-frame, " \
-			"endianness = (int) {1234, 4321}, " \
 			"framed = (boolean) false"
 		),
 		NULL,
