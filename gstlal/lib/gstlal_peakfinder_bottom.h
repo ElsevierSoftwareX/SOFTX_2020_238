@@ -1,0 +1,3 @@
+
+G_END_DECLS
+#endif	/* __GSTLAL_PEAKFINDER_H__ */
