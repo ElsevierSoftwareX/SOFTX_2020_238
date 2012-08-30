@@ -147,7 +147,7 @@ static double fr_get_real_8(GstFrameCPPIGWDParse *element, GstByteReader *reader
 	case G_BIG_ENDIAN:
 		return gst_byte_reader_get_float64_be_unchecked(reader);
 	default:
-		GST_ERROR("unrecognized endianness");
+		GST_ERROR_OBJECT(element, "unrecognized endianness");
 		g_assert_not_reached();
 	}
 }
@@ -242,26 +242,14 @@ static gboolean start(GstBaseParse *parse)
 
 static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 {
-	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
-	GstStructure *s;
-	gint endianness;
+	GstPad *srcpad = GST_BASE_PARSE_SRC_PAD(parse);
 	gboolean success = TRUE;
 
-	s = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(s, "endianness", &endianness)) {
-		GST_DEBUG_OBJECT(element, "unable to parse endianness from %" GST_PTR_FORMAT, caps);
-		success = FALSE;
-	}
-
-	if(success) {
-		element->endianness = endianness;
-		GST_DEBUG_OBJECT(element, "endianness set to %d", endianness);
-
-		caps = gst_caps_copy(caps);
-		gst_caps_set_simple(caps, "framed", G_TYPE_BOOLEAN, TRUE, NULL);
-		success = gst_pad_set_caps(GST_BASE_PARSE_SRC_PAD(parse), caps);
-		gst_caps_unref(caps);
-	}
+	caps = gst_caps_copy(gst_pad_get_pad_template_caps(srcpad));
+	success = gst_pad_set_caps(srcpad, caps);
+	if(!success)
+		GST_ERROR_OBJECT(srcpad, "unable to set caps to %" GST_PTR_FORMAT, caps);
+	gst_caps_unref(caps);
 
 	return success;
 }
@@ -290,18 +278,23 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * FIXME:  get from framecpp?
 			 */
 
-			GST_DEBUG_OBJECT(element, "parsing file header");
 			g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);
 
 			/*
-			 * word sizes
+			 * word sizes and endianness
 			 */
 
 			element->sizeof_int_2 = *(data + 7);
 			element->sizeof_int_4 = *(data + 8);
 			element->sizeof_int_8 = *(data + 9);
 			g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
-			GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
+			if(GST_READ_UINT16_LE(data + 12) == 0x1234)
+				element->endianness = G_LITTLE_ENDIAN;
+			else if(GST_READ_UINT16_BE(data + 12) == 0x1234)
+				element->endianness = G_BIG_ENDIAN;
+			else
+				GST_ERROR_OBJECT(element, "unable to determine endianness");
+			GST_DEBUG_OBJECT(element, "parsed header:  endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
 			/*
 			 * set the size of the structure in table 6 of LIGO-T970130
@@ -466,7 +459,6 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 		"application/x-igwd-frame, " \
-		"endianness = (int) {1234, 4321}, " \
 		"framed = (boolean) false"
 	)
 );
@@ -478,7 +470,6 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 		"application/x-igwd-frame, " \
-		"endianness = (int) {1234, 4321}, " \
 		"framed = (boolean) true"
 	)
 );
