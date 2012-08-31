@@ -87,13 +87,13 @@ static GstPushSrcClass *parent_class = NULL;
 
 
 enum property {
-	ARG_NAME = 1,
+	ARG_SHM_NAME = 1,
 	ARG_MASK,
 	ARG_WAIT_TIME
 };
 
 
-#define DEFAULT_NAME NULL
+#define DEFAULT_SHM_NAME NULL
 #define DEFAULT_MASK -1	/* FIXME:  what does this mean? */
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
 
@@ -391,7 +391,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_NAME:
+	case ARG_SHM_NAME:
 		g_free(element->name);
 		element->name = g_value_dup_string(value);
 		break;
@@ -422,7 +422,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_NAME:
+	case ARG_SHM_NAME:
 		g_value_set_string(value, element->name);
 		break;
 
@@ -521,12 +521,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_NAME,
+		ARG_SHM_NAME,
 		g_param_spec_string(
 			"shm-name",
 			"Name",
 			"Shared memory partition name.  Suggestions:  \"LHO_Data\", \"LLO_Data\", \"VIRGO_Data\".",
-			DEFAULT_NAME,
+			DEFAULT_SHM_NAME,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
