@@ -434,6 +434,10 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 
 	gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(buffer), 0, 0);
 
+	/*
+	 * done
+	 */
+
 	GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	return result;
 }
