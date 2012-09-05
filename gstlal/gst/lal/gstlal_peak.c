@@ -248,7 +248,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		element->peak_type = GSTLAL_PEAK_DOUBLE;
 		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
 	}
 
