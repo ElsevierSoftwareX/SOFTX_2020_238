@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot
+import numpy
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from gstlal import reference_psd
+
+if len(sys.argv) < 3:
+	print "USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ..."
+	sys.exit()
+
+outname = sys.argv[1]
+colors = {"H1":"r", "H2":"b", "L1":"g", "V1":"m"}
+horizons = dict((k, []) for k in colors)
+times = dict((k, []) for k in colors)
+for f in sys.argv[2:]:
+	psds = reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+	for ifo, psd in psds.items():
+		if psd is not None:
+			times[ifo].append(int(psd.epoch))
+			horizons[ifo].append(reference_psd.horizon_distance(psd, 1.4, 1.4, 8, 10, 2048))
+
+pyplot.figure(figsize=(12,4))
+pyplot.subplot(121)
+minh, maxh = (float("inf"), 0)
+for ifo in colors:
+	if len(horizons[ifo]) > 0:
+		pyplot.semilogy(times[ifo], horizons[ifo], 'x', color = colors[ifo], label = ifo)
+		maxh = max(maxh, max(horizons[ifo]))
+		minh = min(minh, min(horizons[ifo]))
+pyplot.legend()
+pyplot.xlabel('GPS Time (s)')
+pyplot.ylabel('Mpc')
+pyplot.grid()
+pyplot.subplot(122)
+binvec = numpy.linspace(minh, maxh, 25)
+for ifo in colors:
+	if len(horizons[ifo]) > 0:
+		pyplot.hist(horizons[ifo], binvec, color = colors[ifo], alpha = 0.5, label = ifo)
+pyplot.legend()
+pyplot.xlabel("Mpc")
+pyplot.ylabel("Count")
+pyplot.savefig(outname)
