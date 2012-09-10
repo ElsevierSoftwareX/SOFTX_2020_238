@@ -567,7 +567,7 @@ SELECT
 	)
 FROM
 	sim_inspiral
-			""", (3.e-10,)):# 1 / 100 years false rate
+			""", (3.e-7,)):# ~ 1 / month 
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
