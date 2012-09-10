@@ -79,6 +79,11 @@ def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frame
 	#
 
 	class PSDHandler(lloidparts.LLOIDHandler):
+		def __init__(self, *args, **kwargs):
+			# FIXME is this a suitable "empty" frequency series?
+			self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+			lloidparts.LLOIDHandler.__init__(self, *args, **kwargs)
+
 		def on_message(self, bus, message):
 			if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
@@ -157,10 +162,16 @@ def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frame
 def read_psd_xmldoc(xmldoc):
 	"""
 	Parse a dictionary of PSD frequency series objects from an XML
-	document.  See also make_psd_xmldoc() for the construction of XML
-	documents from a dictionary of PSDs.
+	document.  See also make_psd_xmldoc() for the construction of XML documents
+	from a dictionary of PSDs.  Interprets an empty freuency series for an
+	instrument as None.
 	"""
-	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
+	out = dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
+	# Interpret empty frequency series as None
+	for k in out:
+		if len(out[k].data) == 0:
+			out[k] = None
+	return out
 
 
 def read_psd(filename, verbose = False):
