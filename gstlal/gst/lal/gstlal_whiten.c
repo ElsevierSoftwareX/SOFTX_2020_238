@@ -674,12 +674,18 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 			 * if not contaminated by gaps
 			 */
 
-			if(!block_contains_gaps)
+			if(!block_contains_gaps) {
+				/* FIXME:  use * XLALPSDRegressorGetNSamples() */
+				guint n_samples_before = element->psd_regressor->n_samples;
 				if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 					XLALClearErrno();
 					return GST_FLOW_ERROR;
 				}
+				/* FIXME:  use * XLALPSDRegressorGetNSamples() */
+				if(n_samples_before != element->psd_regressor->n_samples)
+					g_object_notify(G_OBJECT(element), "n-samples");
+			}
 
 			/*
 			 * Whiten.  After this, the frequency bins should be unit
@@ -933,6 +939,7 @@ enum property {
 	ARG_FFT_LENGTH,
 	ARG_AVERAGE_SAMPLES,
 	ARG_MEDIAN_SAMPLES,
+	ARG_N_SAMPLES,
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
 	ARG_MEAN_PSD,
@@ -1442,6 +1449,11 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_uint(value, XLALPSDRegressorGetMedianSamples(element->psd_regressor));
 		break;
 
+	case ARG_N_SAMPLES:
+		/* FIXME:  use XLALPSDRegressorGetNSamples() when available */
+		g_value_set_uint(value, element->psd_regressor->n_samples);
+		break;
+
 	case ARG_DELTA_F:
 		if(element->fft_length_seconds != 0)
 			g_value_set_double(value, 1.0 / element->fft_length_seconds);
@@ -1605,7 +1617,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		g_param_spec_uint(
 			"average-samples",
 			"Average samples",
-			"Number of FFTs used in PSD average",
+			"Number of FFTs to be used in PSD average",
 			1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -1616,9 +1628,20 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		g_param_spec_uint(
 			"median-samples",
 			"Median samples",
-			"Number of FFTs used in PSD median history",
+			"Number of FFTs to be used in PSD median history",
 			1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_N_SAMPLES,
+		g_param_spec_uint(
+			"n-samples",
+			"Number of samples",
+			"Number of FFTs used for PSD average.  Stops increasing after the number of FFTs equals average-samples.",
+			0, G_MAXUINT, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
 	g_object_class_install_property(
