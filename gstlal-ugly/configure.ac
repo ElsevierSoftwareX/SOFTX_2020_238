@@ -55,6 +55,14 @@ AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 #
+# force /usr/share/ package files into same directory as gstlal
+#
+
+
+AC_SUBST([pkgdatadir],["\${datadir}/gstlal"])
+
+
+#
 # Set the library API info
 #
 #  0.0.0   Original version
