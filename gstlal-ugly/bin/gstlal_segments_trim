@@ -29,7 +29,8 @@ from optparse import OptionParser
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--segment-name", metavar = "name", default = "datasegments", help = "Set the name of segments default datasegments")
-	parser.add_option("--trim", metavar = "int", type = "int", default = 16, help = "Set the trim factor default 16")
+	parser.add_option("--trim", metavar = "int", type = "int", default = 0, help = "Set the trim factor default 0")
+	parser.add_option("--min-length", metavar = "int", type = "int", default = 0, help = "Set the min segment length, default 0")
 	parser.add_option("--output", metavar = "file", default = ".", help = "Set the name of the output file")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -79,7 +80,8 @@ for ifo, segl in segs.items():
 		row.process_id = None
 		row.segment_def_cdb = None
 		row.set(seg)
-		segtab.append(row)
+		if abs(seg) > options.min_length:
+			segtab.append(row)
 
 utils.write_filename(xmldoc, options.output, verbose = True)
 
