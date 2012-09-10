@@ -104,7 +104,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
 	SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
 	guint channel;
-	double complex maxdata_channel;
+	double complex maxdata_channel = 0;
 	guint *maxsample = input->samples;
 
 	if (result != GST_FLOW_OK) {
