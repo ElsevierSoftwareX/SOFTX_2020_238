@@ -62,6 +62,8 @@ Summary information
 """)
 tab, name = cbcwebpage.wiki_table_parse(base_name+'num_trigs_table.txt')
 page.subpages["summary"].add_table(tab[0], "This is a summary table", "This is a summary table")
+imgtable = cbcwebpage.image_glob(base_name+'horizon.png')
+page.subpages["summary"].add_table(imgtable, "Horizon Distance", "Horizon Distance")
 
 ### INJ PARAM PAGE ###
 page.add_subpage("injection_params","Injection Parameters", "Injection Parameters")
