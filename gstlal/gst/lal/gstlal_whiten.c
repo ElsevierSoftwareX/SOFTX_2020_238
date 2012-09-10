@@ -426,6 +426,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 
 	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
+		/* FIXME:  use XLALPSDRegressorGetNSamples() to get ->n_samples */
 		if(!element->psd_regressor->n_samples) {
 			/*
 			 * No data for the average yet, fake a PSD with
