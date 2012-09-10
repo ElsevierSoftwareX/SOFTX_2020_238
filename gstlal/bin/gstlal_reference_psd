@@ -29,6 +29,7 @@ from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw import utils
+from gstlal import inspiral
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
@@ -37,8 +38,8 @@ parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of 
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
-parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--instrument", action = "append", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required). Can be given multiple times.")
+parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
 parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
 parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
@@ -65,6 +66,8 @@ else:
 	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)) # FIXME Future infinity :)
 	seekevent = None
 
+channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
+
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
@@ -84,25 +87,27 @@ if missing_options:
 from gstlal import reference_psd
 from gstlal import lloidparts
 
-if options.frame_segments_file is not None:
-	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()[options.instrument]
-else:
-	frame_segments = None
+psd_dict = {}
 
+for instrument in options.instrument:
 
-reference_psd.write_psd(
-	options.write_psd,
-	{ options.instrument: reference_psd.measure_psd(
-		options.instrument,
+	if options.frame_segments_file is not None:
+		frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()[instrument]
+	else:
+		frame_segments = None
+
+	psd_dict[instrument] = reference_psd.measure_psd(
+		instrument,
 		seekevent,
-		lloidparts.DetectorData(options.frame_cache, options.channel_name),
+		lloidparts.DetectorData(options.frame_cache, channel_dict[instrument]),
 		options.seg,
-		options.sample_rate,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		options.sample_rate,	# Hz
 		psd_fft_length = options.psd_fft_length,
 		data_source = options.fake_data or (options.online_data and "online") or "frames",
 		injection_filename = options.injections,
 		frame_segments = frame_segments,
 		verbose = options.verbose
-	) },
-	verbose = options.verbose
-)
+	)
+
+
+reference_psd.write_psd(options.write_psd, psd_dict, verbose = options.verbose)
