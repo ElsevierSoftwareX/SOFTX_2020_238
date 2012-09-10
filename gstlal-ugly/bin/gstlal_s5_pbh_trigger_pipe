@@ -46,6 +46,69 @@ import numpy
 from pylal.datatypes import LIGOTimeGPS
 
 #
+# Classes to plot the horizon distance
+#
+gstlal_plot_psd_horizon
+
+class gstlal_plot_psd_horizon_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_plot_psd_horizon job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_plot_psd_horizon'), tag_base='gstlal_plot_psd_horizon'):
+		"""
+		gstlal_plot_psd_horizon job
+		"""
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_plot_psd_horizon_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_plot_psd_horizon node
+	"""
+	def __init__(self, job, dag, files, output_name, p_node=[]):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		path = os.getcwd()
+		self.output_name = output_name
+		self.add_var_arg(output_name)
+		for f in files:
+			self.add_file_arg(f)
+
+#
+# Classes for generating reference psds
+#
+
+class gstlal_reference_psd_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_reference_psd job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
+		"""
+		A gstlal_reference_psd job
+		"""
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_reference_psd node
+	"""
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, instruments, channel_dict, injections=None, p_node=[]):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("frame-cache", frame_cache)
+		self.add_var_opt("frame-segments-file", frame_segments_file)
+		self.add_var_opt("frame-segments-name", frame_segments_name)
+		self.add_var_opt("gps-start-time",gps_start_time)
+		self.add_var_opt("gps-end-time",gps_end_time)
+		# add hack for multiple instruments
+		self.add_var_opt("instrument", pipeline_dot_py_append_opts_hack("instrument", instruments))
+		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
+		if injections: self.add_var_opt("injections", injections)
+		path = os.getcwd()
+		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(instruments)), gps_start_time, gps_end_time)
+		self.add_var_opt("write-psd",output_name)
+
+
+#
 # gstlal_s5_pbh_summary_page
 #
 
@@ -308,8 +371,9 @@ class gstlal_inspiral_calc_likelihood_node(inspiral_pipe.InspiralNode):
 		for f in input:
 			self.add_file_arg(f)
 		fpath = os.path.split(likelihood_files[0])
-		self.background_name = os.path.join(fpath[0], likelihood_output_name + fpath[1])
-		self.add_var_opt("write-likelihood", self.background_name)
+		if likelihood_output_name is not None:
+			self.background_name = os.path.join(fpath[0], likelihood_output_name + fpath[1])
+			self.add_var_opt("write-likelihood", self.background_name)
 		self.add_var_opt("background-prior", background_prior)
 		self.add_var_opt("synthesize-injections", synthesize_injections)
 		self.output_names = input
@@ -450,16 +514,18 @@ instruments = "".join(sorted(bank_cache.keys()))
 #
 
 segsdoc = utils.load_filename(options.frame_segments_file, verbose = options.verbose)
+segs = ligolw_segments.segmenttable_get_by_name(segsdoc, options.frame_segments_name).coalesce()
 
-# union of all single detector segments
-segs = ligolw_segments.segmenttable_get_by_name(segsdoc, options.frame_segments_name).union(bank_cache.keys()).coalesce()
+# union of all single detector segments that we want to analyze
+segs = segs.union(bank_cache.keys()).coalesce()
+
 # get the requested start / stop boundary
 boundary_seg = segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_stop_time))])
+
 # intersect so we only analyze segments in the requested time 
 segs &= boundary_seg
-# only keep segments longer than 1024 seconds
-segs = segments.segmentlist([seg for seg in segs if abs(seg) > 1024])
-# break up long segments into smaller ones
+
+# FIXME break up long segments into smaller ones with 1024 of overlap
 segs = gstlaldagparts.breakupsegs(segs, options.max_segment_length, 1024)
 
 try: os.mkdir("logs")
@@ -470,13 +536,18 @@ dag = inspiral_pipe.DAG("trigger_pipe")
 # setup the job classes
 #
 
+refPSDJob = gstlal_reference_psd_job()
+horizonJob = gstlal_plot_psd_horizon_job()
+
 if options.do_iir_pipeline is not None:
 	gstlalInspiralJob = gstlal_inspiral_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
 	gstlalInspiralInjJob = gstlal_inspiral_inj_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
 else:
 	gstlalInspiralJob = gstlal_inspiral_job()
 	gstlalInspiralInjJob = gstlal_inspiral_inj_job()
+
 calcLikelihoodJob = gstlal_inspiral_calc_likelihood_job()
+calcLikelihoodJobInj = gstlal_inspiral_calc_likelihood_job(tag_base='gstlal_inspiral_calc_likelihood_inj')
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = gstlal_compute_far_from_snr_chisq_histograms_job()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
@@ -488,8 +559,25 @@ pageJob = gstlal_s5_pbh_summary_page_job()
 marginalizeJob = gstlal_inspiral_marginalize_likelihood_job()
 
 likelihood_nodes = {}
+likelihood_nodes_inj = {}
 noninj_nodes = []
 inj_nodes = dict([(inj,[]) for inj in options.injections])
+
+#
+# Precompute the PSDs for each segment
+#
+
+def hash_seg(seg):
+	# FIXME what is a good way to hash the segment?
+	return str(seg)
+
+psd_nodes = {}
+for seg in segs:
+	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
+
+# plot the horizon distance
+name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
+gstlal_plot_psd_horizon_node(horizonJob, dag, [node.output_name for node in psd_nodes.values()], name_tag + "horizon.png", p_node = psd_nodes.values())
 
 #
 # loop over banks to run gstlal inspiral pre clustering and far computation
@@ -505,23 +593,29 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 
 	# inspiral jobs by segment
 	for seg in segs:
-		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold)
+		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = [psd_nodes[hash_seg(seg)]])
 		inspiral_nodes.append((None, noninjnode))
 
+	# likelihood jobs for non injections
+	likelihood_nodes[s] = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] is None], p_node=[node[1] for node in inspiral_nodes if node[0] is None])
+	
 	
 	#
 	# injections
 	#
+	
+	likelihood_nodes_inj[s] = []
 
 	for injections in options.injections:
 		# inspiral jobs by segment
 		for seg in segs:
-			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold)
-			inspiral_nodes.append((injections, injnode))	
+			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = [psd_nodes[hash_seg(seg)]])
+			inspiral_nodes.append((injections, injnode))
+
+		# likelihood jobs for injections
+		likelihood_nodes_inj[s].append(gstlal_inspiral_calc_likelihood_node(calcLikelihoodJobInj, dag, likelihood_output_name = None, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] == injections], p_node=[node[1] for node in inspiral_nodes if node[0] == injections]+[node[1] for node in inspiral_nodes if node[0] is None]))
 
 	
-	# likelihood jobs for non injections and injections
-	likelihood_nodes[s] = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes], p_node=[node[1] for node in inspiral_nodes])
 	
 
 	# after assigning the likelihoods cluster
@@ -531,7 +625,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 			# clustering and conversion to XML
 			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[node.output_name], p_node=[likelihood_nodes[s]])
 		else:
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[node.output_name], p_node=[likelihood_nodes[s]])
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[node.output_name], p_node=likelihood_nodes_inj[s])
 		merge_nodes.append((inj, clusternode))
 
 	# merge over the segments and cluster again
@@ -607,7 +701,6 @@ margnode = gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, "mar
 farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = ["marginalized_likelihood.xml.gz"], noninj_input = [noninjdb], inj_input = injdbs, p_node = [margnode])
 
 # make plots
-name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode], segments_name=options.frame_segments_name)
 
 # make a web page
