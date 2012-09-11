@@ -57,6 +57,7 @@ from pylal import lalconstants
 
 from gstlal import pipeparts
 from gstlal import pipeio
+from gstlal import datasource
 
 
 #
@@ -68,7 +69,7 @@ from gstlal import pipeio
 #
 
 
-def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frames", injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
+def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbose = False):
 	# FIXME:  why can't this be done at the top with the other imports?
 	# yes it creates a cyclic dependency, but there's no reason why it
 	# shouldn't work that I can see.
@@ -96,26 +97,26 @@ def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frame
 	# code requires a minimum of 1)
 	#
 
-	if float(abs(seg)) < 8 * psd_fft_length:
-		raise ValueError("segment %s too short" % str(seg))
+	if float(abs(gw_data_source_info.seg)) < 8 * psd_fft_length:
+		raise ValueError("segment %s too short" % str(gw_data_source_info.seg))
 
 	#
 	# build pipeline
 	#
 
 	if verbose:
-		print >>sys.stderr, "measuring PSD in segment %s" % str(seg)
+		print >>sys.stderr, "measuring PSD in segment %s" % str(gw_data_source_info.seg)
 		print >>sys.stderr, "building pipeline ..."
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline("psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, verbose = verbose)
+	head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
-	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), median_samples = 7)
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = psd_fft_length, average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2) - 1)), median_samples = 7)
 	pipeparts.mkfakesink(pipeline, head)
 
 	#
