@@ -5,9 +5,9 @@
 
 # controls triggers
 IFOS = H1 L1
-START = 869622409
-STOP =  870832009
-TAG = Test
+START = 852393970
+STOP =  854813170
+TAG = pipe_compare
 WEBDIR = ~/public_html/${START}-${STOP}-${TAG}
 NUMBANKS = 2
 BANK_CACHE_PREFIX = ../bank/
@@ -18,14 +18,14 @@ BANK_CACHE_SUFFIX = _bank.cache
 # The seed is the string before the suffix _injections.xml
 # Change as appropriate, whitespace is important
 INJECTIONS := 1_injections.xml 2_injections.xml 3_injections.xml 4_injections.xml 5_injections.xml 6_injections.xml
-MIN_DIST = 770
-MAX_DIST = 40000
-MIN_MASS1 = 1.39
-MAX_MASS1 = 1.41
-MIN_MASS2 = 1.39
-MAX_MASS2 = 1.41
-MIN_TOTAL_MASS = 2.78
-MAX_TOTAL_MASS = 2.82
+MIN_DIST = 1000
+MAX_DIST = 80000
+MIN_MASS1 = 1.0
+MAX_MASS1 = 3.0
+MIN_MASS2 = 1.0
+MAX_MASS2 = 3.0
+MIN_TOTAL_MASS = 2.0
+MAX_TOTAL_MASS = 6.0
 FLOW = 35
 
 #
@@ -61,6 +61,7 @@ VETO_SERVER=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbc/public/segments/S5/
 LIGO_FRAME_TYPE='$*_RDS_C03_L2'
 LIGO_SEGMENTS="$*:Science,$*:Injection"
 LIGO_VETOES="$*:Injection"
+CHANNEL_NAMES:=--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN --channel-name=L1=LSC-STRAIN
 endif
 
 ifeq (${S5VSR1}, ${TRUE})
@@ -70,6 +71,7 @@ VETO_SERVER=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbc/public/segments/S5/
 LIGO_FRAME_TYPE='$*_RDS_C03_L2'
 LIGO_SEGMENTS="$*:Science,$*:Injection"
 LIGO_VETOES="$*:Injection"
+CHANNEL_NAMES:=--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN --channel-name=L1=LSC-STRAIN
 # FIXME add virgo
 endif
 
@@ -138,7 +140,7 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:0:0 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
-	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
+	gstlal_s5_pbh_trigger_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) $(CHANNEL_NAMES) 
 
 V1_vetoes.xml:
 	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_VETOES) --result-name=vetoes > $@
