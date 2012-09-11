@@ -24,55 +24,29 @@
 
 # FIXME: Move some common options to a module.
 from optparse import OptionParser
-from glue import segments
-from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw import utils
-from gstlal import inspiral
+from gstlal import datasource
+from gstlal import reference_psd
 
-parser = OptionParser(description = __doc__)
-parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
-parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise according to a certain spectrum.")
-parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--instrument", action = "append", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required). Can be given multiple times.")
-parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
-parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
-parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
-parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
-parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
-parser.add_option("--frame-segments-name", default = "datasegments", metavar = "name", help = "Set the name of the segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
 
-parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	# generic "source" options
+	datasource.append_options(parser)
 
-options, filenames = parser.parse_args()
+	# add our own options
+	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
-if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
-	raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
-	
-if options.fake_data not in (None, "LIGO", "AdvLIGO"):
-	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
+	options, filenames = parser.parse_args()
 
-required_options = ["instrument", "write_psd"]
+	# check our own options
+	if options.write_psd is None:
+		raise ValueError("Must specify --write-psd")
 
-if options.frame_cache or options.fake_data:
-	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
-	seekevent = gst.event_new_seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
-	required_options += ["channel_name", "gps_start_time", "gps_end_time"]
-else:
-	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)) # FIXME Future infinity :)
-	seekevent = None
-
-channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
-
-missing_options = [option for option in required_options if getattr(options, option) is None]
-if missing_options:
-	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
-
-
+	return options, filenames
 
 #
 # =============================================================================
@@ -82,32 +56,10 @@ if missing_options:
 # =============================================================================
 #
 
+options, filenames = parse_command_line()
 
+# parse the generic "source" options, check for inconsistencies is done inside
+# the class init method
+detectors = datasource.GWDataSourceInfo(options)
 
-from gstlal import reference_psd
-from gstlal import lloidparts
-
-psd_dict = {}
-
-for instrument in options.instrument:
-
-	if options.frame_segments_file is not None:
-		frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()[instrument]
-	else:
-		frame_segments = None
-
-	psd_dict[instrument] = reference_psd.measure_psd(
-		instrument,
-		seekevent,
-		lloidparts.DetectorData(options.frame_cache, channel_dict[instrument]),
-		options.seg,
-		options.sample_rate,	# Hz
-		psd_fft_length = options.psd_fft_length,
-		data_source = options.fake_data or (options.online_data and "online") or "frames",
-		injection_filename = options.injections,
-		frame_segments = frame_segments,
-		verbose = options.verbose
-	)
-
-
-reference_psd.write_psd(options.write_psd, psd_dict, verbose = options.verbose)
+reference_psd.write_psd(options.write_psd, dict((instrument, reference_psd.measure_psd(detectors, instrument, options.sample_rate, psd_fft_length = options.psd_fft_length, verbose = options.verbose)) for instrument in detectors.channel_dict), verbose = options.verbose)
