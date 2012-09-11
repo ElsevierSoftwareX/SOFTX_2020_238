@@ -44,11 +44,11 @@ from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 import numpy
 from pylal.datatypes import LIGOTimeGPS
+from gstlal import datasource
 
 #
 # Classes to plot the horizon distance
 #
-gstlal_plot_psd_horizon
 
 class gstlal_plot_psd_horizon_job(inspiral_pipe.InspiralJob):
 	"""
@@ -99,9 +99,8 @@ class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
 		self.add_var_opt("frame-segments-name", frame_segments_name)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
-		# add hack for multiple instruments
-		self.add_var_opt("instrument", pipeline_dot_py_append_opts_hack("instrument", instruments))
-		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
+		self.add_var_opt("data-source", "frames")
+		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict, ifos = instruments))
 		if injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(instruments)), gps_start_time, gps_end_time)
@@ -321,7 +320,7 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 		self.add_var_opt("frame-segments-name", frame_segments_name)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
+		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
@@ -463,16 +462,13 @@ def extract_all_nodes_by_inj(nodes, inj):
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
-	parser.add_option("--injections", metavar = "filename", action = "append", help = "Set the name of the xml file for injections, can be called multiple times")
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
-	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
-	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name", default="datasegments")
+
+	# generic data source options
+	datasource.append_options(parser)
+
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
-	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
-	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
-	parser.add_option("--channel", metavar = "name", default = [], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
@@ -489,41 +485,38 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("frame_cache", "reference_psd", "bank_cache", "gps_start_time", "gps_stop_time"):
+	for option in ("reference_psd", "bank_cache"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
 
-	#FIXME add consistency check?
-	bankcache = parse_cache_str(options.bank_cache)
-	channel_dict = inspiral.channel_dict_from_channel_list(options.channel)
-
-	return options, filenames, bankcache, channel_dict
+	return options, filenames
 
 
 #
 # MAIN
 #
 
-options, filenames, bank_cache, channel_dict = parse_command_line()
-# FIXME use glue function
+options, filenames = parse_command_line()
+bank_cache = parse_cache_str(options.bank_cache)
+
+detectors = datasource.GWDataSourceInfo(options)
+channel_dict = detectors.channel_dict
+
 instruments = "".join(sorted(bank_cache.keys()))
 
 #
 # Setup analysis segments
 #
 
-segsdoc = utils.load_filename(options.frame_segments_file, verbose = options.verbose)
-segs = ligolw_segments.segmenttable_get_by_name(segsdoc, options.frame_segments_name).coalesce()
+segs = detectors.frame_segments
 
 # union of all single detector segments that we want to analyze
 segs = segs.union(bank_cache.keys()).coalesce()
 
-# get the requested start / stop boundary
-boundary_seg = segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_stop_time))])
-
 # intersect so we only analyze segments in the requested time 
-segs &= boundary_seg
+boundary_seg = detectors.seg
+segs &= segments.segmentlist([boundary_seg])
 
 # FIXME break up long segments into smaller ones with 1024 of overlap
 segs = gstlaldagparts.breakupsegs(segs, options.max_segment_length, 1024)
@@ -564,6 +557,12 @@ noninj_nodes = []
 inj_nodes = dict([(inj,[]) for inj in options.injections])
 
 #
+# FIXME FIXME FIXME!!! 
+# From here down don't make explicit references to the opaque options provided
+# by datasource for maintainability
+#
+
+#
 # Precompute the PSDs for each segment
 #
 
@@ -576,7 +575,7 @@ for seg in segs:
 	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
 
 # plot the horizon distance
-name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
+name_tag = "plots/sub-solar-mass-%d-%d_" % (int(boundary_seg[0]), int(boundary_seg[1]))
 gstlal_plot_psd_horizon_node(horizonJob, dag, [node.output_name for node in psd_nodes.values()], name_tag + "horizon.png", p_node = psd_nodes.values())
 
 #
@@ -630,13 +629,13 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 
 	# merge over the segments and cluster again
 
-	noninjdb = "%s-%04d-%d-%d-LLOID.sqlite" % (instruments, i, options.gps_start_time, options.gps_stop_time)
+	noninjdb = "%s-%04d-%d-%d-LLOID.sqlite" % (instruments, i, int(boundary_seg[0]), int(boundary_seg[1]))
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[node[1].output_name for node in merge_nodes if node[0] is None], p_node = [node[1] for node in merge_nodes if node[0] is None])
 	sqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[sqlitenode.output_db_name], p_node=[sqlitenode])
 	noninj_nodes.append(sqlitenode)
 
 	for inj in options.injections:
-		injdb = "%s-%04d-%d-%d-LLOID-%s.sqlite" % (instruments, i, options.gps_start_time, options.gps_stop_time, sim_tag_from_inj_file(inj))
+		injdb = "%s-%04d-%d-%d-LLOID-%s.sqlite" % (instruments, i, int(boundary_seg[0]), int(boundary_seg[1]), sim_tag_from_inj_file(inj))
 		sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[node[1].output_name for node in merge_nodes if node[0] ==  inj], p_node = [node[1] for node in merge_nodes if node[0] == inj])
 		sqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[sqlitenode.output_db_name], p_node=[sqlitenode])
 		inj_nodes[inj].append(sqlitenode)
@@ -647,7 +646,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 #
 
 # setup the final output names
-noninjdb = "%s-ALL-%d-%d-LLOID.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time)
+noninjdb = "%s-ALL-%d-%d-LLOID.sqlite" % (instruments, int(boundary_seg[0]), int(boundary_seg[1]))
 
 # merge
 sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[f.output_name for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=noninj_nodes)
@@ -664,7 +663,7 @@ p_nodes = [noninjsqlitenode]
 for injections in options.injections:
 
 	# Setup the final output names, etc.
-	injdb = "%s-ALL-%d-%d-LLOID-%s.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time, sim_tag_from_inj_file(injections))
+	injdb = "%s-ALL-%d-%d-LLOID-%s.sqlite" % (instruments, int(boundary_seg[0]), int(boundary_seg[1]), sim_tag_from_inj_file(injections))
 	injdbs.append(injdb)
 	injxml = injdb+".xml.gz"
 	
@@ -704,8 +703,8 @@ farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComput
 plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode], segments_name=options.frame_segments_name)
 
 # make a web page
-gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
-gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
+gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=[plotnode])
+gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), p_node=[plotnode])
 
 #
 # all done
