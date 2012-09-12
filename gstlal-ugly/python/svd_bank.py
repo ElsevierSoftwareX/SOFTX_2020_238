@@ -67,7 +67,7 @@ def read_approximant(xmldoc):
 		# approximant |= set(ligolw_process.get_process_params(xmldoc, program, "--approximant"))
 		# when we can rely on the version of glue that allows non-unique programs
 		process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
-		approximant |= set(row.pyvalue for row in lsctables.table.get_table(lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
+		approximant |= set(row.pyvalue for row in lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
 
 	supported_approximants = (u"FindChirpSP", u"TaylorF2", u"IMRPhenomB")
 	if not approximant:
