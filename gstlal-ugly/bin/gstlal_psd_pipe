@@ -70,14 +70,14 @@ class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("data-source", "frames")
-		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict, ifos = instruments))
+		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
 		if injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
-		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(instruments)), gps_start_time, gps_end_time)
+		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(channel_dict)), gps_start_time, gps_end_time)
 		self.add_var_opt("write-psd",output_name)
 
 
-class gstlal_reference_psd_job(inspiral_pipe.InspiralJob):
+class gstlal_median_of_psds_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_median_of_psds job
 	"""
@@ -94,7 +94,9 @@ class gstlal_median_of_psds_node(inspiral_pipe.InspiralNode):
 	"""
 	def __init__(self, job, dag, output_name = "median_psd.xml.gz", input_files = [], p_node = []):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
-		self.add_var_opt("--output-name", output_name)
+		self.add_var_opt("output-name", output_name)
+		for f in input_files:
+			self.add_file_arg(f)
 
 
 def parse_command_line():
@@ -120,8 +122,6 @@ options, filenames = parse_command_line()
 detectors = datasource.GWDataSourceInfo(options)
 channel_dict = detectors.channel_dict
 
-instruments = "".join(sorted(bank_cache.keys()))
-
 #
 # Setup analysis segments
 #
@@ -129,7 +129,7 @@ instruments = "".join(sorted(bank_cache.keys()))
 segs = detectors.frame_segments
 
 # union of all single detector segments that we want to analyze
-segs = segs.union(bank_cache.keys()).coalesce()
+segs = segs.union(channel_dict.keys()).coalesce()
 
 # intersect so we only analyze segments in the requested time 
 boundary_seg = detectors.seg
@@ -147,7 +147,7 @@ dag = inspiral_pipe.DAG("psd_pipe")
 #
 
 refPSDJob = gstlal_reference_psd_job()
-medianPSDJob = gstlal_reference_psd_job()
+medianPSDJob = gstlal_median_of_psds_job()
 
 #
 # Precompute the PSDs for each segment
@@ -159,7 +159,7 @@ def hash_seg(seg):
 
 psd_nodes = {}
 for seg in segs:
-	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
+	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict.keys(), channel_dict, injections=None, p_node=[])
 
 gstlal_median_of_psds_node(medianPSDJob, dag, output_name = "median_psd.xml.gz", input_files = [node.output_name for node in psd_nodes.values()], p_node = psd_nodes.values())
 
