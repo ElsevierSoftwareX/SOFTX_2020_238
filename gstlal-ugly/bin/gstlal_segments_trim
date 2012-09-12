@@ -44,8 +44,7 @@ trim = options.trim
 
 xmldoc = utils.load_filename(fname, verbose = True)
 
-segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).contract(trim)
-
+segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce().contract(trim)
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
@@ -72,7 +71,6 @@ for ifo in segs.keys():
 
 for ifo, segl in segs.items():
 	for seg in segl:
-		print seg
 		row = segtab.RowType()
 		row.segment_def_id = ifo_ids[ifo]
 		row.segment_id = segtab.get_next_id()
