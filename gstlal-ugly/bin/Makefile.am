@@ -22,9 +22,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_iir_bank_pipe \
 	gstlal_iir_ll_inspiral \
 	gstlal_compute_far_from_snr_chisq_histograms \
-	gstlal_s5_pbh_segments_trim \
 	gstlal_s5_pbh_trigger_pipe \
-	gstlal_s5_pbh_trigger_setup \
 	gstlal_s5_pbh_summary_page \
 	gstlal_iir_inspiral \
 	gstlal_injections_by_local_rate \
@@ -53,4 +51,6 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_regen_reg_from_condor_q \
 	gstlal_h1h2_coh_frames \
 	gstlal_inspiral_recompute_online_far \
-	gstlal_inspiral_recompute_online_far_from_gracedb
+	gstlal_inspiral_recompute_online_far_from_gracedb \
+	gstlal_median_of_psds \
+	gstlal_psd_pipe
