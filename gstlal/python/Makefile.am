@@ -5,10 +5,6 @@ INCLUDES = -I$(top_srcdir)/lib
 # which prevents the module from getting spread across lib and lib64
 # on e.g. CentOS.
 pkgpythondir = $(pkgpyexecdir)
-# Put these Python scripts into the plugin directory under "python" so that
-# GStreamer sees them.
-#pkgpythondir = $(plugindir)/python
-#pkgpyexecdir = $(pkgpythondir)
 
 pkgpython_PYTHON = \
 	__init__.py \
