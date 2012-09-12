@@ -466,12 +466,9 @@ def parse_command_line():
 	# generic data source options
 	datasource.append_options(parser)
 
-	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
-	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
-	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
@@ -481,11 +478,14 @@ def parse_command_line():
 	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+	# Override the datasource injection option
+	parser.remove_option("--injections")
+	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
 
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("reference_psd", "bank_cache"):
+	for option in ("bank_cache",):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -504,6 +504,11 @@ detectors = datasource.GWDataSourceInfo(options)
 channel_dict = detectors.channel_dict
 
 instruments = "".join(sorted(bank_cache.keys()))
+
+#FIXME a hack to find the sql paths
+share_path = os.path.split(inspiral_pipe.which('gstlal_reference_psd'))[0].replace('bin', 'share/gstlal')
+options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
+options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
 
 #
 # Setup analysis segments
