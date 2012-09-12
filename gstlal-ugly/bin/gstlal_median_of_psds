@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011 Ian Harry, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import numpy
+import sys
+import glob
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from gstlal import reference_psd
+from optparse import OptionParser
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--output-name", metavar = "filename", help = "The output xml file (required)")
+parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+options, filenames = parser.parse_args()
+
+psd_dict = {}
+# FIXME not memory efficient
+for f in filenames:
+	for ifo, psd in reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose =options.verbose, contenthandler = ligolw.LIGOLWContentHandler)).items():
+		if psd is not None:
+			psd_dict.setdefault(ifo, []).append(psd)
+
+# ony has a value if we have at least one psd so this is safe:
+# assumes all psds have the same parameters
+psd_out_dict = dict((ifo, psds[0]) for ifo, psds in psd_dict)
+for ifo in psd_dict:
+	psd_out_dict[ifo].data = numpy.median(numpy.array([psd_dict[ifo]]), axis= 0)
+
+# Write it to disk
+reference_psd.write_psd(
+        options.output_name,
+	psd_out_dict,
+        verbose = options.verbose
+)
+
