@@ -1,27 +1,6 @@
-# Misc useful definitions
-empty:=
-space:= $(empty) $(empty)
-comma:= ,
-
 # controls psd segments, should set it to the analysis time intended
 IFOS = H1 L1
-PSDSTART = 852393970
-PSDSTOP =  854813170
-
-# Segments file names
-segments_suffix := _segmentspadded.xml
-SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
-
-
-# reference psd file names
-psd_suffix := _psd.xml.gz
-PSD_FILES  := $(addsuffix $(psd_suffix),$(IFOS))
-
-TRIM = 16
-
-# Frame cache file names
-frame_suffix      := _frame.cache
-FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+REF_PSD = ../psd/median_psd.xml.gz
 
 # data for lalapps_tmpltbank, note this is just to be able to run the program, the psd is replaced withe the design psd
 START = 871147452
@@ -37,11 +16,11 @@ LOW_FREQUENCY_CUTOFF = 40.0
 HIGH_PASS_FREQ = 30.0
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
-NUM_SPLIT_TEMPLATES = 250
-OVERLAP = 50
+NUM_SPLIT_TEMPLATES = 100
+OVERLAP = 30
 MM = 0.98
 
-all : dag plots
+all : dag
 
 frame.H.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
@@ -91,46 +70,12 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument H1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument L1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz
 
-reference_psd.xml.gz : $(PSD_FILES)
-	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
-
-%_psd.xml.gz : frame.cache segments.xml
-	gstlal_reference_psd --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
-	
-
-%_segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=$*:Science --result-name=datasegments > $@
-	ligolw_segments_compat $@
-
-%_frame.cache:
-	#FIXME horrible hack to get the observatory, not guaranteed to work
-	$(eval OBS:=$*)
-	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
-	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
-	ligo_data_find -o $(OBS) -t $*_RDS_C03_L2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > $@
-
-frame.cache: $(FRAME_CACHE_FILES)
-	cat $(FRAME_CACHE_FILES) > frame.cache
-
-segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
-
-sql :
-	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
-	cat simplify.sql cluster.sql > simplify_and_cluster.sql
-	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
-
-dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql
+dag : H1-TMPLTBANK-871154847-2048.xml.gz
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --tolerance 0.99995 --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
-	gstlal_inspiral_svd_bank_pipe --tolerance 0.99995 --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	gstlal_inspiral_svd_bank_pipe --tolerance 0.99995 --instrument H1 --reference-psd $(REF_PSD) --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --tolerance 0.99995 --instrument L1 --reference-psd $(REF_PSD) --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat H1_bank.dag L1_bank.dag > bank.dag
 
-plots : reference_psd.xml.gz
-	gstlal_plot_psd reference_psd.xml.gz psd_plot
-
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql *_psd.xml.gz *segments.xml *_segmentspadded.xml
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png

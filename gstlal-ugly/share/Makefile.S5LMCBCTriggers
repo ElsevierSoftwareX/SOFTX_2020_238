@@ -9,8 +9,8 @@ START = 852393970
 STOP =  854813170
 TAG = pipe_compare
 WEBDIR = ~/public_html/${START}-${STOP}-${TAG}
-NUMBANKS = 2
-BANK_CACHE_PREFIX = ../bank/
+NUMBANKS = 5
+BANK_CACHE_PREFIX = ../bank_test/
 BANK_CACHE_SUFFIX = _bank.cache
 
 
@@ -31,13 +31,6 @@ FLOW = 35
 #
 # Stuff the user shouldn't have to mess with
 #
-
-# FIXME do we need this now that the dag estimates it?
-PSD_FILE:= $(addprefix $(BANK_CACHE_PREFIX),reference_psd.xml.gz)
-
-# FIXME get this from share
-CLUSTER_SQL := $(addprefix $(BANK_CACHE_PREFIX),simplify_and_cluster.sql)
-INJ_CLUSTER_SQL := $(addprefix $(BANK_CACHE_PREFIX),inj_simplify_and_cluster.sql)
 
 #
 # Epoch specific info.  Note that an analysis that spans these boundaries would
@@ -140,7 +133,7 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:0:0 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
-	gstlal_s5_pbh_trigger_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) $(CHANNEL_NAMES) 
+	gstlal_s5_pbh_trigger_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) $(CHANNEL_NAMES) 
 
 V1_vetoes.xml:
 	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_VETOES) --result-name=vetoes > $@
@@ -160,7 +153,7 @@ V1_segmentspadded.xml: cats.xml
 	# FIXME ignore the return value since it will always be 1 if we have actually subtracted any segments
 	- ligolw_segment_diff --segment --result-name datasegments $@ $*-VETOTIME_CAT1-*.xml --output-file $@
 	ligolw_segments_compat $@
-	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 16 --output $@ $@
+	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 32 --output $@ $@
 
 %_segmentspadded.xml: cats.xml
 	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
@@ -168,7 +161,7 @@ V1_segmentspadded.xml: cats.xml
 	# FIXME ignore the return value since it will always be 1 if we have actually subtracted any segments
 	- ligolw_segment_diff --segment --result-name datasegments $@ $*-VETOTIME_CAT1-*.xml --output-file $@
 	ligolw_segments_compat $@
-	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 16 --output $@ $@
+	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 32 --output $@ $@
 
 vetoes.xml: $(VETOES_FILES)
 	ligolw_add $(VETOES_FILES) > vetoes.xml
