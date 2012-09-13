@@ -127,7 +127,7 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="allvsall.png"
 			axes.yaxis.set_ticks_position(ylabelposition)
 			axes.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		pylab.grid()
-		axes.scatter(x, y, s=1, marker='x')
+		axes.scatter(x, y, s=100, marker='x', color = 'b')
 		return axes
 
 	def plotHistogram(rec, x, Xa, xlabel = None, ylabel = None, orientation = "vertical"):
