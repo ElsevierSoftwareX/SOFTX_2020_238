@@ -283,7 +283,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 	 * frequency-domain input
 	 */
 
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 
 	GST_LOG_OBJECT(element, "starting FFTW planning");
 	element->input_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->input_fd));
@@ -307,7 +307,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	element->fir_matrix_fd = (complex double *) fftw_malloc(fir_channels(element) * length_fd * sizeof(*element->fir_matrix_fd));
 
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 
 	for(i = 0; i < fir_channels(element); i++) {
 		unsigned j;
@@ -329,7 +329,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 static void free_fft_workspace(GSTLALFIRBank *element)
 {
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 
 	fftw_free(element->fir_matrix_fd);
 	element->fir_matrix_fd = NULL;
@@ -342,7 +342,7 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 	fftw_destroy_plan(element->out_plan);
 	element->out_plan = NULL;
 
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 }
 
 
@@ -1540,7 +1540,7 @@ static void gstlal_load_fftw_wisdom(void)
 	char *filename;
 	int savederrno;
 
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 	savederrno = errno;
 	filename = getenv(GSTLAL_FFTW_WISDOM_ENV);
 	if(filename) {
@@ -1555,7 +1555,7 @@ static void gstlal_load_fftw_wisdom(void)
 	} else if(!fftw_import_system_wisdom())
 		GST_WARNING("failed to import system default FFTW wisdom: %s", strerror(errno));
 	errno = savederrno;
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 }
 
 

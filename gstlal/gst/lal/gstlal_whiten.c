@@ -236,10 +236,10 @@ static int make_workspace(GSTLALWhiten *element)
 	 * build FFT plans
 	 */
 
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 	fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length(element), 1);
 	revplan = XLALCreateReverseREAL8FFTPlan(fft_length(element), 1);
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 	if(!fwdplan || !revplan) {
 		GST_ERROR_OBJECT(element, "failure creating FFT plans: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
@@ -299,10 +299,10 @@ static int make_workspace(GSTLALWhiten *element)
 error:
 	XLALDestroyREAL8Window(hann_window);
 	XLALDestroyREAL8Window(tukey_window);
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 	XLALDestroyREAL8FFTPlan(fwdplan);
 	XLALDestroyREAL8FFTPlan(revplan);
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 	XLALDestroyREAL8TimeSeries(tdworkspace);
 	XLALDestroyCOMPLEX16FrequencySeries(fdworkspace);
 	XLALDestroyREAL8Sequence(output_history);
@@ -325,12 +325,12 @@ static void free_workspace(GSTLALWhiten *element)
 	element->hann_window = NULL;
 	XLALDestroyREAL8Window(element->tukey_window);
 	element->tukey_window = NULL;
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	element->fwdplan = NULL;
 	XLALDestroyREAL8FFTPlan(element->revplan);
 	element->revplan = NULL;
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 	XLALDestroyREAL8TimeSeries(element->tdworkspace);
 	element->tdworkspace = NULL;
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);

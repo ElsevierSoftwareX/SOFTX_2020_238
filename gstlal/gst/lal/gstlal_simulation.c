@@ -401,13 +401,13 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		 * add detector strain to simulation_series
 		 */
 
-		g_static_mutex_lock(gstlal_fftw_lock);
+		gstlal_fftw_lock();
 		if(XLALSimAddInjectionREAL8TimeSeries(element->simulation_series, inspiral_series, response)) {
 			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
 		}
 		XLALDestroyREAL8TimeSeries(inspiral_series);
-		g_static_mutex_unlock(gstlal_fftw_lock);
+		gstlal_fftw_unlock();
 
 		/*
 		 * remove injection from list and continue
@@ -448,10 +448,10 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		 */
 
 
-		g_static_mutex_lock(gstlal_fftw_lock);
+		gstlal_fftw_lock();
 		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response))
 			XLAL_ERROR(XLAL_EFUNC);
-		g_static_mutex_unlock(gstlal_fftw_lock);
+		gstlal_fftw_unlock();
 
 		/*
 		 * add waveforms buffer into simulation_series

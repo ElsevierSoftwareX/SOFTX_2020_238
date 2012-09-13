@@ -475,12 +475,12 @@ static gboolean start(GstBaseTransform *trans)
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
         if (!(element->outfft)) {
-		g_static_mutex_lock(gstlal_fftw_lock);
+		gstlal_fftw_lock();
 		element->outfft = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * (element->n+1));
 
 		element->infft = (double *) fftw_malloc(sizeof(double) * (2 * element->n));
 		element->fftplan = fftw_plan_dft_r2c_1d((int) element->n, (double *) element->infft, (fftw_complex *) element->outfft, FFTW_MEASURE);
-		g_static_mutex_unlock(gstlal_fftw_lock);
+		gstlal_fftw_unlock();
 	}
 
 	return TRUE;
@@ -621,9 +621,9 @@ static void finalize(GObject *object)
 	}
 
 	if (element->fftplan) {
-		g_static_mutex_lock(gstlal_fftw_lock);
+		gstlal_fftw_lock();
 		fftw_destroy_plan(element->fftplan);
-		g_static_mutex_unlock(gstlal_fftw_lock);
+		gstlal_fftw_unlock();
 	}
 
 	if (element->outfft) {

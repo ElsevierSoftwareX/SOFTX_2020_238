@@ -44,7 +44,7 @@
 
 static PyObject *lock(PyObject *self, PyObject *args)
 {
-	g_static_mutex_lock(gstlal_fftw_lock);
+	gstlal_fftw_lock();
 
 	Py_INCREF(Py_None);
 	return Py_None;
@@ -53,7 +53,7 @@ static PyObject *lock(PyObject *self, PyObject *args)
 
 static PyObject *unlock(PyObject *self, PyObject *args)
 {
-	g_static_mutex_unlock(gstlal_fftw_lock);
+	gstlal_fftw_unlock();
 
 	Py_INCREF(Py_None);
 	return Py_None;

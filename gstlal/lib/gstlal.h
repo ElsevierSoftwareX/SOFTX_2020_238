@@ -47,16 +47,12 @@ G_BEGIN_DECLS
 
 
 /*
- * Data
- */
-
-
-extern GStaticMutex *gstlal_fftw_lock;
-
-
-/*
  * Function prototypes
  */
+
+
+void gstlal_fftw_lock(void);
+void gstlal_fftw_unlock(void);
 
 
 /* int type */
