@@ -59,7 +59,6 @@
 
 #include <lal/Date.h>
 #include <lal/LALDatatypes.h>
-#include <lal/FFTWMutex.h>
 #include <lal/Sequence.h>
 #include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
@@ -99,13 +98,11 @@ static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
 void gstlal_fftw_lock(void)
 {
 	g_static_mutex_lock(&gstlal_fftw_lock_mutex);
-	LAL_FFTW_PTHREAD_MUTEX_LOCK;
 }
 
 
 void gstlal_fftw_unlock(void)
 {
-	LAL_FFTW_PTHREAD_MUTEX_UNLOCK;
 	g_static_mutex_unlock(&gstlal_fftw_lock_mutex);
 }
 
