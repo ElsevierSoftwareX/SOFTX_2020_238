@@ -33,6 +33,7 @@
  */
 
 
+#include <locale.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -83,15 +84,15 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 /*
  * the maximum number of characters it takes to print the value for one
- * channel including white space, sign characters, etc.;  double-precision
- * floats in "%.16g" format can be upto 23 characters, plus 1 space between
- * columns
+ * channel including delimeter, sign characters, etc.;  double-precision
+ * floats in "%.16g" format can be upto 23 characters, plus 1 tab character
+ * between columns.  all other data types require fewer characters
  */
 
 #define MAX_CHARS_PER_COLUMN (23 + 1)
 
 /*
- * a newline is sometimes two characters.
+ * newline is "CRLF", and two characters.
  */
 
 #define MAX_EXTRA_BYTES_PER_LINE 2
@@ -130,56 +131,55 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length, g
 
 
 /**
- * Print the samples from a buffer of double precision floats into a buffer
- * of text.
+ * Print the samples from a buffer of channel data into a buffer of text.
  */
 
 
 static int printsample_double(char *location, const void **sample)
 {
-	return sprintf(location, " %.16g", *(*(const double **) sample)++);
+	return sprintf(location, "\t%.16g", *(*(const double **) sample)++);
 }
 
 
 static int printsample_float(char *location, const void **sample)
 {
-	return sprintf(location, " %.16g", (double) *(*(const float **) sample)++);
+	return sprintf(location, "\t%.16g", (double) *(*(const float **) sample)++);
 }
 
 
 static int printsample_int32(char *location, const void **sample)
 {
-	return sprintf(location, " %d", *(*(const gint32 **) sample)++);
+	return sprintf(location, "\t%d", (int) *(*(const gint32 **) sample)++);
 }
 
 
 static int printsample_uint32(char *location, const void **sample)
 {
-	return sprintf(location, " %u", *(*(const guint32 **) sample)++);
+	return sprintf(location, "\t%u", (unsigned) *(*(const guint32 **) sample)++);
 }
 
 
 static int printsample_int16(char *location, const void **sample)
 {
-	return sprintf(location, " %d", *(*(const gint16 **) sample)++);
+	return sprintf(location, "\t%d", (int) *(*(const gint16 **) sample)++);
 }
 
 
 static int printsample_uint16(char *location, const void **sample)
 {
-	return sprintf(location, " %u", *(*(const guint16 **) sample)++);
+	return sprintf(location, "\t%u", (unsigned) *(*(const guint16 **) sample)++);
 }
 
 
 static int printsample_int8(char *location, const void **sample)
 {
-	return sprintf(location, " %d", *(*(const gint8 **) sample)++);
+	return sprintf(location, "\t%d", (int) *(*(const gint8 **) sample)++);
 }
 
 
 static int printsample_uint8(char *location, const void **sample)
 {
-	return sprintf(location, " %u", *(*(const guint8 **) sample)++);
+	return sprintf(location, "\t%u", (unsigned) *(*(const guint8 **) sample)++);
 }
 
 
@@ -218,10 +218,10 @@ static GstFlowReturn print_samples(GstBuffer *out, GstClockTime timestamp, const
 			location += printsample(location, &samples);
 
 		/*
-		 * Finish with a new line
+		 * Finish with a CRLF combination.
 		 */
 
-		location += sprintf(location, "\n");
+		location += sprintf(location, "\r\n");
 	}
 
 	/*
@@ -275,7 +275,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"text/plain"
+		"text/tab-separated-values"
 	)
 );
 
@@ -533,11 +533,17 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		GST_BUFFER_SIZE(outbuf) = 0;
 	} else {
+		struct lconv *locale = localeconv();
+
 		/*
 		 * Print samples into output buffer.
 		 */
 
-		result = print_samples(outbuf, GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate), (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels, element->printsample, element->channels, element->rate, stop - start);
+		if(g_strcmp0(locale->decimal_point, ".") || g_strcmp0(locale->thousands_sep, "")) {
+			GST_ERROR_OBJECT(element, "incompatible locale:  decimal point is \"%s\", thousands separator is \"%s\";  must be \".\" and \"\" respectively", locale->decimal_point, locale->thousands_sep);
+			result = GST_FLOW_ERROR;
+		} else
+			result = print_samples(outbuf, GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate), (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels, element->printsample, element->channels, element->rate, stop - start);
 	}
 
 	/*
