@@ -1,7 +1,7 @@
 /*
  * An "nxy" dumper to produce files that Grace can read
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008--2012  Kipp Cannon, Chad Hanna
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
