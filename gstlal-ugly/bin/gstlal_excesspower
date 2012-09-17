@@ -822,6 +822,47 @@ if( trigger_begin and trigger_end ):
 	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
 gwflocation = cfg.get( "instrument", "location" )
+if( gwflocation == "" ):
+	gwflocation = None
+if( options.data_source == "gwffile" and gwflocation is None ):
+	import tempfile
+	from glue import GWDataFindClient
+
+	if( options.gps_start is None or options.gps_end is None ):
+		sys.exit( "No frame cache present, and no GPS times set. Cannot query for data without an interval to query in." )
+
+	# Shamelessly stolen from gw_data_find
+	print "Querying LDR server for data location." 
+	try:
+		server, port = os.environ["LIGO_DATAFIND_SERVER"].split(":")
+	except ValueError:
+		sys.exit( "Invalid LIGO_DATAFIND_SERVER environment variable set" )
+	print "Server is %s:%s" % (server, port)
+
+	try:
+		frame_type = cfg.get( "instrument", "frame_type" )
+	except ConfigParser.NoOptionError:
+		sys.exit( "Invalid cache location, and no frame type set, so I can't query LDR for the file locations." )
+	if( frame_type == "" ):
+		sys.exit( "No frame type set, aborting." )
+
+	print "Frame type is %s" % frame_type
+	connection =  \
+		GWDataFindClient.GWDataFindHTTPConnection(host=server, port=port)
+	print "Equivalent command line is "
+	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start, options.gps_end, frame_type)
+	cache = connection.find_frame_urls( \
+		handler.inst[0], frame_type,\
+		options.gps_start,\
+		options.gps_end,\
+		urltype="file",\
+		on_gaps="error")
+
+	tmpfile, tmpname = tempfile.mkstemp()
+	print "Writing cache of %d files to %s" % (len(cache), tmpname)
+	cache.tofile( open(tmpname, "w") )
+	connection.close()
+	gwflocation = tmpname
 
 inj_loc = cfg.get( "injections", "xml-location" )
 if( not os.path.isfile( inj_loc ) ):
