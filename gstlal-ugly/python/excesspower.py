@@ -326,8 +326,7 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 		row.confidence = 0
 		row.event_id = bank.get_next_id()
 		row.channel = "awesome full of GW channel"
-		# TODO: Probably should fix this entry.
-		row.process_id = ilwd.get_ilwdchar( u"process:process_id:0" )
+		row.process_id = ilwd.ilwdchar( u"process:process_id:0" )
 
 		bank.append( row )
 		cfreq += band #band is half the full width of the window, so this is 50% overlap
