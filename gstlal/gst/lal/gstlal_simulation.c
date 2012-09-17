@@ -248,10 +248,17 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 
 	/*
 	 * create waveform using lalsimulation
+	 *
+	 * FIXME:  remove the locking when we've figured out how to
+	 * co-ordinate our FFTW lock with LAL
 	 */
 
-	if(XLALSimInspiralChooseWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE)
+	gstlal_fftw_lock();
+	if(XLALSimInspiralChooseWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE) {
+		gstlal_fftw_unlock();
 		XLAL_ERROR(XLAL_EFUNC);
+	}
+	gstlal_fftw_unlock();
 
 	/* add the time of the injection at the geocentre to the
 	 * start times of the h+ and hx time series.  after this,
@@ -399,15 +406,19 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 		/*
 		 * add detector strain to simulation_series
+		 *
+		 * FIXME:  remove the locking when we figure out how to
+		 * co-ordinate this with LAL
 		 */
 
 		gstlal_fftw_lock();
 		if(XLALSimAddInjectionREAL8TimeSeries(element->simulation_series, inspiral_series, response)) {
+			gstlal_fftw_unlock();
 			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
 		}
-		XLALDestroyREAL8TimeSeries(inspiral_series);
 		gstlal_fftw_unlock();
+		XLALDestroyREAL8TimeSeries(inspiral_series);
 
 		/*
 		 * remove injection from list and continue
@@ -445,12 +456,16 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 		/*
 		 * inject waveforms into that buffer
+		 *
+		 * FIXME: remove the locking when we figure out how to co-ordinate this with LAL
 		 */
 
 
 		gstlal_fftw_lock();
-		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response))
+		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response)) {
+			gstlal_fftw_unlock();
 			XLAL_ERROR(XLAL_EFUNC);
+		}
 		gstlal_fftw_unlock();
 
 		/*
