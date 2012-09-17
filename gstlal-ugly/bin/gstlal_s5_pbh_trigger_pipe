@@ -157,6 +157,40 @@ class gstlal_inspiral_plotsummary_node(inspiral_pipe.InspiralNode):
 		for f in input:
 			self.add_file_arg(f)
 
+#
+# gstlal_inspiral_plot_sensitivity
+#
+
+class gstlal_inspiral_plot_sensitivity_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_inspiral_plot_sensitivity_job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plot_sensitivity'), tag_base='gstlal_inspiral_plot_sensitivity'):
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_inspiral_plot_sensitivity_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_inspiral_plot_sensitivity_node
+	"""
+	# FIXME are all needed options here?
+	def __init__(self, job, dag, base, injdbs=[], zldbs=[], tmp_space=inspiral_pipe.log_path(), p_node=[], bin_by_total_mass=True, bin_by_mass1_mass2=True, include_play=True):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("user-tag", base.split("/")[-1])
+		if len(base.split("/")) > 1:
+			self.add_var_opt("output-dir", base.rstrip(base.split("/")[-1]))
+		self.add_var_opt("tmp-space", tmp_space)
+		if bin_by_total_mass:
+			self.add_var_arg("--bin-by-total-mass")
+		if bin_by_mass1_mass2:
+			self.add_var_arg("--bin-by-mass1-mass2")
+		if include_play:
+			self.add_var_arg("--include-play")
+		for f in injdbs:
+			self.add_file_arg(f)
+		for f in zldbs:
+			self.add_file_arg("--zero-lag-database %s"%f)
+
 
 #
 # gstlal_inspiral_plot_likelihoods
@@ -551,7 +585,8 @@ ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
-plotJob = gstlal_inspiral_plotsummary_job()
+plotSummaryJob = gstlal_inspiral_plotsummary_job()
+plotSensitivityJob = gstlal_inspiral_plot_sensitivity_job()
 openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
 marginalizeJob = gstlal_inspiral_marginalize_likelihood_job()
@@ -704,12 +739,16 @@ for i,n in enumerate(range(0, len(margin), margnum)):
 margnode = gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, "marginalized_likelihood.xml.gz", margout, p_node = margnodes)
 farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = ["marginalized_likelihood.xml.gz"], noninj_input = [noninjdb], inj_input = injdbs, p_node = [margnode])
 
-# make plots
-plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode], segments_name=options.frame_segments_name)
+# make summary plots
+plotnodes = []
+plotnodes.append( gstlal_inspiral_plotsummary_node(plotSummaryJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode], segments_name=options.frame_segments_name) )
+
+# make sensitivity plots
+plotnodes.append( gstlal_inspiral_plot_sensitivity_node(plotSensitivityJob, dag, name_tag, injdbs=injdbs, zldbs=[noninjdb], p_node=[farnode]) )
 
 # make a web page
-gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=[plotnode])
-gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), p_node=[plotnode])
+gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=plotnodes)
+gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), p_node=plotnodes)
 
 #
 # all done
