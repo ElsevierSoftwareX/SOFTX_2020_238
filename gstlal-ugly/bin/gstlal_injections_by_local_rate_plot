@@ -98,14 +98,18 @@ for waveform in waveforms:
 dist = numpy.array([0.] + sorted([sim.distance for sim in sim_inspiral_table]))
 
 # BNS
-bns_rate = start = float([proc.value for proc in proc_params if proc.param == "--bns-local-rate"][0]) * 1e-6 # Myr
-poly = rate_to_poly(bns_rate)
-pylab.plot(dist, poly(dist), label="bns rate %.2e" % (bns_rate,) )
+bns_rate = [proc.value for proc in proc_params if proc.param == "--bns-local-rate"]
+if len(bns_rate) > 0:
+	bns_rate = start = float(bns_rate[0]) * 1e-6 # Myr
+	poly = rate_to_poly(bns_rate)
+	pylab.plot(dist, poly(dist), label="bns rate %.2e" % (bns_rate,) )
 
 # NSBH
-nsbh_rate = start = float([proc.value for proc in proc_params if proc.param == "--nsbh-local-rate"][0]) * 1e-6 # Myr
-poly = rate_to_poly(nsbh_rate)
-pylab.plot(dist, poly(dist), label="nsbh rate %.2e" % (nsbh_rate,) )
+nsbh_rate = [proc.value for proc in proc_params if proc.param == "--nsbh-local-rate"]
+if len(nsbh_rate) > 0:
+	nsbh_rate = start = float(nsbh_rate[0]) * 1e-6 # Myr
+	poly = rate_to_poly(nsbh_rate)
+	pylab.plot(dist, poly(dist), label="nsbh rate %.2e" % (nsbh_rate,) )
 
 pylab.legend()
 pylab.grid()
