@@ -74,7 +74,7 @@ dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
 	ligolw_segments_compat $@
 
 %_segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Science --result-name=datasegments > $*segments.xml
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Science,$*:Injection --result-name=datasegments > $*segments.xml
 	ligolw_segments_compat $*segments.xml
 	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
