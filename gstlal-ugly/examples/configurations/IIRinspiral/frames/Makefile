@@ -9,5 +9,10 @@ all : dag
 dag :
 	./fake_frame_pipe --fake-data LIGO --duration 128 --frame-type test --gps-start-time $(START) --gps-end-time $(END) --channel-name=H1=FAKE-STRAIN --channel-name=L1=FAKE-STRAIN --max-segment-length $(BREAKUP)
 
+# Once the dag is complete, you have to run,
+# ls H1/*/*.gwf | lalapps_path2cache > H1_frame.cache
+# ls H1/*/*.gwf | lalapps_path2cache > L1_frame.cache
+# cat H1_frame.cache L1_frame.cache > frame.cache
+
 realclean :
 	rm -r *.sub *.dag* *.cache *.sh logs
