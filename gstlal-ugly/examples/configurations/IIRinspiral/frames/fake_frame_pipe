@@ -1,0 +1,161 @@
+#!/usr/bin/python
+"""
+This program makes a dag to generate fake frames
+"""
+
+__author__ = 'Chad Hanna <channa@caltech.edu>'
+__author__ = 'Shaun Hooper <hoopes01@student.uwa.edu.au>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, copy, math
+import subprocess, socket, tempfile
+
+##############################################################################
+# import the modules we need to build the pipeline
+from glue import iterutils
+from glue import pipeline
+from glue import lal
+from glue.ligolw import lsctables
+from glue import segments
+import glue.ligolw.utils as utils
+from pylal.datatypes import LIGOTimeGPS
+import glue.ligolw.utils.segments as ligolw_segments
+from gstlal import inspiral
+from gstlal import dagparts
+from optparse import OptionParser
+
+def which(prog):
+	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
+	out = which.stdout.read().strip()
+	if not out: 
+		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
+		raise ValueError 
+	return out
+
+def log_path():
+	host = socket.getfqdn()
+	#FIXME add more hosts as you need them
+	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
+	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
+	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
+	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
+
+
+class bank_DAG(pipeline.CondorDAG):
+
+	def __init__(self, name, logpath = log_path()):
+		self.basename = name
+		tempfile.tempdir = logpath
+		tempfile.template = self.basename + '.dag.log.'
+		logfile = tempfile.mktemp()
+		fh = open( logfile, "w" )
+		fh.close()
+		pipeline.CondorDAG.__init__(self,logfile)
+		self.set_dag_file(self.basename)
+		self.jobsDict = {}
+		self.node_id = 0
+		self.output_cache = []
+
+	def add_node(self, node):
+		node.set_retry(3)
+		self.node_id += 1
+		node.add_macro("macroid", self.node_id)
+		pipeline.CondorDAG.add_node(self, node)
+
+	def write_cache(self):
+		out = self.basename + ".cache"
+		f = open(out,"w")
+		for c in self.output_cache:
+			f.write(str(c)+"\n")
+		f.close()
+
+
+#
+# classes for generating fake frames
+#
+
+class gstlal_fake_frames_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_fake_frames job
+	"""
+	def __init__(self, executable=which('gstlal_fake_aligo_frames'), tag_base='gstlal_fake_aligo_frames'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_fake_aligo_frames'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.add_condor_cmd('requirements', 'Memory > 1999') #FIXME is this enough?
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
+
+class gstlal_fake_frames_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_fake_frames node
+	"""
+	def __init__(self, job, dag, gps_start_time, gps_end_time, instrument, channel_name, frame_type, fake_data, duration, p_node=[]):
+
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("gps-start-time",gps_start_time)
+		self.add_var_opt("gps-end-time",gps_end_time)
+		self.add_var_opt("instrument", instrument)
+		self.add_var_opt("channel-name", channel_name)
+		self.add_var_opt("frame-type",frame_type)
+		self.add_var_opt("fake-data",fake_data)
+		self.add_var_opt("duration", duration)
+		path = os.getcwd()
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--gps-start-time", help = "GPS start time (required)", type="float")
+	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
+	parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+	parser.add_option("--frame-type", metavar = "name", help = "Specify the non-instrumental part of the frame type. The full frame type will be constructed by prepending the instrument.")
+	parser.add_option("--fake-data", metavar = "(white|silence|LIGO|AdvLIGO)", help = "Set the type of noise.")
+	parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
+	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
+
+	options, filenames = parser.parse_args()
+
+
+	return options, filenames
+
+
+options, filenames = parse_command_line()
+
+try: os.mkdir("logs")
+except: pass
+dag = bank_DAG("fake_frame")
+
+# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
+channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name, {})
+
+seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+seglists =segments.segmentlistdict()
+for ifo in channel_dict.keys():
+	seglists[ifo] = [seg]
+dagparts.breakupseglists(seglists, options.max_segment_length, 0)
+
+
+fakeframesJob = gstlal_fake_frames_job()
+
+for instrument, seglist in seglists.iteritems():
+	for seg in seglist:
+		gstlal_fake_frames_node(fakeframesJob, dag, int(seg[0]), int(seg[1]), instrument, channel_dict[instrument], options.frame_type, options.fake_data, options.duration, p_node=[])
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
+
+
