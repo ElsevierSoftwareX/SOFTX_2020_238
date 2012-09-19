@@ -46,6 +46,49 @@ import numpy
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
 
+
+#
+# Classes for the svd banks
+#
+
+
+class gstlal_svd_bank_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_svd_bank job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_svd_bank'), tag_base='gstlal_svd_bank'):
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+		self.add_condor_cmd('requirements', 'Memory > 1999') #FIXME is this enough?
+
+
+class gstlal_svd_bank_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_svd_bank node
+	"""
+	def __init__(self, job, dag, template_bank, ifo, svd_bank_name, flow = 40, reference_psd = "psd.xml", tolerance = 0.9995, FAP = 0.5, snr = 4.0, clipleft = 0, clipright = 0, samples_min = 1024, samples_max_256 = 1024, samples_max_64 =  2048, samples_max = 4096, p_node=[], autocorrelation_length = None, bank_id = None, identity_transform = False):
+
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		
+		self.add_var_opt("flow", flow)
+		self.add_var_opt("snr-threshold", snr)
+		self.add_var_opt("svd-tolerance", tolerance)
+		self.add_var_opt("reference-psd", reference_psd)
+		self.add_var_opt("template-bank", template_bank)
+		self.add_var_opt("ortho-gate-fap", FAP)
+		self.add_var_opt("samples-min", samples_min)
+		self.add_var_opt("samples-max", samples_max)
+		self.add_var_opt("samples-max-64", samples_max_64)
+		self.add_var_opt("samples-max-256", samples_max_256)
+		self.add_var_opt("clipleft", clipleft)
+		self.add_var_opt("clipright", clipright)
+		if bank_id is not None:
+			self.add_var_opt("bank-id", bank_id)
+		if autocorrelation_length is not None:
+			self.add_var_opt("autocorrelation-length", autocorrelation_length)
+		if identity_transform:
+			self.add_var_arg("--identity-transform")
+		self.add_var_opt("write-svd-bank", svd_bank_name)
+
 #
 # Classes to plot the horizon distance
 #
@@ -303,6 +346,8 @@ class ligolw_inspinjfind_node(inspiral_pipe.InspiralNode):
 	"""
 	def __init__(self, job, dag, xml, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		#FIXME make a parameter?
+		self.add_var_opt("time-window", 0.9)
 		self.add_var_arg(xml)
 		self.output_name = xml
 
@@ -488,10 +533,11 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 		out += " --%s %s" % (opt, v)
 	return out
 
-def extract_all_nodes_by_inj(nodes, inj):
-	out = []
-	for v in nodes.values():
-		out.extend([n[1] for n in v if n[0] == inj])
+def extract_all_nodes_by_inj(nodes):
+	out = {}
+
+	for n in nodes:
+		out.setdefault(n[0], []).append(n[1])
 	return out
 
 def parse_command_line():
@@ -500,14 +546,24 @@ def parse_command_line():
 	# generic data source options
 	datasource.append_options(parser)
 
+	# SVD bank construction options
+	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
+	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
+	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
+	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
+	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
+	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
+	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	
+	# trigger generation options
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
 	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
@@ -517,6 +573,9 @@ def parse_command_line():
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
 
 	options, filenames = parser.parse_args()
+	
+	if options.overlap % 2:
+		raise ValueError("overlap must be even")
 
 	fail = ""
 	for option in ("bank_cache",):
@@ -548,14 +607,28 @@ options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.
 # Setup analysis segments
 #
 
-segs = detectors.frame_segments
+allsegs = detectors.frame_segments
 
-# union of all single detector segments that we want to analyze
-segs = segs.union(bank_cache.keys()).coalesce()
+# FIXME FIXME FIXME this only makes sense for 2 detectors
+# intersection of all single detector segments that we want to analyze
+
+# define the analyzable instruments
+analyzable_instruments_set = set(bank_cache.keys())
+segsdict = segments.segmentlistdict()
+for n in range(2, len(analyzable_instruments_set))
+	for ifo_combos in iterutils.choices(analyzable_instruments_set, n):
+		segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
+
+print segsdict.keys()
+
+segs = allsegs.intersection(bank_cache.keys()).coalesce()
 
 # intersect so we only analyze segments in the requested time 
 boundary_seg = detectors.seg
 segs &= segments.segmentlist([boundary_seg])
+
+# A little padding to make sure enough time is analyzed around boundaries
+segs = segs.protract(1024)
 
 # FIXME break up long segments into smaller ones with 1024 of overlap
 segs = gstlaldagparts.breakupsegs(segs, options.max_segment_length, 1024)
@@ -569,14 +642,11 @@ dag = inspiral_pipe.DAG("trigger_pipe")
 #
 
 refPSDJob = gstlal_reference_psd_job()
+svdJob = gstlal_svd_bank_job(tag_base="gstlal_svd_bank")
 horizonJob = gstlal_plot_psd_horizon_job()
 
-if options.do_iir_pipeline is not None:
-	gstlalInspiralJob = gstlal_inspiral_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
-	gstlalInspiralInjJob = gstlal_inspiral_inj_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
-else:
-	gstlalInspiralJob = gstlal_inspiral_job()
-	gstlalInspiralInjJob = gstlal_inspiral_inj_job()
+gstlalInspiralJob = gstlal_inspiral_job()
+gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 
 calcLikelihoodJob = gstlal_inspiral_calc_likelihood_job()
 calcLikelihoodJobInj = gstlal_inspiral_calc_likelihood_job(tag_base='gstlal_inspiral_calc_likelihood_inj')
@@ -603,7 +673,7 @@ inj_nodes = dict([(inj,[]) for inj in options.injections])
 #
 
 #
-# Precompute the PSDs for each segment
+# Precompute the PSDs and banks for each segment
 #
 
 def hash_seg(seg):
@@ -611,6 +681,7 @@ def hash_seg(seg):
 	return str(seg)
 
 psd_nodes = {}
+bank_nodes = {}
 for seg in segs:
 	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
 
@@ -622,61 +693,73 @@ gstlal_plot_psd_horizon_node(horizonJob, dag, [node.output_name for node in psd_
 # loop over banks to run gstlal inspiral pre clustering and far computation
 #
 
-for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cache, [options.num_banks])):
+bank_groups = inspiral_pipe.build_bank_groups(bank_cache, [options.num_banks])
 
-	#
-	# non injections
-	#
-
+for i, bank_group in enumerate(bank_groups):
+	
+	# handle the edges by not clipping so you retain the template bank as intended.  
+	clipleft = clipright = options.overlap / 2 # overlap must be even
+	if i == 0:
+		clipleft = 0
+	if i == len(bank_groups) - 1:
+		clipright = 0
+	
 	inspiral_nodes = []
 
-	# inspiral jobs by segment
+	# bank and inspiral jobs by segment
 	for seg in segs:
-		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = [psd_nodes[hash_seg(seg)]])
+
+		svd_nodes = []
+		s = "" # bank input file string for the inspiral jobs
+		for ifo, files in bank_group.items():
+			for n, f in enumerate(files):
+				svd_bank_name = "%s-%d_%d_SVD-%d-%d.xml.gz" % (ifo, i, n, seg[0].seconds, seg[1].seconds)
+				s += '%s:%s,' % (ifo, svd_bank_name)
+				# FIXME bank id should be global??
+				svd_nodes.append(gstlal_svd_bank_node(svdJob, dag, f, ifo, svd_bank_name, tolerance = options.tolerance, reference_psd = psd_nodes[hash_seg(seg)].output_name, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = n, p_node = [psd_nodes[hash_seg(seg)]]))
+
+		s = s.strip(',')
+
+		# non injections
+		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
 		inspiral_nodes.append((None, noninjnode))
 
-	# likelihood jobs for non injections
-	likelihood_nodes[s] = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] is None], p_node=[node[1] for node in inspiral_nodes if node[0] is None])
-	
-	
-	#
-	# injections
-	#
-	
-	likelihood_nodes_inj[s] = []
-
-	for injections in options.injections:
-		# inspiral jobs by segment
-		for seg in segs:
-			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = [psd_nodes[hash_seg(seg)]])
+		# injections
+		for injections in options.injections:	
+			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
 			inspiral_nodes.append((injections, injnode))
 
-		# likelihood jobs for injections
-		likelihood_nodes_inj[s].append(gstlal_inspiral_calc_likelihood_node(calcLikelihoodJobInj, dag, likelihood_output_name = None, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] == injections], p_node=[node[1] for node in inspiral_nodes if node[0] == injections]+[node[1] for node in inspiral_nodes if node[0] is None]))
-
+	# likelihood jobs for non injections
+	likelihood_nodes[i] = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] is None], p_node=[node[1] for node in inspiral_nodes if node[0] is None])
 	
+	# likelihood jobs for injections
 	
+	likelihood_nodes_inj[i] = []
+	for injections in options.injections:
+		likelihood_nodes_inj[i].append(gstlal_inspiral_calc_likelihood_node(calcLikelihoodJobInj, dag, likelihood_output_name = None, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] == injections], p_node=[node[1] for node in inspiral_nodes if node[0] == injections]+[node[1] for node in inspiral_nodes if node[0] is None]))
 
 	# after assigning the likelihoods cluster
 	merge_nodes = []
-	for inj, node in inspiral_nodes:
+	files_to_group = 10
+	for inj, nodes in extract_all_nodes_by_inj(inspiral_nodes).items():
 		if inj is None:
-			# clustering and conversion to XML
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[node.output_name], p_node=[likelihood_nodes[s]])
+			# 10 at a time so the jobs take a bit longer to run
+			for n in range(0, len(nodes), files_to_group):
+				merge_nodes.append((inj, lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[node.output_name for node in nodes[n:n+files_to_group]], p_node=[likelihood_nodes[i]])))
 		else:
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[node.output_name], p_node=likelihood_nodes_inj[s])
-		merge_nodes.append((inj, clusternode))
+			for n in range(0, len(nodes), files_to_group):
+				merge_nodes.append((inj, lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[node.output_name for node in nodes[n:n+files_to_group]], p_node=likelihood_nodes_inj[i])))
 
 	# merge over the segments and cluster again
 
 	noninjdb = "%s-%04d-%d-%d-LLOID.sqlite" % (instruments, i, int(boundary_seg[0]), int(boundary_seg[1]))
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[node[1].output_name for node in merge_nodes if node[0] is None], p_node = [node[1] for node in merge_nodes if node[0] is None])
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[node[1].output_name for node in inspiral_nodes if node[0] is None], p_node = [node[1] for node in merge_nodes if node[0] is None])
 	sqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[sqlitenode.output_db_name], p_node=[sqlitenode])
 	noninj_nodes.append(sqlitenode)
 
 	for inj in options.injections:
 		injdb = "%s-%04d-%d-%d-LLOID-%s.sqlite" % (instruments, i, int(boundary_seg[0]), int(boundary_seg[1]), sim_tag_from_inj_file(inj))
-		sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[node[1].output_name for node in merge_nodes if node[0] ==  inj], p_node = [node[1] for node in merge_nodes if node[0] == inj])
+		sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[node[1].output_name for node in inspiral_nodes if node[0] ==  inj], p_node = [node[1] for node in merge_nodes if node[0] == inj])
 		sqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[sqlitenode.output_db_name], p_node=[sqlitenode])
 		inj_nodes[inj].append(sqlitenode)
 	
