@@ -416,7 +416,9 @@ class DistributionsStats(object):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None):
-		for param, binarr in self.raw_distributions.background_rates.items():
+		# Make a new empty coinc param distributions
+		newdist = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		for param, binarr in newdist.background_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
 			if instruments is not None and instrument not in instruments:
@@ -436,13 +438,16 @@ class DistributionsStats(object):
 			# normalize to the requested count
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
+		self.raw_distributions += newdist
 
 	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.4), df = 40, instruments = None, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for param, binarr in self.raw_distributions.injection_rates.items():
+		# Make a new empty coinc param distributions
+		newdist = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		for param, binarr in newdist.injection_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
 			if instruments is not None and instrument not in instruments:
@@ -471,6 +476,7 @@ class DistributionsStats(object):
 			# normalize to the requested count
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
+		self.raw_distributions += newdist
 
 	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
