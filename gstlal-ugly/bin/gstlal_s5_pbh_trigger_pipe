@@ -567,7 +567,9 @@ def parse_command_line():
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
 	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
+	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+
 	# Override the datasource injection option
 	parser.remove_option("--injections")
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
@@ -584,7 +586,6 @@ def parse_command_line():
 	if fail: raise ValueError, fail
 
 	return options, filenames
-
 
 #
 # MAIN
@@ -603,35 +604,6 @@ share_path = os.path.split(inspiral_pipe.which('gstlal_reference_psd'))[0].repla
 options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
 options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
 
-#
-# Setup analysis segments
-#
-
-allsegs = detectors.frame_segments
-
-# FIXME FIXME FIXME this only makes sense for 2 detectors
-# intersection of all single detector segments that we want to analyze
-
-# define the analyzable instruments
-analyzable_instruments_set = set(bank_cache.keys())
-segsdict = segments.segmentlistdict()
-for n in range(2, len(analyzable_instruments_set))
-	for ifo_combos in iterutils.choices(analyzable_instruments_set, n):
-		segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
-
-print segsdict.keys()
-
-segs = allsegs.intersection(bank_cache.keys()).coalesce()
-
-# intersect so we only analyze segments in the requested time 
-boundary_seg = detectors.seg
-segs &= segments.segmentlist([boundary_seg])
-
-# A little padding to make sure enough time is analyzed around boundaries
-segs = segs.protract(1024)
-
-# FIXME break up long segments into smaller ones with 1024 of overlap
-segs = gstlaldagparts.breakupsegs(segs, options.max_segment_length, 1024)
 
 try: os.mkdir("logs")
 except: pass
@@ -645,8 +617,12 @@ refPSDJob = gstlal_reference_psd_job()
 svdJob = gstlal_svd_bank_job(tag_base="gstlal_svd_bank")
 horizonJob = gstlal_plot_psd_horizon_job()
 
-gstlalInspiralJob = gstlal_inspiral_job()
-gstlalInspiralInjJob = gstlal_inspiral_inj_job()
+if options.do_iir_pipeline is not None:
+	gstlalInspiralJob = gstlal_inspiral_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
+	gstlalInspiralInjJob = gstlal_inspiral_inj_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
+else:
+	gstlalInspiralJob = gstlal_inspiral_job()
+	gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 
 calcLikelihoodJob = gstlal_inspiral_calc_likelihood_job()
 calcLikelihoodJobInj = gstlal_inspiral_calc_likelihood_job(tag_base='gstlal_inspiral_calc_likelihood_inj')
@@ -660,6 +636,30 @@ plotSensitivityJob = gstlal_inspiral_plot_sensitivity_job()
 openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
 marginalizeJob = gstlal_inspiral_marginalize_likelihood_job()
+
+#
+# Setup analysis segments
+#
+
+allsegs = detectors.frame_segments
+boundary_seg = detectors.seg
+
+# define the analyzable instruments
+analyzable_instruments_set = set(bank_cache.keys())
+
+# get a dictionary of all the disjoint 2+ detector combination segments
+segsdict = segments.segmentlistdict()
+for n in range(2, 1 + len(analyzable_instruments_set)):
+	for ifo_combos in iterutils.choices(analyzable_instruments_set, n):
+		segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
+		segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
+		segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(1024)
+		segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 1024)
+
+
+#
+# Variables to track certain dag nodes
+#
 
 likelihood_nodes = {}
 likelihood_nodes_inj = {}
@@ -676,14 +676,15 @@ inj_nodes = dict([(inj,[]) for inj in options.injections])
 # Precompute the PSDs and banks for each segment
 #
 
-def hash_seg(seg):
+def hash_seg(ifos, seg):
 	# FIXME what is a good way to hash the segment?
-	return str(seg)
+	return (ifos, seg)
 
 psd_nodes = {}
 bank_nodes = {}
-for seg in segs:
-	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
+for ifos in segsdict:
+	for seg in segsdict[ifos]:
+		psd_nodes[hash_seg(ifos, seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
 
 # plot the horizon distance
 name_tag = "plots/sub-solar-mass-%d-%d_" % (int(boundary_seg[0]), int(boundary_seg[1]))
@@ -707,27 +708,29 @@ for i, bank_group in enumerate(bank_groups):
 	inspiral_nodes = []
 
 	# bank and inspiral jobs by segment
-	for seg in segs:
+	for ifos in segsdict:
+		for seg in segsdict[ifos]:
+			svd_nodes = []
+			s = "" # bank input file string for the inspiral jobs
+			for ifo, files in bank_group.items():
+				if ifo not in ifos:
+					continue
+				for n, f in enumerate(files):
+					svd_bank_name = "%s-%d_%d_SVD-%d-%d.xml.gz" % (ifo, i, n, seg[0].seconds, seg[1].seconds)
+					s += '%s:%s,' % (ifo, svd_bank_name)
+					# FIXME bank id should be global??
+					svd_nodes.append(gstlal_svd_bank_node(svdJob, dag, f, ifo, svd_bank_name, tolerance = options.tolerance, reference_psd = psd_nodes[hash_seg(ifos, seg)].output_name, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = n, p_node = [psd_nodes[hash_seg(ifos, seg)]]))
 
-		svd_nodes = []
-		s = "" # bank input file string for the inspiral jobs
-		for ifo, files in bank_group.items():
-			for n, f in enumerate(files):
-				svd_bank_name = "%s-%d_%d_SVD-%d-%d.xml.gz" % (ifo, i, n, seg[0].seconds, seg[1].seconds)
-				s += '%s:%s,' % (ifo, svd_bank_name)
-				# FIXME bank id should be global??
-				svd_nodes.append(gstlal_svd_bank_node(svdJob, dag, f, ifo, svd_bank_name, tolerance = options.tolerance, reference_psd = psd_nodes[hash_seg(seg)].output_name, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = n, p_node = [psd_nodes[hash_seg(seg)]]))
+			s = s.strip(',')
 
-		s = s.strip(',')
+			# non injections
+			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+			inspiral_nodes.append((None, noninjnode))
 
-		# non injections
-		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
-		inspiral_nodes.append((None, noninjnode))
-
-		# injections
-		for injections in options.injections:	
-			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
-			inspiral_nodes.append((injections, injnode))
+			# injections
+			for injections in options.injections:	
+				injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+				inspiral_nodes.append((injections, injnode))
 
 	# likelihood jobs for non injections
 	likelihood_nodes[i] = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, likelihood_files = [node[1].background_name for node in inspiral_nodes if node[0] is None], input = [node[1].output_name for node in inspiral_nodes if node[0] is None], p_node=[node[1] for node in inspiral_nodes if node[0] is None])
