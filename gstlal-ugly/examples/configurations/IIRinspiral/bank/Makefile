@@ -6,16 +6,11 @@ comma:= ,
 # controls psd segments, should set it to the analysis time intended
 IFOS = H1 L1
 PSDSTART = 869622409
-PSDSTOP =  870227209
+PSDSTOP =  869722409
 
 # Segments file names
 segments_suffix := _segmentspadded.xml
 SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
-
-
-# reference psd file names
-psd_suffix := _psd.xml.gz
-PSD_FILES  := $(addsuffix $(psd_suffix),$(IFOS))
 
 TRIM = 16
 
@@ -92,18 +87,10 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		--spectrum-type median \
 		&& gzip H1-TMPLTBANK-871154847-2048.xml \
 		&& gstlal_bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
-		&& gstlal_bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
                 && gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 
-reference_psd.xml.gz : $(PSD_FILES)
-	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
-
-V1_psd.xml.gz : frame.cache segments.xml
-	gstlal_reference_psd --channel h_16384Hz --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument V1 --write-psd $@ --verbose
-
-%_psd.xml.gz : frame.cache segments.xml
-	gstlal_reference_psd --channel LSC-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
-
+reference_psd.xml.gz :
+	gstlal_reference_psd --data-source frames --channel-name=H1=LSC-STRAIN --channel-name=L1=LSC-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --write-psd reference_psd.xml.gz --verbose
 
 V1_segmentspadded.xml:
 	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=V1:ITF_SCIENCEMODE --result-name=datasegments > V1segments.xml
@@ -140,12 +127,10 @@ sql :
 
 dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
-	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
 	gstlal_inspiral_iir_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H1_bank
-	gstlal_inspiral_iir_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H2_bank
 	gstlal_inspiral_iir_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name L1_bank
-	cat H2_bank.dag H1_bank.dag L1_bank.dag > bank.dag
+	cat L1_bank.dag H1_bank.dag > bank.dag
 
 plots : reference_psd.xml.gz
 	gstlal_plot_psd reference_psd.xml.gz psd_plot
