@@ -10,10 +10,16 @@ from ConfigParser import SafeConfigParser
 
 from optparse import OptionParser
 
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue import segments
+from glue.lal import LIGOTimeGPS
+
 optp = OptionParser()
 
 # TODO: Make this into the arguments to process, make one dag per ini
 optp.add_option("-i", "--initialization-file", action="store", help="gstlal_excesspower ini file to use. Required.")
+optp.add_option("-c", "--channel-init-file", action="store", help="Channel initialization file to use. If none are specified in the excesspower ini file, this will be the fallback.")
 optp.add_option("-s", "--submit-file", action="store", help="Submit file to link against.")
 optp.add_option("-S", "--segment-list", action="store", help="Segment XML to use. Indicate segment definer with a comma. Eg: segment.xml,L1:DMT-SCIENCE:1. With no defined indicated, the program will search for all Segment tables and use that.")
 optp.add_option("-m", "--minimum-segment-len", action="store", type=int, default=0, help="Discard segments with length less than this. Default is 0.")
@@ -27,7 +33,8 @@ opts, args = optp.parse_args()
 
 defaults = {
 	'sample_rate': 4096,
-	'bit_width': 32
+	'bit_width': 32,
+	'frame_type': "R"
 	#'ini_file': 'gstlal_excesspower_generic.ini'
 }
 
@@ -41,7 +48,14 @@ cfg.read( inifile )
 
 #exe = cfg.get( "gstlal_excesspower", "executable" )
 
-channel_ini = cfg.get( "gstlal_excesspower", "channels" )
+try:
+	channel_ini = cfg.get( "gstlal_excesspower", "channels" )
+except ValueError:
+	if opts.channel_init_file is not None:
+		channel_ini = opts.channel_init_file
+	else:
+		sys.exit( "No channel initialization file specified, aborting." )
+
 cfg = SafeConfigParser()
 cfg.read( channel_ini )
 
@@ -52,18 +66,18 @@ Example entry in channels.ini
 [L1:PSL-ISS_PDA_OUT_DQ]
 bit_width=32
 sample_rate=4096
+
+# also used
+ini_file=/path/to/ini/file.ini
+frame_type=frame_type
 """
+
 inireg = re.compile( "\.ini" )
-if( opts.output) :
+if( opts.output ) :
 	dagfile = opts.output
 else:
 	dagfile = re.sub( inireg, ".dag", inifile )
 dagfile = open( dagfile, "w" )
-
-from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue import segments
-from glue.lal import LIGOTimeGPS
 
 runseg = segments.segment( opts.begin_gps_time or 0, opts.end_gps_time or segments.PosInfinity )
 xmldoc, segdef = None, None
