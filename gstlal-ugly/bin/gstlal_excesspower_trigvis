@@ -229,7 +229,7 @@ for channel, selected_events in event_iter:
 		print "No events remain, skipping."
 		continue
 
-	high_frequency = max( [e.peak_frequency for e in selected_events] )
+	high_frequency = max( [e.central_freq for e in selected_events] )
 	low_frequency = opts.low_frequency or 0
 
 	inst, channel = channel.split(":")
@@ -260,7 +260,7 @@ for channel, selected_events in event_iter:
 	if( opts.mark_time in viewseg ):
 		pyplot.axvline(opts.mark_time, color="k")
 
-	if( i == len(channels)-1 ):
+	if( pn == len(channels)-1 ):
 		pyplot.xlabel( "Time (s)" )
 	pyplot.ylabel( "Frequency (Hz)" )
 
