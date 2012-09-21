@@ -253,10 +253,8 @@ static GstClockTime compute_t_start(GstLALCollectData *data, GstBuffer *buf, gin
 }
 
 
-static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf, gint rate)
+static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf)
 {
-	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
-	 * defined in gst-plugins-base */
 	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
 }
 
@@ -325,7 +323,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 */
 
 		buf_t_start = compute_t_start(data, buf, rate);
-		buf_t_end = compute_t_end(data, buf, rate);
+		buf_t_end = compute_t_end(data, buf);
 		gst_buffer_unref(buf);
 
 		GST_DEBUG_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", ((GstCollectData *) data)->pad, GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
@@ -414,7 +412,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 		return NULL;
 	offset = GST_BUFFER_OFFSET(buf) + ((GstCollectData *) data)->pos / data->unit_size;
 	buf_t_start = compute_t_start(data, buf, rate);
-	buf_t_end = compute_t_end(data, buf, rate);
+	buf_t_end = compute_t_end(data, buf);
 	is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP);
 	is_malloced = GST_BUFFER_DATA(buf) != NULL;
 	gst_buffer_unref(buf);
