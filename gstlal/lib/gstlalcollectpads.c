@@ -199,13 +199,16 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		 * expand start and stop
 		 */
 
-		GST_INFO_OBJECT(pads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
+		GST_DEBUG_OBJECT(pads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
 		if(segment->start == -1 || segment->start > data->segment.start)
 			segment->start = data->segment.start;
 		if(segment->stop == -1 || segment->stop < data->segment.stop)
 			segment->stop = data->segment.stop;
 	}
-	GST_INFO_OBJECT(pads, "returning segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", segment->start, segment->stop);
+	if(segment)
+		GST_DEBUG_OBJECT(pads, "returning segment %" GST_PTR_FORMAT, segment);
+	else
+		GST_DEBUG_OBJECT(pads, "no segment available");
 
 done:
 	return segment;
