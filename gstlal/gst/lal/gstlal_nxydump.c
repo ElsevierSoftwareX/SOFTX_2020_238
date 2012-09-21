@@ -1,5 +1,5 @@
 /*
- * An "nxy" dumper to produce files that Grace can read
+ * A tab-separated values dumper to produce files for plotting
  *
  * Copyright (C) 2008--2012  Kipp Cannon, Chad Hanna
  *
@@ -57,7 +57,7 @@
 #include <gstlal_nxydump.h>
 
 
-#define GST_CAT_DEFAULT gstlal_nxydump_debug
+#define GST_CAT_DEFAULT gst_tsvenc_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
@@ -291,8 +291,8 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GSTLALNXYDump,
-    gstlal_nxydump,
+GST_BOILERPLATE_FULL(GstTSVEnc,
+    gst_tsvenc,
     GstBaseTransform, GST_TYPE_BASE_TRANSFORM, additional_initializations);
 
 
@@ -430,7 +430,7 @@ static gboolean transform_size(GstBaseTransform * trans,
 static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
-  GSTLALNXYDump *element = GSTLAL_NXYDUMP(trans);
+  GstTSVEnc *element = GST_TSVENC(trans);
   GstStructure *str = gst_caps_get_structure(incaps, 0);
   const gchar *media_type;
   gint rate, channels, width;
@@ -501,7 +501,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
 static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
     GstBuffer * outbuf)
 {
-  GSTLALNXYDump *element = GSTLAL_NXYDUMP(trans);
+  GstTSVEnc *element = GST_TSVENC(trans);
   guint64 length;
   guint64 start, stop;
   GstFlowReturn result = GST_FLOW_OK;
@@ -604,7 +604,7 @@ done:
 static void set_property(GObject * object, enum property id,
     const GValue * value, GParamSpec * pspec)
 {
-  GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
+  GstTSVEnc *element = GST_TSVENC(object);
 
   GST_OBJECT_LOCK(element);
 
@@ -634,7 +634,7 @@ static void set_property(GObject * object, enum property id,
 static void get_property(GObject * object, enum property id, GValue * value,
     GParamSpec * pspec)
 {
-  GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
+  GstTSVEnc *element = GST_TSVENC(object);
 
   GST_OBJECT_LOCK(element);
 
@@ -661,15 +661,15 @@ static void get_property(GObject * object, enum property id, GValue * value,
  */
 
 
-static void gstlal_nxydump_base_init(gpointer klass)
+static void gst_tsvenc_base_init(gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
   GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
   gst_element_class_set_details_simple(element_class,
-      "NXY Dump",
-      "Filter",
-      "A time-series dumper compatible with Grace's \"nxy\" input format",
+      "tab-separated values encoder",
+      "Codec/Encoder/Audio",
+      "Converts audio time-series to tab-separated ascii text, a format compatible with most plotting utilities.",
       "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>");
 
   gst_element_class_add_pad_template(element_class,
@@ -690,7 +690,7 @@ static void gstlal_nxydump_base_init(gpointer klass)
  */
 
 
-static void gstlal_nxydump_class_init(GSTLALNXYDumpClass * klass)
+static void gst_tsvenc_class_init(GstTSVEncClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
@@ -721,8 +721,8 @@ static void gstlal_nxydump_class_init(GSTLALNXYDumpClass * klass)
  */
 
 
-static void gstlal_nxydump_init(GSTLALNXYDump * element,
-    GSTLALNXYDumpClass * klass)
+static void gst_tsvenc_init(GstTSVEnc * element,
+    GstTSVEncClass * klass)
 {
   gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 

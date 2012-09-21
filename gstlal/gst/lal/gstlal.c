@@ -95,7 +95,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_gate", GSTLAL_GATE_TYPE},
 		{"lal_matrixmixer", GSTLAL_MATRIXMIXER_TYPE},
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
-		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
+		{"lal_nxydump", GST_TSVENC_TYPE},
 		{"lal_peak", GSTLAL_PEAK_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_segmentsrc", GSTLAL_SEGMENTSRC_TYPE},

@@ -1,7 +1,7 @@
 /*
- * An "nxy" dumper to produce files that Grace can read
+ * A tab-separated values dumper to produce files for plotting
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008--2012  Kipp Cannon, Chad Hanna
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,8 +19,8 @@
  */
 
 
-#ifndef __GSTLAL_NXYDUMP_H__
-#define __GSTLAL_NXYDUMP_H__
+#ifndef __GST_TSVENC_H__
+#define __GST_TSVENC_H__
 
 
 #include <gst/gst.h>
@@ -28,22 +28,22 @@
 
 
 G_BEGIN_DECLS
-#define GSTLAL_NXYDUMP_TYPE \
-	(gstlal_nxydump_get_type())
-#define GSTLAL_NXYDUMP(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_NXYDUMP_TYPE, GSTLALNXYDump))
-#define GSTLAL_NXYDUMP_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_NXYDUMP_TYPE, GSTLALNXYDump))
-#define GST_IS_GSTLAL_NXYDUMP(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_NXYDUMP_TYPE))
-#define GST_IS_GSTLAL_NXYDUMP_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_NXYDUMP_TYPE))
+#define GST_TSVENC_TYPE \
+	(gst_tsvenc_get_type())
+#define GST_TSVENC(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TSVENC_TYPE, GstTSVEnc))
+#define GST_TSVENC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GST_TSVENC_TYPE, GstTSVEncClass))
+#define GST_IS_GST_TSVENC(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TSVENC_TYPE))
+#define GST_IS_GST_TSVENC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GST_TSVENC_TYPE))
 
 
 typedef struct
 {
   GstBaseTransformClass parent_class;
-} GSTLALNXYDumpClass;
+} GstTSVEncClass;
 
 
 typedef struct
@@ -56,11 +56,11 @@ typedef struct
 
   GstClockTime start_time;
   GstClockTime stop_time;
-} GSTLALNXYDump;
+} GstTSVEnc;
 
 
-GType gstlal_nxydump_get_type(void);
+GType gst_tsvenc_get_type(void);
 
 
 G_END_DECLS
-#endif                          /* __GSTLAL_NXYDUMP_H__ */
+#endif                          /* __GST_TSVENC_H__ */
