@@ -28,8 +28,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define GSTLAL_NXYDUMP_TYPE \
 	(gstlal_nxydump_get_type())
 #define GSTLAL_NXYDUMP(obj) \
@@ -42,20 +40,22 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_NXYDUMP_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
+typedef struct
+{
+  GstBaseTransformClass parent_class;
 } GSTLALNXYDumpClass;
 
 
-typedef struct {
-	GstBaseTransform element;
+typedef struct
+{
+  GstBaseTransform element;
 
-	gint rate;
-	gint channels;
-	int (*printsample)(char *, const void **);
+  gint rate;
+  gint channels;
+  int (*printsample) (char *, const void **);
 
-	GstClockTime start_time;
-	GstClockTime stop_time;
+  GstClockTime start_time;
+  GstClockTime stop_time;
 } GSTLALNXYDump;
 
 
@@ -63,6 +63,4 @@ GType gstlal_nxydump_get_type(void);
 
 
 G_END_DECLS
-
-
-#endif	/* __GSTLAL_NXYDUMP_H__ */
+#endif                          /* __GSTLAL_NXYDUMP_H__ */
