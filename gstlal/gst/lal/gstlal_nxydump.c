@@ -191,18 +191,18 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
     int channels, int rate, guint64 length)
 {
   char *location = (char *) GST_BUFFER_DATA(out);
-  guint64 i;
-  int j;
+  guint64 offset;
+  int channel;
 
   g_assert(printsample != NULL);
 
-  for(i = 0; i < length; i++) {
+  for(offset = 0; offset < length; offset++) {
     /*
      * The current timestamp
      */
 
     GstClockTime t =
-        timestamp + gst_util_uint64_scale_int_round(i, GST_SECOND, rate);
+        timestamp + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 
     /*
      * Saftey check.
@@ -223,7 +223,7 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
      * Print the channel samples.
      */
 
-    for(j = 0; j < channels; j++)
+    for(channel = 0; channel < channels; channel++)
       location += printsample(location, &samples);
 
     /*
