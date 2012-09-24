@@ -431,6 +431,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
   GstTSVEnc *element = GST_TSVENC(trans);
+  struct lconv *locale = localeconv();
   GstStructure *str = gst_caps_get_structure(incaps, 0);
   const gchar *media_type;
   gint rate, channels, width;
@@ -438,6 +439,23 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
   gboolean success = TRUE;
 
   element->printsample = NULL;  /* incase it doesn't get set */
+
+  /*
+   * Make sure numbers are formated the way we expect
+   */
+
+  if(g_strcmp0(locale->decimal_point, ".")
+      || g_strcmp0(locale->thousands_sep, "")) {
+    GST_ERROR_OBJECT(element,
+        "incompatible locale:  decimal point is \"%s\", thousands separator is \"%s\";  must be \".\" and \"\" respectively",
+        locale->decimal_point, locale->thousands_sep);
+    success = FALSE;
+    goto done;
+  }
+
+  /*
+   * Parse the format
+   */
 
   media_type = gst_structure_get_name(str);
   success &= gst_structure_get_int(str, "rate", &rate);
@@ -490,6 +508,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
     GST_ERROR_OBJECT(element,
         "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
+done:
   return success;
 }
 
@@ -558,19 +577,6 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
     GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
     GST_BUFFER_SIZE(outbuf) = 0;
   } else {
-    struct lconv *locale = localeconv();
-
-    /*
-     * Print samples into output buffer.
-     */
-
-    if(g_strcmp0(locale->decimal_point, ".")
-        || g_strcmp0(locale->thousands_sep, "")) {
-      GST_ERROR_OBJECT(element,
-          "incompatible locale:  decimal point is \"%s\", thousands separator is \"%s\";  must be \".\" and \"\" respectively",
-          locale->decimal_point, locale->thousands_sep);
-      result = GST_FLOW_ERROR;
-    } else
       result =
           print_samples(outbuf,
           GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
