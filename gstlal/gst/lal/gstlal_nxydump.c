@@ -484,6 +484,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
   if(success) {
     element->rate = rate;
     element->channels = channels;
+    element->unit_size = width / 8 * channels;
     element->printsample = printsample;
   } else
     GST_ERROR_OBJECT(element,
@@ -574,7 +575,7 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
           print_samples(outbuf,
           GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
               GST_SECOND, element->rate),
-          (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels,
+          GST_BUFFER_DATA(inbuf) + start * element->unit_size,
           element->printsample, element->channels, element->rate, stop - start);
   }
 
