@@ -54,4 +54,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_recompute_online_far \
 	gstlal_inspiral_recompute_online_far_from_gracedb \
 	gstlal_median_of_psds \
-	gstlal_psd_pipe
+	gstlal_psd_pipe \
+	gstlal_segments_operations \
+	gstlal_inspiral_plot_efficiency
