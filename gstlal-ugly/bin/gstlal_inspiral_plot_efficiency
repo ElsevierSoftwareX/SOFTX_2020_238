@@ -38,6 +38,23 @@ from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from pylal import imr_utils
 import matplotlib
 matplotlib.use('Agg')
+goldenratio = 2 / (1 + 5**.5)
+matplotlib.rcParams.update({
+        "font.size": 8.0,
+        "axes.titlesize": 8.0,
+        "axes.labelsize": 8.0,
+        "xtick.labelsize": 8.0,
+        "ytick.labelsize": 8.0,
+        "legend.fontsize": 6.0,
+        "figure.figsize": (3.3,3.3*goldenratio),
+        "figure.dpi": 200,
+        "subplots.left": 0.2,
+        "subplots.right": 0.75,
+        "subplots.bottom": 0.15,
+        "subplots.top": 0.75,
+        "savefig.dpi": 600,
+        "text.usetex": True     # render all text with TeX
+})
 from scipy.interpolate import interp1d
 from matplotlib import pyplot
 from gstlal import reference_psd
@@ -96,29 +113,34 @@ options, filenames = parse_command_line()
 
 IMR = imr_utils.DataBaseSummary([f for f in filenames if f.endswith('.sqlite')], tmp_path = options.tmp_space, veto_segments_name = options.veto_segments_name, live_time_program = options.live_time_program, verbose = options.verbose)
 
-horizon_interp = compute_horizon_interpolator([f for f in filenames if f.endswith('.xml.gz')], options.verbose)
+if options.h_snr is not None and options.l_snr is not None:
+	horizon_interp = compute_horizon_interpolator([f for f in filenames if f.endswith('.xml.gz')], options.verbose)
 
 for instruments, total_injections in IMR.total_injections_by_instrument_set.items():
+	colors = ['b', 'g', 'r', 'c', 'm', 'y']
+
 	# make a figure
-	pyplot.figure()
+	fig = pyplot.figure()
+	ax = fig.add_axes((.2,.15,.75,.8))
 	dist_bins = imr_utils.guess_nd_bins(total_injections, {"distance": (15, rate.LinearBins)})
 
-	for far in options.far:
+	for i, far in enumerate(options.far):
 		found_below_far = imr_utils.found_injections_below_far(IMR.found_injections_by_instrument_set[instruments], far_thresh = far)
 		if options.verbose:
 			print >> sys.stderr, "Found %d injections in %s below FAR %e" % (len(found_below_far), "".join(instruments), far)
 		eff, yerr = imr_utils.compute_search_efficiency_in_bins(found_below_far, total_injections, dist_bins)
-		pyplot.errorbar(dist_bins.centres()[0], eff.array, yerr = yerr.array, capsize = 4, label = "Actual efficiency @ %.1e FAR" % far)
+		ax.errorbar(dist_bins.centres()[0], eff.array, yerr = yerr.array, capsize = 3, color = colors[i], label = "$\mathrm{Efficiency\,at\,%.0f\\times 10^{%d}\,FAR}$" % (far / 10.**(numpy.floor(numpy.log10(far))), numpy.floor(numpy.log10(far))))
 
-	for h_snr, l_snr in zip(options.h_snr, options.l_snr):
-		# FIXME always assumes that H1 and L1 define the coincidence, probably roughly true unless you happen to be doing an H2 L1 search
-		found_below_horizon = [sim for sim in total_injections if sim.get_chirp_dist('h') < horizon_interp['H1'](sim.h_end_time) * (8. / h_snr) and sim.get_chirp_dist('l') < horizon_interp['L1'](sim.l_end_time) * (8. / l_snr)]
-		eff_horizon, y_horizon_err = imr_utils.compute_search_efficiency_in_bins(found_below_horizon, total_injections, dist_bins)
-		pyplot.errorbar(dist_bins.centres()[0], eff_horizon.array, yerr = y_horizon_err.array, ls="--", capsize = 4, label = "Gaussian noise efficiency @ \n H1 SNR %.2f & L1 SNR %.2f" % (h_snr, l_snr))
+	if options.h_snr is not None and options.l_snr is not None:
+		for i, (h_snr, l_snr) in enumerate(zip(options.h_snr, options.l_snr)):
+			# FIXME always assumes that H1 and L1 define the coincidence, probably roughly true unless you happen to be doing an H2 L1 search
+			found_below_horizon = [sim for sim in total_injections if sim.get_chirp_dist('h') < horizon_interp['H1'](sim.h_end_time) * (8. / h_snr) and sim.get_chirp_dist('l') < horizon_interp['L1'](sim.l_end_time) * (8. / l_snr)]
+			eff_horizon, y_horizon_err = imr_utils.compute_search_efficiency_in_bins(found_below_horizon, total_injections, dist_bins)
+			ax.errorbar(dist_bins.centres()[0], eff_horizon.array, yerr = y_horizon_err.array, ls="--", capsize = 3, color = colors[i], label = "$\mathrm{GN\,-\,H1/L1\,SNR\,%.2f/%.2f}$" % (h_snr, l_snr))
 
 	pyplot.grid()
 	pyplot.legend()
-	pyplot.xlabel('Distance (Mpc)')
-	pyplot.ylabel('Efficiency')
+	pyplot.xlabel('$\mathrm{Distance\,(Mpc)}$')
+	pyplot.ylabel('$\mathrm{Efficiency}$')
 	pyplot.savefig("%s-%s.png" % ("".join(instruments), options.output_tag))
 
