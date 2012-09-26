@@ -197,7 +197,7 @@ def parse_command_line():
 
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
-	options.psd_fft_length = 8	# seconds
+	options.psd_fft_length = 16	# seconds
 
 	return options, filenames, process_params, svd_banks, detectors
 
