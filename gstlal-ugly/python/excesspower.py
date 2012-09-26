@@ -20,8 +20,11 @@ import sys
 import StringIO
 import subprocess
 import shlex
+import re
 
 import numpy
+
+from scipy.stats import chi2
 
 from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
@@ -34,6 +37,8 @@ from glue.ligolw import ligolw
 from glue.ligolw import ilwd
 from glue.ligolw import utils
 from glue.ligolw import lsctables
+from glue import lal
+from glue.segments import segment
 
 from gstlal.pipeutil import gst
 from gstlal import pipeparts 
@@ -165,13 +170,13 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 	Build the matrix to properly normalize nchannels coming out of the FIR filter. Norm should be an array of length equal to the number of output channels, with the proper normalization factor. up_factor controls the number of output channels. E.g. If thirty two input channels are indicated, and an up_factor of two is input, then an array of length eight corresponding to eight output channels are required. The output matrix uses 1/sqrt(A_i) where A_i is the element of the input norm array.
 	"""
 
-	if( up_factor > int(numpy.log2(nchannels))+1 ):
+	if up_factor > int(numpy.log2(nchannels))+1:
 		sys.exit( "up_factor cannot be larger than log2(nchannels)." )
-	elif( up_factor < 0 ):
+	elif up_factor < 0:
 		sys.exit( "up_factor must be larger than or equal to 0." )
 
 	# If no normalization coefficients are provided, default to unity
-	if( norm == None ):
+	if norm is None:
 		norm = numpy.ones( nchannels >> up_factor )
 
 	# Number of non-zero elements in that row
@@ -227,7 +232,8 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 	while itr <= max_level:
 		# Only one level was requested, skip until we find it
 		#print "level %d" % itr
-		if( level != None and level != itr ): continue
+		if level != None and level != itr: 
+			continue
  
 		foff = 0
 		level_ar = []
@@ -239,14 +245,14 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 		#mu_sq = n*band/del_f
 		mu_sq = n
 		for i in range( n-1 ):
-			if( foff + i + 1 >= nfilts ):
+			if foff + i + 1 >= nfilts:
 				break # because we hit the end of the filter bank
 
 			filter1.data = numpy.roll( d, (foff+i)*wind_len / 2 )
 			filter2.data = numpy.roll( d, (foff+i+1)*wind_len / 2 )
 
 			# TODO: fix when psd None vs NULL is sorted out
-			if( psd == None ):
+			if psd is None:
 				mu_sq += lalburst.XLALExcessPowerFilterInnerProduct( 
 					filter1, filter2, corr
 				) * del_f/band * 2
@@ -273,7 +279,7 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 
 		# Only one level was requested, so return it.
 		inner.append( numpy.array( level_ar ) )
-		if( level == itr ): return inner[itr]
+		if level == itr: return inner[itr]
 
 		# Move to the next higher channel bandwidth
 		n *= 2
@@ -342,13 +348,6 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 	xmldoc.childNodes[0].appendChild(bank)
 	return xmldoc
 
-from glue import lal
-from glue.segments import segment
-import re
-
-from scipy.stats import chi2
-import numpy
-
 def duration_from_cache( cachef ):
 	cache = lal.Cache.fromfile( open( cachef ) )
 	duration = cache[0].segment
@@ -366,16 +365,12 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 
 ############ VISUALIZATION ROUTINES #################
 
-def stream_tfmap_image():
-	# Only difference here is oggmux -> pngenc
-	pass
-
 def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=None, history=4, framerate=5 ):
 	"""
 	Stream the time frequency channel map to a video source. If filename is None and split_on is None (the default), then the pipeline will attempt to stream to a desktop based (xvimagesink or equivalent) video sink. If filename is not None, but no splitting behavior is specified, video will be encoded and saved to the filename plus ".ogg" in Ogg Vorbis format. If split_on is specified to be 'keyframe', then the encoded video will be split between multiple files based on the keyframes being emitted by the ogg muxer. If no file name is specifed a default will be used, otherwise, an index and ".ogg" will be appended to the file name. Specifying amp_max will set the top of the colorscale for the amplitude SNR, the default is 10. History is the amount of time to retain in the video buffer (in seconds), the default is 4. The frame rate is the number of frames per second to output in the video stream.
 	"""
 
-	if( snr_max is None ):
+	if snr_max is None:
 		snr_max = 10 # arbitrary
 		z_autoscale = True 
 	# Tee off the amplitude stream
@@ -404,21 +399,23 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 	head = pipeparts.mkprogressreport( pipeline, head, "video sink" )
 
 	# TODO: Explore using different "next file" mechanisms
-	if( split_on == "keyframe" ):
+	if split_on == "keyframe":
 
 		# Muxer
 		head = pipeparts.mkcolorspace( pipeline, head )
 		head = pipeparts.mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
 		head = pipeparts.mkoggmux( pipeline, pipeparts.mktheoraenc( pipeline, head ) )
 
-		if( filename is None ): filename = handler.inst + "_tfmap_%d.ogg"
-		else: filename = filename + "_%d.ogg"
+		if filename is None: 
+			filename = handler.inst + "_tfmap_%d.ogg"
+		else: 
+			filename = filename + "_%d.ogg"
 
 		print >>sys.stderr, "Streaming TF maps to %s\n" % filename
 		pipeparts.mkgeneric( pipeline, head, "multifilesink",
 			next_file = 2, location = filename, sync = False, async = False )
 
-	elif( filename is not None ):
+	elif filename is not None:
 		# Muxer
 		head = pipeparts.mkcolorspace( pipeline, head )
 		head = pipeparts.mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
@@ -427,13 +424,10 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 		pipeparts.mkfilesink( pipeline, head, filename )
 
 	else: # No filename and no splitting options means stream to desktop
-		if( sys.platform == "darwin" ):
-			#try: # OSX video streaming options are quite limited, unfortunately
+		if sys.platform == "darwin":
+			# TODO: This was due to a glitch in the way X11 was handled
+			# others may not have this issue, so make this optional
 			pipeparts.mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
-
-			#except:
-				#print >>sys.stderr, "Couldn't get glimagesink element for OS X based video output. Please install this element first."
-				#exit()
 		else:
 			pipeparts.mkgeneric( pipeline, head, "autovideosink" )
 
@@ -460,6 +454,6 @@ def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "g
 	# Open a pipe to the process and pipe in the XML as stdin
 	proc = subprocess.Popen( shlex.split(str(cmd)), stdin=subprocess.PIPE )
 	proc.communicate( strbuf.getvalue() )
-	if( proc.returncode != 0 ):
+	if proc.returncode != 0:
 		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.retcode
 
