@@ -114,7 +114,7 @@ def parse_cache_str(instr):
 		dictcache[ifo] = cache
 	return dictcache
 
-def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
+def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	numfiles = num_bank_files(cachedict)
 	filedict = {}
 	cnt = 0
@@ -124,25 +124,21 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 	
 	loop = True
 	outstrs = []
-	outcounts = []
 	while cnt < numfiles:
 		job += 1
 		if maxjobs is not None and job > maxjobs:
 			break
 		position = int(float(cnt) / numfiles * len(numbanks))
-		c = ''
+		c = {}
 		for i in range(numbanks[position]):
 			for ifo, f in filedict.items():
 				if cnt < numfiles:
-					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
+					c.setdefault(ifo, []).append(lal.CacheEntry(f.readline()).path())
 				else:
 					break
 			cnt += 1
-		c = c.strip(',')
-		outcounts.append(numbanks[position])
 		outstrs.append(c)
-	total_banks = sum(outcounts)
-	return [(s, total_banks / outcounts[i]) for i, s in enumerate(outstrs)]
+	return outstrs
 
 def get_independence_factor(bank_cache, ifo = "H1", maxjobs = None):
 	dof = 0.0
