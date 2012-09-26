@@ -135,7 +135,7 @@ class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_reference_psd node
 	"""
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, instruments, channel_dict, injections=None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, instruments, channel_dict, psd_fft_length = 16, injections=None, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("frame-segments-file", frame_segments_file)
@@ -144,6 +144,7 @@ class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("data-source", "frames")
 		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict, ifos = instruments))
+		self.add_var_opt("psd-fft-length", psd_fft_length)
 		if injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(instruments)), gps_start_time, gps_end_time)
@@ -653,8 +654,8 @@ for n in range(2, 1 + len(analyzable_instruments_set)):
 	for ifo_combos in iterutils.choices(analyzable_instruments_set, n):
 		segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 		segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
-		segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(1024)
-		segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 1024)
+		segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(2048)
+		segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 2048)
 
 
 #
