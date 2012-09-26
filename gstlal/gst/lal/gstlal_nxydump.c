@@ -324,7 +324,7 @@ static gboolean get_unit_size(GstBaseTransform * trans, GstCaps * caps,
   gboolean success = TRUE;
 
   str = gst_caps_get_structure(caps, 0);
-  if(gst_structure_has_name(str, "text/plain")) {
+  if(gst_structure_has_name(str, "text/tab-separated-values")) {
     *size = 1;
   } else {
     gint channels, width;
@@ -390,7 +390,7 @@ static gboolean transform_size(GstBaseTransform * trans,
   guint other_unit_size;
   gboolean success = TRUE;
 
-  if(gst_structure_has_name(gst_caps_get_structure(caps, 0), "text/plain")) {
+  if(gst_structure_has_name(gst_caps_get_structure(caps, 0), "text/tab-separated-values")) {
     gint channels;
     if(!gst_structure_get_int(gst_caps_get_structure(othercaps, 0), "channels",
             &channels)) {
