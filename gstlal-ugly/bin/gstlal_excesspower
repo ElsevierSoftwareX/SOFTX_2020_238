@@ -29,20 +29,23 @@
 import os
 import numpy
 import signal
+import glob
+import tempfile
 
 from optparse import OptionParser
 import ConfigParser
 from ConfigParser import SafeConfigParser
 
 from gstlal.pipeutil import gst, mkelem
-from gstlal.pipeparts import *
+from gstlal import pipeparts
 from gstlal.pipeio import parse_spectrum_message
 from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc, get_gate_state
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
-from gstlal.excesspower import *
 from gstlal.inspiral import add_cbc_metadata
+
+from glue import GWDataFindClient
 
 from glue.ligolw import ligolw
 from glue.ligolw import array
@@ -59,9 +62,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.segments import segment, segmentlist, PosInfinity
 from glue import segmentsUtils
 from glue import gpstime
-from glue.lal import LIGOTimeGPS
-from glue.lal import Cache
-from glue.lal import CacheEntry
+from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 
 from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
@@ -85,6 +86,50 @@ EXCESSPOWER_UNIT_SCALE = {
 	'uHz': 1024**-2,
 	'nHz': 1024**-3,
 }
+# This is really only for the strain channels where one might anticipate needing a state vector.
+EXCESSPOWER_DQ_VECTOR = {
+	# 1  Science mode on 
+	"SCIENCE_MODE" : 0b1,
+	# 2  ITF fully locked 
+	"ITF_LOCK" : 0b10,
+	# 3  h(t) reconstruction ok 
+	"HREC_OK": 0b100,
+	# 4  Reserved for future use
+	"RESERVED" : 0b1000,
+	# 5  CBC Injection 
+	"CBC_INJECTION" : 0b10000,
+	# 6  CBC_CAT1 
+	"CBC_CAT1" : 0b100000,
+	# 7  CBC_CAT2 [not used]
+	"CBC_CAT2" : 0b1000000,
+	# 8  CBC_CAT3 [not used]
+	"CBC_CAT3" : 0b10000000,
+	# 9  Burst injection 
+	"BURST_INJECTION" : 0b100000000,
+	# 10 Burst_CAT1 
+	"BURST_CAT1" : 0b1000000000,
+	# 11 Burst_CAT2 
+	"BURST_CAT2" : 0b10000000000,
+	# 12 Burst_CAT3 
+	"BURST_CAT3" : 0b100000000000,
+	# 13 CW injection 
+	"CW_INJECTION" : 0b1000000000000,
+	# 14 Reserved for future use, possibly by CW 
+	# 15 Reserved for future use, possibly by CW 
+	# 16 Reserved for future use, possibly by CW 
+	# 17 Stochastic injection 
+	"STOCHASTIC_INJECTION" : 0b10000000000000000
+	# 18 Reserved for future use, possibly by stochastic 
+	# 19 Reserved for future use, possibly by stochastic [not used]
+	# 20 Reserved for future use, possibly by stochastic [not used]
+}
+DEFAULT_DQ_VECTOR_ON = EXCESSPOWER_DQ_VECTOR["SCIENCE_MODE"] | 
+	EXCESSPOWER_DQ_VECTOR["ITF_LOCK"] | 
+	EXCESSPOWER_DQ_VECTOR["HREC_OK"] 
+	# | EXCESSPOWER_DQ_VECTOR["BURST_CAT1"]
+
+# This is to ensure that when the DQ vector goes out of lock that we follow it
+DEFAULT_DQ_VECTOR_OFF = EXCESSPOWER_DQ_VECTOR["RESERVED"]
 
 #
 # =============================================================================
@@ -165,11 +210,6 @@ class EPHandler( LLOIDHandler ):
 		self.trigger_segment = None
 
 		self.spec_corr = self.build_default_correlation( self.rate )
-		"""
-		self.psd = self.build_default_psd( self.rate, self.filter_len )
-		self.rebuild_filter()
-		self.rebuild_chan_mix_matrix()
-		"""
 
 		# required for file locking
 		self.lock = threading.Lock()
@@ -179,6 +219,9 @@ class EPHandler( LLOIDHandler ):
 		self.bus.connect( "message", self.process_message )
 
 		self.pipeline = pipeline
+
+		self.verbose = False
+		self.clustering = False
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -195,19 +238,19 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Process state changes from the state vector mechanism.
 		"""
-		if( segment_type == "on" ):
+		if segment_type == "on":
 			self.current_segment = segment( LIGOTimeGPS(timestamp) / 1e9, PosInfinity )
 			#segmentsUtils.tosegwizard( sys.stdout, self.seglist["state"] )
-			if( options.verbose ):
+			if self.verbose:
 				print >>sys.stderr, "Starting segment #%d: %.9f" % (len(self.seglist["state"]), self.current_segment[0])
-		elif( segment_type == "off" ):
-			if( self.current_segment is None ): 
+		elif segment_type == "off":
+			if self.current_segment is None: 
 				print >>sys.stderr, "Got a message to end a segment, but no current segment exists. Ignoring."
 				return
 			self.seglist["state"].append(
 				segment( self.current_segment[0], LIGOTimeGPS(timestamp / 1e9) )
 			)
-			if( options.verbose ):
+			if self.verbose:
 				print >>sys.stderr, "Ending segment #%d: %s" % (len(self.seglist["state"]), str(self.seglist["state"][-1]))
 		else:
 			print >>sys.stderr, "Unrecognized state change, ignoring."
@@ -216,13 +259,13 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Process a message from the bus. Depending on what it is, we may drop various data products on to disk, or perform various other actions.
 		"""
-		if( message.type == gst.MESSAGE_EOS ):
+		if message.type == gst.MESSAGE_EOS:
 			self.shutdown(None, None)
 			return
-		elif( message.type == gst.MESSAGE_LATENCY ):
+		elif message.type == gst.MESSAGE_LATENCY:
 			print >>sys.stderr, "Got latency message, ignoring for now."
 			return
-		elif( message.structure is None ): 
+		elif message.structure is None: 
 			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored."
 			return
 
@@ -230,18 +273,17 @@ class EPHandler( LLOIDHandler ):
 		if( message.structure.get_name() == "spectrum" ):
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
-			if( self.trigger_segment is not None 
-				and ts in self.trigger_segment ):
+			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( timestamp = ts )
-			elif( self.cache_psd ): 
+			elif self.cache_psd: 
 				self.dump_psd( timestamp = ts )
 
 	def dump_psd( self, filename=None, timestamp=None ):
 		"""
 		Dump the currently cached PSD to a LIGOLW XML file. If the filename isn't specified, it will be constructed from metadata.
 		"""
-		if( filename is None ):
-			if( os.path.isdir( handler.cache_psd ) ):
+		if filename is None:
+			if os.path.isdir( handler.cache_psd ):
 				filename = "%s/%s-%s_PSD_%d.xml" % ( handler.cache_psd, handler.inst, handler.channel.replace("-","_"), round(timestamp) )
 			else:
 				filename = handler.cache_psd
@@ -264,7 +306,7 @@ class EPHandler( LLOIDHandler ):
 		"""
 		psd = REAL8FrequencySeries()
 		psd.deltaF = float(rate)/filter_len
-		psd.data = numpy.ones( filter_len/2 + 1 ) #/ 2 / psd.deltaF
+		psd.data = numpy.ones( filter_len/2 + 1 ) 
 		psd.f0 = 0
 		self.psd = psd
 		return psd
@@ -282,7 +324,8 @@ class EPHandler( LLOIDHandler ):
 		Rebuilds the matrix mixer matrices from the coefficients calculated in rebuild_chan_mix_matrix and assigns them to their proper element.
 		"""
 		for i, mm in self.mmixers.iteritems():
-			if( res_level != None and res_level != i ): continue
+			if res_level != None and res_level != i: 
+				continue
 
 			nchannels = self.filter_bank.shape[0]
 			up_factor = int(numpy.log2(nchannels/(nchannels >> i)))
@@ -297,7 +340,14 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.filter_bank = ep.build_filter( fhigh = self.fhigh, flow=self.flow, rate=self.rate, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
+		self.filter_bank = ep.build_filter( 
+			fhigh = self.fhigh, 
+			flow=self.flow, 
+			rate=self.rate, 
+			psd = self.psd, 
+			corr = self.spec_corr, 
+			b_wind = self.base_band 
+		)
 		return self.filter_bank
 
 	def build_filter_xml( self, res_level, loc="" ):
@@ -318,8 +368,10 @@ class EPHandler( LLOIDHandler ):
 		return output
 
 	def destroy_filter_xml( self, loc="" ):
-		import glob
-		for f in glob.glob( "%s/gstlal_excesspower_bank_%s_level_*.xml" % (loc, self.inst) ):
+		"""
+		FIXME: This is really inelegant.
+		"""
+		for f in glob.glob( "%sgstlal_excesspower_bank_%s_level_*.xml" % (loc, self.inst) ):
 			os.rm( f )
 
 	def rebuild_chan_mix_matrix( self ):
@@ -333,6 +385,7 @@ class EPHandler( LLOIDHandler ):
 			nfilts = len(self.filter_bank),
 			flow = self.flow,
 			# TODO: PSD option to lalburst IP doesn't work
+			# This should be fixed, let's reenable it
 			#psd = self.psd
 			max_level = self.max_level
 		)
@@ -343,16 +396,17 @@ class EPHandler( LLOIDHandler ):
 		Top-level function to handle the asynchronous updating of FIR banks and matrix mixer elements.
 		"""
 		# Rebuild filter bank and hand it off to the FIR element
-		if( options.verbose ):
+		if self.verbose:
 			print >>sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
 
-		if( options.verbose ):
+		if self.verbose:
 			print >>sys.stderr, "Rebuilding matrix mixer"
 		self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
 
+	# TODO: Move this into library code
 	def make_output_table( self ):
 		self.triggers = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
@@ -364,11 +418,14 @@ class EPHandler( LLOIDHandler ):
  			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
 		return self.triggers
 
+	# TODO: Move this into library code
 	def write_triggers( self, flush=True, overwrite=False, filename=None ):
-		if( not handler.output ): return
-		if( len(self.triggers) == 0 ): return
+		if not self.output: 
+			return
+		if len(self.triggers) == 0: 
+			return
 
-		if( filename == None ):
+		if filename == None:
 			filename = self.outfile
 
 		output = ligolw.Document()
@@ -386,8 +443,8 @@ class EPHandler( LLOIDHandler ):
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + self.whitener_offset)
 		)
-		if( self.whiten_seg.intersects( analysis_segment ) ):
-			if( analysis_segment in self.whiten_seg ):
+		if self.whiten_seg.intersects( analysis_segment ):
+			if analysis_segment in self.whiten_seg:
 				# All the analyzed time is within the settling time
 				# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
 				analysis_segment = segment( 
@@ -419,7 +476,7 @@ class EPHandler( LLOIDHandler ):
 		for row in search_sum:
 			row.set_out( analysis_segment )
 
-		if( self.current_segment is not None ):
+		if self.current_segment is not None:
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
 			self.seglist["state"].append( cur_seg )
@@ -431,20 +488,20 @@ class EPHandler( LLOIDHandler ):
 
 		llwseg.finalize(process)
 
-		# FIXME: We should be careful to not fragment segments across output too 
+		# FIXME: We should be careful to not fragment segments across output too
 		# much
 		self.seglist.clear()
 
-		# FIXME: We actually will end up writing the same segment more than once 
+		# FIXME: We actually will end up writing the same segment more than once
 		# across adjacent files. This is probably okay but, fair warning.
 		# What maybe should be done is to intersect the final segment with the
-		# analysis_segment's end and then make the current segment have the same 
+		# analysis_segment's end and then make the current segment have the same
 		# start time as the last written segment's end.
 		self.seglist["state"] = segments.segmentlist([])
 
-		# Do a temporary write to make the SnglBurst objects into XML rows -- this 
-		# should probably be done only if clustering is requested, since it's the 
-		# only thing that thinks the triggers should be XML rows
+		# Do a temporary write to make the SnglBurst objects into XML rows -- 
+		# this should probably be done only if clustering is requested, since 
+		# it's the only thing that thinks the triggers should be XML rows
 
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
@@ -456,6 +513,9 @@ class EPHandler( LLOIDHandler ):
 		self.lock.acquire()
 		# Enable to debug LIGOLW stream
 		#utils.write_fileobj(output, sys.stdout)
+		# TODO: Get a temporary file name to write to -- once we do that we can
+		# handle max events much easier, because the temporary file can be 
+		# deleted and we only write if clustering is on and events > max
 		utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 		self.lock.release()
 
@@ -466,9 +526,9 @@ class EPHandler( LLOIDHandler ):
 		# FIXME: Should this be moved to the trigger import function?
 		changed = True
 
-		# We need this because we might have just set it to be an infinitesimally 
-		# small segment. Clustering will choke on this, and we want to know what 
-		# we can send to dbs anyway.
+		# We need this because we might have just set it to be an 
+		# infinitesimally small segment. Clustering will choke on this, and we 
+		# want to know what we can send to dbs anyway.
 		while changed and options.clustering and abs(analysis_segment) != 0:
 			ligolw_bucluster.add_ms_columns( output )
 			output, changed = ligolw_bucluster.ligolw_bucluster( 
@@ -486,7 +546,7 @@ class EPHandler( LLOIDHandler ):
 
 		# TODO: Respect max events by removing output XML file and returning
 		# if clustering reduces trigger number below required.
-		if( options.clustering ):
+		if self.clustering:
 			# write the new distribution stats to disk
 			self.lock.acquire()
 			# Enable to debug LIGOLW stream
@@ -494,14 +554,16 @@ class EPHandler( LLOIDHandler ):
 			utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 			self.lock.release()
 
-		# TODO: Determine the right number to put here
+		# TODO: We ignore triggers in the whitening segment now anyway, let's
+		# just pull this unless we have reason to keep it
 		self.discard_segment = segment( 
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + 300)
 		)
 
 		# Keep track of the output files we make for later convience
-		if( self.output_cache is not None ):
+		# TODO: Write the cache periodically?
+		if self.output_cache is not None:
 			self.output_cache.append(
 				CacheEntry(
 					self.inst, self.channel + "_excesspower",
@@ -510,17 +572,20 @@ class EPHandler( LLOIDHandler ):
 				)
 			)
 
-		if( flush ): self.make_output_table()
-		if( self.db_thresh is None ): return
+		if flush: 
+			self.make_output_table()
+		if self.db_thresh is None: 
+			return
 
-		# FIXME: get_table doesn't return the type of table you want it just returns
-		# a "Table" this is probbably why the upload_tbl needs the full definition
+		# FIXME: get_table doesn't return the type of table you want it just 
+		# returns a "Table" this is probbably why the upload_tbl needs the full
+		# definition
 		clus_triggers = table.get_table( output, lsctables.SnglBurstTable.tableName )
 
 		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, clus_triggers ):
 			# TODO: Merge these two
-			if( sb.peak_time in self.discard_segment ): continue
-			if( sb.peak_time not in analysis_segment ): continue
+			if sb.peak_time in self.discard_segment: continue
+			if sb.peak_time not in analysis_segment: continue
 			upload_tbl = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
 			"duration",  "search", "event_id", "process_id",
@@ -573,7 +638,7 @@ def on_psd_change( elem, pspec, hand ):
 	"""
 	Get the PSD object and signal the handler to rebuild everything.
 	"""
-	if( options.verbose ):
+	if options.verbose:
 		print >> sys.stderr, "Intercepted spectrum signal."
 
 	hand.psd = REAL8FrequencySeries(
@@ -590,8 +655,8 @@ def on_psd_change( elem, pspec, hand ):
 	# bank.
 	psd_power = sum(hand.psd.data)
 	change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
-	if( change > handler.psd_change_thresh ):
-		if( options.verbose ):
+	if change > handler.psd_change_thresh:
+		if options.verbose:
 			print >> sys.stderr, "Processed signal. PSD change %d, regenerating filters" % int(change*100)
 		hand.psd_power = psd_power
 		hand.rebuild_everything()
@@ -600,33 +665,34 @@ def on_spec_corr_change( elem, pspec, hand ):
 	"""
 	Get the 2-point spectral correlation object and signal the handler to rebuild everything.
 	"""
-	if( options.verbose ):
+	if options.verbose:
 		print >> sys.stderr, "Intercepted correlation signal."
 	hand.spec_corr = elem.get_property( "spectral-correlation" )
 
-	if( hand.cache_spec_corr ):
+	if hand.cache_spec_corr:
 		f = open( "spec_corr.dat", "w" )
 		k_end = len( hand.spec_corr ) / 2
 		for k, sp in enumerate( hand.spec_corr ):
 			f.write( "%d %g\n" % (k, sp) )
 	
 	# If the spectrum correlation changes, rebuild everything
-	if( hand.psd != None ):
+	if hand.psd is not None:
 		hand.rebuild_everything()
 
 def get_triggers(elem, handler, ndof):
 
 	buffer = elem.emit("pull-buffer")
 
-	if( not handler.output ):
+	if not handler.output:
 		return # We don't want event information
 
-	# TODO: Can I set units here on the buffer fields, avoid changing the triggers themslves and *not* screw up the underlying framework?
+	# TODO: Can I set units here on the buffer fields, avoid changing the 
+	# triggers themslves and *not* screw up the underlying framework?
 
-	# NOTE: This is here and not in the handler, since self.start may not be well
-	# defined before the pipeline starts, and thus shouldn't be checked until
-	# after we start running. We must know handler.start by the time we start
-	# drawing triggers, though
+	# NOTE: This is here and not in the handler, since self.start may not be 
+	# well defined before the pipeline starts, and thus shouldn't be checked 
+	# until after we start running. We must know handler.start by the time we 
+	# start drawing triggers, though
 	whiten_seg = segment( 
 		LIGOTimeGPS(handler.start), 
 		LIGOTimeGPS(handler.start + handler.whitener_offset)
@@ -639,7 +705,7 @@ def get_triggers(elem, handler, ndof):
 		# TODO Move this into the trigger generator
 		# FIXME: Determine "magic number" or remove it
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
-		if( options.compat ):
+		if options.compat:
 			row.snr = row.snr / ndof - 1
 		handler.triggers.append( row )
 	
@@ -648,8 +714,8 @@ def get_triggers(elem, handler, ndof):
 	buf_ts = buffer.timestamp*1e-9 
 	buf_dur = buffer.duration*1e-9 / handler.units
 	handler.stop = (buf_ts + buf_dur)
-	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
-			len(handler.triggers) >= handler.max_events ):
+	if handler.stop - handler.time_since_dump > handler.dump_frequency or
+			len(handler.triggers) >= handler.max_events:
 		# FIXME: Handle units better
 		dur = numpy.ceil(float(handler.stop)) - numpy.floor(float(handler.time_since_dump))
 		if( os.path.isdir( handler.outfile ) ):
@@ -667,15 +733,15 @@ def get_triggers(elem, handler, ndof):
 		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
 
-# TODO: Update a single file every couple of seconds.
-"""
+	# TODO: Update a single file every couple of seconds.
+	"""
 	dur = 0
 	if( len(handler.triggers) > 0 ):
 		dur = handler.triggers[-1].peak_time - handler.triggers[0].peak_time
 
 	if( len(handler.triggers) > 1000 or dur > 16 ):
 		handler.write_triggers( flush=True )
-"""
+	"""
 
 #
 # =============================================================================
@@ -716,12 +782,12 @@ valid_data_sources = [ "gwffile",
 	  "whitedata", 
 	  "fakeLIGO", 
 	  "fakeadvLIGO" ]
-if( not data_source in valid_data_sources ):
+if not data_source in valid_data_sources:
 	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
 	sys.exit(-1)
 
-if( not options.sample_rate 
-	and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ) ):
+if not options.sample_rate 
+	and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
 	print >>sys.stderr, "Sample rate not specified and fake data requested."
 	sys.exit(-1)
 else:
@@ -744,16 +810,17 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-#if( options.disable_triggers ): handler.output = None
-if( options.disable_file_cache ): handler.output_cache = None
+if options.disable_file_cache: 
+	handler.output_cache = None
 
 handler.rate = options.sample_rate
+handler.clustering = options.clustering
+handler.verbose = options.verbose
 
 # Used to keep track if we need to lock the PSD into the whitener
-psdfile = None
-if( not options.infile ):
+if not options.infile:
 	print >>sys.stderr, "Initialization file required."
-elif( not os.path.exists( options.infile ) ):
+elif not os.path.exists( options.infile ):
 	print >>sys.stderr, "Initialization file path is invalid."
 	sys.exit(-1)
 
@@ -766,10 +833,11 @@ try:
 	handler.channel = cfg.get( "instrument", "channel" )
 except ConfigParser.NoOptionError:
 	handler.channel = None
-
-if( options.channame is not None ):
+if options.channame is not None:
 	handler.channel = options.channame
-if( handler.channel is None ):
+
+# We weren't provided a channel -- we're not mind readers, dammit!
+if handler.channel is None:
 	exit("No channel specified in the configuration file or on the command line.")
 print "Channel name: " + handler.channel
 
@@ -790,7 +858,9 @@ handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
 handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
 handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
-if( cfg.has_option( "cache", "reference-psd" ) ):
+
+psdfile = None
+if cfg.has_option( "cache", "reference-psd" ):
 	psdfile = cfg.get( "cache", "reference-psd" )
 	try:
 		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
@@ -803,43 +873,49 @@ if( cfg.has_option( "cache", "reference-psd" ) ):
 
 else:
 	handler.cache_psd = cfg.get( "cache", "cache-psd" )
-if( handler.cache_psd == "" ): handler.cache_psd = False
-else: print "PSD caching enabled."
 
+# TODO: Fix this up
+if handler.cache_psd == "": 
+	handler.cache_psd = False
+else: 
+	print "PSD caching enabled."
+
+# TODO: Fix this up too
 handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
 handler.outfile = cfg.get( "triggering", "output-file" )
 handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-if( options.db_uploads ):
+if options.db_uploads:
+
 	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
-	handler.db_client = cfg.get( "triggering", "db-client" )
-	if( handler.db_thresh is None ):
+	if handler.db_thresh is None:
 		print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
-	if( handler.db_thresh is None ):
+
+	handler.db_client = cfg.get( "triggering", "db-client" )
+	if handler.db_thresh is None:
 		print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
 		handler.db_thresh = None
 
-if( cfg.has_option( "triggering", "events_per_file" ) ):
+if cfg.has_option( "triggering", "events_per_file" ):
 	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
 
 # If a specific (trigger) time is of interest, specify its GPS here
 # TODO: Read from sngl_inspirals and sngl_bursts
+# TODO: Make this useful
 trigger_begin, trigger_end = None, None
-if( cfg.has_option( "triggering", "trig_time_start" ) ):
+if cfg.has_option( "triggering", "trig_time_start" ):
 	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
-if( cfg.has_option( "triggering", "trig_time_end" ) ):
+if cfg.has_option( "triggering", "trig_time_end" ):
 	trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
-if( trigger_begin and trigger_end ):
+if trigger_begin and trigger_end:
 	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
 gwflocation = cfg.get( "instrument", "location" )
-if( gwflocation == "" ):
+if gwflocation == "":
 	gwflocation = None
-if( options.data_source == "gwffile" and gwflocation is None ):
-	import tempfile
-	from glue import GWDataFindClient
+if options.data_source == "gwffile" and gwflocation is None:
 
-	if( options.gps_start is None or options.gps_end is None ):
+	if options.gps_start is None or options.gps_end is None:
 		sys.exit( "No frame cache present, and no GPS times set. Cannot query for data without an interval to query in." )
 
 	# Shamelessly stolen from gw_data_find
@@ -854,7 +930,7 @@ if( options.data_source == "gwffile" and gwflocation is None ):
 		frame_type = cfg.get( "instrument", "frame_type" )
 	except ConfigParser.NoOptionError:
 		sys.exit( "Invalid cache location, and no frame type set, so I can't query LDR for the file locations." )
-	if( frame_type == "" ):
+	if frame_type == "":
 		sys.exit( "No frame type set, aborting." )
 
 	print "Frame type is %s" % frame_type
@@ -862,12 +938,13 @@ if( options.data_source == "gwffile" and gwflocation is None ):
 		GWDataFindClient.GWDataFindHTTPConnection(host=server, port=port)
 	print "Equivalent command line is "
 	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start, options.gps_end, frame_type)
-	cache = connection.find_frame_urls( \
-		handler.inst[0], frame_type,\
-		options.gps_start,\
-		options.gps_end,\
-		urltype="file",\
-		on_gaps="error")
+	cache = connection.find_frame_urls( handler.inst[0], 
+		frame_type,
+		options.gps_start,
+		options.gps_end,
+		urltype="file",
+		on_gaps="error"
+	)
 
 	tmpfile, tmpname = tempfile.mkstemp()
 	print "Writing cache of %d files to %s" % (len(cache), tmpname)
@@ -876,7 +953,7 @@ if( options.data_source == "gwffile" and gwflocation is None ):
 	gwflocation = tmpname
 
 inj_loc = cfg.get( "injections", "xml-location" )
-if( not os.path.isfile( inj_loc ) ):
+if not os.path.isfile( inj_loc ):
 	print >>sys.stderr, "Injection file not found, disabling option."
 	inj_loc = None
 
@@ -890,7 +967,8 @@ handler.rebuild_filter()
 handler.rebuild_chan_mix_matrix()
 
 # Max trigger duration (s)
-handler.max_duration
+# TODO: Uhh... what was going on here?
+#handler.max_duration
 
 #
 # =============================================================================
@@ -906,7 +984,8 @@ if options.verbose:
 duration = -1
 
 # Data source
-if( data_source == "nds" ):
+# TODO: Use new datasource library
+if data_source == "nds":
 	head = mkndssrc( pipeline,
 		host = cfg.get( "instrument", "ndshost" ),
 		instrument = handler.inst,
@@ -919,22 +998,29 @@ if( data_source == "nds" ):
 
 	# FIXME: Don't assume real-time
 	head.set_property( "channel-type", "online" )
-elif( data_source == "fakeLIGO" ):
+
+elif data_source == "fakeLIGO":
 	head = mkfakeLIGOsrc( pipeline, 
 		instrument = handler.inst,
 		channel_name = handler.channel
 	)
-elif( data_source == "fakeadvLIGO" ):
+
+elif data_source == "fakeadvLIGO":
 	head = mkfakeadvLIGOsrc( pipeline, 
 		instrument = handler.inst,
 		channel_name = handler.channel
 	)
-elif( data_source == "whitedata" ):
+
+elif data_source == "whitedata":
+	# TODO: use mkaudiotestsrc
 	head = gst.element_factory_make( "audiotestsrc" )
 	pipeline.add( head )
 	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
-elif( data_source == "lldata" ):
+
+elif data_source == "lldata":
 	# FIXME: Unhardcode this.
+	# TODO: Possibly make lldata have a parameter like:
+	# --data-source lldata=shmname
 	shmmap = { "L1": "LLO_Data",
 	           "H1": "LHO_Data",
 	           "V1": "VIRGO_Data"}
@@ -947,46 +1033,8 @@ elif( data_source == "lldata" ):
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
-elif( data_source == "lldata_sv" ):
-	# This is really only for the strain channels where one might anticipate needing a state vector.
-	dqv = {
-		# 1  Science mode on 
-		"SCIENCE_MODE" : 0b1,
-		# 2  ITF fully locked 
-		"ITF_LOCK" : 0b10,
-		# 3  h(t) reconstruction ok 
-		"HREC_OK": 0b100,
-		# 4  Reserved for future use
-		"RESERVED" : 0b1000,
-		# 5  CBC Injection 
-		"CBC_INJECTION" : 0b10000,
-		# 6  CBC_CAT1 
-		"CBC_CAT1" : 0b100000,
-		# 7  CBC_CAT2 [not used]
-		"CBC_CAT2" : 0b1000000,
-		# 8  CBC_CAT3 [not used]
-		"CBC_CAT3" : 0b10000000,
-		# 9  Burst injection 
-		"BURST_INJECTION" : 0b100000000,
-		# 10 Burst_CAT1 
-		"BURST_CAT1" : 0b1000000000,
-		# 11 Burst_CAT2 
-		"BURST_CAT2" : 0b10000000000,
-		# 12 Burst_CAT3 
-		"BURST_CAT3" : 0b100000000000,
-		# 13 CW injection 
-		"CW_INJECTION" : 0b1000000000000,
-		# 14 Reserved for future use, possibly by CW 
-		# 15 Reserved for future use, possibly by CW 
-		# 16 Reserved for future use, possibly by CW 
-		# 17 Stochastic injection 
-		"STOCHASTIC_INJECTION" : 0b10000000000000000
-		# 18 Reserved for future use, possibly by stochastic 
-		# 19 Reserved for future use, possibly by stochastic [not used]
-		# 20 Reserved for future use, possibly by stochastic [not used]
-	}
-	DEFAULT_DQ_VECTOR_ON = dqv["SCIENCE_MODE"] | dqv["ITF_LOCK"] | dqv["HREC_OK"] # | dqv["BURST_CAT1"]
-	DEFAULT_DQ_VECTOR_OFF = dqv["RESERVED"]
+
+elif data_source == "lldata_sv":
 	head = mkLLOIDbasicsrc( pipeline,
 		seekevent = None,
 		instrument = handler.inst,
@@ -1001,42 +1049,48 @@ elif( data_source == "lldata_sv" ):
 
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
-elif( data_source == "gwffile" ):
+
+elif data_source == "gwffile":
 	framesrc = head = mkframesrc( pipeline, 
 		gwflocation, 
 		handler.inst, 
 		handler.channel
 	)
+
+	if options.gps_start is None and noptions.gps_end is None:
+		print >>sys.stderr, "Warning, inferring analysis duration from cache."
+
 	start, duration = ep.duration_from_cache( gwflocation )
-	if( options.gps_start ):
+	if options.gps_start:
 		handler.start = start = options.gps_start 
 	else:
 		options.gps_start = handler.start = start
 		options.gps_start = float(options.gps_start)
-	if( options.gps_end ):
+	if options.gps_end:
 		duration = options.gps_end - start
 	else:
 		options.gps_end = start + duration
 		options.gps_end = float(options.gps_end)
 	handler.time_since_dump = start
+
 	# TODO: Must unhardcode this -- but requires knowledge of native rate
-	if( options.nbyte == 64 ):
+	if options.nbyte == 64:
 		bsize=16384*8 # 64 bit stream
-	elif( options.nbyte == 32 ):
+	elif options.nbyte == 32:
 		bsize=16384*4 # 32 bit stream
-	if( verbose ):
+	if options.verbose:
 		print "Blocksize %d" % bsize
 	#duration = int(duration*handler.rate/16384.0)
 	head.set_property( "blocksize", bsize )
-	print >>sys.stderr, "Warning, inferring analysis duration from cache."
 
 	# FIXME: Make this an option
-	if( handler.inst == "V1" ): 
+	if handler.inst == "V1": 
 		sieve = "V*"
 		head.set_property( "cache-dsc-regex", sieve )
-	if( site ):
+	if site:
 		sieve = site[0] + "*"
-	else: sieve = handler.inst + "*"
+	else: 
+		sieve = handler.inst + "*"
 	head.set_property( "cache-dsc-regex", sieve )
 	
 else:
@@ -1045,13 +1099,14 @@ else:
 
 # Seeking
 seekevent = None
-if( options.gps_start is not None and options.gps_end is not None ):
+if options.gps_start is not None and options.gps_end is not None:
 
 	# TODO: Use LIGOTimeGPS
 	print "Duration: " + str(duration)
+	print >>sys.stderr, "Seeking to GPS %d, segment duration %d" % (start, duration)
+	print >>sys.stderr, "Will stop at GPS %d" % (start + dur)
+
 	seek, dur = long(start*1e9), long(duration*1e9)
-	print >>sys.stderr, "Seeking to GPS %d (ns), segment duration %d (ns)" % (seek, dur)
-	print >>sys.stderr, "Will stop at GPS %d (ns)" % (seek + dur)
 	seekevent = gst.event_new_seek( 1.0, 
 		gst.Format(gst.FORMAT_TIME),
 		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
@@ -1059,9 +1114,9 @@ if( options.gps_start is not None and options.gps_end is not None ):
 		gst.SEEK_TYPE_SET, seek + dur
 	)
 
-elif( options.gps_start is not None ):
+elif options.gps_start is not None:
 
-	print >>sys.stderr, "Seeking to GPS %d (ns)" % seek
+	print >>sys.stderr, "Seeking to GPS %d (ns)" % start
 	seek = long(options.gps_start*1e9)
 	seekevent = gst.event_new_seek( 1.0, 
 		gst.Format(gst.FORMAT_TIME),
@@ -1071,9 +1126,9 @@ elif( options.gps_start is not None ):
 	)
 
 if( seekevent is not None ):
-	if( head.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS ):
+	if head.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 		exit("Unable to ready pipeline to accept seek.")
-	if( not head.send_event( seekevent ) ):
+	if not head.send_event( seekevent ):
 		exit("Unable to send seek event to " + str(head))
 
 # Diagnostic plot
@@ -1089,49 +1144,50 @@ head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head ), "audio/x-raw-fl
 # Data conditioning
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
 
-if( inj_loc ):
+if inj_loc:
 	head = mkinjections( pipeline, head, inj_loc )
 
-if( inj_loc and verbose ):
+if inj_loc and verbose:
 	head = mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = mkwhiten( pipeline, head )
-whitener.set_property( "fft-length", handler.fft_length ) # GSTLAL_PSDMODE_FIXED
-if( psdfile is not None ): # In other words, we have a reference PSD
+whitener.set_property( "fft-length", handler.fft_length ) 
+if psdfile is not None: # In other words, we have a reference PSD
 	whitener.set_property( "mean-psd", handler.psd.data )
 	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
 
 head = mkqueue( pipeline, head )
 
 # Diagnostic plot
-if( diagnostics ):
+if diagnostics:
 	head = postresamptee = mktee( pipeline, head )
 	mknxydumpsink( pipeline, 
 		mkqueue( pipeline, head ), 
 		cfg.get( "diagnostics", "whitened-data-output" )
 	)
 
-if( verbose ):
+if verbose:
 	head = mkprogressreport( pipeline, head, "whitened stream" )
 
 # excess power channel firbank
-# NOTE: This is where the inspiral pipeline will feed in?
-head = mkfirbank( pipeline, head, time_domain=False, block_stride=handler.rate )
+# TODO: Do we gain anything by changing the block stride?
+head = mkfirbank( pipeline, head, 
+	time_domain=False, 
+	block_stride=handler.rate 
+)
 
-# TODO: Make this less hardcodish
-# This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
 handler.add_firbank( head )
 nchannels = handler.filter_bank.shape[0]
 print "FIR bank constructed with %d %f Hz channels" % (nchannels, base_band)
 
-if( verbose ):
+if verbose:
 	head = mkprogressreport( pipeline, head, "FIR bank stream" )
 
 # TODO: Uncomment here
 #head = postfirtee = mkqueue( pipeline, mktee( pipeline, head ) )
 #####
 
-if( diagnostics ):
+if diagnostics:
 	mknxydumpsink( pipeline, 
 		postfirtee, 
 		cfg.get( "diagnostics", "fir-output" )
@@ -1151,24 +1207,24 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# The undersample_rate for band = R/2 is => sample_rate (passthrough)
 	undersamp_rate = 2 * band
 
-	#head = mkgeneric( pipeline, head, "lal_audioundersample" )
 
-	# If the rate which would be set by the undersampler falls below one, we have
-	# to take steps to prevent this, as gstreamer can't handle this. The 
-	# solution is to change the "units" of the rate. Ideally, this should be done
-	# much earlier in the pipeline (e.g. as the data comes out of the source),
-	# however, to avoid things like figuring out what that means for the FIR bank
-	# we change units here, and readjust appropriately in the trigger output.
-	if( undersamp_rate < 1 ):
+	# If the rate which would be set by the undersampler falls below one, we 
+	# have to take steps to prevent this, as gstreamer can't handle this. The 
+	# solution is to change the "units" of the rate. Ideally, this should be 
+	# done much earlier in the pipeline (e.g. as the data comes out of the 
+	# source), however, to avoid things like figuring out what that means for 
+	# the FIR bank we change units here, and readjust appropriately in the 
+	# trigger output.
+	if undersamp_rate < 1:
 		print "Automatically adjusting units to compensate for undersample rate falling below unity."
 		# No, it's not factors of ten, but rates which aren't factors
-		# of two are often tricky, thus if the rate is a factor of two, the units
-		# conversion won't change that.
-		if( undersamp_rate > EXCESSPOWER_UNIT_SCALE['mHz'] ):
+		# of two are often tricky, thus if the rate is a factor of two, the 
+		# units conversion won't change that.
+		if undersamp_rate > EXCESSPOWER_UNIT_SCALE['mHz']:
 			unit = 'mHz'
-		elif( undersamp_rate > EXCESSPOWER_UNIT_SCALE['uHz'] ):
+		elif undersamp_rate > EXCESSPOWER_UNIT_SCALE['uHz']:
 			unit = 'uHz'
-		elif( undersamp_rate > EXCESSPOWER_UNIT_SCALE['nHz'] ):
+		elif undersamp_rate > EXCESSPOWER_UNIT_SCALE['nHz']:
 			unit = 'nHz'
 		else:
 			sys.exit( "Requested undersampling rate would fall below 1 nHz." )
@@ -1185,11 +1241,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		head = mkgeneric( pipeline, head, "lal_audioundersample" )
 		head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
-	if( diagnostics ):
+	if diagnostics:
 		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
 
-	if( verbose ):
+	if verbose:
 		head = mkprogressreport( pipeline, head, 
 			"Undersampled stream level %d" % res_level
 		)
@@ -1197,19 +1253,19 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head = matmixer = mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
-	if( verbose ):
+	if verbose:
 		head = mkprogressreport( pipeline, head,
 			"post matrix mixer %d" % res_level 
 		)
 
-	if( diagnostics ):
+	if diagnostics:
 		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
 	head = mkgeneric( pipeline, head, "pow" )
 	head.set_property( "exponent", 2 )
 
-	if( verbose ):
+	if verbose:
 		head = mkprogressreport( pipeline, head, 
 			"Energy stream level %d" % res_level
 		)
@@ -1224,7 +1280,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	#while duration <= max_samp:
 		#duration = duration << 1
 
-	# Multi channel FIR filter -- used to add together frequency bands into tiles
+	# Multi channel FIR filter -- used to add together frequency bands into 
+	# tiles
 	# FIXME: This is a workaround around until the audiofirfilter is fixed.
 	# Basically, if the firfilter gets a small enough kernel, it invokes 
 	# time-domain convolution. Something about the way it fills the buffers is
@@ -1242,37 +1299,34 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head = mknofakedisconts( pipeline, head )
 	#head = mkchecktimestamps( pipeline, head, "after audiofir" )
 
-	if( diagnostics ):
+	if diagnostics:
 		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
 
-	if( verbose ):
+	if verbose:
 		head = mkprogressreport( pipeline, head, 
 			"After energy summation resolution level %d, %d DOF" % 
 				(res_level, ndof) 
 		)
 
-	# Reenable for amplitude SNR stream
-	#head = mkgeneric( pipeline, head, "pow" )
-	#head.set_property( "exponent", 0.5 )
-
 	# TODO: Audio
-	if( options.stream_tfmap ):
+	if options.stream_tfmap:
 		if len(options.stream_tfmap.split("=")) == 2:
 			split_opt, filename = options.stream_tfmap.split("=")
 		else:
 			filename = options.stream_tfmap
 			# TODO: Make this more elegant
-			if( filename == "video" ): filename = None
+			if filename == "video": 
+				filename = None
 			split_opt = None
 
-		head = stream_tfmap_video( pipeline, head, 
+		head = ep.stream_tfmap_video( pipeline, head, 
 			handler, 
 			filename,
 			split_opt
 		)
 
-	if( options.disable_triggers ):
+	if options.disable_triggers:
 		mkfakesink( pipeline, head )
 		continue
 
@@ -1281,7 +1335,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		bank = handler.build_filter_xml( res_level )
 	)
 
-	if( handler.fap is not None ):
+	if handler.fap is not None:
 		# Still needs magic number... or use the EP version
 		# ndof_eff = ndof * 0.62
 		snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
@@ -1290,7 +1344,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		snr_thresh = handler.snr_thresh**2
 	head.set_property( "snr-thresh", snr_thresh )
 
-	if( verbose ):
+	if verbose:
 		head = mkprogressreport( pipeline, head, 
 			"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 		)
@@ -1315,11 +1369,10 @@ signal.signal( signal.SIGTERM, handler.shutdown )
 
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
-if( diagnostics ):
+if diagnostics:
 	write_dump_dot(pipeline, "test", verbose = True)
 	#gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
 		#gst.DEBUG_GRAPH_SHOW_ALL,
 		#cfg.get( "diagnostics", "dot-file-location" )
 	#)
 mainloop.run()
-
