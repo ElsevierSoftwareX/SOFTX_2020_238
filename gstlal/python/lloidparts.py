@@ -960,8 +960,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		# FIXME you get a different trigger generator depending on the chisq calculation :/
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
-			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			# peak finding window (n) in samples is four seconds at max rate, ie max(rates)
+			head = pipeparts.mkitac(pipeline, snr, 4 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs.add(head)
