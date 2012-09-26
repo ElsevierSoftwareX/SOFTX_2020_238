@@ -7,8 +7,8 @@ BANKSTART = 871147452
 BANKSTOP =  871247452
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 3.0
+MIN_MASS = 0.98
+MAX_MASS = 3.01
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 40.0
@@ -16,15 +16,15 @@ HIGH_PASS_FREQ = 30.0
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 100
-OVERLAP = 30
-MM = 0.98
+OVERLAP = 40
+MM = 0.975
 
 
 # controls triggers
 IFOS = H1 L1
 START = 852393970
 STOP =  854813170
-TAG = pipe_compare_with_banks
+TAG = pipe_compare_with_banks_cat3_301
 WEBDIR = ~/public_html/${START}-${STOP}-${TAG}
 NUMBANKS = 5
 
@@ -34,7 +34,7 @@ NUMBANKS = 5
 # Change as appropriate, whitespace is important
 INJECTIONS := 1_injections.xml 2_injections.xml 3_injections.xml 4_injections.xml 5_injections.xml 6_injections.xml
 INJ_MIN_DIST = 1000
-INJ_MAX_DIST = 80000
+INJ_MAX_DIST = 60000
 INJ_MIN_MASS1 = 1.0
 INJ_MAX_MASS1 = 3.0
 INJ_MIN_MASS2 = 1.0
@@ -188,6 +188,9 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		--spectrum-type LIGO \
 		&& gzip H1-TMPLTBANK-871154847-2048.xml \
 
+test :
+	echo gstlal_bank_splitter --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
 %_split_bank.cache : H1-TMPLTBANK-871154847-2048.xml.gz
 	gstlal_bank_splitter --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 	ls *$*_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > $@
@@ -201,35 +204,39 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:0:0 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS) $(BANK_CACHE_FILES)
-	gstlal_s5_pbh_trigger_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.99995 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) 
+	gstlal_s5_pbh_trigger_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 0 --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --max-segment-length 30000 --autocorrelation-length 301
 
-V1_vetoes.xml:
-	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_VETOES) --result-name=vetoes > $@
-	ligolw_segments_compat $@
+V1_vetoes.xml: cats.xml
+	ligolw_segments_compat V1-VETOTIME_CAT3-*.xml
+	# FIXME Hack to rename the segments and trim the fluff i.e. taking the union with itself is just the same segments again.  Now it has fewer tables and a new name.
+	gstlal_segments_operations --union --segment-file1 V1-VETOTIME_CAT3-*.xml --segment-name1 VETO_CAT3_CUMULATIVE --segment-file2 V1-VETOTIME_CAT3-*.xml --segment-name2 VETO_CAT3_CUMULATIVE  --output-file $@ --output-segment-name vetoes
 
-%_vetoes.xml:
-	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_VETOES) --result-name=vetoes > $@
-	ligolw_segments_compat $@
+%_vetoes.xml: cats.xml
+	ligolw_segments_compat $*-VETOTIME_CAT3-*.xml
+	# FIXME Hack to rename the segments and trim the fluff i.e. taking the union with itself is just the same segments again.  Now it has fewer tables and a new name.
+	gstlal_segments_operations --union --segment-file1 $*-VETOTIME_CAT3-*.xml --segment-name1 VETO_CAT3_CUMULATIVE --segment-file2 $*-VETOTIME_CAT3-*.xml --segment-name2 VETO_CAT3_CUMULATIVE  --output-file $@ --output-segment-name vetoes
 
 cats.xml:
 	wget ${VETO_SERVER}/${VETO_DEF_FILE} --output-document $@
 	ligolw_segments_from_cats --segment-url=${SEG_SERVER} --veto-file=$@ --gps-start-time ${START} --gps-end-time ${STOP} --cumulative-categories
 
 V1_segmentspadded.xml: cats.xml
-	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_SEGMENTS) --result-name=datasegments > $@
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_SEGMENTS) --result-name=datasegments > tmp$@
+	ligolw_segments_compat tmp$@
 	# FIXME HACK to use predictive file names, can ligolw_segments_from_cats take a --output ??
-	# FIXME ignore the return value since it will always be 1 if we have actually subtracted any segments
-	- ligolw_segment_diff --segment --result-name datasegments $@ $*-VETOTIME_CAT1-*.xml --output-file $@
-	ligolw_segments_compat $@
-	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 32 --output $@ $@
+	# FIXME do we really have to just trust the name of the segments?
+	ligolw_segments_compat $*-VETOTIME_CAT1-*.xml
+	gstlal_segments_operations --diff --segment-file1 tmp$@ --segment-name1 datasegments --segment-file2 V1-VETOTIME_CAT1-*.xml --segment-name2 VETO_CAT1_CUMULATIVE  --output-file $@ 
+	gstlal_segments_trim --segment-name datasegments --min-length 2048 --trim 32 --output $@ $@
 
 %_segmentspadded.xml: cats.xml
-	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > tmp$@
+	ligolw_segments_compat tmp$@
 	# FIXME HACK to use predictive file names, can ligolw_segments_from_cats take a --output ??
-	# FIXME ignore the return value since it will always be 1 if we have actually subtracted any segments
-	- ligolw_segment_diff --segment --result-name datasegments $@ $*-VETOTIME_CAT1-*.xml --output-file $@
-	ligolw_segments_compat $@
-	gstlal_segments_trim --segment-name datasegments --min-length 600 --trim 32 --output $@ $@
+	# FIXME do we really have to just trust the name of the segments?
+	ligolw_segments_compat $*-VETOTIME_CAT1-*.xml
+	gstlal_segments_operations --diff --segment-file1 tmp$@ --segment-name1 datasegments --segment-file2 $*-VETOTIME_CAT1-*.xml --segment-name2 VETO_CAT1_CUMULATIVE  --output-file $@ --output-segment-name datasegments
+	gstlal_segments_trim --segment-name datasegments --min-length 2048 --trim 32 --output $@ $@
 
 vetoes.xml: $(VETOES_FILES)
 	ligolw_add $(VETOES_FILES) > vetoes.xml
