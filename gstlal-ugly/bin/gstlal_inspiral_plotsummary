@@ -771,13 +771,14 @@ WHERE
 					self.zerolag[instrument].bankveto.append(bankveto)
 		else:
 			# injections file
-			for instrument, snr, chi2, r2, bankveto in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, r2, bankveto, end_time in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
 	sngl_inspiral.rsqveto_duration,
-	sngl_inspiral.bank_chisq / bank_chisq_dof
+	sngl_inspiral.bank_chisq / bank_chisq_dof,
+	sngl_inspiral.end_time
 FROM
 	sim_coinc_map
 	JOIN coinc_event_map ON (
@@ -788,12 +789,13 @@ FROM
 		AND coinc_event_map.event_id == sngl_inspiral.event_id
 	)
 			"""):
-				if instrument not in self.injections:
-					self.injections[instrument] = BackgroundVsInjectionPlots.Points()
-				self.injections[instrument].snr.append(snr)
-				self.injections[instrument].chi2.append(chi2)
-				self.injections[instrument].r2.append(r2)
-				self.injections[instrument].bankveto.append(bankveto)
+				if end_time in contents.seglists[instrument]:
+					if instrument not in self.injections:
+						self.injections[instrument] = BackgroundVsInjectionPlots.Points()
+					self.injections[instrument].snr.append(snr)
+					self.injections[instrument].chi2.append(chi2)
+					self.injections[instrument].r2.append(r2)
+					self.injections[instrument].bankveto.append(bankveto)
 
 	def finish(self):
 		for instrument in set(self.injections) | set(self.background) | set(self.zerolag):
