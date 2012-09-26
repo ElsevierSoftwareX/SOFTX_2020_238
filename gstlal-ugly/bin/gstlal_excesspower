@@ -27,16 +27,27 @@
 
 
 import os
-import numpy
+import sys
 import signal
 import glob
 import tempfile
+import threading
 
 from optparse import OptionParser
 import ConfigParser
 from ConfigParser import SafeConfigParser
 
-from gstlal.pipeutil import gst, mkelem
+import numpy
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+from gstlal.pipeutil import gst
 from gstlal import pipeparts
 from gstlal.pipeio import parse_spectrum_message
 from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc, get_gate_state
@@ -59,7 +70,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 
-from glue.segments import segment, segmentlist, PosInfinity
+from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS, Cache, CacheEntry
@@ -123,10 +134,7 @@ EXCESSPOWER_DQ_VECTOR = {
 	# 19 Reserved for future use, possibly by stochastic [not used]
 	# 20 Reserved for future use, possibly by stochastic [not used]
 }
-DEFAULT_DQ_VECTOR_ON = EXCESSPOWER_DQ_VECTOR["SCIENCE_MODE"] | 
-	EXCESSPOWER_DQ_VECTOR["ITF_LOCK"] | 
-	EXCESSPOWER_DQ_VECTOR["HREC_OK"] 
-	# | EXCESSPOWER_DQ_VECTOR["BURST_CAT1"]
+DEFAULT_DQ_VECTOR_ON = EXCESSPOWER_DQ_VECTOR["SCIENCE_MODE"] | EXCESSPOWER_DQ_VECTOR["ITF_LOCK"] | EXCESSPOWER_DQ_VECTOR["HREC_OK"] # | EXCESSPOWER_DQ_VECTOR["BURST_CAT1"]
 
 # This is to ensure that when the DQ vector goes out of lock that we follow it
 DEFAULT_DQ_VECTOR_OFF = EXCESSPOWER_DQ_VECTOR["RESERVED"]
@@ -152,8 +160,8 @@ class EPHandler( LLOIDHandler ):
 		# Book keeping
 		self.start = 0
 		self.stop = -1
-		self.seglist = segments.segmentlistdict()
-		self.seglist["state"] = segments.segmentlist([])
+		self.seglist = segmentlistdict()
+		self.seglist["state"] = segmentlist([])
 		self.current_segment = None
 		# How long of a time to ignore output from the whitener stabilizing
 		# FIXME: This should be ~number of PSDs stored in history * fft_length
@@ -497,7 +505,7 @@ class EPHandler( LLOIDHandler ):
 		# What maybe should be done is to intersect the final segment with the
 		# analysis_segment's end and then make the current segment have the same
 		# start time as the last written segment's end.
-		self.seglist["state"] = segments.segmentlist([])
+		self.seglist["state"] = segmentlist([])
 
 		# Do a temporary write to make the SnglBurst objects into XML rows -- 
 		# this should probably be done only if clustering is requested, since 
@@ -714,20 +722,19 @@ def get_triggers(elem, handler, ndof):
 	buf_ts = buffer.timestamp*1e-9 
 	buf_dur = buffer.duration*1e-9 / handler.units
 	handler.stop = (buf_ts + buf_dur)
-	if handler.stop - handler.time_since_dump > handler.dump_frequency or
-			len(handler.triggers) >= handler.max_events:
+	if handler.stop - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
 		# FIXME: Handle units better
 		dur = numpy.ceil(float(handler.stop)) - numpy.floor(float(handler.time_since_dump))
-		if( os.path.isdir( handler.outfile ) ):
+		if os.path.isdir( handler.outfile ):
 			fname = "%s/%s-%s_excesspower-%d-%d.xml" % (handler.outfile, handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur)
-		elif( handler.outfile is None or len(handler.outfile) == 0 ):
+		elif handler.outfile is None or len(handler.outfile) == 0:
 			fname = "%s-%s_excesspower-%d-%d.xml" % (handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur)
 		else:
 			fname = handler.outfile
 
 		uniq = 1
 		# FIXME: Needs to address the directory structure above
-		while( os.path.exists( fname ) ):
+		while os.path.exists( fname ):
 			fname = "%s-%s_excesspower-%d-%d.%d.xml" % (handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur, uniq)
 			uniq += 1
 		handler.write_triggers( filename = fname, flush = True )
@@ -786,8 +793,7 @@ if not data_source in valid_data_sources:
 	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
 	sys.exit(-1)
 
-if not options.sample_rate 
-	and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
+if not options.sample_rate and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
 	print >>sys.stderr, "Sample rate not specified and fake data requested."
 	sys.exit(-1)
 else:
@@ -986,7 +992,7 @@ duration = -1
 # Data source
 # TODO: Use new datasource library
 if data_source == "nds":
-	head = mkndssrc( pipeline,
+	head = pipeparts.mkndssrc( pipeline,
 		host = cfg.get( "instrument", "ndshost" ),
 		instrument = handler.inst,
 		channel_name = handler.channel
@@ -1000,13 +1006,13 @@ if data_source == "nds":
 	head.set_property( "channel-type", "online" )
 
 elif data_source == "fakeLIGO":
-	head = mkfakeLIGOsrc( pipeline, 
+	head = pipeparts.mkfakeLIGOsrc( pipeline, 
 		instrument = handler.inst,
 		channel_name = handler.channel
 	)
 
 elif data_source == "fakeadvLIGO":
-	head = mkfakeadvLIGOsrc( pipeline, 
+	head = pipeparts.mkfakeadvLIGOsrc( pipeline, 
 		instrument = handler.inst,
 		channel_name = handler.channel
 	)
@@ -1024,9 +1030,9 @@ elif data_source == "lldata":
 	shmmap = { "L1": "LLO_Data",
 	           "H1": "LHO_Data",
 	           "V1": "VIRGO_Data"}
-	head = mklvshmsrc( pipeline, shm_name = shmmap[handler.inst] )
-	src = head = mkframecppchanneldemux( pipeline, head )
-	sink = mkaudiorate( pipeline, None, skip_to_first = True, silent = False )
+	head = pipeparts.mklvshmsrc( pipeline, shm_name = shmmap[handler.inst] )
+	src = head = pipeparts.mkframecppchanneldemux( pipeline, head )
+	sink = pipeparts.mkaudiorate( pipeline, None, skip_to_first = True, silent = False )
 	src_deferred_link( src, "%s:%s" % (handler.inst, handler.channel), sink.get_pad("sink") )
 	head = sink
 
@@ -1051,7 +1057,7 @@ elif data_source == "lldata_sv":
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 
 elif data_source == "gwffile":
-	framesrc = head = mkframesrc( pipeline, 
+	framesrc = head = pipeparts.mkframesrc( pipeline, 
 		gwflocation, 
 		handler.inst, 
 		handler.channel
@@ -1133,45 +1139,45 @@ if( seekevent is not None ):
 
 # Diagnostic plot
 if( diagnostics ):
-	head = postdatatee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, 
-		mkqueue( pipeline, postdatatee ), 
+	head = postdatatee = pipeparts.mktee( pipeline, head )
+	pipeparts.mknxydumpsink( pipeline, 
+		pipeparts.mkqueue( pipeline, postdatatee ), 
 		cfg.get( "diagnostics", "strain-data-output" )
 	)
 
 # Convert to 64 bit
-head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head ), "audio/x-raw-float,width=64" )
+head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkaudioconvert( pipeline, head ), "audio/x-raw-float,width=64" )
 # Data conditioning
-head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
+head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
 
 if inj_loc:
-	head = mkinjections( pipeline, head, inj_loc )
+	head = pipeparts.mkinjections( pipeline, head, inj_loc )
 
 if inj_loc and verbose:
-	head = mkprogressreport( pipeline, head, "injection stream" )
+	head = pipeparts.mkprogressreport( pipeline, head, "injection stream" )
 
-head = whitener = mkwhiten( pipeline, head )
+head = whitener = pipeparts.mkwhiten( pipeline, head )
 whitener.set_property( "fft-length", handler.fft_length ) 
 if psdfile is not None: # In other words, we have a reference PSD
 	whitener.set_property( "mean-psd", handler.psd.data )
 	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
 
-head = mkqueue( pipeline, head )
+head = pipeparts.mkqueue( pipeline, head )
 
 # Diagnostic plot
 if diagnostics:
-	head = postresamptee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, 
-		mkqueue( pipeline, head ), 
+	head = postresamptee = pipeparts.mktee( pipeline, head )
+	pipeparts.mknxydumpsink( pipeline, 
+		pipeparts.mkqueue( pipeline, head ), 
 		cfg.get( "diagnostics", "whitened-data-output" )
 	)
 
 if verbose:
-	head = mkprogressreport( pipeline, head, "whitened stream" )
+	head = pipeparts.mkprogressreport( pipeline, head, "whitened stream" )
 
 # excess power channel firbank
 # TODO: Do we gain anything by changing the block stride?
-head = mkfirbank( pipeline, head, 
+head = pipeparts.mkfirbank( pipeline, head, 
 	time_domain=False, 
 	block_stride=handler.rate 
 )
@@ -1181,14 +1187,14 @@ nchannels = handler.filter_bank.shape[0]
 print "FIR bank constructed with %d %f Hz channels" % (nchannels, base_band)
 
 if verbose:
-	head = mkprogressreport( pipeline, head, "FIR bank stream" )
+	head = pipeparts.mkprogressreport( pipeline, head, "FIR bank stream" )
 
 # TODO: Uncomment here
-#head = postfirtee = mkqueue( pipeline, mktee( pipeline, head ) )
+#head = postfirtee = pipeparts.mkqueue( pipeline, pipeparts.mktee( pipeline, head ) )
 #####
 
 if diagnostics:
-	mknxydumpsink( pipeline, 
+	pipeparts.mknxydumpsink( pipeline, 
 		postfirtee, 
 		cfg.get( "diagnostics", "fir-output" )
 	)
@@ -1233,45 +1239,45 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		handler.units = EXCESSPOWER_UNIT_SCALE[unit]
 		undersamp_rate /= handler.units
 		print "Undersampling rate for level %d: %f %s" % (res_level, undersamp_rate, unit)
-		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate/handler.units), replace=False )
-		head = mkgeneric( pipeline, head, "lal_audioundersample" )
-		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate, replace=False )
+		head = pipeparts.mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate/handler.units), replace=False )
+		head = pipeparts.mkgeneric( pipeline, head, "lal_audioundersample" )
+		head = pipeparts.mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate, replace=False )
 	else:
 		print "Undersampling rate for level %d: %f Hz" % (res_level, undersamp_rate)
-		head = mkgeneric( pipeline, head, "lal_audioundersample" )
-		head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
+		head = pipeparts.mkgeneric( pipeline, head, "lal_audioundersample" )
+		head = pipeparts.mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
 	if diagnostics:
-		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
-		mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
+		head = postustee = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+		pipeparts.mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
 
 	if verbose:
-		head = mkprogressreport( pipeline, head, 
+		head = pipeparts.mkprogressreport( pipeline, head, 
 			"Undersampled stream level %d" % res_level
 		)
 
-	head = matmixer = mkmatrixmixer( pipeline, head )
+	head = matmixer = pipeparts.mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
 	if verbose:
-		head = mkprogressreport( pipeline, head,
+		head = pipeparts.mkprogressreport( pipeline, head,
 			"post matrix mixer %d" % res_level 
 		)
 
 	if diagnostics:
-		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
-		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
+		head = postmmtee = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+		pipeparts.mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
-	head = mkgeneric( pipeline, head, "pow" )
+	head = pipeparts.mkgeneric( pipeline, head, "pow" )
 	head.set_property( "exponent", 2 )
 
 	if verbose:
-		head = mkprogressreport( pipeline, head, 
+		head = pipeparts.mkprogressreport( pipeline, head, 
 			"Energy stream level %d" % res_level
 		)
 
 	# TODO: Uncomment here
-	#head = mkqueue( pipeline, head )
+	#head = pipeparts.mkqueue( pipeline, head )
 	#####
 
 	ndof = 2 # samples -- min number
@@ -1291,20 +1297,20 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# Workaround: Zero pad the kernel past the length (32 samples) in which the 
 	# element switches to FFT convolution which doesn't exhibit bad behavior.
 
-	#head = mkchecktimestamps( pipeline, head, "before audiofir" )
-	head = mkgeneric( pipeline, head, "audiofirfilter" )
+	#head = pipeparts.mkchecktimestamps( pipeline, head, "before audiofir" )
+	head = pipeparts.mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
 		ep.build_fir_sq_adder( ndof, padding=max(0, 33-ndof) )
 	)
-	head = mknofakedisconts( pipeline, head )
-	#head = mkchecktimestamps( pipeline, head, "after audiofir" )
+	head = pipeparts.mknofakedisconts( pipeline, head )
+	#head = pipeparts.mkchecktimestamps( pipeline, head, "after audiofir" )
 
 	if diagnostics:
-		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
-		mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
+		head = postdurtee = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+		pipeparts.mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
 
 	if verbose:
-		head = mkprogressreport( pipeline, head, 
+		head = pipeparts.mkprogressreport( pipeline, head, 
 			"After energy summation resolution level %d, %d DOF" % 
 				(res_level, ndof) 
 		)
@@ -1327,11 +1333,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	if options.disable_triggers:
-		mkfakesink( pipeline, head )
+		pipeparts.mkfakesink( pipeline, head )
 		continue
 
 	# Trigger generator
-	head = mkbursttriggergen( pipeline, head, ndof, 
+	head = pipeparts.mkbursttriggergen( pipeline, head, ndof, 
 		bank = handler.build_filter_xml( res_level )
 	)
 
@@ -1345,14 +1351,14 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head.set_property( "snr-thresh", snr_thresh )
 
 	if verbose:
-		head = mkprogressreport( pipeline, head, 
+		head = pipeparts.mkprogressreport( pipeline, head, 
 			"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 		)
 
 	# TODO: combine trigger streams from various levels
 
 	# TODO: This will have to be linked to multiple outgoing streams
-	appsink = mkappsink(pipeline, mkqueue(pipeline, head))
+	appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, head))
 	appsink.connect_after("new-buffer", get_triggers, handler, ndof)
 
 ### END OF PIPELINE
