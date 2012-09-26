@@ -35,13 +35,15 @@ from glue.ligolw import ilwd
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 
-from gstlal.pipeutil import gst, mkelem
-from gstlal.pipeparts import *
+from gstlal.pipeutil import gst
+from gstlal import pipeparts 
 
 import gstlal.fftw
 
 def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, corr=None):
-	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
+	"""
+	Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested.
+	"""
 
 	if fhigh > rate/2:
 		print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than sampling rate / 2, adjusting to match." % fhigh
@@ -159,7 +161,9 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	return filters
 
 def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
-	"""Build the matrix to properly normalize nchannels coming out of the FIR filter. Norm should be an array of length equal to the number of output channels, with the proper normalization factor. up_factor controls the number of output channels. E.g. If thirty two input channels are indicated, and an up_factor of two is input, then an array of length eight corresponding to eight output channels are required. The output matrix uses 1/sqrt(A_i) where A_i is the element of the input norm array."""
+	"""
+	Build the matrix to properly normalize nchannels coming out of the FIR filter. Norm should be an array of length equal to the number of output channels, with the proper normalization factor. up_factor controls the number of output channels. E.g. If thirty two input channels are indicated, and an up_factor of two is input, then an array of length eight corresponding to eight output channels are required. The output matrix uses 1/sqrt(A_i) where A_i is the element of the input norm array.
+	"""
 
 	if( up_factor > int(numpy.log2(nchannels))+1 ):
 		sys.exit( "up_factor cannot be larger than log2(nchannels)." )
@@ -187,7 +191,9 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 	return numpy.array(m).T
 
 def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=None, max_level=None ):
-	"""Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Returns a list where the indexes correspond to the 'upsample' factor - 1. For example, For 16 channels, An array of length 4 will be returned with the first index corresponding to 8 channels, second to 4, third to 2, and fourth to the single wide band channel. If level != None, then the specified index will be calculated and returned."""
+	"""
+	Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Returns a list where the indexes correspond to the 'upsample' factor - 1. For example, For 16 channels, An array of length 4 will be returned with the first index corresponding to 8 channels, second to 4, third to 2, and fourth to the single wide band channel. If level != None, then the specified index will be calculated and returned.
+	"""
 	# TODO: can we build middle channels from one level down?
 
 	# Recreate the Hann filter in the FD
@@ -276,7 +282,9 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 	return inner
 
 def build_fir_sq_adder( nsamp, padding=0 ):
-	"""Just a square window of nsamp long. Used to sum samples in time. Setting the padding will pad the end with that many 0s."""
+	"""
+	Just a square window of nsamp long. Used to sum samples in time. Setting the padding will pad the end with that many 0s. Padding is required in many cases because the audiofirfilter element in gstreamer defaults to time domain convolution for filters < 32 samples. However, TD convolution in audiofirfilter is broken, thus we invoke the FFT based convolution with a filter > 32 samples.
+	"""
 	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
 def create_bank_xml(flow, fhigh, band, duration, detector=None):
@@ -371,8 +379,8 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 		snr_max = 10 # arbitrary
 		z_autoscale = True 
 	# Tee off the amplitude stream
-	head = chtee = mktee( pipeline, head )
-	head = mkgeneric( pipeline, head, "cairovis_waterfall",
+	head = chtee = pipeparts.mktee( pipeline, head )
+	head = pipeparts.mkgeneric( pipeline, head, "cairovis_waterfall",
 			title = "TF map %s:%s" % (handler.inst, handler.channel),
 			z_autoscale = z_autoscale,
 			z_min = 0,
@@ -392,42 +400,42 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 	)
 
 	# Do some format conversion
-	head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=%d/1" % framerate )
-	head = mkprogressreport( pipeline, head, "video sink" )
+	head = pipeparts.mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=%d/1" % framerate )
+	head = pipeparts.mkprogressreport( pipeline, head, "video sink" )
 
 	# TODO: Explore using different "next file" mechanisms
 	if( split_on == "keyframe" ):
 
 		# Muxer
-		head = mkcolorspace( pipeline, head )
-		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
-		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
+		head = pipeparts.mkcolorspace( pipeline, head )
+		head = pipeparts.mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = pipeparts.mkoggmux( pipeline, pipeparts.mktheoraenc( pipeline, head ) )
 
 		if( filename is None ): filename = handler.inst + "_tfmap_%d.ogg"
 		else: filename = filename + "_%d.ogg"
 
 		print >>sys.stderr, "Streaming TF maps to %s\n" % filename
-		mkgeneric( pipeline, head, "multifilesink",
+		pipeparts.mkgeneric( pipeline, head, "multifilesink",
 			next_file = 2, location = filename, sync = False, async = False )
 
 	elif( filename is not None ):
 		# Muxer
-		head = mkcolorspace( pipeline, head )
-		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
-		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
+		head = pipeparts.mkcolorspace( pipeline, head )
+		head = pipeparts.mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = pipeparts.mkoggmux( pipeline, pipeparts.mktheoraenc( pipeline, head ) )
 		filename = filename + ".ogg"
-		mkfilesink( pipeline, head, filename )
+		pipeparts.mkfilesink( pipeline, head, filename )
 
 	else: # No filename and no splitting options means stream to desktop
 		if( sys.platform == "darwin" ):
 			#try: # OSX video streaming options are quite limited, unfortunately
-			mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
+			pipeparts.mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
 
 			#except:
 				#print >>sys.stderr, "Couldn't get glimagesink element for OS X based video output. Please install this element first."
 				#exit()
 		else:
-			mkgeneric( pipeline, head, "autovideosink" )
+			pipeparts.mkgeneric( pipeline, head, "autovideosink" )
 
 	return chtee
 
