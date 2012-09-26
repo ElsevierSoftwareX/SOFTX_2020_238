@@ -431,6 +431,12 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 		head.connect_after("notify::delta-f", psd_resolution_changed, psd)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
+	# FIXME should this be done??
+	# The idea is to drop the whiteners first 8 psd_lengths worth of data
+	# if it is in tracking mode.
+	if psd is None or track_psd:
+		head = pipeparts.mkdrop(pipeline, head, psd_fft_length * 8 * max(rates))
+
 	#
 	# optionally add vetoes
 	#
