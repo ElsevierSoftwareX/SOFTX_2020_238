@@ -44,7 +44,7 @@ def group_templates(templates, n, overlap = 0):
 	end = 0
 	start = 0
 	assert overlap < n
-	while end < len(templates) + overlap:
+	while end < len(templates):
 		end = start + n + overlap
 		yield templates[start:end]
 		start += n
@@ -102,7 +102,7 @@ if options.add_f_final:
 			if options.max_f_final and row.f_final>options.max_f_final:
 				row.f_final=options.max_f_final
 		else:
-			row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'schwarz_isco')
+			row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'bkl_isco')
 			if options.max_f_final and (row.f_final > options.max_f_final):
 				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,row.chi)))
 				row.f_final=options.max_f_final
