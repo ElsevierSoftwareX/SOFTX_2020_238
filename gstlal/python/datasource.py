@@ -137,13 +137,13 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 class GWDataSourceInfo(object):
 
 	def __init__(self, options):
-		data_sources = ("frames", "online", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		data_sources = ("frames", "online", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
 
 		# Sanity check the options
 		if options.data_source not in data_sources:
 			raise ValueError("--data-source not in " + repr(data_sources))
 		if options.data_source == "frames" and options.frame_cache is None:
-			raise ValueError("--frame-cache not in must be specified when using --data-source=frames")
+			raise ValueError("--frame-cache must be specified when using --data-source=frames")
 		if (options.gps_start_time is None or options.gps_end_time is None) and options.data_source == "frames":
 			raise ValueError("--gps-start-time and --gps-end-time must be specified unless --data-source=online")
 		if len(options.channel_name) == 0:
@@ -152,7 +152,9 @@ class GWDataSourceInfo(object):
 			raise ValueError("Can only give --frame-segments-file if --data-source=frames")
 		if options.frame_segments_name is not None and options.frame_segments_file is None:
 			raise ValueError("Can only specify --frame-segments-name if --frame-segments-file is given")
-		
+		if options.data_source == "nds" and (options.nds_host is None or options.nds_port is None):
+			raise ValueError("Must specify --nds-host and --nds-port when using --data-source=nds")
+
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
 
 		# Parse the frame segments if they exist
@@ -172,6 +174,12 @@ class GWDataSourceInfo(object):
 		self.data_source = options.data_source
 		self.injection_filename = options.injections
 
+		# Store the ndssrc specific options
+		if options.data_source == "nds":
+			self.nds_host = options.nds_host
+			self.nds_port = options.nds_port
+			self.nds_channel_type = options.nds_channel_type
+
 
 def append_options(parser):
 	"""
@@ -187,8 +195,11 @@ def append_options(parser):
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=online")
 	group.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
+	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
+	group.add_option("--nds-port", metavar = "portnumber", help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
+	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
-	group.add_option("--frame-segments-name", default = "datasegments", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
+	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
 	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online data.")
 	group.add_option("--state-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online data.")
 	parser.add_option_group(group)
@@ -275,8 +286,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src.set_property("emit-signals", True)
 		# FIXME:  let the state vector messages going to stderr be
 		# controled somehow
-		bottle.route("/%s/current_segment.txt" % instrument)(get_gate_state(src, msg = instrument, verbose = True).text)
-	
+		bottle.route("/%s/current_segment.txt" % instrument)(get_gate_state(src, msg = instrument, verbose = True).text)	
+	elif gw_data_source_info.data_source == "nds":
+		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
 		raise ValueError("invalid data_source: %s" % gw_data_source_info.data_source)
 
