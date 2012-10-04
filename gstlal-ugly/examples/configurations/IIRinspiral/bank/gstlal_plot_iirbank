@@ -210,17 +210,18 @@ def plotallvsall(banks, out_filename="allvsall.pdf", textstring = None, scl = 11
 			axes.yaxis.set_ticks_position(ylabelposition)
 			axes.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		axes.grid(True)
-		axes.scatter(x, y, s=100, marker='x', color = color)
+		axes.scatter(x, y, s=70, marker='x', color = color)
 		return axes
 
 	def plotHistogram(rec, x, Xa, xlabel = None, ylabel = None, orientation = "vertical"):
-		axes = fig.add_axes(rec)
-		axes.hist(x, 10, histtype='step', orientation=orientation)
-		#axes.xaxis.set_major_formatter( NullFormatter())
-		#axes.yaxis.set_major_formatter( NullFormatter())
+		axes = fig.add_axes(rec, frameon = False)
+		axes.hist(x, 100, histtype='stepfilled', orientation=orientation, color = 'k', facecolor = [0.5, 0.5, 0.5])
+		axes.xaxis.set_major_formatter( NullFormatter())
+		axes.yaxis.set_major_formatter( NullFormatter())
 		if orientation == "vertical":
 			axes.xaxis.set_ticks(Xa.get_xticks())
 			axes.set_xlim(Xa.get_xlim())
+			
 		else:
 			axes.yaxis.set_ticks(Xa.get_yticks())
 			axes.set_ylim(Xa.get_ylim())
@@ -229,44 +230,44 @@ def plotallvsall(banks, out_filename="allvsall.pdf", textstring = None, scl = 11
                 if ylabel is not None:
                         axes.set_ylabel(ylabel)
 
-		axes.grid(True)
+		#axes.grid(True)
+		#axes.set_frame_on(False)
+		axes.get_xaxis().set_visible(False)
+		axes.get_yaxis().set_visible(False)
 		return axes
 
 	fig = figure.Figure()
 	FigureCanvas(fig)
-	aspect = 1.0
+	aspect = 1.2
 	width = 5.4
 	fig.set_size_inches(width, width / aspect)
 	Nb = len(banks)
 
-	w1 = h1 = 0.34
-	w2 = h2 = 0.15
-	wo = ho = 0.01
+	w1 = 0.35
+	h1 = 0.4
+	w2 = h2 = 0.10
+	wo = ho = 0.03
 	wm2 = hm2 = 0.03
-	wm = 1 - 2*w1 -w2 - wo - wm2
-	hm = 1 - 2*h1 -h2 - ho - hm2
+	wm = 0.15#1 - 2*w1 -w2 - wo - wm2
+	hm = 0.1#1 - 2*h1 -h2 - ho - hm2
 
 	rect_scatter1 = [wm, hm+ho+h1, w1, h1]
 	rect_scatter2 = [wm+w1+wo, hm+ho+h1, w1, h1]
 	rect_scatter3 = [wm+w1+wo, hm, w1, h1]
-	rect_histx1 = [wm, hm+2*h1+2*ho, w1, h2]
-	rect_histx2 = [wm+w1+wo, hm+2*h1+2*ho, w1, h2]
-	rect_histy1 = [wm+2*w1+2*wo, hm+h1+ho, w2, h1]
+	rect_histy1 = [wm+2*w1+wo, hm+h1+ho, w2, h1]
 
+	snrs = []
 	for i, bank in enumerate(banks):
 		axScatter1 = plotScatter(rect_scatter1, [sum(bank.niir.values()) for row in bank.snglinspiraltable], [row.snr for row in bank.snglinspiraltable], xlabel = 'Number of IIR filters', ylabel = 'SNR overlap', color=cm.PuOr(1.*i/Nb))
 		axScatter2 = plotScatter(rect_scatter2, [row.mchirp for row in bank.snglinspiraltable], [row.snr for row in bank.snglinspiraltable], color=cm.PuOr(1.*i/Nb))
 		axScatter3 = plotScatter(rect_scatter3, [row.mchirp for row in bank.snglinspiraltable], [sum(bank.niir.values()) for row in bank.snglinspiraltable], xlabel = r'Chirp mass $\mathcal{M}$ ($M_{\odot}$)', ylabel = 'Number of IIR filters', ylabelposition = 'right', color=cm.PuOr(1.*i/Nb))
 		axes = fig.gca()
 		axplot, = axes.plot([row.mchirp for row in bank.snglinspiraltable], [scl*row.mchirp**(-5./6.) for row in bank.snglinspiraltable], color='k')
-	#axplot = axScatter3.plot(mchirps, scl*mchirps**(-5./6.), color='red')
-	print axplot
-	axes.legend([axplot],[r'$N_{\rm IIR} \propto \mathcal{M}_c^{-5/6}$']) # WORKS
-	#axes.legend(('one'),loc = 'upper right')
-	#axplot.legend([r'$N \propto \mathcal{M}_c^{-5/6}$'])
+		[snrs.append(row.snr) for row in bank.snglinspiraltable]
+	axes.legend([axplot],[r'$N_{\rm IIR} \propto \mathcal{M}_c^{-5/6}$'])
 
-	axHistogramx2 = plotHistogram(rect_histx2, [row.mchirp for row in bank.snglinspiraltable], Xa = axScatter2)
-	axHistogramy1 = plotHistogram(rect_histy1, [row.snr for row in bank.snglinspiraltable], Xa = axScatter1, orientation="horizontal")
+	# Plot histogram of SNRs
+	plotHistogram(rect_histy1, snrs, Xa = axScatter1, orientation="horizontal")
 	fig.savefig(out_filename)
 
 #
