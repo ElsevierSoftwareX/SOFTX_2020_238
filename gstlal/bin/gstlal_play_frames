@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2011  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2011--2012  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -27,8 +27,8 @@ import pygst
 pygst.require('0.10')
 import gst
 from gstlal import pipeparts
-from gstlal import lloidparts
 from gstlal import reference_psd
+from gstlal import datasource
 from optparse import OptionParser
 from glue.ligolw import ligolw
 from glue.ligolw import array
@@ -60,71 +60,80 @@ class Handler(object):
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
-	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
-	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
-	parser.add_option("--frame-cache", help="frame-cache. If not specified fake data will be used", type="str")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output")
-	parser.add_option("--instrument", metavar="IFO", help="set the instrument default H1", default="H1")
-	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
 	parser.add_option("--reference-psd", metavar="xml-file", help="reference psd XML file") 
-	parser.add_option("--vetoes", metavar="xml-file", help="veto segments XML file") 
-	parser.add_option("--veto-segments-name", metavar="string", help="veto segments name", default="vetoes") 
-	parser.add_option("--ht-gate-threshold", metavar="float", type="float", help="SNR threshold default is disabled", default=None) 
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-	
+	datasource.append_options(parser)
+
 	options, filenames = parser.parse_args()
 
-	fail = ""
-	for option in ("gps_start_time", "gps_end_time", "frame_cache", "instrument", "channel_name"):
-		if getattr(options, option) is None:
-			fail += "must provide option %s\n" % (option)
-
-	if fail: raise ValueError, fail
-	
 	return options, filenames
 
 
 # parsing and setting up some core structures
 options, filenames = parse_command_line()
-detector = lloidparts.DetectorData(options.frame_cache, options.channel_name)
-seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 
-if options.vetoes:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()[options.instrument]
-else:
-	veto_segments = None
+gw_data_source_info = datasource.GWDataSourceInfo(options)
 
-print veto_segments
+if len(options.channel_name) > 1:
+	raise ValueError,"gstlal_play_frames only configured to play data from a single channel"
+instrument = gw_data_source_info.channel_dict.keys()[0]
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 else:
 	psd = None
+
 
 # building the event loop and pipeline
 gobject.threads_init()
 mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("test")
+pipeline = gst.Pipeline("gstlal_play_frames")
 
 # the pipeline
 
-rates = [2048]
+rate = 2048
 
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, detector, data_source = "frames", injection_filename = options.injections, verbose = options.verbose)
+head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+# disallow upsampling
+head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)
+head = pipeparts.mkresample(pipeline, head, quality = 9)
+head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
+head = pipeparts.mkwhiten(pipeline, head)
 
-head = lloidparts.mkLLOIDsrc(pipeline, head, rates, options.instrument, psd = psd, ht_gate_threshold = options.ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, block_duration = 10 * gst.SECOND)
+if psd is None:
+	# use running average PSD
+	head.set_property("psd-mode", 0)
+else:
+	head.set_property("psd-mode", 1)
+
+	#
+	# install signal handler to retrieve \Delta f and
+	# f_{Nyquist} whenever they are known and/or change,
+	# resample the user-supplied PSD, and install it into the
+	# whitener.
+	#
+
+	def psd_resolution_changed(elem, pspec, psd):
+		# get frequency resolution and number of bins
+		delta_f = elem.get_property("delta-f")
+		n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
+		# interpolate and install PSD
+		psd = reference_psd.interpolate_psd(psd, delta_f)
+		elem.set_property("mean-psd", psd.data[:n])
+
+	head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
+	head.connect_after("notify::delta-f", psd_resolution_changed, psd)
+
+head = pipeparts.mkaudioconvert(pipeline, head)
 
 if options.output.endswith(".wav"):
-	head = pipeparts.mkflacenc(pipeline, head[rates[0]])
+	head = pipeparts.mkflacenc(pipeline, head)
 	pipeparts.mkfilesink(pipeline, head, options.output)
 else:
-	pipeparts.mknxydumpsink(pipeline, head[rates[0]], "test.txt")
+	pipeparts.mknxydumpsink(pipeline, head, "test.txt")
 
 handler = Handler(mainloop, pipeline)
 
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL,"test.dot")
-pipeline.set_state(gst.STATE_PAUSED)
-#gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL,"test.dot")
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
