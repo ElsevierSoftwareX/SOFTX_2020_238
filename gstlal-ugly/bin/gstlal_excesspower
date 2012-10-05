@@ -189,6 +189,7 @@ class EPHandler( LLOIDHandler ):
 		self.firbank = None
 
 		# Defaults -- PSD settings
+		self.psd = None
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
 		self.cache_psd = False
