@@ -873,7 +873,7 @@ if cfg.has_option( "cache", "reference-psd" ):
 		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
 		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
 		# Reference PSD disables caching (since we already have it
-		handler.cache_psd = False
+		handler.cache_psd = ""
 		# TODO: Make a --track-psd option
 	except KeyError: # Make sure we have a PSD for this instrument
 		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
