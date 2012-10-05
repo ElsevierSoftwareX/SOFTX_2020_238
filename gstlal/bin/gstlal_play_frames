@@ -82,7 +82,8 @@ instrument = gw_data_source_info.channel_dict.keys()[0]
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 else:
-	psd = None
+        psd = {}
+        psd[instrument] = None
 
 
 # building the event loop and pipeline
@@ -101,7 +102,7 @@ head = pipeparts.mkresample(pipeline, head, quality = 9)
 head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 head = pipeparts.mkwhiten(pipeline, head)
 
-if psd is None:
+if psd[instrument] is None:
 	# use running average PSD
 	head.set_property("psd-mode", 0)
 else:
@@ -128,7 +129,17 @@ else:
 head = pipeparts.mkaudioconvert(pipeline, head)
 
 if options.output.endswith(".wav"):
+	head = pipeparts.mkwavenc(pipeline, head)
+	pipeparts.mkfilesink(pipeline, head, options.output)
+elif options.output.endswith(".mp3"):
+	head = pipeparts.mkgeneric(pipeline, head, "lame")
+	pipeparts.mkfilesink(pipeline, head, options.output)
+elif options.output.endswith(".flac"):
 	head = pipeparts.mkflacenc(pipeline, head)
+	pipeparts.mkfilesink(pipeline, head, options.output)
+elif options.output.endswith(".ogg"):
+	head = pipeparts.mkgeneric(pipeline, head, "vorbisenc")
+	head = pipeparts.mkoggmux(pipeline, head)
 	pipeparts.mkfilesink(pipeline, head, options.output)
 else:
 	pipeparts.mknxydumpsink(pipeline, head, "test.txt")
