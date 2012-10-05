@@ -170,7 +170,7 @@ class GWDataSourceInfo(object):
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 		
 		self.frame_cache = options.frame_cache
-		self.block_size = options.block_size
+		self.block_size = int(options.block_size)
 		self.data_source = options.data_source
 		self.injection_filename = options.injections
 
