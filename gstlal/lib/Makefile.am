@@ -18,8 +18,12 @@ libgstlaltypes_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(gstreame
 #
 # Build gstlal_peakfinder.h.  Note that it's not portable to process files
 # ending in something other than ".c" with the C preprocessor, so just to
-# be sure the source for the header fragment is named ".c".
+# be sure the source for the header fragment is named ".c".  we need to
+# make sure gstlal_peakfinder.h gets built before gstlal_peakfinder.c is
+# compiled, hence the extra rule for that
 #
+
+gstlal_peakfinder.c : gstlal_peakfinder.h
 
 gstlal_peakfinder_types.h : gstlal_peakfinder_types.c
 	$(CPP) -C -P -o $@ $<
