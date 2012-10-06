@@ -1064,7 +1064,7 @@ elif data_source == "gwffile":
 		handler.channel
 	)
 
-	if options.gps_start is None and noptions.gps_end is None:
+	if options.gps_start is None and options.gps_end is None:
 		print >>sys.stderr, "Warning, inferring analysis duration from cache."
 
 	start, duration = ep.duration_from_cache( gwflocation )
@@ -1111,7 +1111,7 @@ if options.gps_start is not None and options.gps_end is not None:
 	# TODO: Use LIGOTimeGPS
 	print "Duration: " + str(duration)
 	print >>sys.stderr, "Seeking to GPS %d, segment duration %d" % (start, duration)
-	print >>sys.stderr, "Will stop at GPS %d" % (start + dur)
+	print >>sys.stderr, "Will stop at GPS %d" % (start + duration)
 
 	seek, dur = long(start*1e9), long(duration*1e9)
 	seekevent = gst.event_new_seek( 1.0, 
