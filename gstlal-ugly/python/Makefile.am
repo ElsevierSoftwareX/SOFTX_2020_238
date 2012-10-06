@@ -19,6 +19,7 @@ pkgpython_PYTHON = \
 	inspiral.py \
 	inspiral_pipe.py \
 	excesspower.py \
+	epparts.py \
 	gviz_api.py \
 	httpinterface.py \
 	servicediscovery.py
