@@ -53,7 +53,6 @@ from gstlal.lloidparts import DetectorData, mkLLOIDbasicsrc, get_gate_state
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
-from gstlal.inspiral import add_cbc_metadata
 from gstlal.epparts import EPHandler
 
 from glue import GWDataFindClient
@@ -67,15 +66,12 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
 
 from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 
-from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 from pylal.xlal.lalburst import XLALlnOneMinusChisqCdf
