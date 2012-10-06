@@ -45,6 +45,73 @@ from gstlal import pipeparts
 
 import gstlal.fftw
 
+#
+# =============================================================================
+#
+#                                Unit Handling
+#
+# =============================================================================
+#
+
+EXCESSPOWER_UNIT_SCALE = {
+	'Hz':  1024**0,
+	'kHz': 1024**1,
+	'MHz': 1024**2,
+	'GHz': 1024**3,
+	'mHz': 1024**-1,
+	'uHz': 1024**-2,
+	'nHz': 1024**-3,
+}
+# This is really only for the strain channels where one might anticipate needing a state vector.
+EXCESSPOWER_DQ_VECTOR = {
+	# 1  Science mode on 
+	"SCIENCE_MODE" : 0b1,
+	# 2  ITF fully locked 
+	"ITF_LOCK" : 0b10,
+	# 3  h(t) reconstruction ok 
+	"HREC_OK": 0b100,
+	# 4  Reserved for future use
+	"RESERVED" : 0b1000,
+	# 5  CBC Injection 
+	"CBC_INJECTION" : 0b10000,
+	# 6  CBC_CAT1 
+	"CBC_CAT1" : 0b100000,
+	# 7  CBC_CAT2 [not used]
+	"CBC_CAT2" : 0b1000000,
+	# 8  CBC_CAT3 [not used]
+	"CBC_CAT3" : 0b10000000,
+	# 9  Burst injection 
+	"BURST_INJECTION" : 0b100000000,
+	# 10 Burst_CAT1 
+	"BURST_CAT1" : 0b1000000000,
+	# 11 Burst_CAT2 
+	"BURST_CAT2" : 0b10000000000,
+	# 12 Burst_CAT3 
+	"BURST_CAT3" : 0b100000000000,
+	# 13 CW injection 
+	"CW_INJECTION" : 0b1000000000000,
+	# 14 Reserved for future use, possibly by CW 
+	# 15 Reserved for future use, possibly by CW 
+	# 16 Reserved for future use, possibly by CW 
+	# 17 Stochastic injection 
+	"STOCHASTIC_INJECTION" : 0b10000000000000000
+	# 18 Reserved for future use, possibly by stochastic 
+	# 19 Reserved for future use, possibly by stochastic [not used]
+	# 20 Reserved for future use, possibly by stochastic [not used]
+}
+DEFAULT_DQ_VECTOR_ON = EXCESSPOWER_DQ_VECTOR["SCIENCE_MODE"] | EXCESSPOWER_DQ_VECTOR["ITF_LOCK"] | EXCESSPOWER_DQ_VECTOR["HREC_OK"] # | EXCESSPOWER_DQ_VECTOR["BURST_CAT1"]
+
+# This is to ensure that when the DQ vector goes out of lock that we follow it
+DEFAULT_DQ_VECTOR_OFF = EXCESSPOWER_DQ_VECTOR["RESERVED"]
+
+#
+# =============================================================================
+#
+#                      Pipeline Utility Functions
+#
+# =============================================================================
+#
+
 def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, corr=None):
 	"""
 	Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested.
@@ -363,7 +430,38 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 
 	return numpy.sqrt( chi2.ppf( 1-fap, ndof ) )
 
-############ VISUALIZATION ROUTINES #################
+def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "glitchdb" ):
+	"""
+	Upload a sngl_burst event to glitchdb. The 'search' and 'type' variables will be supplied to glitchdb for its search and type respectively. If no type is specified, the function will attempt to determine it from the channel. If it can't, it will default to GlitchTirgger.
+	"""
+	try: 
+		type = sb_event_table[0].channel.split("-")[0]
+	# FIXME: Default to glitchtrigger if the subsystem isn't in the channel name
+	except AttributeError:
+		pass
+
+	cmd = "%s %s %s -" % (db, search, type)
+
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild( ligolw.LIGO_LW() )
+	xmldoc.childNodes[0].appendChild( sb_event_table )
+	strbuf = StringIO.StringIO()
+	table_str = utils.write_fileobj( xmldoc, strbuf, trap_signals=None )
+
+	# Open a pipe to the process and pipe in the XML as stdin
+	proc = subprocess.Popen( shlex.split(str(cmd)), stdin=subprocess.PIPE )
+	proc.communicate( strbuf.getvalue() )
+	if proc.returncode != 0:
+		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.retcode
+
+
+#
+# =============================================================================
+#
+#                          Visualization Routines
+#
+# =============================================================================
+#
 
 def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=None, history=4, framerate=5 ):
 	"""
@@ -432,28 +530,4 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 			pipeparts.mkgeneric( pipeline, head, "autovideosink" )
 
 	return chtee
-
-def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "glitchdb" ):
-	"""
-	Upload a sngl_burst event to glitchdb. The 'search' and 'type' variables will be supplied to glitchdb for its search and type respectively. If no type is specified, the function will attempt to determine it from the channel. If it can't, it will default to GlitchTirgger.
-	"""
-	try: 
-		type = sb_event_table[0].channel.split("-")[0]
-	# FIXME: Default to glitchtrigger if the subsystem isn't in the channel name
-	except AttributeError:
-		pass
-
-	cmd = "%s %s %s -" % (db, search, type)
-
-	xmldoc = ligolw.Document()
-	xmldoc.appendChild( ligolw.LIGO_LW() )
-	xmldoc.childNodes[0].appendChild( sb_event_table )
-	strbuf = StringIO.StringIO()
-	table_str = utils.write_fileobj( xmldoc, strbuf, trap_signals=None )
-
-	# Open a pipe to the process and pipe in the XML as stdin
-	proc = subprocess.Popen( shlex.split(str(cmd)), stdin=subprocess.PIPE )
-	proc.communicate( strbuf.getvalue() )
-	if proc.returncode != 0:
-		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.retcode
 
