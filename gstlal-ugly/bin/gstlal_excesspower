@@ -113,6 +113,7 @@ def on_psd_change( elem, pspec, hand ):
 		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
+
 def on_spec_corr_change( elem, pspec, hand ):
 	"""
 	Get the 2-point spectral correlation object and signal the handler to rebuild everything.
@@ -167,20 +168,31 @@ def get_triggers(elem, handler, ndof):
 	buf_dur = buffer.duration*1e-9 / handler.units
 	handler.stop = (buf_ts + buf_dur)
 	if handler.stop - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
-		# FIXME: Handle units better
-		dur = numpy.ceil(float(handler.stop)) - numpy.floor(float(handler.time_since_dump))
-		if os.path.isdir( handler.outfile ):
-			fname = "%s/%s-%s_excesspower-%d-%d.xml" % (handler.outfile, handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur)
-		elif handler.outfile is None or len(handler.outfile) == 0:
-			fname = "%s-%s_excesspower-%d-%d.xml" % (handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur)
-		else:
-			fname = handler.outfile
 
+		fname = ep.make_cache_parseable_name(
+			inst = handler.inst,
+			tag = handler.channel,
+			start = handler.time_since_dump,
+			stop = handler.stop,
+			ext = "xml",
+			dir = handler.outdir
+		)
+
+		# It's possible that triggers come out so fast that the filename would
+		# be identical and overwrite those triggers. This appends an integer
+		# identified to prevent thtat.
 		uniq = 1
-		# FIXME: Needs to address the directory structure above
 		while os.path.exists( fname ):
-			fname = "%s-%s_excesspower-%d-%d.%d.xml" % (handler.inst, handler.channel.replace("-","_"), handler.time_since_dump, dur, uniq)
+			fname = ep.make_cache_parseable_name(
+				inst = handler.inst,
+				tag = "%d_%s" % (uniq. handler.channel),
+				start = handler.time_since_dump,
+				stop = handler.stop,
+				ext = "xml",
+				dir = handler.outdir
+			)
 			uniq += 1
+
 		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
 
@@ -312,6 +324,12 @@ handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
 handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
 
+if cfg.has_option( "cache", "cache-psd-every" ):
+	handler.cache_psd = cfg.getint( "cache", "cache-psd-every" )
+	print "PSD caching enabled."
+else:
+	handler.cache_psd = None
+	
 psdfile = None
 if cfg.has_option( "cache", "reference-psd" ):
 	psdfile = cfg.get( "cache", "reference-psd" )
@@ -319,24 +337,18 @@ if cfg.has_option( "cache", "reference-psd" ):
 		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
 		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
 		# Reference PSD disables caching (since we already have it
-		handler.cache_psd = ""
-		# TODO: Make a --track-psd option
+		handler.cache_psd = None
 	except KeyError: # Make sure we have a PSD for this instrument
 		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
-
-else:
-	handler.cache_psd = cfg.get( "cache", "cache-psd" )
-
-# TODO: Fix this up
-if handler.cache_psd == "": 
-	handler.cache_psd = False
-else: 
-	print "PSD caching enabled."
 
 # TODO: Fix this up too
 handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
-handler.outfile = cfg.get( "triggering", "output-file" )
+if cfg.has_option( "triggering", "output-file" ):
+	handler.outfile = cfg.get( "triggering", "output-file" )
+if cfg.has_option( "triggering", "output-directory" ):
+	handler.outdir = cfg.get( "triggering", "output-directory" )
+
 handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 if options.db_uploads:
 

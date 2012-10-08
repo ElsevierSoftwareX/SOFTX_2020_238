@@ -430,6 +430,25 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 
 	return numpy.sqrt( chi2.ppf( 1-fap, ndof ) )
 
+#
+# =============================================================================
+#
+#                          Utility Functions
+#
+# =============================================================================
+#
+
+def make_cache_parseable_name( inst, tag, start, stop, ext, dir="./" ):
+	"""
+	Make a LIGO cache parseable name for a segment of time spanning start to stop from instrument inst and file extension ext. If a directory shoudl be prepended to the path, indicate it with dir. The duration is calculated as prescirbed in the technical document describing the LIGO cache format.
+	"""
+	dur =  numpy.ceil(stop) - numpy.floor(start)
+	tag = tag.replace("-","_")
+
+	name = "%s/%s-%s_excesspower-%d-%d.%s" % (dir, inst, tag, start, dur, ext)
+	
+	return name
+
 def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "glitchdb" ):
 	"""
 	Upload a sngl_burst event to glitchdb. The 'search' and 'type' variables will be supplied to glitchdb for its search and type respectively. If no type is specified, the function will attempt to determine it from the channel. If it can't, it will default to GlitchTirgger.

@@ -122,7 +122,8 @@ class EPHandler( LLOIDHandler ):
 		self.psd = None
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
-		self.cache_psd = False
+		self.cache_psd = None
+		self.last_psd_cache = 0
 		self.psd_change_thresh = 0.5 # fifty percent
 
 		# Defaults -- Two-point spectral correlation settings
@@ -138,6 +139,7 @@ class EPHandler( LLOIDHandler ):
 		self.process_params = None
 		self.process = None
 		self.outfile = "test.xml"
+		self.outdir = "./"
 		self.make_output_table()
 		self.output_cache = Cache()
 		self.snr_thresh = 5.5
@@ -200,6 +202,7 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Process a message from the bus. Depending on what it is, we may drop various data products on to disk, or perform various other actions.
 		"""
+
 		if message.type == gst.MESSAGE_EOS:
 			self.shutdown(None, None)
 			return
@@ -211,23 +214,29 @@ class EPHandler( LLOIDHandler ):
 			return
 
 		# TODO: Move this to PSD difference checker
-		if( message.structure.get_name() == "spectrum" ):
+		if message.structure.get_name() == "spectrum":
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
 			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( timestamp = ts )
-			elif self.cache_psd: 
+			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
 				self.dump_psd( timestamp = ts )
+				self.last_psd_cache = ts
 
-	def dump_psd( self, filename=None, timestamp=None ):
+	def dump_psd( self, timestamp, psddir="./" ):
 		"""
-		Dump the currently cached PSD to a LIGOLW XML file. If the filename isn't specified, it will be constructed from metadata.
+		Dump the currently cached PSD to a LIGOLW XML file. If the psddir isn't specified, it defaults to the current directory.
 		"""
-		if filename is None:
-			if os.path.isdir( self.cache_psd ):
-				filename = "%s/%s-%s_PSD_%d.xml" % ( self.cache_psd, self.inst, self.channel.replace("-","_"), round(timestamp) )
-			else:
-				filename = self.cache_psd
+
+		filename = ep.make_cache_parseable_name(
+			inst = self.inst,
+			tag = self.channel + "_PSD",
+			start = round(timestamp) - 40, # PSD history length
+			stop = round(timestamp),
+			ext = "xml.gz",
+			dir = "./"
+		)
+
 		write_psd( filename, { self.inst: self.psd } )
 
 	def add_firbank( self, firbank ):
@@ -312,8 +321,8 @@ class EPHandler( LLOIDHandler ):
 		"""
 		FIXME: This is really inelegant.
 		"""
-		for f in glob.glob( "%sgstlal_excesspower_bank_%s_level_*.xml" % (loc, self.inst) ):
-			os.rm( f )
+		for f in glob.glob( "%sgstlal_excesspower_bank_%s_%s_level_*.xml" % (loc, self.inst, self.channel) ):
+			os.remove( f )
 
 	def rebuild_chan_mix_matrix( self ):
 		"""
@@ -531,10 +540,10 @@ class EPHandler( LLOIDHandler ):
 
 		# TODO: We ignore triggers in the whitening segment now anyway, let's
 		# just pull this unless we have reason to keep it
-		self.discard_segment = segment( 
-			LIGOTimeGPS(self.start), 
-			LIGOTimeGPS(self.start + 300)
-		)
+		#self.discard_segment = segment( 
+			#LIGOTimeGPS(self.start), 
+			#LIGOTimeGPS(self.start + 300)
+		#)
 
 		# Keep track of the output files we make for later convience
 		# TODO: Write the cache periodically?
@@ -559,7 +568,7 @@ class EPHandler( LLOIDHandler ):
 
 		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, clus_triggers ):
 			# TODO: Merge these two
-			if sb.peak_time in self.discard_segment: continue
+			#if sb.peak_time in self.discard_segment: continue
 			if sb.peak_time not in analysis_segment: continue
 			upload_tbl = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
@@ -582,19 +591,27 @@ class EPHandler( LLOIDHandler ):
 		self.mainloop.quit()
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
-		# FIXME: Check units
-		dur = numpy.ceil(float(self.stop)) - numpy.floor(float(self.time_since_dump))
-		# FIXME: Handle this better
-		if( os.path.isdir( self.outfile ) ):
-			outfile = "%s/%s-%s_excesspower-%d-%d.xml" % (self.outfile, self.inst, self.channel.replace("-","_"), self.time_since_dump, dur)
-		elif( self.outfile is None or len(self.outfile) == 0 ):
-			outfile = "%s-%s_excesspower-%d-%d.xml" % (self.inst, self.channel.replace("-","_"), self.time_since_dump, dur)
-		else:
-			outfile = self.outfile
+
+		outfile = ep.make_cache_parseable_name(
+			inst = self.inst,	
+			tag = self.channel,
+			start = self.time_since_dump,
+			stop = self.stop,
+			ext = "xml",
+			dir = self.outdir
+		)
 		self.write_triggers( False, filename = outfile )
-		if( self.output_cache is not None and len(self.output_cache) != 0 ):
-			dur = numpy.ceil(float(self.stop)) - numpy.floor(float(self.start))
-			outfile = "%s-%s_excesspower-%d-%d.xml" % (self.inst, self.channel.replace("-","_"), self.start, dur)
-			self.output_cache.tofile( file(outfile.replace( "xml", "cache" ), "w") )
+
+		if self.output_cache is not None:
+			outfile = ep.make_cache_parseable_name(
+				inst = self.inst,	
+				tag = self.channel,
+				start = self.start,
+				stop = self.stop,
+				ext = "cache",
+				dir = self.outdir
+			)
+			self.output_cache.tofile( file(outfile, "w") )
+
 		self.destroy_filter_xml()
 
