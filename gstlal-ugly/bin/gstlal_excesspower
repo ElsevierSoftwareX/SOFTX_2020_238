@@ -45,9 +45,23 @@ import gobject
 gobject.threads_init()
 import pygst
 pygst.require("0.10")
-import gst
 
-from gstlal.pipeutil import gst
+# This mess is to make gstreamer stop eating our help messages.
+if "--help" in sys.argv or "-h" in sys.argv:
+	try:
+		del sys.argv[ sys.argv.index( "--help" ) ]
+	except ValueError:	
+		pass
+	try:
+		del sys.argv[ sys.argv.index( "-h" ) ]
+	except ValueError:	
+		pass
+	
+	import gst
+	sys.argv.append( "--help" )
+else:
+	import gst
+
 from gstlal import pipeparts
 from gstlal.lloidparts import DetectorData, mkLLOIDbasicsrc, get_gate_state
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
@@ -217,18 +231,14 @@ def get_triggers(elem, handler, ndof):
 
 parser = OptionParser()
 
-#datasource.append_options( parser )
+datasource.append_options( parser )
 
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
-parser.add_option("-n", "--channel-name", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
 parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
-parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,lldata_sv,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
-parser.add_option("-s", "--gps-start-time", dest="gps_start_time", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
-parser.add_option("-e", "--gps-end-time", dest="gps_end_time", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
 parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
 parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
