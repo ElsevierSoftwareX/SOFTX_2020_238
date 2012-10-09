@@ -157,6 +157,12 @@ class GWDataSourceInfo(object):
 
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
 
+		# Set up default dictionary for shared memory partition, and override
+		# if the user asks
+		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
+		if options.shared_memory_partition is not None:
+			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
+
 		# Parse the frame segments if they exist
 		if options.frame_segments_file is not None:
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
@@ -166,6 +172,12 @@ class GWDataSourceInfo(object):
 		if options.gps_start_time is not None:
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
+
+		# Set up default dictionary for the DQ (state vector) channel and 
+		# override if the user asks
+		self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		if options.dq_channel_name is not None:
+			self.dq_channel_dict.update( channel_dict_from_channel_list(options.dq_channel_name) )
 	
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 		
@@ -198,6 +210,8 @@ def append_options(parser):
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-port", metavar = "portnumber", help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
+	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality (or state vector) channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
+	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
 	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online data.")
@@ -239,9 +253,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
 
-		# FIXME:  be careful hard-coding shared-memory partition
 		# FIXME make wait_time adjustable through web interface or command line or both
-		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument], wait_time = 120)
+		src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
 		# strain
@@ -266,7 +279,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "LLD-DQ_VECTOR"), statevector.get_pad("sink"))
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
 		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
