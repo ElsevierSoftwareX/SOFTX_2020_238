@@ -142,6 +142,7 @@ class EPHandler( LLOIDHandler ):
 		self.outdir = "./"
 		self.make_output_table()
 		self.output_cache = Cache()
+		self.output_cache_name = None
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
@@ -546,7 +547,6 @@ class EPHandler( LLOIDHandler ):
 		#)
 
 		# Keep track of the output files we make for later convience
-		# TODO: Write the cache periodically?
 		if self.output_cache is not None:
 			self.output_cache.append(
 				CacheEntry(
@@ -555,6 +555,11 @@ class EPHandler( LLOIDHandler ):
 					("file://localhost" + os.path.abspath(filename))
 				)
 			)
+
+		if self.output_cache_name is not None:	
+			self.lock.acquire()
+			self.output_cache.tofile( file(self.output_cache_name, "a") )
+			self.lock.release()
 
 		if flush: 
 			self.make_output_table()
@@ -602,8 +607,8 @@ class EPHandler( LLOIDHandler ):
 		)
 		self.write_triggers( False, filename = outfile )
 
-		if self.output_cache is not None:
-			outfile = ep.make_cache_parseable_name(
+		if self.output_cache:
+			outfile = self.output_cache_name or ep.make_cache_parseable_name(
 				inst = self.inst,	
 				tag = self.channel,
 				start = self.start,

@@ -226,7 +226,8 @@ parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", h
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
-parser.add_option("-T", "--disable-file-cache", dest="disable_file_cache", action="store_true", help="Don't create file caches of output files. Default is to create file caches.", default=False)
+parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
+parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
 parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
@@ -272,8 +273,11 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-if options.disable_file_cache: 
+if not options.file_cache:
 	handler.output_cache = None
+
+if options.file_cache and options.file_cache_name is not None:
+	handler.output_cache_name = options.file_cache_name
 
 handler.rate = options.sample_rate
 handler.clustering = options.clustering
@@ -342,7 +346,8 @@ if cfg.has_option( "cache", "reference-psd" ):
 		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
 
 # TODO: Fix this up too
-handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
+if cfg.has_option( "cache", "cache-spectral-correlation" ):
+	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
 if cfg.has_option( "triggering", "output-file" ):
 	handler.outfile = cfg.get( "triggering", "output-file" )
