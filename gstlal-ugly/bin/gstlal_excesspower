@@ -54,6 +54,7 @@ from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
 from gstlal.epparts import EPHandler
+from gstlal import datasource
 
 from glue import GWDataFindClient
 
@@ -215,16 +216,19 @@ def get_triggers(elem, handler, ndof):
 #
 
 parser = OptionParser()
+
+#datasource.append_options( parser )
+
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
-parser.add_option("-n", "--channel-name", dest="channame", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
+parser.add_option("-n", "--channel-name", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
 parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,lldata_sv,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
-parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
-parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
+parser.add_option("-s", "--gps-start-time", dest="gps_start_time", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
+parser.add_option("-e", "--gps-end-time", dest="gps_end_time", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
 parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
 parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
@@ -302,8 +306,8 @@ try:
 	handler.channel = cfg.get( "instrument", "channel" )
 except ConfigParser.NoOptionError:
 	handler.channel = None
-if options.channame is not None:
-	handler.channel = options.channame
+if options.channel_name is not None:
+	handler.channel = options.channel_name
 
 # We weren't provided a channel -- we're not mind readers, dammit!
 if handler.channel is None:
@@ -385,7 +389,7 @@ if gwflocation == "":
 	gwflocation = None
 if options.data_source == "gwffile" and gwflocation is None:
 
-	if options.gps_start is None or options.gps_end is None:
+	if options.gps_start_time is None or options.gps_end_time is None:
 		sys.exit( "No frame cache present, and no GPS times set. Cannot query for data without an interval to query in." )
 
 	# Shamelessly stolen from gw_data_find
@@ -407,11 +411,11 @@ if options.data_source == "gwffile" and gwflocation is None:
 	connection =  \
 		GWDataFindClient.GWDataFindHTTPConnection(host=server, port=port)
 	print "Equivalent command line is "
-	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start, options.gps_end, frame_type)
+	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start_time, options.gps_end_time, frame_type)
 	cache = connection.find_frame_urls( handler.inst[0], 
 		frame_type,
-		options.gps_start,
-		options.gps_end,
+		options.gps_start_time,
+		options.gps_end_time,
 		urltype="file",
 		on_gaps="error"
 	)
@@ -527,20 +531,20 @@ elif data_source == "gwffile":
 		handler.channel
 	)
 
-	if options.gps_start is None and options.gps_end is None:
+	if options.gps_start_time is None and options.gps_end_time is None:
 		print >>sys.stderr, "Warning, inferring analysis duration from cache."
 
 	start, duration = ep.duration_from_cache( gwflocation )
-	if options.gps_start:
-		handler.start = start = options.gps_start 
+	if options.gps_start_time:
+		handler.start = start = options.gps_start_time 
 	else:
-		options.gps_start = handler.start = start
-		options.gps_start = float(options.gps_start)
-	if options.gps_end:
-		duration = options.gps_end - start
+		options.gps_start_time = handler.start = start
+		options.gps_start_time = float(options.gps_start_time)
+	if options.gps_end_time:
+		duration = options.gps_end_time - start
 	else:
-		options.gps_end = start + duration
-		options.gps_end = float(options.gps_end)
+		options.gps_end_time = start + duration
+		options.gps_end_time = float(options.gps_end_time)
 	handler.time_since_dump = start
 
 	# TODO: Must unhardcode this -- but requires knowledge of native rate
@@ -569,7 +573,7 @@ else:
 
 # Seeking
 seekevent = None
-if options.gps_start is not None and options.gps_end is not None:
+if options.gps_start_time is not None and options.gps_end_time is not None:
 
 	# TODO: Use LIGOTimeGPS
 	print "Duration: " + str(duration)
@@ -584,10 +588,10 @@ if options.gps_start is not None and options.gps_end is not None:
 		gst.SEEK_TYPE_SET, seek + dur
 	)
 
-elif options.gps_start is not None:
+elif options.gps_start_time is not None:
 
 	print >>sys.stderr, "Seeking to GPS %d (ns)" % start
-	seek = long(options.gps_start*1e9)
+	seek = long(options.gps_start_time*1e9)
 	seekevent = gst.event_new_seek( 1.0, 
 		gst.Format(gst.FORMAT_TIME),
 		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
