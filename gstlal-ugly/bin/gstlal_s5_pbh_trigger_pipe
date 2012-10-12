@@ -365,7 +365,7 @@ class gstlal_inspiral_job(inspiral_pipe.InspiralJob):
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
 		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '6')
+		self.add_condor_cmd('request_cpus', '8')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
 class gstlal_inspiral_inj_job(inspiral_pipe.InspiralJob):
@@ -375,7 +375,7 @@ class gstlal_inspiral_inj_job(inspiral_pipe.InspiralJob):
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral_inj'):
 		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '6')
+		self.add_condor_cmd('request_cpus', '8')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
 
@@ -651,7 +651,11 @@ analyzable_instruments_set = set(bank_cache.keys())
 # get a dictionary of all the disjoint 2+ detector combination segments
 segsdict = segments.segmentlistdict()
 for n in range(2, 1 + len(analyzable_instruments_set)):
-	for ifo_combos in iterutils.choices(analyzable_instruments_set, n):
+	for ifo_combos in iterutils.choices(list(analyzable_instruments_set), n):
+		# never analyze H1H2 or H2L1 times
+		if set(ifo_combos) == set(('H1', 'H2')) or set(ifo_combos) == set(('L1', 'H2')):
+			print >> sys.stderr, "not analyzing: ", ifo_combos, " only time"
+			continue
 		segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 		segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
 		segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(2048)
