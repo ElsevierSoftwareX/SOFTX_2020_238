@@ -170,7 +170,7 @@ class GWDataSourceInfo(object):
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 		
 		self.frame_cache = options.frame_cache
-		self.block_size = int(options.block_size)
+		self.block_size = options.block_size
 		self.data_source = options.data_source
 		self.injection_filename = options.injections
 
@@ -189,7 +189,7 @@ def append_options(parser):
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|online|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
-	group.add_option("--block-size", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=online")
+	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=online")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=online")
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=online")
