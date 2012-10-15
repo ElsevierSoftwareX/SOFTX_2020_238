@@ -63,6 +63,8 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output")
 	parser.add_option("--reference-psd", metavar="xml-file", help="reference psd XML file") 
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("--low-pass-filter", metavar="Hz", type='float', default=None, help='Low pass filter frequency (no filter if not given)')
+	parser.add_option("--high-pass-filter", metavar="Hz", type='float', default=None, help='High pass filter frequency (no filter if not given)')
 	datasource.append_options(parser)
 
 	options, filenames = parser.parse_args()
@@ -127,6 +129,13 @@ else:
 	head.connect_after("notify::delta-f", psd_resolution_changed, psd)
 
 head = pipeparts.mkaudioconvert(pipeline, head)
+
+if options.high_pass_filter:
+  head = pipeparts.mkaudiocheblimit(pipeline,head,cutoff=options.high_pass_filter,mode='high-pass')
+if options.low_pass_filter:
+  head = pipeparts.mkaudiocheblimit(pipeline,head,cutoff=options.low_pass_filter,mode='low-pass')
+if options.high_pass_filter or options.low_pass_filter:
+  head = pipeparts.mkaudioconvert(pipeline, head)
 
 if options.output.endswith(".wav"):
 	head = pipeparts.mkwavenc(pipeline, head)
