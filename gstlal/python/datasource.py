@@ -139,6 +139,11 @@ class GWDataSourceInfo(object):
 	def __init__(self, options):
 		data_sources = ("frames", "online", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
 
+		# Callbacks to handle the "start" and "stop" signals from the gate
+		# element. This is useful for doing things like segments
+		self.gate_start_callback = None
+		self.gate_stop_callback = None
+
 		# Sanity check the options
 		if options.data_source not in data_sources:
 			raise ValueError("--data-source not in " + repr(data_sources))
@@ -296,10 +301,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# use state vector to gate strain
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
 		# export state vector state
-		src.set_property("emit-signals", True)
-		# FIXME:  let the state vector messages going to stderr be
-		# controled somehow
-		bottle.route("/%s/current_segment.txt" % instrument)(get_gate_state(src, msg = instrument, verbose = True).text)	
+		if gw_data_source_info.gate_start_callback is not None:
+			src.set_property("emit-signals", True)
+			src.connect("start", gw_data_source_info.gate_start_callback)
+		if gw_data_source_info.gate_stop_callback is not None:
+			src.set_property("emit-signals", True)
+			src.connect("stop", gw_data_source_info.gate_stop_callback)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
