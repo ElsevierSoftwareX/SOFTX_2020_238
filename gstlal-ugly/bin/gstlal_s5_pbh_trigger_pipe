@@ -566,7 +566,8 @@ def parse_command_line():
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
-	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
+	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
+	#parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
@@ -576,6 +577,7 @@ def parse_command_line():
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
 
 	options, filenames = parser.parse_args()
+	options.num_banks = [int(v) for v in options.num_banks.split(",")]
 	
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
@@ -699,7 +701,7 @@ gstlal_plot_psd_horizon_node(horizonJob, dag, [node.output_name for node in psd_
 # loop over banks to run gstlal inspiral pre clustering and far computation
 #
 
-bank_groups = inspiral_pipe.build_bank_groups(bank_cache, [options.num_banks])
+bank_groups = inspiral_pipe.build_bank_groups(bank_cache, options.num_banks)
 
 for i, bank_group in enumerate(bank_groups):
 	
