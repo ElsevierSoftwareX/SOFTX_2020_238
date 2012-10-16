@@ -56,4 +56,6 @@ dist_bin_SCRIPTS = \
 	gstlal_median_of_psds \
 	gstlal_psd_pipe \
 	gstlal_segments_operations \
-	gstlal_inspiral_plot_efficiency
+	gstlal_inspiral_plot_efficiency \
+	gstlal_recolor_frames_pipe \
+	gstlal_cache_to_segments
