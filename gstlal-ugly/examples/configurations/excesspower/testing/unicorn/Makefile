@@ -1,4 +1,5 @@
 etime=1012071168
+blocksize=$(shell echo "16384 * 8" | bc)
 start=$(shell python -c "print ${etime} - 50")
 end=$(shell python -c "print ${etime} + 50")
 output=$(shell pwd)/triggers/
@@ -12,14 +13,22 @@ H_BTLWNB_unicorn_100.xml:
 no_inj:
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source fakeadvLIGO  \
+		--channel-name=H1=FAKE-STRAIN \
+		--block-size ${blocksize} \
+		--gps-start-time 0 \
+		--file-cache \
+		--file-cache-name H1_no_inj.cache \
+		--data-source AdvLIGO  \
 		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
 		--sample-rate 4096  
 
 no_inj_movie:
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source fakeadvLIGO  \
+		--channel-name=H1=FAKE-STRAIN \
+		--block-size ${blocksize} \
+		--gps-start-time 0 \
+		--data-source AdvLIGO  \
 		--disable-triggers \
 		--stream-tfmap video \
 		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
@@ -28,16 +37,24 @@ no_inj_movie:
 unicorns: H_BTLWNB_unicorn_100.xml 
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source fakeadvLIGO  \
+		--channel-name=H1=FAKE-STRAIN \
+		--block-size ${blocksize} \
+		--gps-start-time 0 \
+		--data-source AdvLIGO  \
+		--injections H_BTLWNB_unicorn_100.xml \
 		--initialization-file gstlal_excesspower_h1_generic.ini  \
 		--sample-rate 4096  
 
 unicorn_movie: H_BTLWNB_unicorn_100.xml
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source fakeadvLIGO  \
+		--channel-name=H1=FAKE-STRAIN \
+		--block-size ${blocksize} \
+		--gps-start-time 0 \
+		--data-source AdvLIGO  \
 		--stream-tfmap unicorn  \
 		--disable-triggers  \
+		--injections H_BTLWNB_unicorn_100.xml \
 		--initialization-file gstlal_excesspower_h1_generic.ini  \
 		--sample-rate 4096  
 

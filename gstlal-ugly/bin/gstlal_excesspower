@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+njec#!/usr/bin/env python
 #
 # Copyright (C) 2011 Chris Pankow
 #
@@ -200,7 +200,7 @@ def get_triggers(elem, handler, ndof):
 		while os.path.exists( fname ):
 			fname = ep.make_cache_parseable_name(
 				inst = handler.inst,
-				tag = "%d_%s" % (uniq. handler.channel),
+				tag = "%d_%s" % (uniq, handler.channel),
 				start = handler.time_since_dump,
 				stop = handler.stop,
 				ext = "xml",
@@ -248,157 +248,7 @@ parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_
 
 (options, args) = parser.parse_args()
 
-# The data rate at which we wish to do analysis
-# Assumed lower than the input data
-data_source = options.data_source
-
-# TODO: Stop reinventing the wheel and replace this with mkLLOIDsrc
-valid_data_sources = [ "gwffile", 
-	  "nds",
-	  "lldata", 
-	  "lldata_sv", 
-	  "whitedata", 
-	  "fakeLIGO", 
-	  "fakeadvLIGO" ]
-if not data_source in valid_data_sources:
-	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
-	sys.exit(-1)
-
-if not options.sample_rate and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
-	print >>sys.stderr, "Sample rate not specified and fake data requested."
-	sys.exit(-1)
-else:
-	sample_rate = options.sample_rate
-
-# Verbosity and diagnostics
-verbose = options.verbose
-diagnostics = options.diagnostics
-
-#
-# =============================================================================
-#
-#                           Handler / Pipeline options
-#
-# =============================================================================
-#
-
-# We need a pipeline and pipeline handler instance to configure
-pipeline = gst.Pipeline( "gstlal_excesspower" )
-mainloop = gobject.MainLoop()
-handler = EPHandler(mainloop, pipeline)
-
-if not options.file_cache:
-	handler.output_cache = None
-
-if options.file_cache and options.file_cache_name is not None:
-	handler.output_cache_name = options.file_cache_name
-
-handler.rate = options.sample_rate
-handler.clustering = options.clustering
-handler.verbose = options.verbose
-
-# Set process params in handler for use with the output xmldocs
-handler.make_process_tables( options, None )
-
-# Used to keep track if we need to lock the PSD into the whitener
-if not options.infile:
-	print >>sys.stderr, "Initialization file required."
-elif not os.path.exists( options.infile ):
-	print >>sys.stderr, "Initialization file path is invalid."
-	sys.exit(-1)
-
-cfg = SafeConfigParser()
-cfg.read( options.infile )
-
-# Instruments and channels
-handler.inst = cfg.get( "instrument", "detector" )
-try:
-	handler.channel = cfg.get( "instrument", "channel" )
-except ConfigParser.NoOptionError:
-	handler.channel = None
-if options.channel_name is not None:
-	handler.channel = options.channel_name
-
-# We weren't provided a channel -- we're not mind readers, dammit!
-if handler.channel is None:
-	exit("No channel specified in the configuration file or on the command line.")
-print "Channel name: " + handler.channel
-
-try:
-	site = cfg.get( "instrument", "site" )
-except ConfigParser.NoOptionError:
-	print >>sys.stderr, "No site requested, using detector as default cache sieve."
-	site = None
-
-# Handler options
-try:
-	handler.fft_length = cfg.getfloat( "tf_parameters", "fft-length" )
-except ConfigParser.NoOptionError:
-	pass
-
-handler.flow = cfg.getfloat( "tf_parameters", "min-frequency" )
-handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
-handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
-handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
-handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
-
-if cfg.has_option( "cache", "cache-psd-every" ):
-	handler.cache_psd = cfg.getint( "cache", "cache-psd-every" )
-	print "PSD caching enabled."
-else:
-	handler.cache_psd = None
-	
-psdfile = None
-if cfg.has_option( "cache", "reference-psd" ):
-	psdfile = cfg.get( "cache", "reference-psd" )
-	try:
-		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
-		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
-		# Reference PSD disables caching (since we already have it
-		handler.cache_psd = None
-	except KeyError: # Make sure we have a PSD for this instrument
-		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
-
-# TODO: Fix this up too
-if cfg.has_option( "cache", "cache-spectral-correlation" ):
-	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
-
-if cfg.has_option( "triggering", "output-file" ):
-	handler.outfile = cfg.get( "triggering", "output-file" )
-if cfg.has_option( "triggering", "output-directory" ):
-	handler.outdir = cfg.get( "triggering", "output-directory" )
-
-handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-if options.db_uploads:
-
-	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
-	if handler.db_thresh is None:
-		print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
-
-	handler.db_client = cfg.get( "triggering", "db-client" )
-	if handler.db_thresh is None:
-		print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
-		handler.db_thresh = None
-
-if cfg.has_option( "triggering", "events_per_file" ):
-	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
-
-# If a specific (trigger) time is of interest, specify its GPS here
-# TODO: Read from sngl_inspirals and sngl_bursts
-# TODO: Make this useful
-trigger_begin, trigger_end = None, None
-if cfg.has_option( "triggering", "trig_time_start" ):
-	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
-if cfg.has_option( "triggering", "trig_time_end" ):
-	trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
-if trigger_begin and trigger_end:
-	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
-
-gwflocation = cfg.get( "instrument", "location" )
-if gwflocation == "":
-	gwflocation = None
-if options.data_source == "gwffile" and gwflocation is None:
-
+if options.data_source == "frames" and options.frame_cache is None:
 	if options.gps_start_time is None or options.gps_end_time is None:
 		sys.exit( "No frame cache present, and no GPS times set. Cannot query for data without an interval to query in." )
 
@@ -434,14 +284,165 @@ if options.data_source == "gwffile" and gwflocation is None:
 	print "Writing cache of %d files to %s" % (len(cache), tmpname)
 	cache.tofile( open(tmpname, "w") )
 	connection.close()
-	gwflocation = tmpname
+	options.frame_cache = tmpname
 
-inj_loc = cfg.get( "injections", "xml-location" )
-if not os.path.isfile( inj_loc ):
-	print >>sys.stderr, "Injection file not found, disabling option."
-	inj_loc = None
+gw_data_source_opts = datasource.GWDataSourceInfo( options )
 
-base_band = handler.base_band
+# Verbosity and diagnostics
+verbose = options.verbose
+diagnostics = options.diagnostics
+
+"""
+# TODO: Stop reinventing the wheel and replace this with mkLLOIDsrc
+valid_data_sources = [ "gwffile", 
+	  "nds",
+	  "lldata", 
+	  "lldata_sv", 
+	  "whitedata", 
+	  "fakeLIGO", 
+	  "fakeadvLIGO" ]
+if not data_source in valid_data_sources:
+	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
+	sys.exit(-1)
+
+if not options.sample_rate and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
+	print >>sys.stderr, "Sample rate not specified and fake data requested."
+	sys.exit(-1)
+else:
+	sample_rate = options.sample_rate
+"""
+
+#
+# =============================================================================
+#
+#                           Handler / Pipeline options
+#
+# =============================================================================
+#
+
+# We need a pipeline and pipeline handler instance to configure
+pipeline = gst.Pipeline( "gstlal_excesspower" )
+mainloop = gobject.MainLoop()
+handler = EPHandler(mainloop, pipeline)
+
+# If a sample rate other than the native rate is requested, we'll need to keep
+# track of it
+if options.sample_rate is not None:
+	handler.rate = options.sample_rate
+
+# Does the user want a cache file to track the trigger files we spit out?
+if not options.file_cache:
+	handler.output_cache = None
+
+# And if so, if you give us a name, we'll update it every time we output, else
+# only at the end of the run
+if options.file_cache and options.file_cache_name is not None:
+	handler.output_cache_name = options.file_cache_name
+
+# Clustering on/off
+handler.clustering = options.clustering
+# Be verbose?
+handler.verbose = options.verbose
+
+if not options.infile:
+	print >>sys.stderr, "Initialization file required."
+elif not os.path.exists( options.infile ):
+	print >>sys.stderr, "Initialization file path is invalid."
+	sys.exit(-1)
+
+cfg = SafeConfigParser()
+cfg.read( options.infile )
+
+# Instruments and channels
+if len(gw_data_source_opts.channel_dict.keys()) == 1:
+	handler.inst = gw_data_source_opts.channel_dict.keys()[0]
+elif cfg.has_option( "instrument", "detector" ):
+	handler.inst = cfg.get( "instrument", "detector" )
+else:
+	sys.exit( "Unable to determine instrument." )
+
+if gw_data_source_opts.channel_dict[handler.inst] is not None:
+	handler.channel = gw_data_source_opts.channel_dict[handler.inst]
+elif cfg.has_option( "instrument", "channel" ):
+	handler.channel = cfg.get( "instrument", "channel" )
+else:
+	# TODO: In the future, we may request multiple channels for the same 
+	# instrument -- e.g. from a single raw frame
+	sys.exit( "Unable to determine channel." )
+print "Channel name(s): " + handler.channel 
+
+# TODO: Is this still needed?
+if cfg.has_option( "instrument", "site" ):
+	site = cfg.get( "instrument", "site" )
+else:
+	print >>sys.stderr, "No site requested, using detector as default cache sieve."
+	site = None
+
+# FFT and time-frequency parameters
+handler.flow = cfg.getfloat( "tf_parameters", "min-frequency" )
+handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
+handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
+handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
+handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
+
+#base_band = handler.base_band
+
+if cfg.has_option( "tf_parameters", "fft-length" ):
+	handler.fft_length = cfg.getfloat( "tf_parameters", "fft-length" )
+
+if cfg.has_option( "cache", "cache-psd-every" ):
+	handler.cache_psd = cfg.getint( "cache", "cache-psd-every" )
+	print "PSD caching enabled. PSD will be recorded every %d seconds" % handler.cache_psd
+else:
+	handler.cache_psd = None
+	
+# Used to keep track if we need to lock the PSD into the whitener
+psdfile = None
+if cfg.has_option( "cache", "reference-psd" ):
+	psdfile = cfg.get( "cache", "reference-psd" )
+	try:
+		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
+		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
+		# Reference PSD disables caching (since we already have it
+		handler.cache_psd = None
+	except KeyError: # Make sure we have a PSD for this instrument
+		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
+
+# TODO: Fix this up too
+if cfg.has_option( "cache", "cache-spectral-correlation" ):
+	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
+
+# Triggering options
+if cfg.has_option( "triggering", "output-file" ):
+	handler.outfile = cfg.get( "triggering", "output-file" )
+if cfg.has_option( "triggering", "output-directory" ):
+	handler.outdir = cfg.get( "triggering", "output-directory" )
+
+handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+if options.db_uploads:
+
+	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
+	if handler.db_thresh is None:
+		print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
+
+	handler.db_client = cfg.get( "triggering", "db-client" )
+	if handler.db_thresh is None:
+		print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
+		handler.db_thresh = None
+
+if cfg.has_option( "triggering", "events_per_file" ):
+	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
+
+# If a specific (trigger) time is of interest, specify its GPS here
+# TODO: Read from sngl_inspirals and sngl_bursts
+# TODO: Make this useful
+trigger_begin, trigger_end = None, None
+if cfg.has_option( "triggering", "trig_time_start" ):
+	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
+if cfg.has_option( "triggering", "trig_time_end" ):
+	trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
+if trigger_begin and trigger_end:
+	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
 # This is invoked here, or else the default rate is used, which will cause funny behavior for the defaults with some cases
 # TODO: Less hardcodish -- update this when the rate or base_band is updated
@@ -449,6 +450,9 @@ handler.filter_len = 2*int(2*handler.rate/handler.base_band)
 handler.build_default_psd( handler.rate, handler.filter_len )
 handler.rebuild_filter()
 handler.rebuild_chan_mix_matrix()
+
+# Set process params in handler for use with the output xmldocs
+handler.make_process_tables( options, None )
 
 # Max trigger duration (s)
 # TODO: Uhh... what was going on here?
@@ -465,11 +469,10 @@ handler.rebuild_chan_mix_matrix()
 if options.verbose:
 	print >>sys.stderr, "Assembling pipeline...\n",
 
+# TODO: He looks lonely... move him somewhere useful
 duration = -1
 
-# Data source
-# TODO: Use new datasource library
-if data_source == "nds":
+if options.data_source == "nds":
 	head = pipeparts.mkndssrc( pipeline,
 		host = cfg.get( "instrument", "ndshost" ),
 		instrument = handler.inst,
@@ -482,19 +485,16 @@ if data_source == "nds":
 
 	# FIXME: Don't assume real-time
 	head.set_property( "channel-type", "online" )
+else:
 
-elif data_source == "fakeLIGO":
-	head = pipeparts.mkfakeLIGOsrc( pipeline, 
-		instrument = handler.inst,
-		channel_name = handler.channel
+	head = datasource.mkbasicsrc( pipeline, 
+		gw_data_source_opts, 
+		handler.inst, 
+		verbose 
 	)
 
-elif data_source == "fakeadvLIGO":
-	head = pipeparts.mkfakeadvLIGOsrc( pipeline, 
-		instrument = handler.inst,
-		channel_name = handler.channel
-	)
-
+# TODO: Check these options
+"""
 elif data_source == "whitedata":
 	# TODO: use mkaudiotestsrc
 	head = gst.element_factory_make( "audiotestsrc" )
@@ -557,16 +557,6 @@ elif data_source == "gwffile":
 		options.gps_end_time = float(options.gps_end_time)
 	handler.time_since_dump = start
 
-	# TODO: Must unhardcode this -- but requires knowledge of native rate
-	if options.nbyte == 64:
-		bsize=16384*8 # 64 bit stream
-	elif options.nbyte == 32:
-		bsize=16384*4 # 32 bit stream
-	if options.verbose:
-		print "Blocksize %d" % bsize
-	#duration = int(duration*handler.rate/16384.0)
-	head.set_property( "blocksize", bsize )
-
 	# FIXME: Make this an option
 	if handler.inst == "V1": 
 		sieve = "V*"
@@ -622,17 +612,12 @@ if( diagnostics ):
 		pipeparts.mkqueue( pipeline, postdatatee ), 
 		cfg.get( "diagnostics", "strain-data-output" )
 	)
+"""
 
 # Convert to 64 bit
-head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkaudioconvert( pipeline, head ), "audio/x-raw-float,width=64" )
+#head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkaudioconvert( pipeline, head ), "audio/x-raw-float,width=64" )
 # Data conditioning
 head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
-
-if inj_loc:
-	head = pipeparts.mkinjections( pipeline, head, inj_loc )
-
-if inj_loc and verbose:
-	head = pipeparts.mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = pipeparts.mkwhiten( pipeline, head )
 whitener.set_property( "fft-length", handler.fft_length ) 
@@ -662,7 +647,7 @@ head = pipeparts.mkfirbank( pipeline, head,
 
 handler.add_firbank( head )
 nchannels = handler.filter_bank.shape[0]
-print "FIR bank constructed with %d %f Hz channels" % (nchannels, base_band)
+print "FIR bank constructed with %d %f Hz channels" % (nchannels, handler.base_band)
 
 if verbose:
 	head = pipeparts.mkprogressreport( pipeline, head, "FIR bank stream" )
@@ -684,7 +669,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	#head = postfirtee
 	#######
 
-	band = base_band * 2**res_level
+	band = handler.base_band * 2**res_level
 	# TODO: Check this
 	chan = numpy.ceil( nchannels / 2.0**res_level )
 
@@ -854,9 +839,9 @@ signal.signal( signal.SIGTERM, handler.shutdown )
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
 if diagnostics:
-	write_dump_dot(pipeline, "test", verbose = True)
-	#gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
-		#gst.DEBUG_GRAPH_SHOW_ALL,
-		#cfg.get( "diagnostics", "dot-file-location" )
-	#)
+	pipeparts.write_dump_dot(pipeline, "gstlal_excesspower", verbose = True)
+	gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
+		gst.DEBUG_GRAPH_SHOW_ALL,
+		"gstlal_excesspower"
+	)
 mainloop.run()
