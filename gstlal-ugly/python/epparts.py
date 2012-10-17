@@ -469,7 +469,7 @@ class EPHandler( LLOIDHandler ):
 		# Write segments
 		llwseg = ligolw_segments.LigolwSegments( output )
 		# FIXME: Better names and comments?
-		llwseg.insert_from_segmentlistdict( self.seglist, "gstlal_excesspower segments", "gstlal_excesspower segments" )
+		llwseg.insert_from_segmentlistdict( self.seglist, "gstlal_excesspower segments", comment="gstlal_excesspower segments", version=u'\u263b' )
 
 		llwseg.finalize(process)
 
