@@ -296,7 +296,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 
 def psd_to_fir_kernel(psd):
 	"""
-	Compute a finite impulse-response filter kernel from a power
+	Compute an acausal finite impulse-response filter kernel from a power
 	spectral density conforming to the LAL normalization convention,
 	such that if zero-mean unit-variance Gaussian random noise is fed
 	into an FIR filter using the kernel the filter's output will
@@ -324,13 +324,19 @@ def psd_to_fir_kernel(psd):
 	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
 
 	#
+	# remove LAL normalization
+	#
+
+	data *= sample_rate
+
+	#
 	# compute the FIR kernel.  it always has an odd number of samples
 	# and no DC offset.
 	#
 
 	data[0] = data[-1] = 0.0
 	try:
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) * math.sqrt(sample_rate) / (2 * len(data) - 1)
+		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) / (2 * len(data) - 1)
 		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
 	except AttributeError:
 		# this computer's scipy.fftpack is missing idct()
@@ -340,7 +346,87 @@ def psd_to_fir_kernel(psd):
 		tmp[1::2] = data[1:]
 		data = tmp
 		del tmp
-		kernel = scipy.fftpack.irfft(numpy.sqrt(data)) * math.sqrt(sample_rate)
+		kernel = scipy.fftpack.irfft(numpy.sqrt(data))
+		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
+
+	#
+	# apply a Tukey window whose flat bit is 50% of the kernel.
+	# preserve the FIR kernel's square magnitude
+	#
+
+	norm_before = numpy.dot(kernel, kernel)
+	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
+
+	#
+	# the kernel's latency
+	#
+
+	# FIXME:  should this be (len(kernel) - 1) / 2 ?
+	latency = (len(kernel) + 1) / 2
+
+	#
+	# done
+	#
+
+	return kernel, latency, sample_rate
+
+
+def psd_to_whitening_fir_kernel(psd):
+	"""
+	Compute an acausal finite impulse-response filter kernel from a power
+	spectral density conforming to the LAL normalization convention,
+	such that if colored Gaussian random noise with the given PSD is fed
+	into an FIR filter using the kernel the filter's output will
+	be zero-mean unit-variance Gaussian random noise.  The PSD must be
+	provided as a REAL8FrequencySeries object (see
+	pylal.xlal.datatypes.real8frequencyseries).
+
+	The return value is the tuple (kernel, latency, sample rate).  The
+	kernel is a numpy array containing the filter kernel, the latency
+	is the filter latency in samples and the sample rate is in Hz.  The
+	kernel and latency can be used, for example, with gstreamer's stock
+	audiofirfilter element.
+	"""
+	#
+	# this could be relaxed with some work
+	#
+
+	assert psd.f0 == 0.0
+
+	#
+	# extract the PSD bins and determine sample rate for kernel
+	#
+
+	data = psd.data / 2
+	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
+
+	#
+	# remove LAL normalization
+	#
+
+	data *= sample_rate
+
+	#
+	# compute the FIR kernel.  it always has an odd number of samples
+	# and no DC offset.
+	#
+
+	data[0] = data[-1] = 0.0
+	data_nonzeros = (data != 0.)
+	data[data_nonzeros] = 1./data[data_nonzeros]
+	try:
+		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) / (2 * len(data) - 1)
+		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
+	except AttributeError:
+		# this computer's scipy.fftpack is missing idct()
+		# repack data:  data[0], data[1], 0, data[2], 0, ....
+		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
+		tmp[0] = data[0]
+		tmp[1::2] = data[1:]
+		data = tmp
+		del tmp
+		kernel = scipy.fftpack.irfft(numpy.sqrt(data))
 		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
 	#
