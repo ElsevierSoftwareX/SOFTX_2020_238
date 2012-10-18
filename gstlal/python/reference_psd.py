@@ -372,7 +372,7 @@ def psd_to_fir_kernel(psd):
 	return kernel, latency, sample_rate
 
 
-def psd_to_whitening_fir_kernel(psd):
+def psd_to_linear_phase_whitening_fir_kernel(psd):
 	"""
 	Compute an acausal finite impulse-response filter kernel from a power
 	spectral density conforming to the LAL normalization convention,
@@ -381,6 +381,9 @@ def psd_to_whitening_fir_kernel(psd):
 	be zero-mean unit-variance Gaussian random noise.  The PSD must be
 	provided as a REAL8FrequencySeries object (see
 	pylal.xlal.datatypes.real8frequencyseries).
+
+	The phase response of this filter is 0, just like whitening done in
+	the frequency domain.
 
 	The return value is the tuple (kernel, latency, sample rate).  The
 	kernel is a numpy array containing the filter kernel, the latency
@@ -450,6 +453,66 @@ def psd_to_whitening_fir_kernel(psd):
 	#
 
 	return kernel, latency, sample_rate
+
+def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_kernel):
+	"""
+	Compute the minimum-phase response filter (zero latency) associated with a
+	linear-phase response filter (latency equal to half the filter length). 
+
+	From "Design of Optimal Minimum-Phase Digital FIR Filters Using
+	Discrete Hilbert Transforms", IEEE Trans. Signal Processing, vol. 48,
+	pp. 1491-1495, May 2000.
+
+	The return value is the tuple (kernel, phase response).  The kernel is
+	a numpy array containing the filter kernel.  The kernel can be used,
+	for example, with gstreamer's stock audiofirfilter element.
+	"""
+	#
+	# compute abs of FFT of kernel
+	#
+
+	absX = abs(scipy.fftpack.fft(linear_phase_kernel))
+
+	#
+	# compute the cepstrum of the kernel
+	# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
+	#
+
+	cepstrum = scipy.fftpack.ifft(scipy.log(absX))
+
+	#
+	# compute sgn
+	#
+
+	sgn = scipy.ones(len(linear_phase_kernel))
+	sgn[0] = 0.
+	sgn[(len(sgn)+1)/2] = 0.
+	sgn[(len(sgn)+1)/2:] *= -1.
+
+	#
+	# compute theta
+	#
+
+	theta = -1.j * scipy.fftpack.fft(sgn * cepstrum)
+
+	#
+	# compute minimum phase kernel
+	#
+
+	minimum_phase_kernel = scipy.real(scipy.fftpack.ifft(absX * scipy.exp(1.j * theta)))
+
+	#
+	# this kernel needs to be reversed to follow conventions used with the
+	# audiofirfilter and lal_firbank elements
+	#
+
+	minimum_phase_kernel = minimum_phase_kernel[-1::-1]
+
+	#
+	# done
+	#
+
+	return minimum_phase_kernel, -theta
 
 
 def interpolate_psd(psd, deltaF):
