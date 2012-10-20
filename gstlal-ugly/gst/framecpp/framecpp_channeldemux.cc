@@ -700,7 +700,6 @@ static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClo
 
 static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
-	using FrameCPP::Common::MemoryBuffer;
 	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	FrameCPP::IFrameStream::frame_h_type frame;
 	GstTagList *tag_list = gst_tag_list_new();
@@ -734,7 +733,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			 * out of scope.
 			 */
 
-			MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
+			FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
 
 			ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
 
@@ -754,7 +753,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo( ));
 		}
-		MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
+		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
 
 		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
 
