@@ -33,7 +33,6 @@
  */
 
 
-#include <locale.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -431,7 +430,6 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
   GstTSVEnc *element = GST_TSVENC(trans);
-  struct lconv *locale = localeconv();
   GstStructure *str = gst_caps_get_structure(incaps, 0);
   const gchar *media_type;
   gint rate, channels, width;
@@ -439,19 +437,6 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
   gboolean success = TRUE;
 
   element->printsample = NULL;  /* incase it doesn't get set */
-
-  /*
-   * Make sure numbers are formated the way we expect
-   */
-
-  if(g_strcmp0(locale->decimal_point, ".")
-      || g_strcmp0(locale->thousands_sep, "")) {
-    GST_ERROR_OBJECT(element,
-        "incompatible locale:  decimal point is \"%s\", thousands separator is \"%s\";  must be \".\" and \"\" respectively",
-        locale->decimal_point, locale->thousands_sep);
-    success = FALSE;
-    goto done;
-  }
 
   /*
    * Parse the format
@@ -708,7 +693,7 @@ static void gst_tsvenc_class_init(GstTSVEncClass * klass)
       ARG_START_TIME,
       g_param_spec_uint64("start-time",
           "Start time",
-          "Start time in nanoseconds.",
+          "Start dumping data at this time in nanoseconds.",
           0, G_MAXUINT64, DEFAULT_START_TIME,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
       );
@@ -716,7 +701,7 @@ static void gst_tsvenc_class_init(GstTSVEncClass * klass)
       ARG_STOP_TIME,
       g_param_spec_uint64("stop-time",
           "Stop time",
-          "Stop time in nanoseconds.",
+          "Stop dumping data at this time in nanoseconds.",
           0, G_MAXUINT64, DEFAULT_STOP_TIME,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
       );
