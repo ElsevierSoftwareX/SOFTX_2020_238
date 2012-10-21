@@ -701,7 +701,6 @@ static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClo
 static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
 	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
-	FrameCPP::IFrameStream::frame_h_type frame;
 	GstTagList *tag_list = gst_tag_list_new();
 	gboolean need_tags = FALSE;
 	gboolean pads_added = FALSE;
@@ -768,6 +767,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 		}
 
 		while(1) {
+			FrameCPP::IFrameStream::frame_h_type frame;
 			try {
 				frame = ifs.ReadNextFrame();
 			} catch(const std::out_of_range& Error) {
