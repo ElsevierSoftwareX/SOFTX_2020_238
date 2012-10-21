@@ -572,6 +572,7 @@ static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 	if(success) {
 		element->rate = rate;
 		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
+		gstlal_collect_pads_set_rate(pad, element->rate);
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -913,7 +914,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 */
 
-	if(!gstlal_collect_pads_get_earliest_times(element->collect, &earliest_input_t_start, &earliest_input_t_end, element->rate)) {
+	if(!gstlal_collect_pads_get_earliest_times(element->collect, &earliest_input_t_start, &earliest_input_t_end)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
 		result = GST_FLOW_ERROR;
 		goto error;
@@ -932,8 +933,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * get buffers upto the desired end time.
 	 */
 
-	snrbuf = gstlal_collect_pads_take_buffer_sync(pads, element->snrcollectdata, earliest_input_t_end, element->rate);
-	chisqbuf = gstlal_collect_pads_take_buffer_sync(pads, element->chisqcollectdata, earliest_input_t_end, element->rate);
+	snrbuf = gstlal_collect_pads_take_buffer_sync(pads, element->snrcollectdata, earliest_input_t_end);
+	chisqbuf = gstlal_collect_pads_take_buffer_sync(pads, element->chisqcollectdata, earliest_input_t_end);
 
 	/*
 	 * NULL means EOS.  EOS on one means our EOS.

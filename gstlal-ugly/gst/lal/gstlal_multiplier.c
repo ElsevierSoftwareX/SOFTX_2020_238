@@ -359,8 +359,10 @@ static gboolean gstlal_multiplier_setcaps(GstPad * pad, GstCaps * caps)
 
 	for(padlist = GST_ELEMENT(multiplier)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *pad = GST_PAD(padlist->data);
-		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
+		if(gst_pad_get_direction(pad) == GST_PAD_SINK) {
 			gstlal_collect_pads_set_unit_size(pad, multiplier->unit_size);
+			gstlal_collect_pads_set_rate(pad, multiplier->rate);
+		}
 	}
 
 	/*
@@ -1032,7 +1034,7 @@ static GstFlowReturn gstlal_multiplier_collected(GstCollectPads * pads, gpointer
 		 * real.
 		 */
 		
-		if(!gstlal_collect_pads_get_earliest_times(multiplier->collect, &t_start, &t_end, multiplier->rate)) {
+		if(!gstlal_collect_pads_get_earliest_times(multiplier->collect, &t_start, &t_end)) {
 			GST_ERROR_OBJECT(multiplier, "cannot deduce input timestamp offset information");
 			result = GST_FLOW_ERROR;
 			goto error;
@@ -1095,7 +1097,7 @@ static GstFlowReturn gstlal_multiplier_collected(GstCollectPads * pads, gpointer
 		 */
 
 		if(multiplier->synchronous)
-			inbuf = gstlal_collect_pads_take_buffer_sync(pads, data, t_end, multiplier->rate);
+			inbuf = gstlal_collect_pads_take_buffer_sync(pads, data, t_end);
 		else
 			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * multiplier->unit_size);
 

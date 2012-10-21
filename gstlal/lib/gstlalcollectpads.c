@@ -110,7 +110,7 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
 
 
 /**
- * Record the number of bytes per unit (e.g., sample, frame, etc.) on the
+ * Set the number of bytes per unit (e.g., sample, frame, etc.) on the
  * given input stream.
  *
  * Should be called with the GstCollectPads' lock held (e.g., from the
@@ -129,7 +129,7 @@ void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size)
 
 
 /**
- * Retrieve the number of bytes per unit (e.g., sample, frame, etc.) on the
+ * Get the number of bytes per unit (e.g., sample, frame, etc.) on the
  * given input stream.
  *
  * Should be called with the GstCollectPads' lock held (i.e., from the
@@ -144,6 +144,44 @@ guint gstlal_collect_pads_get_unit_size(GstPad *pad)
 	g_return_val_if_fail(data != NULL, -1);
 
 	return data->unit_size;
+}
+
+
+/**
+ * Set the unit rate (e.g., sample rate, frame rate, etc.) on the given
+ * input stream.
+ *
+ * Should be called with the GstCollectPads' lock held (e.g., from the
+ * collected() method).
+ */
+
+
+void gstlal_collect_pads_set_rate(GstPad *pad, gint rate)
+{
+	GstLALCollectData *data = gst_pad_get_element_private(pad);
+
+	g_return_if_fail(data != NULL);
+
+	data->rate = rate;
+}
+
+
+/**
+ * Get the unit rate (e.g., sample rate, frame rate, etc.) on the given
+ * input stream.
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
+ */
+
+
+gint gstlal_collect_pads_get_rate(GstPad *pad)
+{
+	GstLALCollectData *data = gst_pad_get_element_private(pad);
+
+	g_return_val_if_fail(data != NULL, -1);
+
+	return data->rate;
 }
 
 
@@ -248,11 +286,11 @@ done:
  */
 
 
-static GstClockTime compute_t_start(GstLALCollectData *data, GstBuffer *buf, gint rate)
+static GstClockTime compute_t_start(GstLALCollectData *data, GstBuffer *buf)
 {
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
-	return  GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(((GstCollectData *) data)->pos / data->unit_size, GST_SECOND, rate);
+	return  GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(((GstCollectData *) data)->pos / data->unit_size, GST_SECOND, data->rate);
 }
 
 
@@ -262,7 +300,7 @@ static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf)
 }
 
 
-gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTime *t_start, GstClockTime *t_end, gint rate)
+gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTime *t_start, GstClockTime *t_end)
 {
 	gboolean all_eos = TRUE;
 	GSList *collectdatalist;
@@ -273,7 +311,6 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 	g_return_val_if_fail(t_start != NULL, FALSE);
 	g_return_val_if_fail(t_end != NULL, FALSE);
-	g_return_val_if_fail(rate > 0, FALSE);
 
 	*t_start = *t_end = G_MAXUINT64;
 
@@ -325,7 +362,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 * compute this buffer's start and end times
 		 */
 
-		buf_t_start = compute_t_start(data, buf, rate);
+		buf_t_start = compute_t_start(data, buf);
 		buf_t_end = compute_t_end(data, buf);
 		gst_buffer_unref(buf);
 
@@ -384,7 +421,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
  */
 
 
-GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALCollectData *data, GstClockTime t_end, gint rate)
+GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALCollectData *data, GstClockTime t_end)
 {
 	GstBuffer *buf;
 	guint64 offset;
@@ -400,7 +437,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), NULL);
 	g_return_val_if_fail(data != NULL, NULL);
 	g_return_val_if_fail(data->unit_size != 0, NULL);
-	g_return_val_if_fail(rate > 0, NULL);
+	g_return_val_if_fail(data->rate != 0, NULL);
 
 	/*
 	 * retrieve the start and end time of the next buffer to be
@@ -414,7 +451,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 		 */
 		return NULL;
 	offset = GST_BUFFER_OFFSET(buf) + ((GstCollectData *) data)->pos / data->unit_size;
-	buf_t_start = compute_t_start(data, buf, rate);
+	buf_t_start = compute_t_start(data, buf);
 	buf_t_end = compute_t_end(data, buf);
 	is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP);
 	is_malloced = GST_BUFFER_DATA(buf) != NULL;
@@ -434,7 +471,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 
 	/* FIXME:  could use GST_CLOCK_TIME_TO_FRAMES() but that macro is
 	 * defined in gst-plugins-base */
-	units = t_end <= buf_t_start ? 0 : gst_util_uint64_scale_int_round(t_end - buf_t_start, rate, GST_SECOND);
+	units = t_end <= buf_t_start ? 0 : gst_util_uint64_scale_int_round(t_end - buf_t_start, data->rate, GST_SECOND);
 	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): requesting %" G_GUINT64_FORMAT " units\n", GST_PAD_NAME(((GstCollectData *) data)->pad), units);
 
 	/*
@@ -491,7 +528,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	GST_BUFFER_TIMESTAMP(buf) = buf_t_start;
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
-	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(units, GST_SECOND, rate);
+	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(units, GST_SECOND, data->rate);
 
 	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): returning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_PAD_NAME(((GstCollectData *) data)->pad), GST_BUFFER_BOUNDARIES_ARGS(buf));
 

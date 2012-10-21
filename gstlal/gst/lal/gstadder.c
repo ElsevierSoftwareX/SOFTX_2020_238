@@ -345,8 +345,10 @@ gst_adder_setcaps (GstPad * pad, GstCaps * caps)
   GST_OBJECT_LOCK (adder->collect);
   for (pads = GST_ELEMENT (adder)->pads; pads; pads = g_list_next (pads)) {
     GstPad *pad = GST_PAD (pads->data);
-    if (gst_pad_get_direction (pad) == GST_PAD_SINK)
+    if (gst_pad_get_direction (pad) == GST_PAD_SINK) {
       gstlal_collect_pads_set_unit_size (pad, adder->bps);
+      gstlal_collect_pads_set_rate (pad, adder->rate);
+    }
   }
   GST_OBJECT_UNLOCK (adder->collect);
 
@@ -1012,6 +1014,7 @@ gst_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
   GST_OBJECT_LOCK (adder->collect);
   data = gstlal_collect_pads_add_pad (adder->collect, newpad, sizeof (*data));
   gstlal_collect_pads_set_unit_size (newpad, adder->bps);
+  gstlal_collect_pads_set_rate (newpad, adder->rate);
   GST_OBJECT_UNLOCK (adder->collect);
 
   /* FIXME: hacked way to override/extend the event function of
@@ -1176,7 +1179,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
    * input buffers */
   if (adder->synchronous) {
     /* when doing synchronous adding, determine the offsetes for real */
-    if (!gstlal_collect_pads_get_earliest_times (adder->collect, &t_start, &t_end, adder->rate)) {
+    if (!gstlal_collect_pads_get_earliest_times (adder->collect, &t_start, &t_end)) {
       GST_ELEMENT_ERROR (adder, STREAM, FORMAT, (NULL), ("cannot deduce input timestamp offset information"));
       goto bad_timestamps;
     }
@@ -1218,7 +1221,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
 
     /* (try to) get a buffer upto the desired end offset */
     if (adder->synchronous)
-      inbuf = gstlal_collect_pads_take_buffer_sync (pads, collect_data, t_end, adder->rate);
+      inbuf = gstlal_collect_pads_take_buffer_sync (pads, collect_data, t_end);
     else
       inbuf = gst_collect_pads_take_buffer (pads, (GstCollectData *) collect_data, outlength * adder->bps);
 

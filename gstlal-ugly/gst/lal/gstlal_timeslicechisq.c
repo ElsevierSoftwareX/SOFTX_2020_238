@@ -396,8 +396,10 @@ setcaps(GstPad *pad, GstCaps *caps)
 
 	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *pad = GST_PAD(padlist->data);
-		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
+		if(gst_pad_get_direction(pad) == GST_PAD_SINK) {
 			gstlal_collect_pads_set_unit_size(pad, element->complex_unit_size);
+			gstlal_collect_pads_set_rate(pad, element->rate);
+		}
 	}
 
 	/* done */
@@ -1064,7 +1066,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 *
 	 * determine the offsets for real. */
-	if(!gstlal_collect_pads_get_earliest_times(element->collect, &t_start, &t_end, element->rate)) {
+	if(!gstlal_collect_pads_get_earliest_times(element->collect, &t_start, &t_end)) {
 		GST_ELEMENT_ERROR(element, STREAM, FORMAT, (NULL), ("cannot deduce input timestamp offset information"));
 		goto bad_timestamps;
 	}
@@ -1126,7 +1128,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		guint64 inlength, numbytes, offsetbytes;
 
 		/* (try to) get a buffer upto the desired end offset. */
-		inbuf = gstlal_collect_pads_take_buffer_sync(pads, collect_data, t_end, element->rate);
+		inbuf = gstlal_collect_pads_take_buffer_sync(pads, collect_data, t_end);
 
 		/* add inbuf to list of input_buffers. this is prepended since
 		 * the last pad linked returns the first buffer  and done here
