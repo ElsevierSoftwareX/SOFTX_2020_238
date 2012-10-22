@@ -123,6 +123,7 @@ class EPHandler( LLOIDHandler ):
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
 		self.cache_psd = None
+		self.cache_psd_dir = "./"
 		self.last_psd_cache = 0
 		self.psd_change_thresh = 0.5 # fifty percent
 
@@ -221,7 +222,7 @@ class EPHandler( LLOIDHandler ):
 			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( timestamp = ts )
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
-				self.dump_psd( timestamp = ts )
+				self.dump_psd( ts, self.cache_psd_dir )
 				self.last_psd_cache = ts
 
 	def dump_psd( self, timestamp, psddir="./" ):
