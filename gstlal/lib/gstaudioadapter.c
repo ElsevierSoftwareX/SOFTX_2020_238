@@ -1,7 +1,7 @@
 /*
  * GstAudioAdapter
  *
- * Copyright (C) 2011  Kipp Cannon
+ * Copyright (C) 2011,2012  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -206,8 +206,8 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 {
 	GList *head = g_queue_peek_head_link(adapter->queue);
 	GstBuffer *buf;
-	gboolean gap = FALSE;
-	gboolean nongap = FALSE;
+	gboolean _copied_gap = FALSE;
+	gboolean _copied_nongap = FALSE;
 	guint n;
 
 	if(!samples)
@@ -220,10 +220,10 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 	n = MIN(samples, samples_remaining(buf, adapter->skip));
 	if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
 		memset(dst, 0, n * adapter->unit_size);
-		gap = TRUE;
+		_copied_gap = TRUE;
 	} else {
 		memcpy(dst, GST_BUFFER_DATA(buf) + adapter->skip * adapter->unit_size, n * adapter->unit_size);
-		nongap = TRUE;
+		_copied_nongap = TRUE;
 	}
 	dst += n * adapter->unit_size;
 	samples -= n;
@@ -234,10 +234,10 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 		n = MIN(samples, GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf));
 		if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
 			memset(dst, 0, n * adapter->unit_size);
-			gap = TRUE;
+			_copied_gap = TRUE;
 		} else {
 			memcpy(dst, GST_BUFFER_DATA(buf), n * adapter->unit_size);
-			nongap = TRUE;
+			_copied_nongap = TRUE;
 		}
 		dst += n * adapter->unit_size;
 		samples -= n;
@@ -245,9 +245,9 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 
 done:
 	if(copied_gap)
-		*copied_gap = gap;
+		*copied_gap = _copied_gap;
 	if(copied_nongap)
-		*copied_nongap = nongap;
+		*copied_nongap = _copied_nongap;
 	return;
 }
 
