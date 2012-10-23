@@ -67,7 +67,7 @@ typedef struct _GstAudioAdapterClass GstAudioAdapterClass;
 
 
 struct _GstAudioAdapterClass {
-	GstObjectClass parent_class;
+	GObjectClass parent_class;
 };
 
 
@@ -79,7 +79,7 @@ struct _GstAudioAdapterClass {
 
 
 struct _GstAudioAdapter {
-	GstObject object;
+	GObject object;
 
 	/*< private >*/
 	GQueue *queue;
