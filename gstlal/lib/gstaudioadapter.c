@@ -266,13 +266,28 @@ GList *gst_audioadapter_get_list(GstAudioAdapter *adapter, guint samples)
 
 	buf = GST_BUFFER((head = g_queue_peek_head_link(adapter->queue))->data);
 	n = samples_remaining(buf, adapter->skip);
-	if(adapter->skip || samples < n)
-		result = g_list_append(result, gst_buffer_create_sub(buf, adapter->skip * adapter->unit_size, MIN(samples, n) * adapter->unit_size));
-	else {
+	if(adapter->skip || samples < n) {
+		GstBuffer *newbuf;
+		n = MIN(samples, n);
+
+		newbuf = gst_buffer_create_sub(buf, adapter->skip * adapter->unit_size, n * adapter->unit_size);
+
+		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buf) + adapter->skip;
+		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + n;
+
+		/* FIXME:  check to make sure gst_buffer_create_sub()
+		 * copies caps.  remove this when gstreamer can be relied
+		 * on to do this */
+		if(!GST_BUFFER_CAPS(newbuf))
+			gst_buffer_set_caps(newbuf, GST_BUFFER_CAPS(buf));
+		g_assert(GST_BUFFER_CAPS(newbuf) != NULL);
+
+		result = g_list_append(result, newbuf);
+	} else {
 		gst_buffer_ref(buf);
 		result = g_list_append(result, buf);
 	}
-	samples -= MIN(samples, n);
+	samples -= n;
 	if(!samples)
 		goto done;
 
@@ -280,7 +295,17 @@ GList *gst_audioadapter_get_list(GstAudioAdapter *adapter, guint samples)
 		buf = GST_BUFFER(head->data);
 		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 		if(samples < n) {
-			result = g_list_append(result, gst_buffer_create_sub(buf, 0, samples * adapter->unit_size));
+			GstBuffer *newbuf = gst_buffer_create_sub(buf, 0, samples * adapter->unit_size);
+			GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + samples;
+
+			/* FIXME:  check to make sure gst_buffer_create_sub()
+			 * copies caps.  remove this when gstreamer can be relied
+			 * on to do this */
+			if(!GST_BUFFER_CAPS(newbuf))
+				gst_buffer_set_caps(newbuf, GST_BUFFER_CAPS(buf));
+			g_assert(GST_BUFFER_CAPS(newbuf) != NULL);
+
+			result = g_list_append(result, newbuf);
 			samples = 0;
 			break;
 		} else {
