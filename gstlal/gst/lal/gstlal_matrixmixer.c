@@ -47,6 +47,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/controller/gstcontroller.h>
 
 
 /*
@@ -484,6 +485,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
 	GstFlowReturn result;
 
+	gst_object_sync_values(G_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+
 	g_mutex_lock(element->mixmatrix_lock);
 	while(!element->mixmatrix.as_void) {
 		GST_DEBUG_OBJECT(element, "mix matrix not available, waiting ...");
@@ -752,7 +755,7 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
 }
