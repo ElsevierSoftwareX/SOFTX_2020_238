@@ -252,6 +252,49 @@ done:
 }
 
 
+GList *gst_audioadapter_get_list(GstAudioAdapter *adapter, guint samples)
+{
+	GList *head;
+	GstBuffer *buf;
+	guint n;
+	GList *result = NULL;
+
+	g_assert_cmpuint(samples, <=, adapter->size);
+
+	if(g_queue_is_empty(adapter->queue) || !samples)
+		goto done;
+
+	buf = GST_BUFFER((head = g_queue_peek_head_link(adapter->queue))->data);
+	n = samples_remaining(buf, adapter->skip);
+	if(adapter->skip || samples < n)
+		result = g_list_append(result, gst_buffer_create_sub(buf, adapter->skip * adapter->unit_size, MIN(samples, n) * adapter->unit_size));
+	else {
+		gst_buffer_ref(buf);
+		result = g_list_append(result, buf);
+	}
+	samples -= MIN(samples, n);
+	if(!samples)
+		goto done;
+
+	for(head = g_list_next(head); head; head = g_list_next(head)) {
+		buf = GST_BUFFER(head->data);
+		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+		if(samples < n) {
+			result = g_list_append(result, gst_buffer_create_sub(buf, 0, samples * adapter->unit_size));
+			samples = 0;
+			break;
+		} else {
+			gst_buffer_ref(buf);
+			result = g_list_append(result, buf);
+			samples -= n;
+		}
+	}
+
+done:
+	return result;
+}
+
+
 void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 {
 	g_assert_cmpuint(samples, <=, adapter->size);
