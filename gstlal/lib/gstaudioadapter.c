@@ -45,7 +45,7 @@
  */
 
 
-GST_BOILERPLATE(GstAudioAdapter, gst_audioadapter, GObject, G_TYPE_OBJECT);
+GST_BOILERPLATE(GstAudioAdapter, gst_audioadapter, GstObject, GST_TYPE_OBJECT);
 
 
 enum property {
@@ -345,7 +345,7 @@ static void finalize(GObject *object)
 	g_queue_free(adapter->queue);
 	adapter->queue = NULL;
 
-	parent_class->finalize(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -392,7 +392,6 @@ static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 static void gst_audioadapter_init(GstAudioAdapter *adapter, GstAudioAdapterClass *g_class)
 {
 	adapter->queue = g_queue_new();
-	adapter->unit_size = 0;
 	adapter->size = 0;
 	adapter->skip = 0;
 }
