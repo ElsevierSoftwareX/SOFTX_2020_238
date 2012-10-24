@@ -602,7 +602,6 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 {
     GObjectClass        *gobject_class = G_OBJECT_CLASS(klass);
     GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
-    parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
     gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
