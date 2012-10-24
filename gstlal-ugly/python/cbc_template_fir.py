@@ -33,6 +33,7 @@ import sys
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
+from pylal import window
 
 
 from gstlal.reference_psd import interpolate_psd
@@ -80,6 +81,35 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		data = z[:len(z) // 2 + 1]
 	)
 
+def condition_template(approximant, data, **kwargs):
+	if approximant=="IMRPhenomB":
+		sample_rate_max = kwargs["sample_rate_max"]
+		max_mass = kwargs["max_mass"]
+
+		# FIXME Hacky - what this is supposed to do is line up the
+		# waveforms by peak amplitude and leave 50 M after peak. THIS
+		# WILL NOT WORK for low mass waveforms that have a peak
+		# amplitude during the inspiral phase due to the noise curve.
+		# The time series is tukey windowed so that it doesn't have any
+		# sharp features at either end.  Unfortunately doing this
+		# correctly will mean an iterative process whereby all the
+		# waveforms will have to be computed in advance.  For example
+		# you could decide to compute all the waveforms in advance and
+		# choose the maximum duration after peak where there is still
+		# 99.9% of waveform power instead of just using 50M.
+		# This isn't a big concern since IMRPhenomB is only currently
+		# valid at high total masses.  But some thought should be put
+		# into solving this issue more generally for IMR waveforms and
+		# coding it up once and for all.
+
+		max_index = numpy.argmax(numpy.abs(data))
+		target_index = len(data) - int(sample_rate_max * max_mass * 50 * 5e-6) # 50 M for the max mass to leave room for ringdown
+		target_tukey_percentage = 2 * (1. - float(target_index) / len(data))
+		data = numpy.roll(data, target_index - max_index)
+		data *= window.XLALCreateTukeyREAL8Window(len(data), target_tukey_percentage).data
+
+	return data
+	
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
 	"""
@@ -124,6 +154,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	sigmasq = []
 
 	# Generate each template, downsampling as we go to save memory
+	max_mass = max([row.mass1+row.mass2 for row in template_table])
 	for i, row in enumerate(template_table):
 		if verbose:
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, chi = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.chi)
@@ -161,6 +192,12 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		#
 
 		data = tseries.data[-length_max:]
+		
+		#
+		# condition the template if necessary (e.g. line up IMR waveforms by peak amplitude)
+		#
+
+		data = condition_template(approximant, data, sample_rate_max = sample_rate_max, max_mass = max_mass)
 
 		#
 		# normalize so that inner product of template with itself
