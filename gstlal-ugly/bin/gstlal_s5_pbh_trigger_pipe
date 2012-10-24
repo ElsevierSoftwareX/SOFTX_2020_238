@@ -58,7 +58,7 @@ class gstlal_svd_bank_job(inspiral_pipe.InspiralJob):
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_svd_bank'), tag_base='gstlal_svd_bank'):
 		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
-		self.add_condor_cmd('requirements', 'Memory > 1999') #FIXME is this enough?
+		self.add_condor_cmd('request_memory', '1999') #FIXME is this enough?
 
 
 class gstlal_svd_bank_node(inspiral_pipe.InspiralNode):
