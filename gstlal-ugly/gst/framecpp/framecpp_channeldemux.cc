@@ -74,8 +74,26 @@
 #include <framecpp_channeldemux.h>
 
 
+/*
+ * ============================================================================
+ *
+ *                                Boilerplate
+ *
+ * ============================================================================
+ */
+
+
 #define GST_CAT_DEFAULT framecpp_channeldemux_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
+}
+
+
+GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
 
 
 /*
@@ -1137,14 +1155,6 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
  * Instance finalize function.  See ???
  */
 
@@ -1217,7 +1227,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
  */
 
 
-static void base_init(gpointer klass)
+static void framecpp_channeldemux_base_init(gpointer klass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
@@ -1255,11 +1265,9 @@ static void base_init(gpointer klass)
  */
 
 
-static void class_init(gpointer klass, gpointer klass_data)
+static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-	parent_class = (GstElementClass *) g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -1312,9 +1320,8 @@ static void class_init(gpointer klass, gpointer klass_data)
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer klass)
+static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element, GstFrameCPPChannelDemuxClass *klass)
 {
-	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -1329,34 +1336,4 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->last_new_segment = NULL;
 	element->channel_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	element->tag_list = gst_tag_list_new();
-}
-
-
-/*
- * framecpp_channeldemux_get_type().
- */
-
-
-GType framecpp_channeldemux_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			sizeof(GstFrameCPPChannelDemuxClass), /* class_size */
-			base_init, /* base_init */
-			NULL, /* base_finalize */
-			class_init, /* class_init */
-			NULL, /* class_finalize */
-			NULL, /* class_data */
-			sizeof(GstFrameCPPChannelDemux), /* instance_size */
-			0, /* n_preallocs */
-			instance_init, /* instance_init */
-			NULL /* value_table */
-		};
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GstFrameCPPChannelDemux", &info, (GTypeFlags) 0);
-	}
-
-	return type;
 }
