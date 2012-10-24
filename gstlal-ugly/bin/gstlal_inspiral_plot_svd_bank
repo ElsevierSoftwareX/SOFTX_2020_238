@@ -80,7 +80,7 @@ for n in range(tmps):
 	pyplot.xlim([mint, 0])
 
 	pyplot.subplot(212)
-	pyplot.xlabel('samples')
+	pyplot.xlabel('time (s)')
 	l = len(bank.autocorrelation_bank[n,:])
 	ts = l / float(maxrate)
 	t = numpy.linspace(-ts, 0, l)
