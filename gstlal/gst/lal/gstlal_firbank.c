@@ -806,7 +806,7 @@ enum gstlal_firbank_signal {
 static guint signals[NUM_SIGNALS] = {0, };
 
 
-static void rate_changed(GstElement *element, gint rate, void *data)
+static void rate_changed(GSTLALFIRBank *element, gint rate, void *data)
 {
 	/* FIXME: send updated segment downstream?  because latency now
 	 * means something different */
