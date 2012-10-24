@@ -58,4 +58,5 @@ dist_bin_SCRIPTS = \
 	gstlal_segments_operations \
 	gstlal_inspiral_plot_efficiency \
 	gstlal_recolor_frames_pipe \
-	gstlal_cache_to_segments
+	gstlal_cache_to_segments \
+	gstlal_inspiral_plot_svd_bank
