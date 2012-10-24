@@ -71,14 +71,18 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_AUTOCHISQ_TYPE))
 
 
-typedef struct {
+typedef struct _GSTLALAutoChiSqClass GSTLALAutoChiSqClass;
+typedef struct _GSTLALAutoChiSq GSTLALAutoChiSq;
+
+
+struct _GSTLALAutoChiSqClass {
 	GstBaseTransformClass parent_class;
 
-	void (*rate_changed)(GstElement *, gint, void *);
-} GSTLALAutoChiSqClass;
+	void (*rate_changed)(GSTLALAutoChiSq *, gint, void *);
+};
 
 
-typedef struct {
+struct _GSTLALAutoChiSq {
 	GstBaseTransform element;
 
 	/*
@@ -114,7 +118,7 @@ typedef struct {
 	 */
 	double snr_thresh;
 
-} GSTLALAutoChiSq;
+};
 
 
 GType gstlal_autochisq_get_type(void);

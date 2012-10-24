@@ -264,7 +264,7 @@ enum gstlal_autochisq_signal {
 static guint signals[NUM_SIGNALS] = {0, };
 
 
-static void rate_changed(GstElement *element, gint rate, void *data)
+static void rate_changed(GSTLALAutoChiSq *element, gint rate, void *data)
 {
 	/* FIXME;  send updated segment event downstream? */
 }
