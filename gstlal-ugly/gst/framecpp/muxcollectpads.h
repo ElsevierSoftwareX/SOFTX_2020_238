@@ -85,7 +85,7 @@ struct _FrameCPPMuxCollectPadsClass {
 struct _FrameCPPMuxCollectPads {
 	GstObject object;
 
-	GMutex pad_list_lock;
+	GMutex *pad_list_lock;
 	GSList *pad_list;
 
 	GstSegment segment;
@@ -125,8 +125,8 @@ struct _FrameCPPMuxCollectPadsData {
  */
 
 
-#define FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(pads) g_mutex_lock(&pads->pad_list_lock)
-#define FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(pads) g_mutex_unlock(&pads->pad_list_lock)
+#define FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(pads) g_mutex_lock(pads->pad_list_lock)
+#define FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(pads) g_mutex_unlock(pads->pad_list_lock)
 
 
 FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *, GstPad *);

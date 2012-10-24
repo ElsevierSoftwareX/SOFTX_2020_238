@@ -152,8 +152,8 @@ static gboolean forward_src_event(GstFrameCPPChannelMux *mux, GstEvent *event, g
 	GstIterator *it;
 	GValue vret = {0};
 	EventData data = {
-		.event = event,
-		.flush = flush
+		event,
+		flush
 	};
 	gboolean success;
 

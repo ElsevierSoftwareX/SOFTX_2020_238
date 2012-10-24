@@ -641,7 +641,8 @@ static void finalize(GObject *object)
 	while(collectpads->pad_list)
 		framecpp_muxcollectpads_remove_pad(collectpads, ((FrameCPPMuxCollectPadsData *) collectpads->pad_list->data)->pad);
 	collectpads->pad_list = NULL;
-	g_mutex_clear(&collectpads->pad_list_lock);
+	g_mutex_free(collectpads->pad_list_lock);
+	collectpads->pad_list_lock = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -689,7 +690,7 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 
 static void framecpp_muxcollectpads_init(FrameCPPMuxCollectPads *collectpads, FrameCPPMuxCollectPadsClass *klass)
 {
-	g_mutex_init(&collectpads->pad_list_lock);
+	collectpads->pad_list_lock = g_mutex_new();
 	collectpads->pad_list = NULL;
 	gst_segment_init(&collectpads->segment, GST_FORMAT_UNDEFINED);
 	collectpads->available_time = 0;
