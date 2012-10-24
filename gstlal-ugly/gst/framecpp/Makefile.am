@@ -4,6 +4,9 @@ plugin_LTLIBRARIES = libframecpp_plugin.la
 
 libframecpp_plugin_la_SOURCES = \
 	framecpp_plugin.c \
+	muxqueue.c muxqueue.h \
+	muxcollectpads.c muxcollectpads.h \
+	framecpp_channelmux.cc framecpp_channelmux.h \
 	framecpp_channeldemux.cc framecpp_channeldemux.h
 if COND_GSTBASEPARSE
 libframecpp_plugin_la_SOURCES += framecpp_igwdparse.cc framecpp_igwdparse.h
