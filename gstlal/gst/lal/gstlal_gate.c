@@ -440,19 +440,19 @@ enum gstlal_gate_signal {
 static guint signals[NUM_SIGNALS] = {0, };
 
 
-static void rate_changed(GstElement *element, gint rate, void *data)
+static void rate_changed(GSTLALGate *element, gint rate, void *data)
 {
 	/* FIXME:  do something? */
 }
 
 
-static void start(GstElement *element, guint64 timestamp, void *data)
+static void start(GSTLALGate *element, guint64 timestamp, void *data)
 {
 	/* FIXME:  do something? */
 }
 
 
-static void stop(GstElement *element, guint64 timestamp, void *data)
+static void stop(GSTLALGate *element, guint64 timestamp, void *data)
 {
 	/* FIXME:  do something? */
 }
