@@ -186,7 +186,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_slices(
-		zip(bank_sngl_table.get_column('mass1'),bank_sngl_table.get_column('mass2'),bank_sngl_table.get_column('chi')),
+		bank_sngl_table,
 		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = flow,
 		padding = padding,
