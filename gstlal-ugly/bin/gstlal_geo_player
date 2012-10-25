@@ -1,0 +1,241 @@
+#!/usr/bin/env python
+
+import sys, os
+import pygtk
+pygtk.require("2.0")
+import gtk, gobject
+import pygst
+pygst.require("0.10")
+import gst
+
+import numpy
+import scipy
+from scipy import pi, exp, cos
+
+from glue.ligolw import utils
+from pylal import datatypes as laltypes
+from gstlal import pipeparts
+from gstlal import reference_psd
+from gstlal import pipeio
+
+#
+# =============================================================================
+#
+#			       Helper Functions
+#
+# =============================================================================
+#
+
+def auditory_critical_band(f):
+	return 24.7*(1. + 4.37*f/2000./pi)
+
+def gammatone(t, f, b=None, n=4):
+	if b is None:
+		b = auditory_critical_band(f)
+	return t**(n-1.) * exp(-2*pi*b*t) * cos(2*pi*f*t)
+
+#
+# =============================================================================
+#
+#				 Pipelines
+#
+# =============================================================================
+#
+
+def look_and_listen(self):
+	pipeline = gst.Pipeline("player")
+
+	analysis_rate = 4096
+	display_rate = 64
+	fft_length = 2
+	history = 5
+	videox = 800
+	videoy = 525
+
+	f_min = 10.
+	f_max = 2000.
+	f_max = min(f_max, .98*analysis_rate/2)
+	N_filters = 40
+
+	#channel_name = "G1:DER-DATA_H_DQ"
+	#channel_name = "G1:ACO-LSC_MID_MCE_MCN_LV_OUT_DQ"
+	channel_name = "G1:SUS-CHN11_DQ"
+	host = "firefly6"
+	port = 8088
+
+	head = gst.element_factory_make("ndssrc")
+	head.set_property("host", host)
+	head.set_property("channel-name", channel_name)
+	head.set_property("port", port)
+	head.set_property("channel-type", "online")
+	pipeline.add(head)
+
+	head = pipeparts.mkaudioconvert(pipeline, head, caps_string="audio/x-raw-float, width=64")
+	head = pipeparts.mkresample(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%i"%(analysis_rate))
+
+	if self.td_whitening:
+		psds = reference_psd.read_psd_xmldoc(utils.load_filename(self.psd_file_name))
+		psd = psds["G1"]
+		psd.data = psd.data[:analysis_rate/psd.deltaF/2+1]
+		psd = reference_psd.interpolate_psd(psd, 1./fft_length)
+		psd.data = psd.data[:-1]
+		kernel1,latency1,sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
+		kernel2,theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel1)
+		latency2 = 0
+		assert analysis_rate==sample_rate
+
+		# this is the time domain whitener
+		whitener = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head), fir_matrix=numpy.array([kernel2]))
+		whitener.set_property("time-domain", True)
+		whitener.set_property("latency", latency2)
+	else:
+		# this is the frequency domain whitener, use this to measure a PSD and save it
+		whitener = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head))
+		whitener.set_property("fft-length", fft_length)
+		whitener.set_property("median-samples", 5)
+		whitener.set_property("average-samples", 5)
+		whitener.set_property("psd-mode", 0)
+
+	tee = pipeparts.mktee(pipeline, whitener)
+
+	# here is the video branch of the pipeline
+	firmatrix = []
+	dt = 1./analysis_rate
+	x = scipy.arange(dt, .1, dt)
+	for idx,fc in enumerate(scipy.logspace(scipy.log10(f_min), scipy.log10(f_max), N_filters)):
+		y = gammatone(x, fc)
+		y /= sum(y*y)**.5
+		firmatrix.append(y[-1::-1])
+	firmatrix = scipy.array(firmatrix)
+	head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, tee), fir_matrix=firmatrix)
+	head.set_property("time-domain", True)
+	head.set_property("latency", analysis_rate*history)
+
+	head = pipeparts.mkgeneric(pipeline, head, "lal_mean")
+	head.set_property("n", analysis_rate/display_rate)
+	head.set_property("type", 1)
+
+	head = pipeparts.mkgeneric(pipeline, head, "lal_audioundersample")
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%i"%(display_rate))
+
+	head = pipeparts.mkgeneric(pipeline, head, "log10")
+
+	head = pipeparts.mkgeneric(pipeline, head, "cairovis_waterfall")
+	head.set_property("z-autoscale", False)
+	head.set_property("z-min", 0)
+	head.set_property("z-max", 1.5)
+	head.set_property("colorbar", True)
+	head.set_property("y-label", "log10(f)")
+	head.set_property("x-label", "Time")
+	head.set_property("z-label", "log10(SNR^2)")
+	head.set_property("title", "Gammatone Filterbank " + channel_name)
+	head.set_property("y-data-min", round(scipy.log10(f_min), 1))
+	head.set_property("y-data-max", round(scipy.log10(f_max), 1))
+	head.set_property("y-data-autoscale",False)
+	head.set_property("history",history*int(1e9))
+	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=%i, height=%i"%(videox,videoy))
+	imagesink = pipeparts.mkgeneric(pipeline, head,"ximagesink")
+
+	# here is the audio branch of the pipeline
+	head = pipeparts.mkqueue(pipeline, tee)
+
+	head = pipeparts.mkgeneric(pipeline, head, "audiochebband")
+	head.set_property("lower-frequency", f_min)
+	head.set_property("upper-frequency", f_max)
+	head.set_property("poles", 8)
+
+	head = pipeparts.mkgeneric(pipeline, head, "audioamplify")
+	head.set_property("clipping-method", 0)
+	head.set_property("amplification", 1e-1)
+
+	head = pipeparts.mkgeneric(pipeline, head, "audiorate")
+	audio = pipeparts.mkaudioconvert(pipeline, head)
+
+	pipeparts.mkgeneric(pipeline, audio, "autoaudiosink")
+
+	self.player = pipeline
+	self.whitener = whitener
+
+
+class GTK_Main:
+	
+	def __init__(self):
+		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		window.set_title("GEO-Player")
+		window.set_default_size(400, 200)
+		window.connect("destroy", gtk.main_quit, "WM destroy")
+		vbox = gtk.VBox()
+		window.add(vbox)
+		self.button = gtk.Button("Start")
+		self.button.connect("clicked", self.start_stop)
+		vbox.add(self.button)
+
+		self.save_psd_button = gtk.Button("Save PSD")
+		self.save_psd_button.connect("clicked", self.save_psd)
+		vbox.add(self.save_psd_button)
+
+		self.print_psd_button = gtk.Button("Print PSD")
+		self.print_psd_button.connect("clicked", self.print_psd)
+		vbox.add(self.print_psd_button)
+
+		self.td_whitening = False
+		self.whitening_domain_button = gtk.Button("FD Whitening")
+		self.whitening_domain_button.connect("clicked", self.whitening_domain)
+		vbox.add(self.whitening_domain_button)
+
+		window.show_all()
+
+		self.psd_file_name = 'G1-GEO_PLAYER_PSD-SUS-CHN11_DQ.xml.gz'
+		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+
+
+	def start_stop(self, w):
+		if self.button.get_label() == "Start":
+			self.button.set_label("Stop")
+			look_and_listen(self)
+
+			bus = self.player.get_bus()
+			bus.add_signal_watch()
+			bus.connect("message", self.on_message)
+
+			self.player.set_state(gst.STATE_PLAYING)
+		else:
+			self.player.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+
+			del self.player
+			del self.whitener
+
+	def save_psd(self, w):
+		self.psd_snapshot = self.psd
+		reference_psd.write_psd(self.psd_file_name, {'G1':self.psd_snapshot})
+
+	def print_psd(self, w):
+		print self.psd_snapshot.data
+		print self.psd.data
+
+	def whitening_domain(self, w):
+		if self.whitening_domain_button.get_label() == "FD Whitening":
+			self.td_whitening = True
+			self.whitening_domain_button.set_label("TD Whitening")
+		else:
+			self.td_whitening = False
+			self.whitening_domain_button.set_label("FD Whitening")
+
+	def on_message(self, bus, message):
+		t = message.type
+		if t == gst.MESSAGE_EOS:
+			self.player.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+		elif t == gst.MESSAGE_ERROR:
+			self.player.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+			err, debug = message.parse_error()
+			print "Error: %s" % err, debug
+		elif t == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+				self.psd = pipeio.parse_spectrum_message(message)
+
+GTK_Main()
+gtk.gdk.threads_init()
+gtk.main()
