@@ -3,6 +3,7 @@ start=$(shell python -c "print ${etime} - 50")
 end=$(shell python -c "print ${etime} + 50")
 duration=$(shell echo "${end}-${start}" | bc)
 outfile=HLV-triggers-${start}-${duration}.xml.gz
+blocksize=$(shell echo "512*8*16384" | bc)
 
 coincidence: cluster
 	ligolw_tisi -i H1=0:1:1 -i L1=0:1:1 -i V1=0:1:1 >| HLV_ZERO_LAG_SLIDES.xml.gz
@@ -37,27 +38,38 @@ v1_ep: v1.cache
 	# Note the *required* "site" entry in the ini file for Virgo
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
+		--frame-cache v1.cache \
+		--channel-name V1=FAKE_h_16384Hz_4R \
 		--initialization-file gstlal_excesspower_v1_hoft.ini  \
-		--gps-start 1012071068 \
-		--gps-end 1012071268 \
+		--gps-start-time 1012071068 \
+		--gps-end-time 1012071268 \
+		--block-size ${blocksize} \
 		--sample-rate 2048  
 
-h1_ep: 
+h1_ep: h1.cache
 	# Show off the new "query LDR if no cache is present" mechanism
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
+		--frame-cache h1.cache \
+		--channel-name H1=FAKE-STRAIN \
 		--initialization-file gstlal_excesspower_h1_hoft.ini  \
-		--sample-rate 2048  \
-		--gps-start ${start} \
-		--gps-end ${end}
+		--gps-start-time ${start} \
+		--gps-end-time ${end} \
+		--block-size ${blocksize} \
+		--sample-rate 2048  
 
 l1_ep: l1.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
+		--frame-cache l1.cache \
+		--channel-name L1=FAKE-STRAIN \
 		--initialization-file gstlal_excesspower_l1_hoft.ini  \
+		--gps-start-time ${start} \
+		--gps-end-time ${end} \
+		--block-size ${blocksize} \
 		--sample-rate 2048  
 
 clean:
