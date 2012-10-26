@@ -44,7 +44,11 @@ trim = options.trim
 
 xmldoc = utils.load_filename(fname, verbose = True)
 
-segs = ~(~(ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce()).protract(trim)) # If you're confused, ask Kipp :)
+segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce()
+# make it safe to contract by elimating segments that are smaller than 2 * trim value
+for k in segs:
+	segs[k] = segments.segmentlist([seg for seg in segs[k] if abs(seg) > 2 * trim])
+segs.contract(trim)
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
