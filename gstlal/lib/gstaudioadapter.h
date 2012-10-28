@@ -101,6 +101,7 @@ struct _GstAudioAdapter {
 GType gst_audioadapter_get_type(void);
 
 
+gboolean gst_audioadapter_is_empty(GstAudioAdapter *);
 GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *);
 guint64 gst_audioadapter_expected_offset(GstAudioAdapter *);
 void gst_audioadapter_clear(GstAudioAdapter *);

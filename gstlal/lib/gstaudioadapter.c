@@ -97,6 +97,12 @@ static guint64 expected_offset(GstAudioAdapter *adapter)
  */
 
 
+gboolean gst_audioadapter_is_empty(GstAudioAdapter *adapter)
+{
+	return g_queue_is_empty(adapter->queue);
+}
+
+
 GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
 {
 	return g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : expected_timestamp(adapter);
