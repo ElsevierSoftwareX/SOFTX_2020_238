@@ -238,7 +238,7 @@ def time_slices(
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
 		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = max(row.template_duration for row in sngl_inspiral_rows)
+		longest_chirp = longest_chirp = max(spawaveform.chirptime(row.mass1,row.mass2,7,this_flow,fhigh,row.chi) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
