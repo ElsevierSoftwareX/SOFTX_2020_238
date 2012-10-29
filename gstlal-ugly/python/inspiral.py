@@ -462,7 +462,7 @@ class Data(object):
 			# database
 
 			(self.process.process_id,), = (self.search_summary.process_id,), = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time)).fetchall()
-			self.process.process_id = self.search_summary.process_id = ilwd.get_ilwdchar(self.process.process_id)
+			self.process.process_id = self.search_summary.process_id = ilwd.ilwdchar(self.process.process_id)
 		else:
 			self.connection = self.working_filename = None
 

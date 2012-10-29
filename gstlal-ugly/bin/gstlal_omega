@@ -23,7 +23,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import ligolw
 from glue.ligolw.utils import process
-from glue.ligolw.ilwd import get_ilwdchar
+from glue.ligolw.ilwd import ilwdchar
 from glue import segments
 import numpy
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
@@ -77,7 +77,7 @@ def create_bank(sample_rate, ifo, output, fmin = 10, fmax = 2000, fnum = 200, qm
 			row.ifo = ifo
 			burst.append(row)
 			row.process_id = procrow.process_id
-			row.event_id = get_ilwdchar("sngl_burst:event_id:1")
+			row.event_id = ilwdchar("sngl_burst:event_id:1")
 
 	utils.write_filename(xmldoc, output)
 	bank = omega.omega_bank(burst, sample_rate)
