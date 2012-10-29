@@ -72,6 +72,8 @@ typedef struct _FrameCPPMuxCollectPadsData FrameCPPMuxCollectPadsData;
 
 struct _FrameCPPMuxCollectPadsClass {
 	GstObjectClass parent_class;
+
+	GstFlowReturn (*collected)(FrameCPPMuxCollectPads *, GstClockTime, GstClockTime, gpointer);
 };
 
 
@@ -91,7 +93,6 @@ struct _FrameCPPMuxCollectPads {
 	GstSegment segment;
 
 	GstClockTime max_size_time;
-	GstClockTime available_time;
 };
 
 
@@ -111,7 +112,6 @@ struct _FrameCPPMuxCollectPadsData {
 	/*< private >*/
 	GstPadEventFunction event_func;
 	gulong waiting_handler_id;
-	gboolean new_segment;
 	gboolean eos;
 };
 
@@ -134,8 +134,6 @@ gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *, GstPad *);
 void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *, GstPadEventFunction);
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *);
-gboolean framecpp_muxcollectpads_all_pads_are_at_eos(FrameCPPMuxCollectPads *);
-gboolean framecpp_muxcollectpads_get_earliest_times(FrameCPPMuxCollectPads *, GstClockTime *, GstClockTime *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);
 
 

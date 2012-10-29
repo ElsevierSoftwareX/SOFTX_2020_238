@@ -57,7 +57,7 @@ GST_BOILERPLATE(FrameCPPMuxQueue, framecpp_muxqueue, GstAudioAdapter, GST_TYPE_A
  */
 
 
-static GstClockTime _framecpp_muxqueue_timestamp(FrameCPPMuxQueue *queue)
+static GstClockTime _framecpp_muxqueue_t_start(FrameCPPMuxQueue *queue)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_head(adapter->queue));
@@ -68,20 +68,27 @@ static GstClockTime _framecpp_muxqueue_timestamp(FrameCPPMuxQueue *queue)
 }
 
 
+static GstClockTime _framecpp_muxqueue_t_end(FrameCPPMuxQueue *queue)
+{
+	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
+	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
+
+	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
+
+	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+}
+
+
 static GstClockTime _framecpp_muxqueue_duration(FrameCPPMuxQueue *queue)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
-	GstBuffer *head, *tail;
 	GstClockTimeDiff duration;
 
 	if(g_queue_is_empty(adapter->queue))
 		return 0;
 
-	/* the first buffer is the head, the last is the tail */
-	head = GST_BUFFER(g_queue_peek_head(adapter->queue));
-	tail = GST_BUFFER(g_queue_peek_tail(adapter->queue));
-
-	duration = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(head), GST_BUFFER_TIMESTAMP(tail) + GST_BUFFER_DURATION(tail)) - gst_util_uint64_scale_int_round(adapter->skip, GST_SECOND, queue->rate);
+	duration = GST_CLOCK_DIFF(_framecpp_muxqueue_t_start(queue), _framecpp_muxqueue_t_end(queue));
 	g_assert(duration >= 0);
 
 	return duration;
@@ -103,7 +110,7 @@ GstClockTime framecpp_muxqueue_timestamp(FrameCPPMuxQueue *queue)
 	GstClockTime timestamp;
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	timestamp = g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : _framecpp_muxqueue_timestamp(queue);
+	timestamp = g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : _framecpp_muxqueue_t_start(queue);
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 
 	return timestamp;
@@ -132,13 +139,22 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 	g_assert_cmpuint(gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buf), queue->rate, GST_SECOND), ==, GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf));
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	while(queue->max_size_time && !queue->flushing && _framecpp_muxqueue_duration(queue) >= queue->max_size_time)
+	while(queue->max_size_time && !queue->flushing && _framecpp_muxqueue_duration(queue) >= queue->max_size_time) {
+		/*
+		 * NOTE:  the signal is emitted with the queue's lock held.
+		 * for example, signal handlers cannot flush data from the
+		 * queue.  the signal handler can only trigger a condition
+		 * in a second task (whose existance is left as an exercise
+		 * for the calling code) that can wait to acquire the lock
+		 * and modify the queue's contents at that time.
+		 */
+		g_signal_emit_by_name(queue, "waiting", _framecpp_muxqueue_t_start(queue), _framecpp_muxqueue_t_end(queue));
 		g_cond_wait(queue->activity, queue->lock);
+	}
 	if(!queue->flushing) {
 		gst_audioadapter_push(adapter, buf);
 		g_cond_broadcast(queue->activity);
-	} else
-		success = FALSE;
+	}
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 
 	return success;
@@ -174,18 +190,15 @@ gboolean framecpp_muxqueue_get_flushing(FrameCPPMuxQueue *queue)
 GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
-	GstClockTime timestamp;
 	GList *head;
 	GList *result;
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	timestamp = g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : _framecpp_muxqueue_timestamp(queue) + gst_util_uint64_scale_int_round(adapter->skip, GST_SECOND, queue->rate);
 	result = gst_audioadapter_get_list(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
-
 	if(result) {
 		/* adjust timestamp of first buffer */
 		result->data = gst_buffer_make_metadata_writable(GST_BUFFER(result->data));
-		GST_BUFFER_TIMESTAMP(result->data) = timestamp;
+		GST_BUFFER_TIMESTAMP(result->data) = _framecpp_muxqueue_t_start(queue);
 	}
 	/* require all buffers in list to be contiguous */
 	for(head = result; head && g_list_next(head); head = g_list_next(head)) {
@@ -343,16 +356,18 @@ static void framecpp_muxqueue_class_init(FrameCPPMuxQueueClass *klass)
 	signals[SIGNAL_WAITING] = g_signal_new(
 		"waiting",
 		G_TYPE_FROM_CLASS(klass),
-		G_SIGNAL_RUN_FIRST,
+		G_SIGNAL_RUN_LAST,
 		G_STRUCT_OFFSET(
 			FrameCPPMuxQueueClass,
 			waiting
 		),
 		NULL,
 		NULL,
-		g_cclosure_marshal_VOID__VOID,
-		G_TYPE_NONE,	/* returns void */
-		0	/* 0 parameters */
+		framecpp_marshal_VOID__CLOCK_TIME__CLOCK_TIME,
+		G_TYPE_NONE,
+		2,
+		G_TYPE_UINT64,
+		G_TYPE_UINT64
 	);
 }
 

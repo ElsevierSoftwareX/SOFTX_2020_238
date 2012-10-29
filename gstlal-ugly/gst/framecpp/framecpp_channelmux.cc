@@ -111,6 +111,9 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST
 #define DEFAULT_FRAMES_PER_FILE 128
 
 
+#define FRAME_FILE_DURATION(mux) ((mux)->frames_per_file * (mux)->frame_duration)
+
+
 /*
  * ============================================================================
  *
@@ -292,7 +295,14 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
 	gboolean success = TRUE;
 
-	/* FIXME:  finish short frame file on eos? */
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_EOS:
+		/* FIXME:  flush final frame file? */
+		break;
+
+	default:
+		break;
+	}
 
 	gst_pad_push_event(mux->srcpad, event);
 
@@ -323,8 +333,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
 
 	/*
-	 * add pad to element.  must ref it because _add_pad()
-	 * consumes a reference
+	 * add pad to element.
 	 */
 
 	GST_OBJECT_LOCK(GST_OBJECT(mux->collect));
@@ -373,62 +382,113 @@ static void release_pad(GstElement *element, GstPad *pad)
 
 
 /*
- * available-time signal handler
+ * collected signal handler
  */
 
 
-static void available_time_handler(GObject *object, GParamSpec *pspec, gpointer user_data)
+static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime collected_t_start, GstClockTime collected_t_end, GstFrameCPPChannelMux *mux)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(object);
-	GstBuffer *outbuf = NULL;
-	GstClockTime t_start, t_end;
+	GstClockTime gwf_t_start, gwf_t_end;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * get the range of timestamps available
+	 * make sure we don't have our wires crossed
 	 */
 
-	if(!framecpp_muxcollectpads_get_earliest_times(mux->collect, &t_start, &t_end)) {
-		goto bad_timestamps;
-	}
-	g_assert(GST_CLOCK_TIME_IS_VALID(t_start));
-	g_assert(GST_CLOCK_TIME_IS_VALID(t_end));
-	g_assert_cmpuint(t_end - t_start, >=, mux->frames_per_file * mux->frame_duration * GST_SECOND);
+	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(mux));
+	g_assert(mux->collect == collectpads);
+	g_assert(GST_CLOCK_TIME_IS_VALID(collected_t_start));
+	g_assert(GST_CLOCK_TIME_IS_VALID(collected_t_end));
 
 	/*
-	 * encode frame file
+	 * loop over available data
 	 */
 
-	try {
-		FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
+	for(gwf_t_start = collected_t_start, gwf_t_end = collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux)) {
+		GstBuffer *outbuf = NULL;
 
-		FrameCPP::OFrameStream ofs(obuf);
+		/*
+		 * build frame file
+		 */
 
-	} catch(const std::exception& Exception) {
-		GST_ELEMENT_ERROR(mux, STREAM, DECODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
-		result = GST_FLOW_ERROR;
-		goto done;
-	} catch(...) {
-		GST_ELEMENT_ERROR(mux, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
-		result = GST_FLOW_ERROR;
-		goto done;
+		try {
+			FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
+			FrameCPP::OFrameStream ofs(obuf);
+			GstClockTime frame_t_start, frame_t_end;
+
+			/* FIXME: initialize frame file */
+
+			/*
+			 * loop over frames
+			 */
+
+			for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
+				GSList *collectdatalist;
+
+				/* FIXME:  initialize frame */
+
+				/*
+				 * loop over pads
+				 */
+
+				for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
+					FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
+					/* we own this list */
+					GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
+
+					/* FIXME:  initialize FrProc */
+
+					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
+						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+
+						/* FIXME:  append/write/memcpy/whatever buffer contents into FrProc */
+
+						gst_buffer_unref(buffer);
+					}
+
+					/* FIXME:  add FrProc to frame */
+				}
+
+				/* FIXME:  add frame to frame file */
+			}
+			g_assert(frame_t_start == gwf_t_end);	/* safety check */
+
+			/* FIXME:  finish/close/whatever frame file */
+
+			/* FIXME:  extract/copy/whatever bytes into GstBuffer */
+			outbuf = gst_buffer_new_and_alloc(0);
+			GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
+			GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
+
+		} catch(const std::exception& Exception) {
+			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
+			result = GST_FLOW_ERROR;
+			goto done;
+		} catch(...) {
+			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised unknown exception"));
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+
+		/*
+		 * push downstream
+		 */
+
+		result = gst_pad_push(mux->srcpad, outbuf);
+		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_push() failed (%s)", gst_flow_get_name(result)));
+			goto done;
+		}
 	}
 
-	/*
-	 * push downstream
-	 */
-
-	result = gst_pad_push(mux->srcpad, outbuf);
+	g_assert(gwf_t_start != collected_t_start);	/* it's a deadlock if we haven't consumed any data */
 
 	/*
 	 * done
 	 */
 
 done:
-	return;
-
-bad_timestamps:
-	return;
+	return result;
 }
 
 
@@ -494,12 +554,12 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 	switch(id) {
 	case ARG_FRAME_DURATION:
 		element->frame_duration = g_value_get_int(value) * GST_SECOND;
-		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration * GST_SECOND), NULL);
+		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration), NULL);
 		break;
 
 	case ARG_FRAMES_PER_FILE:
 		element->frames_per_file = g_value_get_int(value);
-		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration * GST_SECOND), NULL);
+		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration), NULL);
 		break;
 
 	default:
@@ -699,8 +759,8 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChan
 	/*gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));*/ /* FIXME:  implement */
 	gst_pad_set_event_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_event));
 
-	/* configure collect pads */
+	/* configure collect pads.  max-size-time will get set when our
+	 * properties are initialized */
 	mux->collect = FRAMECPP_MUXCOLLECTPADS(g_object_new(FRAMECPP_MUXCOLLECTPADS_TYPE, NULL));
-	g_object_set(G_OBJECT(mux->collect), "max-size-time", (guint64) (mux->frames_per_file * mux->frame_duration * GST_SECOND), NULL);
-	g_signal_connect(G_OBJECT(mux->collect), "notify::available-time", G_CALLBACK(available_time_handler), NULL);
+	g_signal_connect(G_OBJECT(mux->collect), "collected", G_CALLBACK(collected_handler), mux);
 }
