@@ -17,11 +17,29 @@ def which(prog):
 
 def log_path():
 	host = socket.getfqdn()
-	#FIXME add more hosts as you need them
-	if 'cit' in host or 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
-	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
-	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
-	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
+	try:
+		return os.environ['TMPDIR']
+	except KeyError:
+		print "\n\n!!!! $TMPDIR NOT SET !!!!\n\n\tPLEASE email your admin to tell them to set $TMPDIR to be the place where a users temporary files should be\n"
+		#FIXME add more hosts as you need them
+		if 'cit' in host or 'caltech.edu' in host:
+			tmp = '/usr1/' + os.environ['USER']
+			print "falling back to ", tmp
+			return tmp
+		if 'phys.uwm.edu' in host:
+			tmp = '/localscratch/' + os.environ['USER']
+			print "falling back to ", tmp
+			return tmp
+		if 'aei.uni-hannover.de' in host:
+			tmp = '/local/user/' + os.environ['USER']
+			print "falling back to ", tmp
+			return tmp
+		if 'phy.syr.edu' in host:
+			tmp = '/usr1/' + os.environ['USER']
+			print "falling back to ", tmp
+			return tmp
+
+		raise KeyError("$TMPDIR is not set and I don't recognize this environment")
 
 
 ###############################################################################
