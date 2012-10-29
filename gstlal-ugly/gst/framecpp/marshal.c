@@ -65,7 +65,7 @@ framecpp_marshal_VOID__CLOCK_TIME__CLOCK_TIME (
   register gpointer data1, data2;
   register GstClockTime val1, val2;
 
-  g_return_if_fail (return_value != NULL);
+  g_return_if_fail (return_value == NULL);
   g_return_if_fail (n_param_values == 3);
 
   if (G_CCLOSURE_SWAP_DATA (closure))
