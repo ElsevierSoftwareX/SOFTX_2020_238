@@ -55,9 +55,10 @@ from pylal import window
 from pylal import lalconstants
 
 
+from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import pipeio
-from gstlal import datasource
+from gstlal import simplehandler
 
 
 #
@@ -69,28 +70,30 @@ from gstlal import datasource
 #
 
 
+#
+# pipeline handler for PSD measurement
+#
+
+
+class PSDHandler(simplehandler.Handler):
+	def __init__(self, *args, **kwargs):
+		# FIXME is this a suitable "empty" frequency series?
+		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+		simplehandler.Handler.__init__(self, *args, **kwargs)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+			self.psd = pipeio.parse_spectrum_message(message)
+		else:
+			super(type(self), self).on_message(bus, message)
+
+
+#
+# measure_psd()
+#
+
+
 def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbose = False):
-	# FIXME:  why can't this be done at the top with the other imports?
-	# yes it creates a cyclic dependency, but there's no reason why it
-	# shouldn't work that I can see.
-	from gstlal import lloidparts
-
-	#
-	# pipeline handler for PSD measurement
-	#
-
-	class PSDHandler(lloidparts.LLOIDHandler):
-		def __init__(self, *args, **kwargs):
-			# FIXME is this a suitable "empty" frequency series?
-			self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
-			lloidparts.LLOIDHandler.__init__(self, *args, **kwargs)
-
-		def on_message(self, bus, message):
-			if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
-				self.psd = pipeio.parse_spectrum_message(message)
-			else:
-				super(type(self), self).on_message(bus, message)
-
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
 	# needed for a good PSD, this isn't a requirement of the code (the

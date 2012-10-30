@@ -24,10 +24,11 @@ if opts.gps_time is None:
 from gstlal.pipeutil import *
 from gstlal.reference_psd import read_psd
 from gstlal.lloidparts import *
+from gstlal import simplehandler
 
 pipeline = gst.Pipeline()
 mainloop = gobject.MainLoop()
-handler = LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 mid_time = long(round(opts.gps_time / 16.0) * 16)
 start_time = mid_time - 16

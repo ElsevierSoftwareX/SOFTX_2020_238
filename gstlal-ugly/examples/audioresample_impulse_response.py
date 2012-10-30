@@ -31,9 +31,9 @@ if any(getattr(opts, key) is None for key in ('bank', 'downsample_quality', 'ups
 # Pipeline
 
 from gstlal.pipeutil import *
-from gstlal import lloidparts
+from gstlal import simplehandler
 from gstlal import pipeparts
-from gstlal.lloidparts import mkelems_fast
+from gstlal.pipeutil import mkelems_fast
 from gstlal.svd_bank import read_bank
 import math
 
@@ -43,7 +43,7 @@ downsample_quality = int(opts.downsample_quality)
 
 pipeline = gst.Pipeline("impulse_response")
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 source_rate = max(bank.get_rates())
 

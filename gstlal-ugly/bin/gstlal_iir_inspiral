@@ -60,6 +60,7 @@ from gstlal import far
 from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import lloidparts
+from gstlal import simplehandler
 from gstlal import reference_psd
 from gstlal import cbc_template_iir
 from gstlal import inspiral
@@ -257,7 +258,7 @@ if options.verbose:
 
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 
 triggersrc = lloidparts.mkSPIIRmulti(

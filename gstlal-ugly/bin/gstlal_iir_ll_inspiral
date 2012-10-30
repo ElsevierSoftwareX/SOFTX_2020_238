@@ -313,7 +313,7 @@ pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
 # custom handler
-class LLOIDHandler(object):
+class Handler(object):
 	def __init__(self, mainloop, pipeline):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
@@ -341,7 +341,7 @@ class LLOIDHandler(object):
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
-handler = LLOIDHandler(mainloop, pipeline)
+handler = Handler(mainloop, pipeline)
 
 if options.fake_data is not None:
 	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, now().ns(), gst.SEEK_TYPE_SET, 2000000000000000000) # FIXME future infinity :)

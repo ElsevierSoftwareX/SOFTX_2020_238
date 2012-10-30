@@ -40,7 +40,7 @@ import gst
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
-from gstlal import lloidparts
+from gstlal import simplehandler
 from gstlal import pipeparts
 
 
@@ -109,7 +109,7 @@ options, [filename] = parse_command_line()
 
 pipeline = gst.Pipeline("pipeline")
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 
 head = pipeparts.mkaudiotestsrc(pipeline, volume = 0, samplesperbuffer = 8192)

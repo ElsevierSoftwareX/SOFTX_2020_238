@@ -35,7 +35,7 @@ import gobject
 import gst
 
 
-from gstlal import lloidparts
+from gstlal import simplehandler
 from gstlal import pipeparts
 from gstlal import datasource
 
@@ -130,7 +130,7 @@ def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_len
 
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("spectrum-movie")
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.LLOIDHandler(mainloop, pipeline)
 
 
 head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)

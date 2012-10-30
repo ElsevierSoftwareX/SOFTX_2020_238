@@ -53,7 +53,7 @@ opts, args = OptionParser(usage = "%prog [options]" + __doc__, option_list = [
 
 from gstlal.pipeutil import gst, gobject
 from gstlal import pipeparts
-from gstlal.lloidparts import LLOIDHandler
+from gstlal.simplehandler import Handler
 from pylal.Fr import frputvect
 import os, os.path, errno
 
@@ -78,7 +78,7 @@ streaming_buf_size = (max_streaming_buf_size // min_streaming_buf_size) * min_st
 
 pipeline = gst.Pipeline("mock_data_server")
 mainloop = gobject.MainLoop()
-handler = LLOIDHandler(mainloop, pipeline)
+handler = Handler(mainloop, pipeline)
 
 # Show debug messages from tcpserversink
 gst.debug_set_threshold_for_name('tcpserversink', gst.LEVEL_DEBUG)

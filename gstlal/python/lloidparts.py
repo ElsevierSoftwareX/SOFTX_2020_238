@@ -1,4 +1,4 @@
-# Copyright (C) 2009--2011  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2009--2012  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -98,37 +98,6 @@ def mkhtgate(pipeline, src, threshold = 8.0, attack_length = -128, hold_length =
 	control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
 	input = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
-
-
-#
-# LLOID Pipeline handler
-#
-
-
-class LLOIDHandler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_INFO:
-			gerr, dbgmsg = message.parse_info()
-			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_WARNING:
-			gerr, dbgmsg = message.parse_warning()
-			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
 
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):

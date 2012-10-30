@@ -18,6 +18,7 @@ pkgpython_PYTHON = \
 	pipeparts.py \
 	pipeutil.py \
 	reference_psd.py \
+	simplehandler.py \
 	simulation.py \
 	multiratefirparts.py \
 	datasource.py

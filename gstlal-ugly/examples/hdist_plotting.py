@@ -32,7 +32,7 @@ import gobject
 gobject.threads_init()
 import gst
 
-from gstlal import lloidparts
+from gstlal import simplehandler
 from gstlal import pipeparts
 from gstlal.pipeutil import mkelem
 from gstlal import pipeio
@@ -404,7 +404,7 @@ def run_pipeline(pipeline):
     print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
     print pipeline.get_state()
     mainloop = gobject.MainLoop()
-    handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+    handler = simplehandler.Handler(mainloop, pipeline)
     print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
     mainloop.run()
     return

@@ -18,7 +18,7 @@
 
 from gstlal import pipeparts
 from gstlal import reference_psd
-from gstlal import lloidparts
+from gstlal import simplehandler
 from optparse import OptionParser, Option
 from glue import segments
 from glue.ligolw import ligolw
@@ -74,7 +74,7 @@ seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.
 
 pipeline = gst.Pipeline(sys.argv[0])
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 
 #

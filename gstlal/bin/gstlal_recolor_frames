@@ -19,6 +19,7 @@
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import lloidparts
+from gstlal import simplehandler
 from optparse import OptionParser, Option
 from glue import segments
 from glue.ligolw import ligolw
@@ -106,7 +107,7 @@ else:
 
 pipeline = gst.Pipeline(sys.argv[0])
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 #
 # construct the pipeline framesrc -> whiten -> shift -> firbank (recolor) -> frame sink

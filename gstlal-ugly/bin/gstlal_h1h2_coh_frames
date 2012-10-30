@@ -44,6 +44,7 @@ from optparse import OptionParser
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
+from gstlal import simplehandler
 from gstlal import coherent_null
 from gstlal import inspiral
 
@@ -125,7 +126,7 @@ channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
 # =============================================================================
 #
 
-class COHhandler(lloidparts.LLOIDHandler):
+class COHhandler(simplehandler.Handler):
 	
 	def __init__(self, mainloop, pipeline):
 

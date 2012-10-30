@@ -43,7 +43,7 @@ pygst.require("0.10")
 import gst
 
 from gstlal.pipeutil import gst
-from gstlal.lloidparts import LLOIDHandler
+from gstlal.simplehandler import Handler
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
@@ -77,7 +77,7 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 # =============================================================================
 #
 
-class EPHandler( LLOIDHandler ):
+class EPHandler( Handler ):
 	"""
 	Handler class for the excess power pipeline. Keeps various bits of information that the pipeline emits and consumes. This is also in charge of signalling the rebuild of various matrices and vectors needed by the pipeline.
 	"""
