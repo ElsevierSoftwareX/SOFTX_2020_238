@@ -34,7 +34,6 @@ from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
 from gstlal import reference_psd
-from gstlal import lloidparts
 
 def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
 # This routine is designed to smooth a PSD for use in recolouring for NINJA2
