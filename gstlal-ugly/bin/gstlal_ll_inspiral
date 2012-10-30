@@ -202,7 +202,6 @@ def parse_command_line():
 	process_params = options.__dict__.copy()
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
-	print options.state_vector_on_off_dict
 
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
