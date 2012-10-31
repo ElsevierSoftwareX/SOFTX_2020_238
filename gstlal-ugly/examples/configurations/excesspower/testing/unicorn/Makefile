@@ -16,6 +16,7 @@ no_inj:
 		--channel-name=H1=FAKE-STRAIN \
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
+		--gps-end-time 10000 \
 		--file-cache \
 		--file-cache-name H1_no_inj.cache \
 		--data-source AdvLIGO  \
