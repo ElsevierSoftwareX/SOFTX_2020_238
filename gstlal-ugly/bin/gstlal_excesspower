@@ -456,35 +456,20 @@ if options.verbose:
 # TODO: He looks lonely... move him somewhere useful
 duration = -1
 
-if options.data_source == "nds":
-	head = pipeparts.mkndssrc( pipeline,
-		host = cfg.get( "instrument", "ndshost" ),
-		instrument = handler.inst,
-		channel_name = handler.channel
-	)
-	try:
-		head.set_property( "port", cfg.getint( "instrument", "ndsport" ) )
-	except ConfigParser.NoOptionError:
-		print >>sys.stderr, "Warning, no NDS host port specified. Using default."
+head = datasource.mkbasicsrc( pipeline, 
+	gw_data_source_opts, 
+	handler.inst, 
+	verbose 
+)
+if gw_data_source_opts.data_source == "online":
+	# FIXME: This is a guess. Not a terrible one, but still inaccurate
+	handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
+	handler.time_since_dump = handler.start
 
-	# FIXME: Don't assume real-time
-	head.set_property( "channel-type", "online" )
-else:
-
-	head = datasource.mkbasicsrc( pipeline, 
-		gw_data_source_opts, 
-		handler.inst, 
-		verbose 
-	)
-	if gw_data_source_opts.data_source == "online":
-		# FIXME: This is a guess. Not a terrible one, but still inaccurate
-		handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
-		handler.time_since_dump = handler.start
-
-		# FIXME: Use data source callbacks
-		gate = pipeline.get_by_name( "gstlalgate0" )
-		gate.connect("start", handler.handle_segment, "on" )
-		gate.connect("stop", handler.handle_segment, "off" )
+	# FIXME: Use data source callbacks
+	gate = pipeline.get_by_name( "gstlalgate0" )
+	gate.connect("start", handler.handle_segment, "on" )
+	gate.connect("stop", handler.handle_segment, "off" )
 
 """
 # Diagnostic plot
