@@ -28,6 +28,7 @@
 
 import os
 import sys
+import time
 import signal
 import glob
 import tempfile
@@ -236,7 +237,6 @@ datasource.append_options( parser )
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
-parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
@@ -291,26 +291,6 @@ gw_data_source_opts = datasource.GWDataSourceInfo( options )
 # Verbosity and diagnostics
 verbose = options.verbose
 diagnostics = options.diagnostics
-
-"""
-# TODO: Stop reinventing the wheel and replace this with mkLLOIDsrc
-valid_data_sources = [ "gwffile", 
-	  "nds",
-	  "lldata", 
-	  "lldata_sv", 
-	  "whitedata", 
-	  "fakeLIGO", 
-	  "fakeadvLIGO" ]
-if not data_source in valid_data_sources:
-	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
-	sys.exit(-1)
-
-if not options.sample_rate and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ):
-	print >>sys.stderr, "Sample rate not specified and fake data requested."
-	sys.exit(-1)
-else:
-	sample_rate = options.sample_rate
-"""
 
 #
 # =============================================================================
@@ -395,6 +375,10 @@ if cfg.has_option( "cache", "cache-psd-every" ):
 	print "PSD caching enabled. PSD will be recorded every %d seconds" % handler.cache_psd
 else:
 	handler.cache_psd = None
+
+if cfg.has_option( "cache", "cache-psd-dir" ):
+	handler.cache_psd_dir = cfg.get( "cache", "cache-psd-dir" )
+	print "Caching PSD to %s" % handler.cache_psd_dir
 	
 # Used to keep track if we need to lock the PSD into the whitener
 psdfile = None
@@ -492,119 +476,17 @@ else:
 		handler.inst, 
 		verbose 
 	)
+	if gw_data_source_opts.data_source == "online":
+		# FIXME: This is a guess. Not a terrible one, but still inaccurate
+		handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
+		handler.time_since_dump = handler.start
 
-# TODO: Check these options
+		# FIXME: Use data source callbacks
+		gate = pipeline.get_by_name( "gstlalgate0" )
+		gate.connect("start", handler.handle_segment, "on" )
+		gate.connect("stop", handler.handle_segment, "off" )
+
 """
-elif data_source == "whitedata":
-	# TODO: use mkaudiotestsrc
-	head = gst.element_factory_make( "audiotestsrc" )
-	pipeline.add( head )
-	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
-
-elif data_source == "lldata":
-	# FIXME: Unhardcode this.
-	# TODO: Possibly make lldata have a parameter like:
-	# --data-source lldata=shmname
-	shmmap = { "L1": "LLO_Data",
-	           "H1": "LHO_Data",
-	           "V1": "VIRGO_Data"}
-	head = pipeparts.mklvshmsrc( pipeline, shm_name = shmmap[handler.inst] )
-	src = head = pipeparts.mkframecppchanneldemux( pipeline, head )
-	sink = pipeparts.mkaudiorate( pipeline, None, skip_to_first = True, silent = False )
-	src_deferred_link( src, "%s:%s" % (handler.inst, handler.channel), sink.get_pad("sink") )
-	head = sink
-
-	# FIXME: This is a guess. Not a terrible one, but still inaccurate
-	handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
-	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
-
-elif data_source == "lldata_sv":
-	head = mkLLOIDbasicsrc( pipeline,
-		seekevent = None,
-		instrument = handler.inst,
-		detector = DetectorData(None, handler.channel),
-		data_source = "online",
-		state_vector_on_off_dict = { handler.inst: (ep.DEFAULT_DQ_VECTOR_ON, ep.DEFAULT_DQ_VECTOR_OFF) }
-	)
-	# FIXME: Need to get the gate by something other than name
-	gate = pipeline.get_by_name( "lal_gate0" )
-	gate.connect("start", handler.handle_segment, "on" )
-	gate.connect("stop", handler.handle_segment, "off" )
-
-	# FIXME: This is a guess. Not a terrible one, but still inaccurate
-	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
-
-elif data_source == "gwffile":
-	framesrc = head = pipeparts.mkframesrc( pipeline, 
-		gwflocation, 
-		handler.inst, 
-		handler.channel
-	)
-
-	if options.gps_start_time is None and options.gps_end_time is None:
-		print >>sys.stderr, "Warning, inferring analysis duration from cache."
-
-	start, duration = ep.duration_from_cache( gwflocation )
-	if options.gps_start_time:
-		handler.start = start = options.gps_start_time 
-	else:
-		options.gps_start_time = handler.start = start
-		options.gps_start_time = float(options.gps_start_time)
-	if options.gps_end_time:
-		duration = options.gps_end_time - start
-	else:
-		options.gps_end_time = start + duration
-		options.gps_end_time = float(options.gps_end_time)
-	handler.time_since_dump = start
-
-	# FIXME: Make this an option
-	if handler.inst == "V1": 
-		sieve = "V*"
-		head.set_property( "cache-dsc-regex", sieve )
-	if site:
-		sieve = site[0] + "*"
-	else: 
-		sieve = handler.inst + "*"
-	head.set_property( "cache-dsc-regex", sieve )
-	
-else:
-	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
-	sys.exit(-1)
-
-# Seeking
-seekevent = None
-if options.gps_start_time is not None and options.gps_end_time is not None:
-
-	# TODO: Use LIGOTimeGPS
-	print "Duration: " + str(duration)
-	print >>sys.stderr, "Seeking to GPS %d, segment duration %d" % (start, duration)
-	print >>sys.stderr, "Will stop at GPS %d" % (start + duration)
-
-	seek, dur = long(start*1e9), long(duration*1e9)
-	seekevent = gst.event_new_seek( 1.0, 
-		gst.Format(gst.FORMAT_TIME),
-		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
-		gst.SEEK_TYPE_SET, seek,
-		gst.SEEK_TYPE_SET, seek + dur
-	)
-
-elif options.gps_start_time is not None:
-
-	print >>sys.stderr, "Seeking to GPS %d (ns)" % start
-	seek = long(options.gps_start_time*1e9)
-	seekevent = gst.event_new_seek( 1.0, 
-		gst.Format(gst.FORMAT_TIME),
-		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
-		gst.SEEK_TYPE_SET, seek,
-		gst.SEEK_TYPE_NONE, 0
-	)
-
-if( seekevent is not None ):
-	if head.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		exit("Unable to ready pipeline to accept seek.")
-	if not head.send_event( seekevent ):
-		exit("Unable to send seek event to " + str(head))
-
 # Diagnostic plot
 if( diagnostics ):
 	head = postdatatee = pipeparts.mktee( pipeline, head )
