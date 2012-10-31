@@ -220,7 +220,7 @@ class EPHandler( Handler ):
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
 			if self.trigger_segment is not None and ts in self.trigger_segment:
-				self.dump_psd( timestamp = ts )
+				self.dump_psd( ts, self.cache_psd_dir )
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
 				self.dump_psd( ts, self.cache_psd_dir )
 				self.last_psd_cache = ts
@@ -236,7 +236,7 @@ class EPHandler( Handler ):
 			start = round(timestamp) - 40, # PSD history length
 			stop = round(timestamp),
 			ext = "xml.gz",
-			dir = "./"
+			dir = psddir
 		)
 
 		write_psd( filename, { self.inst: self.psd } )
@@ -470,7 +470,7 @@ class EPHandler( Handler ):
 		# Write segments
 		llwseg = ligolw_segments.LigolwSegments( output )
 		# FIXME: Better names and comments?
-		llwseg.insert_from_segmentlistdict( self.seglist, "gstlal_excesspower segments", comment="gstlal_excesspower segments", version=u'\u263b' )
+		llwseg.insert_from_segmentlistdict( self.seglist, u"gstlal_excesspower segments \u263b", comment="gstlal_excesspower segments" )
 
 		llwseg.finalize(process)
 
