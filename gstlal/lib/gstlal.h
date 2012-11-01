@@ -29,6 +29,8 @@
 #include <gsl/gsl_matrix.h>
 
 
+/* FIXME:  FFTWMutex.h is only needed for the LAL_PTHREAD_LOCK macro, which is only needed because we need to check in several places if lal has been compiled with pthread support enabled.  if we could be assured that it has been, then this #include can be removed */
+#include <lal/FFTWMutex.h>
 #include <lal/LALDatatypes.h>
 #include <lal/Units.h>
 
