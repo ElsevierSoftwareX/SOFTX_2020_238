@@ -17,8 +17,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from gstlal import pipeparts
-from gstlal import lloidparts
 from gstlal import simplehandler
+from gstlal import datasource
 from optparse import OptionParser, Option
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
@@ -33,44 +33,48 @@ import sys
 import os
 
 parser = OptionParser(description = __doc__)
-parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
-parser.add_option("--channel-name", metavar = "name", default = "FAKE-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"FAKE-STRAIN\".")
-parser.add_option("--frame-cache", metavar = "filename", help = "If an additional set of frames should be added to the data stream, specify the path to the frame cache.")
+
+#
+# Append data source options
+#
+
+datasource.append_options(parser)
+
+#
+# Append program specific options
+#
+
 parser.add_option("--frame-type", metavar = "name", help = "Specify the non-instrumental part of the frame type. The full frame type will be constructed by prepending the instrument.")
 parser.add_option("--output-channel-name", metavar = "name", help = "If an additional frame cache is requested, indicate the channel name to extract.")
 parser.add_option("--output-path", metavar = "name", help = "Path to output frame files.")
-parser.add_option("--fake-data", metavar = "(white|silence|LIGO|AdvLIGO)", help = "Set the type of noise.")
 parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
 
-if( options.fake_data and options.frame_cache ):
-	exit( "Can't have both fake data and frame cache" )
+gw_data_source = datasource.GWDataSourceInfo(options)
 
 if( options.frame_type is None ):
 	exit( "Frame type argument is required." )
 
-seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 
 pipeline = gst.Pipeline(sys.argv[0])
 mainloop = gobject.MainLoop()
 handler = simplehandler.Handler(mainloop, pipeline)
-seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), data_source = options.fake_data or "frames", injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
+# Assume instrument is the first (only) key of the channel dict
+instrument = gw_data_source.channel_dict.keys()[0]
+
+head = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
 
 if options.output_channel_name is not None:
 	# Correct the channel name
-	head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,units=strain" % (options.instrument,options.output_channel_name))
+	head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,units=strain" % (instrument,options.output_channel_name))
 
 if options.output_path is not None:
-	outpath = options.output_path + "/" + options.instrument
+	outpath = options.output_path + "/" + instrument
 else:
-	outpath = options.instrument
+	outpath = instrument
 
 head = pipeparts.mkprogressreport(pipeline, head, "frames")
 
@@ -79,7 +83,7 @@ try:
 except:
 	pass
 
-frametype = "%s_%s" % (options.instrument, options.frame_type)
+frametype = "%s_%s" % (instrument, options.frame_type)
 
 pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, duration = options.duration, frame_type=frametype, dir_digits=5)
 
