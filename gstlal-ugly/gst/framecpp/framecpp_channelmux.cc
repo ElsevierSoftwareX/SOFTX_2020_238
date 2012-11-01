@@ -55,6 +55,7 @@
 
 #include <framecpp/Common/MemoryBuffer.hh>
 #include <framecpp/Common/Verify.hh>
+#include <framecpp/Dimension.hh>
 #include <framecpp/OFrameStream.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -109,6 +110,9 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST
 
 #define DEFAULT_FRAME_DURATION 1
 #define DEFAULT_FRAMES_PER_FILE 128
+#define DEFAULT_FRAME_NAME NULL
+#define DEFAULT_FRAME_RUN -1
+#define DEFAULT_FRAME_NUMBER 0
 
 
 #define FRAME_FILE_DURATION(mux) ((mux)->frames_per_file * (mux)->frame_duration)
@@ -244,6 +248,26 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 
 
 /*
+ * private data for pre-computed frame object format parameters
+ */
+
+
+typedef struct _framecpp_channelmux_appdata {
+	FrameCPP::FrVect::data_types_type type;
+	FrameCPP::Dimension dims[1];
+	gchar *unitY;
+} framecpp_channelmux_appdata;
+
+
+static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
+{
+	if(appdata)
+		g_free(appdata->unitY);
+	g_free(appdata);	/* FIXME:  correct? */
+}
+
+
+/*
  * get informed of a sink pad's caps
  */
 
@@ -251,7 +275,10 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) gst_pad_get_element_private(pad);
+	framecpp_channelmux_appdata *appdata = (framecpp_channelmux_appdata *) data->appdata;
 	GstStructure *structure;
+	FrameCPP::FrVect::data_types_type type;
 	int width, channels, rate;
 	const gchar *media_type;
 	gboolean success = TRUE;
@@ -266,17 +293,80 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	gst_structure_get_int(structure, "channels", &channels);
 	gst_structure_get_int(structure, "rate", &rate);
 	if(!strcmp(media_type, "audio/x-raw-int")) {
+		gboolean is_signed;
+		gst_structure_get_boolean(structure, "signed", &is_signed);
+		if(is_signed) {
+			switch(width) {
+			case 8:
+				type = FrameCPP::FrVect::FR_VECT_C;
+				break;
+			case 16:
+				type = FrameCPP::FrVect::FR_VECT_2S;
+				break;
+			case 32:
+				type = FrameCPP::FrVect::FR_VECT_4S;
+				break;
+			case 64:
+				type = FrameCPP::FrVect::FR_VECT_8S;
+				break;
+			default:
+				success = FALSE;
+				break;
+			}
+		} else {
+			switch(width) {
+			case 8:
+				type = FrameCPP::FrVect::FR_VECT_1U;
+				break;
+			case 16:
+				type = FrameCPP::FrVect::FR_VECT_2U;
+				break;
+			case 32:
+				type = FrameCPP::FrVect::FR_VECT_4U;
+				break;
+			case 64:
+				type = FrameCPP::FrVect::FR_VECT_8U;
+				break;
+			default:
+				success = FALSE;
+				break;
+			}
+		}
 	} else if(!strcmp(media_type, "audio/x-raw-float")) {
+		switch(width) {
+		case 32:
+			type = FrameCPP::FrVect::FR_VECT_4R;
+			break;
+		case 64:
+			type = FrameCPP::FrVect::FR_VECT_8R;
+			break;
+		default:
+			success = FALSE;
+			break;
+		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
+		switch(width) {
+		case 64:
+			type = FrameCPP::FrVect::FR_VECT_8C;
+			break;
+		case 128:
+			type = FrameCPP::FrVect::FR_VECT_16C;
+			break;
+		default:
+			success = FALSE;
+			break;
+		}
 	} else
 		success = FALSE;
 
 	if(success) {
 		GObject *queue;
 		GST_OBJECT_LOCK(mux->collect);
-		queue = G_OBJECT(((FrameCPPMuxCollectPadsData *) gst_pad_get_element_private(pad))->queue);
+		queue = G_OBJECT(data->queue);
 		g_object_set(queue, "rate", (gint) rate, NULL);
 		g_object_set(queue, "unit-size", (guint) (width / 8 * channels), NULL);
+		appdata->type = type;
+		appdata->dims[0].SetDx(1.0 / (double) rate);
 		GST_OBJECT_UNLOCK(mux->collect);
 	}
 
@@ -297,15 +387,30 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_EOS:
-		/* FIXME:  flush final frame file? */
+		/* FIXME:  flush final (short) frame file? */
 		break;
+
+	case GST_EVENT_TAG:
+		/* FIXME:  capture metadata for Fr{Proc,Adc,...}, e.g.,
+		 * units */
+		/* discard these.  tags in the sink streams make no sense
+		 * in the source stream */
+		/* FIXME:  merged instrument list would make sense, though,
+		 * so capture that and propogate it.  do we need to add
+		 * FrDetector structures to each frame file based on the
+		 * list, too? */
+		GST_DEBUG_OBJECT(mux, "discarding downstream event %" GST_PTR_FORMAT, event);
+		gst_event_unref(event);
+		goto done;
 
 	default:
 		break;
 	}
 
+	GST_DEBUG_OBJECT(mux, "forwarding downstream event %" GST_PTR_FORMAT, event);
 	gst_pad_push_event(mux->srcpad, event);
 
+done:
 	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
@@ -337,9 +442,12 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	 */
 
 	GST_OBJECT_LOCK(GST_OBJECT(mux->collect));
-	data = framecpp_muxcollectpads_add_pad(mux->collect, pad);
+	data = framecpp_muxcollectpads_add_pad(mux->collect, pad, (FrameCPPMuxCollectPadsDataDestroyNotify) framecpp_channelmux_appdata_free);
 	if(!data)
 		goto could_not_add_to_collectpads;
+	data->appdata = g_new0(framecpp_channelmux_appdata, 1);
+	if(!data->appdata)
+		goto could_not_create_appdata;
 	framecpp_muxcollectpads_set_event_function(data, GST_DEBUG_FUNCPTR(sink_event));
 	if(!gst_element_add_pad(element, pad))
 		goto could_not_add_to_element;
@@ -356,6 +464,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	 */
 
 could_not_add_to_element:
+could_not_create_appdata:
 	framecpp_muxcollectpads_remove_pad(mux->collect, pad);
 could_not_add_to_collectpads:
 	gst_object_unref(pad);
@@ -386,10 +495,9 @@ static void release_pad(GstElement *element, GstPad *pad)
  */
 
 
-static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime collected_t_start, GstClockTime collected_t_end, GstFrameCPPChannelMux *mux)
+static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime collected_t_start, GstClockTime collected_t_end, GstFrameCPPChannelMux *mux)
 {
 	GstClockTime gwf_t_start, gwf_t_end;
-	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
 	 * make sure we don't have our wires crossed
@@ -405,7 +513,8 @@ static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstC
 	 */
 
 	for(gwf_t_start = collected_t_start, gwf_t_end = collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux)) {
-		GstBuffer *outbuf = NULL;
+		GstFlowReturn result;
+		GstBuffer *outbuf;
 
 		/*
 		 * build frame file
@@ -416,16 +525,15 @@ static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstC
 			FrameCPP::OFrameStream ofs(obuf);
 			GstClockTime frame_t_start, frame_t_end;
 
-			/* FIXME: initialize frame file */
-
 			/*
 			 * loop over frames
 			 */
 
 			for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
 				GSList *collectdatalist;
-
-				/* FIXME:  initialize frame */
+				General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
+				General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number++, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
+				g_object_notify(G_OBJECT(mux), "frame-number");
 
 				/*
 				 * loop over pads
@@ -433,40 +541,55 @@ static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstC
 
 				for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 					FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
+					framecpp_channelmux_appdata *appdata = (framecpp_channelmux_appdata *) data->appdata;
 					/* we own this list */
 					GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
+					if(!buffer_list)
+						continue;
+					GstClockTime buffer_list_t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(buffer_list->data));
+					appdata->dims[0].SetNx(gst_util_uint64_scale_int_round(frame_t_end - buffer_list_t_start, 1.0 / appdata->dims[0].GetDx(), GST_SECOND));
+					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, 1, appdata->dims);	/* FIXME: units? */
 
 					/* FIXME:  initialize FrProc */
 
 					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
 						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+						gint offset = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, 1.0 / appdata->dims[0].GetDx(), GST_SECOND);
 
 						/* FIXME:  append/write/memcpy/whatever buffer contents into FrProc */
 
 						gst_buffer_unref(buffer);
 					}
-
-					/* FIXME:  add FrProc to frame */
 				}
 
-				/* FIXME:  add frame to frame file */
+				/*
+				 * add frame to file
+				 */
+
+				ofs.WriteFrame(frame, FrameCPP::Common::CheckSum::CRC);
 			}
 			g_assert(frame_t_start == gwf_t_end);	/* safety check */
 
-			/* FIXME:  finish/close/whatever frame file */
+			/*
+			 * close frame file, extract bytes into GstBuffer
+			 */
 
-			/* FIXME:  extract/copy/whatever bytes into GstBuffer */
-			outbuf = gst_buffer_new_and_alloc(0);
+			ofs.Close();
+
+			outbuf = gst_buffer_new_and_alloc(obuf->str().length());
+			memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
+
+			gst_buffer_set_caps(outbuf, GST_PAD_CAPS(mux->srcpad));
 			GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
 			GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
-
+			GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
+			GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
+			mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
 		} catch(const std::exception& Exception) {
 			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
-			result = GST_FLOW_ERROR;
 			goto done;
 		} catch(...) {
 			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised unknown exception"));
-			result = GST_FLOW_ERROR;
 			goto done;
 		}
 
@@ -474,6 +597,7 @@ static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstC
 		 * push downstream
 		 */
 
+		GST_DEBUG_OBJECT(mux, "pushing frame file spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 		result = gst_pad_push(mux->srcpad, outbuf);
 		if(result != GST_FLOW_OK) {
 			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_push() failed (%s)", gst_flow_get_name(result)));
@@ -481,14 +605,12 @@ static GstFlowReturn collected_handler(FrameCPPMuxCollectPads *collectpads, GstC
 		}
 	}
 
-	g_assert(gwf_t_start != collected_t_start);	/* it's a deadlock if we haven't consumed any data */
-
 	/*
 	 * done
 	 */
 
 done:
-	return result;
+	return;
 }
 
 
@@ -508,11 +630,14 @@ GstStateChangeReturn change_state(GstElement *element, GstStateChange transition
 
 	switch(transition) {
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
+		mux->next_out_offset = 0;
+		gst_pad_start_task(mux->srcpad, (GstTaskFunction) framecpp_muxcollectpads_task, mux->collect);
 		framecpp_muxcollectpads_start(mux->collect);
 		break;
 
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		framecpp_muxcollectpads_stop(mux->collect);
+		gst_pad_stop_task(mux->srcpad);
 		break;
 
 	default:
@@ -541,7 +666,10 @@ GstStateChangeReturn change_state(GstElement *element, GstStateChange transition
 
 enum property {
 	ARG_FRAME_DURATION = 1,
-	ARG_FRAMES_PER_FILE
+	ARG_FRAMES_PER_FILE,
+	ARG_FRAME_NAME,
+	ARG_FRAME_RUN,
+	ARG_FRAME_NUMBER
 };
 
 
@@ -560,6 +688,19 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 	case ARG_FRAMES_PER_FILE:
 		element->frames_per_file = g_value_get_int(value);
 		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration), NULL);
+		break;
+
+	case ARG_FRAME_NAME:
+		g_free(element->frame_name);
+		element->frame_name = g_value_dup_string(value);
+		break;
+
+	case ARG_FRAME_RUN:
+		element->frame_run = g_value_get_int(value);
+		break;
+
+	case ARG_FRAME_NUMBER:
+		element->frame_number = g_value_get_int(value);
 		break;
 
 	default:
@@ -584,6 +725,18 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_FRAMES_PER_FILE:
 		g_value_set_int(value, element->frames_per_file);
+		break;
+
+	case ARG_FRAME_NAME:
+		g_value_set_string(value, element->frame_name);
+		break;
+
+	case ARG_FRAME_RUN:
+		g_value_set_int(value, element->frame_run);
+		break;
+
+	case ARG_FRAME_NUMBER:
+		g_value_set_int(value, element->frame_number);
 		break;
 
 	default:
@@ -623,7 +776,7 @@ static void finalize(GObject * object)
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	"sink_%d",
 	GST_PAD_SINK,
-	GST_PAD_SOMETIMES,
+	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 			"rate = (int) [1, MAX], " \
@@ -738,6 +891,39 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_NAME,
+		g_param_spec_string(
+			"frame-name",
+			"Frame name",
+			"Name appearing in each frame header.",
+			DEFAULT_FRAME_NAME,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_RUN,
+		g_param_spec_int(
+			"frame-run",
+			"Run number",
+			"Run number appearing in each frame header.",
+			G_MININT, G_MAXINT, DEFAULT_FRAME_RUN,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_NUMBER,
+		g_param_spec_int(
+			"frame-number",
+			"Frame number",
+			"Current frame number.",
+			0, G_MAXINT, DEFAULT_FRAME_NUMBER,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
 
 	gstelement_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
 	gstelement_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
@@ -753,6 +939,11 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChannelMuxClass *kclass)
 {
 	gst_element_create_all_pads(GST_ELEMENT(mux));
+
+	/* element's code assumes gstreamer is using integer nanoseconds.
+	 * it's readily fixed if this assumption ever fails to hold, but
+	 * for now I'm leaving it */
+	g_assert_cmpuint(GST_SECOND, ==, 1000000000);
 
 	/* configure src pad */
 	mux->srcpad = gst_element_get_static_pad(GST_ELEMENT(mux), "src");

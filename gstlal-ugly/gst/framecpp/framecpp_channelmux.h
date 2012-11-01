@@ -58,12 +58,17 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
+	FrameCPPMuxCollectPads *collect;
 	GstPad *srcpad;
 
-	FrameCPPMuxCollectPads *collect;
+	guint64 next_out_offset;
 
 	gint frame_duration;
 	gint frames_per_file;
+
+	gchar *frame_name;
+	gint frame_run;
+	gint frame_number;
 } GstFrameCPPChannelMux;
 
 

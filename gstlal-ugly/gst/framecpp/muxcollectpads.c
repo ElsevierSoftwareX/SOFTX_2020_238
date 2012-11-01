@@ -77,25 +77,6 @@ GST_BOILERPLATE(FrameCPPMuxCollectPads, framecpp_muxcollectpads, GstObject, GST_
  */
 
 
-static gboolean get_queue_segment(FrameCPPMuxCollectPadsData *data, GstClockTime *t_start, GstClockTime *t_end)
-{
-	*t_start = framecpp_muxqueue_timestamp(data->queue);
-	*t_end = *t_start + framecpp_muxqueue_duration(data->queue);
-
-	/*
-	 * require a valid start offset and timestamp
-	 */
-
-	if(!GST_CLOCK_TIME_IS_VALID(*t_start) || !GST_CLOCK_TIME_IS_VALID(*t_end) || *t_start > *t_end) {
-		GST_ERROR_OBJECT(data->collect, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid timestamp and/or duration", data->pad, data->queue);
-		*t_start = *t_end = GST_CLOCK_TIME_NONE;
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
 {
 	FrameCPPMuxCollectPadsData *data = gst_pad_get_element_private(pad);
@@ -137,7 +118,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 	 * clear the segment boundaries
 	 */
 
-	gst_segment_set_newsegment_full(&collectpads->segment, FALSE, 1.0, 1.0, GST_FORMAT_UNDEFINED, -1, -1, -1);
+	gst_segment_init(&collectpads->segment, GST_FORMAT_UNDEFINED);
 
 	/*
 	 * loop over pads
@@ -150,7 +131,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		 * ignore pads whose segments aren't known
 		 */
 
-		if(data->segment.format == GST_FORMAT_UNDEFINED || data->segment.start == -1 || data->segment.stop == -1) {
+		if(data->segment.format == GST_FORMAT_UNDEFINED || data->segment.start == -1) {
 			GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT ": segment not known", data->pad);
 			continue;
 		}
@@ -192,6 +173,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		GST_ERROR_OBJECT(collectpads, "failed to compute union of input segments");
 		return FALSE;
 	}
+	GST_DEBUG_OBJECT(collectpads, "union of segments = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", collectpads->segment.start, collectpads->segment.stop);
 	return TRUE;
 }
 
@@ -230,12 +212,10 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		gst_segment_set_newsegment_full(&data->segment, update, rate, applied_rate, format, start, stop, position);
 		data->eos = FALSE;
 		success &= update_segment(collectpads);
-		if(!update)
-			clear_segments(collectpads, data);
-		if(success && all_pads_have_segments(collectpads)) {
-			if(event_func)
-				success &= event_func(pad, gst_event_new_new_segment_full(update, collectpads->segment.rate, collectpads->segment.applied_rate, collectpads->segment.format, collectpads->segment.start, collectpads->segment.stop, collectpads->segment.time));
-		}
+		if(success && event_func && all_pads_have_segments(collectpads))
+			success &= event_func(pad, gst_event_new_new_segment_full(update, collectpads->segment.rate, collectpads->segment.applied_rate, collectpads->segment.format, collectpads->segment.start, collectpads->segment.stop, collectpads->segment.time));
+		/*if(!update)
+			clear_segments(collectpads, data);*/
 		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
 		break;
 	}
@@ -270,44 +250,51 @@ static gboolean event(GstPad *pad, GstEvent *event)
 }
 
 
-static void waiting_handler(FrameCPPMuxQueue *queue, GstClockTime t_start, GstClockTime t_end, gpointer user_data)
+static void waiting_handler(FrameCPPMuxQueue *queue, GstClockTime t_start, GstClockTime t_end, FrameCPPMuxCollectPadsData *activedata)
 {
-	FrameCPPMuxCollectPads *collectpads = ((FrameCPPMuxCollectPadsData *) user_data)->collect;
-	GSList *collectdatalist;
+	FrameCPPMuxCollectPads *collectpads = activedata->collect;
 	GstClockTime min_t_start = GST_CLOCK_TIME_NONE;
 	GstClockTime min_t_end = GST_CLOCK_TIME_NONE;
-	GstFlowReturn result = GST_FLOW_OK;
+	GSList *collectdatalist;
 
 	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
+	GST_DEBUG_OBJECT(collectpads, "awoken by %" GST_PTR_FORMAT, activedata->pad);
+	GST_OBJECT_LOCK(collectpads);
 	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		FrameCPPMuxCollectPadsData *data = collectdatalist->data;
-		GstClockTime t_start, t_end;
+		GstClockTime t_start = framecpp_muxqueue_timestamp(data->queue);
+		GstClockTime t_end = t_start + framecpp_muxqueue_duration(data->queue);;
 
-		if(gst_audioadapter_is_empty(GST_AUDIOADAPTER(data->queue)) || !get_queue_segment(data, &t_start, &t_end)) {
-			FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
-			goto done;
+		if(!GST_CLOCK_TIME_IS_VALID(t_start)) {
+			if(data->segment.format == GST_FORMAT_UNDEFINED) {
+				GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT " has no data, no segment;  going back to sleep", data->pad);
+				goto done;
+			}
+			g_assert(data->segment.format == GST_FORMAT_TIME);
+			t_start = t_end = data->segment.start;
 		}
 
 		GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT ": queue spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", data->pad, GST_TIME_SECONDS_ARGS(t_start), GST_TIME_SECONDS_ARGS(t_end));
 
-		min_t_start = MIN(min_t_start, t_start);
-		min_t_end = MIN(min_t_end, t_end);
+		min_t_start = GST_CLOCK_TIME_IS_VALID(min_t_start) ? MIN(min_t_start, t_start) : t_start;
+		min_t_end = GST_CLOCK_TIME_IS_VALID(min_t_end) ? MIN(min_t_end, t_end) : t_end;
 	}
-	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
 
+	/* all queues have enqueued data or, at least, configured segments */
 	g_assert(GST_CLOCK_TIME_IS_VALID(min_t_start));
 	g_assert(GST_CLOCK_TIME_IS_VALID(min_t_end));
-	if(min_t_end - min_t_start >= collectpads->max_size_time) {
-		GST_DEBUG_OBJECT(collectpads, "[%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") available", GST_TIME_SECONDS_ARGS(min_t_start), GST_TIME_SECONDS_ARGS(min_t_end));
-
-		g_signal_emit_by_name(collectpads, "collected", min_t_start, min_t_end, &result);
-		/* FIXME:  do something with the result */
+	GST_DEBUG_OBJECT(collectpads, "[%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") available on all pads", GST_TIME_SECONDS_ARGS(min_t_start), GST_TIME_SECONDS_ARGS(min_t_end));
+	if(min_t_start != collectpads->min_t_start || min_t_end != collectpads->min_t_end) {
+		collectpads->min_t_start = min_t_start;
+		collectpads->min_t_end = min_t_end;
+		g_cond_broadcast(collectpads->min_t_changed);
 	}
 
 done:
-	return;
+	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+	GST_OBJECT_UNLOCK(collectpads);
 }
 
 
@@ -328,7 +315,7 @@ done:
  */
 
 
-FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *collectpads, GstPad *pad)
+FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *collectpads, GstPad *pad, FrameCPPMuxCollectPadsDataDestroyNotify destroy_notify)
 {
 	FrameCPPMuxCollectPadsData *data = g_malloc0(sizeof(*data));
 
@@ -339,13 +326,17 @@ FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPa
 	data->queue = FRAMECPP_MUXQUEUE(g_object_new(FRAMECPP_MUXQUEUE_TYPE, NULL));
 	g_object_set(data->queue, "max-size-time", collectpads->max_size_time, NULL);
 	gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
+	data->appdata = NULL;
+	data->destroy_notify = destroy_notify;
 	data->eos = FALSE;
 
 	GST_OBJECT_LOCK(pad);
 	gst_pad_set_element_private(pad, data);
+	GST_OBJECT_UNLOCK(pad);
 	gst_pad_set_chain_function(pad, chain);
 	gst_pad_set_event_function(pad, event);
-	GST_OBJECT_UNLOCK(pad);
+	if(collectpads->started)
+		gst_pad_set_active(pad, TRUE);
 
 	collectpads->pad_list = g_slist_append(collectpads->pad_list, data);
 	data->waiting_handler_id = g_signal_connect(data->queue, "waiting", G_CALLBACK(waiting_handler), data);
@@ -371,8 +362,12 @@ gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *collectpads,
 
 	GST_OBJECT_LOCK(pad);
 	data = gst_pad_get_element_private(pad);
+	if(data->destroy_notify)
+		data->destroy_notify(data);
 	gst_pad_set_element_private(pad, NULL);
 	GST_OBJECT_UNLOCK(pad);
+	if(!collectpads->started)
+		gst_pad_set_active(pad, FALSE);
 
 	collectpads->pad_list = g_slist_remove(collectpads->pad_list, data);
 
@@ -413,13 +408,31 @@ void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *data
 
 
 /**
+ * GstTaskFunction to be used by calling code to drive the
+ * FrameCPPMuxCollectPads' streaming from within a GstTask.
+ */
+
+
+void framecpp_muxcollectpads_task(FrameCPPMuxCollectPads *collectpads)
+{
+	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
+
+	GST_OBJECT_LOCK(collectpads);
+	g_cond_wait(collectpads->min_t_changed, GST_OBJECT_GET_LOCK(collectpads));
+	GST_DEBUG_OBJECT(collectpads, "collected data spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(collectpads->min_t_start), GST_TIME_SECONDS_ARGS(collectpads->min_t_end));
+	g_signal_emit_by_name(collectpads, "collected", collectpads->min_t_start, collectpads->min_t_end);
+	GST_OBJECT_UNLOCK(collectpads);
+}
+
+
+/**
  * Start the collect pads
  */
 
 
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *collectpads)
 {
-	/* FIXME */
+	collectpads->started = TRUE;
 }
 
 
@@ -430,7 +443,7 @@ void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *collectpads)
 
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *collectpads)
 {
-	/* FIXME */
+	collectpads->started = FALSE;
 }
 
 
@@ -498,14 +511,6 @@ enum framecpp_muxcollectpads_signal {
 
 
 static guint signals[NUM_SIGNALS] = {0, };
-
-
-static gboolean collected_accumulator(GSignalInvocationHint *ihint, GValue *accu_return, const GValue *handler_return, gpointer data)
-{
-	g_value_copy(handler_return, accu_return);
-
-	return (GstFlowReturn) g_value_get_enum(handler_return) == GST_FLOW_OK;
-}
 
 
 /*
@@ -583,6 +588,8 @@ static void finalize(GObject *object)
 	collectpads->pad_list = NULL;
 	g_mutex_free(collectpads->pad_list_lock);
 	collectpads->pad_list_lock = NULL;
+	g_cond_free(collectpads->min_t_changed);
+	collectpads->min_t_changed = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -623,10 +630,10 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 			FrameCPPMuxCollectPadsClass,
 			collected
 		),
-		collected_accumulator,
 		NULL,
-		framecpp_marshal_FLOW_RETURN__CLOCK_TIME__CLOCK_TIME,
-		GST_TYPE_FLOW_RETURN,
+		NULL,
+		framecpp_marshal_VOID__CLOCK_TIME__CLOCK_TIME,
+		G_TYPE_NONE,
 		2,
 		G_TYPE_UINT64,
 		G_TYPE_UINT64
@@ -639,4 +646,8 @@ static void framecpp_muxcollectpads_init(FrameCPPMuxCollectPads *collectpads, Fr
 	collectpads->pad_list_lock = g_mutex_new();
 	collectpads->pad_list = NULL;
 	gst_segment_init(&collectpads->segment, GST_FORMAT_UNDEFINED);
+	collectpads->started = FALSE;
+	collectpads->min_t_start = GST_CLOCK_TIME_NONE;
+	collectpads->min_t_end = GST_CLOCK_TIME_NONE;
+	collectpads->min_t_changed = g_cond_new();
 }

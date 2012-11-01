@@ -68,19 +68,20 @@ G_BEGIN_DECLS
 typedef struct _FrameCPPMuxCollectPadsClass FrameCPPMuxCollectPadsClass;
 typedef struct _FrameCPPMuxCollectPads FrameCPPMuxCollectPads;
 typedef struct _FrameCPPMuxCollectPadsData FrameCPPMuxCollectPadsData;
+typedef void (*FrameCPPMuxCollectPadsDataDestroyNotify) (FrameCPPMuxCollectPadsData *);
 
 
 struct _FrameCPPMuxCollectPadsClass {
 	GstObjectClass parent_class;
 
-	GstFlowReturn (*collected)(FrameCPPMuxCollectPads *, GstClockTime, GstClockTime, gpointer);
+	void (*collected)(FrameCPPMuxCollectPads *, GstClockTime, GstClockTime, gpointer);
 };
 
 
 /**
  * FrameCPPMuxCollectPads
  *
- * The opaque #FrameCPPMuxCollectPads data structure.
+ * The #FrameCPPMuxCollectPads data structure.
  */
 
 
@@ -92,14 +93,20 @@ struct _FrameCPPMuxCollectPads {
 
 	GstSegment segment;
 
+	/*< private >*/
 	GstClockTime max_size_time;
+
+	gboolean started;
+	GstClockTime min_t_start;
+	GstClockTime min_t_end;
+	GCond *min_t_changed;
 };
 
 
 /**
  * FrameCPPMuxCollectPadsData
  *
- * The opaque #FrameCPPMuxCollectPadsData data structure.
+ * The #FrameCPPMuxCollectPadsData data structure.
  */
 
 
@@ -108,6 +115,9 @@ struct _FrameCPPMuxCollectPadsData {
 	GstPad *pad;
 	FrameCPPMuxQueue *queue;
 	GstSegment segment;
+
+	gpointer appdata;
+	FrameCPPMuxCollectPadsDataDestroyNotify destroy_notify;
 
 	/*< private >*/
 	GstPadEventFunction event_func;
@@ -129,9 +139,10 @@ struct _FrameCPPMuxCollectPadsData {
 #define FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(pads) g_mutex_unlock(pads->pad_list_lock)
 
 
-FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *, GstPad *);
+FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *, GstPad *, FrameCPPMuxCollectPadsDataDestroyNotify);
 gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *, GstPad *);
 void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *, GstPadEventFunction);
+void framecpp_muxcollectpads_task(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);
