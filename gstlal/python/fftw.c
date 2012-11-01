@@ -44,7 +44,9 @@
 
 static PyObject *lock(PyObject *self, PyObject *args)
 {
+#ifndef LAL_PTHREAD_LOCK
 	gstlal_fftw_lock();
+#endif
 
 	Py_INCREF(Py_None);
 	return Py_None;
@@ -53,7 +55,9 @@ static PyObject *lock(PyObject *self, PyObject *args)
 
 static PyObject *unlock(PyObject *self, PyObject *args)
 {
+#ifndef LAL_PTHREAD_LOCK
 	gstlal_fftw_unlock();
+#endif
 
 	Py_INCREF(Py_None);
 	return Py_None;
