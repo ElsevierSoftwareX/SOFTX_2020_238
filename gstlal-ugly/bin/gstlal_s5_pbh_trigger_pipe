@@ -391,6 +391,8 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 
+		self.set_category("INSPIRAL")
+
 		if time_slide_file is not None:
 			self.add_var_opt("time-slide-file", time_slide_file)
 		if ht_gate_thresh is not None:
@@ -567,7 +569,7 @@ def parse_command_line():
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
-	#parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
+	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
@@ -611,6 +613,9 @@ options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.
 try: os.mkdir("logs")
 except: pass
 dag = inspiral_pipe.DAG("trigger_pipe")
+
+if options.max_inspiral_jobs is not None:
+	dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
 
 #
 # setup the job classes
