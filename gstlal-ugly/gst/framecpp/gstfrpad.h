@@ -42,6 +42,29 @@ G_BEGIN_DECLS
 /*
  * ============================================================================
  *
+ *                               Pad Type Enum
+ *
+ * ============================================================================
+ */
+
+
+enum gst_frpad_type_t {
+	GST_FRPAD_TYPE_FRADCDATA,
+	GST_FRPAD_TYPE_FRPROCDATA,
+	GST_FRPAD_TYPE_FRSIMDATA
+};
+
+
+#define GST_FRPAD_TYPE_TYPE \
+	(gst_frpad_type_get_type())
+
+
+GType gst_frpad_type_get_type(void);
+
+
+/*
+ * ============================================================================
+ *
  *                                    Type
  *
  * ============================================================================
@@ -82,6 +105,8 @@ struct _GstFrPad {
 	GstPad pad;
 
 	/*< private >*/
+	enum gst_frpad_type_t pad_type;
+	gchar *comment;
 };
 
 

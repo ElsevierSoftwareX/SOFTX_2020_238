@@ -51,6 +51,47 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 /*
  * ============================================================================
  *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define DEFAULT_PAD_TYPE GST_FRPAD_TYPE_FRPROCDATA
+#define DEFAULT_COMMENT ""
+
+
+/*
+ * ============================================================================
+ *
+ *                               Pad Type Enum
+ *
+ * ============================================================================
+ */
+
+
+GType gst_frpad_type_get_type(void)
+{
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GST_FRPAD_TYPE_FRADCDATA, "GST_FRPAD_TYPE_FRADCDATA", "Pad is an FrAdcData stream"},
+			{GST_FRPAD_TYPE_FRPROCDATA, "GST_FRPAD_TYPE_FRPROCDATA", "Pad is an FrProcData stream"},
+			{GST_FRPAD_TYPE_FRSIMDATA, "GST_FRPAD_TYPE_FRSIMDATA", "Pad is an FrSimData stream"},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("GST_FRPAD_TYPE", values);
+	}
+
+	return type;
+}
+
+
+/*
+ * ============================================================================
+ *
  *                             Internal Functions
  *
  * ============================================================================
@@ -89,7 +130,8 @@ GstFrPad *gst_frpad_new_from_template(GstPadTemplate *templ, const gchar *name)
 
 
 enum property {
-	PROP_DUMMY = 1
+	PROP_PAD_TYPE = 1,
+	PROP_COMMENT
 };
 
 
@@ -98,6 +140,15 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GstFrPad *pad = GST_FRPAD(object);
 
 	switch(id) {
+	case PROP_PAD_TYPE:
+		pad->pad_type = g_value_get_enum(value);
+		break;
+
+	case PROP_COMMENT:
+		g_free(pad->comment);
+		pad->comment = g_value_dup_string(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -110,10 +161,29 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GstFrPad *pad = GST_FRPAD(object);
 
 	switch(id) {
+	case PROP_PAD_TYPE:
+		g_value_set_enum(value, pad->pad_type);
+		break;
+
+	case PROP_COMMENT:
+		g_value_set_string(value, pad->comment);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+}
+
+
+static void finalize(GObject *object)
+{
+	GstFrPad *pad = GST_FRPAD(object);
+
+	g_free(pad->comment);
+	pad->comment = NULL;
+
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -127,8 +197,33 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_PAD_TYPE,
+		g_param_spec_enum(
+			"pad-type",
+			"Pad type",
+			"Pad type.",
+			GST_FRPAD_TYPE_TYPE,
+			DEFAULT_PAD_TYPE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_COMMENT,
+		g_param_spec_string(
+			"comment",
+			"Comment",
+			"Comment field.  Validity:  FrAdcData, FrProcData, FrSimData.",
+			DEFAULT_COMMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
