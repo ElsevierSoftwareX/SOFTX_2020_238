@@ -61,6 +61,10 @@ typedef struct {
 	gboolean skip_bad_files;
 	GHashTable *channel_list;
 	GstTagList *tag_list;
+
+	gchar *frame_name;
+	gint frame_run;
+	guint frame_number;
 } GstFrameCPPChannelDemux;
 
 

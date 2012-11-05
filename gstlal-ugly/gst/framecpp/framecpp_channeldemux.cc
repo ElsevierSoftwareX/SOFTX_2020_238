@@ -108,6 +108,9 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement,
 
 #define DEFAULT_DO_FILE_CHECKSUM FALSE
 #define DEFAULT_SKIP_BAD_FILES FALSE
+#define DEFAULT_FRAME_NAME ""
+#define DEFAULT_FRAME_RUN -1
+#define DEFAULT_FRAME_NUMBER 0
 
 
 /*
@@ -255,7 +258,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
  */
 
 
-static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
+static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum gst_frpad_type_t pad_type)
 {
 	GstFrPad *srcpad;
 	struct pad_state *pad_state;
@@ -264,8 +267,9 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 	 * construct the pad
 	 */
 
-	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src_%d"), name);
+	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "%s"), name);
 	g_assert(srcpad != NULL);
+	g_object_set(srcpad, "pad-type", pad_type, NULL);
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
 	/*
@@ -340,7 +344,7 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
  */
 
 
-static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, gboolean *pad_added)
+static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, enum gst_frpad_type_t pad_type, gboolean *pad_added)
 {
 	GstPad *srcpad;
 
@@ -351,8 +355,10 @@ static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, g
 
 	srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 	if(!srcpad) {
-		srcpad = add_pad(element, name);
+		srcpad = add_pad(element, name, pad_type);
 		*pad_added = TRUE;
+	} else {
+		/* FIXME:  bother checking if pad_type is correct? */
 	}
 
 	return srcpad;
@@ -401,7 +407,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gu
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,	/* FIXME:  for Adc use nBits */
 			"signed", G_TYPE_BOOLEAN, TRUE,
 			NULL);
 		break;
@@ -415,7 +421,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gu
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,	/* FIXME;  for Adc use nBits */
 			"signed", G_TYPE_BOOLEAN, FALSE,
 			NULL);
 		break;
@@ -794,6 +800,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				break;
 			}
 
+			if(strcmp(frame->GetName().c_str(), element->frame_name)) {
+				g_free(element->frame_name);
+				element->frame_name = g_strdup(frame->GetName().c_str());
+				g_object_notify(G_OBJECT(element), "frame-name");
+			}
+			if(frame->GetRun() != element->frame_run) {
+				element->frame_run = frame->GetRun();
+				g_object_notify(G_OBJECT(element), "frame-run");
+			}
+			if(frame->GetFrame() != element->frame_number) {
+				element->frame_number = frame->GetFrame();
+				g_object_notify(G_OBJECT(element), "frame-number");
+			}
+
 			/*
 			 * determine frame timestamp.  GPS epoch - Unix epoch = 315964800 s
 			 *
@@ -833,6 +853,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 * comment and units in tags.
 					 */
 
+#if 0
+					/* FIXME:  use these for something */
+					(*current)->GetComment().c_str();
+					(*current)->GetChannelGroup();
+					(*current)->GetChannelNumber();
+					(*current)->GetNBits();
+#endif
+
 					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 					/*
@@ -847,7 +875,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						GST_LOG_OBJECT(element, "skipping: channel not requested");
 						continue;
 					}
-					srcpad = get_src_pad(element, name, &pads_added);
+					srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRADCDATA, &pads_added);
 					if(need_tags)
 						((struct pad_state *) gst_pad_get_element_private(srcpad))->need_tags = TRUE;
 					if(!gst_pad_is_linked(srcpad)) {
@@ -904,6 +932,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * FIXME:  encode comment in tags
 				 */
 
+#if 0
+				/* FIXME:  use these for something */
+				(*current)->GetComment();
+#endif
+
 				GST_LOG_OBJECT(element, "found FrProcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
@@ -917,7 +950,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					GST_LOG_OBJECT(element, "skipping: channel not requested");
 					continue;
 				}
-				srcpad = get_src_pad(element, name, &pads_added);
+				srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRPROCDATA, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
@@ -962,6 +995,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * FIXME:  encode comment in tags
 				 */
 
+#if 0
+				/* FIXME:  use these for something */
+				(*current)->GetComment();
+#endif
+
 				GST_LOG_OBJECT(element, "found FrSimData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
@@ -975,7 +1013,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					GST_LOG_OBJECT(element, "skipping: channel not requested");
 					continue;
 				}
-				srcpad = get_src_pad(element, name, &pads_added);
+				srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRSIMDATA, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
@@ -1061,7 +1099,10 @@ done:
 enum property {
 	ARG_DO_FILE_CHECKSUM = 1,
 	ARG_SKIP_BAD_FILES,
-	ARG_CHANNEL_LIST
+	ARG_CHANNEL_LIST,
+	ARG_FRAME_NAME,
+	ARG_FRAME_RUN,
+	ARG_FRAME_NUMBER
 };
 
 
@@ -1137,6 +1178,18 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 		break;
 	}
 
+	case ARG_FRAME_NAME:
+		g_value_set_string(value, element->frame_name);
+		break;
+
+	case ARG_FRAME_RUN:
+		g_value_set_int(value, element->frame_run);
+		break;
+
+	case ARG_FRAME_NUMBER:
+		g_value_set_uint(value, element->frame_number);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1171,6 +1224,8 @@ static void finalize(GObject * object)
 	element->channel_list = NULL;
 	gst_tag_list_free(element->tag_list);
 	element->tag_list = NULL;
+	g_free(element->frame_name);
+	element->frame_name = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1182,7 +1237,7 @@ static void finalize(GObject * object)
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src_%d",
+	"%s",
 	GST_PAD_SRC,
 	GST_PAD_SOMETIMES,
 	GST_STATIC_CAPS(
@@ -1302,7 +1357,7 @@ static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass
 		g_param_spec_value_array(
 			"channel-list",
 			"Channel list",
-			"Restrict demultiplexed channels to those in this list.  An empty list (default) causes all channels to be demultiplexed.  This is provided as a performance aid when demultiplexing files with large numbers of channels, like level 0 frame files.",
+			"Restrict demultiplexed channels to those in this list.  An empty list (default) causes all channels to be demultiplexed.  The use of this feature can improve performance when demultiplexing files with large numbers of channels;  it can be ignored for small files.  It is not an error for names in this list to not appear in the frame files.",
 			g_param_spec_string(
 				"channel",
 				"Channel name",
@@ -1311,6 +1366,40 @@ static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass
 				(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
 			),
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_NAME,
+		g_param_spec_string(
+			"frame-name",
+			"Frame name",
+			"Name appearing in frame header.",
+			DEFAULT_FRAME_NAME,
+			(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
+		)
+	);
+	G_PARAM_SPEC_STRING(g_object_class_find_property(gobject_class, "frame-name"))->ensure_non_null = TRUE;
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_RUN,
+		g_param_spec_int(
+			"frame-run",
+			"Run number",
+			"Run number appearing in frame header.",
+			G_MININT, G_MAXINT, DEFAULT_FRAME_RUN,
+			(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FRAME_NUMBER,
+		g_param_spec_uint(
+			"frame-number",
+			"Frame number",
+			"Current frame number.",
+			0, G_MAXUINT, DEFAULT_FRAME_NUMBER,
+			(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
 		)
 	);
 }
@@ -1337,4 +1426,7 @@ static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element, GstFram
 	element->last_new_segment = NULL;
 	element->channel_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	element->tag_list = gst_tag_list_new();
+	element->frame_name = g_strdup(DEFAULT_FRAME_NAME);
+	element->frame_run = DEFAULT_FRAME_RUN;
+	element->frame_number = DEFAULT_FRAME_NUMBER;
 }
