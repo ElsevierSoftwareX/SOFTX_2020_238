@@ -69,7 +69,7 @@ typedef struct {
 
 	gchar *frame_name;
 	gint frame_run;
-	gint frame_number;
+	guint frame_number;
 } GstFrameCPPChannelMux;
 
 

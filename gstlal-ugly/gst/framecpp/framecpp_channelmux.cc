@@ -759,7 +759,7 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		break;
 
 	case ARG_FRAME_NUMBER:
-		element->frame_number = g_value_get_int(value);
+		element->frame_number = g_value_get_uint(value);
 		break;
 
 	default:
@@ -795,7 +795,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 		break;
 
 	case ARG_FRAME_NUMBER:
-		g_value_set_int(value, element->frame_number);
+		g_value_set_uint(value, element->frame_number);
 		break;
 
 	default:
@@ -976,11 +976,11 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FRAME_NUMBER,
-		g_param_spec_int(
+		g_param_spec_uint(
 			"frame-number",
 			"Frame number",
 			"Current frame number.",
-			0, G_MAXINT, DEFAULT_FRAME_NUMBER,
+			0, G_MAXUINT, DEFAULT_FRAME_NUMBER,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
