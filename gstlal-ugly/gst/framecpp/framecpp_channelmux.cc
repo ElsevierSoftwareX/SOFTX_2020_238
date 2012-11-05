@@ -548,37 +548,72 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 				for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 					FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
 					framecpp_channelmux_appdata *appdata = get_appdata(data);
+					GstFrPad *frpad = GST_FRPAD(data->pad);
 					/* we own this list */
 					GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
-					if(!buffer_list)
-						continue;
-					GstClockTime buffer_list_t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(buffer_list->data));
-					g_assert_cmpuint(buffer_list_t_start, >=, frame_t_start);
-					g_assert_cmpuint(buffer_list_t_start, <=, frame_t_end);
-					appdata->dims[0].SetNx(gst_util_uint64_scale_int_round(frame_t_end - buffer_list_t_start, appdata->rate, GST_SECOND));
-					char *dest = (char *) g_malloc0(appdata->dims[0].GetNx() * appdata->unit_size);
-					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, dest);	/* FIXME: units? */
-					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), GST_FRPAD(data->pad)->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (frame_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
-					GST_DEBUG_OBJECT(mux, "FrProcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+					if(buffer_list) {
+						GstClockTime buffer_list_t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(buffer_list->data));
+						guint buffer_list_length = gst_util_uint64_scale_int_round(frame_t_end - buffer_list_t_start, appdata->rate, GST_SECOND);
+						char *dest = (char *) g_malloc0(buffer_list_length * appdata->unit_size);
 
-					/*
-					 * copy buffer list contents into FrVect
-					 */
+						g_assert_cmpuint(buffer_list_t_start, >=, frame_t_start);
+						g_assert_cmpuint(buffer_list_t_start, <=, frame_t_end);
 
-					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
-						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
-						memcpy(dest + gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-						gst_buffer_unref(buffer);
+						/*
+						 * copy buffer list
+						 * contents into contiguous
+						 * array
+						 */
+
+						for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
+							GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+							memcpy(dest + gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+							gst_buffer_unref(buffer);
+						}
+
+						/*
+						 * build FrVect from data,
+						 * then Fr{Adc,Proc,Sim}Data
+						 * from FrVect and append
+						 * to frame
+						 */
+
+						appdata->dims[0].SetNx(buffer_list_length);
+						FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, dest);	/* FIXME: units? */
+						switch(frpad->pad_type) {
+						case GST_FRPAD_TYPE_FRADCDATA: {
+							g_assert_not_reached();	/* FIXME:  implement FrAdcData support */
+							/*
+							FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate);
+							GST_DEBUG_OBJECT(mux, "FrAdcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+							adc_data.RefData().append(vect);
+							frame->RefAdcData().append(adc_data);
+							*/
+							break;
+						}
+
+						case GST_FRPAD_TYPE_FRPROCDATA: {
+							FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (frame_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
+							GST_DEBUG_OBJECT(mux, "FrProcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+							proc_data.RefData().append(vect);
+							frame->RefProcData().append(proc_data);
+							break;
+						}
+
+						case GST_FRPAD_TYPE_FRSIMDATA: {
+							FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND);
+							GST_DEBUG_OBJECT(mux, "FrSimData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+							sim_data.RefData().append(vect);
+							frame->RefSimData().append(sim_data);
+							break;
+						}
+
+						default:
+							g_assert_not_reached();
+							break;
+						}
+						g_free(dest);
 					}
-
-					/*
-					 * build FrProcData from FrVect and
-					 * append to frame
-					 */
-
-					proc_data.RefData().append(vect);
-					frame->RefProcData().append(proc_data);
-					g_free(dest);
 				}
 
 				/*
