@@ -285,18 +285,20 @@ static void waiting_handler(FrameCPPMuxQueue *queue, FrameCPPMuxCollectPadsData 
 	GST_DEBUG_OBJECT(collectpads, "woken by %" GST_PTR_FORMAT, activedata->pad);
 
 	GST_OBJECT_LOCK(collectpads);
+	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 
 	/*
 	 * loop over queues
 	 */
 
-	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		FrameCPPMuxCollectPadsData *data = collectdatalist->data;
 		GstClockTime t_start = framecpp_muxqueue_timestamp(data->queue);
 		GstClockTime t_end = t_start + framecpp_muxqueue_duration(data->queue);;
 
 		if(!GST_CLOCK_TIME_IS_VALID(t_start)) {
+			if(data->eos)
+				continue;
 			if(data->segment.format == GST_FORMAT_UNDEFINED) {
 				GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT " has no data, no segment;  going back to sleep", data->pad);
 				goto done;
@@ -506,7 +508,7 @@ GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *data, GstCl
 	 */
 
 	queue_timestamp = framecpp_muxqueue_timestamp(data->queue);
-	if(t_end > queue_timestamp) {
+	if(GST_CLOCK_TIME_IS_VALID(queue_timestamp) && t_end > queue_timestamp) {
 		result = framecpp_muxqueue_get_list(data->queue, t_end - queue_timestamp);
 		framecpp_muxqueue_flush(data->queue, t_end - queue_timestamp);
 	}
