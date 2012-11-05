@@ -98,10 +98,17 @@ static guint signals[NUM_SIGNALS] = {0, };
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
 {
 	FrameCPPMuxCollectPadsData *data = gst_pad_get_element_private(pad);
+	FrameCPPMuxCollectPads *collectpads = data->collect;
+	GstFlowReturn result;
+
+	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
 	if(data->eos || data->segment.format == GST_FORMAT_UNDEFINED)
-		return GST_FLOW_UNEXPECTED;
-	return framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
+		result = GST_FLOW_UNEXPECTED;
+	else
+		result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
+
+	return result;
 }
 
 
