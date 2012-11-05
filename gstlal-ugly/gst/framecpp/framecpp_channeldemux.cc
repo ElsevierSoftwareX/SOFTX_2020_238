@@ -72,6 +72,7 @@
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
+#include <gstfrpad.h>
 
 
 /*
@@ -256,14 +257,14 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 
 static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
-	GstPad *srcpad;
+	GstFrPad *srcpad;
 	struct pad_state *pad_state;
 
 	/*
 	 * construct the pad
 	 */
 
-	srcpad = gst_pad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src_%d"), name);
+	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src_%d"), name);
 	g_assert(srcpad != NULL);
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
@@ -284,24 +285,24 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name)
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
-	pad_state->tag_list = get_pad_tag_list(srcpad);
+	pad_state->tag_list = get_pad_tag_list(GST_PAD(srcpad));
 	g_assert(pad_state->tag_list != NULL);
-	gst_pad_set_element_private(srcpad, pad_state);
+	gst_pad_set_element_private(GST_PAD(srcpad), pad_state);
 
 	/*
 	 * add pad to element.  must ref it because _add_pad()
 	 * consumes a reference
 	 */
 
-	gst_pad_set_active(srcpad, TRUE);
+	gst_pad_set_active(GST_PAD(srcpad), TRUE);
 	gst_object_ref(srcpad);
-	gst_element_add_pad(GST_ELEMENT(element), srcpad);
+	gst_element_add_pad(GST_ELEMENT(element), GST_PAD(srcpad));
 
 	/*
 	 * done
 	 */
 
-	return srcpad;
+	return GST_PAD(srcpad);
 }
 
 

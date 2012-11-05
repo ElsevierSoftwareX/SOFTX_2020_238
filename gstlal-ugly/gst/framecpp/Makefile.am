@@ -4,6 +4,7 @@ plugin_LTLIBRARIES = libframecpp_plugin.la
 
 libframecpp_plugin_la_SOURCES = \
 	framecpp_plugin.c \
+	gstfrpad.c gstfrpad.h \
 	marshal.c marshal.h \
 	muxqueue.c muxqueue.h \
 	muxcollectpads.c muxcollectpads.h \

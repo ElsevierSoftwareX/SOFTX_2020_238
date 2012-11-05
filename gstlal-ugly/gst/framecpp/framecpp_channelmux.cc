@@ -72,6 +72,7 @@
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
+#include <gstfrpad.h>
 #include <framecpp_channelmux.h>
 #include <muxcollectpads.h>
 #include <muxqueue.h>
@@ -428,23 +429,23 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(element);
 	FrameCPPMuxCollectPadsData *data;
-	GstPad *pad;
+	GstFrPad *pad;
 
 	/*
 	 * construct the pad
 	 */
 
-	pad = gst_pad_new_from_template(templ, name);
+	pad = gst_frpad_new_from_template(templ, name);
 	if(!pad)
 		goto no_pad;
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
+	gst_pad_set_setcaps_function(GST_PAD(pad), GST_DEBUG_FUNCPTR(sink_setcaps));
 
 	/*
 	 * add pad to element.
 	 */
 
 	GST_OBJECT_LOCK(mux->collect);
-	data = framecpp_muxcollectpads_add_pad(mux->collect, pad, (FrameCPPMuxCollectPadsDataDestroyNotify) GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
+	data = framecpp_muxcollectpads_add_pad(mux->collect, GST_PAD(pad), (FrameCPPMuxCollectPadsDataDestroyNotify) GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
 	if(!data)
 		goto could_not_add_to_collectpads;
 	framecpp_muxcollectpads_set_event_function(data, GST_DEBUG_FUNCPTR(sink_event));
@@ -453,7 +454,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 		goto could_not_create_appdata;
 	get_appdata(data)->nDims = 1;
 	get_appdata(data)->dims = new FrameCPP::Dimension[get_appdata(data)->nDims];
-	if(!gst_element_add_pad(element, pad))
+	if(!gst_element_add_pad(element, GST_PAD(pad)))
 		goto could_not_add_to_element;
 	GST_OBJECT_UNLOCK(mux->collect);
 
@@ -461,7 +462,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	 * done
 	 */
 
-	return pad;
+	return GST_PAD(pad);
 
 	/*
 	 * errors
@@ -469,7 +470,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 
 could_not_add_to_element:
 could_not_create_appdata:
-	framecpp_muxcollectpads_remove_pad(mux->collect, pad);
+	framecpp_muxcollectpads_remove_pad(mux->collect, GST_PAD(pad));
 could_not_add_to_collectpads:
 	gst_object_unref(pad);
 	GST_OBJECT_UNLOCK(mux->collect);
