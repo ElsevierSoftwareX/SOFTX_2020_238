@@ -376,6 +376,7 @@ class DistributionsStats(object):
 	binnings = {
 		"H1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H1H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"L1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"V1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
 	}
@@ -388,6 +389,7 @@ class DistributionsStats(object):
 	filters = {
 		"H1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
 		"H2_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
+		"H1H2_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
 		"L1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
 		"V1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10)
 	}
