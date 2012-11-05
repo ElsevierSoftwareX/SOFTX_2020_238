@@ -457,6 +457,24 @@ void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *data
 
 
 /**
+ * Set all pads to flushing or not flushing
+ */
+
+
+void framecpp_muxcollectpads_set_flushing(FrameCPPMuxCollectPads *collectpads, gboolean flushing)
+{
+	GSList *pad_list;
+
+	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
+	for(pad_list = collectpads->pad_list; pad_list; pad_list = g_slist_next(pad_list)) {
+		FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) pad_list->data;
+		framecpp_muxqueue_set_flushing(data->queue, flushing);
+	}
+	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+}
+
+
+/**
  * Start the collect pads
  */
 
@@ -467,6 +485,7 @@ void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *collectpads)
 	collectpads->min_t_start = GST_CLOCK_TIME_NONE;
 	collectpads->min_t_end = GST_CLOCK_TIME_NONE;
 	collectpads->started = TRUE;
+	framecpp_muxcollectpads_set_flushing(collectpads, FALSE);
 	GST_OBJECT_UNLOCK(collectpads);
 }
 
@@ -480,6 +499,7 @@ void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *collectpads)
 {
 	GST_OBJECT_LOCK(collectpads);
 	collectpads->started = FALSE;
+	framecpp_muxcollectpads_set_flushing(collectpads, TRUE);
 	GST_OBJECT_UNLOCK(collectpads);
 }
 
@@ -557,8 +577,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		GSList *pad_list;
 		collectpads->max_size_time = g_value_get_uint64(value);
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
-		for(pad_list = collectpads->pad_list; pad_list; pad_list = g_slist_next(pad_list))
-			g_object_set(FRAMECPP_MUXQUEUE(pad_list->data), "max-size-time", collectpads->max_size_time, NULL);
+		for(pad_list = collectpads->pad_list; pad_list; pad_list = g_slist_next(pad_list)) {
+			FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) pad_list->data;
+			g_object_set(data->queue, "max-size-time", collectpads->max_size_time, NULL);
+		}
 		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
 		break;
 	}

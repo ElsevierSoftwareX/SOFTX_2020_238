@@ -142,6 +142,7 @@ struct _FrameCPPMuxCollectPadsData {
 FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *, GstPad *, FrameCPPMuxCollectPadsDataDestroyNotify);
 gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *, GstPad *);
 void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *, GstPadEventFunction);
+void framecpp_muxcollectpads_set_flushing(FrameCPPMuxCollectPads *, gboolean);
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);
