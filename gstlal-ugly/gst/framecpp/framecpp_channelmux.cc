@@ -558,7 +558,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 					appdata->dims[0].SetNx(gst_util_uint64_scale_int_round(frame_t_end - buffer_list_t_start, appdata->rate, GST_SECOND));
 					char *dest = (char *) g_malloc0(appdata->dims[0].GetNx() * appdata->unit_size);
 					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, dest);	/* FIXME: units? */
-					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), "", 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (frame_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
+					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), GST_FRPAD(data->pad)->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (frame_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
 					GST_DEBUG_OBJECT(mux, "FrProcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
 
 					/*

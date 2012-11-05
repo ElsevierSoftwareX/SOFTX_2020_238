@@ -104,7 +104,6 @@ struct _GstFrPadClass {
 struct _GstFrPad {
 	GstPad pad;
 
-	/*< private >*/
 	enum gst_frpad_type_t pad_type;
 	gchar *comment;
 };
