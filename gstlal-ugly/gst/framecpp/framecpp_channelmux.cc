@@ -740,13 +740,13 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	switch(id) {
 	case ARG_FRAME_DURATION:
-		element->frame_duration = g_value_get_int(value) * GST_SECOND;
-		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration), NULL);
+		element->frame_duration = g_value_get_uint(value) * GST_SECOND;
+		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) FRAME_FILE_DURATION(element), NULL);
 		break;
 
 	case ARG_FRAMES_PER_FILE:
-		element->frames_per_file = g_value_get_int(value);
-		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) (element->frames_per_file * element->frame_duration), NULL);
+		element->frames_per_file = g_value_get_uint(value);
+		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) FRAME_FILE_DURATION(element), NULL);
 		break;
 
 	case ARG_FRAME_NAME:
@@ -779,11 +779,11 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	switch(id) {
 	case ARG_FRAME_DURATION:
-		g_value_set_int(value, element->frame_duration / GST_SECOND);
+		g_value_set_uint(value, element->frame_duration / GST_SECOND);
 		break;
 
 	case ARG_FRAMES_PER_FILE:
-		g_value_set_int(value, element->frames_per_file);
+		g_value_set_uint(value, element->frames_per_file);
 		break;
 
 	case ARG_FRAME_NAME:
@@ -931,22 +931,22 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FRAME_DURATION,
-		g_param_spec_int(
+		g_param_spec_uint(
 			"frame-duration",
 			"Frame duration",
 			"Duration of each frame in seconds.",
-			1, G_MAXINT, DEFAULT_FRAME_DURATION,
+			1, G_MAXUINT, DEFAULT_FRAME_DURATION,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FRAMES_PER_FILE,
-		g_param_spec_int(
+		g_param_spec_uint(
 			"frames-per-file",
 			"Frames per file",
 			"Number of frames in each frame file.",
-			1, G_MAXINT, DEFAULT_FRAMES_PER_FILE,
+			1, G_MAXUINT, DEFAULT_FRAMES_PER_FILE,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
