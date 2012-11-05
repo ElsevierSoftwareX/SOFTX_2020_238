@@ -1181,7 +1181,7 @@ static void finalize(GObject * object)
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"%s",
+	"src_%d",
 	GST_PAD_SRC,
 	GST_PAD_SOMETIMES,
 	GST_STATIC_CAPS(
