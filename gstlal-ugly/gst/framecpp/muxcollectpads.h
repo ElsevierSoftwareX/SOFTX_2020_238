@@ -99,7 +99,6 @@ struct _FrameCPPMuxCollectPads {
 	gboolean started;
 	GstClockTime min_t_start;
 	GstClockTime min_t_end;
-	GCond *min_t_changed;
 };
 
 
@@ -135,14 +134,14 @@ struct _FrameCPPMuxCollectPadsData {
  */
 
 
-#define FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(pads) g_mutex_lock(pads->pad_list_lock)
-#define FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(pads) g_mutex_unlock(pads->pad_list_lock)
+#define FRAMECPP_MUXCOLLECTPADS_PADS_GETLOCK(pads) (pads->pad_list_lock)
+#define FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(pads) g_mutex_lock(FRAMECPP_MUXCOLLECTPADS_PADS_GETLOCK(pads))
+#define FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(pads) g_mutex_unlock(FRAMECPP_MUXCOLLECTPADS_PADS_GETLOCK(pads))
 
 
 FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPads *, GstPad *, FrameCPPMuxCollectPadsDataDestroyNotify);
 gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *, GstPad *);
 void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *, GstPadEventFunction);
-void framecpp_muxcollectpads_task(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);

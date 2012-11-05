@@ -105,8 +105,9 @@ struct _FrameCPPMuxQueue {
  */
 
 
-#define FRAMECPP_MUXQUEUE_LOCK(queue) g_mutex_lock(queue->lock)
-#define FRAMECPP_MUXQUEUE_UNLOCK(queue) g_mutex_unlock(queue->lock)
+#define FRAMECPP_MUXQUEUE_GETLOCK(queue) (queue->lock)
+#define FRAMECPP_MUXQUEUE_LOCK(queue) g_mutex_lock(FRAMECPP_MUXQUEUE_GETLOCK(queue))
+#define FRAMECPP_MUXQUEUE_UNLOCK(queue) g_mutex_unlock(FRAMECPP_MUXQUEUE_GETLOCK(queue))
 
 
 GstClockTime framecpp_muxqueue_timestamp(FrameCPPMuxQueue *);

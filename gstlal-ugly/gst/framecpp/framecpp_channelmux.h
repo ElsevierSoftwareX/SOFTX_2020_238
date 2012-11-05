@@ -61,6 +61,7 @@ typedef struct {
 	FrameCPPMuxCollectPads *collect;
 	GstPad *srcpad;
 
+	gboolean need_discont;
 	guint64 next_out_offset;
 
 	gint frame_duration;

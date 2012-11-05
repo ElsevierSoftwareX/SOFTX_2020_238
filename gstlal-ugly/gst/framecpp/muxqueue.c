@@ -51,6 +51,24 @@ GST_BOILERPLATE(FrameCPPMuxQueue, framecpp_muxqueue, GstAudioAdapter, GST_TYPE_A
 /*
  * ============================================================================
  *
+ *                                  Signals
+ *
+ * ============================================================================
+ */
+
+
+enum framecpp_muxqueue_signals {
+	SIGNAL_WAITING,
+	NUM_SIGNALS
+};
+
+
+static guint signals[NUM_SIGNALS] = {0, };
+
+
+/*
+ * ============================================================================
+ *
  *                             Internal Functions
  *
  * ============================================================================
@@ -70,6 +88,7 @@ static GstClockTime _framecpp_muxqueue_t_start(FrameCPPMuxQueue *queue)
 
 static GstClockTime _framecpp_muxqueue_t_end(FrameCPPMuxQueue *queue)
 {
+	/* see static function expected_timestamp() in gstaudioadapter.c */
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
 
@@ -132,6 +151,7 @@ GstClockTime framecpp_muxqueue_duration(FrameCPPMuxQueue *queue)
 gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
+	gboolean abswitch = FALSE;
 	gboolean success = TRUE;
 
 	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
@@ -140,16 +160,12 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	while(queue->max_size_time && !queue->flushing && _framecpp_muxqueue_duration(queue) >= queue->max_size_time) {
-		/*
-		 * NOTE:  the signal is emitted with the queue's lock held.
-		 * for example, signal handlers cannot flush data from the
-		 * queue.  the signal handler can only trigger a condition
-		 * in a second task (whose existance is left as an exercise
-		 * for the calling code) that can wait to acquire the lock
-		 * and modify the queue's contents at that time.
-		 */
-		g_signal_emit_by_name(queue, "waiting", _framecpp_muxqueue_t_start(queue), _framecpp_muxqueue_t_end(queue));
-		g_cond_wait(queue->activity, queue->lock);
+		if(abswitch ^= TRUE) {
+			FRAMECPP_MUXQUEUE_UNLOCK(queue);
+			g_signal_emit(queue, signals[SIGNAL_WAITING], 0);
+			FRAMECPP_MUXQUEUE_LOCK(queue);
+		} else
+			g_cond_wait(queue->activity, FRAMECPP_MUXQUEUE_GETLOCK(queue));
 	}
 	if(!queue->flushing) {
 		gst_audioadapter_push(adapter, buf);
@@ -216,24 +232,6 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 
 	return result;
 }
-
-
-/*
- * ============================================================================
- *
- *                                  Signals
- *
- * ============================================================================
- */
-
-
-enum framecpp_muxqueue_signals {
-	SIGNAL_WAITING,
-	NUM_SIGNALS
-};
-
-
-static guint signals[NUM_SIGNALS] = {0, };
 
 
 /*
@@ -363,11 +361,9 @@ static void framecpp_muxqueue_class_init(FrameCPPMuxQueueClass *klass)
 		),
 		NULL,
 		NULL,
-		framecpp_marshal_VOID__CLOCK_TIME__CLOCK_TIME,
+		g_cclosure_marshal_VOID__VOID,
 		G_TYPE_NONE,
-		2,
-		G_TYPE_UINT64,
-		G_TYPE_UINT64
+		0
 	);
 }
 
