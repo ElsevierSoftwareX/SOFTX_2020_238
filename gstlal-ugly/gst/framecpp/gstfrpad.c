@@ -59,6 +59,9 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 
 #define DEFAULT_PAD_TYPE GST_FRPAD_TYPE_FRPROCDATA
 #define DEFAULT_COMMENT ""
+#define DEFAULT_CHANNEL_GROUP 0
+#define DEFAULT_CHANNEL_NUMBER 0
+#define DEFAULT_NBITS 1	/* FIXME:  is there a "not set" value?  -1? */
 
 
 /*
@@ -131,7 +134,10 @@ GstFrPad *gst_frpad_new_from_template(GstPadTemplate *templ, const gchar *name)
 
 enum property {
 	PROP_PAD_TYPE = 1,
-	PROP_COMMENT
+	PROP_COMMENT,
+	PROP_CHANNEL_GROUP,
+	PROP_CHANNEL_NUMBER,
+	PROP_NBITS,
 };
 
 
@@ -147,6 +153,18 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_COMMENT:
 		g_free(pad->comment);
 		pad->comment = g_value_dup_string(value);
+		break;
+
+	case PROP_CHANNEL_GROUP:
+		pad->channel_group = g_value_get_uint(value);
+		break;
+
+	case PROP_CHANNEL_NUMBER:
+		pad->channel_number = g_value_get_uint(value);
+		break;
+
+	case PROP_NBITS:
+		pad->nbits = g_value_get_uint(value);
 		break;
 
 	default:
@@ -167,6 +185,18 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_COMMENT:
 		g_value_set_string(value, pad->comment);
+		break;
+
+	case PROP_CHANNEL_GROUP:
+		g_value_set_uint(value, pad->channel_group);
+		break;
+
+	case PROP_CHANNEL_NUMBER:
+		g_value_set_uint(value, pad->channel_number);
+		break;
+
+	case PROP_NBITS:
+		g_value_set_uint(value, pad->nbits);
 		break;
 
 	default:
@@ -221,6 +251,39 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Comment",
 			"Comment field.  Validity:  FrAdcData, FrProcData, FrSimData.",
 			DEFAULT_COMMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_CHANNEL_GROUP,
+		g_param_spec_uint(
+			"channel-group",
+			"Channel group",
+			"Channel group.  Validity:  FrAdcData.",
+			0, G_MAXUINT, DEFAULT_CHANNEL_GROUP,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_CHANNEL_NUMBER,
+		g_param_spec_uint(
+			"channel-number",
+			"Channel number",
+			"Channel number.  Validity:  FrAdcData.",
+			0, G_MAXUINT, DEFAULT_CHANNEL_NUMBER,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_NBITS,
+		g_param_spec_uint(
+			"nbits",
+			"Number of bits",
+			"Number of bits in A/D output.  Validity:  FrAdcData.",
+			1, G_MAXUINT, DEFAULT_NBITS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

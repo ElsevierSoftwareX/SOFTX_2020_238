@@ -105,7 +105,10 @@ struct _GstFrPad {
 	GstPad pad;
 
 	enum gst_frpad_type_t pad_type;
-	gchar *comment;
+	gchar *comment;		/* FrAdcData, FrProcData, FrSimData */
+	guint channel_group;	/* FrAdcData */
+	guint channel_number;	/* FrAdcData */
+	guint nbits;		/* FrAdcData */
 };
 
 
