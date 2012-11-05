@@ -167,7 +167,10 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 		} else
 			g_cond_wait(queue->activity, FRAMECPP_MUXQUEUE_GETLOCK(queue));
 	}
-	if(!queue->flushing) {
+	if(queue->flushing) {
+		gst_buffer_unref(buf);
+		/*success = FALSE;*/	/* FIXME:  is it? */
+	} else {
 		gst_audioadapter_push(adapter, buf);
 		g_cond_broadcast(queue->activity);
 	}
@@ -216,6 +219,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 		result->data = gst_buffer_make_metadata_writable(GST_BUFFER(result->data));
 		GST_BUFFER_TIMESTAMP(result->data) = _framecpp_muxqueue_t_start(queue);
 	}
+	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 	/* require all buffers in list to be contiguous */
 	for(head = result; head && g_list_next(head); head = g_list_next(head)) {
 		GstBuffer *this = GST_BUFFER(head->data);
@@ -228,7 +232,6 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 		GstBuffer *buf = head->data = gst_buffer_make_metadata_writable(GST_BUFFER(head->data));
 		GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf), GST_SECOND, queue->rate);
 	}
-	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 
 	return result;
 }
