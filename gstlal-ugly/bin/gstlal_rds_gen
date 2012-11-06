@@ -1,0 +1,174 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import os
+import sys
+
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+
+from gstlal import pipeparts
+from gstlal import simplehandler
+
+
+def excepthook(*args):
+	# system exception hook that forces hard exit.  without this,
+	# exceptions that occur inside python code invoked as a call-back
+	# from the gstreamer pipeline just stop the pipeline, they don't
+	# cause gstreamer to exit.
+
+	# FIXME:  they probably *would* cause if we could figure out why
+	# element errors and the like simply stop the pipeline instead of
+	# crashing it, as well.  Perhaps this should be removed when/if the
+	# "element error's don't crash program" problem is fixed
+	sys.__excepthook__(*args)
+	os._exit(1)
+
+sys.excepthook = excepthook
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = __doc__
+	)
+	parser.add_option("--channel-name", metavar = "name", default = [], action = "append", help = "Include this channel name in the output.")
+	parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
+	parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
+	parser.add_option("--output-pattern", metavar = "pattern", default = "RDS_%05d.gwf", help = "Set the pattern used to generate the names of the output file set (default = \"RDS_%05d.gwf\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+
+	options, filenames = parser.parse_args()
+
+	if not options.channel_name:
+		raise ValueError("must select at least one channel")
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                  Utilities
+#
+# =============================================================================
+#
+
+
+def pad_added_handler(demux, srcpad, (pipeline, mux)):
+	sinkpad = mux.get_pad(srcpad.get_name())
+	srcpad.link(sinkpad)
+
+	#for prop in ("pad-type", "comment", "channel-group", "channel-number", "nbits"):
+	#	srcpad.bind_property(prop, sinkpad, prop, gobject.BINDING_DEFAULT | gobject.BINDING_SYNC_CREATE)
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames = parse_command_line()
+input_cache, = filenames
+
+
+#
+# Build pipeline
+#
+
+
+pipeline = gst.Pipeline("gstlal_rds_gen")
+mainloop = gobject.MainLoop()
+
+handler = simplehandler.Handler(mainloop, pipeline)
+
+
+demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklalcachesrc(pipeline, input_cache), do_file_checksum = False, channel_list = options.channel_name)
+mux = pipeparts.mkframecppchannelmux(pipeline, None)
+pipeparts.mkmultifilesink(pipeline, mux, location = options.output_pattern)
+
+if options.frame_duration is not None:
+	mux.set_property("frame-duration", options.frame_duration)
+if options.frames_per_file is not None:
+	mux.set_property("frames-per-file", options.frames_per_file)
+#demux.bind_property("frame-name", mux, "frame-name", gobject.BINDING_DEFAULT | gobject.BINDING_SYNC_CREATE)
+#demux.bind_property("frame-run", mux, "frame-run", gobject.BINDING_DEFAULT | gobject.BINDING_SYNC_CREATE)
+demux.connect("pad-added", pad_added_handler, (pipeline, mux))
+
+
+#
+# Run pipeline
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+pipeline.set_state(gst.STATE_PLAYING)
+#if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+#	raise RuntimeError("pipeline did not enter playing state")
+
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+
+
+mainloop.run()
+
+
+#
+# done
+#
