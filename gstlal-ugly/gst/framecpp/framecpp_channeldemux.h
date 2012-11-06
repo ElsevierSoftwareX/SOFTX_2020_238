@@ -62,6 +62,9 @@ typedef struct {
 	GHashTable *channel_list;
 	GstTagList *tag_list;
 
+	guint frame_format_version;
+	guint frame_library_version;
+	gchar *frame_library_name;
 	gchar *frame_name;
 	gint frame_run;
 	guint frame_number;
