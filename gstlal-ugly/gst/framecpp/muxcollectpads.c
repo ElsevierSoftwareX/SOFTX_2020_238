@@ -559,6 +559,27 @@ GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *data, GstCl
 }
 
 
+/**
+ * Return the extent of the buffers in the buffer list, for example as
+ * returned by framecpp_muxcollectpads_take_list().  The buffer list cannot
+ * be empty.
+ */
+
+
+void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t_start, GstClockTime *t_end)
+{
+	GstBuffer *last;
+
+	g_assert(list != NULL);
+
+	*t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_first(list)->data));
+	last = GST_BUFFER(g_list_last(list)->data);
+	*t_end = GST_BUFFER_TIMESTAMP(last) + GST_BUFFER_DURATION(last);
+
+	g_assert_cmpuint(*t_start, <=, *t_end);
+}
+
+
 /*
  * ============================================================================
  *
