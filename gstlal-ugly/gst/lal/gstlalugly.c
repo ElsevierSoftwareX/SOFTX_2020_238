@@ -63,6 +63,7 @@
 #include <gstlal_pad.h>
 #include <gstlal_trim.h>
 #include <gstlal_burst_triggergen.h>
+#include <gstlal_cachesrc.h>
 
 
 /*
@@ -93,6 +94,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_pad", GST_TYPE_LALPAD},
 		{"lal_bursttriggergen", GSTLAL_BURST_TRIGGERGEN_TYPE},
 		{"lal_trim", GST_TYPE_LALTRIM},
+		{"lal_cachesrc", GSTLAL_CACHESRC_TYPE},
 		{NULL, 0},
 	};
 
