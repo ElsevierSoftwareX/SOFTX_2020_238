@@ -221,6 +221,8 @@ static GstTagList *get_pad_tag_list(GstPad *pad)
 		GST_TAG_TITLE, GST_PAD_NAME(pad),
 		GSTLAL_TAG_INSTRUMENT, instrument,
 		GSTLAL_TAG_CHANNEL_NAME, channel,
+		/*GST_TAG_GEO_LOCATION_NAME, observatory,
+		GST_TAG_GEO_LOCATION_SUBLOCATION, instrument,*/
 		GSTLAL_TAG_UNITS, strstr(channel, "STRAIN") ? "strain" : " ",	/* FIXME */
 		NULL
 	);
