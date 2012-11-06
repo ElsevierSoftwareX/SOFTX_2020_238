@@ -134,6 +134,10 @@ def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output
 	return elem
 
 
+def mklalcachesrc(pipeline, location, **properties):
+	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, **properties)
+
+
 def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, cache_src_regex = None, cache_dsc_regex = None, segment_list = None):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., LIGO h(t)
@@ -166,6 +170,14 @@ def mkigwdparse(pipeline, src, **properties):
 
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
+
+
+def mkframecppchannelmux(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "framecpp_channelmux", **properties)
+
+
+def mkmultifilesink(pipeline, src, next_file = 0, **properties):
+	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, **properties)
 
 
 def mkframesink(pipeline, src, **properties):
