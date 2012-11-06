@@ -800,7 +800,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				break;
 			}
 
-			if(strcmp(frame->GetName().c_str(), element->frame_name)) {
+			if(g_strcmp0(frame->GetName().c_str(), element->frame_name)) {
 				g_free(element->frame_name);
 				element->frame_name = g_strdup(frame->GetName().c_str());
 				g_object_notify(G_OBJECT(element), "frame-name");
@@ -826,7 +826,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 			/*GstDateTime *date_time = gst_date_time_new_from_unix_epoch_utc(frame_timestamp / GST_SECOND + 315964800);*/
 
-			gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_ORGANIZATION, frame->GetName().c_str(), NULL);
+			gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_ORGANIZATION, element->frame_name, NULL);
 			/* FIXME:  gst_tag_list_is_equal() is only in >0.10.36
 			if(!gst_tag_list_is_equal(element->tag_list, tag_list)) {
 				gst_tag_list_free(element->tag_list);
@@ -848,19 +848,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
 					const char *name = (*current)->GetName().c_str();
 
-					/*
-					 * FIXME:  encode bias, slope,
-					 * comment and units in tags.
-					 */
-
-#if 0
-					/* FIXME:  use these for something */
-					(*current)->GetComment().c_str();
-					(*current)->GetChannelGroup();
-					(*current)->GetChannelNumber();
-					(*current)->GetNBits();
-#endif
-
 					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 					/*
@@ -878,6 +865,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRADCDATA, &pads_added);
 					if(need_tags)
 						((struct pad_state *) gst_pad_get_element_private(srcpad))->need_tags = TRUE;
+					/* FIXME:  bias, slope, units */
+					g_object_set(srcpad,
+						"comment", (*current)->GetComment().c_str(),
+						"channel-group", (*current)->GetChannelGroup(),
+						"channel-number", (*current)->GetChannelNumber(),
+						"nbits", (*current)->GetNBits(),
+						NULL
+					);
 					if(!gst_pad_is_linked(srcpad)) {
 						GST_LOG_OBJECT(element, "skipping: not linked");
 						gst_object_unref(srcpad);
@@ -928,15 +923,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * time-frequency types in the future
 				 */
 
-				/*
-				 * FIXME:  encode comment in tags
-				 */
-
-#if 0
-				/* FIXME:  use these for something */
-				(*current)->GetComment();
-#endif
-
 				GST_LOG_OBJECT(element, "found FrProcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
@@ -951,6 +937,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					continue;
 				}
 				srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRPROCDATA, &pads_added);
+				/* FIXME: units */
+				g_object_set(srcpad,
+					"comment", (*current)->GetComment().c_str(),
+					NULL
+				);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
@@ -991,15 +982,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
 
-				/*
-				 * FIXME:  encode comment in tags
-				 */
-
-#if 0
-				/* FIXME:  use these for something */
-				(*current)->GetComment();
-#endif
-
 				GST_LOG_OBJECT(element, "found FrSimData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
@@ -1014,6 +996,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					continue;
 				}
 				srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRSIMDATA, &pads_added);
+				/* FIXME: units */
+				g_object_set(srcpad,
+					"comment", (*current)->GetComment().c_str(),
+					NULL
+				);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
