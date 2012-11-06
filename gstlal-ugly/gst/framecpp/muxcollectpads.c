@@ -361,6 +361,8 @@ done:
  * FrameCPPMuxCollectPadsData structure.  The calling code does not own the
  * FrameCPPMuxCollectPadsData structure, it is owned by the
  * FrameCPPMuxCollectPads object for which it has been allocated.
+ *
+ * This function should be called with the collectpads' object lock held.
  */
 
 
@@ -399,6 +401,8 @@ FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPa
 /**
  * Remove a pad from the collect pads.  This is the only way to free a
  * FrameCPPMuxCollectPadsData structure.
+ *
+ * This function should be called with the collectpads' object lock held.
  */
 
 
@@ -516,6 +520,9 @@ void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *collectpads)
  *
  * The calling code owns the list returned by this function.  It should be
  * freed and the buffers unref()ed when no longer needed.
+ *
+ * This function should be called with the pads list lock held, e.g. from
+ * within the "collected" signal handler.
  */
 
 
