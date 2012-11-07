@@ -11,7 +11,6 @@ pkgpython_PYTHON = \
 	bottle.py \
 	coherent_null.py \
 	elements.py \
-	lloidparts.py \
 	matplotlibhelper.py \
 	misc.py \
 	pipeio.py \
@@ -20,7 +19,6 @@ pkgpython_PYTHON = \
 	reference_psd.py \
 	simplehandler.py \
 	simulation.py \
-	multiratefirparts.py \
 	datasource.py
 
 pkgpyexec_LTLIBRARIES = fftw.la _misc.la
