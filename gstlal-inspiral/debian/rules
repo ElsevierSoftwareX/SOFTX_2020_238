@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	. /opt/lscsoft/gst/etc/gstlal.sh; dh $@
+
+override_dh_auto_test:
+	. /opt/lscsoft/gst/etc/gstlal.sh; export PYTHONPATH=$$(pwd)/python; dh $@
+
+override_dh_shlibdeps:
+	. /opt/lscsoft/gst/etc/gstlal.sh; dh "$@" -Xlibgstaudio-0.10.so.0
