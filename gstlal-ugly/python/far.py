@@ -292,28 +292,6 @@ class TrialsTable(dict):
 				out[k] = type(other[k])(other[k].count, other[k].count_below_thresh, other[k].thresh)
 		return out
 
-	def count_from_db(self, connection):
-		"""
-		Increment the trials table count from values stored in the database
-		found in "connection"
-		"""
-		# FIXME tsid is pulled out here but not used, it should probably be removed
-		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
-			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
-			try:
-				self[ifos].count += count
-			except KeyError:
-				self[ifos] = Trials(count)
-
-	def count_below_thresh_from_db(self, connection):
-		"""
-		"""
-		cursor = connection.cursor()
-		for ifos in self:
-			count, = cursor.execute('SELECT count(*) FROM coinc_inspiral WHERE combined_far < ? AND ifos == ?', (self[ifos].thresh, lsctables.ifos_from_instrument_set(ifos))).fetchone()
-			self[ifos].count_below_thresh += count
-		cursor.close()
-
 	def increment_count(self, n):
 		"""
 		Increment all keys by n
