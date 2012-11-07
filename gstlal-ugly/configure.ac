@@ -87,10 +87,12 @@ AC_PROG_CXX
 AC_PROG_INSTALL
 # libtool incorrectly determines library path on SL6.  FIXME:  remove when
 # no longer needed
-if test x"`cat /etc/redhat-release 2>/dev/null`" = x"Scientific Linux release 6.1 (Carbon)" ; then
-	AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
-	lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
-fi
+case `cat /etc/redhat-release 2> /dev/null` in
+  "Scientific Linux"*|"CentOS"*)
+    AC_MSG_NOTICE([hacking round broken libtool multilib support on RedHat systems])
+    lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
+    ;;
+esac
 LT_INIT
 PKG_PROG_PKG_CONFIG()
 
