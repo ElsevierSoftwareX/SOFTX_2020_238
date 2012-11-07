@@ -480,9 +480,6 @@ class Data(object):
 		self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 		self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
 
-		# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
-		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
-
 		self.far = FAR
 		self.ranking_data = None
 		if self.assign_likelihoods:
