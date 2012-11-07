@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: libgstlalugly
 Description: LAL/Gstreamer Library (the ugly bits)
 Version: @VERSION@
-Requires: lal lalmetaio lalinspiral
+Requires: lal lalmetaio lalinspiral gstlal
 Libs: -L${libdir} -lgstlalugly
 Cflags: -I${includedir}
