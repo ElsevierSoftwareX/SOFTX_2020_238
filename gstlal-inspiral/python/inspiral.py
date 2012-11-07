@@ -353,41 +353,9 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 	return xmldoc
 
 
-class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
-		#
-		# initialize
-		#
-		
-		# setup bottle routes
-		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
-		bottle.route("/latency_history.txt")(self.web_get_latency_history)
-		bottle.route("/snr_history.txt")(self.web_get_snr_history)
-		bottle.route("/ram_history.txt")(self.web_get_ram_history)
-		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
-		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
-		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
-
-		self.lock = threading.Lock()
+class CoincsDocument(object):
+	def __init__(self, filename, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
 		self.filename = filename
-		self.pipeline = pipeline
-		self.instruments = instruments
-		self.verbose = verbose
-		# True to enable likelihood assignment
-		self.assign_likelihoods = assign_likelihoods
-		self.marginalized_likelihood_file = marginalized_likelihood_file
-		# Set to None to disable period snapshots, otherwise set to seconds
-		self.likelihood_snapshot_interval = likelihood_snapshot_interval
-		# Set to 1.0 to disable background data decay
-		# FIXME:  should this live in the DistributionsStats object?
-		self.likelihood_snapshot_timestamp = None
-		# gracedb far threshold
-		self.gracedb_far_threshold = gracedb_far_threshold
-		self.gracedb_group = gracedb_group
-		self.gracedb_type = gracedb_type
-
-		# All possible instrument combinations
-		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
 
 		#
 		# build the XML document
@@ -471,14 +439,105 @@ class Data(object):
 		# know if they are database-backed or XML objects
 		#
 
-		self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
-		self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
 		self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
-		self.coinc_definer_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
-		self.coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
-		self.coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
-		self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
-		self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
+
+
+	def commit(self):
+		# update output document
+		if self.connection is not None:
+			self.connection.commit()
+
+
+	@property
+	def process_id(self):
+		return self.process.process_id
+
+
+	@property
+	def search_summary_outseg(self):
+		return self.search_summary.get_out()
+
+
+	def add_to_search_summary_outseg(self, seg):
+		out_segs = segments.segmentlist([self.search_summary.get_out()])
+		if out_segs == [segments.segment(None, None)]:
+			# out segment not yet initialized
+			del out_segs[:]
+		out_segs |= segments.segmentlist([seg])
+		self.search_summary.set_out(out_segs.extent())
+
+
+	def get_next_sngl_id(self):
+		return self.sngl_inspiral_table.get_next_id()
+
+
+	def write_output_file(self, verbose = False):
+		ligolw_process.set_process_end_time(self.process)
+
+		# FIXME:  should signal trapping be disabled in this code
+		# path?  I think not
+		if self.connection is not None:
+			from glue.ligolw import dbtables
+			seg = self.search_summary.get_out()
+			# record the final state of the search_summary and
+			# process rows in the database
+			if seg != segments.segment(None, None):
+				self.connection.cursor().execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
+			self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
+			self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
+			self.connection.commit()
+			dbtables.build_indexes(self.connection, verbose = verbose)
+			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
+		else:
+			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
+			self.search_summary.nevents = len(self.sngl_inspiral_table)
+			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+
+
+class Data(object):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+		#
+		# initialize
+		#
+		
+		# setup bottle routes
+		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
+		bottle.route("/latency_history.txt")(self.web_get_latency_history)
+		bottle.route("/snr_history.txt")(self.web_get_snr_history)
+		bottle.route("/ram_history.txt")(self.web_get_ram_history)
+		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
+		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
+		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
+
+		self.lock = threading.Lock()
+		self.pipeline = pipeline
+		self.instruments = instruments
+		self.verbose = verbose
+		# True to enable likelihood assignment
+		self.assign_likelihoods = assign_likelihoods
+		self.marginalized_likelihood_file = marginalized_likelihood_file
+		# Set to None to disable period snapshots, otherwise set to seconds
+		self.likelihood_snapshot_interval = likelihood_snapshot_interval
+		# Set to 1.0 to disable background data decay
+		# FIXME:  should this live in the DistributionsStats object?
+		self.likelihood_snapshot_timestamp = None
+		# gracedb far threshold
+		self.gracedb_far_threshold = gracedb_far_threshold
+		self.gracedb_group = gracedb_group
+		self.gracedb_type = gracedb_type
+
+		# All possible instrument combinations
+		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
+
+		#
+		# initialize document to hold coincs and segments
+		#
+
+		self.coincs_document = CoincsDocument(filename, process_params, comment, instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+
+		#
+		# setup far/fap book-keeping
+		#
 
 		self.far = FAR
 		self.ranking_data = None
@@ -491,8 +550,8 @@ class Data(object):
 		#
 
 		self.stream_thinca = streamthinca.StreamThinca(
-			self.xmldoc,
-			self.process.process_id,
+			self.coincs_document.xmldoc,
+			self.coincs_document.process_id,
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = thinca_interval,	# seconds
 			trials_table = self.far.trials_table
@@ -503,8 +562,8 @@ class Data(object):
 		#
 		
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
-		self.latency_history = deque(maxlen=1000)
-		self.snr_history = deque(maxlen=1000)
+		self.latency_history = deque(maxlen = 1000)
+		self.snr_history = deque(maxlen = 1000)
 		self.ram_history = deque(maxlen = 1000)
 
 	def appsink_new_buffer(self, elem):
@@ -524,16 +583,11 @@ class Data(object):
 			# document.
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
-			out_segs = segments.segmentlist([self.search_summary.get_out()])
-			if out_segs == [segments.segment(None, None)]:
-				# out segment not yet initialized
-				del out_segs[:]
-			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
-			self.search_summary.set_out(out_segs.extent())
+			self.coincs_document.add_to_search_summary_outseg(segments.segment(buf_timestamp, buf_end_time))
 			if self.far.livetime_seg == segments.segment(None, None):
-				self.far.livetime_seg = out_segs.extent()
+				self.far.livetime_seg = self.coincs_document.search_summary_outseg
 			else:
-				self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
+				self.far.livetime_seg = segments.segmentlist([self.coincs_document.search_summary_outseg, self.far.livetime_seg]).extent()
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
@@ -542,8 +596,8 @@ class Data(object):
 			# assigned here will not collide with any already
 			# in the database
 			for event in events:
-				event.process_id = self.process.process_id
-				event.event_id = self.sngl_inspiral_table.get_next_id()
+				event.process_id = self.coincs_document.process_id
+				event.event_id = self.coincs_document.get_next_sngl_id()
 
 			# update likelihood snapshot if needed
 			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
@@ -572,7 +626,6 @@ class Data(object):
 				else:
 					self.ranking_data = None
 
-
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
 
@@ -582,8 +635,7 @@ class Data(object):
 				self.far.distribution_stats.add_single(event)
 
 			# update output document
-			if self.connection is not None:
-				self.connection.commit()
+			self.coincs_document.commit()
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -617,8 +669,7 @@ class Data(object):
 			FAP = None
 		for event in self.stream_thinca.flush(FAP = FAP):
 			self.far.distribution_stats.add_single(event)
-		if self.connection is not None:
-			self.connection.commit()
+		self.coincs_document.commit()
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
@@ -641,19 +692,27 @@ class Data(object):
 			gracedb_client = gracedb.Client()
 			gracedb_ids = []
 			psdmessage = None
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
 			# useless
 			likelihood_dict = self.stream_thinca.last_coincs.column_index(lsctables.CoincTable.tableName, "likelihood")
-			# FIXME, in principle there could be more than one event with the maximum likelihood value
-			coinc_event_id = sorted((likelihood, coinc_event_id) for (coinc_event_id, likelihood) in likelihood_dict.items())[-1][1]
-			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			false_alarm_rate = coinc_inspiral_index[coinc_event_id].combined_far
 
-			# get out of this method if the false alarm rate is not low enough, or is nan
-			if false_alarm_rate > self.gracedb_far_threshold or numpy.isnan(false_alarm_rate):
-				return
-			else:
+			# FIXME:  this is hacked to only send at most the
+			# one best coinc in this set.  May not make sense
+			# depending on what is in last_coincs.  FIX
+			# PROPERLY.  This is probably mostly okay because
+			# we should be doing coincidences every 10s which
+			# is a reasonable time to cluster over.  the slice
+			# can be edited (or removed) to change this.
+			for likelihood, coinc_event_id in sorted((likelihood, coinc_event_id) for (coinc_event_id, likelihood) in likelihood_dict.items())[-1:]:
+				#
+				# quit if the false alarm rate is not low
+				# enough, or is nan
+				#
+
+				if coinc_inspiral_index[coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event_id].combined_far):
+					break
 
 				#
 				# retrieve PSDs
@@ -718,13 +777,6 @@ class Data(object):
 					proc.stdin.flush()
 					proc.stdin.close()
 				message.close()
-
-				# FIXME hack to keep from sending too many alerts.
-				# Only send the best one in this set.  May not make
-				# sense depending on what is in last_coincs.  FIX
-				# PROPERLY.  This is probably mostly okay because we
-				# should be doing coincidences every 10s which is a
-				# reasonable time to cluster over
 
 			#
 			# do PSD file uploads
@@ -841,31 +893,11 @@ class Data(object):
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		self.lock.acquire()
 		try:
-			ligolw_process.set_process_end_time(self.process)
-
-			# FIXME:  should signal trapping be disabled in this code
-			# path?  I think not
-			if self.connection is not None:
-				from glue.ligolw import dbtables
-				seg = self.search_summary.get_out()
-				# record the final state of the
-				# search_summary and process rows in the
-				# database
-				if seg != segments.segment(None, None):
-					self.connection.cursor().execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
-				self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
-				self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
-				self.connection.commit()
-				dbtables.build_indexes(self.connection, verbose = verbose)
-				dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
-			else:
-				self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-				self.search_summary.nevents = len(self.sngl_inspiral_table)
-				utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			self.coincs_document.write_output_file(verbose = verbose)
 
 			# write out the snr / chisq histograms
 			if likelihood_file is None:
-				fname = os.path.split(self.filename)
+				fname = os.path.split(self.coincs_document.filename)
 				fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 			else:
 				fname = likelihood_file
