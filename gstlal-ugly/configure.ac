@@ -17,7 +17,6 @@ AC_CONFIG_FILES([ \
 	debian/Makefile \
 	lib/gstlal-ugly.pc \
 	lib/Makefile \
-	lib/skymap/Makefile \
 	python/Makefile \
 	python/pyzeroconf/Makefile \
 	share/Makefile \

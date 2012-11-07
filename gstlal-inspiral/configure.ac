@@ -17,9 +17,14 @@ AC_CONFIG_FILES([ \
 	debian/Makefile \
 	lib/gstlal-inspiral.pc \
 	lib/Makefile \
+	lib/skymap/Makefile \
 	python/Makefile \
 	gst/Makefile \
-	bin/Makefile
+	gst/lal/Makefile \
+	gst/python/Makefile \
+	bin/Makefile \
+	share/Makefile \
+	tests/Makefile
 ])
 
 

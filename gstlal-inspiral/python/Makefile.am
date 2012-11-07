@@ -7,5 +7,13 @@ INCLUDES = -I$(top_srcdir)/lib
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
-	__init__.py \
-	lloidparts.py
+	cbc_template_fir.py \
+	cbc_template_iir.py \
+	far.py \
+	inspiral_pipe.py \
+	inspiral.py \
+	lloidparts.py \
+	lloidplots.py \
+	streamthinca.py \
+	svd_bank.py \
+	templates.py

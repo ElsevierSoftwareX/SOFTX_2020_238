@@ -7,19 +7,10 @@ SUBDIRS = pyzeroconf
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
-	cbc_template_fir.py \
-	cbc_template_iir.py \
 	dagparts.py \
-	svd_bank.py \
-	templates.py \
-	far.py \
-	streamthinca.py \
-	omega.py \
-	lloidplots.py \
-	inspiral.py \
-	inspiral_pipe.py \
-	excesspower.py \
 	epparts.py \
+	excesspower.py \
 	gviz_api.py \
 	httpinterface.py \
+	omega.py \
 	servicediscovery.py

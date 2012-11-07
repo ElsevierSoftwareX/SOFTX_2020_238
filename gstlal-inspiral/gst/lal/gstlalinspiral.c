@@ -1,7 +1,7 @@
 /*
  * Various bits of LAL wrapped in gstreamer elements.
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2012  Kipp Cannon, Chad Hanna
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,14 +50,12 @@
 
 
 #include <gstlal/gstlal_tags.h>
-#include <gstlal_multiplier.h>
-#include <gstlal_iirbank.h>
-#include <gstlal_mean.h>
-#include <gstlal_specgram.h>
-#include <gstlal_pad.h>
-#include <gstlal_trim.h>
-#include <gstlal_burst_triggergen.h>
-#include <gstlal_cachesrc.h>
+#include <gstlal_coinc.h>
+#include <gstlal_skymap.h>
+#include <gstlal_triggergen.h>
+#include <gstlal_timeslicechisq.h>
+#include <gstlal_blcbc_triggergen.h>
+#include <gstlal_itac.h>
 
 
 /*
@@ -75,14 +73,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},
-		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
-		{"lal_mean", GSTLAL_MEAN_TYPE},
-		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
-		{"lal_pad", GST_TYPE_LALPAD},
-		{"lal_bursttriggergen", GSTLAL_BURST_TRIGGERGEN_TYPE},
-		{"lal_trim", GST_TYPE_LALTRIM},
-		{"lal_cachesrc", GSTLAL_CACHESRC_TYPE},
+		{"lal_coinc", GSTLAL_COINC_TYPE},
+		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
+		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
+		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
+		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
+		{"lal_itac", GSTLAL_ITAC_TYPE},
 		{NULL, 0},
 	};
 
@@ -120,4 +116,4 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlalugly", "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlalinspiral", "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

@@ -1,4 +1,4 @@
-EXTRA_DIST = fixtures.py iir_pipeline_test.py itac_test_01.py plots_test_01.py plot_test test_bank.xml test_coinc.py test_skymap.py
+EXTRA_DIST = plots_test_01.py plot_test
 
 TESTS =
 
