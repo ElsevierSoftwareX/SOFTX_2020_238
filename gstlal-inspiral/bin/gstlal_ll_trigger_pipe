@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-This program makes a dag for ER1
+This program makes a dag for a gstlal inspiral low latency pipeline
 """
 
 __author__ = 'Chad Hanna <channa@caltech.edu>'
@@ -35,7 +35,7 @@ import glue.ligolw.utils as utils
 from optparse import OptionParser
 from gstlal import inspiral
 from gstlal import inspiral_pipe
-
+from gstlal import dagparts
 
 #
 # gstlal_inspiral
@@ -46,7 +46,7 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_inspiral job
 	"""
-	def __init__(self, executable=inspiral_pipe.which('gstlal_ll_inspiral'), tag_base='gstlal_inspiral'):
+	def __init__(self, executable=dagparts.which('gstlal_ll_inspiral'), tag_base='gstlal_inspiral'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_inspiral'
@@ -73,7 +73,7 @@ class gstlal_iir_inspiral_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_iir_inspiral job
 	"""
-	def __init__(self, executable=inspiral_pipe.which('gstlal_iir_ll_inspiral'), tag_base='gstlal_iir_inspiral'):
+	def __init__(self, executable=dagparts.which('gstlal_iir_ll_inspiral'), tag_base='gstlal_iir_inspiral'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_iir_inspiral'
@@ -95,7 +95,7 @@ class gstlal_inspiral_marginalize_likelihoods_online_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_inspiral_marginalize_likelihoods_online job
 	"""
-	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_marginalize_likelihoods_online'), tag_base='gstlal_inspiral_marginalize_likelihoods_online'):
+	def __init__(self, executable=dagparts.which('gstlal_inspiral_marginalize_likelihoods_online'), tag_base='gstlal_inspiral_marginalize_likelihoods_online'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_inspiral_marginalize_likelihoods_online'
@@ -126,7 +126,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -236,7 +236,7 @@ options, filenames, bank_cache, channel_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
-dag = inspiral_pipe.DAG("trigger_pipe")
+dag = dagparts.Condor.DAG("trigger_pipe")
 
 #
 # setup the job classes
