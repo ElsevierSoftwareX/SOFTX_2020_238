@@ -120,8 +120,7 @@ def pad_added_handler(demux, srcpad, (pipeline, mux)):
 #
 
 
-options, filenames = parse_command_line()
-input_cache, = filenames
+options, (input_cache,) = parse_command_line()
 
 
 #
