@@ -7,6 +7,7 @@ Build-Depends:
  debhelper (>= 8),
  python-dev,
  liborc-0.4-dev,
+ liborc-0.4-0,
  libfftw3-dev,
  gstlal-dep,
  python-gobject-dev,
@@ -29,7 +30,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  gstlal-dep,
  python-gobject,
  lscsoft-lalapps,
- libxml2
+ libxml2,
+
 Description: GStreamer version of LAL
  gstlal provides a suite of GStreamer elements that expose
  gravitational-wave data analysis tools from the LAL library for use
