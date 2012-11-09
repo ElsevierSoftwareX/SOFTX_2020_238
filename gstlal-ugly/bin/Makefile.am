@@ -19,7 +19,6 @@ dist_bin_SCRIPTS = \
 	gstlal_vetoes_from_burst_inj \
 	gstlal_ninja_median_of_psds \
 	gstlal_ninja_smooth_reference_psd \
-	gstlal_h1h2_coh_frames \
 	gstlal_median_of_psds \
 	gstlal_psd_pipe \
 	gstlal_segments_operations \
