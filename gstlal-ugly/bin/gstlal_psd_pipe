@@ -24,46 +24,36 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math
-import subprocess, socket, tempfile
+import sys, os
 
 ##############################################################################
 # import the modules we need to build the pipeline
-from glue import iterutils
-from glue import pipeline
-from glue import lal
 from glue import segments
-from glue.ligolw import array
-import glue.ligolw.utils as utils
-import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
-from gstlal import inspiral, inspiral_pipe
-from gstlal import dagparts as gstlaldagparts
-import numpy
-from pylal.datatypes import LIGOTimeGPS
+from gstlal import dagparts
 from gstlal import datasource
 
 #
 # Classes for generating reference psds
 #
 
-class gstlal_reference_psd_job(inspiral_pipe.InspiralJob):
+class gstlal_reference_psd_job(dagparts.CondorDAGJob):
 	"""
 	A gstlal_reference_psd job
 	"""
-	def __init__(self, executable=inspiral_pipe.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
+	def __init__(self, executable=dagparts.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
 		"""
 		A gstlal_reference_psd job
 		"""
-		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+		dagparts.CondorDAGJob.__init__(self, executable, tag_base)
 
 
-class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
+class gstlal_reference_psd_node(dagparts.CondorDAGNode):
 	"""
 	A gstlal_reference_psd node
 	"""
 	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, instruments, channel_dict, injections=None, p_node=[]):
-		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		dagparts.CondorDAGNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("frame-segments-file", frame_segments_file)
 		self.add_var_opt("frame-segments-name", frame_segments_name)
@@ -77,23 +67,23 @@ class gstlal_reference_psd_node(inspiral_pipe.InspiralNode):
 		self.add_var_opt("write-psd",output_name)
 
 
-class gstlal_median_of_psds_job(inspiral_pipe.InspiralJob):
+class gstlal_median_of_psds_job(dagparts.CondorDAGJob):
 	"""
 	A gstlal_median_of_psds job
 	"""
-	def __init__(self, executable=inspiral_pipe.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
+	def __init__(self, executable=dagparts.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
 		"""
 		A gstlal_median_of_psds job
 		"""
-		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+		dagparts.CondorDAGJob.__init__(self, executable, tag_base)
 
 
-class gstlal_median_of_psds_node(inspiral_pipe.InspiralNode):
+class gstlal_median_of_psds_node(dagparts.CondorDAGNode):
 	"""
 	A gstlal_median_of_psds node
 	"""
 	def __init__(self, job, dag, output_name = "median_psd.xml.gz", input_files = [], p_node = []):
-		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		dagparts.CondorDAGNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("output-name", output_name)
 		for f in input_files:
 			self.add_file_arg(f)
@@ -136,11 +126,11 @@ boundary_seg = detectors.seg
 segs &= segments.segmentlist([boundary_seg])
 
 # FIXME break up long segments into smaller ones with 1024 of overlap
-segs = gstlaldagparts.breakupsegs(segs, options.max_segment_length, 1024)
+segs = dagparts.breakupsegs(segs, options.max_segment_length, 1024)
 
 try: os.mkdir("logs")
 except: pass
-dag = inspiral_pipe.DAG("psd_pipe")
+dag = dagparts.CondorDAG("psd_pipe")
 
 #
 # setup the job classes
