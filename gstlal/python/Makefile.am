@@ -10,6 +10,7 @@ pkgpython_PYTHON = \
 	__init__.py \
 	bottle.py \
 	coherent_null.py \
+	dagparts.py \
 	elements.py \
 	matplotlibhelper.py \
 	misc.py \
