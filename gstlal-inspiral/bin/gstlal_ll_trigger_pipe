@@ -24,23 +24,17 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math
-import subprocess, socket, tempfile, shutil
+import sys, os, copy
+import shutil
 
 ##############################################################################
 # import the modules we need to build the pipeline
-from glue import iterutils
 from glue import pipeline
 from glue import lal
-from glue.ligolw import lsctables
-from glue import segments
-from glue.ligolw import array
 import glue.ligolw.utils as utils
-import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import inspiral
 from gstlal import inspiral_pipe
-import numpy
 
 
 #
