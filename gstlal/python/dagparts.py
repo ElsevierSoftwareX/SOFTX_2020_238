@@ -32,6 +32,7 @@ DAG construction tools.
 
 import os
 import sys
+import socket
 
 from glue import segments
 from glue import pipeline
