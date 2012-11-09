@@ -7,7 +7,6 @@ SUBDIRS = pyzeroconf
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
-	dagparts.py \
 	epparts.py \
 	excesspower.py \
 	gviz_api.py \
