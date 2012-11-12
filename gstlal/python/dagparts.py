@@ -33,6 +33,7 @@ DAG construction tools.
 import os
 import sys
 import socket
+import subprocess
 
 from glue import segments
 from glue import pipeline
