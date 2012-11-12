@@ -20,8 +20,8 @@ all : dag
 
 
 frame.cache :
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose --fake-data AdvLIGO --frame-type test
-	ls H1/H-H1_test-8711/*.gwf | lalapps_path2cache > frame.cache
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --channel-name H1=FAKE-STRAIN --verbose --data-source AdvLIGO --frame-type FAKE
+	ls H1/H-H1_FAKE-8711/*.gwf | lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \
@@ -90,4 +90,4 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml
 	cat H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz segments.H.xml logs
+	rm -rf *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz segments.H.xml logs
