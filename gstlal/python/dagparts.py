@@ -34,6 +34,7 @@ import os
 import sys
 import socket
 import subprocess
+import tempfile
 
 from glue import segments
 from glue import pipeline
@@ -102,10 +103,7 @@ class CondorDAG(pipeline.CondorDAG):
 
 	def __init__(self, name, logpath = log_path()):
 		self.basename = name
-		tempfile.tempdir = logpath
-		tempfile.template = self.basename + '.dag.log.'
-		logfile = tempfile.mktemp()
-		fh = open( logfile, "w" )
+		fh, logfile = tempfile.mkstemp(dir = log_path(), prefix = self.basename + '.dag.log.')
 		fh.close()
 		pipeline.CondorDAG.__init__(self,logfile)
 		self.set_dag_file(self.basename)
