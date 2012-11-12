@@ -1,3 +1,5 @@
 pkgdata_DATA = \
-	ZERO_DET_high_P.txt \
-	Makefile.recolor_frames
+	Makefile.ERBank \
+	Makefile.recolor_frames \
+	virgo_online_psd.xml.gz \
+	ZERO_DET_high_P.txt
