@@ -88,6 +88,7 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml
 	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
 	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
+	rm -f H1_bank.dag L1_bank.dag V1_bank.dag
 
 realclean :
 	rm -rf *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz segments.H.xml logs
