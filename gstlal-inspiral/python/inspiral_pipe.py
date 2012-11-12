@@ -10,9 +10,9 @@ from glue.ligolw import utils, lsctables, array
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
 	out = which.stdout.read().strip()
-	if not out: 
+	if not out:
 		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
-		raise ValueError 
+		raise ValueError
 	return out
 
 def log_path():
@@ -139,7 +139,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	job = 0
 	for ifo in cachedict:
 		filedict[ifo] = open(cachedict[ifo],'r')
-	
+
 	loop = True
 	outstrs = []
 	while cnt < numfiles:
@@ -166,7 +166,7 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 	job = 0
 	for ifo in cachedict:
 		filedict[ifo] = open(cachedict[ifo],'r')
-	
+
 	loop = True
 	outstrs = []
 	outcounts = []
