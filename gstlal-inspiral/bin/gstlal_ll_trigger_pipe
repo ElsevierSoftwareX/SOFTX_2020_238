@@ -236,7 +236,7 @@ options, filenames, bank_cache, channel_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
-dag = dagparts.Condor.DAG("trigger_pipe")
+dag = dagparts.CondorDAG("trigger_pipe")
 
 #
 # setup the job classes
