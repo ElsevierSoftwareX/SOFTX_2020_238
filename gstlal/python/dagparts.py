@@ -104,7 +104,7 @@ class CondorDAG(pipeline.CondorDAG):
 	def __init__(self, name, logpath = log_path()):
 		self.basename = name
 		fh, logfile = tempfile.mkstemp(dir = log_path(), prefix = self.basename + '.dag.log.')
-		fh.close()
+		os.close(fh)
 		pipeline.CondorDAG.__init__(self,logfile)
 		self.set_dag_file(self.basename)
 		self.jobsDict = {}
