@@ -557,7 +557,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# streaming can begin through the downstream adders without waiting for
 	# input from all upstream elements.
 
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration)
 
 	#
 	# reconstruct physical SNRs
@@ -930,7 +930,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is four seconds at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, 4 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			head = pipeparts.mkitac(pipeline, snr, 1 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs.add(head)
