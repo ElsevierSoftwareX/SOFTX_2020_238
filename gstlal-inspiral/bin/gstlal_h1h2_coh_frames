@@ -87,7 +87,7 @@ parser.add_option("--reference-psd", metavar = "filename", help = ".xml file con
 parser.add_option("--write-psd", metavar = "filename", help = "Measure psds and write to .xml file.  Use these psds as a first guess psd or fixed psd.")
 parser.add_option("--null-output", metavar="filename", help = "Set the output filename for the null vetoes (default = write to stdout).  If the filename ends with \".gz\" it will be gzip-compressed.")
 parser.add_option("--vetoes-name", metavar = "name", default = "vetoes_from_LHO_null", help = "Set the name of the vetoes segment lists in the output document (default = \"vetoes_from_LHO_null\").")
-
+parser.add_option("--write-null-frames", action="store_true", help = "Write the null stream to frame files as well as out put a null veto segment list (optional).")
 
 options, filenames = parser.parse_args()
 
@@ -250,7 +250,7 @@ class COHhandler(simplehandler.Handler):
 		xmldoc.childNodes.append(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, "vetoes_from_LHO_null", options.__dict__)
 		llwsegments = ligolw_segments.LigolwSegments(xmldoc)
-		llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, "Null vetoes")
+		llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, comment = "Null vetoes")
 		llwsegments.finalize(process)
 		
 		utils.write_filename(xmldoc, options.null_output, gz = (options.null_output or "stdout").endswith(".gz"), verbose = options.verbose)
@@ -421,11 +421,17 @@ nullhead = coherent_null_bin.get_pad("NULLsrc")
 
 cohhead = pipeparts.mkprogressreport(pipeline, cohhead, "progress_coherent")
 cohhead = pipeparts.mktaginject(pipeline, cohhead, "instrument=H1H2, channel-name=LAL-STRAIN_HPLUS")
-pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2", duration = 4096)
+pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2_COH", duration = 4096)
 
 # null veto
 nullhead = pipeparts.mkprogressreport(pipeline, nullhead, "progress_null")
 nullhead = pipeparts.mkwhiten(pipeline, nullhead, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length)
+
+if options.write_null_frames is not None:
+	nullhead = pipeparts.mktee(pipeline, nullhead)
+	nullframehead = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, nullhead), "instrument=H1H2, channel-name=LAL-STRAIN_HNULL")
+	pipeparts.mkframesink(pipeline, nullframehead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2_NULL", duration = 4096)
+
 nullhead = lloidparts.mkhtgate(pipeline, nullhead, threshold = 8.0)
 nullhead.set_property("emit-signals", True)
 nullhead.connect("start", handler.segment_sighandler, "off") # start means the start of non-gap output
