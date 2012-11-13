@@ -374,8 +374,7 @@ FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_add_pad(FrameCPPMuxCollectPa
 
 	data->collect = collectpads;
 	data->pad = gst_object_ref(pad);
-	data->queue = FRAMECPP_MUXQUEUE(g_object_new(FRAMECPP_MUXQUEUE_TYPE, NULL));
-	g_object_set(data->queue, "max-size-time", collectpads->max_size_time, NULL);
+	data->queue = FRAMECPP_MUXQUEUE(g_object_new(FRAMECPP_MUXQUEUE_TYPE, "max-size-time", collectpads->max_size_time, NULL));
 	gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
 	data->appdata = NULL;
 	data->destroy_notify = destroy_notify;
