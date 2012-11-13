@@ -549,7 +549,8 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 					FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
 					framecpp_channelmux_appdata *appdata = get_appdata(data);
 					GstFrPad *frpad = GST_FRPAD(data->pad);
-					/* we own this list */
+					/* we own this list and its
+					 * contents */
 					GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
 					if(buffer_list) {
 						GstClockTime buffer_list_t_start;
@@ -630,7 +631,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 				mux->frame_number++;
 				g_object_notify(G_OBJECT(mux), "frame-number");
 			}
-			g_assert(frame_t_start == gwf_t_end);	/* safety check */
+			g_assert_cmpuint(frame_t_start, ==, gwf_t_end);	/* safety check */
 
 			/*
 			 * close frame file, extract bytes into GstBuffer
