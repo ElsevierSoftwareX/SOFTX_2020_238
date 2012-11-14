@@ -536,7 +536,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 			 * loop over frames
 			 */
 
-			for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
+			for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
 				GSList *collectdatalist;
 				General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
 				General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) mux->frame_duration / GST_SECOND));
