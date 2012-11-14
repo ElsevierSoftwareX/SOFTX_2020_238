@@ -526,9 +526,6 @@ class Data(object):
 		self.gracedb_group = gracedb_group
 		self.gracedb_type = gracedb_type
 
-		# All possible instrument combinations
-		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
-
 		#
 		# initialize document to hold coincs and segments
 		#
