@@ -60,14 +60,15 @@ lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
-from gstlal import svd_bank
-from gstlal import pipeparts
-from gstlal import lloidparts
-from gstlal import reference_psd
-from gstlal import far
-from gstlal import inspiral
-from gstlal import httpinterface
 from gstlal import bottle
+from gstlal import far
+from gstlal import httpinterface
+from gstlal import inspiral
+from gstlal import lloidparts
+from gstlal import pipeparts
+from gstlal import reference_psd
+from gstlal import simplehandler
+from gstlal import svd_bank
 from pylal.date import XLALUTCToGPS
 
 
@@ -303,36 +304,7 @@ if options.verbose:
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
-# custom handler
-class Handler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			print >> sys.stderr, "EOS received"
-			self.pipeline.set_state(gst.STATE_PAUSED)
-			# FIXME we should set null, but if we try it locks
-			# self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_INFO:
-			gerr, dbgmsg = message.parse_info()
-			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_WARNING:
-			gerr, dbgmsg = message.parse_warning()
-			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-
-handler = Handler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 if options.fake_data is not None:
 	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, now().ns(), gst.SEEK_TYPE_SET, 2000000000000000000) # FIXME future infinity :)
