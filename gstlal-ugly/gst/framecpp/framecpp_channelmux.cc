@@ -305,7 +305,7 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	success &= gst_structure_get_int(structure, "channels", &channels);
 	success &= gst_structure_get_int(structure, "rate", &rate);
 	if(!success)
-		GST_ERROR_OBJECT(pad, "cannot parse width, channels, and/or rate from caps");
+		GST_ERROR_OBJECT(pad, "cannot parse width, channels, and/or rate from %" GST_PTR_FORMAT, caps);
 	if(!strcmp(media_type, "audio/x-raw-int")) {
 		gboolean is_signed;
 		success &= gst_structure_get_boolean(structure, "signed", &is_signed);
@@ -353,8 +353,10 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 			success = FALSE;
 			break;
 		}
-	} else
-		g_assert_not_reached();
+	} else {
+		GST_ERROR_OBJECT(pad, "unsupported media type %s", media_type);
+		success = FALSE;
+	}
 
 	if(success) {
 		GObject *queue;
@@ -366,8 +368,7 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 		appdata->dims[0].SetDx(1.0 / (double) rate);
 		appdata->rate = rate;
 		appdata->unit_size = width / 8 * channels;
-		g_object_set(queue, "rate", appdata->rate, NULL);
-		g_object_set(queue, "unit-size", appdata->unit_size, NULL);
+		g_object_set(queue, "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
 		FRAMECPP_MUXQUEUE_UNLOCK(data->queue);
 		GST_OBJECT_UNLOCK(mux->collect);
 	}
