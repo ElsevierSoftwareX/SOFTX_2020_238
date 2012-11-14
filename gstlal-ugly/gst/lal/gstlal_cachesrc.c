@@ -207,7 +207,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	for(read_offset = 0; read_offset < GST_BUFFER_SIZE(*buf); ) {
 		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
 		if(bytes_read < 0) {
-			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("fstat('%s') failed: %s", path, sys_errlist[errno]));
+			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
 			result = GST_FLOW_ERROR;
 			close(fd);
 			goto done;
@@ -356,5 +356,7 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 
 static void gstlal_cachesrc_init(GstLALCacheSrc *element, GstLALCacheSrcClass *klass)
 {
+	gst_base_src_set_format(GST_BASE_SRC(element), GST_FORMAT_TIME);
+
 	element->cache = NULL;
 }
