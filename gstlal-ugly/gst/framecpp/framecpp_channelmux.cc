@@ -386,6 +386,8 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
+	framecpp_channelmux_appdata *appdata = get_appdata(data);
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -393,15 +395,25 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		mux->need_discont = TRUE;
 		break;
 
-	case GST_EVENT_TAG:
-		/* FIXME:  capture metadata for Fr{Proc,Adc,...}, e.g.,
-		 * units */
+	case GST_EVENT_TAG: {
 		/* FIXME:  merged instrument list would make sense to
 		 * propogate downstream.  do we need to add FrDetector
 		 * structures to each frame file based on the list, too? */
-		GST_DEBUG_OBJECT(mux, "discarding downstream event %" GST_PTR_FORMAT, event);
+		GstTagList *taglist;
+		gchar *units = NULL;
+
+		gst_event_parse_tag(event, &taglist);
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
+			GST_OBJECT_LOCK(mux->collect);
+			g_free(appdata->unitY);
+			appdata->unitY = units;
+			GST_OBJECT_UNLOCK(mux->collect);
+		} else
+			g_free(units);
+
 		gst_event_unref(event);
 		goto done;
+	}
 
 	case GST_EVENT_EOS:
 		/* FIXME:  flush final (short) frame file? */
@@ -457,6 +469,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 		goto could_not_create_appdata;
 	get_appdata(data)->nDims = 1;
 	get_appdata(data)->dims = new FrameCPP::Dimension[get_appdata(data)->nDims];
+	get_appdata(data)->unitY = strdup("");
 	if(!gst_element_add_pad(element, GST_PAD(pad)))
 		goto could_not_add_to_element;
 	GST_OBJECT_UNLOCK(mux->collect);
@@ -587,7 +600,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 						 */
 
 						appdata->dims[0].SetNx(buffer_list_length);
-						FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, dest);	/* FIXME: units? */
+						FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, appdata->unitY);
 						switch(frpad->pad_type) {
 						case GST_FRPAD_TYPE_FRADCDATA: {
 							FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate);
