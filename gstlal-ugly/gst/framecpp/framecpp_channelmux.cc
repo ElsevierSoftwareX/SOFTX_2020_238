@@ -266,7 +266,7 @@ typedef struct _framecpp_channelmux_appdata {
 static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
 {
 	if(appdata) {
-		delete[] appdata->dims;	/* FIXME:  correct? */
+		delete[] appdata->dims;
 		g_free(appdata->unitY);
 	}
 	g_free(appdata);
@@ -287,7 +287,7 @@ static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data
 static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
-	FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) gst_pad_get_element_private(pad);
+	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
 	framecpp_channelmux_appdata *appdata = get_appdata(data);
 	GstStructure *structure;
 	FrameCPP::FrVect::data_types_type type;
@@ -442,7 +442,9 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	gst_pad_set_setcaps_function(GST_PAD(pad), GST_DEBUG_FUNCPTR(sink_setcaps));
 
 	/*
-	 * add pad to element.
+	 * add pad to element.  just like FrameCPPMuxCollectPadsData, the
+	 * appdata structure is allocated inline.  there is no stand-alone
+	 * constructor.
 	 */
 
 	GST_OBJECT_LOCK(mux->collect);

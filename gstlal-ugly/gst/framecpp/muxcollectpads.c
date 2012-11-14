@@ -439,6 +439,17 @@ gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *collectpads,
 
 
 /**
+ * Retrieve the FrameCPPMuxCollectPadsData associated with the GstPad.
+ */
+
+
+FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_get_data(GstPad *pad)
+{
+	return pad->element_private;
+}
+
+
+/**
  * Set an event function for a pad.  An event handler will be installed on
  * the pad to do work required by the FrameCPPMuxCollectPads object, and
  * that event handler will chain to the event handler set using this
