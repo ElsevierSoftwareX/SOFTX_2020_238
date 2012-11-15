@@ -29,7 +29,12 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  liborc-0.4-0,
  gstlal-dep,
  python-gobject,
- lscsoft-lalapps,
+ lal,
+ lalframe,
+ lalmetaio,
+ lalsimulation,
+ lalburst,
+ lalinspiral,
  libxml2,
 
 Description: GStreamer version of LAL
