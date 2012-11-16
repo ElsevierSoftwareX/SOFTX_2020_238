@@ -1122,7 +1122,7 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_DO_FILE_CHECKSUM:
 		element->do_file_checksum = g_value_get_boolean(value);
 		break;
@@ -1160,7 +1160,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_DO_FILE_CHECKSUM:
 		g_value_set_boolean(value, element->do_file_checksum);
 		break;

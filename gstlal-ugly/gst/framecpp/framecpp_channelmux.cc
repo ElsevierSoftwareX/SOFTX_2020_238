@@ -761,7 +761,7 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_FRAME_DURATION:
 		element->frame_duration = g_value_get_uint(value) * GST_SECOND;
 		g_object_set(G_OBJECT(element->collect), "max-size-time", (guint64) FRAME_FILE_DURATION(element), NULL);
@@ -800,7 +800,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_FRAME_DURATION:
 		g_value_set_uint(value, element->frame_duration / GST_SECOND);
 		break;
