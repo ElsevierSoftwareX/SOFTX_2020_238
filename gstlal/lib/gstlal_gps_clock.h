@@ -1,5 +1,5 @@
 /*
- * GstLALGPSClock
+ * GstLALGPSSystemClock
  *
  * Copyright (C) 2012  Kipp Cannon
  *
@@ -19,8 +19,8 @@
  */
 
 
-#ifndef __GSTLAL_GPS_CLOCK_H__
-#define __GSTLAL_GPS_CLOCK_H__
+#ifndef __GSTLAL_GPS_SYSTEM_CLOCK_H__
+#define __GSTLAL_GPS_SYSTEM_CLOCK_H__
 
 
 /*
@@ -48,35 +48,35 @@ G_BEGIN_DECLS
  */
 
 
-#define GSTLAL_GPS_CLOCK_TYPE \
-	(gstlal_gps_clock_get_type())
-#define GSTLAL_GPS_CLOCK(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_GPS_CLOCK_TYPE, GstLALGPSClock))
-#define GSTLAL_GPS_CLOCK_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_GPS_CLOCK_TYPE, GstLALGPSClockClass))
-#define GSTLAL_GPS_CLOCK_GET_CLASS(obj) \
-	(G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_GPS_CLOCK_TYPE, GstLALGPSClockClass))
-#define GST_IS_LAL_GPS_CLOCK(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_GPS_CLOCK_TYPE))
-#define GST_IS_LAL_GPS_CLOCK_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_GPS_CLOCK_TYPE))
+#define GSTLAL_GPS_SYSTEM_CLOCK_TYPE \
+	(gstlal_gps_system_clock_get_type())
+#define GSTLAL_GPS_SYSTEM_CLOCK(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_GPS_SYSTEM_CLOCK_TYPE, GstLALGPSSystemClock))
+#define GSTLAL_GPS_SYSTEM_CLOCK_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_GPS_SYSTEM_CLOCK_TYPE, GstLALGPSSystemClockClass))
+#define GSTLAL_GPS_SYSTEM_CLOCK_GET_CLASS(obj) \
+	(G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_GPS_SYSTEM_CLOCK_TYPE, GstLALGPSSystemClockClass))
+#define GST_IS_LAL_GPS_SYSTEM_CLOCK(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_GPS_SYSTEM_CLOCK_TYPE))
+#define GST_IS_LAL_GPS_SYSTEM_CLOCK_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_GPS_SYSTEM_CLOCK_TYPE))
 
 
-typedef struct _GstLALGPSClockClass GstLALGPSClockClass;
-typedef struct _GstLALGPSClock GstLALGPSClock;
+typedef struct _GstLALGPSSystemClockClass GstLALGPSSystemClockClass;
+typedef struct _GstLALGPSSystemClock GstLALGPSSystemClock;
 
 
-struct _GstLALGPSClockClass {
+struct _GstLALGPSSystemClockClass {
 	GstSystemClockClass parent_class;
 };
 
 
 /**
- * GstLALGPSClock
+ * GstLALGPSSystemClock
  */
 
 
-struct _GstLALGPSClock {
+struct _GstLALGPSSystemClock {
 	GstSystemClock systemclock;
 };
 
@@ -90,10 +90,10 @@ struct _GstLALGPSClock {
  */
 
 
-GType gstlal_gps_clock_get_type(void);
+GType gstlal_gps_system_clock_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __GSTLAL_GPS_CLOCK_H__ */
+#endif	/* __GSTLAL_GPS_SYSTEM_CLOCK_H__ */

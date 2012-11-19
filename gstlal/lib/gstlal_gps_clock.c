@@ -1,5 +1,5 @@
 /*
- * GstLALGPSClock
+ * GstLALGPSSystemClock
  *
  * Copyright (C) 2012  Kipp Cannon
  *
@@ -47,7 +47,7 @@
  */
 
 
-GST_BOILERPLATE(GstLALGPSClock, gstlal_gps_clock, GstSystemClock, GST_TYPE_SYSTEM_CLOCK);
+GST_BOILERPLATE(GstLALGPSSystemClock, gstlal_gps_system_clock, GstSystemClock, GST_TYPE_SYSTEM_CLOCK);
 
 
 /*
@@ -76,12 +76,12 @@ static GstClockTime get_internal_time(GstClock *clock)
  */
 
 
-static void gstlal_gps_clock_base_init(gpointer klass)
+static void gstlal_gps_system_clock_base_init(gpointer klass)
 {
 }
 
 
-static void gstlal_gps_clock_class_init(GstLALGPSClockClass *klass)
+static void gstlal_gps_system_clock_class_init(GstLALGPSSystemClockClass *klass)
 {
 	GstClockClass *clock_class = GST_CLOCK_CLASS(klass);
 
@@ -89,7 +89,7 @@ static void gstlal_gps_clock_class_init(GstLALGPSClockClass *klass)
 }
 
 
-static void gstlal_gps_clock_init(GstLALGPSClock *object, GstLALGPSClockClass *klass)
+static void gstlal_gps_system_clock_init(GstLALGPSSystemClock *object, GstLALGPSSystemClockClass *klass)
 {
 	g_object_set(object, "clock-type", GST_CLOCK_TYPE_REALTIME, NULL);
 }
