@@ -82,7 +82,7 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GDSLVSHMSink, gsd_lvshmsink, GstBaseSink, GST_TYPE_BASE_SINK, additional_initializations);
+GST_BOILERPLATE_FULL(GDSLVSHMSink, gds_lvshmsink, GstBaseSink, GST_TYPE_BASE_SINK, additional_initializations);
 
 
 /*
@@ -354,7 +354,7 @@ static void finalize(GObject *object)
  */
 
 
-static void gsd_lvshmsink_base_init(gpointer klass)
+static void gds_lvshmsink_base_init(gpointer klass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
@@ -388,7 +388,7 @@ static void gsd_lvshmsink_base_init(gpointer klass)
  */
 
 
-static void gsd_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
+static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
@@ -460,7 +460,7 @@ static void gsd_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
  */
 
 
-static void gsd_lvshmsink_init(GDSLVSHMSink *element, GDSLVSHMSinkClass *klass)
+static void gds_lvshmsink_init(GDSLVSHMSink *element, GDSLVSHMSinkClass *klass)
 {
 	/*
 	 * internal data

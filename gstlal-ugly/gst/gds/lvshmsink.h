@@ -40,7 +40,7 @@ G_BEGIN_DECLS
 
 
 #define GDS_LVSHMSINK_TYPE \
-	(gsd_lvshmsink_get_type())
+	(gds_lvshmsink_get_type())
 #define GDS_LVSHMSINK(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST((obj), GDS_LVSHMSINK_TYPE, GDSLVSHMSink))
 #define GDS_LVSHMSINK_CLASS(klass) \
@@ -82,7 +82,7 @@ typedef struct {
 } GDSLVSHMSink;
 
 
-GType gsd_lvshmsink_get_type(void);
+GType gds_lvshmsink_get_type(void);
 
 
 G_END_DECLS
