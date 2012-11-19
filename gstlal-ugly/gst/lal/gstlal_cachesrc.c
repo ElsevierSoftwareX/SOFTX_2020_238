@@ -590,7 +590,7 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 		g_param_spec_string(
 			"location",
 			"Location",
-			"Path to LAL frame file cache.",
+			"Path to LAL cache file.",
 			DEFAULT_LOCATION,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
