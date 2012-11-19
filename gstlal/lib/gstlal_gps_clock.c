@@ -91,5 +91,10 @@ static void gstlal_gps_system_clock_class_init(GstLALGPSSystemClockClass *klass)
 
 static void gstlal_gps_system_clock_init(GstLALGPSSystemClock *object, GstLALGPSSystemClockClass *klass)
 {
+	/*
+	 * KC:  I have empirically determined that "REALTIME" means Unix
+	 * time
+	 */
+
 	g_object_set(object, "clock-type", GST_CLOCK_TYPE_REALTIME, NULL);
 }
