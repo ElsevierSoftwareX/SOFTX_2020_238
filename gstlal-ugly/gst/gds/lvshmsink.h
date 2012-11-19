@@ -89,7 +89,6 @@ typedef struct {
 
 	char *name;
 	guint num_buffers;
-	guint buffer_length;
 	guint mask;
 	enum gds_lvshmsink_buffer_mode buffer_mode;
 	gboolean lock;

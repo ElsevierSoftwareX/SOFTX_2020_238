@@ -120,7 +120,6 @@ GType gds_lvshmsink_buffer_mode_get_type(void)
 
 #define DEFAULT_SHM_NAME NULL
 #define DEFAULT_NUM_BUFFERS 1
-#define DEFAULT_BUFFER_LENGTH (1<<20)	/* 1 MiB */
 #define DEFAULT_MASK -1
 #define DEFAULT_BUFFER_MODE 0
 #define DEFAULT_LOCK FALSE
@@ -176,7 +175,7 @@ static gboolean start(GstBaseSink *sink)
 		goto done;
 	}
 
-	element->partition = new LSMP_PROD(element->name, element->num_buffers, element->buffer_length);
+	element->partition = new LSMP_PROD(element->name, element->num_buffers, gst_base_sink_get_blocksize(sink));
 	if(!element->partition) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_WRITE, (NULL), ("unknown failure accessing shared-memory partition"));
 		success = FALSE;
@@ -249,15 +248,15 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_DEBUG_OBJECT(element, "will write to shared-memory buffer %p", dest);
+	GST_DEBUG_OBJECT(element, "have shared-memory buffer %p", dest);
 	if(GST_BUFFER_SIZE(buffer) > (guint64) lsmp_partition(element)->getBufferLength()) {
-		GST_ELEMENT_ERROR(element, RESOURCE, WRITE, (NULL), ("frame file too large:  %" G_GUINT64_FORMAT " > %" G_GUINT64_FORMAT, GST_BUFFER_SIZE(buffer), (guint64) lsmp_partition(element)->getBufferLength()));
+		GST_ELEMENT_ERROR(element, RESOURCE, WRITE, (NULL), ("frame file (%" G_GUINT64_FORMAT " bytes) too large for shared-memry buffer (%" G_GUINT64_FORMAT " bytes)", GST_BUFFER_SIZE(buffer), (guint64) lsmp_partition(element)->getBufferLength()));
 		lsmp_partition(element)->return_buffer();
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
 	memcpy(dest, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	memset(dest + GST_BUFFER_SIZE(buffer), 0, element->buffer_length - GST_BUFFER_SIZE(buffer));
+	memset(dest + GST_BUFFER_SIZE(buffer), 0, gst_base_sink_get_blocksize(sink) - GST_BUFFER_SIZE(buffer));
 	lsmp_partition(element)->SetID(GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
 	GST_DEBUG_OBJECT(element, "shared-memory buffer %p ID set to %" G_GUINT64_FORMAT, dest, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
 	lsmp_partition(element)->release(GST_BUFFER_SIZE(buffer), element->mask, flags);
@@ -285,7 +284,6 @@ done:
 enum property {
 	ARG_SHM_NAME = 1,
 	ARG_NUM_BUFFERS,
-	ARG_BUFFER_LENGTH,
 	ARG_MASK,
 	ARG_BUFFER_MODE,
 	ARG_LOCK,
@@ -306,10 +304,6 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	case ARG_NUM_BUFFERS:
 		element->num_buffers = g_value_get_uint(value);
-		break;
-
-	case ARG_BUFFER_LENGTH:
-		element->buffer_length = g_value_get_uint(value);
 		break;
 
 	case ARG_MASK:
@@ -346,10 +340,6 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_NUM_BUFFERS:
 		g_value_set_uint(value, element->num_buffers);
-		break;
-
-	case ARG_BUFFER_LENGTH:
-		g_value_set_uint(value, element->buffer_length);
 		break;
 
 	case ARG_MASK:
@@ -461,19 +451,8 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 		g_param_spec_uint(
 			"num-buffers",
 			"Number of buffers",
-			"Number of buffers",
+			"Number of buffers in shared-memory partiion.",
 			1, G_MAXUINT, DEFAULT_NUM_BUFFERS,
-			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_BUFFER_LENGTH,
-		g_param_spec_uint(
-			"buffer-length",
-			"Length of each buffer",
-			"Length of each buffer in bytes",
-			1, G_MAXUINT, DEFAULT_BUFFER_LENGTH,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
