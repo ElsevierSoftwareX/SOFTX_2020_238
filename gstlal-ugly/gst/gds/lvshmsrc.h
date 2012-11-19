@@ -43,7 +43,7 @@ G_BEGIN_DECLS
 
 
 #define GDS_LVSHMSRC_TYPE \
-	(gsd_lvshmsrc_get_type())
+	(gds_lvshmsrc_get_type())
 #define GDS_LVSHMSRC(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST((obj), GDS_LVSHMSRC_TYPE, GDSLVSHMSrc))
 #define GDS_LVSHMSRC_CLASS(klass) \
@@ -94,7 +94,7 @@ typedef struct {
 } GDSLVSHMSrc;
 
 
-GType gsd_lvshmsrc_get_type(void);
+GType gds_lvshmsrc_get_type(void);
 
 
 G_END_DECLS

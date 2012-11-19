@@ -65,16 +65,26 @@
 #include <lvshmsrc.h>
 
 
+/*
+ * ========================================================================
+ *
+ *                                Boilerplate
+ *
+ * ========================================================================
+ */
+
+
 #define GST_CAT_DEFAULT gds_lvshmsrc_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-/*
- * Parent class.
- */
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
+}
 
 
-static GstPushSrcClass *parent_class = NULL;
+GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, additional_initializations);
 
 
 /*
@@ -84,13 +94,6 @@ static GstPushSrcClass *parent_class = NULL;
  *
  * ========================================================================
  */
-
-
-enum property {
-	ARG_SHM_NAME = 1,
-	ARG_MASK,
-	ARG_WAIT_TIME
-};
 
 
 #define DEFAULT_SHM_NAME NULL
@@ -383,6 +386,18 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
  */
 
 
+/*
+ * properties
+ */
+
+
+enum property {
+	ARG_SHM_NAME = 1,
+	ARG_MASK,
+	ARG_WAIT_TIME
+};
+
+
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
@@ -473,9 +488,9 @@ static void finalize(GObject *object)
  */
 
 
-static void base_init(gpointer class)
+static void gds_lvshmsrc_base_init(gpointer klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -507,12 +522,10 @@ static void base_init(gpointer class)
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -572,10 +585,9 @@ static void class_init(gpointer class, gpointer class_data)
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gds_lvshmsrc_init(GDSLVSHMSrc *element, GDSLVSHMSrcClass *klass)
 {
-	GstBaseSrc *basesrc = GST_BASE_SRC(object);
-	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
+	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
 	gst_base_src_set_live(basesrc, TRUE);
 	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
@@ -589,29 +601,4 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->unblocked = FALSE;
 	element->create_thread_lock = g_mutex_new();
 	element->handle = NULL;
-}
-
-
-/*
- * gsd_lvshmsrc_get_type().
- */
-
-
-GType gsd_lvshmsrc_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GDSLVSHMSrcClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GDSLVSHMSrc),
-			.instance_init = instance_init,
-		};
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
-		type = g_type_register_static(GST_TYPE_PUSH_SRC, "GDSLVSHMSrc", &info, 0);
-	}
-
-	return type;
 }
