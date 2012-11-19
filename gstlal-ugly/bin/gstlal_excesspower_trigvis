@@ -272,6 +272,10 @@ for channel, selected_events in event_iter:
 	tiles, snrs, markers = [], [], []
 	loudest = [0,-1]
 	for i, event in enumerate(selected_events):
+		if event.snr == float('Inf') or event.snr == float('NaN'):
+   			print >>sys.stderr, "Warning, invalid SNR value found for event id %s, skipping" % event.event_id
+   			continue
+
 		sys.stdout.write( "\b"*statlen )
 		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
 		sys.stdout.write( statstr )
