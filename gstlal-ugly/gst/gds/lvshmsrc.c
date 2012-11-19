@@ -94,7 +94,7 @@ enum property {
 
 
 #define DEFAULT_SHM_NAME NULL
-#define DEFAULT_MASK -1	/* FIXME:  what does this mean? */
+#define DEFAULT_MASK -1
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
 
 
@@ -266,7 +266,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 * when we started waiting for the data adjusted by
 			 * the most recently measured latency
 			 *
-			 *
 			 * FIXME:  we need an API that can tell us the
 			 * timestamp of the missing data
 			 */
@@ -299,14 +298,14 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 */
 	length = lvshm_dataLength(element->handle);
 	timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
-	GST_LOG_OBJECT(element, "retrieved %u byte frame file for GPS %" GST_TIME_SECONDS_FORMAT, length, GST_TIME_SECONDS_ARGS(timestamp));
+	GST_LOG_OBJECT(element, "retrieved %u byte shared-memory buffer %p for GPS %" GST_TIME_SECONDS_FORMAT, length, data, GST_TIME_SECONDS_ARGS(timestamp));
 
 	/*
 	 * copy into a GstBuffer
 	 */
 
 	if(!length) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("received 0-byte frame file"));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("received 0-byte shared-memory buffer"));
 		result = GST_FLOW_UNEXPECTED;
 		goto done;
 	}
@@ -346,7 +345,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 done:
 	lvshm_releaseDataBuffer(element->handle);
-	GST_LOG_OBJECT(element, "released frame file");
+	GST_LOG_OBJECT(element, "released shared-memory buffer %p", data);
 	return result;
 }
 
@@ -535,8 +534,8 @@ static void class_init(gpointer class, gpointer class_data)
 		ARG_MASK,
 		g_param_spec_uint(
 			"mask",
-			"Mask",
-			"Shared memory data type mask.",
+			"Trigger mask",
+			"To receive buffers, produces must use a mask whose bitwise logical and with this mask is non-zero.",
 			0, G_MAXUINT, DEFAULT_MASK,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
