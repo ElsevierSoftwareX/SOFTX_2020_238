@@ -466,6 +466,11 @@ head = datasource.mkbasicsrc( pipeline,
 	handler.inst, 
 	verbose 
 )
+
+# Drop first PSD estimates until it settles
+if psdfile is not None:
+	head = pipeparts.mkdrop( pipeline, head, handler.fft_length*8*handler.rate )
+
 if gw_data_source_opts.data_source == "online":
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
