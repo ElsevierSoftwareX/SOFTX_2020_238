@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -83,6 +84,7 @@ GST_BOILERPLATE_FULL(GstLALCacheSrc, gstlal_cachesrc, GstBaseSrc, GST_TYPE_BASE_
 #define DEFAULT_LOCATION NULL
 #define DEFAULT_CACHE_SRC_REGEX NULL
 #define DEFAULT_CACHE_DSC_REGEX NULL
+#define DEFAULT_USE_MMAP FALSE
 
 
 /*
@@ -92,6 +94,66 @@ GST_BOILERPLATE_FULL(GstLALCacheSrc, gstlal_cachesrc, GstBaseSrc, GST_TYPE_BASE_
  *
  * ============================================================================
  */
+
+
+static GstFlowReturn read_buffer(GstPad *pad, int fd, guint64 offset, size_t size, GstBuffer **buf)
+{
+	size_t read_offset;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	result = gst_pad_alloc_buffer(pad, offset, size, GST_PAD_CAPS(pad), buf);
+	if(result != GST_FLOW_OK)
+		goto done;
+
+	read_offset = 0;
+	do {
+		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
+		if(bytes_read < 0) {
+			gst_buffer_unref(*buf);
+			*buf = NULL;
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		read_offset += bytes_read;
+	} while(read_offset < size);
+
+done:
+	return result;
+}
+
+
+static void munmap_buffer(GstBuffer *buf)
+{
+	munmap(GST_BUFFER_DATA(buf), GST_BUFFER_SIZE(buf));
+	GST_BUFFER_DATA(buf) = NULL;
+}
+
+
+static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t size, GstBuffer **buf)
+{
+	GstFlowReturn result = GST_FLOW_OK;
+
+	*buf = gst_buffer_new();
+	if(!*buf) {
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+	if(!GST_BUFFER_DATA(*buf)) {
+		gst_buffer_unref(*buf);
+		*buf = NULL;
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	GST_BUFFER_OFFSET(*buf) = offset;
+	GST_BUFFER_SIZE(*buf) = size;
+	gst_buffer_set_caps(*buf, GST_PAD_CAPS(pad));
+	GST_BUFFER_MALLOCDATA(*buf) = (void *) *buf;
+	GST_BUFFER_FREE_FUNC(*buf) = (GFreeFunc) munmap_buffer;
+
+done:
+	return result;
+}
 
 
 /*
@@ -188,7 +250,6 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	gchar *path = NULL;
 	int fd;
 	struct stat statinfo;
-	size_t read_offset;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(element->cache != NULL);
@@ -207,37 +268,33 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 
 	fd = open(path, O_RDONLY);
 	if(fd < 0) {
-		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("open('%s') failed: %s", path, sys_errlist[errno]));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s", path, sys_errlist[errno]));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
 
 	if(fstat(fd, &statinfo)) {
-		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("fstat('%s') failed: %s", path, sys_errlist[errno]));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("fstat('%s') failed: %s", path, sys_errlist[errno]));
 		result = GST_FLOW_ERROR;
 		close(fd);
 		goto done;
 	}
 
-	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(src), offset, statinfo.st_size, GST_PAD_CAPS(GST_BASE_SRC_PAD(src)), buf);
-	if(result != GST_FLOW_OK) {
-		close(fd);
-		goto done;
-	}
-
-	read_offset = 0;
-	do {
-		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
-		if(bytes_read < 0) {
-			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
+	if(element->use_mmap) {
+		result = mmap_buffer(GST_BASE_SRC_PAD(src), fd, offset, statinfo.st_size, buf);
+		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, sys_errlist[errno]));
 			close(fd);
-			gst_buffer_unref(*buf);
-			*buf = NULL;
-			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		read_offset += bytes_read;
-	} while(read_offset < GST_BUFFER_SIZE(*buf));
+	} else {
+		result = read_buffer(GST_BASE_SRC_PAD(src), fd, offset, statinfo.st_size, buf);
+		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
+			close(fd);
+			goto done;
+		}
+	}
 	close(fd);
 
 	GST_BUFFER_TIMESTAMP(*buf) = element->cache->frameFiles[element->index].startTime * GST_SECOND;
@@ -388,6 +445,7 @@ enum property {
 	PROP_LOCATION = 1,
 	PROP_CACHE_SRC_REGEX,
 	PROP_CACHE_DSC_REGEX,
+	PROP_USE_MMAP,
 };
 
 
@@ -411,6 +469,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_CACHE_DSC_REGEX:
 		g_free(element->cache_dsc_regex);
 		element->cache_dsc_regex = g_value_dup_string(value);
+		break;
+
+	case PROP_USE_MMAP:
+		element->use_mmap = g_value_get_boolean(value);
 		break;
 
 	default:
@@ -439,6 +501,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_CACHE_DSC_REGEX:
 		g_value_set_string(value, element->cache_dsc_regex);
+		break;
+
+	case PROP_USE_MMAP:
+		g_value_set_boolean(value, element->use_mmap);
 		break;
 
 	default:
@@ -534,6 +600,17 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 			"Pattern",
 			"Description regex for sieving cache (e.g. \".*RDS_C03.*\").",
 			DEFAULT_CACHE_DSC_REGEX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_USE_MMAP,
+		g_param_spec_boolean(
+			"use-mmap",
+			"Use mmap() instead of read()",
+			"Use mmap() instead of read().",
+			DEFAULT_USE_MMAP,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
