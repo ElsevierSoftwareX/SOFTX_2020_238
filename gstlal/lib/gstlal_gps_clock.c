@@ -35,7 +35,7 @@
 #include <lal/Date.h>
 
 
-#include <gstlal_gpsclock.h>
+#include <gstlal_gps_clock.h>
 
 
 /*
@@ -47,7 +47,7 @@
  */
 
 
-GST_BOILERPLATE(GstLALGPSClock, gstlal_gpsclock, GstSystemClock, GST_TYPE_SYSTEM_CLOCK);
+GST_BOILERPLATE(GstLALGPSClock, gstlal_gps_clock, GstSystemClock, GST_TYPE_SYSTEM_CLOCK);
 
 
 /*
@@ -76,12 +76,12 @@ static GstClockTime get_internal_time(GstClock *clock)
  */
 
 
-static void gstlal_gpsclock_base_init(gpointer klass)
+static void gstlal_gps_clock_base_init(gpointer klass)
 {
 }
 
 
-static void gstlal_gpsclock_class_init(GstLALGPSClockClass *klass)
+static void gstlal_gps_clock_class_init(GstLALGPSClockClass *klass)
 {
 	GstClockClass *clock_class = GST_CLOCK_CLASS(klass);
 
@@ -89,6 +89,6 @@ static void gstlal_gpsclock_class_init(GstLALGPSClockClass *klass)
 }
 
 
-static void gstlal_gpsclock_init(GstLALGPSClock *object, GstLALGPSClockClass *klass)
+static void gstlal_gps_clock_init(GstLALGPSClock *object, GstLALGPSClockClass *klass)
 {
 }
