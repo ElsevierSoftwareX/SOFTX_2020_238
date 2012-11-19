@@ -73,11 +73,25 @@
 
 
 /*
- * Parent class.
+ * ========================================================================
+ *
+ *                                Boilerplate
+ *
+ * ========================================================================
  */
 
 
-static GstBaseSrcClass *parent_class = NULL;
+#define GST_CAT_DEFAULT lal_framesrc_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_framesrc", 0, "lal_framesrc element");
+}
+
+
+GST_BOILERPLATE_FULL(GSTLALFrameSrc, gstlal_framesrc, GstBaseSrc, GST_TYPE_BASE_SRC, additional_initializations);
 
 
 /*
@@ -91,17 +105,6 @@ static GstBaseSrcClass *parent_class = NULL;
 
 #define DEFAULT_UNITS_STRING "strain"
 #define DEFAULT_UNITS_UNIT lalStrainUnit
-
-
-enum property {
-	ARG_SRC_LOCATION = 1,
-	ARG_SRC_INSTRUMENT,
-	ARG_CACHE_SRC_REGEX,
-	ARG_CACHE_DSC_REGEX,
-	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_UNITS,
-	ARG_SEGMENT_LIST
-};
 
 
 /*
@@ -1021,6 +1024,22 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
  */
 
 
+/*
+ * properties
+ */
+
+
+enum property {
+	ARG_SRC_LOCATION = 1,
+	ARG_SRC_INSTRUMENT,
+	ARG_CACHE_SRC_REGEX,
+	ARG_CACHE_DSC_REGEX,
+	ARG_SRC_CHANNEL_NAME,
+	ARG_SRC_UNITS,
+	ARG_SEGMENT_LIST
+};
+
+
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
@@ -1130,7 +1149,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 
 /*
- * Instance finalize function.  See ???
+ * Instance finalize function.
  */
 
 
@@ -1160,13 +1179,11 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * Base init function.
  */
 
 
-static void base_init(gpointer class)
+static void gstlal_framesrc_base_init(gpointer class)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
@@ -1211,18 +1228,14 @@ static void base_init(gpointer class)
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * Class init function.
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -1333,16 +1346,13 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * Instance init function.
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_framesrc_init(GSTLALFrameSrc *element, GSTLALFrameSrcClass *klass)
 {
-	GstBaseSrc *basesrc = GST_BASE_SRC(object);
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
@@ -1360,7 +1370,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->series_type = -1;
 	element->segmentlist = NULL;
 
-	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
+	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 
 	/*
 	 * Make a note to push tags before emitting next frame.
@@ -1368,28 +1378,4 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	element->need_tags = TRUE;
 
-}
-
-
-/*
- * gstlal_framesrc_get_type().
- */
-
-
-GType gstlal_framesrc_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALFrameSrcClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALFrameSrc),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "GSTLALFrameSrc", &info, 0);
-	}
-
-	return type;
 }
