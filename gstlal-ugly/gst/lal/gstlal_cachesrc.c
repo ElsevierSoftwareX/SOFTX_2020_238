@@ -156,6 +156,24 @@ done:
 }
 
 
+static GstClockTime cache_entry_start_time(GstLALCacheSrc *element, guint i)
+{
+	return element->cache->frameFiles[i].startTime * GST_SECOND;
+}
+
+
+static GstClockTime cache_entry_duration(GstLALCacheSrc *element, guint i)
+{
+	return element->cache->frameFiles[i].duration * GST_SECOND;
+}
+
+
+static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
+{
+	return (element->cache->frameFiles[i].startTime + element->cache->frameFiles[i].duration) * GST_SECOND;
+}
+
+
 /*
  * ============================================================================
  *
@@ -297,11 +315,11 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	}
 	close(fd);
 
-	GST_BUFFER_TIMESTAMP(*buf) = element->cache->frameFiles[element->index].startTime * GST_SECOND;
-	GST_BUFFER_DURATION(*buf) = element->cache->frameFiles[element->index].duration * GST_SECOND;
+	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
+	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
 	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_OFFSET_END(*buf) = GST_BUFFER_OFFSET(*buf) + GST_BUFFER_SIZE(*buf);
-	if(element->index == 0 || GST_BUFFER_TIMESTAMP(*buf) != (GstClockTime) (element->cache->frameFiles[element->index - 1].startTime + element->cache->frameFiles[element->index - 1].duration) * GST_SECOND)
+	if(element->index == 0 || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1))
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 
 	GST_DEBUG_OBJECT(element, "pushing %s %" GST_BUFFER_BOUNDARIES_FORMAT, element->cache->frameFiles[element->index].url, GST_BUFFER_BOUNDARIES_ARGS(*buf));
@@ -333,7 +351,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 	if(!GST_CLOCK_TIME_IS_VALID(segment->start)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("start time is required"));
-		/*success = FALSE;*/
+		success = FALSE;
 		goto done;
 	}
 
@@ -343,16 +361,18 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 	if(element->cache->numFrameFiles < 1) {
 		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("seek impossible: no files in cache"));
-		/*success = FALSE;*/
+		success = FALSE;
 		goto done;
 	}
-	min = element->cache->frameFiles[0].startTime * GST_SECOND;
-	max = (element->cache->frameFiles[element->cache->numFrameFiles - 1].startTime + element->cache->frameFiles[element->cache->numFrameFiles - 1].duration) * GST_SECOND;
+#if 0
+	min = cache_entry_start_time(element, 0);
+	max = cache_entry_end_time(element, element->cache->numFrameFiles - 1);
 	if((GstClockTime) segment->start < min || (GstClockTime) segment->start >= max) {
-		/*GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("seek to %" GST_TIME_SECONDS_FORMAT " out of range: cache spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max)));*/
-		/*success = FALSE;*/
+		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("seek to %" GST_TIME_SECONDS_FORMAT " out of range: cache spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max)));
+		success = FALSE;
 		goto done;
 	}
+#endif
 
 	/*
 	 * do the seek.  the loop assumes the cache entries are in time
@@ -362,9 +382,9 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 	for(i = 0; i < element->cache->numFrameFiles; i++) {
 		if(i)
-			g_assert_cmpuint(element->cache->frameFiles[i].startTime, >=, element->cache->frameFiles[i - 1].startTime);
-		min = element->cache->frameFiles[i].startTime * GST_SECOND;
-		max = (element->cache->frameFiles[i].startTime + element->cache->frameFiles[i].duration) * GST_SECOND;
+			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
+		min = cache_entry_start_time(element, i);
+		max = cache_entry_end_time(element, i);
 		if((GstClockTime) segment->start < max) {
 			GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ":  found file '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
 			element->index = i;
@@ -399,25 +419,19 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		case GST_QUERY_POSITION:
 			if(element->index < element->cache->numFrameFiles)
 				/* report start of next file */
-				gst_query_set_position(query, GST_FORMAT_TIME, (element->cache->frameFiles[element->index].startTime - element->cache->frameFiles[0].startTime) * GST_SECOND);
+				gst_query_set_position(query, GST_FORMAT_TIME, cache_entry_start_time(element, element->index) - cache_entry_start_time(element, 0));
 			else
 				/* special case for EOS:  report end of last file */
-				gst_query_set_position(query, GST_FORMAT_TIME, (element->cache->frameFiles[element->cache->numFrameFiles - 1].startTime + element->cache->frameFiles[element->cache->numFrameFiles - 1].duration - element->cache->frameFiles[0].startTime) * GST_SECOND);
+				gst_query_set_position(query, GST_FORMAT_TIME, cache_entry_end_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0));
 			break;
 
-		case GST_QUERY_DURATION: {
-			GstClockTime min = element->cache->frameFiles[0].startTime * GST_SECOND;
-			GstClockTime max = (element->cache->frameFiles[element->cache->numFrameFiles - 1].startTime + element->cache->frameFiles[element->cache->numFrameFiles - 1].duration) * GST_SECOND;
-			gst_query_set_duration(query, GST_FORMAT_TIME, max - min);
+		case GST_QUERY_DURATION:
+			gst_query_set_duration(query, GST_FORMAT_TIME, cache_entry_end_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0));
 			break;
-		}
 
-		case GST_QUERY_SEGMENT: {
-			GstClockTime min = element->cache->frameFiles[0].startTime * GST_SECOND;
-			GstClockTime max = (element->cache->frameFiles[element->cache->numFrameFiles - 1].startTime + element->cache->frameFiles[element->cache->numFrameFiles - 1].duration) * GST_SECOND;
-			gst_query_set_segment(query, 1.0, GST_FORMAT_TIME, min, max);
+		case GST_QUERY_SEGMENT:
+			gst_query_set_segment(query, 1.0, GST_FORMAT_TIME, cache_entry_start_time(element, 0), cache_entry_end_time(element, element->cache->numFrameFiles - 1));
 			break;
-		}
 
 		case GST_QUERY_URI:
 			gst_query_set_uri(query, element->cache->frameFiles[element->index].url);
