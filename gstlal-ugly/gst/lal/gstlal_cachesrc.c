@@ -81,6 +81,8 @@ GST_BOILERPLATE_FULL(GstLALCacheSrc, gstlal_cachesrc, GstBaseSrc, GST_TYPE_BASE_
 
 
 #define DEFAULT_LOCATION NULL
+#define DEFAULT_CACHE_SRC_REGEX NULL
+#define DEFAULT_CACHE_DSC_REGEX NULL
 
 
 /*
@@ -119,13 +121,20 @@ static gboolean start(GstBaseSrc *src)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(src);
 	FrCache *cache;
-	FrCacheSieve params = {0,};
+	FrCacheSieve sieve = {
+		.earliestTime = 0,
+		.latestTime = G_MAXINT32,
+		.urlRegEx = NULL,
+		.srcRegEx = element->cache_src_regex,
+		.dscRegEx = element->cache_dsc_regex,
+	};
 
 	g_return_val_if_fail(element->location != NULL, FALSE);
 
 	element->cache = XLALFrImportCache(element->location);
-	/* this puts the files in time order */
-	cache = XLALFrSieveCache(element->cache, &params);
+
+	/* sieving also puts the files in time order */
+	cache = XLALFrSieveCache(element->cache, &sieve);
 	if(!cache) {
 		XLALFrDestroyCache(element->cache);
 		element->cache = NULL;
@@ -377,6 +386,8 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 enum property {
 	PROP_LOCATION = 1,
+	PROP_CACHE_SRC_REGEX,
+	PROP_CACHE_DSC_REGEX,
 };
 
 
@@ -390,6 +401,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_LOCATION:
 		g_free(element->location);
 		element->location = g_value_dup_string(value);
+		break;
+
+	case PROP_CACHE_SRC_REGEX:
+		g_free(element->cache_src_regex);
+		element->cache_src_regex = g_value_dup_string(value);
+		break;
+
+	case PROP_CACHE_DSC_REGEX:
+		g_free(element->cache_dsc_regex);
+		element->cache_dsc_regex = g_value_dup_string(value);
 		break;
 
 	default:
@@ -412,6 +433,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, element->location);
 		break;
 
+	case PROP_CACHE_SRC_REGEX:
+		g_value_set_string(value, element->cache_src_regex);
+		break;
+
+	case PROP_CACHE_DSC_REGEX:
+		g_value_set_string(value, element->cache_dsc_regex);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -427,6 +456,10 @@ static void finalize(GObject *object)
 
 	g_free(element->location);
 	element->location = NULL;
+	g_free(element->cache_src_regex);
+	element->cache_src_regex = NULL;
+	g_free(element->cache_dsc_regex);
+	element->cache_dsc_regex = NULL;
 	XLALFrDestroyCache(element->cache);
 	element->cache = NULL;
 
@@ -450,18 +483,6 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	g_object_class_install_property(
-		gobject_class,
-		PROP_LOCATION,
-		g_param_spec_string(
-			"location",
-			"Location",
-			"Path to LAL frame file cache.",
-			DEFAULT_LOCATION,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
-	);
-
 	gst_element_class_set_details_simple(
 		element_class,
 		"LAL Frame Cache File Source",
@@ -483,6 +504,40 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 		)
 	);
 
+	g_object_class_install_property(
+		gobject_class,
+		PROP_LOCATION,
+		g_param_spec_string(
+			"location",
+			"Location",
+			"Path to LAL frame file cache.",
+			DEFAULT_LOCATION,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_CACHE_SRC_REGEX,
+		g_param_spec_string(
+			"cache-src-regex",
+			"Pattern",
+			"Source/Observatory regex for sieving cache (e.g. \"H.*\").",
+			DEFAULT_CACHE_SRC_REGEX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_CACHE_DSC_REGEX,
+		g_param_spec_string(
+			"cache-dsc-regex",
+			"Pattern",
+			"Description regex for sieving cache (e.g. \".*RDS_C03.*\").",
+			DEFAULT_CACHE_DSC_REGEX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+
 	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
 	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
@@ -496,5 +551,7 @@ static void gstlal_cachesrc_init(GstLALCacheSrc *element, GstLALCacheSrcClass *k
 {
 	gst_base_src_set_format(GST_BASE_SRC(element), GST_FORMAT_TIME);
 
+	element->cache_src_regex = NULL;
+	element->cache_dsc_regex = NULL;
 	element->cache = NULL;
 }

@@ -84,8 +84,10 @@ struct _GstLALCacheSrc {
 	GstBaseSrc basesrc;
 
 	gchar *location;
-	FrCache *cache;
+	gchar *cache_src_regex;
+	gchar *cache_dsc_regex;
 
+	FrCache *cache;
 	guint index;
 };
 
