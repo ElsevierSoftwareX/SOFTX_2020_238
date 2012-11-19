@@ -84,7 +84,7 @@ for i in range(5):
 	head = pipeparts.mkprogressreport( pipeline, head, name = "data_%d" % i )
 
 	head = pipeparts.mkbursttriggergen( pipeline, head, 
-		n = 1,
+		n = int(1e5),
 		bank = bank_filename 
 	)
 	head = pipeparts.mkprogressreport( pipeline, head, name = "triggers_%d" % i )
@@ -99,8 +99,9 @@ head = pipeparts.mkgeneric( pipeline, head, "lal_hveto" )
 
 pipeparts.mkfilesink( pipeline, head, filename="testing" )
 
-os.rm( bank_filename )
+os.remove( bank_filename )
 
+#pipeparts.write_dump_dot(pipeline, "test", verbose = True)
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
 
