@@ -67,6 +67,7 @@ typedef struct {
 	guint num_buffers;
 	guint buffer_length;
 	guint mask;
+	gboolean lock;
 
 	/*< private >*/
 

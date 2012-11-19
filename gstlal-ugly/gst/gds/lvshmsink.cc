@@ -98,6 +98,7 @@ GST_BOILERPLATE_FULL(GDSLVSHMSink, gds_lvshmsink, GstBaseSink, GST_TYPE_BASE_SIN
 #define DEFAULT_NUM_BUFFERS 1
 #define DEFAULT_BUFFER_LENGTH (1<<20)	/* 1 MiB */
 #define DEFAULT_MASK -1
+#define DEFAULT_LOCK FALSE
 
 
 /*
@@ -166,9 +167,13 @@ static gboolean start(GstBaseSink *sink)
 
 	GST_DEBUG_OBJECT(element, "gained access to shared-memory partition \"%s\"", element->name);
 
-	lsmp_partition(element)->lock(true);
-
-	GST_DEBUG_OBJECT(element, "locked shared-memory partition \"%s\"", element->name);
+	lsmp_partition(element)->keep(false);
+	if(element->lock) {
+		if(lsmp_partition(element)->lock(true))
+			GST_ELEMENT_WARNING(element, RESOURCE, OPEN_WRITE, (NULL), ("failure locking shared-memory partition into memory: %s", lsmp_partition(element)->Error()));
+		else
+			GST_DEBUG_OBJECT(element, "locked shared-memory partition \"%s\"", element->name);
+	}
 
 done:
 	return success;
@@ -184,10 +189,6 @@ static gboolean stop(GstBaseSink *sink)
 {
 	GDSLVSHMSink *element = GDS_LVSHMSINK(sink);
 	gboolean success = TRUE;
-
-	lsmp_partition(element)->lock(false);
-
-	GST_DEBUG_OBJECT(element, "unlocked shared-memory partition \"%s\"", element->name);
 
 	delete lsmp_partition(element);
 	element->partition = NULL;
@@ -257,7 +258,8 @@ enum property {
 	ARG_SHM_NAME = 1,
 	ARG_NUM_BUFFERS,
 	ARG_BUFFER_LENGTH,
-	ARG_MASK
+	ARG_MASK,
+	ARG_LOCK,
 };
 
 
@@ -283,6 +285,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	case ARG_MASK:
 		element->mask = g_value_get_uint(value);
+		break;
+
+	case ARG_LOCK:
+		element->lock = g_value_get_boolean(value);
 		break;
 
 	default:
@@ -315,6 +321,10 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_MASK:
 		g_value_set_uint(value, element->mask);
+		break;
+
+	case ARG_LOCK:
+		g_value_set_boolean(value, element->lock);
 		break;
 
 	default:
@@ -438,6 +448,17 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 			"Trigger mask",
 			"To receive buffers, consumers must use a mask whose bitwise logical and with this mask is non-zero.",
 			0, G_MAXUINT, DEFAULT_MASK,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_LOCK,
+		g_param_spec_boolean(
+			"lock",
+			"Lock shared-memory",
+			"Lock shared-memory into main memory.  Process must be able to set effective user ID to 0.",
+			DEFAULT_LOCK,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
