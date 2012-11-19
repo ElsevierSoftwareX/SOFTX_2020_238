@@ -138,6 +138,7 @@ static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
+	GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_READONLY);
 	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
 	if(!GST_BUFFER_DATA(*buf)) {
 		gst_buffer_unref(*buf);
