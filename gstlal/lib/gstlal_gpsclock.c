@@ -89,6 +89,6 @@ static void gstlal_gpsclock_class_init(GstLALGPSClockClass *klass)
 }
 
 
-static void gstlal_gpsclock_init(GstLALGPSClock *element, GstLALGPSClockClass *klass)
+static void gstlal_gpsclock_init(GstLALGPSClock *object, GstLALGPSClockClass *klass)
 {
 }
