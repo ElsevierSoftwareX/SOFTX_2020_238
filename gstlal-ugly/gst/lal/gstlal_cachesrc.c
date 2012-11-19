@@ -176,7 +176,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(src);
 	GError *error = NULL;
 	gchar *host = NULL;
-	gchar *path;
+	gchar *path = NULL;
 	int fd;
 	struct stat statinfo;
 	size_t read_offset;
@@ -188,6 +188,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 		return GST_FLOW_UNEXPECTED;
 
 	path = g_filename_from_uri(element->cache->frameFiles[element->index].url, &host, &error);
+	g_free(host);
 	if(error) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("error parsing URI '%s': %s", element->cache->frameFiles[element->index].url, error->message));
 		g_error_free(error);
@@ -199,10 +200,8 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	if(fd < 0) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("open('%s') failed: %s", path, sys_errlist[errno]));
 		result = GST_FLOW_ERROR;
-		g_free(path);
 		goto done;
 	}
-	g_free(path);
 
 	if(fstat(fd, &statinfo)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("fstat('%s') failed: %s", path, sys_errlist[errno]));
@@ -212,19 +211,24 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 	}
 
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(src), offset, statinfo.st_size, GST_PAD_CAPS(GST_BASE_SRC_PAD(src)), buf);
-	if(result != GST_FLOW_OK)
+	if(result != GST_FLOW_OK) {
+		close(fd);
 		goto done;
+	}
 
-	for(read_offset = 0; read_offset < GST_BUFFER_SIZE(*buf); ) {
+	read_offset = 0;
+	do {
 		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
 		if(bytes_read < 0) {
 			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
-			result = GST_FLOW_ERROR;
 			close(fd);
+			gst_buffer_unref(*buf);
+			*buf = NULL;
+			result = GST_FLOW_ERROR;
 			goto done;
 		}
 		read_offset += bytes_read;
-	}
+	} while(read_offset < GST_BUFFER_SIZE(*buf));
 	close(fd);
 
 	GST_BUFFER_TIMESTAMP(*buf) = element->cache->frameFiles[element->index].startTime * GST_SECOND;
@@ -238,6 +242,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 
 	element->index++;
 done:
+	g_free(path);
 	return result;
 }
 
