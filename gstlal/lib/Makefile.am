@@ -10,9 +10,9 @@ libgstlaltags_la_SOURCES = gstlal_tags.c gstlal_tags.h
 libgstlaltags_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
 libgstlaltags_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(gstreamer_LIBS)
 
-libgstlaltypes_la_SOURCES = gstlal_debug.h gstaudioadapter.h gstaudioadapter.c gstlalcollectpads.h gstlalcollectpads.c
-libgstlaltypes_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
-libgstlaltypes_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(gstreamer_LIBS)
+libgstlaltypes_la_SOURCES = gstlal_debug.h gstaudioadapter.h gstaudioadapter.c gstlalcollectpads.h gstlalcollectpads.c gstlal_gpsclock.h gstlal_gpsclock.c
+libgstlaltypes_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+libgstlaltypes_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(LAL_LIBS) $(gstreamer_LIBS)
 
 #
 # Build gstlal_marshal.h, gstlal_marshal.c
