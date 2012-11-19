@@ -61,9 +61,9 @@ GST_BOILERPLATE(GstLALGPSClock, gstlal_gps_clock, GstSystemClock, GST_TYPE_SYSTE
 
 static GstClockTime get_internal_time(GstClock *clock)
 {
-	LIGOTimeGPS gps;
+	GstClockTime t = GST_CLOCK_CLASS(parent_class)->get_internal_time(clock);
 
-	return XLALGPSToINT8NS(XLALGPSTimeNow(&gps));
+	return t - (XLAL_EPOCH_UNIX_GPS - XLALGPSLeapSeconds(GST_TIME_AS_SECONDS(t))) * GST_SECOND;
 }
 
 
@@ -91,4 +91,5 @@ static void gstlal_gps_clock_class_init(GstLALGPSClockClass *klass)
 
 static void gstlal_gps_clock_init(GstLALGPSClock *object, GstLALGPSClockClass *klass)
 {
+	g_object_set(object, "clock-type", GST_CLOCK_TYPE_REALTIME, NULL);
 }
