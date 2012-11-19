@@ -39,6 +39,30 @@
 G_BEGIN_DECLS
 
 
+/*
+ * gds_lvshmsink_buffer_mode enum type
+ */
+
+
+enum gds_lvshmsink_buffer_mode {
+	GDS_LVSHMSINK_BUFFER_MODE_0 = 0,
+	GDS_LVSHMSINK_BUFFER_MODE_1 = 1,
+	GDS_LVSHMSINK_BUFFER_MODE_2 = 2,
+};
+
+
+#define GDS_LVSHMSINK_BUFFER_MODE_TYPE \
+	(gds_lvshmsink_buffer_mode_get_type())
+
+
+GType gds_lvshmsink_buffer_mode_get_type(void);
+
+
+/*
+ * GDSLVSHMSink type
+ */
+
+
 #define GDS_LVSHMSINK_TYPE \
 	(gds_lvshmsink_get_type())
 #define GDS_LVSHMSINK(obj) \
@@ -67,6 +91,7 @@ typedef struct {
 	guint num_buffers;
 	guint buffer_length;
 	guint mask;
+	enum gds_lvshmsink_buffer_mode buffer_mode;
 	gboolean lock;
 
 	/*< private >*/

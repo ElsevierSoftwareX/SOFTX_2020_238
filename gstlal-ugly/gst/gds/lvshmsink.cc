@@ -86,6 +86,30 @@ GST_BOILERPLATE_FULL(GDSLVSHMSink, gds_lvshmsink, GstBaseSink, GST_TYPE_BASE_SIN
 
 
 /*
+ * buffer-mode enum type
+ */
+
+
+GType gds_lvshmsink_buffer_mode_get_type(void)
+{
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GDS_LVSHMSINK_BUFFER_MODE_0, "GDS_LVSHMSINK_BUFFER_MODE_0", "A buffer is released (moved to free list) any time is not reserved and not in use."},
+			{GDS_LVSHMSINK_BUFFER_MODE_1, "GDS_LVSHMSINK_BUFFER_MODE_1", "A buffer is released after it has been seen by at least one consumer and is no longer reserved or in use."},
+			{GDS_LVSHMSINK_BUFFER_MODE_2, "GDS_LVSHMSINK_BUFFER_MODE_2", "A buffer is not released except if it is unreserved, not in use and needed to fill a producer request."},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("gds_lvshmsink_buffer_mode", values);
+	}
+
+	return type;
+}
+
+
+/*
  * ========================================================================
  *
  *                                 Parameters
@@ -98,6 +122,7 @@ GST_BOILERPLATE_FULL(GDSLVSHMSink, gds_lvshmsink, GstBaseSink, GST_TYPE_BASE_SIN
 #define DEFAULT_NUM_BUFFERS 1
 #define DEFAULT_BUFFER_LENGTH (1<<20)	/* 1 MiB */
 #define DEFAULT_MASK -1
+#define DEFAULT_BUFFER_MODE 0
 #define DEFAULT_LOCK FALSE
 
 
@@ -172,8 +197,11 @@ static gboolean start(GstBaseSink *sink)
 		if(lsmp_partition(element)->lock(true))
 			GST_ELEMENT_WARNING(element, RESOURCE, OPEN_WRITE, (NULL), ("failure locking shared-memory partition into memory: %s", lsmp_partition(element)->Error()));
 		else
-			GST_DEBUG_OBJECT(element, "locked shared-memory partition \"%s\"", element->name);
+			GST_DEBUG_OBJECT(element, "locked shared-memory partition \"%s\" to main memory", element->name);
 	}
+
+	GST_DEBUG_OBJECT(element, "setting shared-memory partition \"%s\" buffer allocation mode to %d", element->name, element->buffer_mode);
+	lsmp_partition(element)->bufmode(element->buffer_mode);
 
 done:
 	return success;
@@ -259,6 +287,7 @@ enum property {
 	ARG_NUM_BUFFERS,
 	ARG_BUFFER_LENGTH,
 	ARG_MASK,
+	ARG_BUFFER_MODE,
 	ARG_LOCK,
 };
 
@@ -285,6 +314,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	case ARG_MASK:
 		element->mask = g_value_get_uint(value);
+		break;
+
+	case ARG_BUFFER_MODE:
+		element->buffer_mode = (enum gds_lvshmsink_buffer_mode) g_value_get_enum(value);
 		break;
 
 	case ARG_LOCK:
@@ -321,6 +354,10 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_MASK:
 		g_value_set_uint(value, element->mask);
+		break;
+
+	case ARG_BUFFER_MODE:
+		g_value_set_enum(value, element->buffer_mode);
 		break;
 
 	case ARG_LOCK:
@@ -448,6 +485,18 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 			"Trigger mask",
 			"To receive buffers, consumers must use a mask whose bitwise logical and with this mask is non-zero.",
 			0, G_MAXUINT, DEFAULT_MASK,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_BUFFER_MODE,
+		g_param_spec_enum(
+			"buffer-mode",
+			"Buffer mode",
+			"Buffer allocation mode.",
+			GDS_LVSHMSINK_BUFFER_MODE_TYPE,
+			DEFAULT_BUFFER_MODE,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
