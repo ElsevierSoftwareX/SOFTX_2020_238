@@ -118,6 +118,7 @@ GType gds_lvshmsink_buffer_mode_get_type(void)
  */
 
 
+#define DEFAULT_BLOCKSIZE (1<<20)	/* 1 MiB */
 #define DEFAULT_SHM_NAME NULL
 #define DEFAULT_NUM_BUFFERS 1
 #define DEFAULT_MASK -1
@@ -434,6 +435,8 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
+	G_PARAM_SPEC_UINT(g_object_class_find_property(gobject_class, "blocksize"))->default_value = DEFAULT_BLOCKSIZE;
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SHM_NAME,
@@ -511,6 +514,8 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 
 static void gds_lvshmsink_init(GDSLVSHMSink *element, GDSLVSHMSinkClass *klass)
 {
+	gst_base_sink_set_blocksize(GST_BASE_SINK(element), DEFAULT_BLOCKSIZE);
+
 	/*
 	 * internal data
 	 */
