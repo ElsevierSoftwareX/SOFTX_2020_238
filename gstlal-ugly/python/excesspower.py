@@ -550,3 +550,12 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 
 	return chtee
 
+def compute_amplitude( sb, psd ):
+	"""
+	Compute the band-limited channel amplitudes from the whitened channel smaples. Note that this is only a rough approximation of the true band-limited amplitude since it ignores the effect of the filters. They are approximated as square windows which pick up the values of the PSD across the entire bandwidth of the tile.
+	"""
+	flow = int((sb.central_freq - sb.bandwidth/2.0 - psd.f0)/psd.deltaF)
+	fhigh = int((sb.central_freq + sb.bandwidth/2.0 - psd.f0)/psd.deltaF)
+	pow = sum(psd.data[flow:fhigh])
+	sb.amplitude = numpy.sqrt(pow*sb.snr*psd.deltaF/sb.bandwidth)
+

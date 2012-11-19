@@ -176,6 +176,11 @@ def get_triggers(elem, handler, ndof):
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
 		if options.compat:
 			row.snr = row.snr / ndof - 1
+
+		# This is done here so that the current PSD is used rather than
+		# what might be there when the triggers are actually output
+		ep.compute_amplitude( row, handler.psd )
+
 		handler.triggers.append( row )
 	
 	#buf_ts = (buffer.timestamp*1e-9 - handler.start) / handler.units + handler.start
