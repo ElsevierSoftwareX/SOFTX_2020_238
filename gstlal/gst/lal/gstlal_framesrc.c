@@ -1,7 +1,7 @@
 /*
  * LAL cache-based .gwf frame file src element
  *
- * Copyright (C) 2008-2011  Kipp Cannon
+ * Copyright (C) 2008-2012  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -103,8 +103,12 @@ GST_BOILERPLATE_FULL(GSTLALFrameSrc, gstlal_framesrc, GstBaseSrc, GST_TYPE_BASE_
  */
 
 
+#define DEFAULT_LOCATION NULL
+#define DEFAULT_INSTRUMENT NULL
+#define DEFAULT_CACHE_SRC_REGEX NULL
+#define DEFAULT_CACHE_DSC_REGEX NULL
+#define DEFAULT_CHANNEL_NAME NULL
 #define DEFAULT_UNITS_STRING "strain"
-#define DEFAULT_UNITS_UNIT lalStrainUnit
 
 
 /*
@@ -1248,8 +1252,8 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 			"location",
 			"Location",
 			"Path to LAL cache file (see ligo_data_find for more information).",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			DEFAULT_LOCATION,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1259,8 +1263,8 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 			"instrument",
 			"Instrument",
 			"Instrument name (e.g., \"H1\").",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			DEFAULT_INSTRUMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1269,9 +1273,9 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 		g_param_spec_string(
 			"cache-src-regex",
 			"Pattern",
-			"Description regex for sieving cache (e.g. \"H.*\")",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			"Source/Observatory regex for sieving cache (e.g. \"H.*\")",
+			DEFAULT_CACHE_SRC_REGEX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1280,9 +1284,9 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 		g_param_spec_string(
 			"cache-dsc-regex",
 			"Pattern",
-			"Source/Observatory regex for sieving cache (e.g. \"H.*\")",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			"Description regex for sieving cache (e.g. \"H.*\")",
+			DEFAULT_CACHE_DSC_REGEX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1292,8 +1296,8 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 			"channel-name",
 			"Channel name",
 			"Channel name (e.g., \"LSC-STRAIN\").",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			DEFAULT_CHANNEL_NAME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1304,7 +1308,7 @@ static void gstlal_framesrc_class_init(GSTLALFrameSrcClass *klass)
 			"Units",
 			"Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.",
 			DEFAULT_UNITS_STRING,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1366,7 +1370,6 @@ static void gstlal_framesrc_init(GSTLALFrameSrc *element, GSTLALFrameSrcClass *k
 	element->rate = 0;
 	element->width = 0;
 	element->stream = NULL;
-	element->units = DEFAULT_UNITS_UNIT;
 	element->series_type = -1;
 	element->segmentlist = NULL;
 
