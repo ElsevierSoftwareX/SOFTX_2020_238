@@ -376,6 +376,33 @@ AC_SUBST([ORC_LIBS])
 
 
 #
+# Check for CUDA
+#
+
+
+AC_ARG_WITH(
+	[cuda],
+	[AS_HELP_STRING([--with-cuda], [specify location of CUDA [/usr/local/cuda]])],
+	[],
+	[with_cuda=no]
+)
+AS_IF(
+	[test "x$with_cuda" != "xno"],
+	[AS_IF([test "x$build_cpu" = "xx86_64"], [CLIBS="lib64"], [CLIBS="lib"])
+	 AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
+	 AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
+	 AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
+	 HAVE_CUDA="yes"
+	],
+	[AC_MSG_WARN([check for cuda disabled])
+	HAVE_CUDA="no"
+	]
+)
+AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
+AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
+
+
+#
 # Output configure information
 #
 
