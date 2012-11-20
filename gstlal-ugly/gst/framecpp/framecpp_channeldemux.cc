@@ -502,7 +502,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
  */
 
 
-static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
+static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
@@ -528,7 +528,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
 	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
 		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
 	else {
-		GST_LOG_OBJECT(pad, "new caps for %s: %P", name, GST_BUFFER_CAPS(buffer));
+		GST_LOG_OBJECT(pad, "new caps: %P", GST_BUFFER_CAPS(buffer));
 		gst_pad_set_caps(pad, GST_BUFFER_CAPS(buffer));
 		pad_state->need_tags = TRUE;
 	}
@@ -583,7 +583,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
 	 * push buffer downstream
 	 */
 
-	GST_LOG_OBJECT(pad, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(buffer));
+	GST_LOG_OBJECT(pad, "pushing buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	result = gst_pad_push(pad, buffer);
 
 	/*
@@ -913,7 +913,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 */
 
 					for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-						result = frvect_to_buffer_and_push(srcpad, name, *vect, timestamp);
+						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
 							srcpad = NULL;
@@ -981,7 +981,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 */
 
 				for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-					result = frvect_to_buffer_and_push(srcpad, name, *vect, timestamp);
+					result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
@@ -1041,7 +1041,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 */
 
 				for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-					result = frvect_to_buffer_and_push(srcpad, name, *vect, timestamp);
+					result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
