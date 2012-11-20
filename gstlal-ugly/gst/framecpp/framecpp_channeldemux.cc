@@ -150,30 +150,6 @@ static const char *get_frame_library_name(FrameCPP::IFrameStream *ifs)
 
 
 /*
- * ============================================================================
- *
- *                                Source Pads
- *
- * ============================================================================
- */
-
-
-/*
- * pad state
- */
-
-
-struct pad_state {
-	gboolean need_discont;
-	gboolean need_new_segment;
-	gboolean need_tags;
-	GstClockTime next_timestamp;
-	guint64 next_out_offset;
-	GstTagList *tag_list;
-};
-
-
-/*
  * split a string of the form "INSTRUMENT:CHANNEL" into two strings
  * containing the instrument and channel parts separately.  the pointers
  * placed in the instrument and channel pointers should be free()ed when no
@@ -195,6 +171,113 @@ static int split_name(const char *name, char **instrument, char **channel)
 
 	return 0;
 }
+
+
+/*
+ * check if a channel name is in the requested channel list.  returns TRUE
+ * if the channel list is empty (demultiplex all channels)
+ */
+
+
+static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const char *name)
+{
+	return !g_hash_table_size(element->channel_list) || g_hash_table_lookup(element->channel_list, name);
+}
+
+
+/*
+ * build the GstCaps describing the format of the contents of an FrVect
+ */
+
+
+static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gint *rate, guint *unit_size, guint *bitrate)
+{
+	GstCaps *caps;
+	gint width = vect->GetTypeSize() * 8;
+	*rate = round(1.0 / vect->GetDim(0).GetDx());
+
+	switch(vect->GetType()) {
+	case FrameCPP::FrVect::FR_VECT_4R:
+	case FrameCPP::FrVect::FR_VECT_8R:
+		caps = gst_caps_new_simple("audio/x-raw-float",
+			"rate", G_TYPE_INT, *rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrameCPP::FrVect::FR_VECT_8C:
+	case FrameCPP::FrVect::FR_VECT_16C:
+		caps = gst_caps_new_simple("audio/x-raw-complex",
+			"rate", G_TYPE_INT, *rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrameCPP::FrVect::FR_VECT_C:
+	case FrameCPP::FrVect::FR_VECT_2S:
+	case FrameCPP::FrVect::FR_VECT_4S:
+	case FrameCPP::FrVect::FR_VECT_8S:
+		caps = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, *rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,	/* FIXME:  for Adc use nBits */
+			"signed", G_TYPE_BOOLEAN, TRUE,
+			NULL);
+		break;
+
+	case FrameCPP::FrVect::FR_VECT_1U:
+	case FrameCPP::FrVect::FR_VECT_2U:
+	case FrameCPP::FrVect::FR_VECT_4U:
+	case FrameCPP::FrVect::FR_VECT_8U:
+		caps = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, *rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,	/* FIXME;  for Adc use nBits */
+			"signed", G_TYPE_BOOLEAN, FALSE,
+			NULL);
+		break;
+
+	default:
+		g_assert_not_reached();
+	}
+
+	*unit_size = 1 * width / 8;	/* 1 channel */
+	*bitrate = *rate * 1 * width;	/* 1 channel */
+
+	return caps;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                Source Pads
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * pad state
+ */
+
+
+struct pad_state {
+	gboolean need_discont;
+	gboolean need_new_segment;
+	gboolean need_tags;
+	GstClockTime next_timestamp;
+	guint64 next_out_offset;
+	GstTagList *tag_list;
+};
 
 
 /*
@@ -334,18 +417,6 @@ static gboolean remove_pad(GstFrameCPPChannelDemux *element, const char *name)
 
 
 /*
- * check if a channel name is in the requested channel list.  returns TRUE
- * if the channel list is empty (demultiplex all channels)
- */
-
-
-static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const char *name)
-{
-	return !g_hash_table_size(element->channel_list) || g_hash_table_lookup(element->channel_list, name);
-}
-
-
-/*
  * get pad by name, creating it if it doesn't exist
  */
 
@@ -377,74 +448,8 @@ static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, e
  */
 
 
-static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, guint *bitrate)
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size, guint *bitrate)
 {
-	GstCaps *caps;
-	gint rate = round(1.0 / vect->GetDim(0).GetDx());
-	gint width = vect->GetTypeSize() * 8;
-
-	switch(vect->GetType()) {
-	case FrameCPP::FrVect::FR_VECT_4R:
-	case FrameCPP::FrVect::FR_VECT_8R:
-		caps = gst_caps_new_simple("audio/x-raw-float",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
-	case FrameCPP::FrVect::FR_VECT_8C:
-	case FrameCPP::FrVect::FR_VECT_16C:
-		caps = gst_caps_new_simple("audio/x-raw-complex",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
-	case FrameCPP::FrVect::FR_VECT_C:
-	case FrameCPP::FrVect::FR_VECT_2S:
-	case FrameCPP::FrVect::FR_VECT_4S:
-	case FrameCPP::FrVect::FR_VECT_8S:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,	/* FIXME:  for Adc use nBits */
-			"signed", G_TYPE_BOOLEAN, TRUE,
-			NULL);
-		break;
-
-	case FrameCPP::FrVect::FR_VECT_1U:
-	case FrameCPP::FrVect::FR_VECT_2U:
-	case FrameCPP::FrVect::FR_VECT_4U:
-	case FrameCPP::FrVect::FR_VECT_8U:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,	/* FIXME;  for Adc use nBits */
-			"signed", G_TYPE_BOOLEAN, FALSE,
-			NULL);
-		break;
-
-	default:
-		g_assert_not_reached();
-	}
-
-	*bitrate = rate * 1 * width;	/* 1 channel */
-
-	return caps;
-}
-
-
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, guint *bitrate)
-{
-	gint rate = round(1.0 / vect->GetDim(0).GetDx());
 	GstBuffer *buffer;
 
 	/*
@@ -459,7 +464,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 
 	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
 	if(!buffer) {
-		*bitrate = 0;
+		*unit_size = *bitrate = 0;
 		return NULL;
 	}
 
@@ -474,20 +479,20 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
 
 	/*
+	 * set buffer format
+	 */
+
+	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size, bitrate);
+	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
+
+	/*
 	 * set timestamp and duration
 	 */
 
 	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
-	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
+	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
 	GST_BUFFER_OFFSET(buffer) = offset;
 	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
-
-	/*
-	 * set buffer format
-	 */
-
-	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, bitrate);
-	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
 
 	/*
 	 * done
@@ -504,8 +509,11 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 
 static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
 {
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
+	gint rate;
+	guint unit_size;
 	guint bitrate;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -513,7 +521,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 * convert FrVect to GstBuffer
 	 */
 
-	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, &bitrate);
+	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, &rate, &unit_size, &bitrate);
 	g_assert(buffer != NULL);
 
 	/*
@@ -554,14 +562,12 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 */
 
 	if(pad_state->need_new_segment) {
-		GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 		if(element->last_new_segment) {
 			gst_event_ref(element->last_new_segment);
 			if(!gst_pad_push_event(pad, element->last_new_segment))
 				GST_ERROR_OBJECT(pad, "failed to push newsegment");
 		}
 		pad_state->need_new_segment = FALSE;
-		gst_object_unref(element);
 	}
 
 	/*
@@ -569,14 +575,12 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 */
 
 	if(pad_state->need_tags) {
-		GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 		gst_tag_list_add(pad_state->tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 		GstTagList *tag_list = gst_tag_list_merge(element->tag_list, pad_state->tag_list, GST_TAG_MERGE_REPLACE);
 		GST_LOG_OBJECT(pad, "pushing %P", tag_list);
 		if(!gst_pad_push_event(pad, gst_event_new_tag(tag_list)))
 			GST_ERROR_OBJECT(pad, "failed to push tags");
 		pad_state->need_tags = FALSE;
-		gst_object_unref(element);
 	}
 
 	/*
@@ -590,6 +594,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 * done
 	 */
 
+	gst_object_unref(element);
 	return result;
 }
 
