@@ -297,7 +297,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 
 	g_assert(element->cache != NULL);
 
-	if(element->index >= element->cache->numFrameFiles)
+	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) src->segment.stop)
 		return GST_FLOW_UNEXPECTED;
 
 	path = g_filename_from_uri(element->cache->frameFiles[element->index].url, &host, &error);
