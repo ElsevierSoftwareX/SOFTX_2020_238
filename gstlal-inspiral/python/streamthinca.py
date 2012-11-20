@@ -165,9 +165,8 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, process_id, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None):
 		self._xmldoc = None
-		self.process_id = process_id
 		self.thinca_interval = thinca_interval
 		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
 		self.last_coincs = None
@@ -198,7 +197,7 @@ class StreamThinca(object):
 		self.likelihood_params_func = likelihood_params_func
 
 
-	def add_events(self, xmldoc, events, boundary, FAP = None):
+	def add_events(self, xmldoc, process_id, events, boundary, FAP = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
 		self.last_coincs = None
@@ -228,10 +227,10 @@ class StreamThinca(object):
 			self.sngl_inspiral_table.append(new_event)
 
 		# run coincidence, return non-coincident sngls
-		return self.run_coincidence(xmldoc, boundary, FAP = FAP)
+		return self.run_coincidence(xmldoc, process_id, boundary, FAP = FAP)
 
 
-	def run_coincidence(self, xmldoc, boundary, FAP = None):
+	def run_coincidence(self, xmldoc, process_id, boundary, FAP = None):
 		# safety check
 		assert xmldoc is self._xmldoc
 
@@ -287,7 +286,7 @@ class StreamThinca(object):
 		# find coincs
 		ligolw_thinca.ligolw_thinca(
 			xmldoc,
-			process_id = self.process_id,
+			process_id = process_id,
 			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
 			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
@@ -407,13 +406,13 @@ class StreamThinca(object):
 		return noncoinc_sngls
 
 
-	def flush(self, xmldoc, FAP = None):
+	def flush(self, xmldoc, process_id, FAP = None):
 		# invalidate the coinc extractor in case run_coincidence()
 		# is a no-op.
 		self.last_coincs = None
 
 		# coincidence
-		noncoinc_sngls = self.run_coincidence(xmldoc, segments.infinity(), FAP = FAP)
+		noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
 
 		# save all remaining triggers that weren't used in coincs
 		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)

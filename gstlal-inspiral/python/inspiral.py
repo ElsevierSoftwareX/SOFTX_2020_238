@@ -547,7 +547,6 @@ class Data(object):
 		#
 
 		self.stream_thinca = streamthinca.StreamThinca(
-			self.coincs_document.process_id,
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = thinca_interval,	# seconds
 			trials_table = self.far.trials_table
@@ -623,7 +622,7 @@ class Data(object):
 					self.ranking_data = None
 
 			# run stream thinca
-			noncoinc_sngls = self.stream_thinca.add_events(self.coincs_document.xmldoc, events, buf_timestamp, FAP = self.ranking_data)
+			noncoinc_sngls = self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, FAP = self.ranking_data)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
@@ -663,7 +662,7 @@ class Data(object):
 			FAP = self.ranking_data
 		else:
 			FAP = None
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, FAP = FAP):
+		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, FAP = FAP):
 			self.far.distribution_stats.add_single(event)
 		self.coincs_document.commit()
 
