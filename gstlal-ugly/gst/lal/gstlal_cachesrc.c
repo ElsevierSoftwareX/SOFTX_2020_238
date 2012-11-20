@@ -124,8 +124,10 @@ done:
 
 static void munmap_buffer(GstBuffer *buf)
 {
-	munmap(GST_BUFFER_DATA(buf), GST_BUFFER_SIZE(buf));
-	GST_BUFFER_DATA(buf) = NULL;
+	if(buf) {
+		g_assert(GST_IS_BUFFER(buf));
+		munmap(GST_BUFFER_DATA(buf), GST_BUFFER_SIZE(buf));
+	}
 }
 
 
@@ -149,6 +151,18 @@ static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_SIZE(*buf) = size;
 	gst_buffer_set_caps(*buf, GST_PAD_CAPS(pad));
+
+	/*
+	 * hack to get both the data pointer and the size to the munmap()
+	 * call.  the mallocdata pointer is set to the buffer object
+	 * itself, and the freefunc looks inside to get the real pointer
+	 * and the size.  this probably goes really wrong if a subbuffer is
+	 * ever made from the buffer, but then the application can choose
+	 * not to use mmap()ed buffers if it wants to be able to do
+	 * subbuffering.  for the .gwf frame file use case, subbuffering is
+	 * (mostly) nonsensical anyway.
+	 */
+
 	GST_BUFFER_MALLOCDATA(*buf) = (void *) *buf;
 	GST_BUFFER_FREE_FUNC(*buf) = (GFreeFunc) munmap_buffer;
 
