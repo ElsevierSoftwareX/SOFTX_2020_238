@@ -97,8 +97,9 @@ GST_BOILERPLATE_FULL(GstLALCacheSrc, gstlal_cachesrc, GstBaseSrc, GST_TYPE_BASE_
  */
 
 
-static GstFlowReturn read_buffer(GstPad *pad, int fd, guint64 offset, size_t size, GstBuffer **buf)
+static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
+	GstPad *pad = GST_BASE_SRC_PAD(basesrc);
 	size_t read_offset;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -110,6 +111,7 @@ static GstFlowReturn read_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 	do {
 		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
 		if(bytes_read < 0) {
+			GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
 			gst_buffer_unref(*buf);
 			*buf = NULL;
 			result = GST_FLOW_ERROR;
@@ -117,6 +119,7 @@ static GstFlowReturn read_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 		}
 		read_offset += bytes_read;
 	} while(read_offset < size);
+	g_assert_cmpuint(read_offset, ==, size);
 
 done:
 	return result;
@@ -132,7 +135,7 @@ static void munmap_buffer(GstBuffer *buf)
 }
 
 
-static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t size, GstBuffer **buf)
+static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -144,6 +147,7 @@ static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 	GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_READONLY);
 	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
 	if(!GST_BUFFER_DATA(*buf)) {
+		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, sys_errlist[errno]));
 		gst_buffer_unref(*buf);
 		*buf = NULL;
 		result = GST_FLOW_ERROR;
@@ -151,7 +155,7 @@ static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 	}
 	GST_BUFFER_SIZE(*buf) = size;
 	GST_BUFFER_OFFSET(*buf) = offset;
-	gst_buffer_set_caps(*buf, GST_PAD_CAPS(pad));
+	gst_buffer_set_caps(*buf, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
 
 	/*
 	 * hack to get both the data pointer and the size to the munmap()
@@ -326,14 +330,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	if(element->use_mmap)
-		result = mmap_buffer(GST_BASE_SRC_PAD(basesrc), fd, basesrc->offset, statinfo.st_size, buf);
+		result = mmap_buffer(basesrc, path, fd, basesrc->offset, statinfo.st_size, buf);
 	else
-		result = read_buffer(GST_BASE_SRC_PAD(basesrc), fd, basesrc->offset, statinfo.st_size, buf);
+		result = read_buffer(basesrc, path, fd, basesrc->offset, statinfo.st_size, buf);
 	close(fd);
-	if(result != GST_FLOW_OK) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("%s('%s') failed: %s", element->use_mmap ? "mmap" : "read", path, sys_errlist[errno]));
+	if(result != GST_FLOW_OK)
 		goto done;
-	}
 
 	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
