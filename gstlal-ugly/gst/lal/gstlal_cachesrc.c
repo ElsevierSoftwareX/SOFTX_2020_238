@@ -42,6 +42,7 @@
 #include <gst/base/gstbasesrc.h>
 
 
+#include <lal/XLALError.h>
 #include <lal/FrameCache.h>
 
 
@@ -227,15 +228,24 @@ static gboolean start(GstBaseSrc *src)
 	g_return_val_if_fail(element->location != NULL, FALSE);
 
 	element->cache = XLALFrImportCache(element->location);
+	if(!element->cache) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("error reading '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
+		return FALSE;
+	}
+	GST_DEBUG_OBJECT(element, "loaded \"%s\": %d items in cache", element->location, element->cache->numFrameFiles);
 
 	/* sieving also puts the files in time order */
 	cache = XLALFrSieveCache(element->cache, &sieve);
 	if(!cache) {
+		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("error sieving cache: %s", element->location, XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
 		XLALFrDestroyCache(element->cache);
 		element->cache = NULL;
 		return FALSE;
 	}
 	element->cache = cache;
+	GST_DEBUG_OBJECT(element, "%d items remain in cache after sieve", element->cache->numFrameFiles);
 
 	element->index = 0;
 
@@ -657,6 +667,7 @@ static void gstlal_cachesrc_init(GstLALCacheSrc *element, GstLALCacheSrcClass *k
 {
 	gst_base_src_set_format(GST_BASE_SRC(element), GST_FORMAT_TIME);
 
+	element->location = NULL;
 	element->cache_src_regex = NULL;
 	element->cache_dsc_regex = NULL;
 	element->cache = NULL;
