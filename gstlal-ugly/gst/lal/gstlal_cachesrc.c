@@ -149,8 +149,8 @@ static GstFlowReturn mmap_buffer(GstPad *pad, int fd, guint64 offset, size_t siz
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_SIZE(*buf) = size;
+	GST_BUFFER_OFFSET(*buf) = offset;
 	gst_buffer_set_caps(*buf, GST_PAD_CAPS(pad));
 
 	/*
@@ -213,9 +213,9 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
  */
 
 
-static gboolean start(GstBaseSrc *src)
+static gboolean start(GstBaseSrc *basesrc)
 {
-	GstLALCacheSrc *element = GSTLAL_CACHESRC(src);
+	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
 	FrCache *cache;
 	FrCacheSieve sieve = {
 		.earliestTime = 0,
@@ -247,7 +247,9 @@ static gboolean start(GstBaseSrc *src)
 	element->cache = cache;
 	GST_DEBUG_OBJECT(element, "%d items remain in cache after sieve", element->cache->numFrameFiles);
 
+	basesrc->offset = 0;
 	element->index = 0;
+	element->need_discont = TRUE;
 
 	return TRUE;
 }
@@ -258,9 +260,9 @@ static gboolean start(GstBaseSrc *src)
  */
 
 
-static gboolean stop(GstBaseSrc *src)
+static gboolean stop(GstBaseSrc *basesrc)
 {
-	GstLALCacheSrc *element = GSTLAL_CACHESRC(src);
+	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
 
 	XLALFrDestroyCache(element->cache);
 	element->cache = NULL;
@@ -274,7 +276,7 @@ static gboolean stop(GstBaseSrc *src)
  */
 
 
-static gboolean is_seekable(GstBaseSrc *src)
+static gboolean is_seekable(GstBaseSrc *basesrc)
 {
 	return TRUE;
 }
@@ -285,9 +287,9 @@ static gboolean is_seekable(GstBaseSrc *src)
  */
 
 
-static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuffer **buf)
+static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buf)
 {
-	GstLALCacheSrc *element = GSTLAL_CACHESRC(src);
+	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
 	GError *error = NULL;
 	gchar *host = NULL;
 	gchar *path = NULL;
@@ -297,7 +299,7 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 
 	g_assert(element->cache != NULL);
 
-	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) src->segment.stop)
+	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)
 		return GST_FLOW_UNEXPECTED;
 
 	path = g_filename_from_uri(element->cache->frameFiles[element->index].url, &host, &error);
@@ -323,29 +325,24 @@ static GstFlowReturn create(GstBaseSrc *src, guint64 offset, guint size, GstBuff
 		goto done;
 	}
 
-	if(element->use_mmap) {
-		result = mmap_buffer(GST_BASE_SRC_PAD(src), fd, offset, statinfo.st_size, buf);
-		if(result != GST_FLOW_OK) {
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, sys_errlist[errno]));
-			close(fd);
-			goto done;
-		}
-	} else {
-		result = read_buffer(GST_BASE_SRC_PAD(src), fd, offset, statinfo.st_size, buf);
-		if(result != GST_FLOW_OK) {
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
-			close(fd);
-			goto done;
-		}
-	}
+	if(element->use_mmap)
+		result = mmap_buffer(GST_BASE_SRC_PAD(basesrc), fd, basesrc->offset, statinfo.st_size, buf);
+	else
+		result = read_buffer(GST_BASE_SRC_PAD(basesrc), fd, basesrc->offset, statinfo.st_size, buf);
 	close(fd);
+	if(result != GST_FLOW_OK) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("%s('%s') failed: %s", element->use_mmap ? "mmap" : "read", path, sys_errlist[errno]));
+		goto done;
+	}
 
 	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
-	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_OFFSET_END(*buf) = GST_BUFFER_OFFSET(*buf) + GST_BUFFER_SIZE(*buf);
-	if(element->index == 0 || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1))
+	basesrc->offset += GST_BUFFER_SIZE(*buf);
+	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
+		element->need_discont = FALSE;
+	}
 
 	GST_DEBUG_OBJECT(element, "pushing '%s' %" GST_BUFFER_BOUNDARIES_FORMAT, path, GST_BUFFER_BOUNDARIES_ARGS(*buf));
 
@@ -394,14 +391,22 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
 		if((GstClockTime) segment->start < max) {
 			GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
-			element->index = i;
+			if(i != element->index) {
+				basesrc->offset = 0;
+				element->index = i;
+				element->need_discont = TRUE;
+			}
 			if((GstClockTime) segment->start < min)
 				GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " uri starts at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min));
 			goto done;
 		}
 	}
 	GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
-	element->index = i;
+	if(i != element->index) {
+		basesrc->offset = 0;
+		element->index = i;
+		element->need_discont = TRUE;
+	}
 
 	/*
 	 * done

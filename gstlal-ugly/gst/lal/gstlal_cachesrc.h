@@ -90,6 +90,7 @@ struct _GstLALCacheSrc {
 
 	FrCache *cache;
 	guint index;
+	gboolean need_discont;
 };
 
 
