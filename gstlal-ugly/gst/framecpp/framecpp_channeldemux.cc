@@ -784,7 +784,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			verifier.CheckFileChecksumOnly(true);
 
 			if(verifier(ifs) != 0)
-				throw std::runtime_error(verifier.ErrorInfo( ));
+				throw std::runtime_error(verifier.ErrorInfo());
 		}
 		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
 
@@ -1102,9 +1102,14 @@ done:
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                              GObject Methods
  *
  * ============================================================================
+ */
+
+
+/*
+ * properites
  */
 
 
@@ -1227,16 +1232,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * ============================================================================
- *
- *                           GStreamer Element
- *
- * ============================================================================
- */
-
-
-/*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
