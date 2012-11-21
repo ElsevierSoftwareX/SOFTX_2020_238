@@ -169,7 +169,7 @@ class StreamThinca(object):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval
 		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
-		self.last_coincs = None
+		self.last_coincs = {}
 		self.trials_table = trials_table
 		self.sngl_inspiral_table = None
 
@@ -200,7 +200,7 @@ class StreamThinca(object):
 	def add_events(self, xmldoc, process_id, events, boundary, FAP = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
-		self.last_coincs = None
+		self.last_coincs = {}
 
 		# no-op if no new events
 		if not events:
@@ -394,11 +394,6 @@ class StreamThinca(object):
 			map(real_coinc_event_table.append, coinc_event_table)
 			map(real_coinc_inspiral_table.append, coinc_inspiral_table)
 
-		# help garbage collection
-		coinc_event_map_table.unlink()
-		coinc_event_table.unlink()
-		coinc_inspiral_table.unlink()
-
 		# record boundary
 		self.last_boundary = boundary
 
@@ -409,7 +404,7 @@ class StreamThinca(object):
 	def flush(self, xmldoc, process_id, FAP = None):
 		# invalidate the coinc extractor in case run_coincidence()
 		# is a no-op.
-		self.last_coincs = None
+		self.last_coincs = {}
 
 		# coincidence
 		noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
