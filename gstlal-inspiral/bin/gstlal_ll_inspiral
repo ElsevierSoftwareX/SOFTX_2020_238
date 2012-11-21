@@ -438,7 +438,7 @@ class SigData(object):
 
 sigdata = SigData()
 
-def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata):
+def signal_handler(signal, frame, pipeline = pipeline, sigdata = sigdata):
 	if not sigdata.has_been_signaled:
 		print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
 		# override file name with approximate interval
@@ -448,7 +448,7 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 	else:
 		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
 
-def crash_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata, mainloop = mainloop):
+def crash_handler(signal, frame, pipeline = pipeline, sigdata = sigdata, mainloop = mainloop):
 	if not sigdata.has_been_signaled:
 		print >>sys.stderr, "*** SIG %d trying to copy outputfile, won't be able to shutdown pipeline***" % (signal,)
 		mainloop.quit()
