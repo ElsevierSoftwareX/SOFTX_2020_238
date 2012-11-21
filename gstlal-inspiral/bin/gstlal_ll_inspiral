@@ -112,7 +112,6 @@ def smrepair():
 
 def now():
 	return XLALUTCToGPS(time.gmtime())
-	#return LIGOTimeGPS(time.time() - 315964786)
 
 
 #
