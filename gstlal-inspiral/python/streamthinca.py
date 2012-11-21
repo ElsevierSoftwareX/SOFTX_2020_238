@@ -406,8 +406,10 @@ class StreamThinca(object):
 		# is a no-op.
 		self.last_coincs = {}
 
-		# coincidence
-		noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
+		# coincidence.  don't bother unless .add_events() has been
+		# called since the last flush()
+		if self._xmldoc is not None:
+			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
 
 		# save all remaining triggers that weren't used in coincs
 		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
