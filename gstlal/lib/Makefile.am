@@ -24,6 +24,8 @@ gstlal_marshal.h : gstlal_marshal.list
 gstlal_marshal.c : gstlal_marshal.list
 	glib-genmarshal --body --prefix gstlal_marshal $(srcdir)/$< >$@.tmp && mv -f $@.tmp $@
 
+CLEANFILES = gstlal_marshal.c gstlal_marshal.h
+
 #
 # Build gstlal_peakfinder.h.  Note that it's not portable to process files
 # ending in something other than ".c" with the C preprocessor, so just to
@@ -40,6 +42,32 @@ gstlal_peakfinder_types.h : gstlal_peakfinder_types.c
 gstlal_peakfinder.h : gstlal_peakfinder_top.h gstlal_peakfinder_types.h gstlal_peakfinder_bottom.h
 	cat $+ >$@
 
-clean-local :
-	rm -f gstlal_marshal.c gstlal_marshal.h
-	rm -f gstlal_peakfinder.h gstlal_peakfinder_types.h
+CLEANFILES += gstlal_peakfinder.h gstlal_peakfinder_types.h
+
+#
+# gobject introspection
+#
+
+-include $(INTROSPECTION_MAKEFILE)
+INTROSPECTION_GIRS =
+INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir) --identifier-prefix GstLAL
+INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
+
+if HAVE_INTROSPECTION
+gstlaltypes.gir : libgstlaltypes.la
+gstlaltypes_gir_INCLUDES = Gst-0.10
+gstlaltypes_gir_CFLAGS = $(INCLUDES)
+gstlaltypes_gir_LIBS = libgstlaltypes.la
+gstlaltypes_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c
+gstlaltypes_gir_NAMESPACE = gstlaltypes
+gstlaltypes_gir_VERSION = $(VERSION)
+INTROSPECTION_GIRS += gstlaltypes.gir
+
+girdir = $(datadir)/gir-1.0
+gir_DATA = $(INTROSPECTION_GIRS)
+
+typelibdir = $(libdir)/girepository-1.0
+typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+
+CLEANFILES += $(gir_DATA) $(typelib_DATA)
+endif

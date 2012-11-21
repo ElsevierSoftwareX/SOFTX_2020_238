@@ -191,6 +191,14 @@ AC_SUBST([pygobject_LIBS])
 
 
 #
+# Check for GObject Introspection
+#
+
+
+GOBJECT_INTROSPECTION_CHECK([1.30.0])
+
+
+#
 # Check for NumPy
 #
 
