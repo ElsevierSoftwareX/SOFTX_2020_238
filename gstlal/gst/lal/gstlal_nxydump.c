@@ -493,7 +493,6 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
     GST_ERROR_OBJECT(element,
         "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
-done:
   return success;
 }
 
