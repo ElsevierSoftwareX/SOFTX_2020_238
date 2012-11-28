@@ -1,3 +1,6 @@
+EXTRA_DIST =
+CLEANFILES =
+
 pkginclude_HEADERS = gstlal.h gstlal_debug.h gstlal_marshal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h gstlal_autocorrelation_chi2.h gstlal_gps_clock.h
 pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la libgstlaltags.la libgstlaltypes.la
@@ -24,7 +27,8 @@ gstlal_marshal.h : gstlal_marshal.list
 gstlal_marshal.c : gstlal_marshal.list
 	glib-genmarshal --body --prefix gstlal_marshal $(srcdir)/$< >$@.tmp && mv -f $@.tmp $@
 
-CLEANFILES = gstlal_marshal.c gstlal_marshal.h
+EXTRA_DIST += gstlal_marshal.list
+CLEANFILES += gstlal_marshal.c gstlal_marshal.h
 
 #
 # Build gstlal_peakfinder.h.  Note that it's not portable to process files
@@ -34,14 +38,15 @@ CLEANFILES = gstlal_marshal.c gstlal_marshal.h
 # compiled, hence the extra rule for that
 #
 
-gstlal_peakfinder.c : gstlal_peakfinder.h
+gstlal_peakfinder.c : gstlal_peakfinder.ct gstlal_peakfinder.h
 
-gstlal_peakfinder_types.h : gstlal_peakfinder_types.c
+gstlal_peakfinder_types.h : gstlal_peakfinder_types.c gstlal_peakfinder.ht
 	$(CPP) -C -P -o $@ $<
 
 gstlal_peakfinder.h : gstlal_peakfinder_top.h gstlal_peakfinder_types.h gstlal_peakfinder_bottom.h
 	cat $+ >$@
 
+EXTRA_DIST += gstlal_peakfinder_types.c gstlal_peakfinder.ht gstlal_peakfinder.ct gstlal_peakfinder_top.h gstlal_peakfinder_bottom.h
 CLEANFILES += gstlal_peakfinder.h gstlal_peakfinder_types.h
 
 #
