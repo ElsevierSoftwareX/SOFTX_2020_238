@@ -7,6 +7,7 @@
 #include <math.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOMetadataBurstUtils.h>
 #include <lal/LIGOLwXMLBurstRead.h>
 #include <lal/LALStdlib.h>
 
