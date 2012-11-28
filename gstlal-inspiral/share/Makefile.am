@@ -1,4 +1,4 @@
-pkgdata_DATA = \
+dist_pkgdata_DATA = \
 	Makefile.ERBank \
 	Makefile.S5LMCBCTriggers \
 	Makefile.S5LMCBCBank \
