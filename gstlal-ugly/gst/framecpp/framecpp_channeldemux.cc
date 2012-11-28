@@ -285,34 +285,27 @@ struct pad_state {
  */
 
 
-static GstTagList *get_pad_tag_list(GstPad *pad)
+static GstTagList *get_pad_tag_list(GstFrPad *pad)
 {
-	char *instrument, *channel;
+	gchar *instrument, *channel, *units;
 	GstTagList *tag_list = NULL;
 
-	split_name(GST_PAD_NAME(pad), &instrument, &channel);
-	if(!instrument || !channel) {
-		/*
-		 * cannot deduce instrument and/or channel from pad's name.
-		 * don't bother sending any tags, report success.
-		 */
-		goto done;
-	}
+	g_object_get(pad, "instrument", &instrument, "channel-name", &channel, "units", &units, NULL);
 
 	tag_list = gst_tag_list_new_full(
 		GST_TAG_CODEC, "RAW",
-		GST_TAG_TITLE, GST_PAD_NAME(pad),
-		GSTLAL_TAG_INSTRUMENT, instrument,
-		GSTLAL_TAG_CHANNEL_NAME, channel,
+		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
+		GSTLAL_TAG_INSTRUMENT, instrument && strcmp(instrument, "") ? instrument : " ",
+		GSTLAL_TAG_CHANNEL_NAME, channel && strcmp(channel, "") ? channel : " ",
 		/*GST_TAG_GEO_LOCATION_NAME, observatory,
 		GST_TAG_GEO_LOCATION_SUBLOCATION, instrument,*/
-		GSTLAL_TAG_UNITS, strstr(channel, "STRAIN") ? "strain" : " ",	/* FIXME */
+		GSTLAL_TAG_UNITS, units && strcmp(units, "") ? units : " ",
 		NULL
 	);
 
-done:
-	free(instrument);
-	free(channel);
+	g_free(instrument);
+	g_free(channel);
+	g_free(units);
 	return tag_list;
 }
 
@@ -349,8 +342,17 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 
 static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum gst_frpad_type_t pad_type)
 {
-	GstFrPad *srcpad;
+	GstFrPad *srcpad = NULL;
 	struct pad_state *pad_state;
+	char *instrument, *channel;
+
+	split_name(name, &instrument, &channel);
+	if(!instrument || !channel) {
+		/*
+		 * cannot deduce instrument and/or channel from pad's name.
+		 */
+		goto done;
+	}
 
 	/*
 	 * construct the pad
@@ -358,7 +360,8 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 
 	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "%s"), name);
 	g_assert(srcpad != NULL);
-	g_object_set(srcpad, "pad-type", pad_type, NULL);
+	/* FIXME:  set units properly */
+	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, "units", strstr(channel, "STRAIN") ? "strain" : "", NULL);
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
 	/*
@@ -378,7 +381,7 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
-	pad_state->tag_list = get_pad_tag_list(GST_PAD(srcpad));
+	pad_state->tag_list = get_pad_tag_list(srcpad);
 	g_assert(pad_state->tag_list != NULL);
 	gst_pad_set_element_private(GST_PAD(srcpad), pad_state);
 
@@ -395,6 +398,9 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 	 * done
 	 */
 
+done:
+	g_free(instrument);
+	g_free(channel);
 	return GST_PAD(srcpad);
 }
 
