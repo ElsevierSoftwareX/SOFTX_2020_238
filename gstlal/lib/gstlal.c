@@ -57,8 +57,11 @@
  */
 
 
+#include <lal/LALConfig.h>
 #include <lal/Date.h>
+#if defined(LAL_PTHREAD_LOCK) && defined(HAVE_LAL_FFTWMUTEX_H)
 #include <lal/FFTWMutex.h>
+#endif
 #include <lal/FrequencySeries.h>
 #include <lal/LALDatatypes.h>
 #include <lal/Sequence.h>
