@@ -46,8 +46,10 @@ plugins and programs.
 # FIXME:  why doesn't % makeinstall macro work?
 DESTDIR=${RPM_BUILD_ROOT} %{__make} install
 # remove .so symlinks from libdir.  these are not included in the .rpm,
-# they will be installed by ldconfig in the post-install script
-[ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT}/%{_libdir} -name "*.so*" -type l -delete
+# they will be installed by ldconfig in the post-install script, except for
+# the .so symlink which isn't created by ldconfig and gets shipped in the
+# devel package
+[ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT}/%{_libdir} -name "*.so.*" -type l -delete
 # don't distribute *.la files
 [ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT} -name "*.la" -type f -delete
 
@@ -84,6 +86,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %files devel
 %defattr(-,root,root)
 %{_libdir}/*.a
+%{_libdir}/*.so
 %{_libdir}/pkgconfig/*
 %{_libdir}/gstreamer-0.10/*.a
 %{_includedir}/*
