@@ -51,6 +51,7 @@
  */
 
 
+#include <lal/LALConfig.h>	/* only needed for LAL_PTHREAD_LOCK */
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
 #include <lal/Date.h>

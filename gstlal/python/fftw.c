@@ -30,6 +30,7 @@
 #include <stdlib.h>
 
 
+#include <lal/LALConfig.h>	/* only needed for LAL_PTHREAD_LOCK */
 #include <gstlal.h>
 
 

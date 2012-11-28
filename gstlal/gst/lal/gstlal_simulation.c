@@ -50,6 +50,7 @@
  */
 
 
+#include <lal/LALConfig.h>
 #include <lal/LALComplex.h>
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
