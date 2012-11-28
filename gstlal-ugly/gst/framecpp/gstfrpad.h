@@ -106,9 +106,12 @@ struct _GstFrPad {
 
 	enum gst_frpad_type_t pad_type;
 	gchar *comment;		/* FrAdcData, FrProcData, FrSimData */
+	gchar *instrument;	/* instrument name */
+	gchar *channel_name;	/* channel name */
 	guint channel_group;	/* FrAdcData */
 	guint channel_number;	/* FrAdcData */
 	guint nbits;		/* FrAdcData */
+	gchar *units;		/* units */
 };
 
 

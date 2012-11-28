@@ -59,9 +59,12 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 
 #define DEFAULT_PAD_TYPE GST_FRPAD_TYPE_FRPROCDATA
 #define DEFAULT_COMMENT ""
+#define DEFAULT_INSTRUMENT NULL
+#define DEFAULT_CHANNEL_NAME NULL
 #define DEFAULT_CHANNEL_GROUP 0
 #define DEFAULT_CHANNEL_NUMBER 0
 #define DEFAULT_NBITS 1	/* FIXME:  is there a "not set" value?  -1? */
+#define DEFAULT_UNITS ""
 
 
 /*
@@ -135,9 +138,12 @@ GstFrPad *gst_frpad_new_from_template(GstPadTemplate *templ, const gchar *name)
 enum property {
 	PROP_PAD_TYPE = 1,
 	PROP_COMMENT,
+	PROP_INSTRUMENT,
+	PROP_CHANNEL_NAME,
 	PROP_CHANNEL_GROUP,
 	PROP_CHANNEL_NUMBER,
 	PROP_NBITS,
+	PROP_UNITS,
 };
 
 
@@ -155,6 +161,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		pad->comment = g_value_dup_string(value);
 		break;
 
+	case PROP_INSTRUMENT:
+		g_free(pad->instrument);
+		pad->instrument = g_value_dup_string(value);
+		break;
+
+	case PROP_CHANNEL_NAME:
+		g_free(pad->channel_name);
+		pad->channel_name = g_value_dup_string(value);
+		break;
+
 	case PROP_CHANNEL_GROUP:
 		pad->channel_group = g_value_get_uint(value);
 		break;
@@ -165,6 +181,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case PROP_NBITS:
 		pad->nbits = g_value_get_uint(value);
+		break;
+
+	case PROP_UNITS:
+		g_free(pad->units);
+		pad->units = g_value_dup_string(value);
 		break;
 
 	default:
@@ -187,6 +208,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, pad->comment);
 		break;
 
+	case PROP_INSTRUMENT:
+		g_value_set_string(value, pad->instrument);
+		break;
+
+	case PROP_CHANNEL_NAME:
+		g_value_set_string(value, pad->channel_name);
+		break;
+
 	case PROP_CHANNEL_GROUP:
 		g_value_set_uint(value, pad->channel_group);
 		break;
@@ -197,6 +226,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_NBITS:
 		g_value_set_uint(value, pad->nbits);
+		break;
+
+	case PROP_UNITS:
+		g_value_set_string(value, pad->units);
 		break;
 
 	default:
@@ -256,6 +289,28 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		PROP_INSTRUMENT,
+		g_param_spec_string(
+			"instrument",
+			"Instrument",
+			"Instrument name.  Not used for frame metadata.",
+			DEFAULT_INSTRUMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_CHANNEL_NAME,
+		g_param_spec_string(
+			"channel-name",
+			"Channel name",
+			"Channel name.  Not used for frame metadata.",
+			DEFAULT_CHANNEL_NAME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		PROP_CHANNEL_GROUP,
 		g_param_spec_uint(
 			"channel-group",
@@ -284,6 +339,17 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Number of bits",
 			"Number of bits in A/D output.  Validity:  FrAdcData.",
 			1, G_MAXUINT, DEFAULT_NBITS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_UNITS,
+		g_param_spec_string(
+			"units",
+			"Units",
+			"Units.  Validity:  FrAdcData, FrProcData, FrSimData.",
+			DEFAULT_UNITS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
