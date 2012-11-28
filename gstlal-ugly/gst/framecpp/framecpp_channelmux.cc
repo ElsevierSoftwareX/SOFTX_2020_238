@@ -400,16 +400,29 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		 * propogate downstream.  do we need to add FrDetector
 		 * structures to each frame file based on the list, too? */
 		GstTagList *taglist;
-		gchar *units = NULL;
+		gchar *value = NULL;
 
 		gst_event_parse_tag(event, &taglist);
-		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &value)) {
+			g_strstrip(value);
+			g_object_set(pad, "units", value, NULL);
 			GST_OBJECT_LOCK(mux->collect);
 			g_free(appdata->unitY);
-			appdata->unitY = units;
+			appdata->unitY = value;
 			GST_OBJECT_UNLOCK(mux->collect);
 		} else
-			g_free(units);
+			g_free(value);
+		value = NULL;
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &value))
+			g_strstrip(value);
+			g_object_set(pad, "instrument", value, NULL);
+		g_free(value);
+		value = NULL;
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &value))
+			g_strstrip(value);
+			g_object_set(pad, "channel-name", value, NULL);
+		g_free(value);
+		value = NULL;
 
 		gst_event_unref(event);
 		goto done;
