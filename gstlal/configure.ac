@@ -222,6 +222,13 @@ CFLAGS="$old_CFLAGS"
 PKG_CHECK_MODULES([LAL], [lal >= 6.7.0 lalframe >= 1.0.5 lalmetaio >= 1.0.4 lalsupport lalsimulation >= 0.2.0 lalburst >= 1.1.2 lalinspiral >= 1.3.0])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
+old_CFLAGS="$CFLAGS"
+old_CPPFLAGS="$CPPFLAGS"
+CFLAGS="$LAL_CFLAGS"
+CPPFLAGS="$LAL_CFLAGS"
+AC_CHECK_HEADERS([lal/FFTWMutex.h])
+CFLAGS="$old_CFLAGS"
+CPPFLAGS="$old_CPPFLAGS"
 
 
 #
