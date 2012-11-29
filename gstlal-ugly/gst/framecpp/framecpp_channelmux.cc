@@ -625,12 +625,9 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 
 	if(mux->need_tag_list) {
 		update_instruments(mux);
-		if(g_hash_table_size(mux->instruments)) {
-			if(!gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)))) {
-				GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("tags: gst_pad_push_event() failed"));
-				goto done;
-			}
-		} else
+		if(g_hash_table_size(mux->instruments))
+			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+		else
 			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
 		mux->need_tag_list = FALSE;
 	}
