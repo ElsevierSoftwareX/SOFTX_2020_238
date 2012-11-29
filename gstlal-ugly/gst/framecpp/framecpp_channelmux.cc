@@ -122,6 +122,47 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST
 /*
  * ============================================================================
  *
+ *                                 Utilities
+ *
+ * ============================================================================
+ */
+
+
+static void update_instruments(GstFrameCPPChannelMux *mux)
+{
+	GstIterator *it = gst_element_iterate_sink_pads(GST_ELEMENT(mux));
+
+	g_hash_table_remove_all(mux->instruments);
+
+	while(TRUE) {
+		GstPad *pad;
+		gchar *instrument = NULL;
+		switch(gst_iterator_next(it, (void **) &pad)) {
+		case GST_ITERATOR_OK:
+			g_object_get(pad, "instrument", &instrument, NULL);
+			if(instrument)
+				g_hash_table_replace(mux->instruments, instrument, instrument);
+			gst_object_unref(pad);
+			break;
+
+		case GST_ITERATOR_RESYNC:
+			g_hash_table_remove_all(mux->instruments);
+			gst_iterator_resync(it);
+			break;
+
+		case GST_ITERATOR_DONE:
+		case GST_ITERATOR_ERROR:
+			goto done;
+		}
+	}
+done:
+	gst_iterator_free(it);
+}
+
+
+/*
+ * ============================================================================
+ *
  *                                  Src Pad
  *
  * ============================================================================
@@ -236,6 +277,27 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 
 	gst_object_unref(GST_OBJECT(mux));
 	return success;
+}
+
+
+/*
+ * tags
+ */
+
+
+static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
+{
+	GstTagList *tag_list = gst_tag_list_new();
+	GHashTableIter it;
+	gchar *instrument;
+
+	g_hash_table_iter_init(&it, mux->instruments);
+	while(g_hash_table_iter_next(&it, (void **) &instrument, NULL))
+		gst_tag_list_add(tag_list, GST_TAG_MERGE_APPEND, GSTLAL_TAG_INSTRUMENT, instrument, NULL);
+
+	GST_DEBUG_OBJECT(mux, "tag list: %" GST_PTR_FORMAT, tag_list);
+
+	return tag_list;
 }
 
 
@@ -396,14 +458,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_TAG: {
-		/* FIXME:  merged instrument list would make sense to
-		 * propogate downstream.  do we need to add FrDetector
-		 * structures to each frame file based on the list, too? */
-		GstTagList *taglist;
+		GstTagList *tag_list;
 		gchar *value = NULL;
 
-		gst_event_parse_tag(event, &taglist);
-		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &value)) {
+		gst_event_parse_tag(event, &tag_list);
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value)) {
 			g_strstrip(value);
 			g_object_set(pad, "units", value, NULL);
 			GST_OBJECT_LOCK(mux->collect);
@@ -413,12 +472,12 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		} else
 			g_free(value);
 		value = NULL;
-		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &value))
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value))
 			g_strstrip(value);
 			g_object_set(pad, "instrument", value, NULL);
 		g_free(value);
 		value = NULL;
-		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &value))
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_CHANNEL_NAME, &value))
 			g_strstrip(value);
 			g_object_set(pad, "channel-name", value, NULL);
 		g_free(value);
@@ -446,6 +505,21 @@ done:
 
 
 /*
+ * sink pad notify::instrument handler
+ */
+
+
+static void notify_instrument_handler(GObject *object, GParamSpec *pspec, gpointer user_data)
+{
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(GST_PAD(object)));
+
+	mux->need_tag_list = TRUE;
+
+	gst_object_unref(GST_OBJECT(mux));
+}
+
+
+/*
  * create a new sink pad and add to element.  does not check if name is
  * already in use
  */
@@ -465,6 +539,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	if(!pad)
 		goto no_pad;
 	gst_pad_set_setcaps_function(GST_PAD(pad), GST_DEBUG_FUNCPTR(sink_setcaps));
+	g_signal_connect(G_OBJECT(pad), "notify::instrument", G_CALLBACK(notify_instrument_handler), NULL);
 
 	/*
 	 * add pad to element.  just like FrameCPPMuxCollectPadsData, the
@@ -521,6 +596,8 @@ static void release_pad(GstElement *element, GstPad *pad)
 	framecpp_muxcollectpads_remove_pad(mux->collect, pad);
 	gst_element_remove_pad(element, pad);
 	GST_OBJECT_UNLOCK(mux->collect);
+
+	mux->need_tag_list = TRUE;
 }
 
 
@@ -543,6 +620,22 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 	g_assert(GST_CLOCK_TIME_IS_VALID(collected_t_end));
 
 	/*
+	 * do tag list if needed
+	 */
+
+	if(mux->need_tag_list) {
+		update_instruments(mux);
+		if(g_hash_table_size(mux->instruments)) {
+			if(!gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)))) {
+				GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("tags: gst_pad_push_event() failed"));
+				goto done;
+			}
+		} else
+			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
+		mux->need_tag_list = FALSE;
+	}
+
+	/*
 	 * loop over available data
 	 */
 
@@ -552,6 +645,9 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 
 		/*
 		 * build frame file
+		 *
+		 * FIXME:  do we need to add FrDetector structures to each
+		 * frame file based on the instrument list?
 		 */
 
 		try {
@@ -858,6 +954,8 @@ static void finalize(GObject * object)
 	if(element->srcpad)
 		gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+	g_hash_table_unref(element->instruments);
+	element->instruments = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1050,4 +1148,8 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChan
 	 * properties are initialized */
 	mux->collect = FRAMECPP_MUXCOLLECTPADS(g_object_new(FRAMECPP_MUXCOLLECTPADS_TYPE, NULL));
 	g_signal_connect(G_OBJECT(mux->collect), "collected", G_CALLBACK(collected_handler), mux);
+
+	/* initialize other internal data */
+	mux->instruments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+	mux->need_tag_list = FALSE;
 }
