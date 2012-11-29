@@ -1,3 +1,10 @@
+gstlal (0.4.2-2) unstable; urgency=low
+
+  * fix control file
+  * rebuild against latest gstlal-dep
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Thu, 29 Nov 2012 15:41:38 +0100
+
 gstlal (0.4.1-1) unstable; urgency=low
 
   * New upstream release
