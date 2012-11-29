@@ -1,4 +1,4 @@
-Source: gstlal-dev
+Source: gstlal
 Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
 Priority: optional
@@ -43,7 +43,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  lalinspiral (>= 1.3.0),
  libgsl0 (>= 1.9),
  libxml2
-
 Description: GStreamer version of LAL
  gstlal provides a suite of GStreamer elements that expose
  gravitational-wave data analysis tools from the LAL library for use
