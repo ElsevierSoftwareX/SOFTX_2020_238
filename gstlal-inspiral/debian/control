@@ -15,7 +15,8 @@ Build-Depends:
  fakeroot,
  autoconf,
  pkg-config,
- gstlal (>=0.4.0)
+ gstlal (>=0.5.0),
+ gstlal-ugly (>=0.4.0)
 
 Package: gstlal-inspiral
 Architecture: any

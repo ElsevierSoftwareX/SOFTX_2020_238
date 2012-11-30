@@ -23,7 +23,7 @@ Build-Depends:
  nds2-client-dev,
  liborc-0.4-0 (>= 1:0.4.16),
  liborc-0.4-dev (>= 1:0.4.16),
- gstlal-dev (>=0.4.0)
+ gstlal-dev (>=0.5.0)
 
 Package: gstlal-ugly
 Architecture: any
@@ -50,7 +50,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  nds2-client,
  liborc-0.4-0 (>= 1:0.4.16),
  libxml2,
- gstlal (>=0.4.0)
+ gstlal (>=0.5.0)
 Description: GStreamer version of LAL (ugly part)
  gstlal provides a suite of GStreamer elements that expose
  gravitational-wave data analysis tools from the LAL library for use
