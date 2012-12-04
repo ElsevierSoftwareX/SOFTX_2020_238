@@ -684,10 +684,10 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->dispose = dispose;
-	gobject_class->finalize = finalize;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
