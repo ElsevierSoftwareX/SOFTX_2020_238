@@ -708,6 +708,8 @@ def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse
 def mkbursttriggergen(pipeline, src, n, bank):
 	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
 
+def mkodctodqv(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_odc_to_dqv", **properties)
 
 def mktcpserversink(pipeline, src, **properties):
 	elem = gst.element_factory_make("tcpserversink")
