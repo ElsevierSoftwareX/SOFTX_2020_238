@@ -1,4 +1,4 @@
-INCLUDES = -I$(top_srcdir)/lib
+INCLUDES = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
 plugin_LTLIBRARIES = libgstlal.la libgstlaladder.la
 
