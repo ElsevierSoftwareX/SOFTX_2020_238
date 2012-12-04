@@ -102,7 +102,7 @@ def numpy_dtype_from_caps(caps):
 		if struct["signed"]:
 			return "i%d" % (struct["width"] / 8)
 		else:
-			return "s%d" % (struct["width"] / 8)
+			return "u%d" % (struct["width"] / 8)
 	elif name == "audio/x-raw-complex":
 		return "c%d" % (struct["width"] / 8)
 	raise ValueError(name)
