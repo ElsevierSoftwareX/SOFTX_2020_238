@@ -22,10 +22,10 @@ libgstlaltypes_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(LAL_LIBS
 #
 
 gstlal_marshal.h : gstlal_marshal.list
-	glib-genmarshal --header --prefix gstlal_marshal $(srcdir)/$< >$@.tmp && mv -f $@.tmp $@
+	glib-genmarshal --header --prefix gstlal_marshal $< >$@.tmp && mv -f $@.tmp $@
 
 gstlal_marshal.c : gstlal_marshal.list
-	glib-genmarshal --body --prefix gstlal_marshal $(srcdir)/$< >$@.tmp && mv -f $@.tmp $@
+	glib-genmarshal --body --prefix gstlal_marshal $< >$@.tmp && mv -f $@.tmp $@
 
 EXTRA_DIST += gstlal_marshal.list
 CLEANFILES += gstlal_marshal.c gstlal_marshal.h
