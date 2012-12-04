@@ -203,6 +203,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 }
 
 
+#if 0
 static void clear_segments(FrameCPPMuxCollectPads *collectpads, FrameCPPMuxCollectPadsData *except)
 {
 	GSList *collectdatalist;
@@ -213,6 +214,7 @@ static void clear_segments(FrameCPPMuxCollectPads *collectpads, FrameCPPMuxColle
 			data->segment.format = GST_FORMAT_UNDEFINED;
 	}
 }
+#endif
 
 
 static gboolean event(GstPad *pad, GstEvent *event)
