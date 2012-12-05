@@ -70,10 +70,6 @@
 #include <gstlal_matrixmixer.h>
 
 
-#define GST_CAT_DEFAULT gstlal_matrixmixer_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-
 /*
  * ============================================================================
  *
@@ -81,6 +77,34 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  *
  * ============================================================================
  */
+
+
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_matrixmixer_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_matrixmixer", 0, "lal_matrixmixer element");
+}
+
+
+GST_BOILERPLATE_FULL(
+	GSTLALMatrixMixer,
+	gstlal_matrixmixer,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
+);
 
 
 /*
@@ -253,73 +277,6 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 
 	return GST_FLOW_OK;
 }
-
-
-/*
- * ============================================================================
- *
- *                           GStreamer Boiler Plate
- *
- * ============================================================================
- */
-
-
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SINK_NAME,
-	GST_PAD_SINK,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [ 1, MAX ], " \
-		"channels = (int) [ 1, MAX ], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64} ; " \
-		"audio/x-raw-complex, " \
-		"rate = (int) [ 1, MAX ], " \
-		"channels = (int) [ 1, MAX ], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {64, 128}"
-	)
-);
-
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SRC_NAME,
-	GST_PAD_SRC,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [ 1, MAX ], " \
-		"channels = (int) [ 1, MAX ], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64} ; " \
-		"audio/x-raw-complex, " \
-		"rate = (int) [ 1, MAX ], " \
-		"channels = (int) [ 1, MAX ], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {64, 128}"
-	)
-);
-
-
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_matrixmixer", 0, "lal_matrixmixer element");
-}
-
-
-GST_BOILERPLATE_FULL(
-	GSTLALMatrixMixer,
-	gstlal_matrixmixer,
-	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
-);
-
-
-enum property {
-	ARG_MATRIX = 1
-};
 
 
 /*
@@ -562,8 +519,13 @@ done:
 
 
 /*
- * set_property()
+ * properties
  */
+
+
+enum property {
+	ARG_MATRIX = 1
+};
 
 
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
@@ -702,21 +664,8 @@ static void finalize(GObject *object)
  */
 
 
-static void gstlal_matrixmixer_base_init(gpointer gclass)
+static void gstlal_matrixmixer_base_init(gpointer klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(element_class, "Matrix Mixer", "Filter/Audio", "A many-to-many mixer", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.org>");
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 }
 
 
@@ -725,14 +674,54 @@ static void gstlal_matrixmixer_base_init(gpointer gclass)
  */
 
 
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [ 1, MAX ], " \
+		"channels = (int) [ 1, MAX ], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64} ; " \
+		"audio/x-raw-complex, " \
+		"rate = (int) [ 1, MAX ], " \
+		"channels = (int) [ 1, MAX ], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {64, 128}"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [ 1, MAX ], " \
+		"channels = (int) [ 1, MAX ], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64} ; " \
+		"audio/x-raw-complex, " \
+		"rate = (int) [ 1, MAX ], " \
+		"channels = (int) [ 1, MAX ], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {64, 128}"
+	)
+);
+
+
 static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+	gst_element_class_set_details_simple(element_class, "Matrix Mixer", "Filter/Audio", "A many-to-many mixer", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.org>");
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	g_object_class_install_property(
 		gobject_class,
@@ -758,6 +747,17 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 }
 
 
