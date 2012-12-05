@@ -64,7 +64,6 @@ else:
 	import gst
 
 from gstlal import pipeparts
-from gstlal.lloidparts import DetectorData, mkLLOIDbasicsrc, get_gate_state
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
