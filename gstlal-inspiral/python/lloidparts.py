@@ -91,14 +91,17 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128):
+def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
 	# FIXME someday explore a good bandpass filter
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
 	src = pipeparts.mktee(pipeline, src)
 	if control is None:
 		control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
 	input = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
-	return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
+	if name is not None:
+		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True, name = name)
+	else:
+		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
 
 
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
@@ -269,7 +272,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, name = "%s_statevector_gate" % instrument)
 		# export state vector state
 		src.set_property("emit-signals", True)
 		# FIXME:  let the state vector messages going to stderr be
@@ -461,7 +464,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 		if ht_gate_threshold is not None:
 			# all h(t) gates are controlled by the same max rate control input.
-			head[rate] = mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate // 4)
+			head[rate] = mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate // 4, name = "%s_%d_ht_gate" % (instrument, rate))
 			# export ht gate state
 			head[rate].set_property("emit-signals", True)
 			# FIXME:  let the state messages going to stderr be
