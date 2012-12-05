@@ -55,10 +55,6 @@
 #include <gstlal_debug.h>
 
 
-#define GST_CAT_DEFAULT gstlal_sumsquares_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-
 /*
  * ============================================================================
  *
@@ -66,6 +62,34 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  *
  * ============================================================================
  */
+
+
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_sumsquares_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_sumsquares", 0, "lal_sumsquares element");
+}
+
+
+GST_BOILERPLATE_FULL(
+	GSTLALSumSquares,
+	gstlal_sumsquares,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
+);
 
 
 /*
@@ -121,63 +145,6 @@ DEFINE_MAKE_WEIGHTS_NATIVE_FUNC(double)
 DEFINE_MAKE_WEIGHTS_NATIVE_FUNC(float)
 DEFINE_SUMSQUARES_FUNC(double, pow)
 DEFINE_SUMSQUARES_FUNC(float, powf)
-
-
-/*
- * ============================================================================
- *
- *                           GStreamer Boiler Plate
- *
- * ============================================================================
- */
-
-
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SINK_NAME,
-	GST_PAD_SINK,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
-	)
-);
-
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SRC_NAME,
-	GST_PAD_SRC,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
-	)
-);
-
-
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_sumsquares", 0, "lal_sumsquares element");
-}
-
-
-GST_BOILERPLATE_FULL(
-	GSTLALSumSquares,
-	gstlal_sumsquares,
-	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
-);
-
-
-enum property {
-	ARG_WEIGHTS = 1
-};
 
 
 /*
@@ -390,8 +357,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 /*
- * set_property()
+ * properties
  */
+
+
+enum property {
+	ARG_WEIGHTS = 1
+};
 
 
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
@@ -448,11 +420,6 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 }
 
 
-/*
- * get_property()
- */
-
-
 static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(object);
@@ -503,20 +470,8 @@ static void finalize(GObject *object)
  */
 
 
-static void gstlal_sumsquares_base_init(gpointer gclass)
+static void gstlal_sumsquares_base_init(gpointer klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(element_class, "Sum-of-Squares", "Filter/Audio", "Computes the weighted sum-of-squares of the input channels.", "Kipp Cannon <kipp.cannon@ligo.org>");
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
 
@@ -525,13 +480,47 @@ static void gstlal_sumsquares_base_init(gpointer gclass)
  */
 
 
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
+	)
+);
+
+
 static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+	gst_element_class_set_details_simple(
+		element_class,
+		"Sum-of-Squares",
+		"Filter/Audio",
+		"Computes the weighted sum-of-squares of the input channels.",
+		"Kipp Cannon <kipp.cannon@ligo.org>"
+	);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -550,6 +539,18 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
 
