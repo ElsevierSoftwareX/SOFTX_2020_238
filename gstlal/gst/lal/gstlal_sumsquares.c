@@ -522,6 +522,18 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
 
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_WEIGHTS,
@@ -539,18 +551,6 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
 

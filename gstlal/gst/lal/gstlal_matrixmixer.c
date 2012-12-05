@@ -722,6 +722,17 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 
 	gst_element_class_set_details_simple(element_class, "Matrix Mixer", "Filter/Audio", "A many-to-many mixer", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.org>");
 
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
+
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
@@ -749,17 +760,6 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 }
 
 
