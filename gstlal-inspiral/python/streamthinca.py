@@ -410,11 +410,14 @@ class StreamThinca(object):
 		# called since the last flush()
 		if self._xmldoc is not None:
 			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
+		else:
+			noncoinc_sngls = []
 
 		# save all remaining triggers that weren't used in coincs
 		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
 		self.sngl_inspiral_table.unlink()
 		self.sngl_inspiral_table = None
+		self.ids.clear()
 
 		# it's now safe to work with a different document
 		self._xmldoc = None
