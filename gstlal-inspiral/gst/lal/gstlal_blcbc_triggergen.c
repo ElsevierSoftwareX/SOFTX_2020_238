@@ -1204,9 +1204,9 @@ static void gen_finalize(GObject *object)
 	element->instrument = NULL;
 	g_free(element->channel_name);
 	element->channel_name = NULL;
-	G_OBJECT_CLASS(gen_parent_class)->finalize(object);
 	g_object_unref(element->snradapter);
 	g_object_unref(element->chisqadapter);
+	G_OBJECT_CLASS(gen_parent_class)->finalize(object);
 }
 
 
