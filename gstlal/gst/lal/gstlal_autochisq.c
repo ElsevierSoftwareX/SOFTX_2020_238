@@ -964,6 +964,8 @@ static void dispose(GObject *object)
 	g_mutex_lock(element->autocorrelation_lock);
 	g_cond_broadcast(element->autocorrelation_available);
 	g_mutex_unlock(element->autocorrelation_lock);
+
+	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 

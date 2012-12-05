@@ -409,6 +409,8 @@ static void dispose(GObject *object)
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(object);
 
 	gst_audioadapter_clear(adapter);
+
+	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 
@@ -419,7 +421,7 @@ static void finalize(GObject *object)
 	g_queue_free(adapter->queue);
 	adapter->queue = NULL;
 
-	parent_class->finalize(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 

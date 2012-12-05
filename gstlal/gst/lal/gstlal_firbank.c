@@ -1470,6 +1470,8 @@ static void dispose(GObject *object)
 	g_mutex_lock(element->fir_matrix_lock);
 	g_cond_broadcast(element->fir_matrix_available);
 	g_mutex_unlock(element->fir_matrix_lock);
+
+	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 

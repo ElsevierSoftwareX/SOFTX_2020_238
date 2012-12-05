@@ -630,6 +630,8 @@ static void dispose(GObject *object)
 	g_mutex_lock(element->mixmatrix_lock);
 	g_cond_broadcast(element->mixmatrix_available);
 	g_mutex_unlock(element->mixmatrix_lock);
+
+	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 

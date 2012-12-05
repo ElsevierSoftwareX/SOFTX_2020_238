@@ -261,6 +261,8 @@ static void dispose(GObject *object)
         gst_caps_unref(elem->caps);
         elem->caps = NULL;
     }
+
+    G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 
