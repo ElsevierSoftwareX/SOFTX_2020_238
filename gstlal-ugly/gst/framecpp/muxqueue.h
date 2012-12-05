@@ -37,7 +37,6 @@
 
 
 #include <gstlal/gstaudioadapter.h>
-#include <marshal.h>
 
 
 G_BEGIN_DECLS
@@ -73,7 +72,7 @@ typedef struct _FrameCPPMuxQueue FrameCPPMuxQueue;
 struct _FrameCPPMuxQueueClass {
 	GstAudioAdapterClass parent_class;
 
-	void (*waiting)(FrameCPPMuxQueue *, GstClockTime, GstClockTime, gpointer);
+	void (*waiting)(FrameCPPMuxQueue *, gpointer);
 };
 
 
