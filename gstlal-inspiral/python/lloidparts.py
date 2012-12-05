@@ -91,11 +91,12 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold = 8.0, attack_length = -128, hold_length = -128):
+def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128):
 	# FIXME someday explore a good bandpass filter
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
 	src = pipeparts.mktee(pipeline, src)
-	control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
+	if control is None:
+		control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
 	input = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
 
@@ -459,7 +460,8 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 		#
 
 		if ht_gate_threshold is not None:
-			head[rate] = mkhtgate(pipeline, head[rate], threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate //4)
+			# all h(t) gates are controlled by the same max rate control input.
+			head[rate] = mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate // 4)
 			# export ht gate state
 			head[rate].set_property("emit-signals", True)
 			# FIXME:  let the state messages going to stderr be
