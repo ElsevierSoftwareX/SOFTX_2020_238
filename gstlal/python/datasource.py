@@ -26,6 +26,7 @@
 
 import sys
 import optparse
+import math
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -354,6 +355,23 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	return src
 
 
+def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
+	"""
+	A convenience function to provide thersholds on input data.  This can be used to remove large spikes / glitches etc.
+	"""
+
+	# FIXME someday explore a good bandpass filter
+	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
+	src = pipeparts.mktee(pipeline, src)
+	if control is None:
+		control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
+	input = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	if name is not None:
+		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True, name = name)
+	else:
+		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
+
+
 def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
@@ -474,8 +492,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
 			head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 			head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
-			head[rate] = pipeparts.mktee(pipeline, head[rate])
 
+		#
+		# optional gate on whitened h(t) amplitude
+		#
+
+		if ht_gate_threshold is not None:
+			# all h(t) gates are controlled by the same max rate control input.
+			head[rate] = mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate // 4, name = "%s_%d_ht_gate" % (instrument, rate))
+
+			# emit signals so that a user can latch on to them
+			head[rate].set_property("emit-signals", True)
+	
+		head[rate] = pipeparts.mktee(pipeline, head[rate])
 	#
 	# done.  return value is a dictionary of tee elements indexed by
 	# sample rate
