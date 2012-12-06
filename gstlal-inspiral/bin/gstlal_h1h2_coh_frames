@@ -47,6 +47,7 @@ from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import coherent_null
 from gstlal import inspiral
+from gstlal import datasource
 
 from glue import segments
 from glue.ligolw import ligolw
@@ -432,7 +433,7 @@ if options.write_null_frames is not None:
 	nullframehead = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, nullhead), "instrument=H1H2, channel-name=LAL-STRAIN_HNULL")
 	pipeparts.mkframesink(pipeline, nullframehead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2_NULL", duration = 4096)
 
-nullhead = lloidparts.mkhtgate(pipeline, nullhead, threshold = 8.0)
+nullhead = datasource.mkhtgate(pipeline, nullhead, threshold = 8.0)
 nullhead.set_property("emit-signals", True)
 nullhead.connect("start", handler.segment_sighandler, "off") # start means the start of non-gap output
 nullhead.connect("stop", handler.segment_sighandler, "on") # stop means the end of non-gap output
