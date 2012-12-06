@@ -300,7 +300,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, name = "%s_state_vector_gate" % instrument)
 		# export state vector state
 		if gw_data_source_info.gate_start_callback is not None:
 			src.set_property("emit-signals", True)
