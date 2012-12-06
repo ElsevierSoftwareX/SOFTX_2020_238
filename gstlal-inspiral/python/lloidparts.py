@@ -41,11 +41,14 @@ import gst
 
 
 from glue import iterutils
+from glue import segments
 from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simulation
 from gstlal import datasource
+from gstlal import simplehandler
+from pylal.datatypes import LIGOTimeGPS
 
 
 #
@@ -162,29 +165,34 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 # data source
 #
 
-
-class get_gate_state(object):
-	# monitor state vector transitions, export via web
-	# interface
-	def __init__(self, elem, msg = None, verbose = False):
+class Handler(simplehandler.Handler):
+	def __init__(self, mainloop, pipeline, gates = {}, verbose = False):
+		"""
+		here gates is a dict of gate names and messages for example
+		gates = {"my_gate_name": "my message"}
+		
+		my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
+		"""
+		simplehandler.Handler.__init__(self, mainloop, pipeline)
+		self.segments = segments.segmentlistdict()
+		self.gates = gates
 		self.verbose = verbose
-		self.current_segment = "unknown"
-		self.segment_start = "unknown"
-		if msg is not None:
-			self.msg = "%s: " % msg
-		else:
-			self.msg = ""
-		elem.connect("start", self.sighandler, "on")
-		elem.connect("stop", self.sighandler, "off")
+		for (name,msg) in self.gates.items():
+			self.segments[name] = segments.segmentlist([])
+			elem = pipeline.get_by_name(name)
+			elem.connect("start", self.sighandler, "on")
+			elem.connect("stop", self.sighandler, "off")
 
 	def sighandler(self, elem, timestamp, segment_type):
-		self.current_segment = segment_type
-		self.segment_start = "%.9f" % (timestamp / 1e9)
+		current_segment = segment_type
+		segment_start = "%.9f" % (timestamp / 1.e9)
+		name = elem.get_name()
 		if self.verbose:
-			print >>sys.stderr, "%s: %sstate transition: %s" % (elem.get_name(), self.msg, self.text().strip())
-
-	def text(self):
-		return "%s @ %s\n" % (self.current_segment, self.segment_start)
+			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], current_segment, segment_start)
+		if current_segment == "on":
+			self.segments[name].append(segments.segment(LIGOTimeGPS(segment_start), None))
+		if current_segment == "off" and self.segments[name]: #have to have seen at least one segment
+			self.segments[name][-1] = segments.segment(self.segments[name][-1][0], LIGOTimeGPS(segment_start))
 
 
 def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}, verbose = False):
