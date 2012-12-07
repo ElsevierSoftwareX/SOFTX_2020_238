@@ -28,7 +28,7 @@ import math
 import sys
 import numpy
 import warnings
-
+import StringIO
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -42,6 +42,10 @@ import gst
 
 from glue import iterutils
 from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -175,24 +179,76 @@ class Handler(simplehandler.Handler):
 		"""
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.segments = segments.segmentlistdict()
+		self.current_segment = {}
 		self.gates = gates
 		self.verbose = verbose
 		for (name,msg) in self.gates.items():
 			self.segments[name] = segments.segmentlist([])
+			self.current_segment[name] = segments.segment(None, None)
 			elem = pipeline.get_by_name(name)
-			elem.connect("start", self.sighandler, "on")
-			elem.connect("stop", self.sighandler, "off")
+			elem.set_property("emit-signals", True)
+			elem.connect("start", self.gatehandler, "on")
+			elem.connect("stop", self.gatehandler, "off")
 
-	def sighandler(self, elem, timestamp, segment_type):
-		current_segment = segment_type
+		bottle.route("/segments.xml")(self.web_get_segments_xml)
+
+	def gatehandler(self, elem, timestamp, segment_type):
 		segment_start = "%.9f" % (timestamp / 1.e9)
 		name = elem.get_name()
+
 		if self.verbose:
-			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], current_segment, segment_start)
-		if current_segment == "on":
-			self.segments[name].append(segments.segment(LIGOTimeGPS(segment_start), None))
-		if current_segment == "off" and self.segments[name]: #have to have seen at least one segment
-			self.segments[name][-1] = segments.segment(self.segments[name][-1][0], LIGOTimeGPS(segment_start))
+			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, segment_start)
+
+		if segment_type == "on":
+			self.current_segment[name] = segments.segment(LIGOTimeGPS(segment_start), self.current_segment[name][1])
+		if segment_type == "off":
+			self.current_segment[name] = segments.segment(self.current_segment[name][0], LIGOTimeGPS(segment_start))
+
+		# if we have a complete segment append it
+		if self.current_segment[name][0] is not None and self.current_segment[name][1] is not None:
+			self.segments[name].append(self.current_segment[name])
+			self.current_segment[name] = segments.segment(None, None)
+
+	def gen_segments_doc(self):
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		seg_def = lsctables.New(lsctables.SegmentDefTable, ligolw_segments.LigolwSegmentList.segment_def_columns)
+		xmldoc.childNodes[0].appendChild(seg_def)
+		segtab = lsctables.New(lsctables.SegmentTable, ligolw_segments.LigolwSegmentList.segment_columns)
+		xmldoc.childNodes[0].appendChild(segtab)
+
+		ids = {}
+		for k in self.segments.keys():
+			ifo, name = k.split('_')[0], "_".join(k.split('_')[1:])
+			row = seg_def.RowType()
+			id = seg_def.get_next_id()
+			row.set_ifos([ifo])
+			row.segment_def_id = id
+			row.process_id = None
+			row.name = name
+			row.version = None
+			row.comment = None
+			row.insertion_time = None
+			ids[k] = id
+			seg_def.append(row)
+
+		for k, segl in self.segments.items():
+			for seg in segl:
+				row = segtab.RowType()
+				row.segment_def_id = ids[k]
+				row.segment_id = segtab.get_next_id()
+				row.process_id = None
+				row.set(seg)
+				segtab.append(row)
+
+		return xmldoc
+
+	def web_get_segments_xml(self):
+		output = StringIO.StringIO()
+		utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+		outstr = output.getvalue()
+		output.close()
+		return outstr
 
 
 def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}, verbose = False):
