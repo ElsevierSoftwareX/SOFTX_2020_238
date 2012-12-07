@@ -413,10 +413,12 @@ class StreamThinca(object):
 		else:
 			noncoinc_sngls = []
 
-		# save all remaining triggers that weren't used in coincs
-		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
-		self.sngl_inspiral_table.unlink()
-		self.sngl_inspiral_table = None
+		# any event that hasn't been used in a coinc by now will
+		# never be
+		if self.sngl_inspiral_table is not None:
+			noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
+			self.sngl_inspiral_table.unlink()
+			self.sngl_inspiral_table = None
 		self.ids.clear()
 
 		# it's now safe to work with a different document
