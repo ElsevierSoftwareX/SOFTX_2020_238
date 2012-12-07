@@ -75,13 +75,9 @@ __author__ = "Madeline Wade <madeline.wade@ligo.org>"
 #
 
 parser = OptionParser()
-parser.add_option("--frame-cache", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Inital LIGO or Advanced LIGO design spectrum (optional).")
-parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process.")
-parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+datasource.append_options(parser)
+
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--track-psd", action = "store_true", help = "Track the H1 and H2 psds.  The filters that create the coherent stream will be updated throughout the run.")
 parser.add_option("--reference-psd", metavar = "filename", help = ".xml file containing the H1 and H2 psds. Use this psd as first guess psd or fixed psd.")
@@ -89,14 +85,11 @@ parser.add_option("--write-psd", metavar = "filename", help = "Measure psds and 
 parser.add_option("--null-output", metavar="filename", help = "Set the output filename for the null vetoes (default = write to stdout).  If the filename ends with \".gz\" it will be gzip-compressed.")
 parser.add_option("--vetoes-name", metavar = "name", default = "vetoes_from_LHO_null", help = "Set the name of the vetoes segment lists in the output document (default = \"vetoes_from_LHO_null\").")
 parser.add_option("--write-null-frames", action="store_true", help = "Write the null stream to frame files as well as out put a null veto segment list (optional).")
+parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
+parser.add_option("--verbose", action="store_true", help = "Be verbose.")
+
 
 options, filenames = parser.parse_args()
-
-if len([option for option in ("frame_cache", "fake_data") if getattr(options, option) is not None]) != 1:
-	raise ValueError("must provide either --frame-cache or --fake-data")
-
-if options.fake_data not in (None, "LIGO", "AdvLIGO"):
-	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
 if options.reference_psd is None and options.write_psd is None and options.track_psd is None:
 	raise ValueError("must use --track-psd if --reference-psd or --write-psd are not given; you can use both simultaneously")
@@ -104,20 +97,11 @@ if options.reference_psd is None and options.write_psd is None and options.track
 if len([option for option in ("reference_psd", "write_psd") if getattr(options, option) is not None]) != 1 and len([option for option in ("reference_psd", "write_psd") if getattr(options, option) is not None]) != 0:
 	raise ValueError("must provide only one of --reference-psd or --write-psd")
 
-required_options = ["gps_start_time", "gps_end_time", "channel_name"]
+gw_data_source_info = datasource.GWDataSourceInfo(options)
 
-missing_options = []
-missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
-if missing_options:
-	raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
-
-seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 options.psd_fft_length = 8
 options.zero_pad_length = 2
-options.srate = 4096
 quality = 9
-
-channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
 
 #
 # =============================================================================
@@ -134,7 +118,7 @@ class COHhandler(simplehandler.Handler):
 		# set various properties for psd and fir filter		
 		self.psd_fft_length = options.psd_fft_length
 		self.zero_pad_length = options.zero_pad_length		
-		self.srate = options.srate
+		self.srate = options.sample_rate
 		self.filter_length = int(self.srate*self.psd_fft_length)
 
 		# set default psds for H1 and H2
@@ -171,6 +155,12 @@ class COHhandler(simplehandler.Handler):
 			self.segment_EOS()
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_INFO:
+			gerr, dbgmsg = message.parse_info()
+			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_WARNING:
+			gerr, dbgmsg = message.parse_warning()
+			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
 			self.pipeline.set_state(gst.STATE_NULL)
@@ -265,58 +255,13 @@ class COHhandler(simplehandler.Handler):
 # =============================================================================
 #
 
-#
-# set up source information
-#
-
-if options.gps_start_time is None:
-	seek_start_type = gst.SEEK_TYPE_NONE
-	seek_start_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
-else:
-	seek_start_type = gst.SEEK_TYPE_SET
-	seek_start_time = seg[0].ns()
-
-if options.gps_end_time is None:
-	seek_stop_type = gst.SEEK_TYPE_NONE
-	seek_stop_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
-else:
-	seek_stop_type = gst.SEEK_TYPE_SET
-	seek_stop_time = seg[1].ns()
-
-seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
-
-detectors = {}
-
-detectors["H1"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H1"])
-detectors["H2"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H2"])
-
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 	psd1 = psd["H1"]
 	psd2 = psd["H2"]
 if options.write_psd is not None:
-	psd1 = reference_psd.measure_psd(
-		"H1",
-		seekevent,
-		detectors["H1"],
-		seg,
-		options.srate,
-		psd_fft_length = options.psd_fft_length,
-		data_source = options.fake_data or "frames",
-		injection_filename = options.injections,
-		verbose = options.verbose
-		)
-	psd2 = reference_psd.measure_psd(
-		"H2",
-		seekevent,
-		detectors["H2"],
-		seg,
-		options.srate,
-		psd_fft_length = options.psd_fft_length,
-		data_source = options.fake_data or "frames",
-		injection_filename = options.injections,
-		verbose = options.verbose
-		)
+	psd1 = reference_psd.measure_psd(gw_data_source_info, instrument = "H1", rate = options.sample_rate, psd_fft_length = options.psd_fft_length, verbose = options.verbose)
+	psd2 = reference_psd.measure_psd(gw_data_source_info, instrument = "H2", rate = options.sample_rate, psd_fft_length = options.psd_fft_length, verbose = options.verbose)
 	reference_psd.write_psd(options.write_psd, { "H1" : psd1, "H2" : psd2 }, verbose = options.verbose)
 
 #
@@ -348,18 +293,9 @@ if options.reference_psd is not None or options.write_psd is not None:
 # H1 branch
 #
 
-H1src = lloidparts.mkLLOIDbasicsrc(
-	pipeline,
-	seekevent,
-	"H1",
-	detectors["H1"],
-	data_source = options.fake_data or "frames",
-	injection_filename = options.injections,
-	state_vector_on_off_dict = {"H1" : (0x7, 0x160), "H2" : (0x7, 0x160)},
-	verbose = options.verbose
-)
+H1head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H1", verbose = options.verbose)
 
-H1head = pipeparts.mkreblock(pipeline, H1src)
+H1head = pipeparts.mkreblock(pipeline, H1head)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
 H1head = pipeparts.mkresample(pipeline, H1head, quality = quality)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=%d" % handler.srate)
@@ -367,10 +303,8 @@ H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, 
 # track psd
 if options.track_psd is not None:
 	H1psdtee = pipeparts.mktee(pipeline, H1head)
-	H1psd = pipeparts.mkchecktimestamps(pipeline, H1psdtee)
 	H1psd = pipeparts.mkwhiten(pipeline, H1psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H1_whitener") 
 	H1psd.connect_after("notify::mean-psd", update_psd, handler)
-	H1psd = pipeparts.mkchecktimestamps(pipeline, H1psd)
 	pipeparts.mkfakesink(pipeline, H1psd)
 
 	H1head = H1psdtee
@@ -379,18 +313,9 @@ if options.track_psd is not None:
 # H2 branch
 #
 
-H2src = lloidparts.mkLLOIDbasicsrc(
-	pipeline,
-	seekevent,
-	"H2",
-	detectors["H2"],
-	data_source = options.fake_data or "frames",
-	injection_filename = options.injections,
-	state_vector_on_off_dict = {"H1" : (0x7, 0x160), "H2" : (0x7, 0x160)},
-	verbose = options.verbose
-)
+H2head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H2", verbose = options.verbose)
 
-H2head = pipeparts.mkreblock(pipeline, H2src)
+H2head = pipeparts.mkreblock(pipeline, H2head)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)
 H2head = pipeparts.mkresample(pipeline, H2head, quality = quality)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" % handler.srate)
@@ -398,10 +323,8 @@ H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" %
 # track psd
 if options.track_psd is not None:
 	H2psdtee = pipeparts.mktee(pipeline, H2head)
-	H2psd = pipeparts.mkchecktimestamps(pipeline, H2psdtee)
 	H2psd = pipeparts.mkwhiten(pipeline, H2psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H2_whitener")
 	H2psd.connect_after("notify::mean-psd", update_psd, handler)
-	H2psd = pipeparts.mkchecktimestamps(pipeline, H2psd)
 	H2psd = pipeparts.mkfakesink(pipeline, H2psd)
 	
 	H2head = H2psdtee
@@ -443,28 +366,19 @@ pipeparts.mkfakesink(pipeline, nullhead)
 # Running the pipeline messages and pipeline graph
 #
 
-def write_dump_dot(pipeline, filestem, verbose = False):
-	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
-		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
-	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
-	if verbose:
-		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
-
 if options.write_pipeline is not None:
-	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to paused ..."
-if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "pipeline did not enter paused state"
+pipeline.set_state(gst.STATE_PAUSED)
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
-if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "pipeline did not enter playing state"
+pipeline.set_state(gst.STATE_PLAYING)
 
 if options.write_pipeline is not None:
-	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
