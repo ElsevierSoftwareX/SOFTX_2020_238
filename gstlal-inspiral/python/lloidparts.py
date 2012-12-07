@@ -169,7 +169,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 # data source
 #
 
-class Handler(simplehandler.Handler):
+class Handler(object):
 	def __init__(self, mainloop, pipeline, gates = {}, verbose = False):
 		"""
 		here gates is a dict of gate names and messages for example
@@ -177,7 +177,13 @@ class Handler(simplehandler.Handler):
 		
 		my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
 		"""
-		simplehandler.Handler.__init__(self, mainloop, pipeline)
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+		
 		self.segments = segments.segmentlistdict()
 		self.current_segment = {}
 		self.gates = gates
@@ -191,6 +197,23 @@ class Handler(simplehandler.Handler):
 			elem.connect("stop", self.gatehandler, "off")
 
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
+	
+	def on_message(self, bus, message):
+		print message
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_INFO:
+			gerr, dbgmsg = message.parse_info()
+			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_WARNING:
+			gerr, dbgmsg = message.parse_warning()
+			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
 	def gatehandler(self, elem, timestamp, segment_type):
 		segment_start = "%.9f" % (timestamp / 1.e9)
