@@ -227,7 +227,7 @@ def parse_command_line():
 		yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
 
 		# First do urls that do not depend on instruments
-		for request in ("registry.txt", "gracedb_far_threshold.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt"):
+		for request in ("registry.txt", "gracedb_far_threshold.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt", "segments.xml"):
 			# FIXME don't hardcode port number
 			yield "http://%s:16953/%s\n" % (host, request)
 
