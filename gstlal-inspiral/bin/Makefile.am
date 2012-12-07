@@ -3,6 +3,7 @@ dist_bin_SCRIPTS = \
 	gstlal_bank_splitter \
 	gstlal_cbc_sensitivity_vs_flow_at_fixed_computational_cost \
 	gstlal_compute_far_from_snr_chisq_histograms \
+	gstlal_h1h2_coh_frames \
 	gstlal_iir_bank \
 	gstlal_iir_inspiral \
 	gstlal_iir_ll_inspiral \
