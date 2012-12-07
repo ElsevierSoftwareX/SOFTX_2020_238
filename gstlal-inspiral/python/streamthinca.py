@@ -202,10 +202,6 @@ class StreamThinca(object):
 		# is a no-op
 		self.last_coincs = {}
 
-		# no-op if no new events
-		if not events:
-			return []
-
 		# we need our own copy of the sngl_inspiral table because
 		# we need a place to store a history of all the triggers,
 		# and a place we can run coincidence on them.  when making
@@ -226,7 +222,10 @@ class StreamThinca(object):
 				setattr(new_event, col, getattr(old_event, col))
 			self.sngl_inspiral_table.append(new_event)
 
-		# run coincidence, return non-coincident sngls
+		# run coincidence, return non-coincident sngls.  no-op if
+		# no new events
+		if not events:
+			return []
 		return self.run_coincidence(xmldoc, process_id, boundary, FAP = FAP)
 
 
