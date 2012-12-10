@@ -216,28 +216,28 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		/*
 		 * sink pad must have same sample rate as source pad
 		 * FIXME:  this doesn't work out all the allowed
-		 * permutations, it just takes the channel count from the
+		 * permutations, it just takes the rate from the
 		 * first structure on the source pad and copies it into all
 		 * the structures on the sink pad
 		 */
 
 		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
 		for(i = 0; i < gst_caps_get_size(othercaps); i++)
-			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "channels", gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "rate", gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 		break;
 
 	case GST_PAD_SINK:
 		/*
 		 * source pad must have same sample rate as sink pad
 		 * FIXME:  this doesn't work out all the allowed
-		 * permutations, it just takes the channel count from the
+		 * permutations, it just takes the rate from the
 		 * first structure on the sink pad and copies it into all
 		 * the structures on the source pad
 		 */
 
 		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans)));
 		for(i = 0; i < gst_caps_get_size(caps); i++)
-			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "channels", gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "rate", gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 		break;
 
 	case GST_PAD_UNKNOWN:
