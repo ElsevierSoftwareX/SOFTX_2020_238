@@ -16,6 +16,270 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+from gstlal import pipeparts
+from gstlal import reference_psd
+from gstlal import simplehandler
+from gstlal import datasource
+from optparse import OptionParser, Option
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from pylal.datatypes import LIGOTimeGPS
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+import sys
+import os
+
+def psd_resolution_changed(elem, pspec, psd):
+	# get frequency resolution and number of bins
+	delta_f = elem.get_property("delta-f")
+	n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
+	# interpolate and install PSD
+	print delta_f, n
+	psd = reference_psd.interpolate_psd(psd, delta_f)
+	elem.set_property("mean-psd", psd.data[:n])
+
+def write_graph(demux, srcpad):
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
+
+parser = OptionParser(description = __doc__)
+
+#
+# Append data source options
+#
+
+datasource.append_options(parser)
+
+#
+# Append program specific options
+#
+
+parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
+parser.add_option("--reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
+parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
+#parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
+parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
+parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
+parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
+parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
+parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, will be written to file.")
+
+#
+# Parse options
+#
+
+options, filenames = parser.parse_args()
+
+if options.output_channel_name is None:
+	options.output_channel_name = options.channel_name
+
+sr = options.sample_rate
+
+gw_data_source = datasource.GWDataSourceInfo(options)
+
+# Assume instrument is the first (only) key of the channel dict
+instrument = gw_data_source.channel_dict.keys()[0]
+
+# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica (I think this is cut off...)
+state_vector_on_bits, state_vector_off_bits = gw_data_source.state_vector_on_off_bits[instrument]
+
+#
+# read psd file
+#
+
+if options.reference_psd is not None:
+	wpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+else:
+	wpsd = None
+	if options.verbose:
+		print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
+rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+
+#
+# Setup the pipeline
+#
+
+pipeline = gst.Pipeline(sys.argv[0])
+mainloop = gobject.MainLoop()
+handler = simplehandler.Handler(mainloop, pipeline)
+
+#                                                                            
+#                                                                                                  ->               
+#                                                                           /                                          \
+#                                                       -> ODC DQ vector ->                                              -> muxer -> shmsink (or multifilesink)
+#                                                     /                     \                                          /
+# (FIXME) construct the pipeline shmsrc -> demuxer ->                         -> gate -> shift -> firbank (recolor) ->     
+#                                                     \                     /
+#						        ->      PSL      ->          
+#
+
+# FIXME make wait_time adjustable through web interface or command line or both
+demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0), do_file_checksum = True, skip_bad_files = True)
+# Write the pipeline graph after pads have been hooked up to the demuxer
+if options.write_pipeline is not None:
+	demux.connect("pad-added", write_graph)
+
+# Set up the PSL and ODC state vector branches
+psl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 mintues of buffering
+odcstatevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 mintues of buffering
+
+# Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
+pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
+pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
+
+# Debugging checktimestamps
+psl = pipeparts.mkchecktimestamps(pipeline, psl)
+odcstatevector = pipeparts.mkchecktimestamps(pipeline, odcstatevector)
+
+#
+# RECOLORING BRANCH
+#
+
+psl = pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False)
+
+# FIXME: Use pipeparts
+fixodc = gst.element_factory_make("lal_fixodc")
+pipeline.add(fixodc)
+odcstatevector.link(fixodc)
+
+odctodqv = gst.element_factory_make("lal_odc_to_dqv")
+odctodqv.set_property("required-on", state_vector_on_bits)
+pipeline.add(odctodqv)
+fixodc.link(odctodqv)
+
+odcstatevector = pipeparts.mkcapsfilter(pipeline, odctodqv, "audio/x-raw-int,rate=32768")
+
+# Tee of the ODC state vector
+odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
+
+# Use the ODC state vector to gate the PSL
+psl = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, psl), threshold = 1, control = pipeparts.mkqueue(pipeline, odcstatevectortee))
+
+# Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
+psl = pipeparts.mkaudioconvert(pipeline, psl)
+
+if options.verbose:
+	psl = pipeparts.mkprogressreport(pipeline, psl, "progress_src_%s" % instrument)
+
+if options.shift is not None:
+	psl = pipeparts.mkshift(pipeline, psl, shift = options.shift)
+	psl = pipeparts.mkprogressreport(pipeline, psl, "frames_shifted")
+
+# First whiten and downsample, take only the [sr] item
+psl = datasource.mkwhitened_multirate_src(pipeline, psl, [sr], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, block_duration = gst.SECOND, track_psd = options.track_psd)[sr]
+# Recolor kernel
+max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
+# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
+rpsd.data = 1. / rpsd.data[:max_sample]
+
+fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
+# Add latency to fix the time stamps
+latency -= 2# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
+psl = pipeparts.mkfirbank(pipeline, psl, latency = latency, fir_matrix = [fir_matrix], block_stride = sr)
+
+# Put the units back to strain before writing to frames
+# Additionally, override the output channel name if provided from the command line
+tagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
+psl = pipeparts.mktaginject(pipeline, psl, tagstr)
+
+if options.injections is not None:
+	psl = pipeparts.mkinjections(pipeline, psl, options.injections)
+
+try:
+	outpath = instrument+"-"+options.output_channel_name
+	os.mkdir(outpath)
+except:
+	pass
+
+
+#
+# ODC STATE VECTOR BRANCH
+#
+
+# Manipulate the ODC state vector
+odcstatevector = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12))
+
+if options.verbose:
+	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
+
+
+# Change the channel name of the manipulated ODC state vector
+odctagstr = "units=strain,channel-name=%s:LLD-DQ_VECTOR_TEST,instrument=%s" % (instrument, instrument)
+odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
+
+#
+# CREATE MUXER AND HOOK EVERYTHING UP TO IT
+#
+
+mux = pipeparts.mkframecppchannelmux(pipeline, None)
+
+if options.frame_duration is not None:
+        mux.set_property("frame-duration", options.frame_duration)
+if options.frames_per_file is not None:
+        mux.set_property("frames-per-file", options.frames_per_file)
+
+# more checktimestamps
+psl = pipeparts.mkchecktimestamps(pipeline, psl)
+odcstatevector = pipeparts.mkchecktimestamps(pipeline, odcstatevector)
+
+# Link the manipulated ODC state vector to muxer
+odcstatevector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR_TEST" % instrument))
+
+# Link fake strain (recolored PSL) to the muxer
+psl.get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
+
+# Link an unchanged ODC state vector to the muxer as a sanity check
+#pipeparts.mkqueue(pipeline, odcstatevectortee).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument])))
+
+mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
+
+if options.write_to_shm_partition is not None:
+	# FIXME: Use pipeparts
+	lvshmsink = gst.element_factory_make("gds_lvshmsink")
+	lvshmsink.set_property("shm-name", options.write_to_shm_partition)
+	lvshmsink.set_property("num-buffers", 10)
+	lvshmsink.set_property("blocksize", 405338)
+	pipeline.add(lvshmsink)
+	mux.link(lvshmsink)
+else:
+	pipeparts.mkmultifilesink(pipeline, mux, location="TEST_%05d.gwf", sync=True) 
+
+# Run pipeline
+
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to paused ..."
+pipeline.set_state(gst.STATE_PAUSED)
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+pipeline.set_state(gst.STATE_PLAYING)
+
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+	
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+
+mainloop.run()
+
+
+# THIS IS THE ACTUAL CALIBRATION PIECE OF THE PIPELINE, WHICH IS CURRENTLY NOT BEING USED (IT IS ALL COMMENTED OUT).  INSTEAD, RECOLORING IS BEING DONE AS SHOWN ABOVE.  THE PIPELINE BELOW WILL CONTINUE TO BE DEVELOPED AND WILL EVENTUALLY BE USED IN PLACE OF THE RECOLORING.
+
 """\
 Generate h(t).
 
@@ -28,8 +292,8 @@ cache file. The filters file has to be in numpy's npz format, and can
 be generated from an old one with calfilters2npz.py (in examples/utilities).
 """
 
-import sys
-from optparse import OptionParser
+#import sys
+#from optparse import OptionParser
 
 
 #
@@ -38,46 +302,46 @@ from optparse import OptionParser
 
 # Read command-line options, check and help if a required one is missing
 
-parser = OptionParser(
-    version='%prog 0.95',
-    usage='%prog [options]',
-    description=__doc__)
+#parser = OptionParser(
+#    version='%prog 0.95',
+#    usage='%prog [options]',
+#    description=__doc__)
 
-add = parser.add_option  # for short notation
-add('--gps-start-time', type='int', help='GPS start time')
-add('--gps-end-time',   type='int', help='GPS end time')
-add('--filters-file', help='Name of file containing filters (in npz format)')
-add('--frame-cache',  help='Name of frame cache file')
-add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
-add('--wings', type='int', default=16, help='Size of wings in seconds')
-add('--frame-type', default='GSTLAL_CAL', help='Frame type to be written')
-add('--doubles', action='store_true', help='Use doubles instead of floats')
+#add = parser.add_option  # for short notation
+#add('--gps-start-time', type='int', help='GPS start time')
+#add('--gps-end-time',   type='int', help='GPS end time')
+#add('--filters-file', help='Name of file containing filters (in npz format)')
+#add('--frame-cache',  help='Name of frame cache file')
+#add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
+#add('--wings', type='int', default=16, help='Size of wings in seconds')
+#add('--frame-type', default='GSTLAL_CAL', help='Frame type to be written')
+#add('--doubles', action='store_true', help='Use doubles instead of floats')
 
-opts, rest = parser.parse_args()
+#opts, rest = parser.parse_args()
 
-if None in [opts.gps_start_time, opts.gps_end_time,
-            opts.filters_file, opts.frame_cache, opts.ifo]:
-    print 'Missing required option (sorry for the oxymoron).\n'
-    parser.print_help()
-    print """\nExample:
-  %s --gps-start-time 943009024  --gps-end-time $((943009024+64)) \\
-     --filters-file filters.npz  --frame-cache data.cache  --ifo H1 \\
-     --frame-type H1_GSTLAL_C02""" % sys.argv[0]
-    sys.exit()
+#if None in [opts.gps_start_time, opts.gps_end_time,
+#            opts.filters_file, opts.frame_cache, opts.ifo]:
+#    print 'Missing required option (sorry for the oxymoron).\n'
+#    parser.print_help()
+#    print """\nExample:
+#  %s --gps-start-time 943009024  --gps-end-time $((943009024+64)) \\
+#     --filters-file filters.npz  --frame-cache data.cache  --ifo H1 \\
+#     --frame-type H1_GSTLAL_C02""" % sys.argv[0]
+#    sys.exit()
 
 
 # Finish importing (not before, so --help works), read filters, set data width
 
-from numpy import load  # only used once to read the filters file
-from gstlal.pipeutil import mkelem
-import gobject, gst
+#from numpy import load  # only used once to read the filters file
+#from gstlal.pipeutil import mkelem
+#import gobject, gst
 
-filters = load(opts.filters_file)
+#filters = load(opts.filters_file)
 
-if opts.doubles is None:
-    caps = gst.Caps('audio/x-raw-float,width=32')  # = 4 bytes, a float
-else:
-    caps = gst.Caps('audio/x-raw-float,width=64')  # = 8 bytes, a double
+#if opts.doubles is None:
+#    caps = gst.Caps('audio/x-raw-float,width=32')  # = 4 bytes, a float
+#else:
+#    caps = gst.Caps('audio/x-raw-float,width=64')  # = 8 bytes, a double
 
 
 #
@@ -93,83 +357,83 @@ else:
 
 # [1] Elements in the first path (from DARM_ERR channel)
 
-derr_src = mkelem('lal_framesrc',
-                  {'location': opts.frame_cache,
-                   'channel-name': 'LSC-DARM_ERR',
-                   'instrument': opts.ifo,
-                   'blocksize': 5000000})
+#derr_src = mkelem('lal_framesrc',
+#                  {'location': opts.frame_cache,
+#                   'channel-name': 'LSC-DARM_ERR',
+#                   'instrument': opts.ifo,
+#                   'blocksize': 5000000})
 
-inv_sensing = mkelem('audiofirfilter',
-                     {'kernel': filters['inv_sensing'],
-                      'latency': int(-filters['inv_sens_delay'])})
+#inv_sensing = mkelem('audiofirfilter',
+#                     {'kernel': filters['inv_sensing'],
+#                      'latency': int(-filters['inv_sens_delay'])})
 # the *delay* is negative (an advance), and so latency=-delay ... funny legacy
 
-path1 = [derr_src,
-         mkelem('audioconvert'),  # a NOP if we don't convert to doubles
-         mkelem('capsfilter', {'caps': caps}),
-         inv_sensing]
+#path1 = [derr_src,
+#         mkelem('audioconvert'),  # a NOP if we don't convert to doubles
+#         mkelem('capsfilter', {'caps': caps}),
+#         inv_sensing]
 
 
 # [2] Elements in the second path (from DARM_CTRL channel)
 
-dctrl_src = mkelem('lal_framesrc',
-                   {'location': opts.frame_cache,
-                    'channel-name': 'LSC-DARM_CTRL',
-                    'instrument': opts.ifo,
-                    'blocksize': 5000000})
+#dctrl_src = mkelem('lal_framesrc',
+#                   {'location': opts.frame_cache,
+#                    'channel-name': 'LSC-DARM_CTRL',
+#                    'instrument': opts.ifo,
+#                    'blocksize': 5000000})
 
-hpf0 = mkelem('audiowsinclimit',
-              {'mode': 1,  # high pass filter
-               'cutoff': 20,  # cf. ComputeStrain.c (0.00244140625 * 16384/2)
-               'window': 2,  # gaussian
-               'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
+#hpf0 = mkelem('audiowsinclimit',
+#              {'mode': 1,  # high pass filter
+#               'cutoff': 20,  # cf. ComputeStrain.c (0.00244140625 * 16384/2)
+#               'window': 2,  # gaussian
+#               'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
 
-hpf1 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
-              {'mode': 1,
-               'cutoff': 20,
-               'window': 2,
-               'length': 2*2000+1})
+#hpf1 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
+#              {'mode': 1,
+#               'cutoff': 20,
+#               'window': 2,
+#               'length': 2*2000+1})
 
-awhiten = mkelem('audiofirfilter',
-                 {'kernel': filters['awhitening']})
+#awhiten = mkelem('audiofirfilter',
+#                 {'kernel': filters['awhitening']})
 
-actuation = mkelem('audiofirfilter',
-                   {'kernel': filters['actuation']})
+#actuation = mkelem('audiofirfilter',
+#                   {'kernel': filters['actuation']})
 
-path2 = [dctrl_src,
-         mkelem('audioconvert'),
-         mkelem('capsfilter', {'caps': caps}),
-         hpf0, hpf1, awhiten, actuation]
+#path2 = [dctrl_src,
+#         mkelem('audioconvert'),
+#         mkelem('capsfilter', {'caps': caps}),
+#         hpf0, hpf1, awhiten, actuation]
 
 
 # [3] Elements from adder to saving the result
 
-Fs = 16384  # sampling rate
-T = opts.gps_end_time - opts.gps_start_time  # original duration
+#Fs = 16384  # sampling rate
+#T = opts.gps_end_time - opts.gps_start_time  # original duration
 
-path3 = [mkelem(*x) for x in [ \
-    ('lal_adder', {'sync': True}),
-    ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # or GSTLAL-STRAIN
-    ('lal_trim', {'initial-offset': Fs * opts.wings,
-                  'final-offset':  Fs * (T - opts.wings)}),
-    ('lal_framesink', {'frame-type': opts.frame_type,
-                       'duration': T - 2 * opts.wings})]]
+#path3 = [mkelem(*x) for x in [ \
+#    ('lal_adder', {'sync': True}),
+#    ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # or GSTLAL-STRAIN
+#    ('lal_trim', {'initial-offset': Fs * opts.wings,
+#                  'final-offset':  Fs * (T - opts.wings)}),
+#    ('lal_framesink', {'frame-type': opts.frame_type,
+#                       'duration': T - 2 * opts.wings})]]
 
 
 # Add to pipeline and link
 
-pipeline = gst.Pipeline('calibration')
+#pipeline = gst.Pipeline('calibration')
 
-pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, inv_sens...)
+#pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, inv_sens...)
 
-gst.element_link_many(*path1)  # [1]
-gst.element_link_many(*path2)  # [2]
+#gst.element_link_many(*path1)  # [1]
+#gst.element_link_many(*path2)  # [2]
 
-path1[-1].link(path3[0])  # [1] \
+#path1[-1].link(path3[0])  # [1] \
                           #      |-> [3]
-path2[-1].link(path3[0])  # [2] /
+#path2[-1].link(path3[0])  # [2] /
 
-gst.element_link_many(*path3)  # [3]
+#gst.element_link_many(*path3)  # [3]
 
 
 #
@@ -178,28 +442,28 @@ gst.element_link_many(*path3)  # [3]
 
 # Start playing at the appropriate reference gpstime
 
-for src in pipeline.iterate_sources():
-    src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-             gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
-             gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
+#for src in pipeline.iterate_sources():
+#    src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+#             gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
+#             gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
 
 # Create main loop, catch finish and error signals
 
-mainloop = gobject.MainLoop()
+#mainloop = gobject.MainLoop()
 
-bus = pipeline.get_bus()
-bus.add_signal_watch()  # emit message signal for messages posted on the bus
+#bus = pipeline.get_bus()
+#bus.add_signal_watch()  # emit message signal for messages posted on the bus
 
-def on_message(bus, message):  # message handler
-    if message.type in [gst.MESSAGE_EOS, gst.MESSAGE_ERROR]:
-        pipeline.set_state(gst.STATE_NULL)
-        mainloop.quit()
-        if message.type == gst.MESSAGE_ERROR:
-            gerr, dbgmsg = message.parse_error()
-            sys.exit('Error: %s\n%s' % (gerr.message, dbgmsg))
+#def on_message(bus, message):  # message handler
+#    if message.type in [gst.MESSAGE_EOS, gst.MESSAGE_ERROR]:
+#        pipeline.set_state(gst.STATE_NULL)
+#        mainloop.quit()
+#        if message.type == gst.MESSAGE_ERROR:
+#            gerr, dbgmsg = message.parse_error()
+#            sys.exit('Error: %s\n%s' % (gerr.message, dbgmsg))
 
-bus.connect('message', on_message)
+#bus.connect('message', on_message)
 
-pipeline.set_state(gst.STATE_PLAYING)
-mainloop.run()
+#pipeline.set_state(gst.STATE_PLAYING)
+#mainloop.run()
