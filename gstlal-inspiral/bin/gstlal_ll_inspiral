@@ -303,6 +303,7 @@ if options.verbose:
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
+
 if options.fake_data is not None:
 	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, now().ns(), gst.SEEK_TYPE_SET, 2000000000000000000) # FIXME future infinity :)
 else:
@@ -329,6 +330,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	state_vector_on_off_dict = options.state_vector_on_off_dict
 )
 
+
 # special gates to attach signal handlers too
 gates = {}
 for ifo in detectors:
@@ -338,6 +340,7 @@ for ifo in detectors:
 	gates["%s_%d_ht_gate" % (ifo, max(rate for bank in banks[ifo] for rate in bank.get_rates()))] = "ht gate"
 
 handler = lloidparts.Handler(mainloop, pipeline, gates = gates, verbose = options.verbose)
+
 
 if options.verbose:
 	print >>sys.stderr, "done"

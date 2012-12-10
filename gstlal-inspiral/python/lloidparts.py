@@ -30,6 +30,7 @@ import numpy
 import warnings
 import StringIO
 
+
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -165,10 +166,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	return snk, src
 
 
-#
-# data source
-#
-
 class Handler(object):
 	def __init__(self, mainloop, pipeline, gates = {}, verbose = False):
 		"""
@@ -272,6 +269,11 @@ class Handler(object):
 		outstr = output.getvalue()
 		output.close()
 		return outstr
+
+
+#
+# data source
+#
 
 
 def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}, verbose = False):
