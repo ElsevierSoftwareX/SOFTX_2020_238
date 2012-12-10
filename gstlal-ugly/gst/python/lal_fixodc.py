@@ -92,8 +92,8 @@ class lal_fixodc(gst.BaseTransform):
 
 
 	def __init__(self):
-		super(lal_checktimestamps, self).__init__()
-		self.set_gapaware(True)
+		super(lal_fixodc, self).__init__()
+		self.set_gap_aware(True)
 
 
 	def do_transform_caps(self, direction, caps):
