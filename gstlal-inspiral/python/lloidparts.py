@@ -196,7 +196,6 @@ class Handler(object):
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
 	
 	def on_message(self, bus, message):
-		print message
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
