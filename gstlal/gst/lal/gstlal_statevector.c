@@ -160,15 +160,6 @@ GST_BOILERPLATE_FULL(
 );
 
 
-enum property {
-	ARG_REQUIRED_ON = 1,
-	ARG_REQUIRED_OFF,
-	ARG_ON_SAMPLES,
-	ARG_OFF_SAMPLES,
-	ARG_GAP_SAMPLES
-};
-
-
 /*
  * ============================================================================
  *
@@ -379,8 +370,17 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 /*
- * set_property()
+ * properties
  */
+
+
+enum property {
+	ARG_REQUIRED_ON = 1,
+	ARG_REQUIRED_OFF,
+	ARG_ON_SAMPLES,
+	ARG_OFF_SAMPLES,
+	ARG_GAP_SAMPLES
+};
 
 
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
@@ -405,11 +405,6 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	GST_OBJECT_UNLOCK(element);
 }
-
-
-/*
- * get_property()
- */
 
 
 static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
@@ -455,19 +450,6 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 static void gstlal_statevector_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(element_class, "LIGO State Vector Parser", "Filter/Audio", "Converts a state vector stream into booleans, for example to drive a lal_gate element.", "Kipp Cannon <kipp.cannon@ligo.org>");
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
 }
 
 
@@ -479,9 +461,22 @@ static void gstlal_statevector_base_init(gpointer gclass)
 static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
+
+	gst_element_class_set_details_simple(element_class, "LIGO State Vector Parser", "Filter/Audio", "Converts a state vector stream into booleans, for example to drive a lal_gate element.", "Kipp Cannon <kipp.cannon@ligo.org>");
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	g_object_class_install_property(
 		gobject_class,
