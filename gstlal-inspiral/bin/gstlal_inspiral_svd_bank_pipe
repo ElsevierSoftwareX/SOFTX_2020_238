@@ -175,7 +175,7 @@ svdNode = {}
 stagger = ((2048, 2048, 2048, 4096), (1024, 1024, 2048, 4096))
 
 # assumes cache is sorted by chirpmass or whatever the SVD sorting algorithm that was chosen
-files = [lal.CacheEntry(line).path() for line in open(input_cache)]
+files = [lal.CacheEntry(line).path for line in open(input_cache)]
 
 for i, f in enumerate(files):
 	# handle the edges by not clipping so you retain the template bank as intended.  

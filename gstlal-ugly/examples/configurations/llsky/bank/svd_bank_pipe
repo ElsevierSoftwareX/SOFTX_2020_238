@@ -117,7 +117,7 @@ svdJob = gstlal_svd_bank_job(tag_base=psdname + "_gstlal_svd_bank")
 svdNode = {}
 
 
-for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
+for f in [lal.CacheEntry(line).path for line in open(input_cache)]:
 	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd=ref_psd)
 
 dag.write_sub_files()

@@ -172,7 +172,7 @@ for instrument, centries in cache_to_dict(options.psd_cache).items():
 		seg = centry.segment
 		for bank in cache_to_dict(bank_cache[instrument])[instrument]:
 			#FIXME if there are segments without frame caches this will barf
-			gstlal_inspiral_node(inspJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=centry.path(), svd_bank=bank.path(), injections=options.injections, vetoes=vetofile, flow=40)
+			gstlal_inspiral_node(inspJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=centry.path, svd_bank=bank.path(), injections=options.injections, vetoes=vetofile, flow=40)
 		
 dag.write_sub_files()
 dag.write_dag()

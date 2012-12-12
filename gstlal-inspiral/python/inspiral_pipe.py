@@ -151,7 +151,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 		for i in range(numbanks[position]):
 			for ifo, f in filedict.items():
 				if cnt < numfiles:
-					c.setdefault(ifo, []).append(lal.CacheEntry(f.readline()).path())
+					c.setdefault(ifo, []).append(lal.CacheEntry(f.readline()).path)
 				else:
 					break
 			cnt += 1
@@ -179,7 +179,7 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 		for i in range(numbanks[position]):
 			for ifo, f in filedict.items():
 				if cnt < numfiles:
-					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
+					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path)
 				else:
 					break
 			cnt += 1

@@ -154,7 +154,7 @@ iirJob = gstlal_iir_bank_job(tag_base=psdname + "_gstlal_iir_bank")
 iirNode = {}
 
 
-for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
+for f in [lal.CacheEntry(line).path for line in open(input_cache)]:
 	print f
 	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, ifo, options.flow, ref_psd, options.sampleRate, options.padding, options.downsample, options.epsilon)
 
