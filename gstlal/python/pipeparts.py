@@ -418,6 +418,10 @@ def mkgate(pipeline, src, threshold = None, control = None, **properties):
 	return elem
 
 
+def mkbitvectorgen(pipeline, src, bit_vector, **properties):
+	return mkgeneric(pipeline, src, "lal_bitvectorgen", bit_vector = bit_vector, **properties)
+
+
 def mkmatrixmixer(pipeline, src, matrix = None):
 	if matrix is not None:
 		return mkgeneric(pipeline, src, "lal_matrixmixer", matrix = matrix)
