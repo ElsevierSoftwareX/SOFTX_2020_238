@@ -31,6 +31,16 @@ import os
 from scipy import random
 import StringIO
 import subprocess
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
+
 try:
 	import sqlite3
 except ImportError:
@@ -518,6 +528,9 @@ class Data(object):
 		self.marginalized_likelihood_file = marginalized_likelihood_file
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
+		# Setup custom checkpoint message
+		appmsgstruct = gst.Structure("CHECKPOINT")
+		self.checkpointmsg = gst.message_new_application(pipeline, appmsgstruct)
 		# Set to 1.0 to disable background data decay
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
@@ -597,6 +610,8 @@ class Data(object):
 			# update likelihood snapshot if needed
 			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
+				# Post a checkpoint message
+				self.pipeline.get_bus().post(self.checkpointmsg)
 				if self.assign_likelihoods:
 					assert self.marginalized_likelihood_file is not None
 					# smooth the distribution_stats
