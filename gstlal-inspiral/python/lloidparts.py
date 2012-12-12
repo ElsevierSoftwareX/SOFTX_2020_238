@@ -31,6 +31,7 @@ import warnings
 import StringIO
 import threading
 
+
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -199,6 +200,7 @@ class Handler(object):
 	
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
+			self.flush_segments_to_disk()
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_INFO:
@@ -218,9 +220,9 @@ class Handler(object):
 
 	def flush_segments_to_disk(self):
 		self.lock.acquire()
-		xmldoc = self.gen_segments_doc()
 		try:
-			# Can't use extent_all() since one list might be empty.
+			xmldoc = self.gen_segments_doc()
+			# FIXME Can't use extent_all() since one list might be empty.
 			ext = self.segments.union(self.segments.keys()).extent()
 			fname = "%s_SEGMENTS-%d-%d.xml.gz" % (self.basename, int(ext[0]), int(abs(ext)))
 			utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
@@ -230,7 +232,8 @@ class Handler(object):
 				self.segments[name] = segments.segmentlist([])
 		except ValueError:
 			print sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
-		self.lock.release()
+		finally:
+			self.lock.release()
 
 	def gatehandler(self, elem, timestamp, segment_type):
 		segment_start = "%.9f" % (timestamp / 1.e9)
@@ -285,11 +288,13 @@ class Handler(object):
 
 	def web_get_segments_xml(self):
 		self.lock.acquire()
-		output = StringIO.StringIO()
-		utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
-		outstr = output.getvalue()
-		output.close()
-		self.lock.release()
+		try:
+			output = StringIO.StringIO()
+			utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+		finally:
+			self.lock.release()
 		return outstr
 
 
