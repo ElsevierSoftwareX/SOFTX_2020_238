@@ -339,7 +339,7 @@ for ifo in detectors:
 	# defined in datasource.mkwhitened_multirate_src
 	gates["%s_%d_ht_gate" % (ifo, max(rate for bank in banks[ifo] for rate in bank.get_rates()))] = "ht gate"
 
-handler = lloidparts.Handler(mainloop, pipeline, gates = gates, basename = "%s-%s" % (lsctables.ifos_from_instrument_set(detectors.keys()).replace(",", ""), options.job_tag), verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, gates = gates, basename = "%s-%s" % ("".join(sorted(detectors)), options.job_tag), verbose = options.verbose)
 
 
 if options.verbose:
