@@ -68,15 +68,20 @@ def geturl(idnodeurls):
 		url = url.strip()
 		path = urlparse(url).path
 		fname = "%s_%s" % (id, path.replace("/",""))
+		tmp = fname+".tmp"
 		age = fileage(fname)
 		if age < 120: #FIXME do not hard code, this is the maximum age of the file for which we won't try to retrieve it again (s)
 			continue
-		try: os.remove(fname) # do this first to help nfs register the new file
-		except OSError: pass  # File not present is not a problem here
 		try:
-			urllib.urlretrieve(url, fname)
+			urllib.urlretrieve(url, tmp)
 		except IOError as (errno, strerror):
 			print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
+			continue
+		os.rename(tmp, fname)
+		try:
+			os.remove(tmp) # do this first to help nfs register the new file
+		except OSError:
+			pass  # File not present is not a problem here
 
 
 if __name__ == "__main__":
