@@ -968,10 +968,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * tell the world about state changes
 		 */
 
-		if(element->emit_signals && FALSE != element->last_state) {
+		if(element->emit_signals && FALSE != element->last_state)
 			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(sinkbuf), NULL);
-			element->last_state = FALSE;
-		}
+		element->last_state = FALSE;
 
 		if(element->leaky) {
 			/*
@@ -1031,10 +1030,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
-		if(element->emit_signals && state != element->last_state) {
+		if(element->emit_signals && state != element->last_state)
 			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
-			element->last_state = state;
-		}
+		element->last_state = state;
 
 		/*
 		 * if the output is a gap and we're in leaky mode, discard
@@ -1266,9 +1264,33 @@ static void finalize(GObject *object)
 	"width = (int) {64, 128}"
 
 
-static void base_init(gpointer class)
+static void base_init(gpointer klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+}
+
+
+/*
+ * Class init function.  See
+ *
+ * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ */
+
+
+static void class_init(gpointer klass, gpointer class_data)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GSTLALGateClass *gstlal_gate_class = GSTLAL_GATE_CLASS(klass);
+
+	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	gstlal_gate_class->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
+	gstlal_gate_class->start = GST_DEBUG_FUNCPTR(start);
+	gstlal_gate_class->stop = GST_DEBUG_FUNCPTR(stop);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1322,30 +1344,6 @@ static void base_init(gpointer class)
 			gst_caps_from_string(CAPS)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer klass, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GSTLALGateClass *gstlal_gate_class = GSTLAL_GATE_CLASS(klass);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	gstlal_gate_class->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
-	gstlal_gate_class->start = GST_DEBUG_FUNCPTR(start);
-	gstlal_gate_class->stop = GST_DEBUG_FUNCPTR(stop);
 
 	g_object_class_install_property(
 		gobject_class,
