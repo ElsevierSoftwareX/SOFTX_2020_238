@@ -97,19 +97,14 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 {
 	/* FIXME check errors */
 
-	/* size is length in samples times number of channels times number of bytes per sample */
-	gint size = sizeof(SnglInspiralTable) * input->num_events;
 	GstBuffer *srcbuf = NULL;
 	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
-	SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
+	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, sizeof(*bankarray) * input->num_events, caps, &srcbuf);
 	guint channel;
 	double complex maxdata_channel = 0;
-	guint *maxsample = input->samples;
 
 	if (result != GST_FLOW_OK) {
-		GstElement *element= gst_pad_get_parent_element(pad);
-		GST_ERROR_OBJECT(element, "Could not allocate sngl-inspiral buffer %d", result);
+		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer %d", result);
 		return srcbuf;
 		}
 
@@ -125,7 +120,8 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	/* FIXME do error checking */
-	if (srcbuf && size) {
+	if (input->num_events) {
+		SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
 		for(channel = 0; channel < input->channels; channel++) {
 	
 			switch (input->type)
@@ -145,8 +141,8 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			if ( maxdata_channel ) {
 				LIGOTimeGPS end_time;
 				XLALINT8NSToGPS(&end_time, time);
-				XLALGPSAdd(&end_time, (double) maxsample[channel] / rate);
-				memcpy(output, &(bankarray[channel]), sizeof(SnglInspiralTable));
+				XLALGPSAdd(&end_time, (double) input->samples[channel] / rate);
+				memcpy(output, &(bankarray[channel]), sizeof(*bankarray));
 				output->snr = cabs(maxdata_channel);
 				output->coa_phase = carg(maxdata_channel);
 				output->chisq = 0.0;
@@ -159,6 +155,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				output++;
 			}
 		}
+		g_assert_cmpuint(output - (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf), ==, input->num_events);
 	}
 
 	return srcbuf;
