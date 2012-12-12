@@ -1,0 +1,7 @@
+GST_DEBUG_DUMP_DOT_DIR=. GST_DEBUG=2 python test_gstlal_adder.py
+
+# GST_DEBUG_DUMP_DOT_DIR=. GST_DEBUG=2 python test_gstlal_adder.py; rm output.png; dot test_1_plot_signals.dot -Tpng -o output.png; open output.png
+
+# redirect stderr to stdout then grep
+# GST_DEBUG=2,audiotestsrc:5 python test_gstlal_adder.py 2>&1 >/dev/null | grep 'InputA'
+# GST_DEBUG=2,audiotestsrc:5 python test_gstlal_adder.py 2>&1 >/dev/null | grep 'generating'|grep 'InputB'
