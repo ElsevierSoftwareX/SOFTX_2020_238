@@ -29,7 +29,7 @@ import sys
 import numpy
 import warnings
 import StringIO
-
+import threading
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -167,7 +167,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 
 
 class Handler(object):
-	def __init__(self, mainloop, pipeline, gates = {}, verbose = False):
+	def __init__(self, mainloop, pipeline, gates = {}, basename = "", verbose = False):
 		"""
 		here gates is a dict of gate names and messages for example
 		gates = {"my_gate_name": "my message"}
@@ -176,6 +176,7 @@ class Handler(object):
 		"""
 		self.mainloop = mainloop
 		self.pipeline = pipeline
+		self.lock = threading.Lock()
 
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
@@ -184,6 +185,7 @@ class Handler(object):
 		self.segments = segments.segmentlistdict()
 		self.current_segment = {}
 		self.gates = gates
+		self.basename = basename
 		self.verbose = verbose
 		for (name,msg) in self.gates.items():
 			self.segments[name] = segments.segmentlist([])
@@ -210,6 +212,25 @@ class Handler(object):
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+		elif message.type == gst.MESSAGE_APPLICATION:
+			if message.structure.get_name() == "CHECKPOINT":
+				self.flush_segments_to_disk()
+
+	def flush_segments_to_disk(self):
+		self.lock.acquire()
+		xmldoc = self.gen_segments_doc()
+		try:
+			# Can't use extent_all() since one list might be empty.
+			ext = self.segments.union(self.segments.keys()).extent()
+			fname = "%s_SEGMENTS-%d-%d.xml.gz" % (self.basename, int(ext[0]), int(abs(ext)))
+			utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
+
+			# Reset the segment lists
+			for name in self.segments:
+				self.segments[name] = segments.segmentlist([])
+		except ValueError:
+			print sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
+		self.lock.release()
 
 	def gatehandler(self, elem, timestamp, segment_type):
 		segment_start = "%.9f" % (timestamp / 1.e9)
@@ -263,10 +284,12 @@ class Handler(object):
 		return xmldoc
 
 	def web_get_segments_xml(self):
+		self.lock.acquire()
 		output = StringIO.StringIO()
 		utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
+		self.lock.release()
 		return outstr
 
 
