@@ -20,6 +20,7 @@ from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import datasource
+from gstlal import multirate_datasource
 from optparse import OptionParser, Option
 from glue import segments
 from glue.ligolw import ligolw
@@ -118,7 +119,7 @@ if options.shift is not None:
 	head = pipeparts.mkprogressreport(pipeline, head, "frames_shifted")
 
 # first whiten and downsample, take only the [sr] item
-head = datasource.mkwhitened_multirate_src(pipeline, head, [sr], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, block_duration = gst.SECOND, track_psd = options.track_psd)[sr]
+head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [sr], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, block_duration = gst.SECOND, track_psd = options.track_psd)[sr]
 
 # Recolor kernel
 max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
