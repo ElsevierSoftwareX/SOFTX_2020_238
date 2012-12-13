@@ -336,7 +336,7 @@ gates = {}
 for ifo in detectors:
 	# defined in datasource.mkbasicsrc
 	gates["%s_state_vector_gate" % ifo] = "state vector gate"
-	# defined in datasource.mkwhitened_multirate_src
+	# defined in multirate_datasource.mkwhitened_multirate_src
 	gates["%s_%d_ht_gate" % (ifo, max(rate for bank in banks[ifo] for rate in bank.get_rates()))] = "ht gate"
 
 handler = lloidparts.Handler(mainloop, pipeline, gates = gates, basename = "%s-%s" % ("".join(sorted(detectors)), options.job_tag), verbose = options.verbose)
