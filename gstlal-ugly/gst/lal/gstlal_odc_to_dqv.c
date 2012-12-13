@@ -208,12 +208,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not GAP.
 		 */
 
-		guint *in = GST_BUFFER_DATA(inbuf);
-		guint *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
+		guint *in = (guint*)GST_BUFFER_DATA(inbuf);
+		guint *end = (guint*)(GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
 		guint *out = (guint*)GST_BUFFER_DATA(outbuf);
 
 		for(; in < end; in++, out++) {
-			*out = *in & element->required_on ? element->status_out : 0x0;
+			*out = (*in & element->required_on) == element->required_on ? element->status_out : 0x0;
 		}
 	} else {
 		/*
@@ -311,17 +311,6 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 static void gstlal_odc_to_dqv_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(element_class, "ODC to DQ", "Filter/Audio", "Processes the Online Detector Characterization channel with the supplied bitmask to produce a data quality output status integer.", "Chris Pankow <chris.pankow@ligo.org>");
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
 }
 
 
@@ -333,9 +322,20 @@ static void gstlal_odc_to_dqv_base_init(gpointer gclass)
 static void gstlal_odc_to_dqv_class_init(GSTLALODCtoDQVClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+
+	gst_element_class_set_details_simple(element_class, "ODC to DQ", "Filter/Audio", "Processes the Online Detector Characterization channel with the supplied bitmask to produce a data quality output status integer.", "Chris Pankow <chris.pankow@ligo.org>");
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
 
     g_object_class_install_property(
         gobject_class,
