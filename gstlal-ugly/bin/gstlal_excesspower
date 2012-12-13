@@ -484,8 +484,8 @@ if gw_data_source_opts.data_source == "online":
 	handler.time_since_dump = handler.start
 
 	# FIXME: Use data source callbacks
-	gate = pipeline.get_by_name( "gstlalgate0" )
-	get.set_property( "emit-signals", True )
+	gate = pipeline.get_by_name( "%s_state_vector_gate" % handler.inst )
+	gate.set_property( "emit-signals", True )
 	gate.connect("start", handler.handle_segment, "on" )
 	gate.connect("stop", handler.handle_segment, "off" )
 
