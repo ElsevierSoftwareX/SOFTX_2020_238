@@ -21,10 +21,13 @@ import StringIO
 import subprocess
 import shlex
 import re
+import json
+from bisect import bisect_left
+from itertools import chain, ifilter
 
 import numpy
 
-from scipy.stats import chi2
+from scipy.stats import chi2, poisson
 
 from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
@@ -38,12 +41,34 @@ from glue.ligolw import ilwd
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue import lal
-from glue.segments import segment
+from glue.segments import segment, segmentlist
 
 from gstlal.pipeutil import gst
 from gstlal import pipeparts 
 
 import gstlal.fftw
+
+#
+# =============================================================================
+#
+#                                Utility Functions
+#
+# =============================================================================
+#
+
+def subdivide( seglist, length, min_length=0 ):
+	newlist = []
+	for seg in seglist:
+		while abs(seg) - min_length > length + min_length:
+			newlist.append( segment(seg[0], seg[0]+length ) )
+			seg = segment(seg[0] + length, seg[1])
+
+		if abs(seg) > 0:
+			newlist.append( segment(seg[0], seg[1] - min_length) )
+			newlist.append( segment(seg[1] - min_length, seg[1]) )
+
+	return segmentlist(newlist)	
+
 
 #
 # =============================================================================
@@ -438,6 +463,19 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 # =============================================================================
 #
 
+def determine_segment_with_whitening( analysis_segment, whiten_seg ):
+	"""
+	Determine the difference between the segment requested to be analyzed and the segment which was actually analyzed after the whitener time is dropped. This is equivalent to the "in" and "out" segs, respectively, in the search_summary.
+	"""
+	if whiten_seg.intersects( analysis_segment ):
+		if analysis_segment in whiten_seg:
+			# All the analyzed time is within the settling time
+			# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
+			analysis_segment = segment( analysis_segment[1], analysis_segment[1] )
+		else:
+			analysis_segment -= whiten_seg
+	return analysis_segment
+
 def make_cache_parseable_name( inst, tag, start, stop, ext, dir="./" ):
 	"""
 	Make a LIGO cache parseable name for a segment of time spanning start to stop from instrument inst and file extension ext. If a directory shoudl be prepended to the path, indicate it with dir. The duration is calculated as prescirbed in the technical document describing the LIGO cache format.
@@ -559,3 +597,124 @@ def compute_amplitude( sb, psd ):
 	pow = sum(psd.data[flow:fhigh])
 	sb.amplitude = numpy.sqrt(pow*sb.snr*psd.deltaF/sb.bandwidth)
 
+class SBStats(object):
+	"""
+	Keep a "running history" of events seen. Useful for detecting statistically outlying sets of events.
+	"""
+	def __init__( self ):
+		self.offsource = {}
+		self.onsource = {}
+		self.offsource_interval = 6000
+		self.onsource_interval = 60
+
+	def event_significance( self, nevents=10 ):
+		"""
+		Calculate the Poissonian significance of the 'on source' trial set for up to the loudest nevents.
+		"""
+
+		offtime = float(abs(segmentlist(self.offsource.keys())))
+		offsource = sorted( chain(*self.offsource.values()), key=lambda sb: -sb.snr )
+		offrate = zip( offsource, map( lambda i:i/offtime, range(1, len(offsource)+1) ) )
+		offrate = offrate[::-1]
+		offsource = offsource[::-1]
+		offsnr = [sb.snr for sb in offsource]
+
+		ontime = float(abs(segmentlist(self.onsource.keys())))
+		onsource = sorted( chain(*self.onsource.values()), key=lambda sb: -sb.snr )
+		onsnr = [sb.snr for sb in onsource]
+		onrate = []
+		for snr in onsnr:
+			try:
+				onrate.append( offrate[bisect_left( offsnr, snr )][1] )
+			except IndexError: # on SNR > max off SNR
+				onrate.append( 0 )
+
+		onsource_sig = []
+		for i, sb in enumerate(onsource[:nevents]):
+			# From Gaussian
+			#exp_num = chi2.cdf(sb.chisq_dof, sb.snr)*len(onsource)
+			# From off-source
+			exp_num = onrate[i]*ontime
+			onsource_sig.append( [sb.snr, -poisson.logsf(i, exp_num)] )
+
+		return onsource_sig
+
+	def normalize( self ):
+		"""
+		Redistribute events to offsource and onsource based on current time span.
+		"""
+
+		all_segs = segmentlist( self.onsource.keys() )
+		if len(self.offsource.keys()) > 0:
+			all_segs += segmentlist( self.offsource.keys() )
+		all_segs.coalesce()
+		begin, end = all_segs[0][0], all_segs[-1][1] 
+		span = float(end-begin)
+		if span < self.onsource_interval:
+			# Not much we can do.
+			return
+
+		if span > self.offsource_interval + self.onsource_interval:
+			begin = end - (self.offsource_interval + self.onsource_interval)
+
+		onsource_seg = segment( end-self.onsource_interval, end)
+		offsource_seg = segment( begin, end-self.onsource_interval)
+
+		for seg, sbt in self.offsource.items():
+			try:
+				seg & offsource_seg 
+			except ValueError: # offsource segment is out of the current window
+				del self.offsource[seg]
+				continue
+			
+			newseg = seg & offsource_seg
+			if seg != newseg:
+				del self.offsource[seg]
+				self.offsource[newseg] = filter( lambda sb: (sb.peak_time + 1e-9*sb.peak_time_ns) in newseg, sbt )
+
+		for seg, sbt in self.onsource.items():
+			if seg in onsource_seg:
+				continue
+
+			offseg = seg & offsource_seg
+			del self.onsource[seg]
+
+			try:
+				onseg = seg & onsource_seg
+				self.onsource[onseg] = filter(lambda sb: (sb.peak_time + 1e-9*sb.peak_time_ns) in onseg, sbt)
+			except ValueError: # onsource segment completely out of new segment
+				pass
+
+			self.offsource[offseg] = filter(lambda sb: (sb.peak_time + 1e-9*sb.peak_time_ns) in offseg, sbt)
+
+	def add_events( self, sbtable, inseg=None ):
+		"""
+		Add a trial to the current running tally. If segment is provided, then the key in the trial table is set to be this. Otherwise, the segment is determined from the peak times of the snglbursts
+		"""
+
+		# If no events are provided and no segment is indicated, there is no
+		# operation to map this into a trial, so we do nothing
+		if len(sbtable) == 0 and segment is None:
+			return
+
+		if inseg is None:
+			inseg = []
+			for sb in sbtable:
+				start = sb.start_time + 1e-9*sb.start_time_ns
+				stop = sb.start_time + sb.duration
+				inseg.append(segment(start, stop))
+			inseg = segmentlist( inseg ).coalesce()
+			inseg = segment( inseg[0][0], inseg[-1][1] )
+
+		oldsegs = filter(lambda s: s.intersects(inseg), self.onsource.keys())
+
+		# FIXME: Is it possible for this to be > 1?
+		# Yes, but the reorganization logic is tricky. 
+		# Call normalize often (like everytime you add a new segment).
+		if len(oldsegs) == 1:
+			oldseg = oldsegs[0]
+			sbtable += self.onsource[oldseg] 
+			del self.onsource[oldseg]
+			inseg = oldseg | inseg
+
+		self.onsource[inseg] = sbtable
