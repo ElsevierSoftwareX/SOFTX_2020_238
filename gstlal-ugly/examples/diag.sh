@@ -111,17 +111,17 @@ function test_down_resampler_gaps() {
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_in.txt" \
-		orig. ! audioresample \
-		! audio/x-raw-float, rate=1023 \
-		! lal_checktimestamps \
+		orig. ! lal_checktimestamps name=before-resampler ! audioresample \
+		! audio/x-raw-float, rate=64 \
+		! lal_checktimestamps name=after-resampler \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_out.txt" \
-		audiotestsrc freq=4.8 samplesperbuffer=1024 num-buffers=16 \
-		! audio/x-raw-float, width=64, rate=1023 \
+		audiotestsrc volume=1 freq=3 samplesperbuffer=4096 num-buffers=64 \
+		! audio/x-raw-float, width=64, rate=4096 \
 		! tee name=control \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_control.txt" \
 		control. ! gate.control \
-		audiotestsrc freq=256 wave=sine samplesperbuffer=8 num-buffers=32768 \
-		! audio/x-raw-float, channels=1, width=64, rate=16383 \
+		audiotestsrc volume=1 freq=25 wave=sine samplesperbuffer=4096 num-buffers=64 \
+		! audio/x-raw-float, channels=1, width=64, rate=4096 \
 		! gate.sink
 }
 
@@ -270,6 +270,19 @@ function test_triggergen() {
 		audiotestsrc wave=9 samplesperbuffer=128 \
 		! audio/x-raw-float, channels=1, width=64, rate=2048 \
 		! triggergen.
+}
+
+function test_channelmux() {
+	gst-launch \
+		framecpp_channelmux name=mux frame-duration=1 frames-per-file=128 \
+		! progressreport do-query=false update-freq=1 \
+		! fakesink \
+		audiotestsrc samplesperbuffer=1024 \
+		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! mux.H1:FAKE-STRAIN \
+		audiotestsrc samplesperbuffer=1024 \
+		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! mux.H1:LSC-DARM_ERR
 }
 
 test_down_resampler_gaps
