@@ -83,20 +83,6 @@ class DetectorData(object):
 # =============================================================================
 #
 
-#
-# gate controlled by a segment source
-#
-
-
-def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
-	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
-	if seekevent is not None:
-		if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % segsrc.get_name())
-		if not segsrc.send_event(seekevent):
-			raise RuntimeError("Element %s did not handle seek event" % segsrc.get_name())
-	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
-
 
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	"""Create a new seek event for a given gps_start_time and gps_end_time,
