@@ -53,6 +53,7 @@ from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simulation
 from gstlal import datasource
+from gstlal import multirate_datasource
 from gstlal import simplehandler
 from pylal.datatypes import LIGOTimeGPS
 
@@ -322,9 +323,9 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# FIXME this function is deprecated, should be deleted
 	#
 
-	warnings.warn("mkLLOIDsrc() is deprecated.  Call datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
+	warnings.warn("mkLLOIDsrc() is deprecated.  Call multirate_datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
 
-	return datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad)
+	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad)
 
 
 #
