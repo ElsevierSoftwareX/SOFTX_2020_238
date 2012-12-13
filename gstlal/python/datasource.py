@@ -186,7 +186,8 @@ class GWDataSourceInfo(object):
 		self.dq_channel_type = "LLD"
 		if options.dq_channel_name is not None:
 			self.dq_channel_dict.update( channel_dict_from_channel_list(options.dq_channel_name) )
-			if options.dq_channel_name.split("-")[1][:3] == "ODC":
+			dq_channel = self.dq_channel_dict[instrument]
+			if dq_channel.split("-")[1][:3] == "ODC":
 				self.dq_channel_type = "ODC"
 	
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
