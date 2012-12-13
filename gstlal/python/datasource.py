@@ -175,6 +175,7 @@ class GWDataSourceInfo(object):
 		else:
 			self.frame_segments = dict([(instrument, None) for instrument in self.channel_dict])
 
+		self.seekevent = None
 		if options.gps_start_time is not None:
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
@@ -182,8 +183,11 @@ class GWDataSourceInfo(object):
 		# Set up default dictionary for the DQ (state vector) channel and 
 		# override if the user asks
 		self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		self.dq_channel_type = "LLD"
 		if options.dq_channel_name is not None:
 			self.dq_channel_dict.update( channel_dict_from_channel_list(options.dq_channel_name) )
+			if options.dq_channel_name.split("-")[1][:3] == "ODC":
+				self.dq_channel_type = "ODC"
 	
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 		
@@ -288,6 +292,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
 		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
+		if gw_data_source_info.dq_channel_type == "ODC":
+			# FIXME: This goes away when the ODC channel format is fixed.
+			fixodc = gst.make_factory_element( "lal_fixodc" )
+			pipeline.add(fixodc)
+			statevector.link(fixodc) 
+			statevector = fixodc
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
