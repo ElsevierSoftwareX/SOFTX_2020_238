@@ -1,5 +1,8 @@
-gstlal-inspiral (0.1.0-1) unstable; urgency=low
+gstlal-inspiral (0.1.0~beta0-3) unstable; urgency=low
 
-  * First release
+  * First release 0.1.0
+  * Rebuild with source format 3.0, dh_python2
+  * Split off -dev package
+  * Adjusted description texts
 
  -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 07 Nov 2012 12:00:00 -0500

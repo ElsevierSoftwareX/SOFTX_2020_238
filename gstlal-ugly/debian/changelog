@@ -1,3 +1,12 @@
+gstlal-ugly (0.4.0~beta0-6) unstable; urgency=low
+
+  * New release 0.4.0
+  * Rebuild with source format 3.0, dh_python2
+  * Split off -dev package
+  * Adjusted description texts
+
+ -- Steffen Grunewald <steffen.grunewald@aei.mpg.de>  Thu, 13 Dec 2012 11:10:00 +0100
+
 gstlal-ugly (0.3.1-1) unstable; urgency=low
 
   * New upstream release
@@ -16,3 +25,4 @@ gstlal-ugly (0.2.0-1) squeeze; urgency=low
   * Initial release.
 
  -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Mon, 16 Apr 2012 13:50:55 +0200
+

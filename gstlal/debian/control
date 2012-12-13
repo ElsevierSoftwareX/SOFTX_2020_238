@@ -3,13 +3,14 @@ Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
+X-Python-Version: >= 2.6
 Build-Depends:
  debhelper (>= 8),
- python-dev (>= 2.6),
+ python-all-dev (>= 2.6),
  liborc-0.4-dev (>= 1:0.4.16),
  liborc-0.4-0 (>= 1:0.4.16),
  libfftw3-dev (>= 3),
- gstlal-dep (>= 0.2.2),
+ gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject-dev,
  lal-dev (>= 6.7.0),
  lalframe-dev (>= 1.0.5),
@@ -19,20 +20,19 @@ Build-Depends:
  lalinspiral-dev (>= 1.3.0),
  libgsl0-dev (>= 1.9),
  fakeroot,
- autoconf,
  pkg-config,
  libxml2-dev
 
 Package: gstlal
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= 2.6),
  python-glue (>= 1.42),
  python-glue-segments (>= 1.42),
  python-pylal (>= 0.1.4),
  libfftw3-3,
  liborc-0.4-0 (>= 1:0.4.16),
- gstlal-dep (>= 0.2.2),
+ gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject,
  python-numpy,
  lal (>= 6.7.0),
@@ -43,11 +43,32 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  lalinspiral (>= 1.3.0),
  libgsl0 (>= 1.9),
  libxml2
-Description: GStreamer version of LAL
- gstlal provides a suite of GStreamer elements that expose
- gravitational-wave data analysis tools from the LAL library for use
- in GStreamer signal-processing pipelines. Examples include an element
- to add simulated gravitational waves to an h(t) stream, and a source
- element to provide the contents of .gwf frame files to a GStreamer
- pipeline.
+Description: GStreamer for GW data analysis (core stable parts)
+ This package provides a variety of GStreamer elements for
+ gravitational-wave data analysis and some libraries to help write such
+ elements.  The code here sits on top of several other libraries, notably
+ the LIGO Algorithm Library (LAL), FFTW, the GNU scientific Library (GSL),
+ and, of course, GStreamer.
+ This package contains the plugins and shared libraries required to run
+ gstlal-based applications.
 
+Package: gstlal-dev
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ gstlal (= ${binary:Version}),
+ python-all-dev (>= 2.6),
+ libfftw3-dev (>= 3),
+ libgsl0-dev (>= 1.9),
+ liborc-0.4-dev (>= 1:0.4.16),
+ liborc-0.4-0 (>=1:0.4.16),
+ gstlal-dep (>= 2.2) | gstenvironment,
+ python-gobject-dev,
+ lal-dev (>= 6.7.0),
+ lalframe-dev (>= 1.0.5),
+ lalmetaio-dev (>= 1.0.4),
+ lalsimulation-dev (>= 0.4.0),
+ lalburst-dev (>= 1.1.2),
+ lalinspiral-dev (>= 1.3.0)
+Description: Files and documentation needed for compiling gstlal based plugins and programs.
+ This package contains the files needed for building gstlal-based plugins
+ and programs.

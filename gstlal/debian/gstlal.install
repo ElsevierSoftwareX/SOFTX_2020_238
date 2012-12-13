@@ -1,0 +1,5 @@
+usr/bin/*
+usr/lib/*.so.*
+usr/lib/gstreamer-*/*.so*
+usr/lib/gstreamer-*/python*/*
+usr/lib/python*/*/gstlal
