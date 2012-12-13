@@ -31,6 +31,8 @@ import sys
 import signal
 import glob
 import threading
+import json
+from StringIO import StringIO
 
 import numpy
 
@@ -66,8 +68,10 @@ from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 
+from pylal import snglcluster
 from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+#from pylal.xlal.datatypes.snglburst import SnglBurst
 
 #
 # =============================================================================
@@ -126,6 +130,8 @@ class EPHandler( Handler ):
 		self.cache_psd_dir = "./"
 		self.last_psd_cache = 0
 		self.psd_change_thresh = 0.5 # fifty percent
+		# This is used to store the change from the previous PSD power
+		self.psd_change = 0.0
 
 		# Defaults -- Two-point spectral correlation settings
 		self.cache_spec_corr = False
@@ -167,6 +173,8 @@ class EPHandler( Handler ):
 
 		self.verbose = False
 		self.clustering = False
+		self.channel_monitoring = False
+		self.stats = ep.SBStats()
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -401,13 +409,93 @@ class EPHandler( Handler ):
  			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
 		return self.triggers
 
-	# TODO: Move this into library code
-	def write_triggers( self, flush=True, overwrite=False, filename=None ):
-		if not self.output: 
-			return
-		if len(self.triggers) == 0: 
+	def process_triggers( self, newtrigs, cluster_passes=0 ):
+		"""
+		Add additional information to triggers from the buffer and cluster them with the triggers already present in the handler. The cluster parameter controls how many passes of the clustering routine should be performed, with True being a special value indicating "as many as neccessary".
+		"""
+
+		output = ligolw.Document()
+		output.appendChild(ligolw.LIGO_LW())
+		# FIXME: this is probably broken since it's going to create multiple
+		# process ids for one run of excesspower since the program gets registered
+		# every time this function is called, which is often.
+		process = self.make_process_tables( None, output )
+
+		# Assign process ids to events
+		for trig in newtrigs:
+			# For some reason, importing the XLAL SnglBurst 
+			# causes the write to crash -- we still need a better
+			# way to identified processed triggers
+			if trig.process_id is not None:
+				continue
+			trig.process_id = self.process.process_id
+			# If we're using a different units system, adjust back to SI
+			trig.duration *= self.units
+			#trig.peak_time /= self.units
+			# Readjust start time for units
+			trig.start_time -= self.start
+			trig.start_time /= self.units
+			trig.start_time += self.start
+
+		# FIXME: Write only the triggers that aren't XML
+		if len(newtrigs) != 0:
+			# Just in case any of the handler's trigger tables are the XLAL snglburst
+			output.childNodes[0].appendChild( newtrigs )
+
+			# Do a temporary write to make the SnglBurst objects into XML rows -- 
+			# this should probably be done only if clustering is requested, since 
+			# it's the only thing that thinks the triggers should be XML rows
+
+			self.lock.acquire()
+			# Enable to debug LIGOLW stream
+			#utils.write_fileobj(output, sys.stdout)
+			# TODO: Find out if this is any faster
+			tmpfile = StringIO()
+			utils.write_fileobj(output, tmpfile, trap_signals = None)
+			self.lock.release()
+
+			# Reload the document to convert the SnglBurst type to rows
+			tmpfile.seek(0)
+			output, mdhash = utils.load_fileobj(tmpfile)
+			ligolw_bucluster.add_ms_columns( output )
+			tmpfile.close()
+
+			newtrigs = table.get_table( output, lsctables.SnglBurstTable.tableName ) 
+		self.triggers.extend( newtrigs )
+
+		# Avoid all the temporary writing and the such
+		if cluster_passes == 0 or not self.clustering:
 			return
 
+		full = cluster_passes is True
+		if full:
+			cluster_passes = 1
+		# Pipe down unless its important
+		verbose = self.verbose and full
+		changed = True
+		off = ligolw_bucluster.ExcessPowerPreFunc( self.triggers )
+		while changed and self.clustering:
+			changed = snglcluster.cluster_events( 
+				events = self.triggers,
+				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
+				clusterfunc = ligolw_bucluster.ExcessPowerClusterFunc,
+				sortfunc = ligolw_bucluster.ExcessPowerSortFunc,
+				bailoutfunc = ligolw_bucluster.ExcessPowerBailoutFunc,
+				verbose = verbose
+			)
+			# If full clustering is on, ignore the number of cluster_passes
+			if not full:
+				cluster_passes -= 1
+			# If we've reached the number of requested passes, break out
+			if cluster_passes <= 0: 
+				break
+		ligolw_bucluster.ExcessPowerPostFunc( self.triggers, off )
+		#self.triggers = newtrigs
+
+	def write_triggers( self, flush=True, filename=None, output_type="xml" ):
+
+		if not self.output: 
+			return
 		if filename == None:
 			filename = self.outfile
 
@@ -419,39 +507,17 @@ class EPHandler( Handler ):
 			LIGOTimeGPS( self.stop )
 		)
 
-		analysis_segment = requested_segment
 		# If we include start up time, indicate it in the search summary
 		self.whiten_seg = segment( 
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + self.whitener_offset)
 		)
-		if self.whiten_seg.intersects( analysis_segment ):
-			if analysis_segment in self.whiten_seg:
-				# All the analyzed time is within the settling time
-				# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
-				analysis_segment = segment( 
-					analysis_segment[1], analysis_segment[1]
-				)
-			else:
-				analysis_segment -= self.whiten_seg
+
+		analysis_segment = ep.determine_segment_with_whitening( 
+			requested_segment, self.whiten_seg 
+		)
 
 		process = self.make_process_tables( None, output )
-		"""
-		process_params = vars( options )
-		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
-		process.set_ifos( [self.inst] )
-		"""
-
-		# Assign process ids to events
-		for trig in self.triggers:
-			trig.process_id = process.process_id
-			# If we're using a different units system, adjust back to SI
-			trig.duration *= self.units
-			#trig.peak_time /= self.units
-			# Readjust start time for units
-			trig.start_time -= self.start
-			trig.start_time /= self.units
-			trig.start_time += self.start
 
 		output.childNodes[0].appendChild( self.triggers )
 
@@ -485,10 +551,6 @@ class EPHandler( Handler ):
 		# start time as the last written segment's end.
 		self.seglist["state"] = segmentlist([])
 
-		# Do a temporary write to make the SnglBurst objects into XML rows -- 
-		# this should probably be done only if clustering is requested, since 
-		# it's the only thing that thinks the triggers should be XML rows
-
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
@@ -497,55 +559,8 @@ class EPHandler( Handler ):
 
 		# write the new distribution stats to disk
 		self.lock.acquire()
-		# Enable to debug LIGOLW stream
-		#utils.write_fileobj(output, sys.stdout)
-		# TODO: Get a temporary file name to write to -- once we do that we can
-		# handle max events much easier, because the temporary file can be 
-		# deleted and we only write if clustering is on and events > max
 		utils.write_filename(output, filename, verbose = self.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 		self.lock.release()
-
-		# Reload the document to convert the SnglBurst type to rows
-		output = utils.load_filename(filename, verbose = self.verbose)
-		process = lsctables.table.get_table( output, lsctables.ProcessTable.tableName )[0]
-
-		# FIXME: Should this be moved to the trigger import function?
-		changed = True
-
-		# We need this because we might have just set it to be an 
-		# infinitesimally small segment. Clustering will choke on this, and we 
-		# want to know what we can send to dbs anyway.
-		while changed and self.clustering and abs(analysis_segment) != 0:
-			ligolw_bucluster.add_ms_columns( output )
-			output, changed = ligolw_bucluster.ligolw_bucluster( 
-				xmldoc = output,
-				program = "gstlal_excesspower",
-				process = process,
-				prefunc = ligolw_bucluster.ExcessPowerPreFunc,
-				postfunc = ligolw_bucluster.ExcessPowerPostFunc,
-				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
-				clusterfunc = ligolw_bucluster.ExcessPowerClusterFunc,
-				sortfunc = ligolw_bucluster.ExcessPowerSortFunc,
-				bailoutfunc = ligolw_bucluster.ExcessPowerBailoutFunc,
-				verbose = self.verbose
-			)
-
-		# TODO: Respect max events by removing output XML file and returning
-		# if clustering reduces trigger number below required.
-		if self.clustering:
-			# write the new distribution stats to disk
-			self.lock.acquire()
-			# Enable to debug LIGOLW stream
-			#utils.write_fileobj(output, sys.stdout)
-			utils.write_filename(output, filename, verbose = self.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
-			self.lock.release()
-
-		# TODO: We ignore triggers in the whitening segment now anyway, let's
-		# just pull this unless we have reason to keep it
-		#self.discard_segment = segment( 
-			#LIGOTimeGPS(self.start), 
-			#LIGOTimeGPS(self.start + 300)
-		#)
 
 		# Keep track of the output files we make for later convience
 		if self.output_cache is not None:
@@ -560,6 +575,36 @@ class EPHandler( Handler ):
 		if self.output_cache_name is not None:	
 			self.lock.acquire()
 			self.output_cache.tofile( file(self.output_cache_name, "a") )
+			self.lock.release()
+
+		# Keeping statistics about event rates
+		if self.channel_monitoring:
+			self.stats.add_events( self.triggers, self.current_segment )
+			self.stats.normalize()
+			stat_json = {}
+			stat_json["current_seg"] = [ float(t) for t in (self.current_segment or analysis_segment) ] 
+			stat_json["psd_last_change_percent"] = self.psd_change
+			stat_json["psd_power"] = self.psd_power
+			ontime = float(abs(segmentlist(self.stats.onsource.keys())))
+			erate = 0
+			for sbt in self.stats.onsource.values(): 
+				erate += len(sbt)
+			erate /= ontime
+			stat_json["event_rate"] = erate
+
+			esig = self.stats.event_significance()
+			stat_json["event_significance"] = list(esig)
+			if self.verbose:
+				print >>sys.stderr, "Event rate in current segment: %g" % erate
+
+				print >>sys.stderr, "Event significance:\nSNR\t\tsig"
+				for (snr, sig) in esig:
+					print >>sys.stderr, "%4.2f\t\t%4.2f" % (snr, sig)
+
+			self.lock.acquire()
+			jsonf = open( "%s-%s-channel_mon.json" % (self.inst, self.channel), "w" )
+			print >>jsonf, json.dumps( stat_json )
+			jsonf.close()
 			self.lock.release()
 
 		if flush: 
