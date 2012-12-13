@@ -121,10 +121,11 @@ def on_psd_change( elem, pspec, hand ):
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
 	psd_power = sum(hand.psd.data)
-	change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
-	if change > hand.psd_change_thresh:
+	#change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
+	hand.psd_change = (hand.psd_power - psd_power) / (hand.psd_power + psd_power) 
+	if abs(hand.psd_change) > hand.psd_change_thresh:
 		if options.verbose:
-			print >> sys.stderr, "Processed signal. PSD change %d, regenerating filters" % int(change*100)
+			print >> sys.stderr, "Processed signal. PSD change %d, regenerating filters" % int(hand.psd_change*100)
 		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
@@ -166,6 +167,11 @@ def get_triggers(elem, handler, ndof):
 		LIGOTimeGPS(handler.start + handler.whitener_offset)
 	)
 
+	trigs = lsctables.New(lsctables.SnglBurstTable,
+			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
+			"duration",  "search", "event_id", "process_id",
+			"central_freq", "channel", "amplitude", "snr", "confidence",
+			"chisq", "chisq_dof", "bandwidth"])
 	for row in sngl_bursts_from_buffer(buffer):
 		if row.peak_time in whiten_seg:
 			continue
@@ -180,13 +186,20 @@ def get_triggers(elem, handler, ndof):
 		# what might be there when the triggers are actually output
 		ep.compute_amplitude( row, handler.psd )
 
-		handler.triggers.append( row )
+		trigs.append( row )
 	
 	#buf_ts = (buffer.timestamp*1e-9 - handler.start) / handler.units + handler.start
 	# TODO: Why does the buf_dur need unit conversion, but not the timestamp
 	buf_ts = buffer.timestamp*1e-9 
 	buf_dur = buffer.duration*1e-9 / handler.units
 	handler.stop = (buf_ts + buf_dur)
+
+	# Check if clustering reduces the amount of events
+	if len(handler.triggers) >= handler.max_events and handler.clustering:
+		handler.process_triggers( trigs, cluster_passes=1 )
+	else:
+		handler.process_triggers( trigs )
+
 	if handler.stop - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
 
 		fname = ep.make_cache_parseable_name(
@@ -213,18 +226,9 @@ def get_triggers(elem, handler, ndof):
 			)
 			uniq += 1
 
+		handler.process_triggers( [], cluster_passes = True )
 		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
-
-	# TODO: Update a single file every couple of seconds.
-	"""
-	dur = 0
-	if( len(handler.triggers) > 0 ):
-		dur = handler.triggers[-1].peak_time - handler.triggers[0].peak_time
-
-	if( len(handler.triggers) > 1000 or dur > 16 ):
-		handler.write_triggers( flush=True )
-	"""
 
 #
 # =============================================================================
@@ -249,6 +253,7 @@ parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="sto
 parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
+parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
 
 (options, args) = parser.parse_args()
 
@@ -308,6 +313,9 @@ diagnostics = options.diagnostics
 pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
+
+if options.channel_monitoring:
+	handler.channel_monitoring = True
 
 # If a sample rate other than the native rate is requested, we'll need to keep
 # track of it
@@ -477,6 +485,7 @@ if gw_data_source_opts.data_source == "online":
 
 	# FIXME: Use data source callbacks
 	gate = pipeline.get_by_name( "gstlalgate0" )
+	get.set_property( "emit-signals", True )
 	gate.connect("start", handler.handle_segment, "on" )
 	gate.connect("stop", handler.handle_segment, "off" )
 
