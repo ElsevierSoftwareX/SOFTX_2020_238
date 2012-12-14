@@ -22,6 +22,7 @@ AC_CONFIG_FILES([ \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
+	share/Makefile \
 	tests/Makefile
 ])
 
