@@ -3,4 +3,7 @@ EXTRA_DIST = \
 	compat \
 	control \
 	copyright \
-	rules
+	gstlal-dev.install \
+	gstlal.install \
+	rules \
+	source/format
