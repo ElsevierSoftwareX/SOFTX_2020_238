@@ -41,7 +41,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalsimulation (>= 0.4.0),
  lalburst (>= 1.1.2),
  lalinspiral (>= 1.3.0),
- libgsl0 (>= 1.9),
+ libgsl0ldbl (>= 1.9),
  libxml2
 Description: GStreamer for GW data analysis (core stable parts)
  This package provides a variety of GStreamer elements for

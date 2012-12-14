@@ -1,11 +1,11 @@
-gstlal-ugly (0.4.0~beta0-6) unstable; urgency=low
+gstlal-ugly (0.4.0-1) unstable; urgency=low
 
   * New release 0.4.0
   * Rebuild with source format 3.0, dh_python2
   * Split off -dev package
   * Adjusted description texts
 
- -- Steffen Grunewald <steffen.grunewald@aei.mpg.de>  Thu, 13 Dec 2012 11:10:00 +0100
+ -- Steffen Grunewald <steffen.grunewald@aei.mpg.de>  Fri, 14 Dec 2012 11:35:00 +0100
 
 gstlal-ugly (0.3.1-1) unstable; urgency=low
 

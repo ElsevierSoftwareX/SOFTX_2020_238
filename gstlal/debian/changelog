@@ -1,11 +1,11 @@
-gstlal (0.5.0~beta0-3) unstable; urgency=low
+gstlal (0.5.0-1) unstable; urgency=low
 
   * New version 0.5.0
   * Rebuild with source format 3.0, dh_python2
   * Split off -dev package
   * Adjusted description texts
 
- -- Steffen Grunewald <steffen.grunewald@aei.mpg.de>  Thu, 13 Dec 2012 10:15:00 +0100
+ -- Steffen Grunewald <steffen.grunewald@aei.mpg.de>  Fri, 14 Dec 2012 10:55:00 +0100
 
 gstlal (0.4.2-2) unstable; urgency=low
 
