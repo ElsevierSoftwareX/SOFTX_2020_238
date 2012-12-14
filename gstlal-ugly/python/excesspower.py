@@ -620,6 +620,8 @@ class SBStats(object):
 		offsnr = [sb.snr for sb in offsource]
 
 		ontime = float(abs(segmentlist(self.onsource.keys())))
+		if ontime == 0:
+			return []
 		onsource = sorted( chain(*self.onsource.values()), key=lambda sb: -sb.snr )
 		onsnr = [sb.snr for sb in onsource]
 		onrate = []
@@ -635,7 +637,9 @@ class SBStats(object):
 			#exp_num = chi2.cdf(sb.chisq_dof, sb.snr)*len(onsource)
 			# From off-source
 			exp_num = onrate[i]*ontime
-			onsource_sig.append( [sb.snr, -poisson.logsf(i, exp_num)] )
+			# FIXME: requires scipy >= 0.10
+			#onsource_sig.append( [sb.snr, -poisson.logsf(i, exp_num)] )
+			onsource_sig.append( [sb.snr, -numpy.log(poisson.sf(i, exp_num))] )
 
 		return onsource_sig
 
@@ -643,8 +647,10 @@ class SBStats(object):
 		"""
 		Redistribute events to offsource and onsource based on current time span.
 		"""
-
 		all_segs = segmentlist( self.onsource.keys() )
+		if len(all_segs) == 0:
+			return
+
 		if len(self.offsource.keys()) > 0:
 			all_segs += segmentlist( self.offsource.keys() )
 		all_segs.coalesce()
@@ -694,7 +700,7 @@ class SBStats(object):
 
 		# If no events are provided and no segment is indicated, there is no
 		# operation to map this into a trial, so we do nothing
-		if len(sbtable) == 0 and segment is None:
+		if len(sbtable) == 0 and inseg is None:
 			return
 
 		if inseg is None:

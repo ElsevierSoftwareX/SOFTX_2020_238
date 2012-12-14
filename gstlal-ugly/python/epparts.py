@@ -528,6 +528,7 @@ class EPHandler( Handler ):
 		for row in search_sum:
 			row.set_out( analysis_segment )
 
+		cur_seg = None
 		if self.current_segment is not None:
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
@@ -579,24 +580,26 @@ class EPHandler( Handler ):
 
 		# Keeping statistics about event rates
 		if self.channel_monitoring:
-			self.stats.add_events( self.triggers, self.current_segment )
+			self.stats.add_events( self.triggers, cur_seg )
 			self.stats.normalize()
 			stat_json = {}
-			stat_json["current_seg"] = [ float(t) for t in (self.current_segment or analysis_segment) ] 
+			stat_json["current_seg"] = [ float(t) for t in (cur_seg or analysis_segment) ] 
 			stat_json["psd_last_change_percent"] = self.psd_change
 			stat_json["psd_power"] = self.psd_power
 			ontime = float(abs(segmentlist(self.stats.onsource.keys())))
 			erate = 0
 			for sbt in self.stats.onsource.values(): 
 				erate += len(sbt)
-			erate /= ontime
-			stat_json["event_rate"] = erate
+			if ontime > 0:
+				erate /= ontime
+				stat_json["event_rate"] = erate
+			else:
+				stat_json["event_rate"] = float('NaN')
 
 			esig = self.stats.event_significance()
 			stat_json["event_significance"] = list(esig)
 			if self.verbose:
 				print >>sys.stderr, "Event rate in current segment: %g" % erate
-
 				print >>sys.stderr, "Event significance:\nSNR\t\tsig"
 				for (snr, sig) in esig:
 					print >>sys.stderr, "%4.2f\t\t%4.2f" % (snr, sig)

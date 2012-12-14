@@ -120,7 +120,7 @@ def on_psd_change( elem, pspec, hand ):
 
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
-	psd_power = sum(hand.psd.data)
+	psd_power = sum(hand.psd.data)*hand.psd.deltaF
 	#change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
 	hand.psd_change = (hand.psd_power - psd_power) / (hand.psd_power + psd_power) 
 	if abs(hand.psd_change) > hand.psd_change_thresh:

@@ -80,7 +80,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"channels = (int) 1, " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 32, " \
-		"signed = false" 
+		"signed = (boolean) {true,false}" 
 	)
 );
 
