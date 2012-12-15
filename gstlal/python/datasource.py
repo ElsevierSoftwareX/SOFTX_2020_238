@@ -295,7 +295,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		if gw_data_source_info.dq_channel_type == "ODC":
 			# FIXME: This goes away when the ODC channel format is fixed.
-			fixodc = gst.make_factory_element( "lal_fixodc" )
+			fixodc = gst.element_factory_make( "lal_fixodc" )
 			pipeline.add(fixodc)
 			statevector.link(fixodc) 
 			statevector = fixodc
