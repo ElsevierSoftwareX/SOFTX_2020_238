@@ -631,7 +631,7 @@ class EPHandler( Handler ):
 			"chisq", "chisq_dof", "bandwidth"])
 
 			upload_tbl.append( sb )
-			upload_to_db( upload_tbl, search = "EP", db = self.db_client )
+			ep.upload_to_db( upload_tbl, search = "EP", db = self.db_client )
 		
 	def shutdown( self, signum, frame ):
 		"""
