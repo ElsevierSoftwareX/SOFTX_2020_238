@@ -736,14 +736,12 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 * process contents
 	 */
 
-	/* FIXME:  the source pad's caps might not be set yet, then what? */
 	result = filter_and_push(element, GST_PAD_CAPS(srcpad), output_length - final_gap_length);
 	if(result != GST_FLOW_OK)
 		goto done;
 	if(final_gap_length) {
 		GstBuffer *buf;
 
-		/* FIXME:  the source pad's caps might not be set yet, then what? */
 		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 		g_assert(GST_BUFFER_CAPS(buf) != NULL);
 		if(result != GST_FLOW_OK)
@@ -1090,11 +1088,19 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 	case GST_EVENT_EOS:
 		/*
-		 * end-of-stream:  finish processing adapter's contents
+		 * end-of-stream:  finish processing adapter's contents.
+		 * don't bother trying if there's no FIR matrix or caps set
+		 * on the source pad, but at least make sure the adapters
+		 * contents are wiped
 		 */
 
-		if(flush_history(element) != GST_FLOW_OK)
-			GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
+		g_mutex_lock(element->fir_matrix_lock);
+		if(element->fir_matrix && gst_caps_is_fixed(GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)))) {
+			if(flush_history(element) != GST_FLOW_OK)
+				GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
+		} else
+			gst_audioadapter_clear(element->adapter);
+		g_mutex_unlock(element->fir_matrix_lock);
 		return TRUE;
 
 	default:
