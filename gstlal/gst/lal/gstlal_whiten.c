@@ -83,6 +83,23 @@ static const LIGOTimeGPS GPS_ZERO = {0, 0};
 /*
  * ============================================================================
  *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
+
+
+GST_BOILERPLATE(
+	GSTLALWhiten,
+	gstlal_whiten,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM
+);
+
+
+/*
+ * ============================================================================
+ *
  *                                 Parameters
  *
  * ============================================================================
@@ -890,82 +907,6 @@ static void release_pad(GstElement *element, GstPad *pad)
 /*
  * ============================================================================
  *
- *                           GStreamer Boiler Plate
- *
- * ============================================================================
- */
-
-
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SINK_NAME,
-	GST_PAD_SINK,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
-	)
-);
-
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SRC_NAME,
-	GST_PAD_SRC,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
-	)
-);
-
-
-static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
-	"mean-psd",
-	GST_PAD_SRC,
-	GST_PAD_REQUEST,
-	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"channels = (int) 1, " \
-		"delta-f = (double) [0, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64, " \
-		"rate = (fraction) [0/1, MAX]"
-	)
-);
-
-
-GST_BOILERPLATE(
-	GSTLALWhiten,
-	gstlal_whiten,
-	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
-);
-
-
-enum property {
-	ARG_PSDMODE = 1,
-	ARG_ZERO_PAD_SECONDS,
-	ARG_FFT_LENGTH,
-	ARG_AVERAGE_SAMPLES,
-	ARG_MEDIAN_SAMPLES,
-	ARG_N_SAMPLES,
-	ARG_DELTA_F,
-	ARG_F_NYQUIST,
-	ARG_MEAN_PSD,
-	ARG_SIGMA_SQUARED,
-	ARG_SPECTRAL_CORRELATION,
-	ARG_EXPAND_GAPS
-};
-
-
-/*
- * ============================================================================
- *
  *                     GstBaseTransform Method Overrides
  *
  * ============================================================================
@@ -1339,8 +1280,24 @@ done:
 
 
 /*
- * set_property()
+ * properties
  */
+
+
+enum property {
+	ARG_PSDMODE = 1,
+	ARG_ZERO_PAD_SECONDS,
+	ARG_FFT_LENGTH,
+	ARG_AVERAGE_SAMPLES,
+	ARG_MEDIAN_SAMPLES,
+	ARG_N_SAMPLES,
+	ARG_DELTA_F,
+	ARG_F_NYQUIST,
+	ARG_MEAN_PSD,
+	ARG_SIGMA_SQUARED,
+	ARG_SPECTRAL_CORRELATION,
+	ARG_EXPAND_GAPS
+};
 
 
 static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
@@ -1429,11 +1386,6 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	GST_OBJECT_UNLOCK(element);
 }
-
-
-/*
- * get_property()
- */
 
 
 static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
@@ -1549,8 +1501,77 @@ static void finalize(GObject * object)
 
 static void gstlal_whiten_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
+
+
+static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
+	"mean-psd",
+	GST_PAD_SRC,
+	GST_PAD_REQUEST,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"channels = (int) 1, " \
+		"delta-f = (double) [0, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64, " \
+		"rate = (fraction) [0/1, MAX]"
+	)
+);
+
+
+static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	element_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
+	element_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
+	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
+	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1563,33 +1584,6 @@ static void gstlal_whiten_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&psd_factory));
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
-	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
-	transform_class->event = GST_DEBUG_FUNCPTR(event);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-}
-
-
-/*
- * class_init()
- */
-
-
-static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	element_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
-	element_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
 
 	g_object_class_install_property(
 		gobject_class,
