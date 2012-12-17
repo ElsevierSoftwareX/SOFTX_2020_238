@@ -1159,10 +1159,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		/*
-		 * clear adapter
+		 * flush any previous history and clear the adapter
 		 */
 
-		gst_audioadapter_clear(element->adapter);
+		flush_history(element);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
