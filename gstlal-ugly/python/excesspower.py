@@ -509,7 +509,7 @@ def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "g
 	proc = subprocess.Popen( shlex.split(str(cmd)), stdin=subprocess.PIPE )
 	proc.communicate( strbuf.getvalue() )
 	if proc.returncode != 0:
-		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.retcode
+		print >>sys.stderr, "Warning, failed to upload to gracedb. Process returned %d" % proc.returncode
 
 
 #
