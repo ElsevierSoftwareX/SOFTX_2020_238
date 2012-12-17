@@ -310,6 +310,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 			self.injection_filename = injection_filename
 			self.gate_start_callback = None
 			self.gate_stop_callback = None
+			self.dq_channel_type = "LLD"
 			self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 			self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
 
