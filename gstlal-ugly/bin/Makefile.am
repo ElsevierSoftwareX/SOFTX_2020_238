@@ -23,4 +23,5 @@ dist_bin_SCRIPTS = \
 	gstlal_psd_pipe \
 	gstlal_segments_operations \
 	gstlal_recolor_frames_pipe \
-	gstlal_cache_to_segments
+	gstlal_cache_to_segments \
+	gstlal_compute_strain

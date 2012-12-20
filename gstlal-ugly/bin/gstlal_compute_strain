@@ -133,16 +133,12 @@ if options.write_pipeline is not None:
 	demux.connect("pad-added", write_graph)
 
 # Set up the PSL and ODC state vector branches
-psl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 mintues of buffering
-odcstatevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 mintues of buffering
+psl = pipeparts.mkqueue(pipeline, None)
+odcstatevector = pipeparts.mkqueue(pipeline, None)
 
 # Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
 pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
 pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
-
-# Debugging checktimestamps
-psl = pipeparts.mkchecktimestamps(pipeline, psl)
-odcstatevector = pipeparts.mkchecktimestamps(pipeline, odcstatevector)
 
 #
 # RECOLORING BRANCH
@@ -155,12 +151,7 @@ fixodc = gst.element_factory_make("lal_fixodc")
 pipeline.add(fixodc)
 odcstatevector.link(fixodc)
 
-odctodqv = gst.element_factory_make("lal_odc_to_dqv")
-odctodqv.set_property("required-on", state_vector_on_bits)
-pipeline.add(odctodqv)
-fixodc.link(odctodqv)
-
-odcstatevector = pipeparts.mkcapsfilter(pipeline, odctodqv, "audio/x-raw-int,rate=32768")
+odcstatevector = pipeparts.mkodctodqv(pipeline, fixodc, required_on = state_vector_on_bits)
 
 # Tee of the ODC state vector
 odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
@@ -210,7 +201,9 @@ except:
 #
 
 # Manipulate the ODC state vector
-odcstatevector = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12))
+odcstatevector = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 11)
+odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
+odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, width=32, rate=1")
 
 if options.verbose:
 	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
@@ -231,15 +224,11 @@ if options.frame_duration is not None:
 if options.frames_per_file is not None:
         mux.set_property("frames-per-file", options.frames_per_file)
 
-# more checktimestamps
-psl = pipeparts.mkchecktimestamps(pipeline, psl)
-odcstatevector = pipeparts.mkchecktimestamps(pipeline, odcstatevector)
-
 # Link the manipulated ODC state vector to muxer
-odcstatevector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR_TEST" % instrument))
+pipeparts.mkqueue(pipeline, odcstatevector).get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR_TEST" % instrument))
 
 # Link fake strain (recolored PSL) to the muxer
-psl.get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
+pipeparts.mkqueue(pipeline, psl).get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
 
 # Link an unchanged ODC state vector to the muxer as a sanity check
 #pipeparts.mkqueue(pipeline, odcstatevectortee).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument])))
