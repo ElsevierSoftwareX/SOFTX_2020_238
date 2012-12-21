@@ -21,6 +21,7 @@ no_inj:
 		--file-cache-name H1_no_inj.cache \
 		--data-source AdvLIGO  \
 		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
+		--enable-channel-monitoring \
 		--sample-rate 4096  
 
 no_inj_movie:
@@ -29,6 +30,7 @@ no_inj_movie:
 		--channel-name=H1=FAKE-STRAIN \
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
+		--gps-end-time 10000 \
 		--data-source AdvLIGO  \
 		--disable-triggers \
 		--stream-tfmap video \
