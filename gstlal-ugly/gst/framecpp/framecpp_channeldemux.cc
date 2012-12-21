@@ -125,10 +125,8 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement,
  */
 
 
-/* FIXME:  switch to proper #ifndef when problem with framecpp is sorted out */
 /* FIXME:  remove when we can rely on new-enough framecpp */
-/*#ifndef HAVE_FRAMECPP_FrameLibraryName*/
-#if 1
+#ifndef HAVE_FRAMECPP_FrameLibraryName
 static const char *get_frame_library_name(FrameCPP::IFrameStream *ifs)
 {
 	static const char *frame_library_names[] = {
