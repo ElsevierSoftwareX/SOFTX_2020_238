@@ -679,9 +679,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			filename,
 			split_opt
 		)
+		head = pipeparts.mkqueue( pipeline, head )
 
 	if options.disable_triggers:
-		head = pipeparts.mkqueue( pipeline, head )
 		pipeparts.mkfakesink( pipeline, head )
 		continue
 
