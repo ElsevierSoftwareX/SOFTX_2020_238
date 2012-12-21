@@ -530,6 +530,7 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 		z_autoscale = True 
 	# Tee off the amplitude stream
 	head = chtee = pipeparts.mktee( pipeline, head )
+	head = pipeparts.mkqueue( pipeline, head )
 	head = pipeparts.mkgeneric( pipeline, head, "cairovis_waterfall",
 			title = "TF map %s:%s" % (handler.inst, handler.channel),
 			z_autoscale = z_autoscale,
@@ -579,12 +580,7 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 		pipeparts.mkfilesink( pipeline, head, filename )
 
 	else: # No filename and no splitting options means stream to desktop
-		if sys.platform == "darwin":
-			# TODO: This was due to a glitch in the way X11 was handled
-			# others may not have this issue, so make this optional
-			pipeparts.mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
-		else:
-			pipeparts.mkgeneric( pipeline, head, "autovideosink" )
+		pipeparts.mkgeneric( pipeline, head, "autovideosink", filter_caps=gst.caps_from_string("video/x-raw-rgb") )
 
 	return chtee
 

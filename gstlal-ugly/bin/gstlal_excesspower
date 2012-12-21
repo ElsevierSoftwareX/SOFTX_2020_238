@@ -681,6 +681,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	if options.disable_triggers:
+		head = pipeparts.mkqueue( pipeline, head )
 		pipeparts.mkfakesink( pipeline, head )
 		continue
 
@@ -723,7 +724,8 @@ signal.signal( signal.SIGTERM, handler.shutdown )
 
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
-if diagnostics:
+#if diagnostics:
+def write_pipeline_graph():
 	pipeparts.write_dump_dot(pipeline, "gstlal_excesspower", verbose = True)
 	gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
 		gst.DEBUG_GRAPH_SHOW_ALL,
