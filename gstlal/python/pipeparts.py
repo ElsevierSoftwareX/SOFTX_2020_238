@@ -601,41 +601,41 @@ class AppSync(object):
 
 	def appsink_handler(self, elem, eos):
 		self.lock.acquire()
+		try:
+			# update eos status, and retrieve buffer timestamp
+			if eos:
+				self.at_eos.add(elem)
+			else:
+				self.at_eos.discard(elem)
+				assert self.appsinks[elem] is None
+				self.appsinks[elem] = elem.get_last_buffer().timestamp
 
-		# update eos status, and retrieve buffer timestamp
-		if eos:
-			self.at_eos.add(elem)
-		else:
-			self.at_eos.discard(elem)
-			assert self.appsinks[elem] is None
-			self.appsinks[elem] = elem.get_last_buffer().timestamp
-
-		# keep looping while we can process buffers
-		while True:
-			# retrieve the timestamps of all elements that
-			# aren't at eos and all elements at eos that still
-			# have buffers in them
-			timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
-			# nothing to do if all elements are at eos and do
-			# not have buffers
-			if not timestamps:
-				break
-			# find the element with the oldest timestamp.  None
-			# compares as less than everything, so we'll find
-			# any element (that isn't at eos) that doesn't yet
-			# have a buffer (elements at eos and that are
-			# without buffers aren't in the list)
-			timestamp, elem_with_oldest = min(timestamps)
-			# if there's an element without a buffer, do
-			# nothing --- we require all non-eos elements to
-			# have buffers before proceding
-			if timestamp is None:
-				break
-			# pass element to handler func and clear timestamp
-			self.appsink_new_buffer(elem_with_oldest)
-			self.appsinks[elem_with_oldest] = None
-
-		self.lock.release()
+			# keep looping while we can process buffers
+			while True:
+				# retrieve the timestamps of all elements that
+				# aren't at eos and all elements at eos that still
+				# have buffers in them
+				timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+				# nothing to do if all elements are at eos and do
+				# not have buffers
+				if not timestamps:
+					break
+				# find the element with the oldest timestamp.  None
+				# compares as less than everything, so we'll find
+				# any element (that isn't at eos) that doesn't yet
+				# have a buffer (elements at eos and that are
+				# without buffers aren't in the list)
+				timestamp, elem_with_oldest = min(timestamps)
+				# if there's an element without a buffer, do
+				# nothing --- we require all non-eos elements to
+				# have buffers before proceding
+				if timestamp is None:
+					break
+				# pass element to handler func and clear timestamp
+				self.appsink_new_buffer(elem_with_oldest)
+				self.appsinks[elem_with_oldest] = None
+		finally:
+			self.lock.release()
 
 
 def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
@@ -662,10 +662,12 @@ def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
 
 		def execute(self, elem):
 			self.n_lock.acquire()
-			type(self).n += 1
-			if self.n >= self.write_after:
-				write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			self.n_lock.release()
+			try:
+				type(self).n += 1
+				if self.n >= self.write_after:
+					write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
+			finally:
+				self.n_lock.release()
 			elem.disconnect(self.handler_id)
 
 	for sink in appsinks:
