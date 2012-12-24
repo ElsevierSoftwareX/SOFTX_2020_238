@@ -1090,12 +1090,12 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		/*
 		 * end-of-stream:  finish processing adapter's contents.
 		 * don't bother trying if there's no FIR matrix or caps set
-		 * on the source pad, but at least make sure the adapters
+		 * on the source pad, but at least make sure the adapter's
 		 * contents are wiped
 		 */
 
 		g_mutex_lock(element->fir_matrix_lock);
-		if(element->fir_matrix && gst_caps_is_fixed(GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)))) {
+		if(element->fir_matrix && GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)) && gst_caps_is_fixed(GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)))) {
 			if(flush_history(element) != GST_FLOW_OK)
 				GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
 		} else
