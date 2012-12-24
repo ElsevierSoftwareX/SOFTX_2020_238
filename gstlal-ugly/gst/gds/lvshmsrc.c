@@ -331,7 +331,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 
 	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
-	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+	element->min_latency = element->max_latency /*- GST_BUFFER_DURATION(*buffer)*/; 	/* FIXME:  duration is not set */
 
 	/*
 	 * adjust segment
