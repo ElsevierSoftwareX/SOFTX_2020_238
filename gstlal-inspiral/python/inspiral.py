@@ -922,23 +922,35 @@ class Data(object):
 			self.lock.release()
 
 
+	def __write_output_file(self, filename = None, likelihood_file = None, verbose = False):
+		self.__flush()
+		if filename is not None:
+			self.coincs_document.filename = filename
+		self.coincs_document.write_output_file(verbose = verbose)
+
+		# write out the snr / chisq histograms
+		if likelihood_file is None:
+			fname = os.path.split(self.coincs_document.filename)
+			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		else:
+			fname = likelihood_file
+		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+
+
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		self.lock.acquire()
 		try:
-			self.__flush()
-			if filename is not None:
-				self.coincs_document.filename = filename
-			self.coincs_document.write_output_file(verbose = verbose)
-
-			# write out the snr / chisq histograms
-			if likelihood_file is None:
-				fname = os.path.split(self.coincs_document.filename)
-				fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
-			else:
-				fname = likelihood_file
-			utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
-
+			self.__write_output_file(filename = filename, likelihood_file = likelihood_file, verbose = verbose)
 			# can't be used anymore
 			del self.coincs_document
+		finally:
+			self.lock.release()
+
+
+	def snapshot_output_file(self, description, verbose = False):
+		self.lock.acquire()
+		try:
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description), verbose = verbose)
+			self.coincs_document = self.coincs_document.get_another()
 		finally:
 			self.lock.release()
