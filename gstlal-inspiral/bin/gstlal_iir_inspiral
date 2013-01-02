@@ -366,7 +366,6 @@ mainloop.run()
 #
 
 
-output.flush()
 output.write_output_file(verbose = options.verbose)
 
 

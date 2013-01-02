@@ -904,6 +904,7 @@ class Data(object):
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		self.lock.acquire()
 		try:
+			self.__flush()
 			self.coincs_document.write_output_file(verbose = verbose)
 
 			# write out the snr / chisq histograms
