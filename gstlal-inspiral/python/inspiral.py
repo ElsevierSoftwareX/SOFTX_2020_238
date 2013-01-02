@@ -497,6 +497,7 @@ class CoincsDocument(object):
 			self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
 			self.connection.commit()
 			dbtables.build_indexes(self.connection, verbose = verbose)
+			self.connection.close()
 			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
@@ -912,5 +913,8 @@ class Data(object):
 			else:
 				fname = likelihood_file
 			utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+
+			# can't be used anymore
+			del self.coincs_document
 		finally:
 			self.lock.release()
