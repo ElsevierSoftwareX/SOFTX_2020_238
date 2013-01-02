@@ -497,9 +497,9 @@ class CoincsDocument(object):
 		return self.sngl_inspiral_table.get_next_id()
 
 
-	def T050017_filename(self, description):
+	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
-		return "%s-%s-%d-%d.sqlite" % ("".join(sorted(self.process.get_ifos())), description, int(start), int(end - start))
+		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, int(start), int(end - start), extension)
 
 
 	def write_output_file(self, verbose = False):
@@ -947,10 +947,10 @@ class Data(object):
 			self.lock.release()
 
 
-	def snapshot_output_file(self, description, verbose = False):
+	def snapshot_output_file(self, description, extension, verbose = False):
 		self.lock.acquire()
 		try:
-			self.__write_output_file(filename = self.coincs_document.T050017_filename(description), verbose = verbose)
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
 			self.coincs_document = self.coincs_document.get_another()
 		finally:
 			self.lock.release()
