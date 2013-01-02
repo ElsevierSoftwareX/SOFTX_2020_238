@@ -365,6 +365,16 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 class CoincsDocument(object):
 	def __init__(self, filename, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
+		#
+		# how to make another like us
+		#
+
+		self.get_another = lambda self: CoincsDocument(filename, process_params, comment, instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+
+		#
+		# filename
+		#
+
 		self.filename = filename
 
 		#
@@ -430,6 +440,12 @@ class CoincsDocument(object):
 			del __orig_append
 			dbtables.idmap_reset(self.connection)
 			dbtables.idmap_sync(self.connection)
+
+			#
+			# convert self.xmldoc into wrapper interface to
+			# database
+			#
+
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
 			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
 
@@ -479,6 +495,11 @@ class CoincsDocument(object):
 
 	def get_next_sngl_id(self):
 		return self.sngl_inspiral_table.get_next_id()
+
+
+	def T050017_filename(self, description):
+		start, end = self.search_summary_outseg
+		return "%s-%s-%d-%d.sqlite" % ("".join(sorted(self.process.get_ifos())), description, int(start), int(end - start))
 
 
 	def write_output_file(self, verbose = False):
