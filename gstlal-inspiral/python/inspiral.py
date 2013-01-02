@@ -922,10 +922,12 @@ class Data(object):
 			self.lock.release()
 
 
-	def write_output_file(self, likelihood_file = None, verbose = False):
+	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		self.lock.acquire()
 		try:
 			self.__flush()
+			if filename is not None:
+				self.coincs_document.filename = filename
 			self.coincs_document.write_output_file(verbose = verbose)
 
 			# write out the snr / chisq histograms

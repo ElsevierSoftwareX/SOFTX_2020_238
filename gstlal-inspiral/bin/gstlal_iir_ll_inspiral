@@ -517,8 +517,7 @@ mainloop.run()
 
 
 # if no output is given use Naming Convention for LIGO Trigger Files T050017-00
-output.coincs_document.filename = options.output or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag)
-output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
+output.write_output_file(filename = options.output or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag), likelihood_file = options.likelihood_file, verbose = options.verbose)
 # repair the shared memory just in case before exiting
 smrepair()
 
