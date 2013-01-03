@@ -584,6 +584,7 @@ class EPHandler( Handler ):
 			self.stats.normalize()
 			stat_json = {}
 			stat_json["current_seg"] = [ float(t) for t in (cur_seg or analysis_segment) ] 
+			stat_json["offsource_time"] = sum([ float(abs(t)) for s in self.stats.offsource.keys() ])
 			stat_json["psd_last_change_percent"] = self.psd_change
 			stat_json["psd_power"] = self.psd_power
 			ontime = float(abs(segmentlist(self.stats.onsource.keys())))
@@ -596,6 +597,8 @@ class EPHandler( Handler ):
 			else:
 				stat_json["event_rate"] = float('NaN')
 
+			rates = self.stats.event_rate()
+			stat_json["event_rates"] = list(rates)
 			esig = self.stats.event_significance()
 			stat_json["event_significance"] = list(esig)
 			if self.verbose:

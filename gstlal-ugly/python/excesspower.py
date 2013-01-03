@@ -27,7 +27,7 @@ from itertools import chain, ifilter
 
 import numpy
 
-from scipy.stats import chi2, poisson
+from scipy.stats import chi2, poisson, mannwhitneyu, norm
 
 from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
@@ -603,6 +603,33 @@ class SBStats(object):
 		self.offsource_interval = 6000
 		self.onsource_interval = 60
 
+	def event_rate( self, nevents=10 ):
+		"""
+		Calculate the Poissonian significance of the 'on source' trial set for up to the loudest nevents.
+		"""
+
+		offtime = float(abs(segmentlist(self.offsource.keys())))
+		offsource = sorted( chain(*self.offsource.values()), key=lambda sb: -sb.snr )
+		offrate = zip( offsource, map( lambda i:i/offtime, range(1, len(offsource)+1) ) )
+		offrate = offrate[::-1]
+		offsource = offsource[::-1]
+		offsnr = [sb.snr for sb in offsource]
+
+		ontime = float(abs(segmentlist(self.onsource.keys())))
+		if ontime == 0:
+			return []
+		onsource = sorted( chain(*self.onsource.values()), key=lambda sb: -sb.snr )
+		onsnr = [sb.snr for sb in onsource]
+		onrate = []
+		for snr in onsnr:
+			try:
+				onrate.append( offrate[bisect_left( offsnr, snr )][1] )
+			except IndexError: # on SNR > max off SNR
+				onrate.append( 0 )
+
+		return onrate
+
+	# FIXME: Have event_sig call event_rate
 	def event_significance( self, nevents=10 ):
 		"""
 		Calculate the Poissonian significance of the 'on source' trial set for up to the loudest nevents.
@@ -638,6 +665,34 @@ class SBStats(object):
 			onsource_sig.append( [sb.snr, -numpy.log(poisson.sf(i, exp_num))] )
 
 		return onsource_sig
+
+	def mann_whitney_pval( self ):
+		offsource = sorted( chain(*self.offsource.values()), key=lambda sb: -sb.snr )
+		offsnr = [sb.snr for sb in offsource]
+
+		onsource = sorted( chain(*self.onsource.values()), key=lambda sb: -sb.snr )
+		onsnr = [sb.snr for sb in onsource]
+
+		ranks = [(s, "B") for s in offsnr]
+		ranks.extend( [(s, "F") for s in onsnr] )
+		ranks = sorted( ranks, key=lambda st: s[0] )
+		ranks_fg = [ s for s, t in ranks if t == "F" ]
+		ranks_bg = [ s for s, t in ranks if t == "B" ]
+		if len(ranks) <= 20:
+			n = len(ranks)
+			nt = len(ranks_fg)
+                	u_fg = sum() - nt*(nt+1)/2.0
+                	u = min( (n-nt)*nt - u_fg, u_fg )
+			m_u = nt*(n-nt)/2.0
+			sig_u = numpy.sqrt( m_u/6.0*(n+1) )
+			zval = (u-m_u)/sig_u
+		else:
+			u, pval = scipy.stats.mannwhitneyu( ranks_fg, ranks_bg )
+			# FIXME: tail or symmetric?
+			zval = abs(scipy.stats.norm( pval ))
+
+		return zval
+		
 
 	def normalize( self ):
 		"""
