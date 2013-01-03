@@ -155,7 +155,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 
 
 class Handler(object):
-	def __init__(self, mainloop, pipeline, gates = {}, basename = "", verbose = False):
+	def __init__(self, mainloop, pipeline, gates = {}, basename = "", dataclass = None, verbose = False):
 		"""
 		here gates is a dict of gate names and messages for example
 		gates = {"my_gate_name": "my message"}
@@ -164,6 +164,7 @@ class Handler(object):
 		"""
 		self.mainloop = mainloop
 		self.pipeline = pipeline
+		self.dataclass = dataclass
 		self.lock = threading.Lock()
 
 		bus = pipeline.get_bus()
