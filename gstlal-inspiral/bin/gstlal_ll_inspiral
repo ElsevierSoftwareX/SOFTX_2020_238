@@ -387,7 +387,7 @@ output = inspiral.Data(
 	verbose = options.verbose
 )
 
-handler = lloidparts.Handler(mainloop, pipeline, gates = gates, basename = "%s-%s" % ("".join(sorted(detectors)), options.job_tag), dataclass = output, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
