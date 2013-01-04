@@ -4,12 +4,12 @@ START = 871147516
 STOP =  871149564
 
 # Template bank parameters
-MIN_MASS = 1.2
-MAX_MASS = 1.8
-MIN_TOTAL_MASS = 2.4
-MAX_TOTAL_MASS = 3.6
+MIN_MASS = 1.0
+MAX_MASS = 24.0
+MIN_TOTAL_MASS = 2.0
+MAX_TOTAL_MASS = 25.0
 LOW_FREQUENCY_CUTOFF = 15.0
-HIGH_PASS_FREQ = 9
+HIGH_PASS_FREQ = 10
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 200
@@ -69,13 +69,13 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
 
 H1psd.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1psd.xml.gz ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1psd.xml.gz /usr/share/gstlal/ZERO_DET_high_P.txt
 
 L1psd.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1psd.xml.gz ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1psd.xml.gz /usr/share/gstlal/ZERO_DET_high_P.txt
 
 V1psd.xml.gz :
-	cp virgo_online_psd.xml.gz V1psd.xml.gz 
+	cp /usr/share/gstlal/virgo_online_psd.xml.gz V1psd.xml.gz 
 
 reference_psd.xml: H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz  L1psd.xml.gz V1psd.xml.gz
@@ -84,9 +84,9 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml
 	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > V1_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > L1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
-	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
-	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
 	rm -f H1_bank.dag L1_bank.dag V1_bank.dag
 
