@@ -369,7 +369,7 @@ class CoincsDocument(object):
 		# how to make another like us
 		#
 
-		self.get_another = lambda self: CoincsDocument(filename, process_params, comment, instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.get_another = lambda: CoincsDocument(filename = filename, process_params = process_params, comment = comment, instruments = instruments, seg = seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
 		# filename
