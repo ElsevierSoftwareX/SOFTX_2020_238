@@ -452,8 +452,7 @@ def signal_handler(signal, frame, pipeline = pipeline, sigdata = sigdata):
 	if not sigdata.has_been_signaled:
 		print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
 		# override file name with approximate interval
-		bus = pipeline.get_bus()
-		bus.post(gst.message_new_eos(pipeline))
+		pipeline.send_event(gst.event_new_eos())
 		sigdata.has_been_signaled = True
 	else:
 		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
