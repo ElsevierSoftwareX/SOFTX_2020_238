@@ -286,8 +286,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
-		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
-		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		if gw_data_source_info.dq_channel_type == "ODC":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
@@ -303,7 +301,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, name = "%s_state_vector_gate" % instrument)
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, default_state = False, name = "%s_state_vector_gate" % instrument)
 		# export state vector state
 		if gw_data_source_info.gate_start_callback is not None:
 			src.set_property("emit-signals", True)
