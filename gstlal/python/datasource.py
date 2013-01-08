@@ -334,7 +334,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 	src = pipeparts.mkaudioconvert(pipeline, src)
 
-
 	#
 	# progress report
 	#
