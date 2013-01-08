@@ -1314,7 +1314,22 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 
 static void framecpp_channeldemux_base_init(gpointer klass)
 {
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1342,21 +1357,6 @@ static void framecpp_channeldemux_base_init(gpointer klass)
 		element_class,
 		gst_static_pad_template_get(&src_factory)
 	);
-}
-
-
-/*
- * class_init()
- */
-
-
-static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
