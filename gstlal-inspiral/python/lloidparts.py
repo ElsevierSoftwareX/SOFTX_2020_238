@@ -155,7 +155,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 
 
 class Handler(object):
-	def __init__(self, mainloop, pipeline, gates = {}, basename = "", dataclass = None, verbose = False):
+	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
 		"""
 		here gates is a dict of gate names and messages for example
 		gates = {"my_gate_name": "my message"}
@@ -174,7 +174,7 @@ class Handler(object):
 		self.segments = segments.segmentlistdict()
 		self.current_segment = {}
 		self.gates = gates
-		self.basename = basename
+		self.tag = tag
 		self.verbose = verbose
 		for (name,msg) in self.gates.items():
 			self.segments[name] = segments.segmentlist([])
@@ -189,7 +189,7 @@ class Handler(object):
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.flush_segments_to_disk()
-			self.pipeline.set_state(gst.STATE_NULL)
+			#self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_INFO:
 			gerr, dbgmsg = message.parse_info()
@@ -205,6 +205,10 @@ class Handler(object):
 		elif message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
 				self.flush_segments_to_disk()
+				try:
+					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "sqlite", verbose = self.verbose)
+				except TypeError as te:
+					print >> sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers", te
 
 	def flush_segments_to_disk(self):
 		self.lock.acquire()
@@ -212,14 +216,14 @@ class Handler(object):
 			xmldoc = self.gen_segments_doc()
 			# FIXME Can't use extent_all() since one list might be empty.
 			ext = self.segments.union(self.segments.keys()).extent()
-			fname = "%s_SEGMENTS-%d-%d.xml.gz" % (self.basename, int(ext[0]), int(abs(ext)))
+			fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(self.dataclass.instruments)), self.tag, int(ext[0]), int(abs(ext)))
 			utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
 
 			# Reset the segment lists
 			for name in self.segments:
 				self.segments[name] = segments.segmentlist([])
 		except ValueError:
-			print sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
+			print >> sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 		finally:
 			self.lock.release()
 
