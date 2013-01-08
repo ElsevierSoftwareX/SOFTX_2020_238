@@ -283,11 +283,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# state vector
-		# FIXME use pipeparts
-		statevector = gst.element_factory_make("queue")
-		statevector.set_property("max_size_buffers", 0)
-		statevector.set_property("max_size_bytes", 0)
-		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
+		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
@@ -295,10 +291,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		if gw_data_source_info.dq_channel_type == "ODC":
 			# FIXME: This goes away when the ODC channel format is fixed.
-			fixodc = gst.element_factory_make( "lal_fixodc" )
-			pipeline.add(fixodc)
-			statevector.link(fixodc) 
-			statevector = fixodc
+			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
