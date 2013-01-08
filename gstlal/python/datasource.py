@@ -283,9 +283,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# state vector
-		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
-		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
+		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
 		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
