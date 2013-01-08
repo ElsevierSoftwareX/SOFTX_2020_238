@@ -292,8 +292,10 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				element->endianness = G_LITTLE_ENDIAN;
 			else if(GST_READ_UINT16_BE(data + 12) == 0x1234)
 				element->endianness = G_BIG_ENDIAN;
-			else
+			else {
 				GST_ERROR_OBJECT(element, "unable to determine endianness");
+				g_assert_not_reached();
+			}
 			GST_DEBUG_OBJECT(element, "parsed header:  endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
 			/*
