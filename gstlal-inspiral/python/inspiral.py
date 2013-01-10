@@ -62,7 +62,9 @@ from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import ilwd
 from glue.ligolw import lsctables
+from glue.ligolw import dbtables
 from glue.ligolw import utils
+from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
@@ -193,7 +195,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 		for n, filename in enumerate(files):
 			# FIXME over ride the file name stored in the bank file with
 			# this file name this bank I/O code needs to be fixed
-			bank = svd_bank.read_bank(filename, verbose = verbose)
+			bank = svd_bank.read_bank(filename, contenthandler = XMLContentHandler, verbose = verbose)
 			bank.template_bank_filename = filename
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
@@ -299,6 +301,13 @@ rate.param.use_in(XMLContentHandler)
 lsctables.use_in(XMLContentHandler)
 
 
+class DBContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+rate.array.use_in(DBContentHandler)
+rate.param.use_in(DBContentHandler)
+dbtables.use_in(DBContentHandler)
+
+
 #
 # =============================================================================
 #
@@ -398,7 +407,7 @@ class CoincsDocument(object):
 		#
 
 		if injection_filename is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
+			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], contenthandler = XMLContentHandler, verbose = verbose)
 
 		#
 		# optionally insert a time slide table document.  if we
@@ -408,7 +417,7 @@ class CoincsDocument(object):
 
 		time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 		if time_slide_file is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], verbose = verbose)
+			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = XMLContentHandler, verbose = verbose)
 		else:
 			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), time_slide_table.get_next_id(), self.process):
 				time_slide_table.append(row)
@@ -424,14 +433,10 @@ class CoincsDocument(object):
 		#
 
 		if filename is not None and filename.endswith('.sqlite'):
-			# FIXME:  this is a MESS.  the idmap crap should
-			# live in insert_from_xml() so that it Just Works,
-			# the code should be moved away from the old global
-			# content handler, I don't know what all else!
-			from glue.ligolw.utils import ligolw_sqlite
-			from glue.ligolw import dbtables
+			# FIXME:  remove the ID remap stuff when we can
+			# rely on having glue 1.44
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
-			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
+			self.connection = sqlite3.connect(self.working_filename, check_same_thread = False)
 			dbtables.idmap_create(self.connection)
 			dbtables.idmap_sync(self.connection)
 			__orig_append, dbtables.DBTable.append = dbtables.DBTable.append, dbtables.DBTable._remapping_append
@@ -508,14 +513,15 @@ class CoincsDocument(object):
 		# FIXME:  should signal trapping be disabled in this code
 		# path?  I think not
 		if self.connection is not None:
-			from glue.ligolw import dbtables
 			seg = self.search_summary.get_out()
 			# record the final state of the search_summary and
 			# process rows in the database
+			cursor = self.connection.cursor()
 			if seg != segments.segment(None, None):
-				self.connection.cursor().execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
-			self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
-			self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
+				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
+			cursor.execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
+			cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
+			cursor.close()
 			self.connection.commit()
 			dbtables.build_indexes(self.connection, verbose = verbose)
 			self.connection.close()
