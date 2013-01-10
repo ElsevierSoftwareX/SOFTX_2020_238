@@ -189,7 +189,7 @@ class Handler(object):
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.flush_segments_to_disk()
-			#self.pipeline.set_state(gst.STATE_NULL)
+			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_INFO:
 			gerr, dbgmsg = message.parse_info()
