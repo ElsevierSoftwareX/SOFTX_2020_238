@@ -47,6 +47,14 @@ from gstlal import misc as gstlalmisc
 from gstlal import templates
 
 
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
 #
 # =============================================================================
 #
@@ -177,9 +185,9 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = DefaultContentHandler):
 	# Open template bank file
-	bank_xmldoc = utils.load_filename(template_bank_filename, verbose = verbose)
+	bank_xmldoc = utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
@@ -218,7 +226,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
+def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = DefaultContentHandler, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
 
 	# Create new document
@@ -226,7 +234,7 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 	root = ligolw.LIGO_LW()
 
 	# Open template bank file
-	bank_xmldoc = utils.load_filename(bank.template_bank_filename, verbose = verbose)
+	bank_xmldoc = utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
@@ -297,11 +305,11 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 	utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-def read_bank(filename, verbose = False):
+def read_bank(filename, contenthandler = DefaultContentHandler, verbose = False):
 	"""Read an SVD bank from a LIGO_LW xml file."""
 
 	# Load document
-	xmldoc = utils.load_filename(filename, verbose = verbose)
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 	root = xmldoc.childNodes[0]
 
 	# Create new SVD bank object
