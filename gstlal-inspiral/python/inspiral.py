@@ -520,6 +520,7 @@ class CoincsDocument(object):
 			dbtables.build_indexes(self.connection, verbose = verbose)
 			self.connection.close()
 			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
+			self.connection = None
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
