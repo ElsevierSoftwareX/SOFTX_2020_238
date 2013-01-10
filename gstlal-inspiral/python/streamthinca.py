@@ -420,6 +420,10 @@ class StreamThinca(object):
 			self.sngl_inspiral_table = None
 		self.ids.clear()
 
+		# last_boundary must be reset to -infinity so that it looks
+		# like a fresh copy of the stream thinca instance
+		self.last_boundary = -segments.infinity()
+
 		# it's now safe to work with a different document
 		self._xmldoc = None
 
