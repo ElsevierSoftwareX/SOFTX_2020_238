@@ -294,6 +294,7 @@ def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name 
 	pipeline.add(head)
 	return head
 
+
 def mkfakeadvvirgosrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeadvvirgosrc")
 	if instrument is not None:

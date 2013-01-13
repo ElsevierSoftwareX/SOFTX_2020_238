@@ -158,7 +158,7 @@ class Handler(object):
 		"""
 		here gates is a dict of gate names and messages for example
 		gates = {"my_gate_name": "my message"}
-		
+
 		my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
 		"""
 		self.mainloop = mainloop
@@ -169,7 +169,7 @@ class Handler(object):
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
-		
+
 		self.segments = segments.segmentlistdict()
 		self.current_segment = {}
 		self.gates = gates
@@ -184,7 +184,7 @@ class Handler(object):
 			elem.connect("stop", self.gatehandler, "off")
 
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
-	
+
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.flush_segments_to_disk()
@@ -207,7 +207,7 @@ class Handler(object):
 				try:
 					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "sqlite", verbose = self.verbose)
 				except TypeError as te:
-					print >> sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers", te
+					print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
 	def flush_segments_to_disk(self):
 		self.lock.acquire()
@@ -222,7 +222,7 @@ class Handler(object):
 			for name in self.segments:
 				self.segments[name] = segments.segmentlist([])
 		except ValueError:
-			print >> sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
+			print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 		finally:
 			self.lock.release()
 
@@ -235,7 +235,7 @@ class Handler(object):
 
 		if segment_type == "on":
 			self.current_segment[name] = segments.segment(LIGOTimeGPS(segment_start), self.current_segment[name][1])
-		if segment_type == "off":
+		elif segment_type == "off":
 			self.current_segment[name] = segments.segment(self.current_segment[name][0], LIGOTimeGPS(segment_start))
 
 		# if we have a complete segment append it
@@ -299,7 +299,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 	#
 	# FIXME this is deprecated, call datasource.mkbasicsrc directly.  THIS WILL BE DELETED!
 	#
-	
+
 	warnings.warn("mkLLOIDbasicsrc() is obsolete.  Please modify your code to call datasource.mkbasicsrc as this function will be deleted in a future release", DeprecationWarning)
 
 	class gwinfo(object):
