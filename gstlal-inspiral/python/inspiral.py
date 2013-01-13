@@ -490,7 +490,7 @@ class CoincsDocument(object):
 
 
 	def add_to_search_summary_outseg(self, seg):
-		out_segs = segments.segmentlist([self.search_summary.get_out()])
+		out_segs = segments.segmentlist([self.search_summary_outseg])
 		if out_segs == [segments.segment(None, None)]:
 			# out segment not yet initialized
 			del out_segs[:]
@@ -513,7 +513,7 @@ class CoincsDocument(object):
 		# FIXME:  should signal trapping be disabled in this code
 		# path?  I think not
 		if self.connection is not None:
-			seg = self.search_summary.get_out()
+			seg = self.search_summary_outseg
 			# record the final state of the search_summary and
 			# process rows in the database
 			cursor = self.connection.cursor()
