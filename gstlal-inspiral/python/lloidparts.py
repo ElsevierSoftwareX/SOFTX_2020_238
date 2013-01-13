@@ -50,7 +50,6 @@ from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import bottle
 from gstlal import pipeparts
-from gstlal import reference_psd
 from gstlal import simulation
 from gstlal import datasource
 from gstlal import multirate_datasource

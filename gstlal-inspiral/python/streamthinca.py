@@ -34,7 +34,6 @@ from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal.date import XLALUTCToGPS
 import time
-from gstlal import far
 
 
 #
