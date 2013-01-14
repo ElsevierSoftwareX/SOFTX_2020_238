@@ -82,16 +82,20 @@ class lal_fakeadvvirgosrc(gst.Bin):
 
 
 	def do_send_event(self, event):
-		"""Override send_event so that SEEK events go straight to the source
-		elements, bypassing the filter chains.  This makes it so that the
-		entire bin can be SEEKed even before it is added to a pipeline."""
-		if event.type == gst.EVENT_SEEK:
-			success = True
+		"""
+		Send SEEK and EOS events to the source elements, all others
+		to the by default bins send all events to the sink
+		elements.
+		"""
+		# FIXME:  seeks should go to sink elements as well
+		success = True
+		if event.type in (gst.EVENT_SEEK, gst.EVENT_EOS):
 			for elem in self.iterate_sources():
 				success &= elem.send_event(event)
-			return success
 		else:
-			return super(lal_fakeadvvirgosrc, self).send_event(event)
+			for elem in self.iterate_sinks():
+				success &= elem.send_event(event)
+		return success
 
 
 	def __init__(self):
