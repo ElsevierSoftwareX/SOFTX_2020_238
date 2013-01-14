@@ -312,7 +312,7 @@ else:
 
 triggersrc = lloidparts.mkLLOIDmulti(
 	pipeline,
-	seekevent = seekevent, # seekevent iff fake data
+	seekevent = seekevent,
 	detectors = detectors,
 	banks = banks,
 	psd = psd,
