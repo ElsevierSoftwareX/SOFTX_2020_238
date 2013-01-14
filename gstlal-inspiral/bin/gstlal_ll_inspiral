@@ -420,6 +420,35 @@ httpinterface.start_servers(16953, verbose = options.verbose)
 
 
 #
+# setup sigint handler to shutdown pipeline.  this is how the program stops
+# gracefully, it is the only way to stop it.  Otherwise it runs forever
+# man.
+#
+
+
+class OneTimeSignalHandler(object):
+	def __init__(self, pipeline):
+		self.pipeline = pipeline
+		self.count = 0
+
+	def __call__(self, signum, frame):
+		self.count += 1
+		if self.count == 1:
+			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			try:
+				if not self.pipeline.send_event(gst.event_new_eos()):
+					raise Exception("pipeline.send_event(EOS) returned failure")
+			except Exception, e:
+				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+				os._exit(1)
+		else:
+			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+
+
+#
 # Run pipeline
 #
 
@@ -437,46 +466,6 @@ if options.write_pipeline is not None:
 
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
-
-
-#
-# setup sigint handler to shutdown pipeline
-#
-
-class SigData(object):
-	def __init__(self):
-		self.has_been_signaled = False
-
-sigdata = SigData()
-
-def signal_handler(signal, frame, pipeline = pipeline, sigdata = sigdata):
-	if not sigdata.has_been_signaled:
-		print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
-		# override file name with approximate interval
-		pipeline.send_event(gst.event_new_eos())
-		sigdata.has_been_signaled = True
-	else:
-		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
-
-def crash_handler(signal, frame, pipeline = pipeline, sigdata = sigdata, mainloop = mainloop):
-	if not sigdata.has_been_signaled:
-		print >>sys.stderr, "*** SIG %d trying to copy outputfile, won't be able to shutdown pipeline***" % (signal,)
-		mainloop.quit()
-	else:
-		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
-
-# this is how the program stops gracefully, it is the only way to stop it.
-# Otherwise it runs forever man.
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-
-#
-# run pipeline
-#
-
-
 mainloop.run()
 
 
