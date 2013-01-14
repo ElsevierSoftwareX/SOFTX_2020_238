@@ -205,7 +205,7 @@ class Handler(object):
 			if message.structure.get_name() == "CHECKPOINT":
 				self.flush_segments_to_disk()
 				try:
-					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "sqlite", verbose = self.verbose)
+					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 				except TypeError as te:
 					print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
