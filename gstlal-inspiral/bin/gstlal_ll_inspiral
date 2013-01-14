@@ -364,7 +364,7 @@ options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
 output = inspiral.Data(
-	filename = options.output or "%s-%s_LLOID-%d-%d.sqlite" % (lsctables.ifos_from_instrument_set(detectors.keys()).replace(",", ""), options.job_tag, int(start), int(now() - start)),
+	filename = options.output or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.keys()).replace(",", ""), options.job_tag, int(start), int(now() - start)),
 	process_params = process_params,
 	pipeline = pipeline,
 	instruments = set(detectors),
@@ -474,7 +474,7 @@ mainloop.run()
 #
 
 # if no output is given use Naming Convention for LIGO Trigger Files T050017-00
-output.write_output_file(filename = options.output or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "sqlite"), likelihood_file = options.likelihood_file, verbose = options.verbose)
+output.write_output_file(filename = options.output or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = options.likelihood_file, verbose = options.verbose)
 # repair the shared memory just in case before exiting
 smrepair()
 
