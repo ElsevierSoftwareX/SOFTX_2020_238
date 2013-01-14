@@ -230,6 +230,16 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
+def _do_seek(src, seekevent):
+	# FIXME:  remove.  seek the pipeline instead
+	# DO NOT USE IN NEW CODE!!!!
+	if seekevent is not None:
+		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
+		if not src.send_event(seekevent):
+			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
+
+
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""
 	All the conditionals and stupid pet tricks for reading real or
@@ -249,16 +259,24 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkfakesrcseeked(pipeline, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.seekevent, blocksize = gw_data_source_info.block_size, wave = 4)
 	elif gw_data_source_info.data_source == 'LIGO':
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
+		# FIXME:  remove
+		_do_seek(src, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == 'AdvLIGO':
 		src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
+		# FIXME:  remove
+		_do_seek(src, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == 'AdvVirgo':
 		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
+		# FIXME:  remove
+		_do_seek(src, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
 		else:
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
+		# FIXME:  remove
+		_do_seek(src, gw_data_source_info.seekevent)
 	# Next process online data, fake data must be None for this to have gotten this far
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
@@ -314,19 +332,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	else:
 		raise ValueError("invalid data_source: %s" % gw_data_source_info.data_source)
 
-	# seek some non-live sources FIXME someday this should go away and seeks
-	# should only be done on the pipeline that is why this is separated
-	# here
-	if gw_data_source_info.data_source in ("LIGO", "AdvLIGO", "AdvVirgo", "frames"):
-		#
-		# seek the data source if not live
-		#
-
-		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
-		if not src.send_event(gw_data_source_info.seekevent):
-			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
-
 	#
 	# provide an audioconvert element to allow Virgo data (which is
 	# single-precision) to be adapted into the pipeline
@@ -362,11 +367,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
 	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
-	if seekevent is not None:
-		if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % segsrc.get_name())
-		if not segsrc.send_event(seekevent):
-			raise RuntimeError("Element %s did not handle seek event" % segsrc.get_name())
+	# FIXME:  remove
+	_do_seek(segsrc, seekevent)
 	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
 
 
@@ -385,6 +387,3 @@ def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -12
 		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True, name = name)
 	else:
 		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
-
-
-
