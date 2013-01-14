@@ -94,6 +94,10 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 #
 
 
+def message_new_checkpoint(src):
+	return gst.message_new_application(src, gst.Structure("CHECKPOINT"))
+
+
 def channel_dict_from_channel_list(channel_list, channel_dict = {"H1" : "LSC-STRAIN", "H2" : "LSC-STRAIN", "L1" : "LSC-STRAIN", "V1" : "LSC-STRAIN"}):
 	"""
 	given a list of channels like this ["H1=LSC-STRAIN",
@@ -558,7 +562,7 @@ class Data(object):
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Setup custom checkpoint message
-		self.checkpointmsg = gst.message_new_application(pipeline, gst.Structure("CHECKPOINT"))
+		self.checkpointmsg = message_new_checkpoint(pipeline)
 		# Set to 1.0 to disable background data decay
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
