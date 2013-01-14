@@ -106,9 +106,8 @@ pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
 # FIXME repair the shared memory partition just in case, update this as appropriate
 def smrepair():
-	subprocess.call(["smrepair", "LHO_Data"])
-	subprocess.call(["smrepair", "LLO_Data"])
-	subprocess.call(["smrepair", "VIRGO_Data"])
+	for partition in ("LHO_Data", "LLO_Data", "VIRGO_Data"):
+		subprocess.call(["smrepair", partition])
 
 
 def now():
