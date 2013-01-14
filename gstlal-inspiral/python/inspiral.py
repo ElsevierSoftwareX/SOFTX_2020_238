@@ -558,8 +558,7 @@ class Data(object):
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Setup custom checkpoint message
-		appmsgstruct = gst.Structure("CHECKPOINT")
-		self.checkpointmsg = gst.message_new_application(pipeline, appmsgstruct)
+		self.checkpointmsg = gst.message_new_application(pipeline, gst.Structure("CHECKPOINT"))
 		# Set to 1.0 to disable background data decay
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
