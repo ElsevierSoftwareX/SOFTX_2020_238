@@ -705,9 +705,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 	if chisq_type not in ['autochisq', 'timeslicechisq']:
 		raise ValueError("chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % chisq_type)
-	# FIXME:  uncomment when glue.iterutils.nonuniq is available
-	#if tuple(iterutils.nonuniq(bank.bank_id for bank in banks)):
-	#	raise ValueError("bank IDs %s are not unique" % ", ".join(iterutils.nonuniq(bank.bank_id for bank in banks)))
+	if any(tuple(iterutils.nonuniq(bank.bank_id for bank in banklist)) for banklist in banks.values()):
+		raise ValueError("bank IDs are not unique: %s" % "; ".join("for %s: %s" % (instrument, iterutils.nonuniq(bank.bank_id for bank in banklist)) for instrument, banklist in banks.items()))
 
 	#
 	# extract segments from the injection file for selected reconstruction
