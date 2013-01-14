@@ -938,7 +938,8 @@ class Data(object):
 		# write out the snr / chisq histograms
 		if likelihood_file is None:
 			fname = os.path.split(self.coincs_document.filename)
-			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+			ifo, desc, start, dur = ".".join(fname[1].split('.')[:-1]).split('-')
+			fname = os.path.join(fname[0], '%s-%s_SNR_CHI-%s-%s.xml.gz' % (ifo, desc, start, dur))
 		else:
 			fname = likelihood_file
 		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
