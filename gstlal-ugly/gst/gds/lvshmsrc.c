@@ -490,7 +490,32 @@ static void finalize(GObject *object)
 
 static void gds_lvshmsrc_base_init(gpointer klass)
 {
+}
+
+
+/*
+ * Class init function.  See
+ *
+ * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ */
+
+
+static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+	gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(unlock);
+	gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(unlock_stop);
+	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -512,24 +537,6 @@ static void gds_lvshmsrc_base_init(gpointer klass)
 			)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -564,17 +571,6 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-
-	/*
-	 * GstBaseSrc method overrides
-	 */
-
-	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
-	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
-	gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(unlock);
-	gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(unlock_stop);
-	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
-	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 }
 
 
