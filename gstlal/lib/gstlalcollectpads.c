@@ -244,7 +244,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 			segment->stop = data->segment.stop;
 	}
 	if(segment)
-		GST_DEBUG_OBJECT(pads, "returning segment %" GST_PTR_FORMAT, segment);
+		GST_DEBUG_OBJECT(pads, "returning segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", segment->start, segment->stop);
 	else
 		GST_DEBUG_OBJECT(pads, "no segment available");
 
