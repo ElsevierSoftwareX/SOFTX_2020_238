@@ -216,8 +216,12 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	result = gst_audioadapter_get_list(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
 	if(result) {
 		/* adjust timestamp of first buffer */
+		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_TIMESTAMP(result->data);
 		result->data = gst_buffer_make_metadata_writable(GST_BUFFER(result->data));
-		GST_BUFFER_TIMESTAMP(result->data) = _framecpp_muxqueue_t_start(queue);
+		g_assert_cmpint(delta, >=, 0);
+		g_assert_cmpuint(delta, <=, GST_BUFFER_DURATION(result->data));
+		GST_BUFFER_TIMESTAMP(result->data) += delta;
+		GST_BUFFER_DURATION(result->data) -= delta;
 	}
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 	/* require all buffers in list to be contiguous */
