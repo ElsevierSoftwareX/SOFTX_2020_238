@@ -337,7 +337,7 @@ AC_SUBST([gds_LIBS])
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalframe >= 1.0.8 lalmetaio >= 1.0.6 lalsupport lalburst >= 1.1.2])
+PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalframe >= 1.0.8 lalmetaio >= 1.0.6 lalsupport lalburst >= 1.1.5])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

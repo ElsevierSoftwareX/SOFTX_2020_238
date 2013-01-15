@@ -16,7 +16,7 @@ Build-Depends:
  lalframe-dev (>= 1.0.8),
  lalmetaio-dev (>= 1.0.6),
  lalsimulation-dev (>= 0.6.0),
- lalburst-dev (>= 1.1.2),
+ lalburst-dev (>= 1.1.5),
  lalinspiral-dev (>= 1.3.0),
  libgsl0-dev (>= 1.9),
  fakeroot,
@@ -40,7 +40,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalframe (>= 1.0.8),
  lalmetaio (>= 1.0.6),
  lalsimulation (>= 0.6.0),
- lalburst (>= 1.1.2),
+ lalburst (>= 1.1.5),
  lalinspiral (>= 1.3.0),
  libgsl0ldbl (>= 1.9),
  libxml2
@@ -68,7 +68,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  lalframe-dev (>= 1.0.8),
  lalmetaio-dev (>= 1.0.6),
  lalsimulation-dev (>= 0.6.0),
- lalburst-dev (>= 1.1.2),
+ lalburst-dev (>= 1.1.5),
  lalinspiral-dev (>= 1.3.0)
 Description: Files and documentation needed for compiling gstlal based plugins and programs.
  This package contains the files needed for building gstlal-based plugins
