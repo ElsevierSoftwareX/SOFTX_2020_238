@@ -296,11 +296,17 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			GstStructure *s = gst_caps_get_structure(caps, n);
 			const GValue *v = gst_structure_get_value(s, "rate");
 
-			if(GST_VALUE_HOLDS_INT_RANGE(v))
-				gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, 1, gst_value_get_int_range_max(v), NULL);
-			else if(G_VALUE_HOLDS_INT(v))
-				gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, 1, g_value_get_int(v), NULL);
-			else
+			if(GST_VALUE_HOLDS_INT_RANGE(v)) {
+				if(gst_value_get_int_range_max(v) == 1)
+					gst_structure_set(s, "rate", G_TYPE_INT, 1, NULL);
+				else
+					gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, 1, gst_value_get_int_range_max(v), NULL);
+			} else if(G_VALUE_HOLDS_INT(v)) {
+				if(g_value_get_int(v) == 1)
+					gst_structure_set(s, "rate", G_TYPE_INT, 1, NULL);
+				else
+					gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, 1, g_value_get_int(v), NULL);
+			} else
 				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
 		}
 		break;
