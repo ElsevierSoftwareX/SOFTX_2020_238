@@ -177,7 +177,7 @@ def mkframecppchannelmux(pipeline, src, **properties):
 
 
 def mkmultifilesink(pipeline, src, next_file = 0, **properties):
-	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, **properties)
+	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, sync = False, async = False, **properties)
 
 
 def mkframesink(pipeline, src, **properties):
