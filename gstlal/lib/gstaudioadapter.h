@@ -83,9 +83,9 @@ struct _GstAudioAdapter {
 
 	/*< private >*/
 	GQueue *queue;
-	guint unit_size;
-	guint size;
-	guint skip;
+	guint unit_size;	/* bytes */
+	guint size;		/* samples (units) */
+	guint skip;		/* samples (units) */
 };
 
 
