@@ -17,7 +17,7 @@ Build-Depends:
  lalmetaio-dev (>= 1.0.6),
  lalsimulation-dev (>= 0.6.0),
  lalburst-dev (>= 1.1.5),
- lalinspiral-dev (>= 1.3.0),
+ lalinspiral-dev (>= 1.4.1),
  libgsl0-dev (>= 1.9),
  fakeroot,
  pkg-config,
@@ -41,7 +41,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalmetaio (>= 1.0.6),
  lalsimulation (>= 0.6.0),
  lalburst (>= 1.1.5),
- lalinspiral (>= 1.3.0),
+ lalinspiral (>= 1.4.1),
  libgsl0ldbl (>= 1.9),
  libxml2
 Description: GStreamer for GW data analysis (core stable parts)
@@ -69,7 +69,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  lalmetaio-dev (>= 1.0.6),
  lalsimulation-dev (>= 0.6.0),
  lalburst-dev (>= 1.1.5),
- lalinspiral-dev (>= 1.3.0)
+ lalinspiral-dev (>= 1.4.1)
 Description: Files and documentation needed for compiling gstlal based plugins and programs.
  This package contains the files needed for building gstlal-based plugins
  and programs.

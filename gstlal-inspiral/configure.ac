@@ -222,7 +222,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalmetaio >= 1.0.6 lalsupport lalinspiral >= 1.3.0])
+PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalmetaio >= 1.0.6 lalsupport lalinspiral >= 1.4.1])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
