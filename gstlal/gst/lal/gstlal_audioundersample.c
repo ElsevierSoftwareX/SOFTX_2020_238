@@ -278,7 +278,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			else if(G_VALUE_HOLDS_INT(v))
 				gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, g_value_get_int(v), G_MAXINT, NULL);
 			else
-				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid invalid type for rate in caps"));
+				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
 		}
 		break;
 
@@ -301,7 +301,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			else if(G_VALUE_HOLDS_INT(v))
 				gst_structure_set(s, "rate", GST_TYPE_INT_RANGE, 1, g_value_get_int(v), NULL);
 			else
-				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid invalid type for rate in caps"));
+				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
 		}
 		break;
 
