@@ -177,7 +177,6 @@ class Handler(object):
 		self.verbose = verbose
 		for (name,msg) in self.gates.items():
 			self.segments[name] = segments.segmentlist([])
-			self.current_segment[name] = segments.segment(None, None)
 			elem = pipeline.get_by_name(name)
 			elem.set_property("emit-signals", True)
 			elem.connect("start", self.gatehandler, "on")
@@ -227,21 +226,19 @@ class Handler(object):
 			self.lock.release()
 
 	def gatehandler(self, elem, timestamp, segment_type):
-		segment_start = "%.9f" % (timestamp / 1.e9)
+		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
 		name = elem.get_name()
 
 		if self.verbose:
-			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, segment_start)
+			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, str(timestamp))
 
+		if name in self.current_segment:
+			self.current_segment[name][1] = timestamp
+			self.segments[name] |= segments.segmentlist([self.current_segment.pop(name)])
 		if segment_type == "on":
-			self.current_segment[name] = segments.segment(LIGOTimeGPS(segment_start), self.current_segment[name][1])
-		elif segment_type == "off":
-			self.current_segment[name] = segments.segment(self.current_segment[name][0], LIGOTimeGPS(segment_start))
-
-		# if we have a complete segment append it
-		if self.current_segment[name][0] is not None and self.current_segment[name][1] is not None:
-			self.segments[name].append(self.current_segment[name])
-			self.current_segment[name] = segments.segment(None, None)
+			self.current_segment[name] = segments.segment(timestamp, None)
+		elif segment_type != "off":
+			raise AssertionError
 
 	def gen_segments_doc(self):
 		xmldoc = ligolw.Document()
