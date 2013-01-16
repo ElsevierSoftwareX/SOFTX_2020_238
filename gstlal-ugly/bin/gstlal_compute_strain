@@ -145,7 +145,7 @@ pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_chan
 # ODC STATE VECTOR BRANCH
 #
 
-odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = 0x1, status_out = 0x3)
+odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = 0x1, status_out = 0x7)
 odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
 if options.verbose:
@@ -160,7 +160,7 @@ odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 # Use the ODC state vector to gate the PSL
 odccontrol = pipeparts.mkqueue(pipeline, odcstatevectortee)
-odccontrol = pipeparts.mkstatevector(pipeline, odccontrol, required_on = 0x3, required_off = 0x4)
+odccontrol = pipeparts.mkstatevector(pipeline, odccontrol, required_on = 0x3)
 psl = pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False)
 psl = pipeparts.mkgate(pipeline, psl, threshold = 1, default_state = False, control =  odccontrol )
 
@@ -238,14 +238,14 @@ htdqbit = pipeparts.mkchecktimestamps(pipeline, htdqbit)
 # COMBINE ODC VECTOR WITH H(t)-OK BIT
 #
 
-dqvector = gst.element_factory_make("lal_adder")
-dqvector.set_property("sync", True)
-pipeline.add(dqvector)
-pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12).link(dqvector)
+#dqvector = gst.element_factory_make("lal_adder")
+#dqvector.set_property("sync", True)
+#pipeline.add(dqvector)
+#pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12).link(dqvector)
 #pipeparts.mkqueue(pipeline, htdqbit).link(dqvector)
 
 dqtagstr = "units=strain,channel-name=%s:LLD-DQ_VECTOR_TEST,instrument=%s" % (instrument, instrument)
-dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
+dqvector = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12), dqtagstr)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
