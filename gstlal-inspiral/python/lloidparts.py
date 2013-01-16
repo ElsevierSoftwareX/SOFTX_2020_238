@@ -171,7 +171,7 @@ class Handler(object):
 		bus.connect("message", self.on_message)
 
 		self.segments = segments.segmentlistdict()
-		self.current_segment = {}
+		self.current_segment_start = {}
 		self.gates = gates
 		self.tag = tag
 		self.verbose = verbose
@@ -232,11 +232,10 @@ class Handler(object):
 		if self.verbose:
 			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, str(timestamp))
 
-		if name in self.current_segment:
-			self.current_segment[name][1] = timestamp
-			self.segments[name] |= segments.segmentlist([self.current_segment.pop(name)])
+		if name in self.current_segment_start:
+			self.segments[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
 		if segment_type == "on":
-			self.current_segment[name] = segments.segment(timestamp, None)
+			self.current_segment_start[name] = timestamp
 		elif segment_type != "off":
 			raise AssertionError
 
