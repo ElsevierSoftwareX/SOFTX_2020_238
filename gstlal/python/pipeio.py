@@ -111,7 +111,8 @@ def numpy_dtype_from_caps(caps):
 def array_from_audio_buffer(buf):
 	channels = buf.caps[0]["channels"]
 	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
-	return a.reshape((len(a) / channels, channels))
+	a.shape = (len(a) / channels, channels)
+	return a
 
 
 #
