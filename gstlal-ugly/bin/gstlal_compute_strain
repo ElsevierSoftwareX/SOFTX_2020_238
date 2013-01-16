@@ -102,12 +102,12 @@ state_vector_on_bits, state_vector_off_bits = gw_data_source.state_vector_on_off
 #
 
 if options.reference_psd is not None:
-	wpsd = pylal.series.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+	wpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 else:
 	wpsd = None
 	if options.verbose:
 		print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
-rpsd = pylal.series.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 
 #
 # Setup the pipeline
