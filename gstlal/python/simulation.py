@@ -17,19 +17,17 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
-try:
-	import sqlite3
-except ImportError:
-        # pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
 
 from glue import segments
-from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
+
+
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(ContentHandler)
 
 
 #
@@ -41,19 +39,16 @@ def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
 	# initialization
 
 	seglist = segments.segmentlist()
-	padtime = LIGOTimeGPS(pad)
 
 	# Parse the XML file
 
-	xmldoc=utils.load_filename(fname, gz=fname.endswith(".gz"), verbose=verbose)
+	xmldoc=utils.load_filename(fname, contenthandler=ContentHandler, verbose=verbose)
 
 	# extract the padded geocentric end times into segment lists
-	
+
 	sim_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SimInspiralTable.tableName)
 	for row in sim_inspiral_table:
-		t = row.get_time_geocent()
-		seglist.append((t-padtime, t+padtime))
+		t = LIGOTimeGPS(row.get_time_geocent())
+		seglist.append(segments.segment(t-pad, t+pad))
 
 	return seglist
-
-
