@@ -264,7 +264,7 @@ if options.write_to_shm_partition is not None:
 	lvshmsink = gst.element_factory_make("gds_lvshmsink")
 	lvshmsink.set_property("shm-name", options.write_to_shm_partition)
 	lvshmsink.set_property("num-buffers", 10)
-	lvshmsink.set_property("blocksize", 405338)
+	lvshmsink.set_property("blocksize", 405338 * options.frame_duration * options.frames_per_file)
 	pipeline.add(lvshmsink)
 	mux.link(lvshmsink)
 else:
