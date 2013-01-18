@@ -148,6 +148,7 @@ static gboolean start(GstBaseSrc *object)
 	lvshm_setWaitTime(element->handle, element->wait_time);
 
 	element->need_new_segment = TRUE;
+	element->last_timestamp = 0;
 
 	return TRUE;
 }
@@ -241,67 +242,75 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	element->create_thread = pthread_self();
-	g_mutex_lock(element->create_thread_lock);
-	t_before = GPSNow();
-	data = lvshm_getNextBuffer(element->handle, flags);
-	t_after = GPSNow();
-	g_mutex_unlock(element->create_thread_lock);
-	if(!data) {
-		/*
-		 * data retrieval failed.  guess cause.
-		 * FIXME:  we need an API that can tell us the cause
-		 */
-
-		if(element->unblocked) {
+	while(1) {
+		g_mutex_lock(element->create_thread_lock);
+		t_before = GPSNow();
+		data = lvshm_getNextBuffer(element->handle, flags);
+		t_after = GPSNow();
+		g_mutex_unlock(element->create_thread_lock);
+		if(!data) {
 			/*
-			 * assume reason for failure was we were killed by
-			 * a signal, and assume that is because we were
-			 * unblocked.  indicate end-of-stream
+			 * data retrieval failed.  guess cause.
+			 * FIXME:  we need an API that can tell us the cause
 			 */
 
-			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-			return GST_FLOW_UNEXPECTED;
-		} else if(element->wait_time > 0. && (GstClockTimeDiff) (t_after - t_before) >= (GstClockTimeDiff) (element->wait_time * GST_SECOND)) {
-			/*
-			 * assume reason for failure was a timeout.  create
-			 * a 0-length buffer with a guess as to the
-			 * timestamp of the missing data.  guess:  the time
-			 * when we started waiting for the data adjusted by
-			 * the most recently measured latency
-			 *
-			 * FIXME:  we need an API that can tell us the
-			 * timestamp of the missing data
-			 */
+			if(element->unblocked) {
+				/*
+				 * assume reason for failure was we were killed by
+				 * a signal, and assume that is because we were
+				 * unblocked.  indicate end-of-stream
+				 */
 
-			GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
+				GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
+				return GST_FLOW_UNEXPECTED;
+			} else if(element->wait_time > 0. && (GstClockTimeDiff) (t_after - t_before) >= (GstClockTimeDiff) (element->wait_time * GST_SECOND)) {
+				/*
+				 * assume reason for failure was a timeout.  create
+				 * a 0-length buffer with a guess as to the
+				 * timestamp of the missing data.  guess:  the time
+				 * when we started waiting for the data adjusted by
+				 * the most recently measured latency
+				 *
+				 * FIXME:  we need an API that can tell us the
+				 * timestamp of the missing data
+				 */
 
-			*buffer = gst_buffer_new();
-			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
-			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
-				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
-			GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
-			GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
-			GST_BUFFER_OFFSET(*buffer) = offset;
-			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
-			return result;
-		} else {
-			/*
-			 * reason for failure is not known.  indicate
-			 * end-of-stream
-			 */
+				GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
 
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-			return GST_FLOW_UNEXPECTED;
+				*buffer = gst_buffer_new();
+				gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
+				GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+				if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
+					GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+				GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
+				GST_BUFFER_OFFSET(*buffer) = offset;
+				GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+				return result;
+			} else {
+				/*
+				 * reason for failure is not known.  indicate
+				 * end-of-stream
+				 */
+
+				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
+				return GST_FLOW_UNEXPECTED;
+			}
 		}
+		/*
+		 * we have successfully retrieved data.  all code paths from this
+		 * point must include a call to lvshm_releaseDataBuffer()
+		 */
+		length = lvshm_dataLength(element->handle);
+		timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
+		GST_LOG_OBJECT(element, "retrieved %u byte shared-memory buffer %p for GPS %" GST_TIME_SECONDS_FORMAT, length, data, GST_TIME_SECONDS_ARGS(timestamp));
+		if(timestamp >= element->last_timestamp) {
+			element->last_timestamp = timestamp;
+			break;
+		}
+		GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
+		lvshm_releaseDataBuffer(element->handle);
 	}
-	/*
-	 * we have successfully retrieved data.  all code paths from this
-	 * point must include a call to lvshm_releaseDataBuffer()
-	 */
-	length = lvshm_dataLength(element->handle);
-	timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
-	GST_LOG_OBJECT(element, "retrieved %u byte shared-memory buffer %p for GPS %" GST_TIME_SECONDS_FORMAT, length, data, GST_TIME_SECONDS_ARGS(timestamp));
 
 	/*
 	 * copy into a GstBuffer
