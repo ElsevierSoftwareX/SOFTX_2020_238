@@ -395,7 +395,7 @@ class DistributionsStats(object):
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
-	def add_background_prior(self, n = 1., transition = 10., instruments = None):
+	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		# Make a new empty coinc param distributions
 		newdist = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		for param, binarr in newdist.background_rates.items():
@@ -420,7 +420,46 @@ class DistributionsStats(object):
 			binarr.array *= n
 		self.raw_distributions += newdist
 
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.15), df = 40, instruments = None, verbose = False):
+		# FIXME, an adhoc way of adding glitches, us a signal distribution with bad matches
+		# FIXME if we keep this, make a function that can be reused for both signal and background
+		# FIXME:  for maintainability, this should be modified to
+		# use the .add_injection() method of the .raw_distributions
+		# attribute, but that will slow this down
+		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
+		# Make a new empty coinc param distributions
+		newdist = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		for param, binarr in newdist.background_rates.items():
+			instrument = param.split("_")[0]
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
+			if verbose:
+				print >> sys.stderr, "synthesizing background for %s" % param
+			# Custom handle the first and last over flow bins
+			snrs = binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for i, snr in enumerate(snrs):
+				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
+					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
+					dist = 0
+					for pf in pfs:
+						nc = pf * snr**2
+						v = stats.ncx2.pdf(chisq, df, nc)
+						if numpy.isfinite(v):
+							dist += v
+					dist *= (snr / snrs[0])**-4
+					if numpy.isfinite(dist):
+						binarr[snr, chi2_over_snr2] += dist
+			# normalize to the requested count
+			binarr.array /= binarr.array.sum()
+			binarr.array *= n
+		self.raw_distributions += newdist
+
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
