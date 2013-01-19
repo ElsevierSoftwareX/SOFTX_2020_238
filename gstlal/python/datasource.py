@@ -287,22 +287,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
 		# strain
-		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_pad("sink"))
-		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-		@bottle.route("/%s/strain_add_drop.txt" % instrument)
-		def strain_add(elem = strain):
-			import time
-			from pylal.date import XLALUTCToGPS
-			t = float(XLALUTCToGPS(time.gmtime()))
-			add = elem.get_property("add")
-			drop = elem.get_property("drop")
-			# FIXME don't hard code the sample rate
-			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
-
+		#strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 		# state vector
 		# FIXME:  don't hard-code channel name
-		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
 		if gw_data_source_info.dq_channel_type == "ODC":
 			# FIXME: This goes away when the ODC channel format is fixed.
@@ -327,6 +317,18 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		if gw_data_source_info.gate_stop_callback is not None:
 			src.set_property("emit-signals", True)
 			src.connect("stop", gw_data_source_info.gate_stop_callback)
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
+		@bottle.route("/%s/strain_add_drop.txt" % instrument)
+		def strain_add(elem = src):
+			import time
+			from pylal.date import XLALUTCToGPS
+			t = float(XLALUTCToGPS(time.gmtime()))
+			add = elem.get_property("add")
+			drop = elem.get_property("drop")
+			# FIXME don't hard code the sample rate
+			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
+
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
