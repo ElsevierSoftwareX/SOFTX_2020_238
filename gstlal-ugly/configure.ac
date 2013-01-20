@@ -330,6 +330,14 @@ AS_IF(
 AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
 AC_SUBST([gds_CFLAGS])
 AC_SUBST([gds_LIBS])
+AS_IF(
+	[test "x${HAVE_GDS}" == "xyes"], [
+	framexmit_CFLAGS="-I/usr/include/gds"
+	framexmit_LIBS="-lframexmit -lpthread -lsockutil"
+	AC_SUBST([framexmit_CFLAGS])
+	AC_SUBST([framexmit_LIBS])
+	]
+)
 
 
 #

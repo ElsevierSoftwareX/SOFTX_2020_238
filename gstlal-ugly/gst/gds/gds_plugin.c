@@ -41,6 +41,7 @@
  */
 
 
+#include <framexmitsrc.h>
 #include <lvshmsink.h>
 #include <lvshmsrc.h>
 
@@ -60,6 +61,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"gds_framexmitsrc", GDS_FRAMEXMITSRC_TYPE},
 		{"gds_lvshmsink", GDS_LVSHMSINK_TYPE},
 		{"gds_lvshmsrc", GDS_LVSHMSRC_TYPE},
 		{NULL, 0},
