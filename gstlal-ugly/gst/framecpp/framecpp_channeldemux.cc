@@ -675,48 +675,58 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
  */
 
 
-static void do_heart_beat(gpointer object, gpointer data)
+static GstFlowReturn push_heart_beat(GstPad *pad, GstClockTime timestamp)
+{
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+	GstBuffer *buffer;
+
+	/*
+	 * create heartbeat buffer for this pad
+	 */
+
+	buffer = gst_buffer_new();
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_DURATION(buffer) = 0;
+	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
+	gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+
+	/*
+	 * check for disconts
+	 */
+
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+		pad_state->need_discont = FALSE;
+	}
+
+	/*
+	 * record state for next time
+	 */
+
+	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+	/*
+	 * push buffer
+	 */
+
+	return gst_pad_push(pad, buffer);
+}
+
+
+static void push_heart_beat_iter_wrapper(gpointer object, gpointer data)
 {
 	GstPad *pad = GST_PAD(object);
 	GstClockTime timestamp = *(GstClockTime *) data;
 
-	if(gst_pad_is_linked(pad)) {
-		struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
-		GstBuffer *buffer;
-
-		/*
-		 * create heartbeat buffer for this pad
-		 */
-
-		buffer = gst_buffer_new();
-		GST_BUFFER_TIMESTAMP(buffer) = timestamp;
-		GST_BUFFER_DURATION(buffer) = 0;
-		GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
-		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
-
-		/*
-		 * check for disconts
-		 */
-
-		if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
-			GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
-			pad_state->need_discont = FALSE;
-		}
-
-		/*
-		 * record state for next time
-		 */
-
-		pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
-		pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
-
+	if(gst_pad_is_linked(pad))
 		/*
 		 * push buffer.  ignore failures
 		 * FIXME:  should failures be ignored?
 		 */
 
-		gst_pad_push(pad, buffer);
-	}
+		push_heart_beat(pad, timestamp);
+
 	gst_object_unref(pad);
 }
 
@@ -726,7 +736,7 @@ static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClo
 	GstIterator *iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
 	GstFlowReturn result = GST_FLOW_OK;
 
-	gst_iterator_foreach(iter, do_heart_beat, &t);
+	gst_iterator_foreach(iter, push_heart_beat_iter_wrapper, &t);
 	gst_iterator_free(iter);
 
 	return result;
