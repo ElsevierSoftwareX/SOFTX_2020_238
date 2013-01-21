@@ -40,7 +40,6 @@ matplotlib.rcParams.update({
 	"path.simplify": True
 })
 from matplotlib import figure
-from matplotlib import cm as colourmap
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
