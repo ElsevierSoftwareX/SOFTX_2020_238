@@ -116,11 +116,12 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("frame-cache", frame_cache)
-		self.add_var_opt("gps-start-time",gps_start_time)
-		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("instrument", instrument)
-		self.add_var_opt("channel", channel)
-		if injections: self.add_var_opt("injections", injections)
+		self.add_var_opt("gps-start-time", gps_start_time)
+		self.add_var_opt("gps-end-time", gps_end_time)
+		self.add_var_opt("data-source", "frames")
+		self.add_var_arg("--channel-name=%s=%s" % (instrument, channel))
+		if injections:
+			self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, instrument, gps_start_time, gps_end_time)
 		self.add_var_opt("write-psd",output_name)
@@ -160,15 +161,16 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("data-source", "frames")
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("instrument", instrument)
-		self.add_var_opt("channel-name", channel)
+		self.add_var_opt("output-channel-name", "FAKE-STRAIN")
 		if injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		self.add_var_opt("recolor-psd",recolor_psd)
 		self.add_var_opt("reference-psd",reference_psd)
+		self.add_var_arg("--channel-name=%s=%s" % (instrument, channel))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
