@@ -468,7 +468,8 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 
 	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
 	if(!buffer) {
-		*unit_size = *bitrate = 0;
+		/* silence possibly-uninitialized warnings */
+		*rate = *unit_size = *bitrate = 0;
 		return NULL;
 	}
 
@@ -566,9 +567,9 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 */
 
 	if(pad_state->need_new_segment) {
-		if(element->last_new_segment) {
-			gst_event_ref(element->last_new_segment);
-			if(!gst_pad_push_event(pad, element->last_new_segment))
+		if(element->last_new_segment_event) {
+			gst_event_ref(element->last_new_segment_event);
+			if(!gst_pad_push_event(pad, element->last_new_segment_event))
 				GST_ERROR_OBJECT(pad, "failed to push newsegment");
 		}
 		pad_state->need_new_segment = FALSE;
@@ -617,6 +618,18 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
  */
 
 
+static void gst_event_parse_new_segment_segment(GstEvent *event, GstSegment *segment)
+{
+	gboolean update;
+	gdouble rate, applied_rate;
+	GstFormat format;
+	gint64 start, stop, position;
+
+	gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
+	gst_segment_set_newsegment_full(segment, update, rate, applied_rate, format, start, stop, position);
+}
+
+
 static void forward_sink_event(gpointer object, gpointer data)
 {
 	GstPad *pad = GST_PAD(object);
@@ -641,16 +654,17 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		if(element->last_new_segment)
-			gst_event_unref(element->last_new_segment);
+		if(element->last_new_segment_event)
+			gst_event_unref(element->last_new_segment_event);
 		gst_event_ref(event);
-		element->last_new_segment = event;
+		element->last_new_segment_event = event;
+		gst_event_parse_new_segment_segment(event, &element->segment);
 		break;
 
 	case GST_EVENT_EOS:
-		if(element->last_new_segment)
-			gst_event_unref(element->last_new_segment);
-		element->last_new_segment = NULL;
+		if(element->last_new_segment_event)
+			gst_event_unref(element->last_new_segment_event);
+		element->last_new_segment_event = NULL;
 		break;
 
 	default:
@@ -1254,9 +1268,9 @@ static void finalize(GObject * object)
 {
 	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 
-	if(element->last_new_segment)
-		gst_event_unref(element->last_new_segment);
-	element->last_new_segment = NULL;
+	if(element->last_new_segment_event)
+		gst_event_unref(element->last_new_segment_event);
+	element->last_new_segment_event = NULL;
 	g_hash_table_unref(element->channel_list);
 	element->channel_list = NULL;
 	gst_tag_list_free(element->tag_list);
@@ -1495,7 +1509,7 @@ static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element, GstFram
 	gst_object_unref(pad);
 
 	/* internal data */
-	element->last_new_segment = NULL;
+	element->last_new_segment_event = NULL;
 	element->channel_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	element->tag_list = gst_tag_list_new();
 	element->frame_format_version = DEFAULT_FRAME_FORMAT_VERSION;

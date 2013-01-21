@@ -55,7 +55,8 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
-	GstEvent *last_new_segment;
+	GstEvent *last_new_segment_event;
+	GstSegment segment;	/* undefined if last_new_segment_event is NULL */
 
 	gboolean do_file_checksum;
 	gboolean skip_bad_files;
