@@ -141,7 +141,7 @@ if options.injections is not None:
 try:
 	outpath = instrument+"-"+options.output_channel_name
 	os.mkdir(outpath)
-except:
+except OSError:
 	pass
 pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=instrument, duration = options.duration)
 
