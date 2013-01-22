@@ -27,3 +27,6 @@ while true ; do
 	gstlal_inspiral_marginalize_likelihood --verbose --ignore-missing --output ${OUTPUT}.next.gz $(grep -s -h likelihood.xml ${REGPATH}/*registry*.txt) || break
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
 done
+
+# If this program ends its an error, always - then condor will restart it
+exit 1
