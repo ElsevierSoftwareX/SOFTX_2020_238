@@ -937,16 +937,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 * and push out source pad,
 					 * checking for disconts and
 					 * recording state for next time.
-					 *
-					 * NOTE:  there are no known
-					 * examples of frames with more
-					 * than 1 vect per adc, but the
-					 * spec allows it so we'd better
-					 * expect it just in case.
 					 */
 
-					for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+					if(vects.size()) {
+						for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+							result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+							if(result != GST_FLOW_OK) {
+								gst_object_unref(srcpad);
+								srcpad = NULL;
+								GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+								goto done;
+							}
+						}
+					} else {
+						result = push_heart_beat(srcpad, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
 							srcpad = NULL;
@@ -1006,15 +1010,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * convert FrVects to GstBuffers and push
 				 * out source pad, checking for disconts
 				 * and recording state for next time.
-				 *
-				 * NOTE:  there are no known examples of
-				 * frames with more than 1 vect per proc,
-				 * but the spec allows it so we'd better
-				 * expect it just in case.
 				 */
 
-				for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-					result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+				if(vects.size()) {
+					for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+						if(result != GST_FLOW_OK) {
+							gst_object_unref(srcpad);
+							srcpad = NULL;
+							GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+							goto done;
+						}
+					}
+				} else {
+					result = push_heart_beat(srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
@@ -1066,15 +1075,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * convert FrVect to a GstBuffer and push
 				 * out source pad, checking for disconts
 				 * and recording state for next time.
-				 *
-				 * NOTE:  there are no known examples of
-				 * frames with more than 1 vect per sim,
-				 * but the spec allows it so we'd better
-				 * expect it just in case.
 				 */
 
-				for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-					result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+				if(vects.size()) {
+					for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+						if(result != GST_FLOW_OK) {
+							gst_object_unref(srcpad);
+							srcpad = NULL;
+							GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+							goto done;
+						}
+					}
+				} else {
+					result = push_heart_beat(srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
