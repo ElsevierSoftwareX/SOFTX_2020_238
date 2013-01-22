@@ -103,9 +103,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
 
 	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
-	if(data->eos || data->segment.format == GST_FORMAT_UNDEFINED)
+	if(data->eos || data->segment.format == GST_FORMAT_UNDEFINED) {
+		gst_buffer_unref(buffer);
 		result = GST_FLOW_UNEXPECTED;
-	else
+	} else
 		result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
 
 	return result;
