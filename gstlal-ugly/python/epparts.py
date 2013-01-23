@@ -56,9 +56,13 @@ from glue.ligolw import array
 from glue.ligolw import param
 from glue.ligolw import lsctables
 from glue.ligolw import table
+
+class ContentHandler(ligolw.LIGOLWContentHandler): 
+	pass 
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
+
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
@@ -456,7 +460,7 @@ class EPHandler( Handler ):
 
 			# Reload the document to convert the SnglBurst type to rows
 			tmpfile.seek(0)
-			output, mdhash = utils.load_fileobj(tmpfile)
+			output, mdhash = utils.load_fileobj(tmpfile, contenthandler=ContentHandler)
 			ligolw_bucluster.add_ms_columns( output )
 			tmpfile.close()
 
@@ -506,6 +510,7 @@ class EPHandler( Handler ):
 			LIGOTimeGPS( self.time_since_dump ), 
 			LIGOTimeGPS( self.stop )
 		)
+		print >>sys.stderr, "req seg: %s" % str(requested_segment)
 
 		# If we include start up time, indicate it in the search summary
 		self.whiten_seg = segment( 
@@ -516,6 +521,7 @@ class EPHandler( Handler ):
 		analysis_segment = ep.determine_segment_with_whitening( 
 			requested_segment, self.whiten_seg 
 		)
+		print >>sys.stderr, "ana seg: %s" % str(analysis_segment)
 
 		process = self.make_process_tables( None, output )
 
@@ -575,7 +581,22 @@ class EPHandler( Handler ):
 
 		if self.output_cache_name is not None:	
 			self.lock.acquire()
-			self.output_cache.tofile( file(self.output_cache_name, "a") )
+			# This is to ensure that multiple *processes* don't
+			# write to the file simulateanously, and thereby
+			# invalidating the cache
+			counter, lockf = 100, None
+			while counter > 100:
+				try:
+					lockf = os.open( self.output_cache_name + ".lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY )
+					break
+				except OSError:
+					counter -= 1
+
+			if lockf is not None:
+				self.output_cache.tofile( file(self.output_cache_name, "a") )
+				os.close(lockf)
+				os.remove( self.output_cache_name + ".lock" )
+				
 			self.lock.release()
 
 		# Keeping statistics about event rates
