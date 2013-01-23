@@ -21,8 +21,8 @@ OUTPUT=$2
 
 
 while true ; do
-	echo "...sleeping for 3600 seconds..."
-	sleep 3600 # 1 hour
+	echo "...sleeping for 60 seconds..."
+	sleep 60 # 1 minute
 	cp ${OUTPUT} ${OUTPUT}.next.gz
 	gstlal_inspiral_marginalize_likelihood --verbose --ignore-missing --output ${OUTPUT}.next.gz $(grep -s -h likelihood.xml ${REGPATH}/*registry*.txt) || break
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
