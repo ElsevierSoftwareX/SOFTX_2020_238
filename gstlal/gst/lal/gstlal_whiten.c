@@ -468,8 +468,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 
 	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
-		/* FIXME:  use XLALPSDRegressorGetNSamples() to get ->n_samples */
-		if(!element->psd_regressor->n_samples) {
+		if(!XLALPSDRegressorGetNSamples(element->psd_regressor)) {
 			/*
 			 * No data for the average yet, fake a PSD with
 			 * current frequency series.
@@ -717,15 +716,13 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 			 */
 
 			if(!block_contains_gaps) {
-				/* FIXME:  use * XLALPSDRegressorGetNSamples() */
-				guint n_samples_before = element->psd_regressor->n_samples;
+				guint n_samples_before = XLALPSDRegressorGetNSamples(element->psd_regressor);
 				if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 					XLALClearErrno();
 					return GST_FLOW_ERROR;
 				}
-				/* FIXME:  use * XLALPSDRegressorGetNSamples() */
-				if(n_samples_before != element->psd_regressor->n_samples)
+				if(n_samples_before != XLALPSDRegressorGetNSamples(element->psd_regressor))
 					g_object_notify(G_OBJECT(element), "n-samples");
 			}
 
@@ -1427,8 +1424,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_N_SAMPLES:
-		/* FIXME:  use XLALPSDRegressorGetNSamples() when available */
-		g_value_set_uint(value, element->psd_regressor->n_samples);
+		g_value_set_uint(value, XLALPSDRegressorGetNSamples(element->psd_regressor));
 		break;
 
 	case ARG_DELTA_F:
