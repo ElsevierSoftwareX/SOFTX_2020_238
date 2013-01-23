@@ -75,6 +75,7 @@
 #include <gstaudioadapter.h>
 #include <gstlal_tags.h>
 #include <gstlal_whiten.h>
+#include <gstlal_debug.h>
 
 
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
@@ -594,6 +595,7 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	else
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
+	GST_INFO_OBJECT(element, "%s%s output buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, is_gap ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", buf, GST_BUFFER_BOUNDARIES_ARGS(buf));
 }
 
 
