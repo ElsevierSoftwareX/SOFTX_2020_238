@@ -138,7 +138,6 @@ if options.write_pipeline is not None:
 	demux.connect("pad-added", write_graph)
 
 # Set up the PSL and ODC state vector branches
-#psl = pipeparts.mkqueue(pipeline, None, max_size_time = gst.SECOND * 100)
 psl = pipeparts.mkqueue(pipeline, None)
 odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
 
@@ -151,14 +150,14 @@ pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_chan
 #
 
 odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = 0x1, status_out = 0x7)
-odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
+odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
+
+# This is the branch that gets converted to the DQ vector
+odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevectortee)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
-odctagstr = "units=strain,channel-name=%s:LLD-DQ_VECTOR_TEST,instrument=%s" % (instrument, instrument)
+odctagstr = "channel-name=%s:LLD-DQ_VECTOR,instrument=%s" % (instrument, instrument)
 odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
-
-# Tee of the ODC state vector
-odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 #
 # RECOLORING BRANCH
@@ -167,7 +166,9 @@ odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 # Use the ODC state vector to gate the PSL
 odccontrol = pipeparts.mkqueue(pipeline, odcstatevectortee)
 odccontrol = pipeparts.mkstatevector(pipeline, odccontrol, required_on = 0x3)
-psl = pipeparts.mkgate(pipeline, pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False), threshold = 1, default_state = False, control =  odccontrol)
+
+psl = pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False)
+psl = pipeparts.mkgate(pipeline, psl, threshold = 1, default_state = False, control =  odccontrol)
 
 # Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
 psl = pipeparts.mkaudioconvert(pipeline, psl)
@@ -176,8 +177,6 @@ psl = pipeparts.mkprogressreport(pipeline, psl, "progress_src_%s" % instrument)
 # Whiten the PSL
 rates = sr
 quality = 9
-psl = pipeparts.mkresample(pipeline, psl, quality = quality)
-psl = pipeparts.mkcapsfilter(pipeline, psl, "audio/x-raw-float, rate=%d" % rates)
 psl = pipeparts.mkchecktimestamps(pipeline, psl, "%s_timestamps_%d_hoft" % (instrument, rates))
 psl = pipeparts.mkreblock(pipeline, psl, block_duration = gst.SECOND)
 psl = pipeparts.mkwhiten(pipeline, psl, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
@@ -195,6 +194,10 @@ else:
 	psl.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
 psl = pipeparts.mkchecktimestamps(pipeline, psl, "%s_timestamps_%d_whitehoft" % (instrument, rates))	
 
+# Resample the whitened PSL to match the sample rate of the reocloring PSD provided
+psl = pipeparts.mkresample(pipeline, psl, quality = quality)
+psl = pipeparts.mkcapsfilter(pipeline, psl, "audio/x-raw-float, rate=%d" % rates)
+
 # Recolor kernel
 max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
 # Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
@@ -207,9 +210,10 @@ psl = pipeparts.mkfirbank(pipeline, psl, latency = latency, fir_matrix = [fir_ma
 
 # Put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line
-tagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
-psl = pipeparts.mktaginject(pipeline, psl, tagstr)
 psltee = pipeparts.mktee(pipeline, psl)
+
+tagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
+psl = pipeparts.mktaginject(pipeline, psltee, tagstr)
 
 """
 FIXME: This part of the pipeline does not work currently
@@ -225,20 +229,20 @@ htdqbit = pipeparts.mkaudioundersample(pipeline, htdqbit)
 #htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=1")
 htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=2")
 htdqbit = pipeparts.mkchecktimestamps(pipeline, htdqbit)
-"""
 
 #
 # COMBINE ODC VECTOR WITH H(t)-OK BIT
 #
 
-#dqvector = gst.element_factory_make("lal_adder")
-#dqvector.set_property("sync", True)
-#pipeline.add(dqvector)
-#pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12).link(dqvector)
-#pipeparts.mkqueue(pipeline, htdqbit).link(dqvector)
+dqvector = gst.element_factory_make("lal_adder")
+dqvector.set_property("sync", True)
+pipeline.add(dqvector)
+pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12).link(dqvector)
+pipeparts.mkqueue(pipeline, htdqbit).link(dqvector)
+"""
 
-dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 12), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, psltee))
-dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True)
+dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 12), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, psltee), attack_length = -300, hold_length = -1)
+dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -255,7 +259,7 @@ if options.frames_per_file is not None:
 dqvector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR" % instrument))
 
 # Link fake strain (recolored PSL) to the muxer
-pipeparts.mkqueue(pipeline, psltee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
+pipeparts.mkqueue(pipeline, psl, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
