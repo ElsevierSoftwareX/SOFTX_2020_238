@@ -89,11 +89,22 @@ static const LIGOTimeGPS GPS_ZERO = {0, 0};
  */
 
 
-GST_BOILERPLATE(
+#define GST_CAT_DEFAULT gstlal_whiten_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_whiten", 0, "lal_whiten element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALWhiten,
 	gstlal_whiten,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 
