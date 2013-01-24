@@ -27,6 +27,9 @@ from glue.ligolw.utils import process
 from pylal.antenna import response
 import sys
 
+def uniform_dec(num):
+	return (numpy.pi / 2.) - numpy.arccos(2 * random.random_sample(num) - 1)
+
 def uniform_theta(num):
 	return numpy.arccos(2 * random.random_sample(num) - 1)
 
@@ -68,7 +71,7 @@ class source(object):
 	def uniform_sky(self):
 		expnum = self.expnum
 		ra = uniform_phi(expnum)
-		dec = uniform_theta(expnum)
+		dec = uniform_dec(expnum)
 		pol = uniform_phi(expnum)
 		inc = uniform_theta(expnum)
 		phase = uniform_phi(expnum)
