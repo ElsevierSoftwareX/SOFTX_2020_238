@@ -21,16 +21,13 @@ from gstlal import reference_psd
 import pylal
 from gstlal import simplehandler
 from gstlal import datasource
-from gstlal import multirate_datasource
 from optparse import OptionParser, Option
-from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from pylal.datatypes import LIGOTimeGPS
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -68,9 +65,7 @@ datasource.append_options(parser)
 parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
 parser.add_option("--reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
-#parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
-parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
@@ -93,9 +88,6 @@ gw_data_source = datasource.GWDataSourceInfo(options)
 
 # Assume instrument is the first (only) key of the channel dict
 instrument = gw_data_source.channel_dict.keys()[0]
-
-# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica (I think this is cut off...)
-state_vector_on_bits, state_vector_off_bits = gw_data_source.state_vector_on_off_bits[instrument]
 
 #
 # read psd file
@@ -121,7 +113,7 @@ handler = simplehandler.Handler(mainloop, pipeline)
 #                                                                                                  ->               
 #                                                                           /                                          \
 #                                                       -> ODC DQ vector ->                                              -> muxer -> shmsink (or multifilesink)
-#                                                     /                     \                                          /
+#                                                     /                     \                                           /
 # (FIXME) construct the pipeline shmsrc -> demuxer ->                         -> gate -> whiten -> firbank (recolor) ->     
 #                                                     \                     /
 #						        ->      PSL      ->          
@@ -167,7 +159,6 @@ odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
 odccontrol = pipeparts.mkqueue(pipeline, odcstatevectortee)
 odccontrol = pipeparts.mkstatevector(pipeline, odccontrol, required_on = 0x3)
 
-psl = pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False)
 psl = pipeparts.mkgate(pipeline, psl, threshold = 1, default_state = False, control =  odccontrol)
 
 # Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
@@ -177,6 +168,9 @@ psl = pipeparts.mkprogressreport(pipeline, psl, "progress_src_%s" % instrument)
 # Whiten the PSL
 rates = sr
 quality = 9
+psl = pipeparts.mkresample(pipeline, psl, quality = quality)
+psl = pipeparts.mkcapsfilter(pipeline, psl, "audio/x-raw-float, rate=%d" % rates)
+psl = pipeparts.mkaudiorate(pipeline, psl, skip_to_first = True, silent = False) # This audiorate works around a bug in the resampler
 psl = pipeparts.mkchecktimestamps(pipeline, psl, "%s_timestamps_%d_hoft" % (instrument, rates))
 psl = pipeparts.mkreblock(pipeline, psl, block_duration = gst.SECOND)
 psl = pipeparts.mkwhiten(pipeline, psl, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
@@ -194,24 +188,17 @@ else:
 	psl.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
 psl = pipeparts.mkchecktimestamps(pipeline, psl, "%s_timestamps_%d_whitehoft" % (instrument, rates))	
 
-# Resample the whitened PSL to match the sample rate of the reocloring PSD provided
-psl = pipeparts.mkresample(pipeline, psl, quality = quality)
-psl = pipeparts.mkcapsfilter(pipeline, psl, "audio/x-raw-float, rate=%d" % rates)
-
 # Recolor kernel
 max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
 # Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
 rpsd.data = 1. / rpsd.data[:max_sample]
-
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 # Add latency to fix the time stamps
 latency -= 2# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
 psl = pipeparts.mkfirbank(pipeline, psl, latency = latency, fir_matrix = [fir_matrix], block_stride = sr)
-
 # Put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line
-psltee = pipeparts.mktee(pipeline, psl)
-
+psltee = pipeparts.mktee(pipeline, psl) # tee off to gate the DQ vector (temporary)
 tagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
 psl = pipeparts.mktaginject(pipeline, psltee, tagstr)
 
