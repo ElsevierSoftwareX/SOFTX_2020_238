@@ -17,8 +17,8 @@ Build-Depends:
  fakeroot,
  pkg-config,
  libxml2-dev,
- gstlal-dev (>= 0.5.0),
- gstlal-ugly-dev (>= 0.4.0)
+ gstlal-dev (>= 0.5.2),
+ gstlal-ugly-dev (>= 0.4.2)
 
 Package: gstlal-inspiral
 Architecture: any
@@ -36,8 +36,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalinspiral (>= 1.4.1),
  libgsl0ldbl (>= 1.9),
  libxml2,
- gstlal (>= 0.5.0),
- gstlal-ugly (>= 0.4.0)
+ gstlal (>= 0.5.2),
+ gstlal-ugly (>= 0.4.2)
 Description: GStreamer for GW data analysis (inspiral parts)
  This package provides a variety of gstreamer elements for
  gravitational-wave data analysis and some libraries to help write such
@@ -58,8 +58,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  python-glue (>= 1.42),
  libgsl0-dev (>= 1.9),
  gstlal-inspiral (= ${binary:Version}),
- gstlal-dev (>= 0.5.0),
- gstlal-ugly-dev (>= 0.4.0)
+ gstlal-dev (>= 0.5.2),
+ gstlal-ugly-dev (>= 0.4.2)
 Description: Files and documentation needed for compiling gstlal-inspiral based plugins and programs.
  This package contains the files needed for building gstlal-inspiral based
  plugins and programs.

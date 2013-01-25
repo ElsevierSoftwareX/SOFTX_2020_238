@@ -1,3 +1,9 @@
+gstlal (0.5.2-1) unstable; urgency=low
+
+  * New version 0.5.2
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Fri, 25 Jan 2013 14:14:49 -0500
+
 gstlal (0.5.1-1) unstable; urgency=low
 
   * New version 0.5.1

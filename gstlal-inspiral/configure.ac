@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-inspiral],[0.1.1],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal-inspiral])
+AC_INIT([gstlal-inspiral],[0.1.2],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal-inspiral])
 AC_COPYRIGHT([Copyright (C) 2008--2012 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -232,7 +232,7 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-PKG_CHECK_MODULES([GSTLAL], [gstlal >= 0.3.0])
+PKG_CHECK_MODULES([GSTLAL], [gstlal >= 0.5.2])
 AC_SUBST([GSTLAL_CFLAGS])
 AC_SUBST([GSTLAL_LIBS])
 
