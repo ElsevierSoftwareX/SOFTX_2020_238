@@ -1,7 +1,7 @@
 /*
  * gds lvshm (LIGO-Virgo Shared Memory) sink element
  *
- * Copyright (C) 2011  Kipp Cannon
+ * Copyright (C) 2012,2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -162,7 +162,6 @@ static void get_times(GstBaseSink *sink, GstBuffer *buffer, GstClockTime *start,
 /*
  * start()
  */
-
 
 
 static gboolean start(GstBaseSink *sink)
@@ -394,7 +393,32 @@ static void finalize(GObject *object)
 
 static void gds_lvshmsink_base_init(gpointer klass)
 {
+}
+
+
+/*
+ * Class init function.  See
+ *
+ * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ */
+
+
+static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	gstbasesink_class->get_times = GST_DEBUG_FUNCPTR(get_times);
+	gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
+	gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
+
+	G_PARAM_SPEC_UINT(g_object_class_find_property(gobject_class, "blocksize"))->default_value = DEFAULT_BLOCKSIZE;
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -416,26 +440,6 @@ static void gds_lvshmsink_base_init(gpointer klass)
 			)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	G_PARAM_SPEC_UINT(g_object_class_find_property(gobject_class, "blocksize"))->default_value = DEFAULT_BLOCKSIZE;
 
 	g_object_class_install_property(
 		gobject_class,
@@ -493,15 +497,6 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
-
-	/*
-	 * GstBaseSink method overrides
-	 */
-
-	gstbasesink_class->get_times = GST_DEBUG_FUNCPTR(get_times);
-	gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
-	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
-	gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
 }
 
 
