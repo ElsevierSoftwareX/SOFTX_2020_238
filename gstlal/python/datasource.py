@@ -42,6 +42,7 @@ from gstlal import pipeparts
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw import utils
 from glue.ligolw import ligolw
+from glue.ligolw import lsctables
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 
@@ -129,11 +130,17 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 
 	return onstr, offstr
 
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(ContentHandler)
 
 #
 # Class to hold the data associated with data sources
 #
 
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(ContentHandler)
 
 class GWDataSourceInfo(object):
 
@@ -171,7 +178,7 @@ class GWDataSourceInfo(object):
 
 		# Parse the frame segments if they exist
 		if options.frame_segments_file is not None:
-			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
+			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 		else:
 			self.frame_segments = dict([(instrument, None) for instrument in self.channel_dict])
 
