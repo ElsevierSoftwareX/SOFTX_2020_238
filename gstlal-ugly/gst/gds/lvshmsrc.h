@@ -85,7 +85,7 @@ typedef struct {
 	pthread_t create_thread;
 	GMutex *create_thread_lock;
 	gboolean need_new_segment;
-	GstClockTime last_timestamp;
+	GstClockTime next_timestamp;
 
 	/*
 	 * LVSHM interface

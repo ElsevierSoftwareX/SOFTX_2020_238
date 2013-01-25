@@ -148,7 +148,7 @@ static gboolean start(GstBaseSrc *object)
 	lvshm_setWaitTime(element->handle, element->wait_time);
 
 	element->need_new_segment = TRUE;
-	element->last_timestamp = 0;
+	element->next_timestamp = 0;
 
 	return TRUE;
 }
@@ -282,10 +282,17 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				GST_BUFFER_TIMESTAMP(*buffer) = t_before;
 				if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 					GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+				if(GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+					GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
+					gst_buffer_unref(*buffer);
+					*buffer = NULL;
+					continue;
+				}
 				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
-				GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
+				GST_BUFFER_DURATION(*buffer) = 0;
 				GST_BUFFER_OFFSET(*buffer) = offset;
 				GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+				element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
 				return result;
 			} else {
 				/*
@@ -304,10 +311,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		length = lvshm_dataLength(element->handle);
 		timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
 		GST_LOG_OBJECT(element, "retrieved %u byte shared-memory buffer %p for GPS %" GST_TIME_SECONDS_FORMAT, length, data, GST_TIME_SECONDS_ARGS(timestamp));
-		if(timestamp >= element->last_timestamp) {
-			element->last_timestamp = timestamp;
+		if(timestamp >= element->next_timestamp)
 			break;
-		}
 		GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
 		lvshm_releaseDataBuffer(element->handle);
 	}
@@ -335,12 +340,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 	memcpy(GST_BUFFER_DATA(*buffer), data, length);
 	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
-	GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
+	GST_BUFFER_DURATION(*buffer) = 4 * GST_SECOND;	/* FIXME:  we need to know this! */
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
 
 	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
-	element->min_latency = element->max_latency /*- GST_BUFFER_DURATION(*buffer)*/; 	/* FIXME:  duration is not set */
+	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
 
 	/*
 	 * adjust segment
