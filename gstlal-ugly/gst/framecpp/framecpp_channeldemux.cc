@@ -804,7 +804,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			verifier.BufferSize(GST_BUFFER_SIZE(inbuf));
 			verifier.UseMemoryMappedIO(false);
-			verifier.CheckDataValid(false);
+			verifier.CheckDataValid(false);	/* FIXME:  what's this? */
 			verifier.Expandability(false);
 			verifier.MustHaveEOFChecksum(true);
 			verifier.Strict(false);
@@ -939,7 +939,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 * recording state for next time.
 					 */
 
-					if(vects.size()) {
+					/* FIXME:  what about checking "dataValid" vect in the aux list? */
+					if((*current)->GetDataValid() == 0 && vects.size()) {
 						for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 							result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
 							if(result != GST_FLOW_OK) {
@@ -950,6 +951,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 							}
 						}
 					} else {
+						if((*current)->GetDataValid() != 0)
+							GST_DEBUG_OBJECT(element, "FrAdcData invalid (dataValid=0x%04x)", (*current)->GetDataValid());
+						if(!vects.size())
+							GST_DEBUG_OBJECT(element, "no FrVects");
+						GST_DEBUG_OBJECT(element, "pushing 0-length heart-beat buffer");
 						result = push_heart_beat(srcpad, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
@@ -1012,6 +1018,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * and recording state for next time.
 				 */
 
+				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
@@ -1023,6 +1030,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						}
 					}
 				} else {
+					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
 					result = push_heart_beat(srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
@@ -1077,6 +1085,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * and recording state for next time.
 				 */
 
+				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
@@ -1088,6 +1097,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						}
 					}
 				} else {
+					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
 					result = push_heart_beat(srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
