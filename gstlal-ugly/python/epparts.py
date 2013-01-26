@@ -207,6 +207,8 @@ class EPHandler( Handler ):
 			self.seglist["state"].append(
 				segment( self.current_segment[0], LIGOTimeGPS(timestamp / 1e9) )
 			)
+			# Make it very clear we don't have a segment currently
+			self.current_segment = None
 			if self.verbose:
 				print >>sys.stderr, "Ending segment #%d: %s" % (len(self.seglist["state"]), str(self.seglist["state"][-1]))
 		else:
@@ -539,6 +541,8 @@ class EPHandler( Handler ):
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
 			self.seglist["state"].append( cur_seg )
+			# TODO: send the new time to handle_segment instead
+			self.current_segment = segment( cur_seg[1], PosInfinity )
 
 		# Write segments
 		llwseg = ligolw_segments.LigolwSegments( output )
