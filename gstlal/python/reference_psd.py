@@ -471,6 +471,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd):
 
 	return kernel, latency, sample_rate
 
+
 def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_kernel):
 	"""
 	Compute the minimum-phase response filter (zero latency) associated with a
