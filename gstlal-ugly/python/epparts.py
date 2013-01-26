@@ -589,12 +589,12 @@ class EPHandler( Handler ):
 			# write to the file simulateanously, and thereby
 			# invalidating the cache
 			counter, lockf = 100, None
-			while counter > 100:
+			while counter > 0:
 				try:
 					lockf = os.open( self.output_cache_name + ".lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY )
-					break
 				except OSError:
 					counter -= 1
+				break
 
 			if lockf is not None:
 				self.output_cache.tofile( file(self.output_cache_name, "a") )
