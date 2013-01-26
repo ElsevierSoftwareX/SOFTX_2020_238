@@ -273,10 +273,10 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 	assert len(Sn) > 0
 
 	if f_max is None:
-		f_max = psd.f0 + (len(Sn) - 1) + psd.deltaF
-	elif f_max > psd.f0 + (len(Sn) - 1) + psd.deltaF:
+		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
+	elif f_max > psd.f0 + (len(Sn) - 1) * psd.deltaF:
 		warnings.warn("f_max clipped to Nyquist frequency", UserWarning)
-		f_max = psd.f0 + (len(Sn) - 1) + psd.deltaF
+		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
 
 	#
 	# clip to ISCO.  see (4) in arXiv:1003.2481
