@@ -72,7 +72,7 @@ if options.output_channel_name is not None:
 	head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,units=strain" % (instrument,options.output_channel_name))
 
 if options.output_path is not None:
-	outpath = options.output_path + "/" + instrument
+	outpath = os.path.join(options.output_path,instrument)
 else:
 	outpath = instrument
 
