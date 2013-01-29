@@ -72,6 +72,7 @@ parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = 
 parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, will be written to file.")
+parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the required-on bits for the ODC to DQ vector conversion.")
 
 #
 # Parse options
@@ -141,7 +142,7 @@ pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_chan
 # ODC STATE VECTOR BRANCH
 #
 
-odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = 0x1, status_out = 0x7)
+odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x7)
 odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 # This is the branch that gets converted to the DQ vector
