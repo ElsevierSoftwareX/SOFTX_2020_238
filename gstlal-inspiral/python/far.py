@@ -44,6 +44,7 @@ import copy
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import ilwd
+from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils
@@ -54,6 +55,13 @@ from pylal import ligolw_burca_tailor
 from pylal import ligolw_burca2
 from pylal import llwapp
 from pylal import rate
+
+
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(DefaultContentHandler)
+ligolw_param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
 
 
 #
@@ -560,9 +568,9 @@ class DistributionsStats(object):
 		return self, process_id
 
 	@classmethod
-	def from_filenames(cls, filenames, verbose = False):
+	def from_filenames(cls, filenames, contenthandler = DefaultContentHandler, verbose = False):
 		self = cls()
-		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", verbose = verbose)
+		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", contenthandler = contenthandler, verbose = verbose)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
 		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
@@ -689,10 +697,10 @@ class LocalRankingData(object):
 		return self, process_id
 
 	@classmethod
-	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", verbose = False):
-		self, process_id = LocalRankingData.from_xml(utils.load_filename(filenames[0], verbose = verbose), name = name)
+	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", contenthandler = DefaultContentHandler, verbose = False):
+		self, process_id = LocalRankingData.from_xml(utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
 		for f in filenames[1:]:
-			s, p = LocalRankingData.from_xml(utils.load_filename(f, verbose = verbose), name = name)
+			s, p = LocalRankingData.from_xml(utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
 			self += s
 		return self
 		
