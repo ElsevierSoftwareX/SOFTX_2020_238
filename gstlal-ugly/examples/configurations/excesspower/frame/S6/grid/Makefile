@@ -14,23 +14,23 @@ h1.cache:
 h1_darm_ep: h1.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames \
 		--initialization-file gstlal_excesspower_darm.ini  \
-		--channel-width 32  \
-		--gps-start ${ep_start} \
-		--gps-end ${ep_end} \
+		--frame-cache h1.cache \
+		--gps-start-time ${ep_start} \
+		--gps-end-time ${ep_end} \
 		--stream-tfmap "darm" \
 		--sample-rate 2048
 
 h1_omc_ep: h1.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_darm.ini  \
-		--channel-width 32  \
-		--gps-start ${ep_start} \
-		--gps-end ${ep_end} \
-		--channel-name "OMC-QPD3_SUM_IN1_DAQ" \
+		--frame-cache h1.cache \
+		--gps-start-time ${ep_start} \
+		--gps-end-time ${ep_end} \
+		--channel-name H1=OMC-QPD3_SUM_IN1_DAQ \
 		--stream-tfmap "omc" \
 		--sample-rate 2048
 

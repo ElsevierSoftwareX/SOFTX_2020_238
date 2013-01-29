@@ -4,7 +4,7 @@ end=$(shell python -c "print ${etime} + 50")
 output=$(shell pwd)/triggers/
 
 triggers: v1_ep h1_ep l1_ep
-	ligolw_add *triggers* -o HLV_triggers_all.xml.gz
+	ligolw_add H1-*.xml L1-*.xml V1-*.xml -o HLV_triggers_all.xml.gz
 	rm *.xml
 
 package: ${output}
@@ -15,9 +15,7 @@ package: ${output}
 caches: l1.cache h1.cache v1.cache
 
 cluster: 
-	find ${output} -name "*.xml" | lalapps_path2cache -a > triggers.cache
-	ligolw_bucluster --verbose --cluster-algorithm excesspower --program gstlal_excesspower -i triggers.cache
-	rm triggers.cache
+	ligolw_bucluster --verbose --cluster-algorithm excesspower --program gstlal_excesspower HLV_triggers_all.xml.gz
 
 l1.cache:
 	ligo_data_find -o L -t L1_LDAS_C02_L2 -s ${start} -e ${end}  -u file -l > l1.cache
@@ -30,28 +28,34 @@ v1_ep: v1.cache
 	# Note the *required* "site" entry in the ini file for Virgo
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_v1_hoft.ini  \
-		--gps-start ${start}  \
-		--gps-end ${end}  \
+		--frame-cache v1.cache \
+		--gps-start-time ${start}  \
+		--gps-end-time ${end}  \
+		--channel-name V1=h_16384Hz \
 		--sample-rate 2048  
 
 h1_ep: h1.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames \
 		--initialization-file gstlal_excesspower_h1_hoft.ini  \
-		--gps-start ${start}  \
-		--gps-end ${end}  \
+		--frame-cache h1.cache \
+		--gps-start-time ${start}  \
+		--gps-end-time ${end}  \
+		--channel-name H1=LDAS-STRAIN \
 		--sample-rate 2048  
 
 l1_ep: l1.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames \
 		--initialization-file gstlal_excesspower_l1_hoft.ini  \
-		--gps-start ${start}  \
-		--gps-end ${end}  \
+		--frame-cache l1.cache \
+		--gps-start-time ${start}  \
+		--gps-end-time ${end}  \
+		--channel-name L1=LDAS-STRAIN \
 		--sample-rate 2048  
 
 clean:

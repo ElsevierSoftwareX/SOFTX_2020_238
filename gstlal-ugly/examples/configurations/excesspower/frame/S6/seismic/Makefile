@@ -14,45 +14,48 @@ H1_seismic.cache:
 h1_darm_ep: H1_seismic.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames \
 		--initialization-file gstlal_excesspower_darm.ini  \
-		--channel-width 32  \
-		--gps-start 956498544 \
-		--gps-end 956498744 \
+		--frame-cache H1_seismic.cache \
+		--gps-start-time 956498544 \
+		--gps-end-time 956498744 \
+		--channel-name H1=LSC-DARM_ERR \
 		--stream-tfmap "darm" \
 		--sample-rate 2048
 
 h1_accel_ep: H1_seismic.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames \
 		--initialization-file gstlal_excesspower_accel.ini  \
-		--channel-width 32  \
-		--gps-start 956498544 \
-		--gps-end 956498744 \
+		--frame-cache H1_seismic.cache \
+		--gps-start-time 956498544 \
+		--gps-end-time 956498744 \
+		--channel-name H1=PEM-ISCT10_ACCY \
 		--stream-tfmap "accel" \
 		--sample-rate 1024
 
 h1_seis_lvea_ep: H1_seismic.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_seismic.ini  \
-		--channel-width 32  \
-		--gps-start 956497644 \
-		--gps-end 956499644 \
+		--frame-cache H1_seismic.cache \
+		--gps-start-time 956497644 \
+		--gps-end-time 956499644 \
+		--channel-name H1=PEM-LVEA_SEISZ \
 		--stream-tfmap "lvea_seisz" \
 		--sample-rate 256
 
 h1_seis_ey_ep: H1_seismic.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_seismic.ini  \
-		--channel-width 32  \
-		--gps-start 956497644 \
-		--gps-end 956499644 \
-		--channel-name "PEM-EY_SEISZ" \
+		--frame-cache H1_seismic.cache \
+		--gps-start-time 956497644 \
+		--gps-end-time 956499644 \
+		--channel-name H1=PEM-EY_SEISZ \
 		--stream-tfmap "lvea_ey" \
 		--sample-rate 256
 

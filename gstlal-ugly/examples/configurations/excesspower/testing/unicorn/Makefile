@@ -43,6 +43,7 @@ unicorns: H_BTLWNB_unicorn_100.xml
 		--channel-name=H1=FAKE-STRAIN \
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
+		--gps-end-time 300 \
 		--data-source AdvLIGO  \
 		--injections H_BTLWNB_unicorn_100.xml \
 		--initialization-file gstlal_excesspower_h1_generic.ini  \
@@ -54,6 +55,7 @@ unicorn_movie: H_BTLWNB_unicorn_100.xml
 		--channel-name=H1=FAKE-STRAIN \
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
+		--gps-end-time 300 \
 		--data-source AdvLIGO  \
 		--stream-tfmap unicorn  \
 		--disable-triggers  \

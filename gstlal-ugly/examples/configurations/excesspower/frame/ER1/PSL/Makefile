@@ -16,64 +16,78 @@ L1_PSL_channels.cache:
 ISS_PDA_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-ISS_PDA_OUT_DQ" \
+		--channel-name L1=PSL-ISS_PDA_OUT_DQ \
 		--sample-rate 4096
 
 ISS_PDB_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-ISS_PDB_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-ISS_PDB_OUT_DQ \
 		--sample-rate 4096
 
 PMC_HV_MON_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-PMC_HV_MON_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-PMC_HV_MON_OUT_DQ \
 		--sample-rate 4096
 
 PMC_MIXER_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-PMC_MIXER_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-PMC_MIXER_OUT_DQ \
 		--sample-rate 4096
 
 FSS_FAST_MON_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-FSS_FAST_MON_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-FSS_FAST_MON_OUT_D \
 		--sample-rate 4096
 
 FSS_MIXER_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-FSS_MIXER_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-FSS_MIXER_OUT_DQ \
 		--sample-rate 4096
 
 FSS_PC_MON_OUT_DQ: L1_PSL_channels.cache
 	gstlal_excesspower  \
 		--verbose  \
-		--data-source gwffile  \
+		--data-source frames  \
 		--initialization-file gstlal_excesspower_psl.ini  \
-		--channel-width 32  \
-		--channel-name "PSL-FSS_PC_MON_OUT_DQ" \
+		--frame-cache L1_PSL_channels.cache \
+		--gps-start-time 1017000000 \
+		--gps-end-time 1017001000 \
+		--channel-name L1=PSL-FSS_PC_MON_OUT_DQ \
 		--sample-rate 4096
 
 clean:
