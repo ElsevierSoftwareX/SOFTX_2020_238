@@ -6,7 +6,7 @@ Release: 1.lscsoft
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.1.4 fftw >= 3 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= 6.9.0 lalframe >= 1.0.8 lalmetaio >= 1.0.6 lalsimulation >= 0.6.0 lalburst >= 1.1.5 lalinspiral >= 1.4.1 gsl orc >= 0.4.16
+Requires: python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 fftw >= 3 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= 6.9.0 lalframe >= 1.0.8 lalmetaio >= 1.0.6 lalsimulation >= 0.6.0 lalburst >= 1.1.5 lalinspiral >= 1.4.1 gsl orc >= 0.4.16
 BuildRequires: python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.9.0 lalframe-devel >= 1.0.8 lalmetaio-devel >= 1.0.6 lalsimulation-devel >= 0.6.0 lalburst-devel >= 1.1.5 lalinspiral-devel >= 1.4.1 gsl-devel orc >= 0.4.16
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html

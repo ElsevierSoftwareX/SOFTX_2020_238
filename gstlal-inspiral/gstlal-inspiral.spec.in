@@ -6,7 +6,7 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= 0.5.2 gstlal-ugly >= 0.4.2 python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.1.4 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= 6.9.0 lalmetaio >= 1.0.6 lalinspiral >= 1.4.1 gsl
+Requires: gstlal >= 0.5.2 gstlal-ugly >= 0.4.2 python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= 6.9.0 lalmetaio >= 1.0.6 lalinspiral >= 1.4.1 gsl
 BuildRequires: gstlal-devel >= 0.5.2 python-devel >= 2.6 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.9.0 lalmetaio-devel >= 1.0.6 lalinspiral-devel >= 1.4.1 gsl-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
