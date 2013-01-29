@@ -317,7 +317,7 @@ AS_IF(
 	[test "x$with_gds" != "xno"],
 	[PKG_CHECK_MODULES(
 		[gds],
-		[gds >= 2.15.6],
+		[gds >= 2.16.5],
 		[HAVE_GDS="yes"
 		AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])
 		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
