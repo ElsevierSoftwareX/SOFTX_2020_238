@@ -223,7 +223,10 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalmetaio >= 1.0.6 lalsupport lalinspiral >= 1.4.1])
+AC_SUBST([MIN_LAL_VERSION], [6.9.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.0.6])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.4.1])
+PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

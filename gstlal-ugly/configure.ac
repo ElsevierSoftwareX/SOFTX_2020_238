@@ -346,7 +346,11 @@ AS_IF(
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal >= 6.9.0 lalframe >= 1.0.8 lalmetaio >= 1.0.6 lalsupport lalburst >= 1.1.5])
+AC_SUBST([MIN_LAL_VERSION], [6.9.0])
+AC_SUBST([MIN_LALFRAME_VERSION], [1.0.8])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.0.6])
+AC_SUBST([MIN_LALBURST_VERSION], [1.1.5])
+PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalframe >= ${MIN_LALFRAME_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalburst >= ${MIN_LALBURST_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
