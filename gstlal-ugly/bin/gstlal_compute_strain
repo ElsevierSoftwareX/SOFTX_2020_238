@@ -125,7 +125,7 @@ if not options.verbose:
 	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
 
 # FIXME make wait_time adjustable through web interface or command line or both
-demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0), do_file_checksum = True, skip_bad_files = True)
+demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0, assumed_duration = 1), do_file_checksum = True, skip_bad_files = True)
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
 	demux.connect("pad-added", write_graph)
