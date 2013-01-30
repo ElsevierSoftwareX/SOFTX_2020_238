@@ -27,7 +27,7 @@ Build-Depends:
  libxml2-dev,
  liborc-0.4-0 (>= 1:0.4.16),
  liborc-0.4-dev (>= 1:0.4.16),
- gstlal-dev (>= 0.5.2)
+ gstlal-dev (>= @MIN_GSTLAL_VERSION@)
 
 Package: gstlal-ugly
 Architecture: any
@@ -53,7 +53,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  nds2-client,
  liborc-0.4-0 (>= 1:0.4.16),
  libxml2,
- gstlal (>= 0.5.2)
+ gstlal (>= @MIN_GSTLAL_VERSION@)
 Description: GStreamer for GW data analysis (in-development parts)
  This package provides a variety of GStreamer elements for
  gravitational-wave data analysis and some libraries to help write such
@@ -67,7 +67,7 @@ Package: gstlal-ugly-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  gstlal-ugly (= ${binary:Version}),
- gstlal-dev (>= 0.5.2),
+ gstlal-dev (>= @MIN_GSTLAL_VERSION@),
  libfftw3-dev,
  libgsl0-dev,
  libreadline-dev,
