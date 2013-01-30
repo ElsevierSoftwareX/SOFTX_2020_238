@@ -14,6 +14,7 @@ AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
 	gstlal.spec \
+	debian/control \
 	debian/Makefile \
 	lib/gstlal.pc \
 	lib/Makefile \
