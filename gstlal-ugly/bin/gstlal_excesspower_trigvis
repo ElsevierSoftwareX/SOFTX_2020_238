@@ -310,13 +310,14 @@ for channel, selected_events in event_iter:
 		if( opts.plotting_type in ["tile", "both"] ):
 			tiles.append( tile )
 		if( opts.plotting_type in ["marker", "both"] ):
-			markers.append( (start, event.central_freq, event.snr) )
+			markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
 		snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
 			loudest = [event.snr, float(event.get_peak()), event.central_freq]
 		elif( loudest[0] < event.confidence and opts.mark_loudest == 'conf' ):
 			loudest = [event.confidence, event.get_peak(), event.central_freq]
 
+	markers = numpy.array(markers).T
 	print ""
 
 	title = "channel: %s, inst %s" % (channel, inst)
@@ -335,9 +336,9 @@ for channel, selected_events in event_iter:
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
 	if( opts.plotting_type == "marker" ):
-		ax.cplot( markers ) # with circles
+		ax.scatter( markers[0], markers[1], c=markers[2] ) # with circles
 	elif( opts.plotting_type == "both" ):
-		ax.plot( markers ) # with crosses
+		ax.scatter( markers[0], markers[1], marker='+' ) # with crosses
 
 	lastwrite = viewseg[0]
 	# FIXME: This is empircal at best.
