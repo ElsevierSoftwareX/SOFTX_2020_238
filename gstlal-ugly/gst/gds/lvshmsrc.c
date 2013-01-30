@@ -99,7 +99,7 @@ GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, a
 #define DEFAULT_SHM_NAME NULL
 #define DEFAULT_MASK -1
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
-#define DEFAULT_ASSUMED_DURATION 1
+#define DEFAULT_ASSUMED_DURATION 4
 
 
 /*
