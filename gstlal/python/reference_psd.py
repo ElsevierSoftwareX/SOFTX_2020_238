@@ -251,19 +251,29 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 #
 
 
-def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
+def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = None):
 	"""
-	Compute horizon distance.  m1 and m2 are in solar mass units.
-	f_min and f_max are in Hz.  psd is a REAL8FrequencySeries object
-	containing the strain spectral density function in the LAL
-	normalization convention.  The return value is in Mpc.
+	Compute horizon distance, the distance at which an optimally
+	oriented inspiral would be seen to have the given SNR.  m1 and m2
+	are in solar mass units.  f_min and f_max are in Hz.  psd is a
+	REAL8FrequencySeries object containing the strain spectral density
+	function in the LAL normalization convention.  The return value is
+	in Mpc.
 
-	See (6) in arXiv:1003.2481, but note the factor 2 difference
-	between the PSD normalization used there, and what is used here.
+	The horizon distance is determined using an integral whose upper
+	bound is the smaller of f_max (if supplied), the highest frequency
+	in the PSD, or the ISCO frequency.
 
-	If f_max is not supplied, it defaults to the highest frequency
-	available in the PSD.  In both cases, whether f_max is supplied or
-	a default value is assumed, f_max is clipped to the ISCO frequency.
+	If inspiral_spectrum is not None, it should be a two-element list.
+	The first element will be replaced with an array of frequency
+	values, and the second element will be replaced with an array of
+	spectrum values giving the amplitude of an inspiral spectrum with
+	the given SNR.  The spectrum is normalized so that the SNR is
+
+	SNR^2 = \int (inspiral_spectrum / psd) df
+
+	That is, the ratio of the inspiral spectrum to the PSD gives the
+	density of SNR^2.
 	"""
 	#
 	# obtain PSD data, set default f_max if not supplied
@@ -290,7 +300,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 
 	#
 	# convert f_min and f_max to indexes and extract data vectors for
-	# integral
+	# SNR integral
 	#
 
 	k_min = int(round((f_min - psd.f0) / psd.deltaF))
@@ -300,15 +310,34 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 	Sn = Sn[k_min : k_max + 1]
 
 	#
-	# compute and return horizon distance in megaparsecs
+	# |h(f)|^2 for source at D = 1 m.  see (5) in arXiv:1003.2481
 	#
 
 	mu = (m1 * m2) / (m1 + m2)
-	norm = 2. * lalconstants.LAL_MRSUN_SI * math.sqrt(5. * mu / 96.) * ((m1 + m2) / math.pi**2)**(1. / 3.) / lalconstants.LAL_MTSUN_SI**(1. / 6)
+	mchirp = mu**(3. / 5.) * (m1 + m2)**(2. / 5.)
 
-	integral = 4 * (f**(-7. / 3.) / Sn).sum() * psd.deltaF
+	inspiral = (5 * math.pi / (24 * lalconstants.LAL_C_SI**3)) * (lalconstants.LAL_G_SI * mchirp * lalconstants.LAL_MSUN_SI)**(5. / 3.) * (math.pi * f)**(-7. / 3.)
 
-	return norm * math.sqrt(integral) / snr / (1e6 * lalconstants.LAL_PC_SI)
+	#
+	# SNR for source at D = 1 m <--> D in m for source w/ SNR = 1.  see
+	# (3) in arXiv:1003.2481
+	#
+
+	D_at_snr_1 = math.sqrt(4 * (inspiral / Sn).sum() * psd.deltaF)
+
+	#
+	# scale inspiral spectrum by distance to achieve desired SNR
+	#
+
+	if inspiral_spectrum is not None:
+		inspiral_spectrum[0] = f
+		inspiral_spectrum[1] = 4 * inspiral / (D_at_snr_1 / snr)**2
+
+	#
+	# D in Mpc for source with desired SNR
+	#
+
+	return D_at_snr_1 / snr / (1e6 * lalconstants.LAL_PC_SI)
 
 
 def psd_to_fir_kernel(psd):
