@@ -62,6 +62,7 @@ parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a 
 parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
+parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 
 opts, args = parser.parse_args()
@@ -97,6 +98,7 @@ if( opts.input_cache is not None ):
 	args += Cache.fromfile( open(opts.input_cache) ).pfnlist()
 
 events = lsctables.SnglBurstTable()
+
 analyzed_segments = segments.segmentlistdict()
 
 search_map = defaultdict(list)
@@ -117,12 +119,14 @@ for arg in args:
 
 	# Map events to their searches, and ensure they are in the proper "out" segment
 	for pid, eventlist in event_map.iteritems():
+		# FIXME: Clustering will sometimes take an event past the out segment and this will discard it
 		try:
 			search_map[pid]
 		except ValueError:
 			continue # not mapped to a search
-		for ss in search_map[pid]:
-			all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
+		#for ss in search_map[pid]:
+			#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
+		all_events += eventlist
 
 	events += all_events 
 
@@ -191,6 +195,15 @@ for key, segl in segs.iteritems():
 		segs[key] = segs[key] & segments.segmentlist([viewseg])
 	except ValueError:
 		segs[key] = segments.segmentlistdict()
+
+print "Summary of segments included:"
+for k, v in segs.iteritems():
+	print "%s: %f" % (k, abs(v))
+if opts.coalesce_segments:
+	segs.coalesce()
+	print "Summary of segments included, after coalesce:"
+	for k, v in segs.iteritems():
+		print "%s: %f" % (k, abs(v))
 
 # FIXME: Return to this when the ifos situation is sorted out
 analyzed_segments.coalesce()
@@ -281,7 +294,7 @@ for channel, selected_events in event_iter:
 		sys.stdout.write( statstr )
 		statlen = len(statstr)
 		# 1. plot tile 
-		start = event.get_peak()# + event.start_time_ns*1e-9
+		start = event.get_start()# + event.start_time_ns*1e-9
 		tile = matplotlib.patches.Rectangle(
 			# lower left point
 			( start,
