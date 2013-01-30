@@ -69,6 +69,7 @@ typedef struct {
 	char *name;
 	lvshm_mask mask;
 	double wait_time;
+	guint assumed_duration;
 
 	/*
 	 * latency

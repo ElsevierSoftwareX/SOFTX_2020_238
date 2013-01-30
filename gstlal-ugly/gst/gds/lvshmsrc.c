@@ -99,6 +99,7 @@ GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, a
 #define DEFAULT_SHM_NAME NULL
 #define DEFAULT_MASK -1
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
+#define DEFAULT_ASSUMED_DURATION 1
 
 
 /*
@@ -340,7 +341,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 	memcpy(GST_BUFFER_DATA(*buffer), data, length);
 	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
-	GST_BUFFER_DURATION(*buffer) = 4 * GST_SECOND;	/* FIXME:  we need to know this! */
+	GST_BUFFER_DURATION(*buffer) = element->assumed_duration * GST_SECOND;	/* FIXME:  we need to know this! */
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
@@ -409,7 +410,8 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 enum property {
 	ARG_SHM_NAME = 1,
 	ARG_MASK,
-	ARG_WAIT_TIME
+	ARG_WAIT_TIME,
+	ARG_ASSUMED_DURATION
 };
 
 
@@ -433,6 +435,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->wait_time = g_value_get_double(value);
 		if(element->handle)
 			lvshm_setWaitTime(element->handle, element->wait_time);
+		break;
+
+	case ARG_ASSUMED_DURATION:
+		element->assumed_duration = g_value_get_uint(value);
 		break;
 
 	default:
@@ -461,6 +467,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_WAIT_TIME:
 		g_value_set_double(value, element->wait_time);
+		break;
+
+	case ARG_ASSUMED_DURATION:
+		g_value_set_uint(value, element->assumed_duration);
 		break;
 
 	default:
@@ -583,6 +593,17 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			"Wait time",
 			"Wait time in seconds (<0 = wait indefinitely, 0 = never wait).",
 			-G_MAXDOUBLE, G_MAXDOUBLE, DEFAULT_WAIT_TIME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ASSUMED_DURATION,
+		g_param_spec_uint(
+			"assumed-duration",
+			"Assumed duration",
+			"Assume all files span this much time in seconds.",
+			1, G_MAXUINT, DEFAULT_ASSUMED_DURATION,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
