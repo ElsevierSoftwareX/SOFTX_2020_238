@@ -273,6 +273,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
+AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.24])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -281,7 +282,7 @@ AC_ARG_WITH([framecpp],
 AS_IF([test "x$with_framecpp" != "xno"], [
 	PKG_CHECK_MODULES(
 		[framecpp],
-		[framecpp >= 1.19.24],
+		[framecpp >= ${MIN_FRAMECPP_VERSION}],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found: $framecpp_PKG_ERRORS])
 		HAVE_FRAMECPP="no"]
