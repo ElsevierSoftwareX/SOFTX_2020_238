@@ -309,6 +309,7 @@ AC_SUBST([framecpp_VERSION])
 #
 
 
+AC_SUBST([MIN_GDS_VERSION], [2.16.5])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -319,7 +320,7 @@ AS_IF(
 	[test "x$with_gds" != "xno"],
 	[PKG_CHECK_MODULES(
 		[gds],
-		[gds >= 2.16.5],
+		[gds >= ${MIN_GDS_VERSION}],
 		[HAVE_GDS="yes"
 		AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])
 		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
