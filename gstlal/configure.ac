@@ -254,7 +254,8 @@ AC_SUBST([GSL_LIBS])
 #
 
 
-PKG_CHECK_MODULES([ORC], [orc-0.4], , [
+AC_SUBST([MIN_ORC_VERSION], [0.4.16])
+PKG_CHECK_MODULES([ORC], [orc-0.4 >= ${MIN_ORC_VERSION}], , [
 	AC_MSG_WARN([ORC not found;  using potentially slower code paths.])
 	ORC_CFLAGS="-DDISABLE_ORC"
 ])
