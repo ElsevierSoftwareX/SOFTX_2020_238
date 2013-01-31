@@ -1,7 +1,7 @@
 /*
  * An element to chop up audio buffers into smaller pieces.
  *
- * Copyright (C) 2009,2011  Kipp Cannon
+ * Copyright (C) 2009,2011,2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +48,23 @@
 
 
 #include <gstlal_reblock.h>
+
+
+/*
+ * ============================================================================
+ *
+ *                           Gstreamer Boilerplate
+ *
+ * ============================================================================
+ */
+
+
+GST_BOILERPLATE(
+	GSTLALReblock,
+	gstlal_reblock,
+	GstElement,
+	GST_TYPE_ELEMENT
+);
 
 
 /*
@@ -300,10 +317,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		srcbuf = gst_buffer_create_sub(sinkbuf, offset * element->unit_size, block_length * element->unit_size);
 		if(G_UNLIKELY(!srcbuf)) {
-			gst_buffer_unref(sinkbuf);
 			GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 			result = GST_FLOW_ERROR;
-			goto done;
+			break;
 		}
 
 		/*
@@ -341,9 +357,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
-			gst_buffer_unref(sinkbuf);
 			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
-			goto done;
+			break;
 		}
 	}
 	gst_buffer_unref(sinkbuf);
@@ -368,15 +383,7 @@ done:
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
- * Instance finalize function.  See ???
+ * Instance finalize function.
  */
 
 
@@ -394,9 +401,17 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * Base init function.
+ */
+
+
+static void gstlal_reblock_base_init(gpointer klass)
+{
+}
+
+
+/*
+ * Class init function.
  */
 
 
@@ -419,9 +434,14 @@ static void finalize(GObject *object)
 	"width = (int) {64, 128}"
 
 
-static void base_init(gpointer class)
+static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -449,25 +469,6 @@ static void base_init(gpointer class)
 			gst_caps_from_string(CAPS)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer class, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -484,15 +485,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * Instance init function.
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_reblock_init(GSTLALReblock *element, GSTLALReblockClass *Klass)
 {
-	GSTLALReblock *element = GSTLAL_REBLOCK(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -514,28 +512,4 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	element->unit_size = 0;
-}
-
-
-/*
- * gstlal_reblock_get_type().
- */
-
-
-GType gstlal_reblock_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALReblockClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALReblock),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALReblock", &info, 0);
-	}
-
-	return type;
 }
