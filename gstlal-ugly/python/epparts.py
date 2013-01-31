@@ -226,7 +226,7 @@ class EPHandler( Handler ):
 			print >>sys.stderr, "Got latency message, ignoring for now."
 			return
 		elif message.structure is None: 
-			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored."
+			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored." % str(message.type)
 			return
 
 		# TODO: Move this to PSD difference checker
