@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+
+from optparse import OptionParser
+
+parser = OptionParser()
+parser.add_option("--timestamp-fuzz", metavar = "nanoseconds", type = "float", default = 1.0)
+parser.add_option("--sample-fuzz", metavar = "fraction", type = "float", default = 1e-15)
+options, (filename1, filename2) = parser.parse_args()
+
+for line1, line2 in zip(open(filename1), open(filename2)):
+	line1 = map(float, line1.strip().split())
+	line2 = map(float, line2.strip().split())
+
+	assert abs(line1[0] - line2[0]) <= options.timestamp_fuzz
+	for val1, val2 in zip(line1[1:], line2[1:]):
+		assert abs(val1 - val2) / max(val1, val2) <= options.sample_fuzz
