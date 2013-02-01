@@ -13,6 +13,7 @@ autom4te.cache/
 config.log
 config.status
 configure
+*/debian/control
 */gnuscripts/libtool.m4
 */gnuscripts/ltmain.sh
 */gnuscripts/ltoptions.m4
