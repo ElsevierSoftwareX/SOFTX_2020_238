@@ -62,10 +62,24 @@ parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a 
 parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
+parser.add_option("-X", "--overlay-summary", action="append", help="Parse the search summaries for information provided by excesspower and mark their times in the plot. Valid choices are 'spectrum_message', 'prebuild', 'postbuild'.")
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
+parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
 
 opts, args = parser.parse_args()
+
+logaxes = opts.logscale or []
+for ax in logaxes:
+	if ax not in ['x', 'y', 'c']:
+		print >>sys.stderr, "Invalid log axis choice %s." % ax
+		exit()
+
+plotsum = opts.overlay_summary or []
+for info in plotsum:
+	if info not in ['spectrum_message', 'prebuild', 'postbuild']:
+		print >>sys.stderr, "Invalid summary info choice %s." % ax
+		exit()
 
 plotting_types = ["tile", "marker", "both"]
 if( opts.plotting_type not in plotting_types ):
@@ -103,6 +117,7 @@ analyzed_segments = segments.segmentlistdict()
 
 search_map = defaultdict(list)
 event_map = defaultdict(list)
+summary_info = defaultdict(list)
 for arg in args:
 	xmldoc = utils.load_filename( arg )
 	all_events = []
@@ -116,6 +131,11 @@ for arg in args:
 		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
 		for ss in tbl:
 			search_map[ss.process_id].append( ss )
+			if len(plotsum) == 0:
+				continue
+			for typetime in ss.comment.split(","):
+				type, time =  typetime.split(":")
+				summary_info[type].append( float(time) )
 
 	# Map events to their searches, and ensure they are in the proper "out" segment
 	for pid, eventlist in event_map.iteritems():
@@ -259,10 +279,15 @@ for channel, selected_events in event_iter:
 
 	# what's our snr scale
 	if( len(selected_events) > 0 ):
-		snr_norm = matplotlib.colors.Normalize( 
-			selected_events[0].snr, selected_events[-1].snr
-			#numpy.log10(selected_events[0].snr), numpy.log10(selected_events[-1].snr)
-		)
+		if 'c' in logaxes:
+			snr_norm = matplotlib.colors.Normalize( 
+				numpy.log10(selected_events[0].snr), 
+				numpy.log10(selected_events[-1].snr)
+			)
+		else:
+			snr_norm = matplotlib.colors.Normalize( 
+				selected_events[0].snr, selected_events[-1].snr
+			)
 	else:
 		snr_norm = matplotlib.colors.Normalize( 0, 1 )
 
@@ -311,7 +336,10 @@ for channel, selected_events in event_iter:
 			tiles.append( tile )
 		if( opts.plotting_type in ["marker", "both"] ):
 			markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
-		snrs.append( event.snr )
+		if 'c' in logaxes:
+			snrs.append( numpy.log10(event.snr) )
+		else:
+			snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
 			loudest = [event.snr, float(event.get_peak()), event.central_freq]
 		elif( loudest[0] < event.confidence and opts.mark_loudest == 'conf' ):
@@ -418,11 +446,50 @@ for channel, selected_events in event_iter:
 			ax.text( lastwrite, 0.95*high_frequency, name, rotation = "vertical" )
 			ax.add_patch( tile )
 
+	for (type, timelist) in summary_info.iteritems():
+		# TODO: Divide this up by channel
+		for time in timelist:
+			# Indicate the name and if the segment extent continues to left or right
+			if time not in viewseg : continue
+			if type not in plotsum : continue
+			pyplot.axvline(time, color="r")
+
+			# If multiple segment names would be written to the same area
+			# move the text over. FIXME: This is not the definitive way to do 
+			# this it's a hack at best
+			if lastwrite == time:
+				lastwrite += tsize*t
+				t+=1
+			else:
+				lastwrite = time
+				t = 0
+			ax.text( lastwrite, 0.95*high_frequency, type, rotation = "vertical" )
+
+	if 'x' in logaxes and 'y' in logaxes:
+		ax.loglog()
+	elif 'x' in logaxes:
+		ax.semilogx()
+	elif 'y' in logaxes:
+		ax.semilogy()
+
 	# Add colorbar
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes( "right", size="5%", pad=0.1 )
-	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
-	cbl.set_label( "Tile Energy" )
+	"""
+	if 'c' in logaxes:
+		formatter = matplotlib.ticker.LogFormatter(10, labelOnlyBase=False)
+		mins, maxs = selected_events[0].snr, selected_events[-1].snr
+		ticks = numpy.logspace(numpy.log10(mins), numpy.log10(maxs), 5, base=10) 
+	else:
+		formatter = None
+		ticks = None
+	"""
+	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	if 'c' in logaxes:
+		cbl.set_label( "log10 Tile Energy" )
+	else:
+		cbl.set_label( "Tile Energy" )
+
 
 	# If requested, make a histogram of the tile energies and compare to
 	# expectation
