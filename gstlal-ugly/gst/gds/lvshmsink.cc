@@ -99,6 +99,7 @@ GType gds_lvshmsink_buffer_mode_get_type(void)
 			{GDS_LVSHMSINK_BUFFER_MODE_0, "GDS_LVSHMSINK_BUFFER_MODE_0", "A buffer is released (moved to free list) any time is not reserved and not in use."},
 			{GDS_LVSHMSINK_BUFFER_MODE_1, "GDS_LVSHMSINK_BUFFER_MODE_1", "A buffer is released after it has been seen by at least one consumer and is no longer reserved or in use."},
 			{GDS_LVSHMSINK_BUFFER_MODE_2, "GDS_LVSHMSINK_BUFFER_MODE_2", "A buffer is not released except if it is unreserved, not in use and needed to fill a producer request."},
+			{GDS_LVSHMSINK_BUFFER_MODE_3, "GDS_LVSHMSINK_BUFFER_MODE_3", "All incoming buffers are reserved for all consumers.  The buffer is entered into the free list after being released by all consumers."},
 			{0, NULL, NULL}
 		};
 
