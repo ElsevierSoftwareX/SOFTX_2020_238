@@ -237,7 +237,7 @@ static gboolean start(GstBaseSrc *basesrc)
 		XLALClearErrno();
 		return FALSE;
 	}
-	GST_DEBUG_OBJECT(element, "loaded '%s': %d items in cache", element->location, element->cache->numFrameFiles);
+	GST_DEBUG_OBJECT(element, "loaded '%s': %d item(s) in cache", element->location, element->cache->numFrameFiles);
 
 	/* sieving also puts the files in time order */
 	cache = XLALFrSieveCache(element->cache, &sieve);
@@ -249,7 +249,7 @@ static gboolean start(GstBaseSrc *basesrc)
 		return FALSE;
 	}
 	element->cache = cache;
-	GST_DEBUG_OBJECT(element, "%d items remain in cache after sieve", element->cache->numFrameFiles);
+	GST_DEBUG_OBJECT(element, "%d item(s) remain in cache after sieve", element->cache->numFrameFiles);
 
 	basesrc->offset = 0;
 	element->index = 0;
