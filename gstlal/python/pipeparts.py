@@ -240,10 +240,10 @@ def mkaudiotestsrc(pipeline, **properties):
 	return elem
 
 
-def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9):
+def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
-	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=%d" % rate), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
