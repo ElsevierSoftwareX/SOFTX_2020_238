@@ -173,14 +173,7 @@ def mkframesink(pipeline, src, **properties):
 def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize = 16384 * 8 * 1, port = 31200):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., LIGO h(t)
-	elem = gst.element_factory_make("ndssrc")
-	elem.set_property("blocksize", blocksize)
-	elem.set_property("port", port)
-	elem.set_property("host", host)
-	elem.set_property("channel-name", "%s:%s" % (instrument, channel_name))
-	elem.set_property("channel-type", channel_type)
-	pipeline.add(elem)
-	return elem
+	return mkgeneric(pipeline, None, "ndssrc", blocksize = blocksize, port = port, host = host, channel_name = "%s:%s" % (instrument, channel_name), channel_type = channel_type)
 
 
 def mkonlinehoftsrc(pipeline, instrument):
