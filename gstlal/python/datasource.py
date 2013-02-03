@@ -26,7 +26,6 @@
 
 import sys
 import optparse
-import math
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -44,7 +43,12 @@ from glue.ligolw import utils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue import segments
-from pylal.datatypes import LIGOTimeGPS
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+
+
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(ContentHandler)
 
 
 #
@@ -130,17 +134,9 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 
 	return onstr, offstr
 
-class ContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(ContentHandler)
-
 #
 # Class to hold the data associated with data sources
 #
-
-class ContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(ContentHandler)
 
 class GWDataSourceInfo(object):
 
