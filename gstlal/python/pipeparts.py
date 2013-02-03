@@ -136,19 +136,14 @@ def mklalcachesrc(pipeline, location, **properties):
 def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, cache_src_regex = None, cache_dsc_regex = None, segment_list = None):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., LIGO h(t)
-	elem = gst.element_factory_make("lal_framesrc")
-	elem.set_property("blocksize", blocksize)
-	elem.set_property("location", location)
-	elem.set_property("instrument", instrument)
-	elem.set_property("channel-name", channel_name)
+	properties = {}
 	if segment_list is not None:
-		elem.set_property("segment-list", segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
+		properties["segment_list"] = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list)
 	if cache_src_regex is not None:
-		elem.set_property("cache-src-regex", cache_src_regex)
+		properties["cache_src_regex"] = cache_src_regex
 	if cache_dsc_regex is not None:
-		elem.set_property("cache-dsc-regex", cache_dsc_regex)
-	pipeline.add(elem)
-	return elem
+		properties["cache_dsc_regex"] = cache_dsc_regex
+	return mkgeneric(pipeline, None, "lal_framesrc", blocksize = blocksize, location = location, instrument = instrument, channel_name = channel_name, **properties)
 
 
 def mklvshmsrc(pipeline, **properties):
