@@ -421,27 +421,17 @@ def mknxydumpsinktee(pipeline, src, *args, **properties):
 
 
 def mkblcbctriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
-	elem = gst.element_factory_make("lal_blcbctriggergen")
-	elem.set_property("bank-filename", template_bank_filename)
-	elem.set_property("snr-thresh", snr_threshold)
-	elem.set_property("sigmasq", sigmasq)
-	pipeline.add(elem)
 	# snr is complex and chisq is real so the correct source and sink
 	# pads will be selected automatically
-	snr.link(elem)
+	elem = mkgeneric(pipeline, snr, "lal_blcbctriggergen", bank_filename = template_bank_filename, snr_thresh = snr_threshold, sigmasq = sigmasq)
 	chisq.link(elem)
 	return elem
 
 
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
-	elem = gst.element_factory_make("lal_triggergen")
-	elem.set_property("bank-filename", template_bank_filename)
-	elem.set_property("snr-thresh", snr_threshold)
-	elem.set_property("sigmasq", sigmasq)
-	pipeline.add(elem)
 	# snr is complex and chisq is real so the correct source and sink
 	# pads will be selected automatically
-	snr.link(elem)
+	elem = mkgeneric(pipeline, snr, "lal_triggergen", bank_filename = template_bank_filename, snr_thresh = snr_threshold, sigmasq = sigmasq)
 	chisq.link(elem)
 	return elem
 
