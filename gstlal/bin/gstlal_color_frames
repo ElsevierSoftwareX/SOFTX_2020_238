@@ -63,10 +63,10 @@ sr = options.sample_rate
 rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 
 #
-# create input segment for the seek
+# create seek event for segment
 #
 
-seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, LIGOTimeGPS(options.gps_start_time).ns(), gst.SEEK_TYPE_SET, LIGOTimeGPS(options.gps_end_time).ns())
 
 #
 # Setup the pipeline
@@ -75,13 +75,12 @@ seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.
 pipeline = gst.Pipeline(sys.argv[0])
 mainloop = gobject.MainLoop()
 handler = simplehandler.Handler(mainloop, pipeline)
-seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 
 #
 # Construct a white noise source
 #
 
-head = pipeparts.mkfakesrcseeked(pipeline, options.instrument, options.channel_name, seekevent, blocksize = 16384 * 8 * 16, volume = 1, is_live = False, wave = 9, rate = sr)
+head = pipeparts.mkfakesrc(pipeline, options.instrument, options.channel_name, blocksize = 16384 * 8 * 16, volume = 1, is_live = False, wave = 9, rate = sr)
 head = pipeparts.mkprogressreport(pipeline, head, "frames")
 
 #
@@ -117,7 +116,8 @@ pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, fram
 # Run it
 #
 
-pipeline.set_state(gst.STATE_PAUSED)
+for elem in pipeline.iterate_sources():
+	assert elem.send_event(seekevent)
 pipeline.set_state(gst.STATE_PLAYING)
 
 mainloop.run()
