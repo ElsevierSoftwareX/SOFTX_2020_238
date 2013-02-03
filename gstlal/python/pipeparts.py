@@ -231,36 +231,30 @@ def mkshift(pipeline, src, **properties):
 
 
 def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
-	head = gst.element_factory_make("lal_fakeligosrc")
+	properties = {"blocksize": blocksize}
 	if instrument is not None:
-		head.set_property("instrument", instrument)
+		properties["instrument"] = instrument
 	if channel_name is not None:
-		head.set_property("channel-name", channel_name)
-	head.set_property("blocksize", blocksize)
-	pipeline.add(head)
-	return head
+		properties["channel_name"] = channel_name
+	return mkgeneric(pipeline, None, "lal_fakeligosrc", **properties)
 
 
 def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
-	head = gst.element_factory_make("lal_fakeadvligosrc")
+	properties = {"blocksize": blocksize}
 	if instrument is not None:
-		head.set_property("instrument", instrument)
+		properties["instrument"] = instrument
 	if channel_name is not None:
-		head.set_property("channel-name", channel_name)
-	head.set_property("blocksize", blocksize)
-	pipeline.add(head)
-	return head
+		properties["channel_name"] = channel_name
+	return mkgeneric(pipeline, None, "lal_fakeadvligosrc", **properties)
 
 
 def mkfakeadvvirgosrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
-	head = gst.element_factory_make("lal_fakeadvvirgosrc")
+	properties = {"blocksize": blocksize}
 	if instrument is not None:
-		head.set_property("instrument", instrument)
+		properties["instrument"] = instrument
 	if channel_name is not None:
-		head.set_property("channel-name", channel_name)
-	head.set_property("blocksize", blocksize)
-	pipeline.add(head)
-	return head
+		properties["channel_name"] = channel_name
+	return mkgeneric(pipeline, None, "lal_fakeadvvirgosrc", **properties)
 
 
 def mkprogressreport(pipeline, src, name):
