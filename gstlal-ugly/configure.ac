@@ -179,8 +179,8 @@ AS_IF([test "x$with_nds" != "xno"], [
 			AC_MSG_ERROR([Not found!])
 		], [
 			AC_MSG_WARN([Not found!])
-		])]
-	)
+		])
+	])
 ])
 AM_CONDITIONAL([COND_NDS], [test "x${HAVE_NDS}" == "xyes"])
 AC_SUBST([NDS_CFLAGS])
@@ -286,7 +286,8 @@ AS_IF([test "x$with_framecpp" != "xno"], [
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found: $framecpp_PKG_ERRORS])
 		HAVE_FRAMECPP="no"]
-)], [
+	)
+], [
 	AC_MSG_WARN([check for framecpp disabled])
 	HAVE_FRAMECPP="no"
 ])
@@ -316,9 +317,8 @@ AC_ARG_WITH(
 	[],
 	[with_gds=check]
 )
-AS_IF(
-	[test "x$with_gds" != "xno"],
-	[PKG_CHECK_MODULES(
+AS_IF([test "x$with_gds" != "xno"], [
+	PKG_CHECK_MODULES(
 		[gds],
 		[gds >= ${MIN_GDS_VERSION}],
 		[HAVE_GDS="yes"
@@ -326,21 +326,18 @@ AS_IF(
 		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
 		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
 		HAVE_GDS="no"]
-	)],
-	[AC_MSG_WARN([check for gds disabled])
-	HAVE_GDS="no"]
-)
+	)
+], [
+	AC_MSG_WARN([check for gds disabled])
+	HAVE_GDS="no"
+])
 AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
 AC_SUBST([gds_CFLAGS])
 AC_SUBST([gds_LIBS])
-AS_IF(
-	[test "x${HAVE_GDS}" == "xyes"], [
-	framexmit_CFLAGS="-I/usr/include/gds"
-	framexmit_LIBS="-lframexmit -lpthread -lsockutil"
-	AC_SUBST([framexmit_CFLAGS])
-	AC_SUBST([framexmit_LIBS])
-	]
-)
+AS_IF([test "x${HAVE_GDS}" == "xyes"], [
+	AC_SUBST([framexmit_CFLAGS], ["-I/usr/include/gds"])
+	AC_SUBST([framexmit_LIBS], ["-lframexmit -lpthread -lsockutil"])
+])
 
 
 #
@@ -402,18 +399,20 @@ AC_ARG_WITH(
 	[],
 	[with_cuda=no]
 )
-AS_IF(
-	[test "x$with_cuda" != "xno"],
-	[AS_IF([test "x$build_cpu" = "xx86_64"], [CLIBS="lib64"], [CLIBS="lib"])
-	 AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
-	 AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
-	 AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
-	 HAVE_CUDA="yes"
-	],
-	[AC_MSG_WARN([check for cuda disabled])
+AS_IF([test "x$with_cuda" != "xno"], [
+	AS_IF([test "x$build_cpu" = "xx86_64"], [
+		CLIBS="lib64"
+	], [
+		CLIBS="lib"
+	])
+	AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
+	AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
+	AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
+	HAVE_CUDA="yes"
+], [
+	AC_MSG_WARN([check for cuda disabled])
 	HAVE_CUDA="no"
-	]
-)
+])
 AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
 AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
 
