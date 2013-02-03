@@ -291,8 +291,8 @@ def mkresample(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audioresample", **properties)
 
 
-def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **kwargs):
-	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **kwargs)
+def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **properties):
+	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **properties)
 
 
 def mktee(pipeline, src):
@@ -424,9 +424,9 @@ def mknxydumpsink(pipeline, src, filename, segment = None):
 	mkfilesink(pipeline, elem, filename)
 
 
-def mknxydumpsinktee(pipeline, src, *args, **kwargs):
+def mknxydumpsinktee(pipeline, src, *args, **properties):
 	t = mktee(pipeline, src)
-	mknxydumpsink(pipeline, mkqueue(pipeline, t), *args, **kwargs)
+	mknxydumpsink(pipeline, mkqueue(pipeline, t), *args, **properties)
 	return t
 
 
