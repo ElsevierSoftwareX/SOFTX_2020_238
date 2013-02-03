@@ -197,33 +197,10 @@ def read_psd(filename, verbose = False):
 	return read_psd_xmldoc(utils.load_filename(filename, verbose = verbose))
 
 
-try:
-	lalseries.make_psd_xmldoc
-	def make_psd_xmldoc(psddict, xmldoc = None):
-		import warnings
-		warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
-		return lalseries.make_psd_xmldoc(psddict, xmldoc = xmldoc)
-except AttributeError:
-	def make_psd_xmldoc(psddict, xmldoc = None):
-		"""
-		Construct an XML document tree representation of a dictionary of
-		frequency series objects containing PSDs.  See also
-		read_psd_xmldoc() for a function to parse the resulting XML
-		documents.
-
-		If xmldoc is None (the default), then a new XML document is created
-		and the PSD dictionary added to it.  If xmldoc is not None then the
-		PSD dictionary is appended to the children of that element inside a
-		new LIGO_LW element.
-		"""
-		if xmldoc is None:
-			xmldoc = ligolw.Document()
-		lw = xmldoc.appendChild(ligolw.LIGO_LW())
-		for instrument, psd in psddict.items():
-			fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
-			if instrument is not None:
-				fs.appendChild(param.from_pyvalue(u"instrument", instrument))
-		return xmldoc
+def make_psd_xmldoc(psddict, xmldoc = None):
+	import warnings
+	warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
+	return lalseries.make_psd_xmldoc(psddict, xmldoc = xmldoc)
 
 
 def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
