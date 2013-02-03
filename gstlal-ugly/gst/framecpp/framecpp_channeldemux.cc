@@ -46,6 +46,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -251,6 +252,57 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
 	*bitrate = *rate * 1 * width;	/* 1 channel */
 
 	return caps;
+}
+
+
+/*
+ * local version of gst_audio_buffer_clip()
+ * FIXME:  remove this when the stock version doesn't segfault
+ */
+
+
+static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, GstSegment *segment, gint rate, gint unit_size)
+{
+	guint offset, offset_end;
+
+	g_assert_cmpuint((GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) * unit_size, ==, GST_BUFFER_SIZE(buffer));
+
+	if(GST_CLOCK_TIME_IS_VALID(segment->start)) {
+		if(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer) <= (guint64) segment->start) {
+			gst_buffer_unref(buffer);
+			return NULL;
+		}
+		offset = gst_util_uint64_scale_int_round(MAX(GST_BUFFER_TIMESTAMP(buffer), (guint64) segment->start) - GST_BUFFER_TIMESTAMP(buffer), rate, GST_SECOND);
+		g_assert_cmpuint(offset, <=, GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
+	} else
+		offset = 0;
+
+	if(GST_CLOCK_TIME_IS_VALID(segment->stop)) {
+		if(GST_BUFFER_TIMESTAMP(buffer) >= (guint64) segment->stop) {
+			gst_buffer_unref(buffer);
+			return NULL;
+		}
+		offset_end = gst_util_uint64_scale_int_round(MIN(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), (guint64) segment->stop) - GST_BUFFER_TIMESTAMP(buffer), rate, GST_SECOND);
+		g_assert_cmpuint(offset_end, <=, GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
+	} else
+		offset_end = GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer);
+
+	g_assert_cmpuint(offset, <=, offset_end);
+
+	if(offset_end - offset != GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) {
+		/* buffer lies partially outside requested segment */
+		GstBuffer *newbuf = gst_buffer_create_sub(buffer, offset * unit_size, (offset_end - offset) * unit_size);
+		gst_buffer_copy_metadata(newbuf, buffer, (GstBufferCopyFlags)( GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS));
+		GST_BUFFER_TIMESTAMP(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
+		GST_BUFFER_DURATION(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset_end, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(newbuf);
+		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buffer) + offset;
+		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(buffer) + offset_end;
+		GST_DEBUG("clipped buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT " to %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer), GST_BUFFER_BOUNDARIES_ARGS(newbuf));
+		gst_buffer_unref(buffer);
+		buffer = newbuf;
+	}
+
+	return buffer;
 }
 
 
@@ -547,22 +599,6 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	}
 
 	/*
-	 * check for disconts
-	 */
-
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
-		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
-		pad_state->need_discont = FALSE;
-	}
-
-	/*
-	 * record state for next time
-	 */
-
-	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
-	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
-
-	/*
 	 * forward most recent new segment event
 	 */
 
@@ -589,6 +625,39 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	}
 
 	/*
+	 * clip buffer to configured segment
+	 */
+
+	if(element->last_new_segment_event && element->segment.format == GST_FORMAT_TIME) {
+#if 0
+		/* FIXME:  this function segfaults sometimes.  my guess is bad rounding because it happens more often for very low sample rates */
+		buffer = gst_audio_buffer_clip(buffer, &element->segment, rate, unit_size);
+#else
+		buffer = my_gst_audio_buffer_clip(buffer, &element->segment, rate, unit_size);
+#endif
+		if(!buffer) {
+			GST_WARNING_OBJECT(pad, "buffer outside of configured segment: dropped");
+			goto done;
+		}
+	}
+
+	/*
+	 * check for disconts
+	 */
+
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+		pad_state->need_discont = FALSE;
+	}
+
+	/*
+	 * record state for next time
+	 */
+
+	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+	/*
 	 * push buffer downstream
 	 */
 
@@ -599,6 +668,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 * done
 	 */
 
+done:
 	gst_object_unref(element);
 	return result;
 }
