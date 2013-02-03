@@ -651,17 +651,9 @@ def mkodctodqv(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_odc_to_dqv", **properties)
 
 def mktcpserversink(pipeline, src, **properties):
-	elem = gst.element_factory_make("tcpserversink")
+	# units_soft_max = 1 GB
 	# FIXME:  are these sensible defaults?
-	elem.set_property("sync", True)
-	elem.set_property("sync-method", "latest-keyframe")
-	elem.set_property("recover-policy", "keyframe")
-	elem.set_property("unit-type", "bytes")
-	elem.set_property("unist-soft-max", 1024**3)	# 1 GB
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	src.link(elem)
+	return mkgeneric(pipeline, src, "tcpserversink", sync = True, sync_method = "latest-keyframe", recover_policy = "keyframe", unit_type = "bytes", units_soft_max = 1024**3, **properties)
 
 
 def audioresample_variance_gain(quality, num, den):
