@@ -294,7 +294,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# strain
 		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_pad("sink"))
-		#strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 		# state vector
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
