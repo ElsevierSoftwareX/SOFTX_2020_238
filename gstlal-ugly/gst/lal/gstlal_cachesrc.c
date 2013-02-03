@@ -346,7 +346,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		element->need_discont = FALSE;
 	}
 
-	GST_DEBUG_OBJECT(element, "pushing '%s' %" GST_BUFFER_BOUNDARIES_FORMAT, path, GST_BUFFER_BOUNDARIES_ARGS(*buf));
+	GST_DEBUG_OBJECT(element, "pushing '%s' spanning %" GST_BUFFER_BOUNDARIES_FORMAT, path, GST_BUFFER_BOUNDARIES_ARGS(*buf));
 
 	element->index++;
 done:
@@ -391,29 +391,25 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 		GstClockTime max = cache_entry_end_time(element, i);
 		if(i)
 			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
-		if((GstClockTime) segment->start < max) {
-			GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
-			if(i != element->index) {
-				basesrc->offset = 0;
-				element->index = i;
-				element->need_discont = TRUE;
-			}
-			if((GstClockTime) segment->start < min)
-				GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " uri starts at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min));
-			goto done;
-		}
+		if(max <= (GstClockTime) segment->start)
+			continue;
+		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
+		if((GstClockTime) segment->start < min)
+			GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " uri starts at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min));
+		goto checkfordiscont;
 	}
 	GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
-	if(i != element->index) {
-		basesrc->offset = 0;
-		element->index = i;
-		element->need_discont = TRUE;
-	}
 
 	/*
 	 * done
 	 */
 
+checkfordiscont:
+	if(i != element->index) {
+		basesrc->offset = 0;
+		element->index = i;
+		element->need_discont = TRUE;
+	}
 done:
 	return success;
 }
