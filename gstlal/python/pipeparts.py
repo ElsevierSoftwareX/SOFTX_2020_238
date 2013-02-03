@@ -233,11 +233,7 @@ def mktaginject(pipeline, src, tags):
 
 
 def mkaudiotestsrc(pipeline, **properties):
-	elem = gst.element_factory_make("audiotestsrc")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	return elem
+	return mkgeneric(pipeline, None, "audiotestsrc", **properties)
 
 
 def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
