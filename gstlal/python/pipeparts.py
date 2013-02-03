@@ -386,16 +386,16 @@ def mktogglecomplex(pipeline, src):
 
 
 def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None, latency = 0, snr_thresh=0):
-	elem = gst.element_factory_make("lal_autochisq")
+	properties = {}
 	if autocorrelation_matrix is not None:
-		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
-		elem.set_property("latency", latency)
-		elem.set_property("snr-thresh", snr_thresh)
+		properties.update({
+			"autocorrelation_matrix": pipeio.repack_complex_array_to_real(autocorrelation_matrix),
+			"latency": latency,
+			"snr_thresh": snr_thresh
+		})
 	if mask_matrix is not None:
-		elem.set_property("autocorrelation-mask-matrix", mask_matrix)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		properties["autocorrelation_mask_matrix"] = mask_matrix
+	return mkgeneric(pipeline, src, "lal_autochisq", **properties)
 
 
 def mkfakesink(pipeline, src):
