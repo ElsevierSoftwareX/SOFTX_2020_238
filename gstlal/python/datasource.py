@@ -237,10 +237,10 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
-def _do_seek(src, seekevent):
+def _do_seek(pipeline, seekevent):
 	# FIXME:  remove.  seek the pipeline instead
 	# DO NOT USE IN NEW CODE!!!!
-	if seekevent is not None:
+	for src in pipeline.iterate_sources():
 		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
 		if not src.send_event(seekevent):
@@ -259,23 +259,25 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 	# First process fake data or frame data
 	if gw_data_source_info.data_source == "white":
-		# seek events have to be given to these since the element returned is a tag inject
-		src = pipeparts.mkfakesrcseeked(pipeline, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.seekevent, blocksize = gw_data_source_info.block_size)
+		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
+		# FIXME:  remove
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "silence":
-		# seek events have to be given to these since the element returned is a tag inject
-		src = pipeparts.mkfakesrcseeked(pipeline, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.seekevent, blocksize = gw_data_source_info.block_size, wave = 4)
+		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
+		# FIXME:  remove
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == 'LIGO':
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 		# FIXME:  remove
-		_do_seek(src, gw_data_source_info.seekevent)
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == 'AdvLIGO':
 		src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 		# FIXME:  remove
-		_do_seek(src, gw_data_source_info.seekevent)
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == 'AdvVirgo':
 		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 		# FIXME:  remove
-		_do_seek(src, gw_data_source_info.seekevent)
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
@@ -283,7 +285,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		else:
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove
-		_do_seek(src, gw_data_source_info.seekevent)
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 	# Next process online data, fake data must be None for this to have gotten this far
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
@@ -377,7 +379,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
 	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
 	# FIXME:  remove
-	_do_seek(segsrc, seekevent)
+	_do_seek(pipeline, seekevent)
 	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
 
 
