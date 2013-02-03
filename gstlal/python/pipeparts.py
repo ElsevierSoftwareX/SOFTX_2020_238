@@ -622,17 +622,16 @@ def mkpeak(pipeline, src, n):
 
 
 def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0, sigmasq = None):
-	elem = gst.element_factory_make("lal_itac")
-	elem.set_property("n", n)
-	elem.set_property("bank-filename", bank)
+	properties = {
+		"n": n,
+		"bank_filename": bank,
+		"snr_thresh": snr_thresh
+	}
 	if autocorrelation_matrix is not None:
-		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
+		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)
 	if sigmasq is not None:
-		elem.set_property("sigmasq", sigmasq)
-	elem.set_property("snr-thresh", snr_thresh)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		properties["sigmasq"] = sigmasq
+	return mkgeneric(pipeline, src, "lal_itac", **properties)
 
 
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
