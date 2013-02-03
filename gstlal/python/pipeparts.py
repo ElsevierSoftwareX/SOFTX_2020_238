@@ -407,15 +407,11 @@ def mkfilesink(pipeline, src, filename):
 
 
 def mknxydumpsink(pipeline, src, filename, segment = None):
-	elem = gst.element_factory_make("lal_nxydump")
 	if segment is not None:
-		if type(segment[0]) is not segments.infinity:
-			elem.set_property("start-time", segment[0].ns())
-		if type(segment[1]) is not segments.infinity:
-			elem.set_property("stop-time", segment[1].ns())
-	pipeline.add(elem)
-	src.link(elem)
-	mkfilesink(pipeline, elem, filename)
+		elem = mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
+	else:
+		elem = mkgeneric(pipeline, src, "lal_nxydump")
+	return mkfilesink(pipeline, elem, filename)
 
 
 def mknxydumpsinktee(pipeline, src, *args, **properties):
