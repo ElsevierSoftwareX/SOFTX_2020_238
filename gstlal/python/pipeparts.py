@@ -123,15 +123,10 @@ def mkhistogram(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_histogramplot")
 
 
-def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):
+def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output = False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
-	elem = gst.element_factory_make("lal_segmentsrc")
-	elem.set_property("blocksize", blocksize)
-	elem.set_property("segment-list", segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
-	elem.set_property("invert-output", invert_output)
-	pipeline.add(elem)
-	return elem
+	return mkgeneric(pipeline, None, "lal_segmentsrc", blocksize = blocksize, segment_list = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list), invert_output = invert_output)
 
 
 def mklalcachesrc(pipeline, location, **properties):
