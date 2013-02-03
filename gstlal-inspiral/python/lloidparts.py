@@ -722,9 +722,6 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
-		# let the frame reader and injection code run in a
-		# different thread than the whitener, etc.,
-		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
 		if veto_segments is not None:
 			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 		else:
@@ -845,9 +842,6 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		print instrument
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
-		# let the frame reader and injection code run in a
-		# different thread than the whitener, etc.,
-		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
 		if veto_segments is not None:
 			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 		else:

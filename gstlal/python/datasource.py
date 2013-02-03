@@ -282,6 +282,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove
 		_do_seek(pipeline, gw_data_source_info.seekevent)
+		# allow frame reading to occur in a diffrent thread
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
 	# Next process online data, fake data must be None for this to have gotten this far
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
@@ -332,7 +334,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME don't hard code the sample rate
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		# 10 minutes of buffering
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
@@ -358,6 +361,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 	if gw_data_source_info.injection_filename is not None:
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
+		# let the injection code run in a different thread than the
+		# whitener, etc.,
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 0)
 
 	#
 	# done
