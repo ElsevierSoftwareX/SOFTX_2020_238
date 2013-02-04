@@ -53,7 +53,7 @@ from collections import deque
 import resource
 
 try:
-	from ligo import gracedb
+	from ligo.gracedb import cli as gracedb
 except ImportError:
 	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
 
