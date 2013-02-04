@@ -6,7 +6,7 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= @MIN_GSTLAL_VERSION@ gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@ python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl
+Requires: gstlal >= @MIN_GSTLAL_VERSION@ gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@ python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl ligo-gracedb >= 1.11
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
