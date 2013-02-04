@@ -27,7 +27,6 @@
 import sys, os
 import numpy
 import threading
-import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -40,8 +39,7 @@ import gst
 
 
 from glue import segments
-
-import pipeio
+from gstlal import pipeio
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
