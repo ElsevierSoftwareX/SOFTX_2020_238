@@ -163,26 +163,10 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	return handler.psd
 
 
-try:
-	lalseries.read_psd_xmldoc
-	def read_psd_xmldoc(xmldoc):
-		import warnings
-		warnings.warn("gstlal.reference_psd.read_psd_xmldoc() is deprecated, use pylal.series.read_psd_xmldoc() instead.", DeprecationWarning)
-		return lalseries.read_psd_xmldoc(xmldoc)
-except AttributeError:
-	def read_psd_xmldoc(xmldoc):
-		"""
-		Parse a dictionary of PSD frequency series objects from an XML
-		document.  See also make_psd_xmldoc() for the construction of XML documents
-		from a dictionary of PSDs.  Interprets an empty freuency series for an
-		instrument as None.
-		"""
-		out = dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
-		# Interpret empty frequency series as None
-		for k in out:
-			if len(out[k].data) == 0:
-				out[k] = None
-		return out
+def read_psd_xmldoc(xmldoc):
+	import warnings
+	warnings.warn("gstlal.reference_psd.read_psd_xmldoc() is deprecated, use pylal.series.read_psd_xmldoc() instead.", DeprecationWarning)
+	return lalseries.read_psd_xmldoc(xmldoc)
 
 
 def read_psd(filename, verbose = False):
