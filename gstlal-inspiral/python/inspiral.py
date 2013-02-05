@@ -827,7 +827,7 @@ class Data(object):
 			if psdmessage is not None:
 				filename = "psd.xml.gz"
 				for gracedb_id in gracedb_ids:
-					resp = gracedb_client.upload(gracedb_id, filename, psdmessage.getvalue(), comment = "strain spectral densities")
+					resp = gracedb_client.upload(gracedb_id, filename, psdmessage.getvalue(), comment = "strain spectral densities", alert = True)
 					if "error" in resp:
 						print >>sys.stderr, "gracedb upload of %s for ID %s failed: %s" % (filename, gracedb_id, resp["error"])
 
