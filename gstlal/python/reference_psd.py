@@ -28,6 +28,7 @@
 
 import math
 import numpy
+import os
 import scipy
 import scipy.fftpack
 from scipy import interpolate
@@ -121,6 +122,31 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	pipeparts.mkfakesink(pipeline, head)
 
 	#
+	# setup signal handler to shutdown pipeline
+	#
+
+	class OneTimeSignalHandler(object):
+		def __init__(self, pipeline):
+			self.pipeline = pipeline
+			self.count = 0
+
+		def __call__(self, signum, frame):
+			self.count += 1
+			if self.count == 1:
+				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+				try:
+					if not self.pipeline.send_event(gst.event_new_eos()):
+						raise Exception("pipeline.send_event(EOS) returned failure")
+				except Exception, e:
+					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+					os._exit(1)
+			else:
+				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+
+	#
 	# process segment
 	#
 
@@ -129,27 +155,6 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	pipeline.set_state(gst.STATE_PLAYING)
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."
-
-	class SigData(object):
-		def __init__(self):
-			self.has_been_signaled = False
-
-	sigdata = SigData()
-
-	def signal_handler(signal, frame, pipeline = pipeline, sigdata = sigdata):
-		if not sigdata.has_been_signaled:
-			print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
-			# override file name with approximate interval
-			bus = pipeline.get_bus()
-			bus.post(gst.message_new_eos(pipeline))
-			sigdata.has_been_signaled = True
-		else:
-			print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
-
-	# this is how the program could stop gracefully
-	signal.signal(signal.SIGINT, signal_handler)
-	signal.signal(signal.SIGTERM, signal_handler)
-
 	mainloop.run()
 
 	#
