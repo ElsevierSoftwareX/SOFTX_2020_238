@@ -176,7 +176,7 @@ def read_psd(filename, verbose = False):
 	"""
 	import warnings
 	warnings.warn("gstlal.reference_psd.read_psd() is deprecated, use pylal.series.read_psd_xmldoc(utils.load_filename()) instead.", DeprecationWarning)
-	return read_psd_xmldoc(utils.load_filename(filename, verbose = verbose))
+	return lalseries.read_psd_xmldoc(utils.load_filename(filename, verbose = verbose))
 
 
 def make_psd_xmldoc(psddict, xmldoc = None):
@@ -190,7 +190,7 @@ def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a Python file object.
 	"""
-	utils.write_fileobj(make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
+	utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
@@ -198,7 +198,7 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a named file.
 	"""
-	utils.write_filename(make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
+	utils.write_filename(lalseries.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
 #
