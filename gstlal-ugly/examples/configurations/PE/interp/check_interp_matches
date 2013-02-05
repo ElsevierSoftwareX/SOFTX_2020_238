@@ -18,9 +18,9 @@ param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import cbc_template_fir
-from gstlal import reference_psd
 from pylal import datatypes as laltypes
 from pylal import lalfft
+from pylal import series as lalseries
 from pylal import spawaveform
 from gstlal.reference_psd import interpolate_psd
 import math
@@ -56,7 +56,7 @@ revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((working_length,), dtype = "cdouble"))
 
 #FIXME don't hardcode H1
-psd =  reference_psd.read_psd_xmldoc(utils.load_filename(sys.argv[3], contenthandler = ligolw.LIGOLWContentHandler))['H1']
+psd =  lalseries.read_psd_xmldoc(utils.load_filename(sys.argv[3], contenthandler = ligolw.LIGOLWContentHandler))['H1']
 psd = cbc_template_fir.interpolate_psd(psd, 1.0 / working_duration)
 
 

@@ -27,7 +27,7 @@ from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from gstlal import reference_psd
+from pylal import series as lalseries
 
 if len(sys.argv) != 3:
 	print "USAGE gstlal_plot_psd psd_name output_name"
@@ -36,7 +36,7 @@ if len(sys.argv) != 3:
 fname = sys.argv[1]
 outname = sys.argv[2]
 
-psds = reference_psd.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
 for k,v in psds.items():
 	pyplot.loglog(v.deltaF * numpy.arange(len(v.data)), v.data, label = k)
 	pyplot.xlabel('Frequency (Hz)')

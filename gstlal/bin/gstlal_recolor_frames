@@ -30,6 +30,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -92,12 +93,12 @@ instrument = gw_data_source.channel_dict.keys()[0]
 #
 
 if options.reference_psd is not None:
-	wpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+	wpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 else:
 	wpsd = None
 	if options.verbose:
 		print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
-rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+rpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
 
 #
 # Setup the pipeline

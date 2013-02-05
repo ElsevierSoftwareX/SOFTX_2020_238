@@ -30,7 +30,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import svd_bank
-from gstlal import reference_psd
+from pylal import series as lalseries
 
 
 #
@@ -87,7 +87,7 @@ svd_bank.write_bank(
 	options.write_svd_bank,
 	svd_bank.build_bank(
 		options.template_bank,
-		reference_psd.read_psd_xmldoc(utils.load_filename(
+		lalseries.read_psd_xmldoc(utils.load_filename(
 			options.reference_psd,
 			verbose=options.verbose,
 			contenthandler=ligolw.LIGOLWContentHandler

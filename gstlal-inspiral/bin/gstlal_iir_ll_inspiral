@@ -59,10 +59,10 @@ lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
 from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
-from gstlal import reference_psd
 from gstlal import cbc_template_iir
 from gstlal import far
 from gstlal import inspiral
@@ -279,7 +279,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+	psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
 	psd = dict([(instrument, None) for instrument in detectors])
 

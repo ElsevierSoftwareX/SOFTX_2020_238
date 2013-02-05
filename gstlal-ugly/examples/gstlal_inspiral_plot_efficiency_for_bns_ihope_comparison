@@ -33,6 +33,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from pylal import db_thinca_rings
 from pylal import llwapp
 from pylal import rate
+from pylal import series as lalseries
 from pylal import SimInspiralUtils
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from pylal import imr_utils
@@ -69,7 +70,7 @@ def compute_horizon_interpolator(psd_files, verbose = False):
 	horizons = dict( (s, []) for s in sites)
 	times = dict( (s, []) for s in sites)
 	for f in psd_files:
-		psds = reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose = verbose, contenthandler = ligolw.LIGOLWContentHandler))
+		psds = lalseries.read_psd_xmldoc(utils.load_filename(f, verbose = verbose, contenthandler = ligolw.LIGOLWContentHandler))
 		for ifo, psd in psds.items():
 			if psd is not None:
 				times[ifo].append(int(psd.epoch))

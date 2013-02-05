@@ -28,6 +28,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -60,7 +61,7 @@ sr = options.sample_rate
 # read psd file
 #
 
-rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
+rpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 
 #
 # create seek event for segment

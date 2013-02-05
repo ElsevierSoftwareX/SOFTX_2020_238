@@ -28,6 +28,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import reference_psd
+from pylal import series as lalseries
 
 if len(sys.argv) < 3:
 	print "USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ..."
@@ -38,7 +39,7 @@ colors = {"H1":"r", "H2":"b", "L1":"g", "V1":"m", "H1H2":"c"}
 horizons = dict((k, []) for k in colors)
 times = dict((k, []) for k in colors)
 for f in sys.argv[2:]:
-	psds = reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+	psds = lalseries.read_psd_xmldoc(utils.load_filename(f, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
 	for ifo, psd in psds.items():
 		if psd is not None:
 			times[ifo].append(int(psd.epoch))

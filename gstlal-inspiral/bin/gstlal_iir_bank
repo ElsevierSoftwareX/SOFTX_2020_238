@@ -53,7 +53,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import cbc_template_iir
-from gstlal.reference_psd import read_psd_xmldoc
+from pylal.series import read_psd_xmldoc
 from glue.ligolw import utils, lsctables
 
 # read bank file

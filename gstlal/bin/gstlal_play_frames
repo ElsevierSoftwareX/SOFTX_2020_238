@@ -40,8 +40,9 @@ lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import datasource
 from gstlal import pipeparts
-from gstlal import reference_psd
 from gstlal import simplehandler
+from glue.ligolw.utils import segments as ligolw_segments
+from pylal import series as lalseries
 
 
 def parse_command_line():
