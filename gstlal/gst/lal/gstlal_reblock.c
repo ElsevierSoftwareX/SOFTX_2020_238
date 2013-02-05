@@ -82,60 +82,6 @@ GST_BOILERPLATE(
 /*
  * ============================================================================
  *
- *                                 Properties
- *
- * ============================================================================
- */
-
-
-enum property {
-	ARG_BLOCK_DURATION = 1
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALReblock *element = GSTLAL_REBLOCK(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_BLOCK_DURATION:
-		element->block_duration = g_value_get_uint64(value);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALReblock *element = GSTLAL_REBLOCK(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_BLOCK_DURATION:
-		g_value_set_uint64(value, element->block_duration);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
- * ============================================================================
- *
  *                                    Pads
  *
  * ============================================================================
@@ -147,7 +93,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static GstCaps *getcaps(GstPad * pad)
+static GstCaps *getcaps(GstPad *pad)
 {
 	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
 	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
@@ -376,14 +322,64 @@ done:
 /*
  * ============================================================================
  *
- *                                Type Support
+ *                              GObject Methods
  *
  * ============================================================================
  */
 
 
 /*
- * Instance finalize function.
+ * properties
+ */
+
+
+enum property {
+	ARG_BLOCK_DURATION = 1
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALReblock *element = GSTLAL_REBLOCK(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_BLOCK_DURATION:
+		element->block_duration = g_value_get_uint64(value);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALReblock *element = GSTLAL_REBLOCK(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_BLOCK_DURATION:
+		g_value_set_uint64(value, element->block_duration);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
+ * finalize()
  */
 
 
@@ -401,7 +397,7 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.
+ * base_init()
  */
 
 
@@ -411,7 +407,7 @@ static void gstlal_reblock_base_init(gpointer klass)
 
 
 /*
- * Class init function.
+ * class_init()
  */
 
 
@@ -485,7 +481,7 @@ static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
 
 
 /*
- * Instance init function.
+ * instance init
  */
 
 
