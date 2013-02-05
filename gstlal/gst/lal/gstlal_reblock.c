@@ -59,11 +59,22 @@
  */
 
 
-GST_BOILERPLATE(
+#define GST_CAT_DEFAULT gstlal_reblock_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_reblock", 0, "lal_reblock element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALReblock,
 	gstlal_reblock,
 	GstElement,
-	GST_TYPE_ELEMENT
+	GST_TYPE_ELEMENT,
+	additional_initializations
 );
 
 
@@ -228,12 +239,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * if buffer is already small enough, push down stream
 	 */
 
-
 	if(GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
 		/* consumes reference */
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+			GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result));
 		goto done;
 	}
 
@@ -303,7 +313,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+			GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result));
 			break;
 		}
 	}
