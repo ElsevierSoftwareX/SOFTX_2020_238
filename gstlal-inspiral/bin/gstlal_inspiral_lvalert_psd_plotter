@@ -58,7 +58,10 @@ from glue.ligolw import param
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from gstlal.reference_psd import horizon_distance
-from ligo.gracedb import cli as gracedb
+try:
+	from ligo.gracedb import cli as gracedb
+except ImportError:
+	from ligo import gracedb
 from ligo.lvalert.utils import get_LVAdata_from_stdin
 from pylal import series as lal_series
 
