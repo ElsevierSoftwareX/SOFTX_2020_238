@@ -144,8 +144,8 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	return mkgeneric(pipeline, None, "lal_framesrc", blocksize = blocksize, location = location, instrument = instrument, channel_name = channel_name, **properties)
 
 
-def mklvshmsrc(pipeline, **properties):
-	return mkgeneric(pipeline, None, "gds_lvshmsrc", **properties)
+def mklvshmsrc(pipeline, shm_name, **properties):
+	return mkgeneric(pipeline, None, "gds_lvshmsrc", shm_name = shm_name, **properties)
 
 
 def mkigwdparse(pipeline, src, **properties):
