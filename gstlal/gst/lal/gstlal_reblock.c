@@ -47,6 +47,7 @@
  */
 
 
+#include <gstlal_debug.h>
 #include <gstlal_reblock.h>
 
 
@@ -224,22 +225,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	guint64 blocks, block_length;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		gst_buffer_unref(sinkbuf);
-		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
+	GST_DEBUG_OBJECT(element, "received %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
 	/*
-	 * if buffer is already small enough, push down stream
+	 * if buffer is already smalle enough or if it doesn't possess
+	 * valid metadata, push down stream
 	 */
 
-	if(GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
+	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
+		GST_DEBUG_OBJECT(element, "pushing verbatim");
 		/* consumes reference */
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
@@ -311,6 +305,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer down stream
 		 */
 
+		GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
 			GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result));
