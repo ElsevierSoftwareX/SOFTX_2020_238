@@ -167,18 +167,6 @@ def read_psd_xmldoc(xmldoc):
 	return lalseries.read_psd_xmldoc(xmldoc)
 
 
-def read_psd(filename, verbose = False):
-	"""
-	Wrapper around read_psd_xmldoc() to parse PSDs directly from a
-	named file.
-
-	This function is deprecated, use pylal.series.read_psd_xmldoc() instead.
-	"""
-	import warnings
-	warnings.warn("gstlal.reference_psd.read_psd() is deprecated, use pylal.series.read_psd_xmldoc(utils.load_filename()) instead.", DeprecationWarning)
-	return lalseries.read_psd_xmldoc(utils.load_filename(filename, verbose = verbose))
-
-
 def make_psd_xmldoc(psddict, xmldoc = None):
 	import warnings
 	warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
