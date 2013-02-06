@@ -1,7 +1,7 @@
 /*
  * FrameCPPMuxCollectPads
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012,2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -187,7 +187,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
 		if(collectpads->segment.start > data->segment.start)
 			collectpads->segment.start = data->segment.start;
-		if(collectpads->segment.stop < data->segment.stop)
+		if(data->segment.stop == -1 || (collectpads->segment.stop != -1 && collectpads->segment.stop < data->segment.stop))
 			collectpads->segment.stop = data->segment.stop;
 	}
 
@@ -202,20 +202,6 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 	GST_DEBUG_OBJECT(collectpads, "union of segments = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", collectpads->segment.start, collectpads->segment.stop);
 	return TRUE;
 }
-
-
-#if 0
-static void clear_segments(FrameCPPMuxCollectPads *collectpads, FrameCPPMuxCollectPadsData *except)
-{
-	GSList *collectdatalist;
-
-	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
-		FrameCPPMuxCollectPadsData *data = collectdatalist->data;
-		if(data != except)
-			data->segment.format = GST_FORMAT_UNDEFINED;
-	}
-}
-#endif
 
 
 static gboolean event(GstPad *pad, GstEvent *event)
@@ -242,8 +228,6 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		success &= update_segment(collectpads);
 		if(success && event_func && all_pads_have_segments(collectpads))
 			success &= event_func(pad, gst_event_new_new_segment_full(update, collectpads->segment.rate, collectpads->segment.applied_rate, collectpads->segment.format, collectpads->segment.start, collectpads->segment.stop, collectpads->segment.time));
-		/*if(!update)
-			clear_segments(collectpads, data);*/
 		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
 		break;
 	}
@@ -261,7 +245,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 
 	case GST_EVENT_EOS:
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
-		data->segment.format = GST_FORMAT_UNDEFINED;
+		gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
 		data->eos = TRUE;
 		if(all_pads_are_at_eos(collectpads) && event_func)
 			success &= event_func(pad, event);
@@ -657,6 +641,14 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 static void dispose(GObject *object)
 {
+	FrameCPPMuxCollectPads *collectpads = FRAMECPP_MUXCOLLECTPADS(object);
+
+/* FIXME:  this segfaults.  why?
+	while(collectpads->pad_list)
+		framecpp_muxcollectpads_remove_pad(collectpads, ((FrameCPPMuxCollectPadsData *) collectpads->pad_list->data)->pad);
+*/
+	collectpads->pad_list = NULL;
+
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
@@ -665,11 +657,6 @@ static void finalize(GObject *object)
 {
 	FrameCPPMuxCollectPads *collectpads = FRAMECPP_MUXCOLLECTPADS(object);
 
-/* FIXME:  this segfaults.  why?
-	while(collectpads->pad_list)
-		framecpp_muxcollectpads_remove_pad(collectpads, ((FrameCPPMuxCollectPadsData *) collectpads->pad_list->data)->pad);
-*/
-	collectpads->pad_list = NULL;
 	g_mutex_free(collectpads->pad_list_lock);
 	collectpads->pad_list_lock = NULL;
 
