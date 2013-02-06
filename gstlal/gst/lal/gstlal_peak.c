@@ -330,7 +330,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		else {
 			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-			gst_audioadapter_copy(element->adapter, element->data, outsamps, &copied_gap, &copied_nongap);
+			gst_audioadapter_copy_samples(element->adapter, element->data, outsamps, &copied_gap, &copied_nongap);
 			gstlal_peak_over_window(element->maxdata, (const void*) element->data, outsamps);
 		}	
 		
@@ -343,7 +343,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = push_buffer(element, srcbuf);
 
 		/* knock off the first buffers worth of bytes since we don't need them any more */
-		gst_audioadapter_flush(element->adapter, outsamps);
+		gst_audioadapter_flush_samples(element->adapter, outsamps);
 	}
 
 done:

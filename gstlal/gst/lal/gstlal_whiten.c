@@ -652,7 +652,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * samples later).
 		 */
 
-		gst_audioadapter_copy(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
+		gst_audioadapter_copy_samples(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + *outsamples - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
@@ -826,7 +826,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * flush the input queue
 		 */
 
-		gst_audioadapter_flush(element->input_queue, hann_length / 2);
+		gst_audioadapter_flush_samples(element->input_queue, hann_length / 2);
 	}
 
 	/*

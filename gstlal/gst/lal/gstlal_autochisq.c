@@ -208,7 +208,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 */
 
 	input = g_malloc(available_length * channels * sizeof(*input));
-	gst_audioadapter_copy(element->adapter, input, available_length, NULL, NULL);
+	gst_audioadapter_copy_samples(element->adapter, input, available_length, NULL, NULL);
 
 	/*
 	 * compute output samples.  note:  we assume that gsl_complex can
@@ -229,7 +229,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 */
 
 	g_free(input);
-	gst_audioadapter_flush(element->adapter, output_length);
+	gst_audioadapter_flush_samples(element->adapter, output_length);
 
 done:
 	/*
@@ -679,7 +679,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * single gap buffer
 		 */
 
-		gst_audioadapter_flush(element->adapter, output_length);
+		gst_audioadapter_flush_samples(element->adapter, output_length);
 #ifdef GSTLAL_MALLOC_GAPS
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 #else
@@ -732,7 +732,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			goto done;
 		g_mutex_lock(element->autocorrelation_lock);
 
-		gst_audioadapter_flush(element->adapter, gap_length);
+		gst_audioadapter_flush_samples(element->adapter, gap_length);
 #ifdef GSTLAL_MALLOC_GAPS
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 #else

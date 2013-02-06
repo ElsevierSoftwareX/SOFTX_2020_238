@@ -111,9 +111,14 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *);
 guint gst_audioadapter_tail_gap_length(GstAudioAdapter *);
 guint gst_audioadapter_head_nongap_length(GstAudioAdapter *);
 guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *);
-void gst_audioadapter_copy(GstAudioAdapter *, void *, guint, gboolean *, gboolean *);
-GList *gst_audioadapter_get_list(GstAudioAdapter *, guint);
-void gst_audioadapter_flush(GstAudioAdapter *, guint);
+void gst_audioadapter_copy_samples(GstAudioAdapter *, void *, guint, gboolean *, gboolean *);
+GList *gst_audioadapter_get_list_samples(GstAudioAdapter *, guint);
+void gst_audioadapter_flush_samples(GstAudioAdapter *, guint);
+
+/* backwards compatibility */
+#define gst_audioadapter_copy gst_audioadapter_copy_samples
+#define gst_audioadapter_get_list gst_audioadapter_get_list_samples
+#define gst_audioadapter_flush gst_audioadapter_flush_samples
 
 
 G_END_DECLS

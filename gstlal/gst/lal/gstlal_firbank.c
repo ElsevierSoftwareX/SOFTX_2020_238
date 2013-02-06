@@ -412,7 +412,7 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 */
 
 	input = g_malloc(input_length * sizeof(double));
-	gst_audioadapter_copy(element->adapter, input, input_length, NULL, NULL);
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
 	input_view = gsl_vector_view_array(input, fir_length(element));
 
 	/*
@@ -498,7 +498,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 */
 
 	input = malloced_input = g_malloc(input_length * sizeof(double));
-	gst_audioadapter_copy(element->adapter, input, input_length, NULL, NULL);
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
 
 	/*
 	 * wrap workspace (as real numbers) in a GSL vector view.  note
@@ -625,7 +625,7 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * flush the data from the adapter
 	 */
 
-	gst_audioadapter_flush(element->adapter, output_length);
+	gst_audioadapter_flush_samples(element->adapter, output_length);
 
 	/*
 	 * set buffer metadata
@@ -1219,7 +1219,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * single gap buffer
 		 */
 
-		gst_audioadapter_flush(element->adapter, output_length);
+		gst_audioadapter_flush_samples(element->adapter, output_length);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_LOG_OBJECT(element, "output is %u sample gap", output_length);
@@ -1262,7 +1262,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * generate the second, gap, buffer
 		 */
 
-		gst_audioadapter_flush(element->adapter, gap_length);
+		gst_audioadapter_flush_samples(element->adapter, gap_length);
 		GST_BUFFER_SIZE(outbuf) = gap_length * fir_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, gap_length, TRUE);
