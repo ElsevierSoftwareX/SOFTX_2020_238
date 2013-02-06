@@ -1,7 +1,7 @@
 /*
  * framecpp channel multiplexor
  *
- * Copyright (C) 2012  Kipp Cannon, Ed Maros
+ * Copyright (C) 2012,2013  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -651,7 +651,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 			FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
 			FrameCPP::OFrameStream ofs(obuf);
 			GstClockTime frame_t_start, frame_t_end;
-			GST_DEBUG_OBJECT(mux, "building frame file");
+			GST_DEBUG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
 
 			/*
 			 * loop over frames
@@ -761,6 +761,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 
 			ofs.Close();
 
+			/* FIXME:  can this be done without a memcpy()? */
 			outbuf = gst_buffer_new_and_alloc(obuf->str().length());
 			memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
 
