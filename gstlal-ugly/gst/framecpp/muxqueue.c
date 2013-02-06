@@ -1,7 +1,7 @@
 /*
  * FrameCPPMuxQueue
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012,2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -157,6 +157,16 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 	g_assert_cmpuint(gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buf), queue->rate, GST_SECOND), ==, GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf));
+
+	/*
+	 * wait until space becomes available.  if we're full, we need to
+	 * unlock ourselves when emiting the signal so that whoever gets
+	 * woken up by the signal is able to manipulate us.  that means the
+	 * is-full condition needs to be rechecked after re-acquiring the
+	 * lock and before going to sleep.  the sequence is (i) check
+	 * condition, (ii) unlock + emit signal + lock, (iii) check
+	 * condition, (iv) sleep, ...
+	 */
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	while(queue->max_size_time && !queue->flushing && _framecpp_muxqueue_duration(queue) >= queue->max_size_time) {
