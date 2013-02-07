@@ -56,8 +56,32 @@
 #include <framecpp_igwdparse.h>
 
 
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boilerplate
+ *
+ * ============================================================================
+ */
+
+
 #define GST_CAT_DEFAULT framecpp_igwdparse_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
+}
+
+
+GST_BOILERPLATE_FULL(
+	GstFrameCPPIGWDParse,
+	framecpp_igwdparse,
+	GstBaseParse,
+	GST_TYPE_BASE_PARSE,
+	additional_initializations
+);
 
 
 /*
@@ -448,14 +472,24 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 /*
  * ============================================================================
  *
- *                           GStreamer Element
+ *                             GObject Overrides
  *
  * ============================================================================
  */
 
 
 /*
- * pad templates
+ * base_init()
+ */
+
+
+static void framecpp_igwdparse_base_init(gpointer klass)
+{
+}
+
+
+/*
+ * class_init()
  */
 
 
@@ -481,15 +515,15 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-/*
- * base_init()
- */
-
-
-static void framecpp_igwdparse_base_init(gpointer klass)
+static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseParseClass *parse_class = GST_BASE_PARSE_CLASS(klass);
+
+	parse_class->start = GST_DEBUG_FUNCPTR(start);
+	parse_class->set_sink_caps = GST_DEBUG_FUNCPTR(set_sink_caps);
+	parse_class->check_valid_frame = GST_DEBUG_FUNCPTR(check_valid_frame);
+	parse_class->parse_frame = GST_DEBUG_FUNCPTR(parse_frame);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -501,21 +535,6 @@ static void framecpp_igwdparse_base_init(gpointer klass)
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	parse_class->start = GST_DEBUG_FUNCPTR(start);
-	parse_class->set_sink_caps = GST_DEBUG_FUNCPTR(set_sink_caps);
-	parse_class->check_valid_frame = GST_DEBUG_FUNCPTR(check_valid_frame);
-	parse_class->parse_frame = GST_DEBUG_FUNCPTR(parse_frame);
-}
-
-
-/*
- * class_init()
- */
-
-
-static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
-{
 }
 
 
@@ -527,23 +546,3 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *object, GstFrameCPPIGWDParseClass *klass)
 {
 }
-
-
-/*
- * boilerplate
- */
-
-
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
-}
-
-
-GST_BOILERPLATE_FULL(
-	GstFrameCPPIGWDParse,
-	framecpp_igwdparse,
-	GstBaseParse,
-	GST_TYPE_BASE_PARSE,
-	additional_initializations
-);
