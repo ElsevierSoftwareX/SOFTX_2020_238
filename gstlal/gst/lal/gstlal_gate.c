@@ -58,8 +58,32 @@
 #include <gstlal_gate.h>
 
 
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boilerplate
+ *
+ * ============================================================================
+ */
+
+
 #define GST_CAT_DEFAULT gstlal_gate_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element");
+}
+
+
+GST_BOILERPLATE_FULL(
+	GSTLALGate,
+	gstlal_gate,
+	GstElement,
+	GST_TYPE_ELEMENT,
+	additional_initializations
+);
 
 
 /*
@@ -1198,22 +1222,14 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 /*
  * ============================================================================
  *
- *                                Type Support
+ *                              GObject Methods
  *
  * ============================================================================
  */
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
@@ -1239,9 +1255,17 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * base_init()
+ */
+
+
+static void gstlal_gate_base_init(gpointer klass)
+{
+}
+
+
+/*
+ * class_init()
  */
 
 
@@ -1264,33 +1288,18 @@ static void finalize(GObject *object)
 	"width = (int) {64, 128}"
 
 
-static void base_init(gpointer klass)
-{
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer klass, gpointer class_data)
+static void gstlal_gate_class_init(GSTLALGateClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
-	GSTLALGateClass *gstlal_gate_class = GSTLAL_GATE_CLASS(klass);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	gstlal_gate_class->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
-	gstlal_gate_class->start = GST_DEBUG_FUNCPTR(start);
-	gstlal_gate_class->stop = GST_DEBUG_FUNCPTR(stop);
+	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
+	klass->start = GST_DEBUG_FUNCPTR(start);
+	klass->stop = GST_DEBUG_FUNCPTR(stop);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1472,15 +1481,12 @@ static void class_init(gpointer klass, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * init()
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer klass)
+static void gstlal_gate_init(GSTLALGate *element, GSTLALGateClass *klass)
 {
-	GSTLALGate *element = GSTLAL_GATE(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -1521,29 +1527,4 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->unit_size = 0;
 	element->control_rate = 0;
 	element->need_discont = FALSE;
-}
-
-
-/*
- * gstlal_gate_get_type().
- */
-
-
-GType gstlal_gate_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALGateClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALGate),
-			.instance_init = instance_init,
-		};
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALGate", &info, 0);
-	}
-
-	return type;
 }
