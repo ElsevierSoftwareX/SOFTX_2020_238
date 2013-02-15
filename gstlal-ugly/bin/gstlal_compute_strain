@@ -73,6 +73,8 @@ parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, will be written to file.")
 parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the required-on bits for the ODC to DQ vector conversion.")
+parser.add_option("--buffer-mode", type="int", default=0, help = "Set the 'buffer-mode' property on the gds_lvshmsink element. (default = 0)")
+parser.add_option("--num-buffers", type = "int", default=10, help = "Set the 'num-buffers' property on the gds_lvshmink element. (default = 10)")
 
 #
 # Parse options
@@ -255,9 +257,9 @@ if options.write_to_shm_partition is not None:
 	# FIXME: Use pipeparts
 	lvshmsink = gst.element_factory_make("gds_lvshmsink")
 	lvshmsink.set_property("shm-name", options.write_to_shm_partition)
-	lvshmsink.set_property("num-buffers", 10)
+	lvshmsink.set_property("num-buffers", options.num_buffers)
 	lvshmsink.set_property("blocksize", 405338 * options.frame_duration * options.frames_per_file)
-	lvshmsink.set_property("buffer-mode", 2)
+	lvshmsink.set_property("buffer-mode", options.buffer_mode)
 	pipeline.add(lvshmsink)
 	mux.link(lvshmsink)
 else:
