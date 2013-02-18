@@ -145,7 +145,7 @@ static int printsample_double(char *location, const void **sample)
 
 static int printsample_float(char *location, const void **sample)
 {
-  return sprintf(location, "\t%.16g", (double) *(*(const float **) sample)++);
+  return sprintf(location, "\t%.8g", (double) *(*(const float **) sample)++);
 }
 
 
