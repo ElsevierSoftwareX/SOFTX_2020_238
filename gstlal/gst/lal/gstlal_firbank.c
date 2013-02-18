@@ -265,7 +265,7 @@ static int push_gap(GSTLALFIRBank *element, unsigned samples)
 
 static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
-	GST_BUFFER_SIZE(buf) = outsamples * fir_channels(element) * sizeof(double);
+	GST_BUFFER_SIZE(buf) = outsamples * fir_channels(element) * element->width / 8;
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
@@ -315,37 +315,37 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 	gstlal_fftw_lock();
 
 	GST_LOG_OBJECT(element, "starting FFTW planning");
-	element->input_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->input_fd));
-	element->in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->input_fd, element->input_fd, FFTW_MEASURE);
+	element->workspace.fdd.input = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace.fdd.input));
+	element->workspace.fdd.in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->workspace.fdd.input, element->workspace.fdd.input, FFTW_MEASURE);
 
 	/*
 	 * frequency-domain workspace
 	 */
 
-	element->workspace_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace_fd));
-	element->out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace_fd, (double *) element->workspace_fd, FFTW_MEASURE);
+	element->workspace.fdd.filtered = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace.fdd.filtered));
+	element->workspace.fdd.out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fdd.filtered, (double *) element->workspace.fdd.filtered, FFTW_MEASURE);
 	GST_LOG_OBJECT(element, "FFTW planning complete");
 
 	/*
-	 * loop over filters.  copy each time-domain filter to input_fd,
+	 * loop over filters.  copy each time-domain filter to input,
 	 * zero-pad, transform to frequency domain, and save in
-	 * fir_matrix_fd.  the frequency-domain filters are pre-scaled by
-	 * 1/n and conjugated to save those operations inside the filtering
-	 * loop.
+	 * working_fir_matrix.  the frequency-domain filters are pre-scaled
+	 * by 1/n and conjugated to save those operations inside the
+	 * filtering loop.
 	 */
 
-	element->fir_matrix_fd = (complex double *) fftw_malloc(fir_channels(element) * length_fd * sizeof(*element->fir_matrix_fd));
+	element->workspace.fdd.working_fir_matrix = (complex double *) fftw_malloc(fir_channels(element) * length_fd * sizeof(*element->workspace.fdd.working_fir_matrix));
 
 	gstlal_fftw_unlock();
 
 	for(i = 0; i < fir_channels(element); i++) {
 		unsigned j;
-		memset(element->input_fd, 0, length_fd * sizeof(*element->input_fd));
+		memset(element->workspace.fdd.input, 0, length_fd * sizeof(*element->workspace.fdd.input));
 		for(j = 0; j < fir_length(element); j++)
-			((double *) element->input_fd)[j] = gsl_matrix_get(element->fir_matrix, i, j) / fft_block_length(element);
-		fftw_execute(element->in_plan);
+			((double *) element->workspace.fdd.input)[j] = gsl_matrix_get(element->fir_matrix, i, j) / fft_block_length(element);
+		fftw_execute(element->workspace.fdd.in_plan);
 		for(j = 0; j < length_fd; j++)
-			element->fir_matrix_fd[i * length_fd + j] = conj(element->input_fd[j]);
+			element->workspace.fdd.working_fir_matrix[i * length_fd + j] = conj(element->workspace.fdd.input[j]);
 	}
 
 	/*
@@ -360,16 +360,16 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 {
 	gstlal_fftw_lock();
 
-	fftw_free(element->fir_matrix_fd);
-	element->fir_matrix_fd = NULL;
-	fftw_free(element->input_fd);
-	element->input_fd = NULL;
-	fftw_destroy_plan(element->in_plan);
-	element->in_plan = NULL;
-	fftw_free(element->workspace_fd);
-	element->workspace_fd = NULL;
-	fftw_destroy_plan(element->out_plan);
-	element->out_plan = NULL;
+	fftw_free(element->workspace.fdd.working_fir_matrix);
+	element->workspace.fdd.working_fir_matrix = NULL;
+	fftw_free(element->workspace.fdd.input);
+	element->workspace.fdd.input = NULL;
+	fftw_destroy_plan(element->workspace.fdd.in_plan);
+	element->workspace.fdd.in_plan = NULL;
+	fftw_free(element->workspace.fdd.filtered);
+	element->workspace.fdd.filtered = NULL;
+	fftw_destroy_plan(element->workspace.fdd.out_plan);
+	element->workspace.fdd.out_plan = NULL;
 
 	gstlal_fftw_unlock();
 }
@@ -411,7 +411,7 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 * properly.
 	 */
 
-	input = g_malloc(input_length * sizeof(double));
+	input = g_malloc(input_length * sizeof(*input));
 	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
 	input_view = gsl_vector_view_array(input, fir_length(element));
 
@@ -473,8 +473,8 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	unsigned input_length;
 	double *input, *malloced_input;
 	double *output_end;
-	gsl_matrix_view output;
 	gsl_vector_view workspace;
+	gsl_matrix_view output;
 
 	/*
 	 * how many samples do we need from the adapter?  FIXME:  we might
@@ -497,7 +497,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 * retrieve input samples
 	 */
 
-	input = malloced_input = g_malloc(input_length * sizeof(double));
+	input = malloced_input = g_malloc(input_length * sizeof(*input));
 	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
 
 	/*
@@ -506,7 +506,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 * overlap
 	 */
 
-	workspace = gsl_vector_view_array((double *) element->workspace_fd, stride);
+	workspace = gsl_vector_view_array((double *) element->workspace.fdd.filtered, stride);
 
 	/*
 	 * wrap first block of output buffer in a GSL matrix view
@@ -532,34 +532,34 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 
 		/*
 		 * copy a block-length of data to input workspace and
-		 * transform to frequency-domain
+		 * transform to frequency-domain inplace
 		 */
 
-		memcpy(element->input_fd, input, fft_block_length(element) * sizeof(*input));
-		fftw_execute(element->in_plan);
+		memcpy(element->workspace.fdd.input, input, fft_block_length(element) * sizeof(*input));
+		fftw_execute(element->workspace.fdd.in_plan);
 
 		/*
 		 * loop over filters
 		 */
 
-		filter = element->fir_matrix_fd;
+		filter = element->workspace.fdd.working_fir_matrix;
 		for(j = 0; j < fir_channels(element); j++) {
 			/*
 			 * multiply input by filter, transform to
-			 * time-domain, copy to output.  note that the
-			 * workspace view and the output matrix view are
-			 * only stride samples long, thus the end of the
-			 * real workspace is not copied.  the
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
 			 * frequency-domain filters are constructed so that
 			 * the wrap-around transient lives in that part of
 			 * the work space in the time domain.
 			 */
 
-			complex double *last_input_fd, *input_fd = element->input_fd;
-			complex double *workspace_fd = element->workspace_fd;
-			for(last_input_fd = input_fd + filter_length_fd; input_fd < last_input_fd; )
-				*(workspace_fd++) = *(input_fd++) * *(filter++);
-			fftw_execute(element->out_plan);
+			complex double *last_input, *input = element->workspace.fdd.input;
+			complex double *workspace_fd = element->workspace.fdd.filtered;
+			for(last_input = input + filter_length_fd; input < last_input; )
+				*(workspace_fd++) = *(input++) * *(filter++);
+			fftw_execute(element->workspace.fdd.out_plan);
 			gsl_matrix_set_col(&output.matrix, j, &workspace.vector);
 		}
 
@@ -614,7 +614,7 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 			 * yet
 			 */
 
-			if(!element->fir_matrix_fd)
+			if(!element->workspace.fdd.working_fir_matrix)
 				create_fft_workspace(element);
 
 			output_length = fdfilter(element, outbuf, output_length);
@@ -661,7 +661,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, GstCaps *caps, guin
 
 	if(!output_length)
 		return GST_FLOW_OK;
-	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * sizeof(double), caps, &buf);
+	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * element->width / 8, caps, &buf);
 	g_assert(GST_BUFFER_CAPS(buf) != NULL);
 	if(result != GST_FLOW_OK)
 		return result;
@@ -742,7 +742,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	if(final_gap_length) {
 		GstBuffer *buf;
 
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * element->width / 8, GST_PAD_CAPS(srcpad), &buf);
 		g_assert(GST_BUFFER_CAPS(buf) != NULL);
 		if(result != GST_FLOW_OK)
 			goto done;
@@ -857,14 +857,15 @@ static void rate_changed(GSTLALFIRBank *element, gint rate, void *data)
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
 {
 	GstStructure *str;
-	gint channels;
+	gint width, channels;
 	gboolean success = TRUE;
 
 	str = gst_caps_get_structure(caps, 0);
 	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_structure_get_int(str, "width", &width);
 
 	if(success)
-		*size = sizeof(double) * channels;
+		*size = width / 8 * channels;
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 
@@ -1019,11 +1020,23 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	if(success) {
+		gboolean format_changed = element->rate != rate || element->width != width;
 		gint old_rate = element->rate;
+		if(element->width != width)
+			/*
+			 * invalidate frequency-domain filters
+			 */
+
+			free_fft_workspace(element);
+		element->width = width;
 		element->rate = rate;
+		if(format_changed) {
+			gst_audioadapter_clear(element->adapter);
+			g_object_set(element->adapter, "unit-size", width / 8 * 1, NULL);	/* input has 1 channel */
+			element->t0 = GST_CLOCK_TIME_NONE;	/* force discont */
+		}
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
-		g_object_set(element->adapter, "unit-size", width / 8 * 1, NULL);	/* input has 1 channel */
 	} else
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
 
@@ -1263,7 +1276,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		GST_BUFFER_SIZE(outbuf) = gap_length * fir_channels(element) * sizeof(double);
+		GST_BUFFER_SIZE(outbuf) = gap_length * fir_channels(element) * element->width / 8;
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
@@ -1661,6 +1674,8 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass)
 {
+	filter->rate = 0;	/* impossible --> force signal on first caps */
+	filter->width = 0;	/* impossible --> force workspace reset on first caps */
 	filter->block_stride = 0;	/* must != DEFAULT_BLOCK_STRIDE */
 	filter->latency = 0;
 	filter->adapter = NULL;
@@ -1668,11 +1683,11 @@ static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass
 	filter->fir_matrix_lock = g_mutex_new();
 	filter->fir_matrix_available = g_cond_new();
 	filter->fir_matrix = NULL;
-	filter->fir_matrix_fd = NULL;
-	filter->input_fd = NULL;
-	filter->workspace_fd = NULL;
-	filter->in_plan = NULL;
-	filter->out_plan = NULL;
+	filter->workspace.fdd.working_fir_matrix = NULL;
+	filter->workspace.fdd.input = NULL;
+	filter->workspace.fdd.filtered = NULL;
+	filter->workspace.fdd.in_plan = NULL;
+	filter->workspace.fdd.out_plan = NULL;
 	filter->last_new_segment = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }

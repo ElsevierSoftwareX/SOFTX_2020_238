@@ -75,6 +75,7 @@ struct _GSTLALFIRBank {
 	 */
 
 	gint rate;
+	gint width;
 	GstAudioAdapter *adapter;
 
 	/*
@@ -86,17 +87,27 @@ struct _GSTLALFIRBank {
 	GCond *fir_matrix_available;
 	gsl_matrix *fir_matrix;
 	gint64 latency;
+	gint block_stride;	/* for frequency-domain mode */
 
 	/*
-	 * FFT work space
+	 * work space
 	 */
 
-	gint block_stride;
-	complex double *fir_matrix_fd;
-	complex double *input_fd;
-	complex double *workspace_fd;
-	fftw_plan in_plan;
-	fftw_plan out_plan;
+	union {
+		struct {
+		} tdd;	/* double-precision time-domain */
+		struct {
+		} tds;	/* single-precision time-domain */
+		struct {
+			complex double *working_fir_matrix;
+			complex double *input;
+			complex double *filtered;
+			fftw_plan in_plan;
+			fftw_plan out_plan;
+		} fdd;	/* double-precision frequency-domain */
+		struct {
+		} fds;	/* single-precision frequency-domain */
+	} workspace;
 
 	/*
 	 * timestamp book-keeping
