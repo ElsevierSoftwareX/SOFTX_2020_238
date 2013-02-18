@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2009--2013 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -299,11 +299,36 @@ static guint64 get_available_samples(GSTLALFIRBank *element)
 
 
 /*
- * create/free FFT workspace.  call with fir_matrix_lock held
+ * create/free workspace.  call with fir_matrix_lock held
  */
 
 
-static int create_fft_workspace(GSTLALFIRBank *element)
+static int create_tds_workspace(GSTLALFIRBank *element)
+{
+	unsigned i, j;
+
+	element->workspace.tds.working_fir_matrix = gsl_matrix_float_alloc(fir_channels(element), fir_length(element));
+
+	for(i = 0; i < fir_channels(element); i++)
+		for(j = 0; j < fir_length(element); j++)
+			gsl_matrix_float_set(element->workspace.tds.working_fir_matrix, i, j, gsl_matrix_get(element->fir_matrix, i, j));
+
+	/*
+	 * done
+	 */
+
+	return 0;
+}
+
+
+static void free_tds_workspace(GSTLALFIRBank *element)
+{
+	gsl_matrix_float_free(element->workspace.tds.working_fir_matrix);
+	element->workspace.tds.working_fir_matrix = NULL;
+}
+
+
+static int create_fdd_workspace(GSTLALFIRBank *element)
 {
 	unsigned i;
 	unsigned length_fd = fft_block_length(element) / 2 + 1;
@@ -356,7 +381,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 }
 
 
-static void free_fft_workspace(GSTLALFIRBank *element)
+static void free_fdd_workspace(GSTLALFIRBank *element)
 {
 	gstlal_fftw_lock();
 
@@ -375,6 +400,96 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 }
 
 
+static int create_fds_workspace(GSTLALFIRBank *element)
+{
+	unsigned i;
+	unsigned length_fd = fft_block_length(element) / 2 + 1;
+
+	/*
+	 * frequency-domain input
+	 */
+
+	gstlal_fftw_lock();
+
+	GST_LOG_OBJECT(element, "starting FFTW planning");
+	element->workspace.fds.input = (complex float *) fftwf_malloc(length_fd * sizeof(*element->workspace.fds.input));
+	element->workspace.fds.in_plan = fftwf_plan_dft_r2c_1d(fft_block_length(element), (float *) element->workspace.fds.input, element->workspace.fds.input, FFTW_MEASURE);
+
+	/*
+	 * frequency-domain workspace
+	 */
+
+	element->workspace.fds.filtered = (complex float *) fftwf_malloc(length_fd * sizeof(*element->workspace.fds.filtered));
+	element->workspace.fds.out_plan = fftwf_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fds.filtered, (float *) element->workspace.fds.filtered, FFTW_MEASURE);
+	GST_LOG_OBJECT(element, "FFTW planning complete");
+
+	/*
+	 * loop over filters.  copy each time-domain filter to input,
+	 * zero-pad, transform to frequency domain, and save in
+	 * working_fir_matrix.  the frequency-domain filters are pre-scaled
+	 * by 1/n and conjugated to save those operations inside the
+	 * filtering loop.
+	 */
+
+	element->workspace.fds.working_fir_matrix = (complex float *) fftwf_malloc(fir_channels(element) * length_fd * sizeof(*element->workspace.fds.working_fir_matrix));
+
+	gstlal_fftw_unlock();
+
+	for(i = 0; i < fir_channels(element); i++) {
+		unsigned j;
+		memset(element->workspace.fds.input, 0, length_fd * sizeof(*element->workspace.fds.input));
+		for(j = 0; j < fir_length(element); j++)
+			((float *) element->workspace.fds.input)[j] = gsl_matrix_get(element->fir_matrix, i, j) / fft_block_length(element);
+		fftwf_execute(element->workspace.fds.in_plan);
+		for(j = 0; j < length_fd; j++)
+			element->workspace.fds.working_fir_matrix[i * length_fd + j] = conjf(element->workspace.fds.input[j]);
+	}
+
+	/*
+	 * done
+	 */
+
+	return 0;
+}
+
+
+static void free_fds_workspace(GSTLALFIRBank *element)
+{
+	gstlal_fftw_lock();
+
+	fftwf_free(element->workspace.fds.working_fir_matrix);
+	element->workspace.fds.working_fir_matrix = NULL;
+	fftwf_free(element->workspace.fds.input);
+	element->workspace.fds.input = NULL;
+	fftwf_destroy_plan(element->workspace.fds.in_plan);
+	element->workspace.fds.in_plan = NULL;
+	fftwf_free(element->workspace.fds.filtered);
+	element->workspace.fds.filtered = NULL;
+	fftwf_destroy_plan(element->workspace.fds.out_plan);
+	element->workspace.fds.out_plan = NULL;
+
+	gstlal_fftw_unlock();
+}
+
+
+static void free_workspace(GSTLALFIRBank *element)
+{
+	if(element->time_domain) {
+		if(element->width == 64)
+			return;	/* no-op */
+		else if(element->width == 32)
+			return free_tds_workspace(element);
+		/* if width not valid, assume workspace is not initialized */
+	} else {
+		if(element->width == 64)
+			free_fdd_workspace(element);
+		else if(element->width == 32)
+			free_fds_workspace(element);
+		/* if width not valid, assume workspace is not initialized */
+	}
+}
+
+
 /*
  * transform input samples to output samples using a frequency-domain
  * algorithm.  output_length is the number of output samples to compute.  if
@@ -384,7 +499,7 @@ static void free_fft_workspace(GSTLALFIRBank *element)
  */
 
 
-static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned tddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
 {
 	unsigned i;
 	unsigned input_length;
@@ -396,7 +511,7 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 * clip number of output samples to buffer size.
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(double)));
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * how many samples do we need from the adapter?
@@ -456,6 +571,78 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 }
 
 
+static unsigned tdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+{
+	unsigned i;
+	unsigned input_length;
+	float *input;
+	gsl_vector_float_view input_view;
+	gsl_matrix_float_view output;
+
+	/*
+	 * clip number of output samples to buffer size.
+	 */
+
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+
+	/*
+	 * how many samples do we need from the adapter?
+	 */
+
+	input_length = output_length + fir_length(element) - 1;
+
+	/*
+	 * wrap the adapter's contents in a GSL vector view.  note that the
+	 * wrapper vector's length is set to the fir_length length, not the
+	 * length that has been peeked at, so that inner products work
+	 * properly.
+	 */
+
+	input = g_malloc(input_length * sizeof(*input));
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
+	input_view = gsl_vector_float_view_array(input, fir_length(element));
+
+	/*
+	 * wrap output buffer in a GSL matrix view.
+	 */
+
+	output = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(outbuf), output_length, fir_channels(element));
+
+	/*
+	 * assemble the output sample time series as the columns of a
+	 * matrix.
+	 */
+
+	for(i = 0; i < output_length; i++) {
+		/*
+		 * the current row (sample) in the output matrix
+		 */
+
+		gsl_vector_float_view output_sample = gsl_matrix_float_row(&(output.matrix), i);
+
+		/*
+		 * compute one vector of output samples --- the projection
+		 * of the input onto each of the FIR filters
+		 */
+
+		gsl_blas_sgemv(CblasNoTrans, 1.0, element->workspace.tds.working_fir_matrix, &(input_view.vector), 0.0, &(output_sample.vector));
+
+		/*
+		 * advance the input pointer
+		 */
+
+		input_view.vector.data++;
+	}
+
+	/*
+	 * done
+	 */
+
+	g_free(input);
+	return output_length;
+}
+
+
 /*
  * transform input samples to output samples using a frequency-domain
  * algorithm.  output_length is the total number of output samples to
@@ -466,7 +653,7 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
  */
 
 
-static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned fddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
 {
 	unsigned stride = fft_block_stride(element);
 	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
@@ -491,7 +678,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 	 * blocks, but only this many will be copied into the output buffer
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(double)));
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * retrieve input samples
@@ -580,6 +767,120 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned out
 }
 
 
+static unsigned fdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+{
+	unsigned stride = fft_block_stride(element);
+	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
+	unsigned input_length;
+	float *input, *malloced_input;
+	float *output_end;
+	gsl_vector_float_view workspace;
+	gsl_matrix_float_view output;
+
+	/*
+	 * how many samples do we need from the adapter?  FIXME:  we might
+	 * not need this much because after output_length is clipped to the
+	 * buffer size we might find we can reduce the number of fft blocks
+	 * to be processed
+	 */
+
+	input_length = output_length + fir_length(element) - 1;
+
+	/*
+	 * clip number of output samples to buffer size.  we still need to
+	 * compute all of them because we're limited to processing full FFT
+	 * blocks, but only this many will be copied into the output buffer
+	 */
+
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+
+	/*
+	 * retrieve input samples
+	 */
+
+	input = malloced_input = g_malloc(input_length * sizeof(*input));
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
+
+	/*
+	 * wrap workspace (as real numbers) in a GSL vector view.  note
+	 * that vector has length fft_block_stride to affect the requisite
+	 * overlap
+	 */
+
+	workspace = gsl_vector_float_view_array((float *) element->workspace.fds.filtered, stride);
+
+	/*
+	 * wrap first block of output buffer in a GSL matrix view
+	 */
+
+	output = gsl_matrix_float_view_array(((float *) GST_BUFFER_DATA(outbuf)), stride, fir_channels(element));
+	output_end = output.matrix.data + output_length * fir_channels(element);
+
+	/*
+	 * loop over FFT blocks
+	 */
+
+	while(output.matrix.data < output_end) {
+		complex float *filter;
+		unsigned j;
+
+		/*
+		 * clip the output to the output buffer's length
+		 */
+
+		if(output_end - output.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output.matrix.size1 = (output_end - output.matrix.data) / fir_channels(element);
+
+		/*
+		 * copy a block-length of data to input workspace and
+		 * transform to frequency-domain inplace
+		 */
+
+		memcpy(element->workspace.fds.input, input, fft_block_length(element) * sizeof(*input));
+		fftwf_execute(element->workspace.fds.in_plan);
+
+		/*
+		 * loop over filters
+		 */
+
+		filter = element->workspace.fds.working_fir_matrix;
+		for(j = 0; j < fir_channels(element); j++) {
+			/*
+			 * multiply input by filter, transform to
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
+			 */
+
+			complex float *last_input, *input = element->workspace.fds.input;
+			complex float *workspace_fd = element->workspace.fds.filtered;
+			for(last_input = input + filter_length_fd; input < last_input; )
+				*(workspace_fd++) = *(input++) * *(filter++);
+			fftwf_execute(element->workspace.fds.out_plan);
+			gsl_matrix_float_set_col(&output.matrix, j, &workspace.vector);
+		}
+
+		/*
+		 * advance to next block
+		 */
+
+		input += stride;
+		output.matrix.data += stride * fir_channels(element);
+	}
+
+	/*
+	 * done
+	 */
+
+	g_free(malloced_input);
+	return output_length;
+}
+
+
 /*
  * filtering algorithm front-end
  */
@@ -603,10 +904,19 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	if(output_length) {
 		if(element->time_domain) {
 			/*
-			 * use time-domain filter implementation
+			 * use time-domain filter implementation;  start by
+			 * building width-specific filters if we don't have
+			 * them yet
 			 */
 
-			output_length = tdfilter(element, outbuf, output_length);
+			if(element->width == 64)
+				output_length = tddfilter(element, outbuf, output_length);
+			else if(element->width == 32) {
+				if(!element->workspace.tds.working_fir_matrix)
+					create_tds_workspace(element);
+				output_length = tdsfilter(element, outbuf, output_length);
+			} else
+				g_assert_not_reached();
 		} else {
 			/*
 			 * use frequency-domain filter implementation;  start by
@@ -614,10 +924,15 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 			 * yet
 			 */
 
-			if(!element->workspace.fdd.working_fir_matrix)
-				create_fft_workspace(element);
-
-			output_length = fdfilter(element, outbuf, output_length);
+			if(element->width == 64) {
+				if(!element->workspace.fdd.working_fir_matrix)
+					create_fdd_workspace(element);
+				output_length = fddfilter(element, outbuf, output_length);
+			} else if(element->width == 32) {
+				if(!element->workspace.fds.working_fir_matrix)
+					create_fds_workspace(element);
+				output_length = fdsfilter(element, outbuf, output_length);
+			}
 		}
 	}
 
@@ -1024,10 +1339,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		gint old_rate = element->rate;
 		if(element->width != width)
 			/*
-			 * invalidate frequency-domain filters
+			 * invalidate filter workspace
 			 */
 
-			free_fft_workspace(element);
+			free_workspace(element);
 		element->width = width;
 		element->rate = rate;
 		if(format_changed) {
@@ -1320,29 +1635,31 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_TIME_DOMAIN:
+	case ARG_TIME_DOMAIN: {
+		gboolean time_domain;
 		g_mutex_lock(element->fir_matrix_lock);
-		element->time_domain = g_value_get_boolean(value);
-		if(element->time_domain) {
+		time_domain = g_value_get_boolean(value);
+		if(element->time_domain != time_domain)
 			/*
-			 * invalidate frequency-domain filters
+			 * invalidate filter workspace
 			 */
 
-			free_fft_workspace(element);
-		}
+			free_workspace(element);
+		element->time_domain = time_domain;
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
+	}
 
 	case ARG_BLOCK_STRIDE: {
 		gint block_stride;
 		g_mutex_lock(element->fir_matrix_lock);
 		block_stride = g_value_get_int(value);
-		if(block_stride != element->block_stride)
+		if(block_stride != element->block_stride && element->time_domain)
 			/*
-			 * invalidate frequency-domain filters
+			 * invalidate filter workspace
 			 */
 
-			free_fft_workspace(element);
+			free_workspace(element);
 		element->block_stride = block_stride;
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
@@ -1371,10 +1688,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		}
 
 		/*
-		 * invalidate frequency-domain filters
+		 * invalidate filter workspace
 		 */
 
-		free_fft_workspace(element);
+		free_workspace(element);
 
 		/*
 		 * signal availability of new time-domain filters
@@ -1482,7 +1799,7 @@ static void finalize(GObject *object)
 		gsl_matrix_free(element->fir_matrix);
 		element->fir_matrix = NULL;
 	}
-	free_fft_workspace(element);
+	free_workspace(element);
 
 	/*
 	 * chain to parent class' finalize() method
@@ -1540,7 +1857,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) {32, 64}"
 	)
 );
 
@@ -1554,7 +1871,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) {32, 64}"
 	)
 );
 
@@ -1683,11 +2000,7 @@ static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass
 	filter->fir_matrix_lock = g_mutex_new();
 	filter->fir_matrix_available = g_cond_new();
 	filter->fir_matrix = NULL;
-	filter->workspace.fdd.working_fir_matrix = NULL;
-	filter->workspace.fdd.input = NULL;
-	filter->workspace.fdd.filtered = NULL;
-	filter->workspace.fdd.in_plan = NULL;
-	filter->workspace.fdd.out_plan = NULL;
+	memset(&filter->workspace, 0, sizeof(filter->workspace));
 	filter->last_new_segment = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }

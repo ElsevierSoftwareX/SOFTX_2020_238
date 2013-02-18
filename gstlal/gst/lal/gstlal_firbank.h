@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2009--2013 Kipp Cannon <kipp.cannon@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -95,8 +95,10 @@ struct _GSTLALFIRBank {
 
 	union {
 		struct {
+			/* not used */
 		} tdd;	/* double-precision time-domain */
 		struct {
+			gsl_matrix_float *working_fir_matrix;
 		} tds;	/* single-precision time-domain */
 		struct {
 			complex double *working_fir_matrix;
@@ -106,6 +108,11 @@ struct _GSTLALFIRBank {
 			fftw_plan out_plan;
 		} fdd;	/* double-precision frequency-domain */
 		struct {
+			complex float *working_fir_matrix;
+			complex float *input;
+			complex float *filtered;
+			fftwf_plan in_plan;
+			fftwf_plan out_plan;
 		} fds;	/* single-precision frequency-domain */
 	} workspace;
 

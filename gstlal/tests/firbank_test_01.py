@@ -45,7 +45,7 @@ import test_common
 #
 
 
-def firbank_test_01(pipeline, name):
+def firbank_test_01(pipeline, name, width, time_domain):
 	#
 	# try changing these.  test should still work!
 	#
@@ -62,13 +62,13 @@ def firbank_test_01(pipeline, name):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	fir_matrix = numpy.zeros((1, fir_length), dtype = "double")
 	fir_matrix[0, (fir_matrix.shape[1] - 1) - latency] = 1.0
 
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency, time_domain = False)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency, time_domain = time_domain)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
@@ -89,5 +89,8 @@ def firbank_test_01(pipeline, name):
 #
 
 
-test_common.build_and_run(firbank_test_01, "firbank_test_01a")
+test_common.build_and_run(firbank_test_01, "firbank_test_01a", width = 64, time_domain = True)
+test_common.build_and_run(firbank_test_01, "firbank_test_01b", width = 64, time_domain = False)
+test_common.build_and_run(firbank_test_01, "firbank_test_01c", width = 32, time_domain = True)
+test_common.build_and_run(firbank_test_01, "firbank_test_01d", width = 32, time_domain = False)
 
