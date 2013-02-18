@@ -45,7 +45,7 @@ import test_common
 #
 
 
-def framesrc_test_01a(pipeline):
+def framesrc_test_01a(pipeline, name):
 	#
 	# change these as needed to make test run on your machine
 	#

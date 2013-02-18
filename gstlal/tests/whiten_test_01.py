@@ -47,7 +47,7 @@ import test_common
 #
 
 
-def whiten_test_01a(pipeline):
+def whiten_test_01a(pipeline, name):
 	#
 	# signal handler to construct a new unit PSD (with LAL's
 	# normalization) whenever the frequency resolution or Nyquist
@@ -83,8 +83,8 @@ def whiten_test_01a(pipeline):
 	head.connect_after("notify::f-nyquist", psd_resolution_changed, None)
 	head.connect_after("notify::delta-f", psd_resolution_changed, None)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "whiten_test_01a_in.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "%s_in.dump" % name)
 
 	#
 	# done
@@ -99,7 +99,7 @@ def whiten_test_01a(pipeline):
 #
 
 
-def whiten_test_01b(pipeline):
+def whiten_test_01b(pipeline, name):
 	#
 	# try changing these.  test should still work!
 	#
@@ -117,7 +117,7 @@ def whiten_test_01b(pipeline):
 	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 6)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 
 	#
 	# done

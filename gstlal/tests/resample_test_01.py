@@ -28,7 +28,7 @@ import test_common
 #
 
 
-def resample_test_01a(pipeline):
+def resample_test_01a(pipeline, name):
 	#
 	# try changing these.  test should still work!
 	#
@@ -45,7 +45,7 @@ def resample_test_01a(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "resample_test_01a_control.dump")
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	elem = pipeparts.gst.element_factory_make("audiocheblimit")
 	elem.set_property("mode", 0)
 	elem.set_property("cutoff", .95 * out_rate / 2.0)
@@ -56,8 +56,8 @@ def resample_test_01a(pipeline):
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "resample_test_01a_out.dump")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "resample_test_01a_in.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 
 	#
 	# done
@@ -71,7 +71,7 @@ def resample_test_01a(pipeline):
 #
 
 
-def resample_test_01b(pipeline):
+def resample_test_01b(pipeline, name):
 	#
 	# try changing these.  test should still work!
 	#
@@ -88,7 +88,7 @@ def resample_test_01b(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "resample_test_01a_control.dump")
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	elem = pipeparts.gst.element_factory_make("audiocheblimit")
 	elem.set_property("mode", 0)
 	elem.set_property("cutoff", .95 * out_rate / 2.0)
@@ -105,8 +105,8 @@ def resample_test_01b(pipeline):
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % in_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "resample_test_01b_out.dump")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "resample_test_01b_in.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 
 	#
 	# done
