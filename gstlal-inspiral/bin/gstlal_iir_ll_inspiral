@@ -29,7 +29,6 @@
 
 import os
 import sys
-import warnings
 from optparse import OptionParser
 import resource
 import signal

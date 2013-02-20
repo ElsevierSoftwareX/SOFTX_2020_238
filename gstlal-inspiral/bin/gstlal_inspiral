@@ -30,7 +30,6 @@
 import os
 import resource
 import sys
-import warnings
 from optparse import OptionParser
 
 
