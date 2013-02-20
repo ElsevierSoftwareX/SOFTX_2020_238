@@ -130,7 +130,7 @@ def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_len
 
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("spectrum-movie")
-handler = simplehandler.LLOIDHandler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 
 head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
