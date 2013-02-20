@@ -1,0 +1,196 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import os
+import sys
+from optparse import OptionParser
+
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+
+from glue import lal
+from glue import segments
+from gstlal import datasource
+from gstlal import pipeparts
+from gstlal import simplehandler
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+
+def excepthook(*args):
+	# system exception hook that forces hard exit.  without this,
+	# exceptions that occur inside python code invoked as a call-back
+	# from the gstreamer pipeline just stop the pipeline, they don't
+	# cause gstreamer to exit.
+
+	# FIXME:  they probably *would* cause if we could figure out why
+	# element errors and the like simply stop the pipeline instead of
+	# crashing it, as well.  Perhaps this should be removed when/if the
+	# "element error's don't crash program" problem is fixed
+	sys.__excepthook__(*args)
+	os._exit(1)
+
+sys.excepthook = excepthook
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = __doc__
+	)
+	parser.add_option("--output-path", metavar = "filename", default = os.environ.get("TMPDIR", "."), help = "Set the path where the output frame files are to be written (default = value of TMPDIR environment variable if set, otherwise the current working directory).")
+	parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Downsample to this sample rate (default = no resampling).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	datasource.append_options(parser)
+
+	options, (cache_filename,) = parser.parse_args()
+
+	options.description = "CBC_TMP"
+
+	return options, cache_filename
+
+
+#
+# =============================================================================
+#
+#                                Custom Handler
+#
+# =============================================================================
+#
+
+
+class Handler(simplehandler.Handler):
+	def init_cache(self, instrument, description):
+		self.cache_instrument = instrument
+		self.cache_description = description
+		self.cache = []
+
+	def do_on_message(self, bus, message):
+		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
+			start = LIGOTimeGPS(0, message.structure["timestamp"])
+			end = start + LIGOTimeGPS(0, message.structure["duration"])
+			self.cache.append(lal.CacheEntry(self.cache_instrument, self.cache_description, segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"])))
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, cache_filename = parse_command_line()
+data_source_info = datasource.GWDataSourceInfo(options)
+instrument, = data_source_info.channel_dict
+
+
+#
+# Build pipeline
+#
+
+
+mainloop = gobject.MainLoop()
+pipeline = gst.Pipeline("gstlal_inspiral_condition_data")
+handler = Handler(mainloop, pipeline)
+handler.init_cache(instrument, options.description)
+
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline ...",
+
+head = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+if options.sample_rate is not None:
+	# make sure we're *down*sampling
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % options.sample_rate)
+	head = pipeparts.mkresample(pipeline, head, quality = 9)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % options.sample_rate)
+head = pipeparts.mkframecppchannelmux(pipeline, head, frames_per_file = 512)
+pipeparts.mkmultifilesink(pipeline, head, location = os.path.join(options.output_path, "%s-%s-%%05d.gwf" % (instrument, options.description)), post_messages = True)
+
+if options.verbose:
+	print >>sys.stderr, "done"
+
+
+#
+# Run pipeline
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to paused ..."
+if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError("pipeline did not enter paused state")
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError("pipeline did not enter playing state")
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+mainloop.run()
+
+
+#
+# Write cache
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "writing %s ..." % cache_filename
+cache_file = open(cache_filename, "w")
+for cacheentry in handler.cache:
+	print >>cache_file, str(cacheentry)
+
+
+#
+# done
+#
