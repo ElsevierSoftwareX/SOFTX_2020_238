@@ -429,13 +429,13 @@ static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, co
 
 	fullcache = XLALFrImportCache(filename);
 	if(!fullcache) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache(%s) failed: %s", filename, XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		return NULL;
 	}
 
 	/*
-	 * Sieve the cache for the cache_src_regex of interest
+	 * Sieve the cache using the description and source regex
 	 */
 
 	cache = XLALFrSieveCache(fullcache, &sieve);
