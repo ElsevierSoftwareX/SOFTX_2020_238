@@ -693,7 +693,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		/* FIXME:  hard-coded = BAD BAD BAD */
 		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
 		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
+		gstlal_fftw_lock();
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
+		gstlal_fftw_unlock();
 		if(!element->injection_document) {
 			GST_ERROR_OBJECT(element, "error loading \"%s\"", element->xml_location);
 			gst_buffer_unref(buf);
