@@ -62,14 +62,7 @@ def channel_dict_from_channel_list(channel_list):
 	H2="SOMETHING-ELSE"] produce a dictionary keyed by ifo of channel
 	names.  The default values are LSC-STRAIN for all detectors
 	"""
-
-	channel_dict = {}
-	for channel in channel_list:
-		ifo = channel.split("=")[0]
-		chan = "".join(channel.split("=")[1:])
-		channel_dict[ifo] = chan
-
-	return channel_dict
+	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
 
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
