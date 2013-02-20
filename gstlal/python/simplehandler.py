@@ -61,7 +61,19 @@ class Handler(object):
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
 
+	def do_on_message(self, bus, message):
+		"""
+		Add extra message handling by overriding this in your
+		subclass.  If this method returns True, no further message
+		handling is performed.  If this method returns False,
+		message handling continues with default cases or EOS, INFO,
+		WARNING and ERROR messages.
+		"""
+		return False
+
 	def on_message(self, bus, message):
+		if self.do_on_message(bus, message):
+			return
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
