@@ -134,7 +134,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	#
 
 	if inj_seg_list is not None:
-		src = mksegmentsrcgate(pipeline, src, inj_seg_list, threshold = 0.1, seekevent = seekevent, invert_output = False)
+		src = datasource.mksegmentsrcgate(pipeline, src, inj_seg_list, threshold = 0.1, seekevent = seekevent, invert_output = False)
 
 	#
 	# verbosity and a tee
