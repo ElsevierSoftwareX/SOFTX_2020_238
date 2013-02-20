@@ -81,11 +81,9 @@ class PSDHandler(simplehandler.Handler):
 		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 
-	def on_message(self, bus, message):
+	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
-		else:
-			super(type(self), self).on_message(bus, message)
 
 
 #
