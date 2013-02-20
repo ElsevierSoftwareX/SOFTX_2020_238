@@ -41,25 +41,8 @@ from glue.ligolw import utils
 from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import reference_psd
+from gstlal import simplehandler
 
-
-class Handler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -102,7 +85,7 @@ else:
 gobject.threads_init()
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("gstlal_play_frames")
-handler = Handler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
 # the pipeline
 
