@@ -53,7 +53,6 @@ from gstlal import pipeparts
 from gstlal import simulation
 from gstlal import datasource
 from gstlal import multirate_datasource
-from gstlal import simplehandler
 from pylal.datatypes import LIGOTimeGPS
 
 
