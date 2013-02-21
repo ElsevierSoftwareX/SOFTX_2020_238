@@ -146,6 +146,8 @@ void framecpp_muxcollectpads_set_event_function(FrameCPPMuxCollectPadsData *, Gs
 void framecpp_muxcollectpads_set_flushing(FrameCPPMuxCollectPads *, gboolean);
 void framecpp_muxcollectpads_start(FrameCPPMuxCollectPads *);
 void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *);
+gboolean framecpp_muxcollectpads_get_common_span(FrameCPPMuxCollectPads *, GstClockTime *, GstClockTime *);
+gboolean framecpp_muxcollectpads_get_span(FrameCPPMuxCollectPads *, GstClockTime *, GstClockTime *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);
 void framecpp_muxcollectpads_buffer_list_boundaries(GList *, GstClockTime *, GstClockTime *);
 

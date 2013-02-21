@@ -465,10 +465,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value)) {
 			g_strstrip(value);
 			g_object_set(pad, "units", value, NULL);
-			GST_OBJECT_LOCK(mux->collect);
 			g_free(appdata->unitY);
 			appdata->unitY = value;
-			GST_OBJECT_UNLOCK(mux->collect);
 		} else
 			g_free(value);
 		value = NULL;
