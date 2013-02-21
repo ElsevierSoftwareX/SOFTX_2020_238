@@ -367,7 +367,14 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
 		/* FIXME support single precision and get it from caps */
-		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		if (width == 128) {
+			element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+			element->chi2 = calloc(element->channels, sizeof(double));
+			}
+		if (width == 64) {
+			element->peak_type = GSTLAL_PEAK_COMPLEX;
+			element->chi2 = calloc(element->channels, sizeof(float));
+			}
 		if (element->maxdata)
 			gstlal_peak_state_free(element->maxdata);
 		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
@@ -422,31 +429,43 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	double complex *dataptr = NULL;
+	union {
+		complex * as_complex;
+		double complex * as_double_complex;
+		void * as_void;
+		} dataptr;
 
 	/* make sure the snr threshold is up-to-date */
 	element->maxdata->thresh = element->snr_thresh;
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
+	
 	/* put the data pointer one pad length in */
-	/* FIXME support single precision too */
-	dataptr = (double complex *) element->data + element->maxdata->pad * element->maxdata->channels;
-	/* Find the peak FIXME support single precision too */
-	gstlal_peak_over_window(element->maxdata, (const void *) dataptr, outsamps);
+	if (element->peak_type == GSTLAL_PEAK_COMPLEX)
+		dataptr.as_complex = (complex *) element->data + element->maxdata->pad * element->maxdata->channels;
+	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+		dataptr.as_double_complex = (double complex *) element->data + element->maxdata->pad * element->maxdata->channels;
+
+	/* Find the peak */
+	gstlal_peak_over_window(element->maxdata, (const void *) dataptr.as_void, outsamps);
+
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
-		/* FIXME preallocate? */
-		double chi2[autocorrelation_channels(element)];
 		/* compute the chisq norm if it doesn't exist */
 		if (!element->autocorrelation_norm)
 			element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
-		/* extract data around peak for chisq calculation FIXME support single precision too */
-		gstlal_series_around_peak(element->maxdata, (void *) dataptr, element->snr_mat, element->maxdata->pad);
+
+		/* extract data around peak for chisq calculation */
+		gstlal_series_around_peak(element->maxdata, (void *) dataptr.as_void, element->snr_mat, element->maxdata->pad);
 		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
-		/* FIXME support single precision too */
-		gstlal_autocorrelation_chi2(chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+
+		if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+		if (element->peak_type == GSTLAL_PEAK_COMPLEX)
+			gstlal_autocorrelation_chi2_float((float *) element->chi2, (complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+
 		/* create the output buffer */
-		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, chi2);
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2);
 		}
 	else
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL);
@@ -634,6 +653,9 @@ static void finalize(GObject *object)
 		gsl_vector_free(element->autocorrelation_norm);
 		element->autocorrelation_norm = NULL;
 	}
+	if(element->chi2) {
+		free(element->chi2);
+	}
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -650,7 +672,7 @@ static void finalize(GObject *object)
 	"rate = (int) [1, MAX], " \
 	"channels = (int) [1, MAX], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {128}; "
+	"width = (int) {64, 128}; "
 
 
 static void base_init(gpointer class)
