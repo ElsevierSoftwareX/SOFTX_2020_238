@@ -129,7 +129,7 @@ class Handler(simplehandler.Handler):
 
 options, cache_filename = parse_command_line()
 data_source_info = datasource.GWDataSourceInfo(options)
-instrument, = data_source_info.channel_dict
+(instrument, channel_name), = data_source_info.channel_dict.items()
 
 
 #
@@ -146,14 +146,15 @@ handler.init_cache(instrument, options.description)
 if options.verbose:
 	print >>sys.stderr, "assembling pipeline ...",
 
-head = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 if options.sample_rate is not None:
 	# make sure we're *down*sampling
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % options.sample_rate)
-	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % options.sample_rate)
-head = pipeparts.mkframecppchannelmux(pipeline, head, frames_per_file = 512)
-pipeparts.mkmultifilesink(pipeline, head, location = os.path.join(options.output_path, "%s-%s-%%05d.gwf" % (instrument, options.description)), post_messages = True)
+	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % options.sample_rate)
+	src = pipeparts.mkresample(pipeline, src, quality = 9)
+	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % options.sample_rate)
+sink = pipeparts.mkframecppchannelmux(pipeline, None, frames_per_file = 512)
+src.get_pad("src").link(sink.get_pad("%s:%s" % (instrument, channel_name)))
+pipeparts.mkmultifilesink(pipeline, sink, location = os.path.join(options.output_path, "%s-%s-%%05d.gwf" % (instrument, options.description)), post_messages = True)
 
 if options.verbose:
 	print >>sys.stderr, "done"
