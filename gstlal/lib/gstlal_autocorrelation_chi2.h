@@ -58,3 +58,4 @@ unsigned gstlal_autocorrelation_chi2_autocorrelation_channels(const gsl_matrix_c
 unsigned gstlal_autocorrelation_chi2_autocorrelation_length(const gsl_matrix_complex *);
 gsl_vector *gstlal_autocorrelation_chi2_compute_norms(const gsl_matrix_complex *, const gsl_matrix_int *);
 unsigned gstlal_autocorrelation_chi2(double *, const complex double *, unsigned, int, double, const gsl_matrix_complex *, const gsl_matrix_int *, const gsl_vector *);
+unsigned gstlal_autocorrelation_chi2_float(float *, const complex *, unsigned, int, double, const gsl_matrix_complex *, const gsl_matrix_int *, const gsl_vector *);
