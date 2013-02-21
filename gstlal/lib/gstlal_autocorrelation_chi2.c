@@ -320,3 +320,146 @@ unsigned gstlal_autocorrelation_chi2(
 
 	return output_length;
 }
+
+/*
+ * Single precision version
+ */
+
+unsigned gstlal_autocorrelation_chi2_float(
+	float *output,	/* pointer to start of output buffer */
+	const complex *input,	/* pointer to start of input buffer */
+	unsigned input_length,	/* how many samples of the input to process */
+	int latency,	/* latency offset */
+	double snr_threshold,	/* only compute \chi^{2} values for input samples at or above this SNR (set to 0.0 to compute all \chi^{2} values) */
+	const gsl_matrix_complex *autocorrelation_matrix,	/* autocorrelation function matrix.  autocorrelation vectors are rows */
+	const gsl_matrix_int *autocorrelation_mask_matrix,	/* autocorrelation mask matrix or NULL to disable mask feature */
+	const gsl_vector *autocorrelation_norm	/* autocorrelation norms */
+)
+{
+	unsigned channels = autocorrelation_channels(autocorrelation_matrix);
+	unsigned output_length;
+	float *output_end;
+
+	/*
+	 * safety checks
+	 */
+
+	g_assert(autocorrelation_matrix->tda == autocorrelation_length(autocorrelation_matrix));
+	if(autocorrelation_mask_matrix) {
+		g_assert(autocorrelation_channels(autocorrelation_matrix) == autocorrelation_mask_matrix->size1);
+		g_assert(autocorrelation_length(autocorrelation_matrix) == autocorrelation_mask_matrix->size2);
+		g_assert(autocorrelation_mask_matrix->tda == autocorrelation_length(autocorrelation_matrix));
+	}
+
+	/*
+	 * initialize
+	 */
+
+	/* the +1 is because when there is 1 correlation-length of data in
+	 * the adapter then we can produce 1 output sample, not 0. */
+	output_length = input_length - autocorrelation_length(autocorrelation_matrix) + 1;
+	output_end = output + output_length * channels;
+
+	/*
+	 * compute output samples.  note:  we assume that gsl_complex can
+	 * be aliased to complex double.  I think it says somewhere in the
+	 * documentation that this is true.
+	 */
+
+	while(output < output_end) {
+		const complex double *autocorrelation = (const complex double *) gsl_matrix_complex_const_ptr(autocorrelation_matrix, 0, 0);
+		const int *autocorrelation_mask = autocorrelation_mask_matrix ? (const int *) gsl_matrix_int_const_ptr(autocorrelation_mask_matrix, 0, 0) : NULL;
+		unsigned channel;
+
+		for(channel = 0; channel < channels; channel++) {
+			/*
+			 * start of input data block to be used for this
+			 * output sample
+			 */
+
+			const complex *indata = input;
+
+			/*
+			 * the input sample by which the autocorrelation
+			 * funcion will be scaled
+			 */
+
+			complex double snr = input[((gint) autocorrelation_length(autocorrelation_matrix) - 1 + latency) * channels];
+
+			if(cabs(snr) >= snr_threshold) {
+#if CHI2_USES_REAL_ONLY
+				/*
+				 * multiplying snr by this makes it real
+				 */
+
+				complex double invsnrphase = complex cexp(-I*carg(snr));
+#endif
+
+				/*
+				 * end of this channel's row in the autocorrelation
+				 * matrix
+				 */
+
+				const complex double *autocorrelation_end = autocorrelation + autocorrelation_length(autocorrelation_matrix);
+
+				/*
+				 * \chi^{2} sum
+				 */
+
+				double chisq;
+
+				/*
+				 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
+				 */
+
+				if(autocorrelation_mask) {
+					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, autocorrelation_mask++, indata += channels) {
+						complex double z;
+						if(!*autocorrelation_mask)
+							continue;
+						z = *autocorrelation * snr - (complex double) *indata;
+#if CHI2_USES_REAL_ONLY
+						chisq += pow(creal(z * invsnrphase), 2);
+#else
+						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+#endif
+					}
+				} else {
+					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
+						complex double z = *autocorrelation * snr - (complex double) *indata;
+#if CHI2_USES_REAL_ONLY
+						chisq += pow(creal(z * invsnrphase), 2);
+#else
+						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+#endif
+					}
+				}
+
+				/*
+				 * record \chi^{2} sum, advance to next output sample
+				 */
+
+				*output = (float) chisq / gsl_vector_get(autocorrelation_norm, channel);
+			} else {
+				autocorrelation += autocorrelation_length(autocorrelation_matrix);
+				if(autocorrelation_mask)
+					autocorrelation_mask += autocorrelation_length(autocorrelation_matrix);
+				*output = 0;
+			}
+
+			/*
+			 * advance to next sample
+			 */
+
+			output++;
+			input++;
+		}
+	}
+
+	/*
+	 * done
+	 */
+
+	return output_length;
+}
+
