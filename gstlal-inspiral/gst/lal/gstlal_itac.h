@@ -73,6 +73,7 @@ typedef struct {
 	gstlal_peak_type_specifier peak_type;
 	struct gstlal_peak_state *maxdata;
 	void *data;
+	void *chi2;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	SnglInspiralTable *bankarray;
