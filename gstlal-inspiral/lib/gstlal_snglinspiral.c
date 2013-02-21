@@ -93,7 +93,7 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, double *chi2)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2)
 {
 	/* FIXME check errors */
 
@@ -151,7 +151,19 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				output->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
 				output->eff_distance = gstlal_effective_distance(output->snr, output->sigmasq);
 				/* populate chi squared if we have it */
-				if (chi2) output->chisq = chi2[channel];
+				switch (input->type)
+					{
+					case GSTLAL_PEAK_COMPLEX:
+					if (chi2) output->chisq = (double) *(((float *) chi2 ) + channel);
+					break;
+		
+					case GSTLAL_PEAK_DOUBLE_COMPLEX:
+					if (chi2) output->chisq = (double) *(((double *) chi2 ) + channel);
+					break;
+
+					default:
+					g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
+					}
 				output++;
 			}
 		}
