@@ -325,7 +325,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 	warnings.warn("mkLLOIDsrc() is deprecated.  Call multirate_datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
 
-	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad)
+	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad, width = 64)
 
 
 #
@@ -693,7 +693,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
@@ -707,8 +707,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# extract segments from the injection file for selected reconstruction
 	#
 
-	if injection_filename is not None:
-		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
+	if detectors.injection_filename is not None:
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
 		inj_seg_list = None
 
@@ -718,13 +718,13 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	#
 
 	hoftdicts = {}
-	for instrument in detectors:
+	for instrument in detectors.channel_dict:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
+		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:
-			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = detectors.seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 		else:
-			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = detectors.seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 
 	#
 	# build gate control branches
@@ -735,7 +735,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	else:
