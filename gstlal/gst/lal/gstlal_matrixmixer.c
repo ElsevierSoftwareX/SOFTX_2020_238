@@ -209,12 +209,6 @@ static void mixmatrix_free(GSTLALMatrixMixer *element)
 static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	guint64 length;
-	union {
-		gsl_matrix_float_view as_float;
-		gsl_matrix_view as_double;
-		gsl_matrix_complex_float_view as_complex_float;
-		gsl_matrix_complex_view as_complex_double;
-	} input_channels, output_channels;
 
 	/*
 	 * Number of samples to process.
@@ -230,45 +224,49 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	 */
 
 	switch(element->data_type) {
-	case GSTLAL_MATRIXMIXER_FLOAT:
-		input_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		output_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
-		if(input_channels.as_float.matrix.size1 * input_channels.as_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
+	case GSTLAL_MATRIXMIXER_FLOAT: {
+		gsl_matrix_float_view input_channels = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
+		gsl_matrix_float_view output_channels = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not an integer number of samples", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
-		gsl_blas_sgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.as_float.matrix, element->mixmatrix.as_float, 0, &output_channels.as_float.matrix);
+		gsl_blas_sgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, element->mixmatrix.as_float, 0, &output_channels.matrix);
 		break;
+	}
 
-	case GSTLAL_MATRIXMIXER_DOUBLE:
-		input_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		output_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
-		if(input_channels.as_double.matrix.size1 * input_channels.as_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
+	case GSTLAL_MATRIXMIXER_DOUBLE: {
+		gsl_matrix_view input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
+		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not an integer number of samples", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
-		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.as_double.matrix, element->mixmatrix.as_double, 0, &output_channels.as_double.matrix);
+		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, element->mixmatrix.as_double, 0, &output_channels.matrix);
 		break;
+	}
 
-	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
-		input_channels.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		output_channels.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
-		if(input_channels.as_complex_float.matrix.size1 * input_channels.as_complex_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT: {
+		gsl_matrix_complex_float_view input_channels = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
+		gsl_matrix_complex_float_view output_channels = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not an integer number of samples", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
-		gsl_blas_cgemm(CblasNoTrans, CblasNoTrans, (gsl_complex_float) {{1,0}}, &input_channels.as_complex_float.matrix, element->mixmatrix.as_complex_float, (gsl_complex_float) {{0,0}}, &output_channels.as_complex_float.matrix);
+		gsl_blas_cgemm(CblasNoTrans, CblasNoTrans, (gsl_complex_float) {{1,0}}, &input_channels.matrix, element->mixmatrix.as_complex_float, (gsl_complex_float) {{0,0}}, &output_channels.matrix);
 		break;
+	}
 
-	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
-		input_channels.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		output_channels.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
-		if(input_channels.as_complex_double.matrix.size1 * input_channels.as_complex_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE: {
+		gsl_matrix_complex_view input_channels = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
+		gsl_matrix_complex_view output_channels = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not an integer number of samples", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
-		gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.as_complex_double.matrix, element->mixmatrix.as_complex_double, GSL_COMPLEX_ZERO, &output_channels.as_complex_double.matrix);
+		gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.matrix, element->mixmatrix.as_complex_double, GSL_COMPLEX_ZERO, &output_channels.matrix);
 		break;
+	}
 	}
 
 	/*
