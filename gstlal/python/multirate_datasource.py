@@ -48,7 +48,7 @@ from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 
 
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0, width = 64):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -89,26 +89,28 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# construct whitener.
 	#
 
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max(rates)))
 
 	# export PSD in ascii text format
 	# FIXME:  also make them available in XML format as a single document
 	@bottle.route("/%s/psd.txt" % instrument)
-	def get_psd_txt(elem = head):
+	def get_psd_txt(elem = whiten):
 		delta_f = elem.get_property("delta-f")
 		yield "# frequency\tspectral density\n"
 		for i, value in enumerate(elem.get_property("mean-psd")):
 			yield "%.16g %.16g\n" % (i * delta_f, value)	
 	if psd is None:
 		# use running average PSD
-		head.set_property("psd-mode", 0)
+		whiten.set_property("psd-mode", 0)
 	else:
 		# use running psd
 		if track_psd:
-			head.set_property("psd-mode", 0)
+			whiten.set_property("psd-mode", 0)
 		# use fixed PSD
 		else:
-			head.set_property("psd-mode", 1)
+			whiten.set_property("psd-mode", 1)
 
 		#
 		# install signal handler to retrieve \Delta f and
@@ -125,8 +127,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			psd = reference_psd.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
-		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
-		head.connect_after("notify::delta-f", psd_resolution_changed, psd)
+		whiten.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
+		whiten.connect_after("notify::delta-f", psd_resolution_changed, psd)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
