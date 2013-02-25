@@ -207,7 +207,7 @@ def append_options(parser):
 	for applications that read GW data.
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|online|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|online|nds|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=online")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=online")
