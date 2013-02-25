@@ -1,7 +1,7 @@
 /*
  * GstLALCacheSrc
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -197,15 +197,6 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 /*
  * ============================================================================
  *
- *                                Exported API
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- *
  *                             GstBaseSrc Methods
  *
  * ============================================================================
@@ -341,6 +332,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
 	GST_BUFFER_OFFSET_END(*buf) = GST_BUFFER_OFFSET(*buf) + GST_BUFFER_SIZE(*buf);
 	basesrc->offset += GST_BUFFER_SIZE(*buf);
+	/* need_discont is TRUE for the first buffer, so
+	 * cache_entry_end_time() won't be invoked with an index of -1 */
 	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -581,6 +574,13 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
+	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
+	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
+	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
+
 	gst_element_class_set_details_simple(
 		element_class,
 		"LAL Frame Cache File Source",
@@ -646,13 +646,6 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-
-	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
-	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
-	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
-	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
-	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
-	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 }
 
 
