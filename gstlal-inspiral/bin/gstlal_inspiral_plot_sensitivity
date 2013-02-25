@@ -97,7 +97,7 @@ class upper_limit(object):
             for inst in self.instruments:
                 self.found_injections.setdefault(inst,[])
                 self.total_injections.setdefault(inst,[])
-                found, total = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
                 self.found_injections[inst] += found
                 self.total_injections[inst] += total
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
