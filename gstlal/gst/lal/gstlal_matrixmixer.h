@@ -1,7 +1,7 @@
 /*
  * A many-to-many mixer.
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008--2013  Kipp Cannon, Chad Hanna
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the
@@ -85,19 +85,17 @@ typedef struct {
 
 	GMutex *mixmatrix_lock;
 	GCond *mixmatrix_available;
-	enum {
+	gsl_matrix *mixmatrix_d;
+	gsl_matrix_float *mixmatrix_s;
+	gsl_matrix_complex_view mixmatrix_cd;
+	gsl_matrix_complex_float_view mixmatrix_cs;
+	enum gstlal_matrixmixer_media_type {
+		GSTLAL_MATRIXMIXER_NONE = 0,
 		GSTLAL_MATRIXMIXER_FLOAT,
 		GSTLAL_MATRIXMIXER_DOUBLE,
 		GSTLAL_MATRIXMIXER_COMPLEX_FLOAT,
 		GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE
 	} data_type;
-	union {
-		void *as_void;
-		gsl_matrix_float *as_float;
-		gsl_matrix *as_double;
-		gsl_matrix_complex_float *as_complex_float;
-		gsl_matrix_complex *as_complex_double;
-	} mixmatrix;
 } GSTLALMatrixMixer;
 
 
