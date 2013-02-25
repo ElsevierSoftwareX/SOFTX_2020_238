@@ -1,4 +1,4 @@
-# Copyright (C) 2009,2010  Kipp Cannon
+# Copyright (C) 2009--2011,2013  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -36,6 +36,7 @@ import gst
 
 
 from gstlal import pipeparts
+from gstlal import simplehandler
 
 
 gobject.threads_init()
@@ -62,7 +63,7 @@ def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, test_durati
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = "H1", channel_name = "LSC-STRAIN")
 	else:
 		head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length))
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d" % (width, rate))
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, rate))
 	return pipeparts.mkprogressreport(pipeline, head, "src")
 
 
@@ -70,7 +71,7 @@ def gapped_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, test
 	src = test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq)
 	if gap_frequency is None:
 		return src
-	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=32, rate=%d" % rate)
+	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=32, rate=%d, channels=1" % rate)
 	if control_dump_filename is not None:
 		control = pipeparts.mktee(pipeline, control)
 		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control), control_dump_filename)
@@ -84,7 +85,7 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 		src = pipeparts.mktaginject(pipeline, src, tags)
 	if gap_frequency is None:
 		return src
-	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=32, rate=%d" % rate)
+	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=32, rate=%d, channels=1" % rate)
 	if control_dump_filename is not None:
 		control = pipeparts.mknxydumpsinktee(pipeline, pipeparts.mkqueue(pipeline, control), control_dump_filename)
 		control = pipeparts.mkqueue(pipeline, control)
@@ -94,36 +95,17 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 #
 # =============================================================================
 #
-#                               Pipeline Handler
+#                               Pipeline Builder
 #
 # =============================================================================
 #
-
-
-class Handler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
 
 
 def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline(name)
-	handler = Handler(mainloop, pipelinefunc(pipeline, name, **pipelinefunc_kwargs))
+	handler = simplehandler.Handler(mainloop, pipelinefunc(pipeline, name, **pipelinefunc_kwargs))
 	if segment is not None:
 		pipeline.set_state(gst.STATE_PAUSED)
 		pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, segment[0].ns(), gst.SEEK_TYPE_SET, segment[1].ns())
