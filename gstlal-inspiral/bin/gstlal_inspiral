@@ -31,7 +31,9 @@ import os
 import resource
 import sys
 from optparse import OptionParser
-
+import signal
+import subprocess
+import socket
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -41,7 +43,7 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 import gst
-
+from gstlal import bottle
 
 from glue import segments
 from glue import segmentsUtils
@@ -63,6 +65,7 @@ from gstlal import simplehandler
 from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
+from gstlal import datasource
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -97,6 +100,9 @@ maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
 resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
 
+def now():
+	return XLALUTCToGPS(time.gmtime())
+
 #
 # =============================================================================
 #
@@ -110,16 +116,12 @@ def parse_command_line():
 	parser = OptionParser(
 		description = __doc__
 	)
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data is used in which case it must not be set.")
-	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
-	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
-	parser.add_option("--fake-data", metavar = "[white|silence|AdvVirgo|LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate fake data")
-	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+
+	# append all the datasource specific options
+	datasource.append_options(parser)
+
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
-	parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
@@ -138,21 +140,22 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 
-	options, filenames = parser.parse_args()
+	# Online options
 
-	if len([option for option in ("frame_cache", "fake_data") if getattr(options, option) is not None]) != 1:
-		raise ValueError, "must provide exactly one of --frame-cache, --fake-data"
+	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
+	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+	parser.add_option("--likelihood-snapshot-interval", default = 28800, type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+
+	options, filenames = parser.parse_args()
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
 
-	required_options = ["output"]
-	if options.frame_cache:
-		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
-	if options.frame_segments_file:
-		required_options += ["frame_segments_name"]
-	if options.frame_segments_name:
-		required_options += ["frame_segments_file"]
+	required_options = []
 
 	missing_options = []
 	if options.svd_bank is None:
@@ -161,24 +164,19 @@ def parse_command_line():
 	if missing_options:
 		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
+	# parse the datasource specific information and do option checking
+	detectors = datasource.GWDataSourceInfo(options)
+	if len(detectors.channel_dict) < 2:
+		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
+
 	# Get the banks and make the detectors
 	# FIXME add error checking on length of banks per detector, etc
 	svd_banks = inspiral.parse_banks(options.svd_bank)
-	# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
-	channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
-	detectors = {}
-	for instrument in set(svd_banks.keys()):
-		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, channel_dict[instrument])
-	if len(detectors) < 2:
-		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
 	# FIXME: should also check for read permissions
 	required_files = []
 	for instrument in svd_banks:
 		required_files.extend(svd_banks[instrument])
-
-	if options.frame_segments_file:
-		required_files += [options.frame_segments_file]
 	if options.veto_segments_file:
 		required_files += [options.veto_segments_file]
 	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
@@ -191,14 +189,60 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = options.__dict__.copy()
 
-	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
-
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
 	options.psd_fft_length = 16	# seconds
+	
+	# Online specific initialization
+	if options.data_source == "online":
+		# check required options in this case
+		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
+		
+		missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+		if missing_options:
+			raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+		# shorter whitening filter online
+		options.psd_fft_length = 8	# seconds
 
+		# make an "infinite" extent segment
+		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+	
+		# this gets set so that if you log into a node you can find out what the job id is easily
+		os.environ['GSTLAL_LL_JOB'] = options.job_tag
+
+		#
+		# Set up a registry of the resources that this job provides
+		#
+	
+		host = socket.gethostname()
+
+		# FIXME 
+		# update this as bottle routes are added, can we do this automatically?
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
+		f = open(fname, "w")
+
+		@bottle.route("/registry.txt")
+		def register(fname = None):
+		
+			yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
+
+			# First do urls that do not depend on instruments
+			for request in ("registry.txt", "gracedb_far_threshold.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt", "segments.xml"):
+				# FIXME don't hardcode port number
+				yield "http://%s:16953/%s\n" % (host, request)
+
+			# Then do instrument dependent urls
+			for ifo in set(svd_banks.keys()):
+				for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt", "psd.txt"):
+					# FIXME don't hardcode port number
+					yield "http://%s:16953/%s/%s\n" % (host, ifo, request)
+
+		[f.write(l) for l in register(fname)]
+		f.close()
+
+	# we're done
 	return options, filenames, process_params, svd_banks, detectors
 
 
@@ -221,15 +265,6 @@ options, filenames, process_params, svd_banks, detectors = parse_command_line()
 if not options.check_time_stamps:
 	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
-#
-# Parse the segments file(s) if provided
-#
-
-
-if options.frame_segments_file is not None:
-	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.frame_segments_name).coalesce()
-else:
-	frame_segments = dict([(instrument, None) for instrument in detectors])
 
 #
 # Parse the vetos segments file(s) if provided
@@ -240,14 +275,6 @@ if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
-
-
-#
-# Set up seek
-#
-
-
-seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
 
 
 #
@@ -263,7 +290,7 @@ seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SE
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
-	psd = dict([(instrument, None) for instrument in detectors])
+	psd = dict([(instrument, None) for instrument in detectors.channel_dict])
 
 
 #
@@ -271,6 +298,10 @@ else:
 #
 
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
+@bottle.route("/bank.txt")
+def get_filter_length_and_chirpmass(banks = banks):
+	bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+	yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
 
 #
 # Build pipeline
@@ -287,24 +318,28 @@ handler = simplehandler.Handler(mainloop, pipeline)
 
 triggersrc = lloidparts.mkLLOIDmulti(
 	pipeline,
-	seekevent,
 	detectors = detectors,
 	banks = banks,
 	psd = psd,
 	psd_fft_length = options.psd_fft_length,
-	data_source = options.fake_data or "frames",
-	injection_filename = options.injections,
 	ht_gate_threshold = options.ht_gate_threshold,
 	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
-	frame_segments = frame_segments,
 	chisq_type = options.chisq_type,
 	track_psd = options.track_psd,
 	control_peak_time = options.control_peak_time,
 	fir_stride = options.fir_stride
 )
 
+# FIXME this is busted, don't assume there is an h(t) gate find a better way to do this
+# special gates to attach signal handlers to
+#gates = {}
+#for ifo in detectors:
+	# defined in datasource.mkbasicsrc
+#	gates["%s_state_vector_gate" % ifo] = "state vector gate"
+	# defined in multirate_datasource.mkwhitened_multirate_src
+#	gates["%s_%d_ht_gate" % (ifo, max(rate for bank in banks[ifo] for rate in bank.get_rates()))] = "ht gate"
 
 if options.verbose:
 	print >>sys.stderr, "done"
@@ -321,7 +356,7 @@ else:
 	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
 	# initialize an empty trials table with the combinations of detectors
 	# that this job will analyze
-	FAR.trials_table.initialize_from_sngl_ifos(detectors.keys())
+	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
 
 #
 # build output document
@@ -331,18 +366,25 @@ else:
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
 output = inspiral.Data(
-	filename = options.output,
+	filename = options.output or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 	process_params = process_params,
 	pipeline = pipeline,
-	instruments = set(detectors),
-	seg = options.seg,
+	instruments = set(detectors.channel_dict),
+	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
 	FAR = FAR,
+	likelihood_file = options.likelihood_file,
+	marginalized_likelihood_file = options.marginalized_likelihood_file,
+	likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 	assign_likelihoods = options.likelihood_file is not None,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
+	thinca_interval = options.thinca_interval,
+	gracedb_far_threshold = options.gracedb_far_threshold,
+	gracedb_type = options.gracedb_type,
+	gracedb_group = options.gracedb_group,
 	verbose = options.verbose
 )
 if options.verbose:
@@ -363,21 +405,54 @@ if options.write_pipeline is not None:
 	pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
-#
-# start http interface
-#
-
-# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
-# httpinterface.start_servers(16953, verbose = options.verbose)
 
 #
 # Run pipeline
 #
 
-if options.verbose:
-	print >>sys.stderr, "setting pipeline state to paused ..."
-if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "pipeline did not enter paused state"
+if options.data_source != "online":
+	if options.verbose:
+		print >>sys.stderr, "setting pipeline state to paused ..."
+	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError, "pipeline did not enter paused state"
+else:
+	#
+	# start http interface
+	#
+
+	# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+	httpinterface.start_servers(16953, verbose = options.verbose)
+	#
+	# setup sigint handler to shutdown pipeline.  this is how the program stops
+	# gracefully, it is the only way to stop it.  Otherwise it runs forever
+	# man.
+	#
+
+
+	class OneTimeSignalHandler(object):
+		def __init__(self, pipeline):
+			self.pipeline = pipeline
+			self.count = 0
+
+		def __call__(self, signum, frame):
+			self.count += 1
+			if self.count == 1:
+				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+				try:
+					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline))
+					if not self.pipeline.send_event(gst.event_new_eos()):
+						raise Exception("pipeline.send_event(EOS) returned failure")
+				except Exception, e:
+					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+					os._exit(1)
+			else:
+				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+	# FIXME get rid of this someday: Repair the shared memory just in case before starting
+	for partition in ("LHO_Data", "LLO_Data", "VIRGO_Data"):
+		subprocess.call(["smrepair", partition])
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
@@ -397,9 +472,12 @@ mainloop.run()
 #
 
 
-output.write_output_file(verbose = options.verbose)
+output.write_output_file(filename = options.output or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = options.likelihood_file, verbose = options.verbose)
 
 
 #
 # done
 #
+
+if options.data_source == "online":
+	sys.exit(1) # online pipeline always ends with an error code
