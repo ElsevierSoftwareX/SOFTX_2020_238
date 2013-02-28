@@ -36,6 +36,7 @@ from optparse import OptionParser
 from gstlal import inspiral
 from gstlal import inspiral_pipe
 from gstlal import dagparts
+from gstlal import datasource
 
 #
 # gstlal_inspiral
@@ -46,7 +47,7 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_inspiral job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_ll_inspiral'), tag_base='gstlal_inspiral'):
+	def __init__(self, executable=dagparts.which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_inspiral'
@@ -130,12 +131,13 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
-		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
+		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
 		if reference_psd is not None:
 			self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
+		self.add_var_opt("data-source", "online")
 		self.add_var_opt("control-peak-time", control_peak_time)
 		self.add_var_opt("fir-stride", fir_stride)
 		self.add_var_opt("thinca-interval", thinca_interval)
@@ -222,7 +224,7 @@ def parse_command_line():
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
-	channel_dict = inspiral.channel_dict_from_channel_list(options.channel)
+	channel_dict = datasource.channel_dict_from_channel_list(options.channel)
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 	
