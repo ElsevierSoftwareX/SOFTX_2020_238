@@ -693,6 +693,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		/* FIXME:  hard-coded = BAD BAD BAD */
 		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
 		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
+		/* FIXME we don't understand what about this funciton isn't
+		 * thread safe, so we need to figure that out properly and
+		 * remove the locks.
+		 */
 		gstlal_fftw_lock();
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
 		gstlal_fftw_unlock();
