@@ -85,7 +85,7 @@ sys.excepthook = excepthook
 #
 # Make sure we have sufficient resources
 # We allocate far more memory than we need, so this is okay
-# 
+#
 
 # set the number of processes up to hard limit
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
@@ -194,12 +194,12 @@ def parse_command_line():
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
 	options.psd_fft_length = 16	# seconds
-	
+
 	# Online specific initialization
 	if options.data_source == "online":
 		# check required options in this case
 		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
-		
+
 		missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 		if missing_options:
 			raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
@@ -208,24 +208,24 @@ def parse_command_line():
 
 		# make an "infinite" extent segment
 		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
-	
+
 		# this gets set so that if you log into a node you can find out what the job id is easily
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
 
 		#
 		# Set up a registry of the resources that this job provides
 		#
-	
+
 		host = socket.gethostname()
 
-		# FIXME 
+		# FIXME
 		# update this as bottle routes are added, can we do this automatically?
 		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
 		f = open(fname, "w")
 
 		@bottle.route("/registry.txt")
 		def register(fname = None):
-		
+
 			yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
 
 			# First do urls that do not depend on instruments
