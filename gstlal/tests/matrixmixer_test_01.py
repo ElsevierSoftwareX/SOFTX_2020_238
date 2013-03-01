@@ -28,6 +28,7 @@ import numpy
 import sys
 from gstlal import pipeparts
 import test_common
+import cmp_nxydumps
 
 
 #
@@ -87,3 +88,5 @@ def matrixmixer_test_01(pipeline, name, width):
 test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01a", width = 64)
 test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01b", width = 32)
 
+cmp_nxydumps.compare("matrixmixer_test_01a_in.dump", "matrixmixer_test_01a_out.dump")
+cmp_nxydumps.compare("matrixmixer_test_01b_in.dump", "matrixmixer_test_01b_out.dump")
