@@ -1109,7 +1109,7 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 		g_param_spec_uint(
 			"frame-number",
 			"Frame number",
-			"Current frame number.",
+			"Current frame number.  Automatically incremented for each new frame.",
 			0, G_MAXUINT, DEFAULT_FRAME_NUMBER,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
