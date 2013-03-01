@@ -1219,26 +1219,31 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     guint offset;
     guint64 inlength;
 
-    /* (try to) get a buffer upto the desired end offset */
-    if (adder->synchronous)
-      inbuf = gstlal_collect_pads_take_buffer_sync (pads, collect_data, t_end);
-    else
-      inbuf = gst_collect_pads_take_buffer (pads, (GstCollectData *) collect_data, outlength * adder->bps);
-
-    /* NULL means EOS or an empty buffer so we still need to flush in
-     * case of an empty buffer. */
-    if (inbuf == NULL) {
-      GST_LOG_OBJECT (adder, "channel %p: no bytes available", collect_data);
-      continue;
-    }
-
-    /* determine the buffer's location relative to the desired range of
+    /* (try to) get a buffer upto the desired end offset.
+     * NULL means EOS or an empty buffer so we still need to flush in
+     * case of an empty buffer.
+     * determine the buffer's location relative to the desired range of
      * offsets.  we've checked above that time hasn't gone backwards on any
      * input buffer so offset can't be negative.  if not doing synchronous
      * adding the buffer starts "now". */
-    offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
-    inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
-    g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps || GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP));
+    if (adder->synchronous) {
+      inbuf = gstlal_collect_pads_take_buffer_sync (pads, collect_data, t_end);
+      if (inbuf == NULL) {
+        GST_LOG_OBJECT (adder, "channel %p: no bytes available", collect_data);
+        continue;
+      }
+      offset = gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset;
+      inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
+      g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps || GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP));
+    } else {
+      inbuf = gst_collect_pads_take_buffer (pads, (GstCollectData *) collect_data, outlength * adder->bps);
+      if (inbuf == NULL) {
+        GST_LOG_OBJECT (adder, "channel %p: no bytes available", collect_data);
+        continue;
+      }
+      offset = 0;
+      inlength = GST_BUFFER_SIZE (inbuf) / adder->bps;
+    }
     g_assert (offset + inlength <= outlength || inlength == 0);
     GST_LOG_OBJECT (adder, "channel %p: retrieved %d sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
 
