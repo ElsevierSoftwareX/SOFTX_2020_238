@@ -128,6 +128,11 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST
  */
 
 
+/*
+ * iterate over sink pads and update instrument set
+ */
+
+
 static void update_instruments(GstFrameCPPChannelMux *mux)
 {
 	GstIterator *it = gst_element_iterate_sink_pads(GST_ELEMENT(mux));
@@ -157,6 +162,212 @@ static void update_instruments(GstFrameCPPChannelMux *mux)
 	}
 done:
 	gst_iterator_free(it);
+}
+
+
+/*
+ * private collectpads data for pre-computed frame object format parameters
+ */
+
+
+typedef struct _framecpp_channelmux_appdata {
+	FrameCPP::FrVect::data_types_type type;
+	gint nDims;
+	FrameCPP::Dimension *dims;
+	gint rate;
+	guint unit_size;
+	gchar *unitY;
+} framecpp_channelmux_appdata;
+
+
+static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
+{
+	if(appdata) {
+		delete[] appdata->dims;
+		g_free(appdata->unitY);
+	}
+	g_free(appdata);
+}
+
+
+static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data)
+{
+	return (framecpp_channelmux_appdata *) data->appdata;
+}
+
+
+/*
+ * build frame file from queue contents and push downstream
+ *
+ * FIXME:  do we need to add FrDetector structures to each frame file based
+ * on the instrument list?
+ */
+
+
+static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstClockTime gwf_t_start, GstClockTime gwf_t_end)
+{
+	GstBuffer *outbuf;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	try {
+		FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
+		FrameCPP::OFrameStream ofs(obuf);
+		GstClockTime frame_t_start, frame_t_end;
+		GST_DEBUG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
+
+		/*
+		 * loop over frames
+		 * FIXME:  what about a short final frame if the gwf
+		 * duration isn't an integer multiple of the frame size?
+		 */
+
+		for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
+			GSList *collectdatalist;
+			General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
+			General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) mux->frame_duration / GST_SECOND));
+			GST_DEBUG_OBJECT(mux, "building frame %d [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", mux->frame_number, GST_TIME_SECONDS_ARGS(frame_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+
+			/*
+			 * loop over pads
+			 */
+
+			for(collectdatalist = mux->collect->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
+				FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
+				framecpp_channelmux_appdata *appdata = get_appdata(data);
+				GstFrPad *frpad = GST_FRPAD(data->pad);
+				/* we own this list and its
+				 * contents */
+				GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
+				if(buffer_list) {
+					GstClockTime buffer_list_t_start;
+					GstClockTime buffer_list_t_end;
+					framecpp_muxcollectpads_buffer_list_boundaries(buffer_list, &buffer_list_t_start, &buffer_list_t_end);
+					guint buffer_list_length = gst_util_uint64_scale_int_round(buffer_list_t_end - buffer_list_t_start, appdata->rate, GST_SECOND);
+					char *dest = (char *) g_malloc0(buffer_list_length * appdata->unit_size);
+
+					g_assert_cmpuint(frame_t_start, <=, buffer_list_t_start);
+					g_assert_cmpuint(buffer_list_t_end, <=, frame_t_end);
+
+					/*
+					 * copy buffer list
+					 * contents into contiguous
+					 * array
+					 */
+
+					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
+						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+						/* FIXME:  how to indicate gaps in frame file? */
+						if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
+							memcpy(dest + gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+						gst_buffer_unref(buffer);
+					}
+
+					/*
+					 * build FrVect from data,
+					 * then Fr{Adc,Proc,Sim}Data
+					 * from FrVect and append
+					 * to frame
+					 */
+
+					appdata->dims[0].SetNx(buffer_list_length);
+					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, appdata->unitY);
+					switch(frpad->pad_type) {
+					case GST_FRPAD_TYPE_FRADCDATA: {
+						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate);
+						adc_data.AppendComment(frpad->comment);
+						GST_DEBUG_OBJECT(mux, "FrAdcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
+						adc_data.RefData().append(vect);
+						if(!frame->GetRawData()) {
+							FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
+							frame->SetRawData(rawData);
+						}
+						frame->GetRawData()->RefFirstAdc().append(adc_data);
+						break;
+					}
+
+					case GST_FRPAD_TYPE_FRPROCDATA: {
+						FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (buffer_list_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
+						GST_DEBUG_OBJECT(mux, "FrProcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
+						proc_data.RefData().append(vect);
+						frame->RefProcData().append(proc_data);
+						break;
+					}
+
+					case GST_FRPAD_TYPE_FRSIMDATA: {
+						FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND);
+						GST_DEBUG_OBJECT(mux, "FrSimData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
+						sim_data.RefData().append(vect);
+						frame->RefSimData().append(sim_data);
+						break;
+					}
+
+					default:
+						g_assert_not_reached();
+						break;
+					}
+					g_free(dest);
+				}
+			}
+
+			/*
+			 * add frame to file
+			 */
+
+			ofs.WriteFrame(frame, FrameCPP::Common::CheckSum::CRC);
+			mux->frame_number++;
+			g_object_notify(G_OBJECT(mux), "frame-number");
+		}
+		g_assert_cmpuint(frame_t_start, ==, gwf_t_end);	/* safety check */
+
+		/*
+		 * close frame file, extract bytes into GstBuffer
+		 */
+
+		ofs.Close();
+
+		/* FIXME:  can this be done without a memcpy()? */
+		outbuf = gst_buffer_new_and_alloc(obuf->str().length());
+		g_assert(outbuf != NULL);
+		g_assert(GST_BUFFER_DATA(outbuf) != NULL);
+		memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
+
+		gst_buffer_set_caps(outbuf, GST_PAD_CAPS(mux->srcpad));
+		if(mux->need_discont) {
+			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
+			mux->need_discont = FALSE;
+		}
+		GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
+		GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
+		GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
+		mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
+	} catch(const std::exception& Exception) {
+		GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
+		result = GST_FLOW_ERROR;
+		goto done;
+	} catch(...) {
+		GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised unknown exception"));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * push downstream
+	 */
+
+	GST_DEBUG_OBJECT(mux, "pushing frame file spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
+	result = gst_pad_push(mux->srcpad, outbuf);
+	if(result != GST_FLOW_OK) {
+		GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_push() failed (%s)", gst_flow_get_name(result)));
+		goto done;
+	}
+
+	/*
+	 * done
+	 */
+
+done:
+	return result;
 }
 
 
@@ -308,37 +519,6 @@ static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
  *
  * ============================================================================
  */
-
-
-/*
- * private data for pre-computed frame object format parameters
- */
-
-
-typedef struct _framecpp_channelmux_appdata {
-	FrameCPP::FrVect::data_types_type type;
-	gint nDims;
-	FrameCPP::Dimension *dims;
-	gint rate;
-	guint unit_size;
-	gchar *unitY;
-} framecpp_channelmux_appdata;
-
-
-static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
-{
-	if(appdata) {
-		delete[] appdata->dims;
-		g_free(appdata->unitY);
-	}
-	g_free(appdata);
-}
-
-
-static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data)
-{
-	return (framecpp_channelmux_appdata *) data->appdata;
-}
 
 
 /*
@@ -634,164 +814,9 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 	 * loop over available data
 	 */
 
-	for(gwf_t_start = collected_t_start, gwf_t_end = collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux)) {
-		GstFlowReturn result;
-		GstBuffer *outbuf;
-
-		/*
-		 * build frame file
-		 *
-		 * FIXME:  do we need to add FrDetector structures to each
-		 * frame file based on the instrument list?
-		 */
-
-		try {
-			FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
-			FrameCPP::OFrameStream ofs(obuf);
-			GstClockTime frame_t_start, frame_t_end;
-			GST_DEBUG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
-
-			/*
-			 * loop over frames
-			 */
-
-			for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
-				GSList *collectdatalist;
-				General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
-				General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) mux->frame_duration / GST_SECOND));
-				GST_DEBUG_OBJECT(mux, "building frame %d [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", mux->frame_number, GST_TIME_SECONDS_ARGS(frame_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
-
-				/*
-				 * loop over pads
-				 */
-
-				for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
-					FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
-					framecpp_channelmux_appdata *appdata = get_appdata(data);
-					GstFrPad *frpad = GST_FRPAD(data->pad);
-					/* we own this list and its
-					 * contents */
-					GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
-					if(buffer_list) {
-						GstClockTime buffer_list_t_start;
-						GstClockTime buffer_list_t_end;
-						framecpp_muxcollectpads_buffer_list_boundaries(buffer_list, &buffer_list_t_start, &buffer_list_t_end);
-						guint buffer_list_length = gst_util_uint64_scale_int_round(buffer_list_t_end - buffer_list_t_start, appdata->rate, GST_SECOND);
-						char *dest = (char *) g_malloc0(buffer_list_length * appdata->unit_size);
-
-						g_assert_cmpuint(frame_t_start, <=, buffer_list_t_start);
-						g_assert_cmpuint(buffer_list_t_end, <=, frame_t_end);
-
-						/*
-						 * copy buffer list
-						 * contents into contiguous
-						 * array
-						 */
-
-						for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
-							GstBuffer *buffer = GST_BUFFER(buffer_list->data);
-							/* FIXME:  how to indicate gaps in frame file? */
-							if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
-								memcpy(dest + gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-							gst_buffer_unref(buffer);
-						}
-
-						/*
-						 * build FrVect from data,
-						 * then Fr{Adc,Proc,Sim}Data
-						 * from FrVect and append
-						 * to frame
-						 */
-
-						appdata->dims[0].SetNx(buffer_list_length);
-						FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, appdata->unitY);
-						switch(frpad->pad_type) {
-						case GST_FRPAD_TYPE_FRADCDATA: {
-							FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate);
-							adc_data.AppendComment(frpad->comment);
-							GST_DEBUG_OBJECT(mux, "FrAdcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-							adc_data.RefData().append(vect);
-							if(!frame->GetRawData()) {
-								FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
-								frame->SetRawData(rawData);
-							}
-							frame->GetRawData()->RefFirstAdc().append(adc_data);
-							break;
-						}
-
-						case GST_FRPAD_TYPE_FRPROCDATA: {
-							FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (buffer_list_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
-							GST_DEBUG_OBJECT(mux, "FrProcData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-							proc_data.RefData().append(vect);
-							frame->RefProcData().append(proc_data);
-							break;
-						}
-
-						case GST_FRPAD_TYPE_FRSIMDATA: {
-							FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND);
-							GST_DEBUG_OBJECT(mux, "FrSimData \"%s\" [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-							sim_data.RefData().append(vect);
-							frame->RefSimData().append(sim_data);
-							break;
-						}
-
-						default:
-							g_assert_not_reached();
-							break;
-						}
-						g_free(dest);
-					}
-				}
-
-				/*
-				 * add frame to file
-				 */
-
-				ofs.WriteFrame(frame, FrameCPP::Common::CheckSum::CRC);
-				mux->frame_number++;
-				g_object_notify(G_OBJECT(mux), "frame-number");
-			}
-			g_assert_cmpuint(frame_t_start, ==, gwf_t_end);	/* safety check */
-
-			/*
-			 * close frame file, extract bytes into GstBuffer
-			 */
-
-			ofs.Close();
-
-			/* FIXME:  can this be done without a memcpy()? */
-			outbuf = gst_buffer_new_and_alloc(obuf->str().length());
-			memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
-
-			gst_buffer_set_caps(outbuf, GST_PAD_CAPS(mux->srcpad));
-			if(mux->need_discont) {
-				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
-				mux->need_discont = FALSE;
-			}
-			GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
-			GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
-			GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
-			GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
-			mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
-		} catch(const std::exception& Exception) {
-			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
+	for(gwf_t_start = collected_t_start, gwf_t_end = collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux))
+		if(build_and_push_frame_file(mux, gwf_t_start, gwf_t_end) != GST_FLOW_OK)
 			goto done;
-		} catch(...) {
-			GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised unknown exception"));
-			goto done;
-		}
-
-		/*
-		 * push downstream
-		 */
-
-		GST_DEBUG_OBJECT(mux, "pushing frame file spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
-		result = gst_pad_push(mux->srcpad, outbuf);
-		if(result != GST_FLOW_OK) {
-			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_push() failed (%s)", gst_flow_get_name(result)));
-			goto done;
-		}
-	}
 
 	/*
 	 * done
