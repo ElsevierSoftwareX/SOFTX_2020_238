@@ -84,11 +84,16 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	datasource.append_options(parser)
 
-	options, (cache_filename,) = parser.parse_args()
+	options, filenames = parser.parse_args()
 
 	options.description = "CBC_TMP"
 
-	return options, cache_filename
+	try:
+		output_cache_filename, = filenames
+	except ValueError:
+		raise ValueError("must provide exactly one output cache filename")
+
+	return options, output_cache_filename
 
 
 #
@@ -127,7 +132,7 @@ class Handler(simplehandler.Handler):
 #
 
 
-options, cache_filename = parse_command_line()
+options, output_cache_filename = parse_command_line()
 data_source_info = datasource.GWDataSourceInfo(options)
 (instrument, channel_name), = data_source_info.channel_dict.items()
 
@@ -186,8 +191,8 @@ mainloop.run()
 
 
 if options.verbose:
-	print >>sys.stderr, "writing %s ..." % cache_filename
-cache_file = open(cache_filename, "w")
+	print >>sys.stderr, "writing %s ..." % output_cache_filename
+cache_file = open(output_cache_filename, "w")
 for cacheentry in handler.cache:
 	print >>cache_file, str(cacheentry)
 
