@@ -82,9 +82,9 @@ GType gst_frpad_type_get_type(void)
 
 	if(!type) {
 		static GEnumValue values[] = {
-			{GST_FRPAD_TYPE_FRADCDATA, "GST_FRPAD_TYPE_FRADCDATA", "Pad is an FrAdcData stream"},
-			{GST_FRPAD_TYPE_FRPROCDATA, "GST_FRPAD_TYPE_FRPROCDATA", "Pad is an FrProcData stream"},
-			{GST_FRPAD_TYPE_FRSIMDATA, "GST_FRPAD_TYPE_FRSIMDATA", "Pad is an FrSimData stream"},
+			{GST_FRPAD_TYPE_FRADCDATA, "FrAdcData", "Pad is an FrAdcData stream"},
+			{GST_FRPAD_TYPE_FRPROCDATA, "FrProcData", "Pad is an FrProcData stream"},
+			{GST_FRPAD_TYPE_FRSIMDATA, "FrSimData", "Pad is an FrSimData stream"},
 			{0, NULL, NULL}
 		};
 
