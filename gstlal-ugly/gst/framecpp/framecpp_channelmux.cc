@@ -197,6 +197,27 @@ static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data
 
 
 /*
+ * tags
+ */
+
+
+static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
+{
+	GstTagList *tag_list = gst_tag_list_new();
+	GHashTableIter it;
+	gchar *instrument;
+
+	g_hash_table_iter_init(&it, mux->instruments);
+	while(g_hash_table_iter_next(&it, (void **) &instrument, NULL))
+		gst_tag_list_add(tag_list, GST_TAG_MERGE_APPEND, GSTLAL_TAG_INSTRUMENT, instrument, NULL);
+
+	GST_DEBUG_OBJECT(mux, "tag list: %" GST_PTR_FORMAT, tag_list);
+
+	return tag_list;
+}
+
+
+/*
  * build frame file from queue contents and push downstream
  *
  * FIXME:  do we need to add FrDetector structures to each frame file based
@@ -209,19 +230,18 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 	GstBuffer *outbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	GST_DEBUG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
+
 	try {
 		FrameCPP::Common::MemoryBuffer *obuf(new FrameCPP::Common::MemoryBuffer(std::ios::out));
 		FrameCPP::OFrameStream ofs(obuf);
 		GstClockTime frame_t_start, frame_t_end;
-		GST_DEBUG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
 
 		/*
 		 * loop over frames
-		 * FIXME:  what about a short final frame if the gwf
-		 * duration isn't an integer multiple of the frame size?
 		 */
 
-		for(frame_t_start = gwf_t_start, frame_t_end = gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration; frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
+		for(frame_t_start = gwf_t_start, frame_t_end = MIN(gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration, gwf_t_end); frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
 			GSList *collectdatalist;
 			General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
 			General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) mux->frame_duration / GST_SECOND));
@@ -372,6 +392,59 @@ done:
 
 
 /*
+ * flush remaining queued data
+ */
+
+
+static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
+{
+	GstClockTime collected_t_start, collected_t_end;
+	GstClockTime gwf_t_start, gwf_t_end;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * get span
+	 */
+
+	if(!framecpp_muxcollectpads_get_span(mux->collect, &collected_t_start, &collected_t_end)) {
+		GST_ERROR_OBJECT(mux, "unable to determine span of queues");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * do tag list if needed
+	 */
+
+	if(mux->need_tag_list) {
+		update_instruments(mux);
+		if(g_hash_table_size(mux->instruments))
+			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+		else
+			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
+		mux->need_tag_list = FALSE;
+	}
+
+	/*
+	 * loop over available data
+	 */
+
+	for(gwf_t_start = collected_t_start, gwf_t_end = MIN(collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux), collected_t_end); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux)) {
+		result = build_and_push_frame_file(mux, gwf_t_start, gwf_t_end);
+		if(result != GST_FLOW_OK)
+			goto done;
+	}
+
+	/*
+	 * done
+	 */
+
+done:
+	return result;
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Src Pad
@@ -488,27 +561,6 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 
 	gst_object_unref(GST_OBJECT(mux));
 	return success;
-}
-
-
-/*
- * tags
- */
-
-
-static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
-{
-	GstTagList *tag_list = gst_tag_list_new();
-	GHashTableIter it;
-	gchar *instrument;
-
-	g_hash_table_iter_init(&it, mux->instruments);
-	while(g_hash_table_iter_next(&it, (void **) &instrument, NULL))
-		gst_tag_list_add(tag_list, GST_TAG_MERGE_APPEND, GSTLAL_TAG_INSTRUMENT, instrument, NULL);
-
-	GST_DEBUG_OBJECT(mux, "tag list: %" GST_PTR_FORMAT, tag_list);
-
-	return tag_list;
 }
 
 
@@ -665,8 +717,9 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		goto done;
 	}
 
+	case GST_EVENT_FLUSH_START:
 	case GST_EVENT_EOS:
-		/* FIXME:  flush final (short) frame file? */
+		flush(mux);
 		break;
 
 	default:
@@ -816,14 +869,11 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 
 	for(gwf_t_start = collected_t_start, gwf_t_end = collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux))
 		if(build_and_push_frame_file(mux, gwf_t_start, gwf_t_end) != GST_FLOW_OK)
-			goto done;
+			break;
 
 	/*
 	 * done
 	 */
-
-done:
-	return;
 }
 
 
