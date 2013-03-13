@@ -9,6 +9,7 @@ dist_bin_SCRIPTS = \
 	gstlal_iir_ll_inspiral \
 	gstlal_inspiral \
 	gstlal_inspiral_calc_likelihood \
+	gstlal_inspiral_coinc_extractor \
 	gstlal_inspiral_condition_data \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_iir_bank_pipe \
