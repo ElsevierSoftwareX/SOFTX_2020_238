@@ -1,0 +1,144 @@
+#!/usr/bin/python
+
+import sys, glob, os, time
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw import table
+from glue import segments
+from glue import lal
+from glue import iterutils
+from pylal import rate
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from pylal.date import XLALUTCToGPS
+import matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
+import numpy
+import StringIO
+import base64
+
+class ContentHandler(ligolw.PartialLIGOLWContentHandler):
+	def __init__(self, xmldoc):
+		ligolw.PartialLIGOLWContentHandler.__init__(self, xmldoc, lambda name, attrs: name == ligolw.Table.tagName and attrs["Name"] == lsctables.CoincInspiralTable.tableName)
+lsctables.use_in(ContentHandler)
+
+def glob_trigger_files(path, seg):
+	cache = lal.Cache.from_urls(glob.glob(os.path.join(path, '*-*_LLOID-*.xml.gz')))
+	return cache.sieve(segment = seg)
+
+def now():
+        return XLALUTCToGPS(time.gmtime())
+
+def to_png_image(out):
+	f = StringIO.StringIO()
+	plt.savefig(f, format="png")
+	print >> out, '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	f.close()
+
+analysis_segment = segments.segment(LIGOTimeGPS(now() - 86400 - 28800), LIGOTimeGPS(now() - 28800))
+
+triggerSNR = rate.BinnedArray(rate.NDBins((rate.IrregularBins((0.8, 50)), rate.LinearBins(float(analysis_segment[0]), float(analysis_segment[1]), 480), rate.LinearBins(5.5,25,500))))
+triggerIFAR = rate.BinnedArray(rate.NDBins((rate.IrregularBins((0.8, 50)), rate.LinearBins(float(analysis_segment[0]), float(analysis_segment[1]), 480), rate.LogarithmicBins(1,1e15,500))))
+
+out = open('H1L1V1-LLOID_DAILY_SUMMARY-%d-%d.html' % (int(analysis_segment[0]), int(abs(analysis_segment))), "w")
+print >> out, "<html>"
+print >> out, """
+<html>
+<head>
+  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
+  <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+  <script type="text/javascript"> $(function() {
+    $("#accordion").accordion({
+    });
+
+  });</script>
+</head>"""
+print >> out, "<body>"
+print >> out, "<h1>LLOID analysis covering %s</h1><br>" % str(analysis_segment)
+
+ifars = iterutils.Highest(max = 100)
+
+path = sys.argv[0]
+
+for c in glob_trigger_files(path, analysis_segment):
+
+	try:
+		xmldoc = utils.load_filename(c.path, gz = c.path.endswith('.gz'), verbose = True, contenthandler = ContentHandler)
+	except IOError as e:
+		print >> out, "Could not load %s: %s" % (c.path, e)
+	for n, event in enumerate(table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)):
+		if event.end_time in analysis_segment and event.snr < 10:
+			triggerSNR[(event.mchirp, event.end_time, event.snr)] += 1
+		if event.end_time in analysis_segment and 1. / event.combined_far < 1.e15 and 1. / event.combined_far > 1.:
+			triggerIFAR[(event.mchirp, event.end_time, 1. / event.combined_far)] += 1
+			ifars.append((1. / event.combined_far, event.end_time, event.end_time_ns, event.ifos, event.mchirp, event.mass, event.snr))
+
+print >> out, '<div id="accordion">'
+for n, (mchirp_start, mchirp_end) in enumerate(zip(triggerSNR.bins[0].lower(), triggerSNR.bins[0].upper())):
+	print >> sys.stderr, n
+	print >> out, "<h2>Chirp Mass [%.2f - %.2f)</h2>" % (mchirp_start, mchirp_end)
+	
+	print >> out, "<div>"
+	# SNR plot
+	plt.figure(figsize=(20,5))
+	plt.pcolor(triggerSNR.centres()[1], triggerSNR.centres()[2], numpy.log(triggerSNR.array[n,:,:].T + 1.))
+	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
+	plt.xlabel('GPS Time')
+	plt.ylabel('SNR')
+	plt.xlim(int(analysis_segment[0]), int(analysis_segment[1]))
+	plt.ylim(5.5, 25)
+	to_png_image(out)
+	
+	# IFAR plot
+	plt.figure(figsize=(20,5))
+	ax = plt.subplot(111)
+	plt.pcolormesh(triggerIFAR.centres()[1], triggerIFAR.centres()[2], numpy.log(triggerIFAR.array[n,:,:].T + 1.))
+	ax.set_yscale('log')
+	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
+	plt.xlabel('GPS Time')
+	plt.ylabel('IFAR (s)')
+	plt.xlim(int(analysis_segment[0]), int(analysis_segment[1]))
+	plt.ylim(1, 1e15)
+	to_png_image(out)
+
+	print >> out, "</div>"
+
+print >> out, "<h2>Loudest</h2>"
+print >> out, "<div><table>"
+print >> out, "<tr><th>FAR (Hz)</th> <th>GPS time</th> <th>GPS time ns</th> <th>IFOs</th> <th>chirp mass</th> <th>Total Mass</th> <th>SNR</th> </tr>"
+for n, event in enumerate(ifar):
+	print >> out, "".join(["<tr>%s</tr>" repr(col) for col in ifar])
+	if n >= 10:
+		break
+print >> out, "</table></div>"
+
+print >> out, "<h2>IFAR</h2>"
+
+ifars = numpy.array([ifar[0] for ifar in ifars])
+N = numpy.linspace(1, len(ifars), len(ifars))
+
+eN = numpy.linspace(1, 100 * len(ifars), 100 * len(ifars)) / 100.
+expected_ifars = float(abs(analysis_segment)) / eN
+
+up = eN + eN**.5
+down = eN - eN**.5
+down[down < 0.9] = 0.9
+
+plt.figure()
+plt.loglog(ifars[::-1], N[::-1])
+
+plt.fill_between(expected_ifars[::-1], down[::-1], up[::-1], alpha=0.1)
+plt.loglog(expected_ifars[::-1], eN[::-1])
+
+plt.ylim([0.9, 100])
+plt.xlabel('IFAR (s)')
+plt.ylabel('N')
+plt.grid()
+print >> out, "<div>"
+to_png_image(out)
+print >> out, "</div>"
+
+print >> out, "</div></body></html>"
+
