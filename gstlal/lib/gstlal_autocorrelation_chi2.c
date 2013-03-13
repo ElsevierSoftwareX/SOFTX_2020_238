@@ -417,7 +417,7 @@ unsigned gstlal_autocorrelation_chi2_float(
 						complex double z;
 						if(!*autocorrelation_mask)
 							continue;
-						z = *autocorrelation * snr - (complex double) *indata;
+						z = *autocorrelation * snr - (const complex double) *indata;
 #if CHI2_USES_REAL_ONLY
 						chisq += pow(creal(z * invsnrphase), 2);
 #else
@@ -426,7 +426,7 @@ unsigned gstlal_autocorrelation_chi2_float(
 					}
 				} else {
 					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
-						complex double z = *autocorrelation * snr - (complex double) *indata;
+						complex double z = *autocorrelation * snr - (const complex double) *indata;
 #if CHI2_USES_REAL_ONLY
 						chisq += pow(creal(z * invsnrphase), 2);
 #else
