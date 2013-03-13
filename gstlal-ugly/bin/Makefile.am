@@ -17,6 +17,7 @@ dist_bin_SCRIPTS = \
 	gstlal_omega \
 	gstlal_excesspower \
 	gstlal_vetoes_from_burst_inj \
+	gstlal_vetoes_from_burst_triggers \
 	gstlal_ninja_median_of_psds \
 	gstlal_ninja_smooth_reference_psd \
 	gstlal_median_of_psds \
