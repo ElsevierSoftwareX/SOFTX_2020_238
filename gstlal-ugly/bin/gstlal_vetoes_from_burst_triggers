@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Kipp Cannon, Chris Pankow
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+"""
+Generate a LIGO Light-Weight XML veto segment file from burst triggers.  The input files can be LIGO Light-Weight XML files containing sngl_burst tables. If a file is encountered that cannot be parsed in one of these formats, or is identified as a LIGO Light-Weight XML file but does not contain a sim_burst table, the program fails.  If no input filenames are provided input is read from stdin.
+"""
+
+
+import math
+from optparse import OptionParser
+import sys
+from xml.sax import SAXParseException
+
+
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chris Pankow <chris.pankow@ligo.org>, Chad Hanna <chad.hanna@ligo.org>"
+__version = "FIXME" # "git id %s" % git_version.id
+__date__ = "FIXME" # git_version.date
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "FIXME", # git_version.verbose_msg
+		usage = "%prog [options] [filename ...]",
+		description = __doc__
+	)
+	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 1.0, help = "Set the default burst event duration in seconds for injections without explicit durations (default = 1).")
+	parser.add_option("--instruments", metavar = "name[,name,...]", default = "H1,H2,L1,V1", help = "Set the instruments to veto (default = \"H1,H2,L1,V1\").")
+	parser.add_option("--output", metavar = "filename", help = "Set the output filename (default = write to stdout).  If the filename ends in \".gz\" it will be gzip-compressed.")
+	parser.add_option("--padding", metavar = "seconds", type = "float", default = 0.05, help = "Set the additional padding in seconds to veto before and after each injection (default = 0.05).")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segment lists in the output document (default = \"vetoes\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames or [None]
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# comand line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# parse injection documents and build segment list
+#
+
+
+vetoes = segments.segmentlistdict.fromkeys(options.instruments.split(","))
+for s in vetoes:
+	vetoes[s] = segments.segmentlist()
+for filename in filenames:
+	try:
+		#
+		# try parsing injection list as an XML document
+		#
+
+		for trig in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SnglBurstTable.tableName):
+			t = trig.get_start()
+			if trig.duration is None or math.isnan(trig.duration):
+				duration = options.default_duration
+			else:
+				duration = trig.duration
+			vetoes[trig.ifo].append(segments.segment(t - duration / 2.0, t + duration / 2.0))
+
+	except SAXParseException:
+
+		print >> sys.stderr, "couldn't parse: ", filename
+		continue
+
+vetoes.protract(options.padding).coalesce()
+
+#
+# build and write output document
+#
+
+xmldoc = ligolw.Document()
+xmldoc.childNodes.append(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_vetoes_from_burst_triggers", options.__dict__)
+llwsegments = ligolw_segments.LigolwSegments(xmldoc)
+llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, "Burst triggers")
+llwsegments.finalize(process)
+
+segdef = lsctables.table.get_table(xmldoc, lsctables.SegmentDefTable.tableName)
+for r in segdef:
+	r.version = 0
+	r.insertion_time = 0
+
+utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
