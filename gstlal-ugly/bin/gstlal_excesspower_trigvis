@@ -66,6 +66,7 @@ parser.add_option("-X", "--overlay-summary", action="append", help="Parse the se
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
+parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
 
 opts, args = parser.parse_args()
 
@@ -146,7 +147,7 @@ for arg in args:
 			continue # not mapped to a search
 		#for ss in search_map[pid]:
 			#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
-		all_events += eventlist
+		all_events += [ e for e in eventlist if not( math.isnan(e.snr) or math.isinf(e.snr)) ]
 
 	events += all_events 
 
@@ -256,7 +257,13 @@ for channel, selected_events in event_iter:
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
 	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
-	#selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg ]
+	if opts.exclude_outside_segments:
+		for k in segs.keys():
+			try:
+				segs[k[1]].extend( segs[k] )
+			except KeyError:
+				segs[k[1]] = segs[k]
+		selected_events = filter( lambda event: event.peak_time in segs[event.ifo], selected_events )
 	print "%d events remain." % len(selected_events)
 	if( len(selected_events) == 0 ):
 		print "No events remain, skipping."
@@ -290,8 +297,6 @@ for channel, selected_events in event_iter:
 			)
 	else:
 		snr_norm = matplotlib.colors.Normalize( 0, 1 )
-
-	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
 
 	# Make me purty
 	ax.grid()
@@ -335,7 +340,11 @@ for channel, selected_events in event_iter:
 		if( opts.plotting_type in ["tile", "both"] ):
 			tiles.append( tile )
 		if( opts.plotting_type in ["marker", "both"] ):
-			markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
+			if 'c' in logaxes:
+				markers.append( (float(event.get_peak()), event.central_freq, numpy.log10(event.snr)) )
+			else:
+				markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
+
 		if 'c' in logaxes:
 			snrs.append( numpy.log10(event.snr) )
 		else:
@@ -364,7 +373,17 @@ for channel, selected_events in event_iter:
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
 	if( opts.plotting_type == "marker" ):
-		ax.scatter( markers[0], markers[1], c=markers[2] ) # with circles
+		# SNR 3-5.5
+		markers = numpy.array(markers)
+		def sizef( m ):
+			if m <= 5.5:
+				return 1
+			elif m > 5.5 and m < 10:
+				return 5
+			else:
+				return 50
+		size = map(sizef, markers[2])
+		ax.scatter( markers[0], markers[1], c=markers[2], s=size, lw=0, cmap=matplotlib.cm.copper_r ) # with circles
 	elif( opts.plotting_type == "both" ):
 		ax.scatter( markers[0], markers[1], marker='+' ) # with crosses
 
@@ -484,7 +503,11 @@ for channel, selected_events in event_iter:
 		formatter = None
 		ticks = None
 	"""
-	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	#cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	if opts.plotting_type == "marker":
+		cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.copper_r, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	else:
+		cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
 	if 'c' in logaxes:
 		cbl.set_label( "log10 Tile Energy" )
 	else:
