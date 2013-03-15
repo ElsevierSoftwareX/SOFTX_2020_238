@@ -732,6 +732,10 @@ class SBStats(object):
 		for seg, sbt in self.onsource.items():
 			if seg in onsource_seg:
 				continue
+			elif offsource_seg.disjoint( seg ) == 1:
+				# segment ran off the span since last check
+				del self.onsource[seg]
+				continue
 
 			offseg = seg & offsource_seg
 			del self.onsource[seg]

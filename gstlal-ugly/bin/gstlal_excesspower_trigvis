@@ -121,7 +121,6 @@ event_map = defaultdict(list)
 summary_info = defaultdict(list)
 for arg in args:
 	xmldoc = utils.load_filename( arg )
-	all_events = []
 
 	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
 		for sb in tbl:
@@ -132,24 +131,26 @@ for arg in args:
 		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
 		for ss in tbl:
 			search_map[ss.process_id].append( ss )
-			if len(plotsum) == 0:
+			if len(plotsum) == 0 or ss.comment is None:
 				continue
 			for typetime in ss.comment.split(","):
-				type, time =  typetime.split(":")
-				summary_info[type].append( float(time) )
+				try:
+					type, time = typetime.split(":")
+					summary_info[type].append( float(time) )
+				except ValueError:
+					pass
 
-	# Map events to their searches, and ensure they are in the proper "out" segment
-	for pid, eventlist in event_map.iteritems():
-		# FIXME: Clustering will sometimes take an event past the out segment and this will discard it
-		try:
-			search_map[pid]
-		except ValueError:
-			continue # not mapped to a search
-		#for ss in search_map[pid]:
-			#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
-		all_events += [ e for e in eventlist if not( math.isnan(e.snr) or math.isinf(e.snr)) ]
-
-	events += all_events 
+# Map events to their searches, and ensure they are in the proper "out" segment
+for pid, eventlist in event_map.iteritems():
+	# FIXME: Clustering will sometimes take an event past the out segment and this will discard it
+	try:
+		search_map[pid]
+	except ValueError:
+		continue # not mapped to a search
+	#for ss in search_map[pid]:
+		#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
+	#all_events += eventlist
+	events += eventlist
 
 if( len(events) == 0 ):
 	print "No events remain."
@@ -350,9 +351,9 @@ for channel, selected_events in event_iter:
 		else:
 			snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
-			loudest = [event.snr, float(event.get_peak()), event.central_freq]
+			loudest = [event.snr, float(event.get_peak()), event.central_freq, event.duration, event.bandwidth]
 		elif( loudest[0] < event.confidence and opts.mark_loudest == 'conf' ):
-			loudest = [event.confidence, event.get_peak(), event.central_freq]
+			loudest = [event.confidence, event.get_peak(), event.central_freq, event.duration, event.bandwidth]
 
 	markers = numpy.array(markers).T
 	print ""
@@ -362,7 +363,10 @@ for channel, selected_events in event_iter:
 		title = "Tile energy time frequency map\n%s" % title
 	if( opts.mark_loudest is not None ):
 		print "Loudest event at (%s)" % ", ".join(map(lambda a: str(a), loudest[1:]))
-		pyplot.plot( [loudest[1]], [loudest[2]], marker='o', markerfacecolor='none', markersize=10, markeredgewidth=1.2)
+		if opts.plotting_type != "marker":
+			ax.add_patch( matplotlib.patches.Ellipse( xy=loudest[1:3], width=loudest[3]*1.2, height=loudest[4]*1.2, facecolor = 'none', linewidth=1.2 ) )
+		else:
+			pyplot.plot( [loudest[1]], [loudest[2]], marker='*', markerfacecolor='yellow', markersize=15.0 )
 		title += " loudest event (%s=%.3g): %10.1f" % (opts.mark_loudest, math.sqrt(loudest[0]), loudest[1])
 	pyplot.title( title )
 

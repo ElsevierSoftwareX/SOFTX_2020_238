@@ -218,7 +218,7 @@ def get_triggers(elem, handler, ndof):
 		while os.path.exists( fname ):
 			fname = ep.make_cache_parseable_name(
 				inst = handler.inst,
-				tag = "%d_%s" % (uniq, handler.channel),
+				tag = "%s_%d" % (handler.channel, uniq),
 				start = handler.time_since_dump,
 				stop = handler.stop,
 				ext = "xml",
