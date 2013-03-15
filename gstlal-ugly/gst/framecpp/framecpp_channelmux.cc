@@ -255,8 +255,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 				FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
 				framecpp_channelmux_appdata *appdata = get_appdata(data);
 				GstFrPad *frpad = GST_FRPAD(data->pad);
-				/* we own this list and its
-				 * contents */
+				/* we own this list and its contents */
 				GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
 				if(buffer_list) {
 					GstClockTime buffer_list_t_start;
@@ -269,9 +268,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					g_assert_cmpuint(buffer_list_t_end, <=, frame_t_end);
 
 					/*
-					 * copy buffer list
-					 * contents into contiguous
-					 * array
+					 * copy buffer list contents into
+					 * contiguous array
 					 */
 
 					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
@@ -283,10 +281,9 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					}
 
 					/*
-					 * build FrVect from data,
-					 * then Fr{Adc,Proc,Sim}Data
-					 * from FrVect and append
-					 * to frame
+					 * build FrVect from data, then
+					 * Fr{Adc,Proc,Sim}Data from FrVect
+					 * and append to frame
 					 */
 
 					appdata->dims[0].SetNx(buffer_list_length);
