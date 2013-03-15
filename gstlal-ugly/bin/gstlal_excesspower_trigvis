@@ -269,7 +269,7 @@ for channel, selected_events in event_iter:
 		print "No events remain, skipping."
 		continue
 
-	high_frequency = max( [e.central_freq for e in selected_events] )
+	high_frequency = opts.high_frequency or max( [e.central_freq for e in selected_events] )
 	low_frequency = opts.low_frequency or 0
 
 	inst, channel = channel.split(":")
