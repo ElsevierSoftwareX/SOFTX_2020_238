@@ -1083,7 +1083,27 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 
 static void framecpp_channelmux_base_init(gpointer klass)
 {
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	gstelement_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
+	gstelement_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
+	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1111,24 +1131,6 @@ static void framecpp_channelmux_base_init(gpointer klass)
 		element_class,
 		gst_static_pad_template_get(&sink_factory)
 	);
-}
-
-
-/*
- * class_init()
- */
-
-
-static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
-
-	parent_class = (GstElementClass *) g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1186,10 +1188,6 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
-
-	gstelement_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
-	gstelement_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
-	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 }
 
 
