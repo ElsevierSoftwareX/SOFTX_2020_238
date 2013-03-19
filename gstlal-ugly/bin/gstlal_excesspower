@@ -176,6 +176,7 @@ def get_triggers(elem, handler, ndof):
 		if row.peak_time in whiten_seg:
 			continue
 		row.duration *= ndof
+		row.chisq_dof *= ndof
 		# TODO Move this into the trigger generator
 		# FIXME: Determine "magic number" or remove it
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
