@@ -325,7 +325,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 	warnings.warn("mkLLOIDsrc() is deprecated.  Call multirate_datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
 
-	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad, width = 64)
+	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad, width = 32)
 
 
 #
