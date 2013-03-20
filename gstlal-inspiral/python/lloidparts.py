@@ -473,7 +473,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),			
 			bank,
 			bank_fragment,
 			control_snksrc,
