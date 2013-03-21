@@ -232,6 +232,15 @@ AC_SUBST([LAL_LIBS])
 
 
 #
+# Check for glue and pylal
+#
+
+
+AX_PYTHON_GLUE()
+AX_PYTHON_PYLAL()
+
+
+#
 # Check for gstlal
 #
 
