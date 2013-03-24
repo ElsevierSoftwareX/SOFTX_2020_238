@@ -516,7 +516,7 @@ for channel, selected_events in event_iter:
 			start, end = seg[0], seg[1]
 			tile = matplotlib.patches.Rectangle(
 				# lower left point
-				( start, 0 ),
+				( start, 1e-10 ),
 				# tile extent
 				(end-start),
 				high_frequency,
@@ -557,7 +557,7 @@ for channel, selected_events in event_iter:
 			start, end = seg[0], seg[1]
 			tile = matplotlib.patches.Rectangle(
 				# lower left point
-				( start, 0 ),
+				( start, 1e-10 ),
 				# tile extent
 				(end-start),
 				high_frequency,
