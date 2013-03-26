@@ -68,7 +68,7 @@ lsctables.use_in(DefaultContentHandler)
 #
 
 def read_approximant(xmldoc):
-	programs = ("tmpltbank", "ligolw_cbc_sbank")
+	programs = ("tmpltbank", "lalapps_cbc_sbank")
 	approximant = set()
 	for program in programs:
 		# FIXME:  replace with
