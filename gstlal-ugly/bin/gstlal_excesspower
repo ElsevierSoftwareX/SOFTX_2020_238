@@ -139,7 +139,6 @@ def on_psd_change( elem, pspec, hand ):
 	#print >>sys.stderr , "PSD estimate: %g / %g (min: %g, max: %g)" % (sum(hand.psd.data),sum(new_psd.data), min(psd_change), max(psd_change))
 	#print >>sys.stderr , "change estimate: %f" % hand.psd_change
 
-	hand.psd_change_thresh = 0.2
 	if abs(hand.psd_change) > hand.psd_change_thresh:
 		if options.verbose:
 			print >> sys.stderr, "Processed signal, change estimate: %f, regenerating filters" % hand.psd_change
