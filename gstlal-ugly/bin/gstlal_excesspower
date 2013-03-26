@@ -102,12 +102,13 @@ __version__ = "Defiant" # until we get proper versioning tags
 
 def on_psd_change( elem, pspec, hand ):
 	"""
-	Get the PSD object and signal the handler to rebuild everything.
+	Get the PSD object and signal the handler to rebuild everything if the spectrum has changed appreciably from the PSD which was used to rebuild the filters originally.
 	"""
 	if options.verbose:
 		print >> sys.stderr, "Intercepted spectrum signal."
 
-	hand.psd = REAL8FrequencySeries(
+	# Get the new one
+	new_psd = REAL8FrequencySeries(
 		name = "PSD",
 		#epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
 		f0 = 0.0,
@@ -115,17 +116,34 @@ def on_psd_change( elem, pspec, hand ):
 		#sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
 		data = numpy.array( elem.get_property( "mean-psd" ) )
 	)
+	hand.cur_psd = new_psd
 
+	# Determine if the PSD has changed enough to warrant rebuilding the 
+	# filter bank.
+	hand.psd_power = sum(new_psd.data)*hand.psd.deltaF
+	#hand.psd_change = (hand.psd_power - psd_power) / (hand.psd_power + psd_power) 
 
-	# Determine if the PSD has changed enough to warrant rebuilding the filter
-	# bank.
-	psd_power = sum(hand.psd.data)*hand.psd.deltaF
-	#change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
-	hand.psd_change = (hand.psd_power - psd_power) / (hand.psd_power + psd_power) 
+	# This will get triggered in two cases: the rate (and thus bin length)
+	# has changed, or we had the default PSD in place previously.
+	if len(new_psd.data) != len(hand.psd.data):
+		if options.verbose:
+
+			print >>sys.stderr, "Different PSD lengths detected, automatically regenerating filters."
+		hand.psd = new_psd
+		hand.rebuild_everything()
+		return
+	else:
+		# Poor man's coherence
+		hand.psd_change = 2.0/len(hand.psd.data) * sum(abs(hand.psd.data-new_psd.data)/(new_psd.data+hand.psd.data))
+	#psd_change = abs(hand.psd.data-new_psd.data)/(new_psd.data+hand.psd.data)
+	#print >>sys.stderr , "PSD estimate: %g / %g (min: %g, max: %g)" % (sum(hand.psd.data),sum(new_psd.data), min(psd_change), max(psd_change))
+	#print >>sys.stderr , "change estimate: %f" % hand.psd_change
+
+	hand.psd_change_thresh = 0.2
 	if abs(hand.psd_change) > hand.psd_change_thresh:
 		if options.verbose:
-			print >> sys.stderr, "Processed signal. PSD change %d, regenerating filters" % int(hand.psd_change*100)
-		hand.psd_power = psd_power
+			print >> sys.stderr, "Processed signal, change estimate: %f, regenerating filters" % hand.psd_change
+		hand.psd = new_psd
 		hand.rebuild_everything()
 
 

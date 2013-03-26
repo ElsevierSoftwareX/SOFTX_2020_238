@@ -131,7 +131,8 @@ class EPHandler( Handler ):
 
 		# Defaults -- PSD settings
 		self.whitener = None
-		self.psd = None
+		# Current measured PSD from the whitener
+		self.prev_psd = self.psd = None
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
 		self.cache_psd = None
@@ -257,7 +258,7 @@ class EPHandler( Handler ):
 			dir = psddir
 		)
 
-		write_psd( filename, { self.inst: self.psd } )
+		write_psd( filename, { self.inst: self.cur_psd } )
 
 	def add_firbank( self, firbank ):
 		"""
