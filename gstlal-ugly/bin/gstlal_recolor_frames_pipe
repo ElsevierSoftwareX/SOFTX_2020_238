@@ -108,6 +108,25 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
 
+class gstlal_ninja_smooth_reference_psd_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_ninja_smooth_reference_psd job
+	"""
+	def __init__(self, executable=which('gstlal_ninja_smooth_reference_psd'), tag_base='gstlal_ninja_smooth_reference_psd'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_ninja_smooth_reference_psd'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
+
+
 class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_reference_psd node
@@ -125,6 +144,23 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, instrument, gps_start_time, gps_end_time)
 		self.add_var_opt("write-psd",output_name)
+		dag.output_cache.append(lal.CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+class gstlal_ninja_smooth_reference_psd_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_ninja_smooth_reference_psd node
+	"""
+	def __init__(self, job, dag, instrument, input_psd, p_node=[]):
+		pipeline.CondorDAGNode.__init__(self,job)
+		path = os.getcwd()
+		output_name = self.output_name = '%s/%s-%d-%d-reference_psd_smooth.xml.gz' % (path, instrument, gps_start_time, gps_end_time)
+		self.add_var_opt("instrument", instrument)
+		self.add_var_opt("input-psd", input_psd)
+		self.add_var_opt("output-psd", output_name)
 		dag.output_cache.append(lal.CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
 		for p in p_node:
 			self.add_parent(p)
@@ -218,17 +254,19 @@ try: os.mkdir("logs")
 except: pass
 dag = bank_DAG("recolor_pipe")
 
-seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segment_file), "datasegments")
+seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segment_file), "datasegments").coalesce()
 breakupsegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()
+smoothJob = gstlal_ninja_smooth_reference_psd_job()
 colorJob = gstlal_recolor_frames_job()
 
 for instrument, seglist in seglists.iteritems():
 	for seg in seglist:
 		#FIXME if there are sements without frame caches this will barf
 		psdnode = gstlal_reference_psd_node(psdJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, injections=options.injections, p_node=[])
-		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=psdnode.output_name, recolor_psd = options.recolor_psd, injections=options.injections, p_node=[psdnode])
+		smoothnode = gstlal_reference_psd_node(psdJob, dag, instrument, psdnode.output_name,  p_node=[psdnode])
+		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=smoothnode.output_name, recolor_psd = options.recolor_psd, injections=options.injections, p_node=[smoothnode])
 		
 dag.write_sub_files()
 dag.write_dag()
