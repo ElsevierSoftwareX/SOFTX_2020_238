@@ -73,8 +73,6 @@ parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, will be written to file.")
 parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the required-on bits for the ODC to DQ vector conversion.")
-parser.add_option("--buffer-mode", type="int", default=0, help = "Set the 'buffer-mode' property on the gds_lvshmsink element. (default = 0)")
-parser.add_option("--num-buffers", type = "int", default=10, help = "Set the 'num-buffers' property on the gds_lvshmink element. (default = 10)")
 
 #
 # Parse options
@@ -126,20 +124,28 @@ pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 if not options.verbose:
 	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
 
-# FIXME make wait_time adjustable through web interface or command line or both
-demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0, assumed_duration = 1), do_file_checksum = True, skip_bad_files = True)
-# Write the pipeline graph after pads have been hooked up to the demuxer
-if options.write_pipeline is not None:
-	demux.connect("pad-added", write_graph)
+if options.data_source == "online":
+	# FIXME make wait_time adjustable through web interface or command line or both
+	demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0, assumed_duration = 1), do_file_checksum = True, skip_bad_files = True)
+	# Write the pipeline graph after pads have been hooked up to the demuxer
+	if options.write_pipeline is not None:
+		demux.connect("pad-added", write_graph)
+	
+	# Set up the PSL and ODC state vector branches
+	psl = pipeparts.mkqueue(pipeline, None)
+	odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
 
-# Set up the PSL and ODC state vector branches
-psl = pipeparts.mkqueue(pipeline, None)
-odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
+	# Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
+	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
+	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
 
-# Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
-pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
-pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
+if options.data_source == "frames":
+	psl = pipeparts.mkframesrc(pipeline, location = gw_data_source.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source.channel_dict[instrument], blocksize = gw_data_source.block_size, segment_list = gw_data_source.frame_segments[instrument]) 
+	psl = pipeparts.mkreblock(pipeline, psl, block_duration = gst.SECOND)
 
+	odcstatevector = pipeparts.mkframesrc(pipeline, location = gw_data_source.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source.dq_channel_dict[instrument], blocksize = gw_data_source.block_size, segment_list = gw_data_source.frame_segments[instrument]) 
+	odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
 #
 # ODC STATE VECTOR BRANCH
 #
@@ -249,7 +255,7 @@ if options.frames_per_file is not None:
 dqvector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR" % instrument))
 
 # Link fake strain (recolored PSL) to the muxer
-pipeparts.mkqueue(pipeline, psl, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:FAKE-STRAIN" % instrument))
+pipeparts.mkqueue(pipeline, psl, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
@@ -257,9 +263,9 @@ if options.write_to_shm_partition is not None:
 	# FIXME: Use pipeparts
 	lvshmsink = gst.element_factory_make("gds_lvshmsink")
 	lvshmsink.set_property("shm-name", options.write_to_shm_partition)
-	lvshmsink.set_property("num-buffers", options.num_buffers)
+	lvshmsink.set_property("num-buffers", 10)
 	lvshmsink.set_property("blocksize", 405338 * options.frame_duration * options.frames_per_file)
-	lvshmsink.set_property("buffer-mode", options.buffer_mode)
+	lvshmsink.set_property("buffer-mode", 2)
 	pipeline.add(lvshmsink)
 	mux.link(lvshmsink)
 else:
