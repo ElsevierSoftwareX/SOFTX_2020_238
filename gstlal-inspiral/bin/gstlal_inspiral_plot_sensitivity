@@ -369,7 +369,8 @@ for bin_type in opts.bin_types:
             label = '-'.join(["%.1f"%ma for ma in mbin])+"M$_\odot$"
             pyplot.errorbar( fars, [d[mbin] for d in dist], yerr = [e[mbin] for e in derr], label=label )
 
-        tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        #tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        tag = "%s_RANGE_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
         pyplot.semilogx()
         pyplot.legend(loc='upper left')
         pyplot.xlim([min(fars),max(fars)])
