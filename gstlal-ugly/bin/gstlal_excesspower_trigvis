@@ -99,16 +99,21 @@ def plot_wnb( sim_burst ):
 		sim_burst.duration,
 		sim_burst.bandwidth,
 		linewidth=1.2,
-		linestyle='-.'
+		linestyle='dashdot'
 	)
 
 def plot_csg( sim_burst ):
 	"""
 	Return an elliptical outline of a cosine / sine gaussian burst.
 	"""
+	# Gaussian in time domain with width w has width 1/w in frequency
+	# domain
+	# tau = Q / sqrt(2) pi f_0, so 1/tau = sqrt(2) pi f_0 / Q
+	sim_burst.duration = sim_burst.q / math.sqrt(2) / math.pi / sim_burst.frequency 
+	sim_burst.bandwidth = 1.0 / sim_burst.duration
 	center = (float(sim_burst.get_time_geocent()),
-	 		  (sim_burst.frequency+sim_burst.bandwidth/2.0) )
-	return matplotlib.patches.Ellipse( xy=center, width=duration, height=bandwidth, facecolor = 'none', linewidth=1.2, linestyle='--' )
+	 		  (sim_burst.frequency) )
+	return matplotlib.patches.Ellipse( xy=center, width=sim_burst.duration/2.0, height=sim_burst.bandwidth/2.0, facecolor = 'none', linewidth=1.2, linestyle='dashed' )
 
 def plot_chirp( mtot, mchirp, end_time ):
 		"""
@@ -334,6 +339,7 @@ for channel, selected_events in event_iter:
 		print "No events remain, skipping."
 		continue
 
+	high_frequency = opts.high_frequency
 	if opts.high_frequency == float("inf"):
 		high_frequency = max( [e.central_freq for e in selected_events] )
 	low_frequency = opts.low_frequency or 0
@@ -475,18 +481,18 @@ for channel, selected_events in event_iter:
 		try:
 			sim_burst = get_sim_burst_from_file( opts.plot_injections_from_file )
 
-			valid_waveforms = ["BTLWNB", "CSG"]
+			valid_waveforms = ["BTLWNB", "SineGaussian"]
 			
 			for sb in sim_burst:
 				if sb.waveform not in valid_waveforms: 
 					continue # Dunno how to do this one.
 			
-				if si.time_geocent_gps < viewseg[0] or si.time_geocent_gps > viewseg[1]:
+				if not (sb.time_geocent_gps > viewseg[0] and sb.time_geocent_gps < viewseg[1]):
 					continue # outside, skip
-				print "plotting %s with gps time %d.%d" % (si.waveform, si.time_geocent_gps, si.time_geocent_gps_ns)
+				print "plotting %s with gps time %d.%d" % (sb.waveform, sb.time_geocent_gps, sb.time_geocent_gps_ns)
 				if sb.waveform == "BTLWNB":
 					ax.add_patch( plot_wnb( sb ) )
-				elif sb.waveform == "CSG":
+				elif sb.waveform == "SineGaussian":
 					ax.add_patch( plot_csg( sb ) )
 					
 		except ValueError:
