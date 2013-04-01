@@ -356,32 +356,77 @@ for bin_type in opts.bin_types:
             vols.append(vol)
             errs.append(err)
 
+        # set up figure for putting legend outside of plot
+        if bin_type == "Mass1_Mass2":
+            fig = pyplot.figure()
+            xsize, ysize = fig.get_size_inches()
+            fig.set_size_inches(2*xsize, ysize)
+
+            pyplot.subplot(121)
+
         # plot the volume versus far for each bin
         mbins = rate.NDBins(bins[1:])
-        for j,mbin in enumerate(iterutils.MultiIter(*mbins.centres())):
-            label = '-'.join(["%.1f"%ma for ma in mbin])+"M$_\odot$"
-            pyplot.errorbar( fars, [v[mbin] for v in vols], yerr = [e[mbin] for e in errs], label=label )
+        for mlo, mmid, mhi in zip(iterutils.MultiIter(*mbins.lower()),
+                                  iterutils.MultiIter(*mbins.centres()),
+                                  iterutils.MultiIter(*mbins.upper())):
+            if bin_type == "Aligned_Spin":
+                label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+            if bin_type == "Total_Mass":
+                label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+            if bin_type == "Mass1_Mass2":
+                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+            pyplot.errorbar( fars, [v[mmid] for v in vols], yerr = [e[mmid] for e in errs], label=label )
 
-        tag = "%s-%s_VOLUME_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        #tag = "%s-%s_VOLUME_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        tag = "%s_VOLUME_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+
+        # Put a legend to the right of the current axis
+        if bin_type == "Mass1_Mass2":
+            pyplot.gca().legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
+        else:
+            pyplot.gca().legend(loc='lower right')
+
         pyplot.semilogx()
-        pyplot.legend(loc='upper left')
+        pyplot.grid()
         pyplot.xlim([min(fars),max(fars)])
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Volume*T (Mpc$^3$ yr)")
         pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
         pyplot.close()
 
+        # set up figure for putting legend outside of plot
+        if bin_type == "Mass1_Mass2":
+            fig = pyplot.figure()
+            xsize, ysize = fig.get_size_inches()
+            fig.set_size_inches(2*xsize, ysize)
+
+            pyplot.subplot(121)
+
         # plot the sensitive range versus far for each bin
         dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols ]
         derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs,vols,dist) ]
-        for j,mbin in enumerate(iterutils.MultiIter(*mbins.centres())):
-            label = '-'.join(["%.1f"%ma for ma in mbin])+"M$_\odot$"
-            pyplot.errorbar( fars, [d[mbin] for d in dist], yerr = [e[mbin] for e in derr], label=label )
+        for mlo, mmid, mhi in zip(iterutils.MultiIter(*mbins.lower()),
+                                  iterutils.MultiIter(*mbins.centres()),
+                                  iterutils.MultiIter(*mbins.upper())):
+            if bin_type == "Aligned_Spin":
+                label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+            if bin_type == "Total_Mass":
+                label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+            if bin_type == "Mass1_Mass2":
+                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+            pyplot.errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
         #tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
         tag = "%s_RANGE_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+
+        # Put a legend to the right of the current axis
+        if bin_type == "Mass1_Mass2":
+            pyplot.gca().legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
+        else:
+            pyplot.gca().legend(loc='lower right')
+
         pyplot.semilogx()
-        pyplot.legend(loc='upper left')
+        pyplot.grid()
         pyplot.xlim([min(fars),max(fars)])
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Mean Sensitive Range (Mpc)")
