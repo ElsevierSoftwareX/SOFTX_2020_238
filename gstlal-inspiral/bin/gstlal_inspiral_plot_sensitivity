@@ -199,6 +199,9 @@ class upper_limit(object):
         if bin_type == "Mass1_Mass2":
             self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
+        if bin_type == "Aligned_Spin":
+            self.bins = imr_utils.guess_distance_phenomb_spin_parameter_bins_from_sims(self.total_injections[inst], chibins = opts.spin_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_phenomb_spin_parameter_bins_function
 
         return self.bins, self.sim_to_bins
 
@@ -262,7 +265,8 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
     #
     # Binning options
     #
-    parser.add_option("--mass-bins", default = 3, metavar = "integer", type = "int", help = "Number of mass bins (per dimension), if mass bin boundaries are not explicitly set.") 
+    parser.add_option("--mass-bins", default = 4, metavar = "integer", type = "int", help = "Number of mass bins (per dimension), if mass bin boundaries are not explicitly set.") 
+    parser.add_option("--spin-bins", default = 4, metavar = "integer", type = "int", help = "Number of spin bins (per dimension), if spin bin boundaries are not explicitly set.")
     parser.add_option("--dist-bins", default = 15, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
 
     # injection filters
@@ -280,6 +284,9 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
     # Bin injections by total mass
     parser.add_option("--bin-by-total-mass", default = False, action = "store_true", help = "Bin injections by total mass when estimating the search efficiency.")
 
+    # aligned spin
+    parser.add_option("--bin-by-aligned-spin", default = False, action = "store_true", help = "Bin injections by aligned spin parameter when estimating the search efficiency.")
+
     opts, filenames = parser.parse_args()
     opts.injection_database.extend(filenames)
 
@@ -288,6 +295,8 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
         opts.bin_types.append("Total_Mass")
     if opts.bin_by_mass1_mass2:
         opts.bin_types.append("Mass1_Mass2")
+    if opts.bin_by_aligned_spin:
+        opts.bin_types.append("Aligned_Spin")
 
     if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
         raise ValueError, "The maximum mass ratio must be >=1!"
