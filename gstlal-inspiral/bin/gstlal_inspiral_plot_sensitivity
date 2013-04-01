@@ -197,6 +197,7 @@ class upper_limit(object):
             self.bins = imr_utils.guess_distance_total_mass_bins_from_sims(self.total_injections[inst], nbins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_total_mass_bins_function
         if bin_type == "Mass1_Mass2":
+            self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
             self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
         if bin_type == "Aligned_Spin":
@@ -223,6 +224,13 @@ class upper_limit(object):
 
                 if self.opts.max_mass_ratio and not (1.0/self.opts.max_mass_ratio <= sim.mass1/sim.mass2 <= self.opts.max_mass_ratio):
                     continue
+
+                # symmetrize in m1-m2
+                if sim.mass1 > sim.mass2:
+                    m1 = sim.mass1
+                    m2 = sim.mass2
+                    sim.mass1 = m2
+                    sim.mass2 = m1
 
                 # passed all constraint tests, we can use it
                 newinjs.append((far,sim))
@@ -374,6 +382,8 @@ for bin_type in opts.bin_types:
             if bin_type == "Total_Mass":
                 label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
+                if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
+                    continue
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             pyplot.errorbar( fars, [v[mmid] for v in vols], yerr = [e[mmid] for e in errs], label=label )
 
@@ -413,6 +423,8 @@ for bin_type in opts.bin_types:
             if bin_type == "Total_Mass":
                 label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
+                if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
+                    continue
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             pyplot.errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
