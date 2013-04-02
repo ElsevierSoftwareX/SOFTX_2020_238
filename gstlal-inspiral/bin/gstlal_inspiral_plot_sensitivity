@@ -102,8 +102,10 @@ class upper_limit(object):
                 self.total_injections[inst] += total
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
 
-        # remove injections that violate user-imposed constraints
+        # remove injections that violate user-imposed constraints and
+        # symmetrize between m1-m2
         for instr in self.instruments:
+            self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
             self.found_injections[instr] = self.filter_injections(self.found_injections[instr])
 
 
@@ -197,12 +199,14 @@ class upper_limit(object):
             self.bins = imr_utils.guess_distance_total_mass_bins_from_sims(self.total_injections[inst], nbins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_total_mass_bins_function
         if bin_type == "Mass1_Mass2":
-            self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
             self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
         if bin_type == "Aligned_Spin":
             self.bins = imr_utils.guess_distance_phenomb_spin_parameter_bins_from_sims(self.total_injections[inst], chibins = opts.spin_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_phenomb_spin_parameter_bins_function
+        if bin_type == "Mass_Ratio":
+            self.bins = imr_utils.guess_distance_mass_ratio_bins_from_sims(self.total_injections[inst], qbins = opts.mass_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_mass_ratio_bins_function
 
         return self.bins, self.sim_to_bins
 
@@ -295,6 +299,9 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
     # aligned spin
     parser.add_option("--bin-by-aligned-spin", default = False, action = "store_true", help = "Bin injections by aligned spin parameter when estimating the search efficiency.")
 
+    # aligned spin
+    parser.add_option("--bin-by-mass-ratio", default = False, action = "store_true", help = "Bin injections by mass ratio when estimating the search efficiency.")
+
     opts, filenames = parser.parse_args()
     opts.injection_database.extend(filenames)
 
@@ -305,6 +312,8 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
         opts.bin_types.append("Mass1_Mass2")
     if opts.bin_by_aligned_spin:
         opts.bin_types.append("Aligned_Spin")
+    if opts.bin_by_mass_ratio:
+        opts.bin_types.append("Mass_Ratio")
 
     if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
         raise ValueError, "The maximum mass ratio must be >=1!"
@@ -379,6 +388,8 @@ for bin_type in opts.bin_types:
                                   iterutils.MultiIter(*mbins.upper())):
             if bin_type == "Aligned_Spin":
                 label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+            if bin_type == "Mass_Ratio":
+                label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
                 label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
@@ -394,11 +405,12 @@ for bin_type in opts.bin_types:
         if bin_type == "Mass1_Mass2":
             pyplot.gca().legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
         else:
-            pyplot.gca().legend(loc='lower right')
+            pyplot.gca().legend(loc='upper left')
 
         pyplot.semilogx()
         pyplot.grid()
         pyplot.xlim([min(fars),max(fars)])
+        pyplot.ylim(ymin=0)
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Volume*T (Mpc$^3$ yr)")
         pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
@@ -420,6 +432,8 @@ for bin_type in opts.bin_types:
                                   iterutils.MultiIter(*mbins.upper())):
             if bin_type == "Aligned_Spin":
                 label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+            if bin_type == "Mass_Ratio":
+                label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
                 label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
@@ -440,6 +454,7 @@ for bin_type in opts.bin_types:
         pyplot.semilogx()
         pyplot.grid()
         pyplot.xlim([min(fars),max(fars)])
+        pyplot.ylim(ymin=0)
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Mean Sensitive Range (Mpc)")
         pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))

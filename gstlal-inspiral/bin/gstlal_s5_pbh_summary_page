@@ -173,6 +173,9 @@ page.subpages["search_sensitivity"].sections["mass1_mass2"].add_table(imgtable, 
 page.subpages["search_sensitivity"].add_section("aligned_spin","Binned by aligned spin")
 imgtable = cbcwebpage.image_glob(base_name+'*BINNED_BY_ALIGNED_SPIN*.png')
 page.subpages["search_sensitivity"].sections["aligned_spin"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance", "Binned by aligned spin")
+page.subpages["search_sensitivity"].add_section("mass_ratio","Binned by mass ratio")
+imgtable = cbcwebpage.image_glob(base_name+'*BINNED_BY_MASS_RATIO*.png')
+page.subpages["search_sensitivity"].sections["mass_ratio"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance", "Binned by mass ratio")
 
 
 #
