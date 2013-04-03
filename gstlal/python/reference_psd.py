@@ -50,9 +50,9 @@ import gst
 from glue.ligolw import ligolw
 from glue.ligolw import param
 from glue.ligolw import utils
+import lal
 from pylal import datatypes as laltypes
 from pylal import series as lalseries
-from pylal import window
 from pylal import lalconstants
 
 
@@ -353,7 +353,7 @@ def psd_to_fir_kernel(psd):
 	#
 
 	norm_before = numpy.dot(kernel, kernel)
-	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= lal.CreateTukeyREAL8Window(len(kernel), .5).data.data
 	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
 
 	#
@@ -436,7 +436,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd):
 	#
 
 	norm_before = numpy.dot(kernel, kernel)
-	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= lal.CreateTukeyREAL8Window(len(kernel), .5).data.data
 	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
 
 	#
