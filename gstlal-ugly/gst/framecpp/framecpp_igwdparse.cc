@@ -295,11 +295,15 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 	do {
 		if(element->offset == 0) {
 			/*
-			 * parse header.  see table 5 of LIGO-T970130.  note:  we
-			 * know the endianness from the caps (which the typefinder
-			 * takes care of figuring out for us), so the only other
-			 * things we need to figure out are the word sizes.
-			 * FIXME:  get from framecpp?
+			 * parse header.  see table 5 of LIGO-T970130.
+			 * note:  we only need the endianness and word
+			 * sizes.
+			 * FIXME:  this doesn't check that the header is
+			 * valid.  adding code to do that could allow the
+			 * parser to be "resyncable" (able to find frame
+			 * files starting at an arbitrary point in a byte
+			 * stream)
+			 * FIXME:  use framecpp to parse / validate header?
 			 */
 
 			g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);

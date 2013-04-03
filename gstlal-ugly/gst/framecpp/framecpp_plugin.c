@@ -75,9 +75,9 @@
  * - bytes 0 -- 4 to be {'I', 'G', 'W', 'D', '\0'},
  *
  * If test passes, we claim it's an IGWD frame file with 100% certainty.
- * The probability that 40 randomly-select bits would equal this sequence
- * is 1 in 1099511627776.  The probability that 32 null-terminated bits
- * would equal this sequence is 1 in 4294967296.  The probability that 4
+ * The probability that 40 random bits would equal this sequence is 1 in
+ * 1099511627776.  The probability that 32 null-terminated bits would equal
+ * this sequence is 1 in 4294967296.  The probability that 4
  * null-terminated upper-case ASCII letters would equal this sequence is 1
  * in 456976.
  */
