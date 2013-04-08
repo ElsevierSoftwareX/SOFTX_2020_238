@@ -27,7 +27,6 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue import iterutils
-from pylal import inject
 from pylal import rate
 from optparse import OptionParser
 from gstlal import far
