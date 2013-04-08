@@ -292,6 +292,22 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = 
 	return D_at_snr_1 / snr / (1e6 * lalconstants.LAL_PC_SI)
 
 
+def effective_distance_factor(inclination, fp, fc):
+	"""
+	Returns the ratio of effective distance to physical distance for
+	compact binary mergers.  Inclination is the orbital inclination of
+	the system in radians, fp and fc are the F+ and Fx antenna factors.
+	See lal.ComputeDetAMResponse() for a function to compute antenna
+	factors.  The effective distance is given by
+
+	Deff = effective_distance_factor * D
+
+	See Equation (4.3) of arXiv:0705.1514.
+	"""
+	cos2i = math.cos(inclination)**2
+	return 1.0 / math.sqrt(fp**2 * (1+cos2i)**2 / 4 + fc**2 * cos2i)
+
+
 def psd_to_fir_kernel(psd):
 	"""
 	Compute an acausal finite impulse-response filter kernel from a power
