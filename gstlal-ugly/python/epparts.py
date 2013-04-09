@@ -127,6 +127,7 @@ class EPHandler( Handler ):
 		self.firbank = None
 
 		# Defaults -- PSD settings
+		self.whitener = None
 		self.psd = None
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
@@ -179,6 +180,7 @@ class EPHandler( Handler ):
 		self.clustering = False
 		self.channel_monitoring = False
 		self.stats = ep.SBStats()
+		self.filter_rebuild_times = []
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -210,7 +212,7 @@ class EPHandler( Handler ):
 			# Make it very clear we don't have a segment currently
 			self.current_segment = None
 			if self.verbose:
-				print >>sys.stderr, "Ending segment #%d: %s" % (len(self.seglist["state"]), str(self.seglist["state"][-1]))
+				print >>sys.stderr, "Ending segment #%d: %s" % (len(self.seglist["state"])-1, str(self.seglist["state"][-1]))
 		else:
 			print >>sys.stderr, "Unrecognized state change, ignoring."
 
@@ -233,6 +235,7 @@ class EPHandler( Handler ):
 		if message.structure.get_name() == "spectrum":
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
+			self.filter_rebuild_times.append( ("spectrum_message", ts) )
 			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( ts, self.cache_psd_dir )
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
@@ -531,13 +534,23 @@ class EPHandler( Handler ):
 
 		add_cbc_metadata( output, process, requested_segment )
 		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
+		search_sum[0].comment = ",".join( [ "%s:%10.9f" % (m[0], m[1]) for m in self.filter_rebuild_times ] )
+		self.filter_rebuild_times = []
 		# TODO: This shouldn't set every one of them in case we reuse XML 
 		# documents later
 		for row in search_sum:
 			row.set_out( analysis_segment )
 
+		# The second condition corresponds to a sentinel that I think
+		# is a bug in the segment class. If start > end, then it simply
+		# reverses the order of and creates a segment with a 
+		# non-negative duration. What can happen is the gate gets 
+		# ahead of the trigger generator by enough that the "analysis"
+		# would end before the next segment. The second condition
+		# prevents that segment from being added to the outgoing search
+		# summary.
 		cur_seg = None
-		if self.current_segment is not None:
+		if self.current_segment is not None and float(self.current_segment[0]) > self.analysis_segment[1]:
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
 			self.seglist["state"].append( cur_seg )
@@ -555,11 +568,6 @@ class EPHandler( Handler ):
 		# much
 		self.seglist.clear()
 
-		# FIXME: We actually will end up writing the same segment more than once
-		# across adjacent files. This is probably okay but, fair warning.
-		# What maybe should be done is to intersect the final segment with the
-		# analysis_segment's end and then make the current segment have the same
-		# start time as the last written segment's end.
 		self.seglist["state"] = segmentlist([])
 
 		# TODO: replace cbc filter table with our own

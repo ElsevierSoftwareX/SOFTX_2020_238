@@ -430,7 +430,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 	union {
-		complex * as_complex;
+		float complex * as_complex;
 		double complex * as_double_complex;
 		void * as_void;
 		} dataptr;
@@ -441,13 +441,16 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
 	
 	/* put the data pointer one pad length in */
-	if (element->peak_type == GSTLAL_PEAK_COMPLEX)
-		dataptr.as_complex = (complex *) element->data + element->maxdata->pad * element->maxdata->channels;
-	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
-		dataptr.as_double_complex = (double complex *) element->data + element->maxdata->pad * element->maxdata->channels;
-
-	/* Find the peak */
-	gstlal_peak_over_window(element->maxdata, (const void *) dataptr.as_void, outsamps);
+	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
+		dataptr.as_complex = ((float complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
+		/* Find the peak */
+		gstlal_float_complex_peak_over_window(element->maxdata, dataptr.as_complex, outsamps);
+		}
+	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+		dataptr.as_double_complex = ((double complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
+		/* Find the peak */
+		gstlal_double_complex_peak_over_window(element->maxdata, dataptr.as_double_complex, outsamps);
+		}
 
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
@@ -455,15 +458,18 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		if (!element->autocorrelation_norm)
 			element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
 
-		/* extract data around peak for chisq calculation */
-		gstlal_series_around_peak(element->maxdata, (void *) dataptr.as_void, element->snr_mat, element->maxdata->pad);
 		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
 
-		if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+		if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+			/* extract data around peak for chisq calculation */
+			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
-		if (element->peak_type == GSTLAL_PEAK_COMPLEX)
-			gstlal_autocorrelation_chi2_float((float *) element->chi2, (complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
-
+			}
+		if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
+			/* extract data around peak for chisq calculation */
+			gstlal_float_complex_series_around_peak(element->maxdata, dataptr.as_complex, (float complex *) element->snr_mat, element->maxdata->pad);
+			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+			}
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2);
 		}

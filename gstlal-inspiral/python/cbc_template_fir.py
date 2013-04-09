@@ -33,7 +33,7 @@ import sys
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
-from pylal import window
+import lal
 
 
 from gstlal.reference_psd import interpolate_psd
@@ -103,7 +103,7 @@ def condition_imr_phenom_b_template(approximant, data, sample_rate_max, max_mass
 	target_index = len(data) - int(sample_rate_max * max_mass * 50 * 5e-6) # 50 M for the max mass to leave room for ringdown
 	target_tukey_percentage = 2 * (1. - float(target_index) / len(data))
 	data = numpy.roll(data, target_index - max_index)
-	data *= window.XLALCreateTukeyREAL8Window(len(data), target_tukey_percentage).data
+	data *= lal.CreateTukeyREAL8Window(len(data), target_tukey_percentage).data.data
 
 	return data
 	

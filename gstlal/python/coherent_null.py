@@ -26,8 +26,8 @@ import scipy.fftpack
 import numpy
 import math
 
+import lal
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-from pylal import window
 
 #
 # =============================================================================
@@ -84,7 +84,7 @@ def factors_to_fir_kernel(coh_facs):
 	#
 
 	norm_before = numpy.dot(kernel, kernel)
-	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= lal.CreateTukeyREAL8Window(len(kernel), .5).data.data
 	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
 
 	#

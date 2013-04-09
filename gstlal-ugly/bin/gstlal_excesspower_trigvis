@@ -17,6 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """Visualizer for SnglBurst events"""
 
+import os
 import sys
 
 from collections import defaultdict
@@ -42,6 +43,7 @@ import itertools
 
 from glue.ligolw import utils
 from glue.ligolw import lsctables
+from glue.ligolw import table
 from glue import segments
 from glue.lal import LIGOTimeGPS
 from glue.lal import Cache
@@ -66,8 +68,71 @@ parser.add_option("-X", "--overlay-summary", action="append", help="Parse the se
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
+parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
+parser.add_option("-j", "--plot-injections-from-file", action="store", help="Plot all injections from the file indicated. File must contain a sim_burst or sim_inspiral table. If a sim_inspiral table is found, will plot the 3.5 PN time-frequency track. If a sim_burst table is found, will plot the approximate extent of the time frequency area on the map.")
 
 opts, args = parser.parse_args()
+
+def get_sim_inspirals_from_file(filename):
+	"""
+	Get a sim inspiral table from the file name."
+	"""
+	xmldoc = utils.load_filename(filename)
+	return table.get_table( xmldoc, lsctables.SimInspiralTable.tableName )
+
+def get_sim_burst_from_file( filename ):
+	"""
+	Get a sim burst table from the file name."
+	"""
+	xmldoc = utils.load_filename(filename)
+	return table.get_table( xmldoc, lsctables.SimBurstTable.tableName )
+	
+def plot_wnb( sim_burst ):
+	"""
+	Return a rectangular outline of a band / time limited white noise burst.
+	"""
+	return matplotlib.patches.Rectangle( 
+		# lower left point
+		( sim_burst.get_time_geocent()-sim_burst.duration/2.0,
+		  (sim_burst.frequency - sim_burst.bandwidth/2.0) ),
+		# tile extent
+		sim_burst.duration,
+		sim_burst.bandwidth,
+		linewidth=1.2,
+		linestyle='-.'
+	)
+
+def plot_csg( sim_burst ):
+	"""
+	Return an elliptical outline of a cosine / sine gaussian burst.
+	"""
+	center = (float(sim_burst.get_time_geocent()),
+	 		  (sim_burst.frequency+sim_burst.bandwidth/2.0) )
+	return matplotlib.patches.Ellipse( xy=center, width=duration, height=bandwidth, facecolor = 'none', linewidth=1.2, linestyle='--' )
+
+def plot_chirp( mtot, mchirp, end_time ):
+		"""
+		Return the time-frequency track of a non-spinning 3.5 PN TaylorT2 expression for t(v). Reference BIOPS (arXiv:0907.0700) Eq. 3.8b
+		Courtesy of Andy Lundgren (andrew.lundgren@ligo.org)
+		"""
+		mtsun = 4.9254923218988638e-06 
+		eta = pow(mchirp/mtot,5./3.)
+		freqs = numpy.arange(10.0, 2048.0)
+		v = pow(numpy.pi*mtsun*mtot*freqs,1./3.)
+
+		newt_chirp = (-5.*mtsun*mtot)/(256.*eta)*pow(v,-8.)
+		pn_series = (1. \
+						+ (2.94841 + 3.66667*eta) * pow(v,2) \
+						+ (-20.1062) * pow(v,3) \
+						+ (6.02063 + 10.7718*eta + 8.56944*eta*eta) * pow(v,4) \
+						+ (-96.3546 + 13.6136*eta) * pow(v,5) \
+						+ (120.87 + 661.664*eta - 8.80266*eta*eta + 19.7261*eta*eta*eta \
+							+ 65.219*numpy.log(v)) * pow(v,6) \
+						+ (-381.403 - 314.587*eta + 123.079*eta*eta) * pow(v, 7))
+		times = newt_chirp * pn_series
+		times = end_time + times - times[-1]
+
+		return times, freqs
 
 logaxes = opts.logscale or []
 for ax in logaxes:
@@ -86,29 +151,29 @@ if( opts.plotting_type not in plotting_types ):
 	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types))
 	exit()
 
-if( opts.low_frequency is None ):
+if opts.low_frequency is None:
 	opts.low_frequency = 0
 
-if( opts.high_frequency is None ):
-	opts.high_frequency = 1e10
+if opts.high_frequency is None:
+	opts.high_frequency = float("inf")
 
-if( opts.mark_loudest not in [None, 'snr', 'conf'] ):
+if opts.mark_loudest not in [None, 'snr', 'conf']:
 	exit( "Invalid argument to '--mark-loudest', please choose one of 'snr' or 'conf'" )
 
-if( opts.channels is not None ):
+if opts.channels is not None:
 	channels = opts.channels.split(",")
 else: channels = None
 
-if( opts.instruments is not None ):
+if opts.instruments is not None:
 	print instruments
 else: instruments = None
 
-if( opts.overlay_segments is not None ): 
+if opts.overlay_segments is not None: 
 	segment_defs = opts.overlay_segments.split(",")
 else:
 	segment_defs = None
 
-if( opts.input_cache is not None ):
+if opts.input_cache is not None:
 	args += Cache.fromfile( open(opts.input_cache) ).pfnlist()
 
 events = lsctables.SnglBurstTable()
@@ -120,7 +185,6 @@ event_map = defaultdict(list)
 summary_info = defaultdict(list)
 for arg in args:
 	xmldoc = utils.load_filename( arg )
-	all_events = []
 
 	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
 		for sb in tbl:
@@ -131,36 +195,38 @@ for arg in args:
 		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
 		for ss in tbl:
 			search_map[ss.process_id].append( ss )
-			if len(plotsum) == 0:
+			if len(plotsum) == 0 or ss.comment is None:
 				continue
 			for typetime in ss.comment.split(","):
-				type, time =  typetime.split(":")
-				summary_info[type].append( float(time) )
+				try:
+					type, time = typetime.split(":")
+					summary_info[type].append( float(time) )
+				except ValueError:
+					pass
 
-	# Map events to their searches, and ensure they are in the proper "out" segment
-	for pid, eventlist in event_map.iteritems():
-		# FIXME: Clustering will sometimes take an event past the out segment and this will discard it
-		try:
-			search_map[pid]
-		except ValueError:
-			continue # not mapped to a search
-		#for ss in search_map[pid]:
-			#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
-		all_events += eventlist
+# Map events to their searches, and ensure they are in the proper "out" segment
+for pid, eventlist in event_map.iteritems():
+	# FIXME: Clustering will sometimes take an event past the out segment and this will discard it
+	try:
+		search_map[pid]
+	except ValueError:
+		continue # not mapped to a search
+	#for ss in search_map[pid]:
+		#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
+	#all_events += eventlist
+	events += eventlist
 
-	events += all_events 
-
-if( len(events) == 0 ):
+if len(events) == 0:
 	print "No events remain."
 	exit()
 
 # Get instrument and channel information
-if( instruments is None and channels is None ):
+if instruments is None and channels is None:
 	instruments = {}
 	for event in events:
 		instruments[event.ifo] = None
 	instruments = instruments.keys()
-if( instruments is None ):
+if instruments is None:
 	instruments = {}
 	for channel in channels:
 		instruments[channel.split(":")[0]] = None
@@ -175,7 +241,7 @@ for arg in args:
 
 	xmldoc = utils.load_filename( arg )
 	def_id_pair = []
-	if( segment_defs is not None ):
+	if segment_defs is not None:
 		segtables = lsctables.SegmentDefTable()
 		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentDefTable ):
 			segtables += tbl 
@@ -185,7 +251,7 @@ for arg in args:
 		def_id_pair = filter( lambda (i,n,j): n in segment_defs and j in instruments, def_id_pair )
 		def_id_pair = dict(map( lambda (i,n,j): (i,(n,j)), def_id_pair ))
 
-	if( len(def_id_pair) > 0 ):
+	if len(def_id_pair) > 0:
 		for i, ids in def_id_pair.iteritems(): 
 			segs[ids] = segments.segmentlist()
 
@@ -202,10 +268,10 @@ for arg in args:
 				segs[def_id_pair[seg.segment_def_id]].append( segm )
 
 viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
-if( opts.gps_start is None ):
+if opts.gps_start is None:
 	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
 else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
-if( opts.gps_end is None ):
+if opts.gps_end is None:
 	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
 else: viewseg = segments.segment( viewseg[0], opts.gps_end )
 viewseg = segments.segment( viewseg[0], viewseg[1] )
@@ -231,10 +297,10 @@ analyzed_segments.coalesce()
 analyzed_segments = analyzed_segments.__invert__()
 
 # Channel information
-if( channels is None ):
+if channels is None:
 	channels = {}
 	for event in events:
-		if( event.ifo in instruments ):
+		if event.ifo in instruments:
 			channels[(event.ifo, event.channel)] = None
 	channels = channels.keys()
 	channels = map( lambda cl: ":".join(cl), channels )
@@ -252,17 +318,24 @@ events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
 event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
 
 for channel, selected_events in event_iter:
-	if( channel not in channels ): continue
+	if channel not in channels: continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
 	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
-	#selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg ]
+	if opts.exclude_outside_segments:
+		for k in segs.keys():
+			try:
+				segs[k[1]].extend( segs[k] )
+			except KeyError:
+				segs[k[1]] = segs[k]
+		selected_events = filter( lambda event: event.peak_time in segs[event.ifo], selected_events )
 	print "%d events remain." % len(selected_events)
-	if( len(selected_events) == 0 ):
+	if len(selected_events) == 0:
 		print "No events remain, skipping."
 		continue
 
-	high_frequency = max( [e.central_freq for e in selected_events] )
+	if opts.high_frequency == float("inf"):
+		high_frequency = max( [e.central_freq for e in selected_events] )
 	low_frequency = opts.low_frequency or 0
 
 	inst, channel = channel.split(":")
@@ -278,7 +351,7 @@ for channel, selected_events in event_iter:
 	selected_events = numpy.array( selected_events )
 
 	# what's our snr scale
-	if( len(selected_events) > 0 ):
+	if len(selected_events) > 0:
 		if 'c' in logaxes:
 			snr_norm = matplotlib.colors.Normalize( 
 				numpy.log10(selected_events[0].snr), 
@@ -291,14 +364,12 @@ for channel, selected_events in event_iter:
 	else:
 		snr_norm = matplotlib.colors.Normalize( 0, 1 )
 
-	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
-
 	# Make me purty
 	ax.grid()
-	if( opts.mark_time in viewseg ):
+	if opts.mark_time in viewseg:
 		pyplot.axvline(opts.mark_time, color="k")
 
-	if( pn == len(channels)-1 ):
+	if pn == len(channels)-1:
 		pyplot.xlabel( "Time (s)" )
 	pyplot.ylabel( "Frequency (Hz)" )
 
@@ -332,63 +403,120 @@ for channel, selected_events in event_iter:
 			#color = colormap.to_rgba( event.snr )
 		)
 		#ax.add_patch( tile )
-		if( opts.plotting_type in ["tile", "both"] ):
+		if opts.plotting_type in ["tile", "both"]:
 			tiles.append( tile )
-		if( opts.plotting_type in ["marker", "both"] ):
-			markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
+		if opts.plotting_type in ["marker", "both"]:
+			if 'c' in logaxes:
+				markers.append( (float(event.get_peak()), event.central_freq, numpy.log10(event.snr)) )
+			else:
+				markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
+
 		if 'c' in logaxes:
 			snrs.append( numpy.log10(event.snr) )
 		else:
 			snrs.append( event.snr )
-		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
-			loudest = [event.snr, float(event.get_peak()), event.central_freq]
-		elif( loudest[0] < event.confidence and opts.mark_loudest == 'conf' ):
-			loudest = [event.confidence, event.get_peak(), event.central_freq]
+		if loudest[0] < event.snr and opts.mark_loudest == 'snr':
+			loudest = [event.snr, float(event.get_peak()), event.central_freq, event.duration, event.bandwidth]
+		elif loudest[0] < event.confidence and opts.mark_loudest == 'conf':
+			loudest = [event.confidence, event.get_peak(), event.central_freq, event.duration, event.bandwidth]
 
 	markers = numpy.array(markers).T
 	print ""
 
 	title = "channel: %s, inst %s" % (channel, inst)
-	if( pn == 0 ):
+	if pn == 0:
 		title = "Tile energy time frequency map\n%s" % title
-	if( opts.mark_loudest is not None ):
+	if opts.mark_loudest is not None:
 		print "Loudest event at (%s)" % ", ".join(map(lambda a: str(a), loudest[1:]))
-		pyplot.plot( [loudest[1]], [loudest[2]], marker='o', markerfacecolor='none', markersize=10, markeredgewidth=1.2)
+		if opts.plotting_type != "marker":
+			ax.add_patch( matplotlib.patches.Ellipse( xy=loudest[1:3], width=loudest[3]*1.2, height=loudest[4]*1.2, facecolor = 'none', linewidth=1.2 ) )
+		else:
+			pyplot.plot( [loudest[1]], [loudest[2]], marker='*', markerfacecolor='yellow', markersize=15.0 )
 		title += " loudest event (%s=%.3g): %10.1f" % (opts.mark_loudest, math.sqrt(loudest[0]), loudest[1])
 	pyplot.title( title )
 
 
 	# TODO: See if replacing data speeds up the process
-	if( opts.plotting_type in ["tile", "both"] ):
+	if opts.plotting_type in ["tile", "both"]:
 		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
-	if( opts.plotting_type == "marker" ):
-		ax.scatter( markers[0], markers[1], c=markers[2] ) # with circles
-	elif( opts.plotting_type == "both" ):
+	if opts.plotting_type == "marker":
+		# SNR 3-5.5
+		markers = numpy.array(markers)
+		def sizef( m ):
+			if m <= 5.5:
+				return 1
+			elif m > 5.5 and m < 10:
+				return 5
+			else:
+				return 50
+		size = map(sizef, markers[2])
+		ax.scatter( markers[0], markers[1], c=markers[2], s=size, lw=0, cmap=matplotlib.cm.copper_r ) # with circles
+	elif opts.plotting_type == "both":
 		ax.scatter( markers[0], markers[1], marker='+' ) # with crosses
+
+	# Plot simulations
+	if opts.plot_injections_from_file is not None:
+		try:
+			sim_insp = get_sim_inspirals_from_file( opts.plot_injections_from_file )
+			for si in sim_insp:
+				# half hour buffer for BNS
+				print si.geocent_end_time
+				if si.geocent_end_time < viewseg[0] - 1800 or si.geocent_end_time > viewseg[1] + 1800:
+					continue # outside, skip
+				print "plotting chirp of masses (%f, %f) with end time %d.%d" % (si.mass1, si.mass2, si.geocent_end_time, si.geocent_end_time_ns) 
+				time, freq = plot_chirp( si.mass1+si.mass2, si.mchirp, si.geocent_end_time + si.geocent_end_time_ns*1e-9 )
+				ax.plot( time, freq, "k-" )
+		except ValueError:
+			print >>sys.stderr, "No sim_inspiral table found, skipping..."
+
+
+		try:
+			sim_burst = get_sim_burst_from_file( opts.plot_injections_from_file )
+
+			valid_waveforms = ["BTLWNB", "CSG"]
+			
+			for sb in sim_burst:
+				if sb.waveform not in valid_waveforms: 
+					continue # Dunno how to do this one.
+			
+				if si.time_geocent_gps < viewseg[0] or si.time_geocent_gps > viewseg[1]:
+					continue # outside, skip
+				print "plotting %s with gps time %d.%d" % (si.waveform, si.time_geocent_gps, si.time_geocent_gps_ns)
+				if sb.waveform == "BTLWNB":
+					ax.add_patch( plot_wnb( sb ) )
+				elif sb.waveform == "CSG":
+					ax.add_patch( plot_csg( sb ) )
+					
+		except ValueError:
+			print >>sys.stderr, "No sim_burst table found, skipping..."
+
 
 	lastwrite = viewseg[0]
 	# FIXME: This is empircal at best.
 	tsize = 0.02*abs(viewseg)
 	t = 0
 	for (segdef, ifo), slist in segs.iteritems():
-		if( ifo != inst ): continue
+		if ifo != inst: continue
 		for seg in slist:
 			# Indicate the name and if the segment extent continues to left or right
 			name = str(ifo+":"+segdef)
-			if( seg[0] < viewseg[0] ):
+			if seg[0] < viewseg[0]:
 				name = unichr(0x2191) + name 
-			if( seg[1] > viewseg[1] ):
+			if seg[1] > viewseg[1]:
 				name = name + unichr(0x2192) 
 
-			seg = viewseg & seg 
+			try:
+				seg = viewseg & seg 
+			except ValueError: # outside the segment
+				continue
 			# Shouldn't happen, but just in case
-			if( seg is None ): continue
+			if seg is None: continue
 			start, end = seg[0], seg[1]
 			tile = matplotlib.patches.Rectangle(
 				# lower left point
-				( start, 0 ),
+				( start, 1e-10 ),
 				# tile extent
 				(end-start),
 				high_frequency,
@@ -399,7 +527,7 @@ for channel, selected_events in event_iter:
 			# If multiple segment names would be written to the same area
 			# move the text over. FIXME: This is not the definitive way to do 
 			# this it's a hack at best
-			if( lastwrite == start ):
+			if lastwrite == start:
 				lastwrite += tsize*t
 				t+=1
 			else:
@@ -411,7 +539,7 @@ for channel, selected_events in event_iter:
 	for (ifo, aseg) in analyzed_segments.iteritems():
 		# TODO: what to do with this?
 		continue
-		if( ifo != inst ): continue
+		if ifo != inst: continue
 		for seg in aseg:
 			# Indicate the name and if the segment extent continues to left or right
 			name = str(ifo+"_analyzed")
@@ -420,13 +548,16 @@ for channel, selected_events in event_iter:
 			if( seg[1] > viewseg[1] ):
 				name = name + unichr(0x2192) 
 
-			seg = viewseg & seg 
+			try:
+				seg = viewseg & seg 
+			except ValueError:
+				continue # not in segment
 			# Shouldn't happen, but just in case
-			if( seg is None ): continue
+			if seg is None: continue
 			start, end = seg[0], seg[1]
 			tile = matplotlib.patches.Rectangle(
 				# lower left point
-				( start, 0 ),
+				( start, 1e-10 ),
 				# tile extent
 				(end-start),
 				high_frequency,
@@ -437,7 +568,7 @@ for channel, selected_events in event_iter:
 			# If multiple segment names would be written to the same area
 			# move the text over. FIXME: This is not the definitive way to do 
 			# this it's a hack at best
-			if( lastwrite == start ):
+			if lastwrite == start:
 				lastwrite += tsize*t
 				t+=1
 			else:
@@ -484,7 +615,11 @@ for channel, selected_events in event_iter:
 		formatter = None
 		ticks = None
 	"""
-	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	#cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	if opts.plotting_type == "marker":
+		cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.copper_r, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
+	else:
+		cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" ) #, format=formatter, ticks=ticks )
 	if 'c' in logaxes:
 		cbl.set_label( "log10 Tile Energy" )
 	else:
@@ -494,7 +629,7 @@ for channel, selected_events in event_iter:
 	# If requested, make a histogram of the tile energies and compare to
 	# expectation
 	snrs = numpy.array([e.snr for e in selected_events])
-	if( opts.enable_event_hist ):
+	if opts.enable_event_hist:
 		sax = divider.append_axes( "right", size="50%", pad=0.7 )
 		#pyplot.hist( selected_events**2, log=True )
 		pyplot.hist( snrs*0.62, log=True )
@@ -517,6 +652,8 @@ for channel, selected_events in event_iter:
 
 # Drop the file
 filename = opts.output_file or "trigmap"
-if( opts.mark_time ): filename += "_%d" % int(opts.mark_time)
+filename, filext = os.path.splitext(filename)
+if len(filext) == 0: filext = None
+if opts.mark_time: filename += "_%d" % int(opts.mark_time)
 print "Saving " + filename
-fig.savefig( "%s.png" % filename )
+fig.savefig( "%s.%s" % (filename, filext or "png") )

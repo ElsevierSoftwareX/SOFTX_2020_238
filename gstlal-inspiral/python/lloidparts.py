@@ -325,7 +325,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 	warnings.warn("mkLLOIDsrc() is deprecated.  Call multirate_datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
 
-	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad, width = 64)
+	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration, zero_pad = zero_pad, width = 32)
 
 
 #
@@ -473,7 +473,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),			
 			bank,
 			bank_fragment,
 			control_snksrc,

@@ -56,8 +56,17 @@ print """
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
+  <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+  <script type="text/javascript"> $(function() {
+    $("#accordion").accordion({
+    });
+
+  });</script>
+
 </head>
-<body bgcolor=#E0E0E0>
+<body>
 """
 
 # title
@@ -65,7 +74,7 @@ print """
 <font size=10>Likelihood</font><font size=6 color=#707070><b><right> GPS:%d Local Time: %s </right></b><br></font><hr><br>
 """ % (int(now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()))
 
-print "<div id='canvasa'>"
+print '<div id="accordion">'
 path = form.getlist("url")[0]
 
 likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path))
@@ -80,28 +89,42 @@ else:
 	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
 	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
 
+bgcol = (224/255.,224/255.,224/255.)
+
 likely = copy.deepcopy(inj)
-for i, ifo in enumerate(['H1','H2','L1', 'V1']):
+for i, ifo in enumerate(['H1','L1', 'V1']):
+	if form.getfirst(ifo):
+		snrm, chisqm = [float(v) for v in form.getfirst(ifo).split(",")]
+	else:
+		snrm, chisqm = None, None
+	print "<h1>%s SNR / CHISQ stats</h1>" % ifo
+	print "<div>"
 	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
 	for name, obj in (("background", counts), ("injections", inj), ("likelihood", likely)):
-		pylab.figure()
-		pylab.clf()
-		pylab.figure()
+		fig = pylab.figure(figsize=(6,4), facecolor = 'g')
+		fig.patch.set_alpha(0.0)
+		#pylab.gray()
 		H1 = obj[ifo+"_snr_chi"].array
 		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
 		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
 		chi[0] = 0 # not inf
 		ax = pylab.subplot(111)
 		pylab.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
-		ax.set_yscale('log')
+		if snrm is not None and chisqm is not None:
+			pylab.plot(snrm, chisqm / snrm / snrm, 'ko', mfc = 'None', ms = 14, mew=4)
+		if "Log" in str(obj[ifo+"_snr_chi"].bins[0]):
+			ax.set_xscale('log')
+		if "Log" in str(obj[ifo+"_snr_chi"].bins[1]):
+			ax.set_yscale('log')
 		pylab.colorbar()
 		pylab.xlabel('SNR')
 		pylab.ylabel('reduced chi^2 / SNR^2')
-		pylab.ylim([.001, .5])
-		pylab.xlim([4,26])
+		pylab.ylim([chi[1], chi[-1]])
+		pylab.xlim([snr[1],snr[-1]])
 		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
-		pylab.grid()
+		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
 		to_png_image()
+	print "</div>"
 
 print "</div>"
 print "</body>"

@@ -38,8 +38,6 @@ import gst
 
 from gstlal import pipeparts
 
-from pylal import window
-
 #
 # =============================================================================
 #

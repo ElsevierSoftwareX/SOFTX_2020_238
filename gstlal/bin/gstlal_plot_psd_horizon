@@ -48,13 +48,14 @@ for f in sys.argv[2:]:
 pyplot.figure(figsize=(12,4))
 pyplot.subplot(121)
 minh, maxh = (float("inf"), 0)
+mint = min([min(t) for t in times.values() if t])
 for ifo in colors:
 	if len(horizons[ifo]) > 0:
-		pyplot.semilogy(times[ifo], horizons[ifo], 'x', color = colors[ifo], label = ifo)
+		pyplot.semilogy((numpy.array(times[ifo]) - mint) / 1000., horizons[ifo], 'x', color = colors[ifo], label = ifo)
 		maxh = max(maxh, max(horizons[ifo]))
 		minh = min(minh, min(horizons[ifo]))
-pyplot.legend()
-pyplot.xlabel('GPS Time (s)')
+#pyplot.legend()
+pyplot.xlabel('Time (ks) from GPS %d' % mint)
 pyplot.ylabel('Mpc')
 pyplot.grid()
 pyplot.subplot(122)

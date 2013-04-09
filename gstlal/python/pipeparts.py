@@ -163,12 +163,12 @@ def mkframecppchannelmux(pipeline, src, **properties):
 def mkframecppfilesink(pipeline, src, **properties):
     return mkgeneric(pipeline, src, "framecpp_filesink", **properties)
 
-def mkmultifilesink(pipeline, src, next_file = 0, **properties):
-	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, sync = False, async = False, **properties)
+def mkmultifilesink(pipeline, src, next_file = 0, sync = False, async = False, **properties):
+	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, sync = sync, async = async, **properties)
 
 
-def mkframesink(pipeline, src, **properties):
-	return mkgeneric(pipeline, src, "lal_framesink", sync = False, async = False, **properties)
+def mkframesink(pipeline, src, sync = False, async = False, **properties):
+	return mkgeneric(pipeline, src, "lal_framesink", sync = sync, async = async, **properties)
 
 
 def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize = 16384 * 8 * 1, port = 31200):

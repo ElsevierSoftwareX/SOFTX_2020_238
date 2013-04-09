@@ -739,13 +739,16 @@ for i, bank_group in enumerate(bank_groups):
 
 			s = s.strip(',')
 
+			# only use a channel dict with the relevant channels
+			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+
 			# non injections
-			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
 			inspiral_nodes.append((None, noninjnode))
 
 			# injections
 			for injections in options.injections:	
-				injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+				injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
 				inspiral_nodes.append((injections, injnode))
 
 	# likelihood jobs for non injections

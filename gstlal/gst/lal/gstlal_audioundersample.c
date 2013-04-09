@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2011--2013 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -541,21 +541,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 static void gstlal_audioundersample_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(element_class, "Undersample", "Filter/Audio", "Undersamples an audio stream.  Undersampling downsamples by taking every n-th sample, with no antialiasing or low-pass filter.  For data confined to a narrow frequency band, this transformation simultaneously downconverts and downsamples the data (otherwise it does weird things).  This element's output sample rate must be an integer divisor of its input sample rate.", "Kipp Cannon <kipp.cannon@ligo.org>");
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->passthrough_on_same_caps = TRUE;
 }
 
 
@@ -566,6 +551,21 @@ static void gstlal_audioundersample_base_init(gpointer gclass)
 
 static void gstlal_audioundersample_class_init(GSTLALAudioUnderSampleClass *klass)
 {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->passthrough_on_same_caps = TRUE;
+
+	gst_element_class_set_details_simple(element_class, "Undersample", "Filter/Audio", "Undersamples an audio stream.  Undersampling downsamples by taking every n-th sample, with no antialiasing or low-pass filter.  For data confined to a narrow frequency band, this transformation simultaneously downconverts and downsamples the data (otherwise it does weird things).  This element's output sample rate must be an integer divisor of its input sample rate.", "Kipp Cannon <kipp.cannon@ligo.org>");
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 }
 
 

@@ -151,7 +151,7 @@ try:
 except:
         pass
 
-pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=instrument, duration = options.duration)
+pipeparts.mkframesink(pipeline, head, path=outpath, frame_type=instrument, duration = options.duration)
 
 #
 # Run it

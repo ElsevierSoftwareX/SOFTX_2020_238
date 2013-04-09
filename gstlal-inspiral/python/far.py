@@ -360,11 +360,11 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H1H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H1H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
 	}
 
 	# FIXME the characteristic width (which is relevant for smoothing)
@@ -373,11 +373,11 @@ class DistributionsStats(object):
 	# between 4 and 26 each bin is .11 wide in SNR. So a width of 13 bins
 	# corresponds to 1.43 which is close to 1.41
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
-		"H2_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
-		"H1H2_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
-		"L1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
-		"V1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10)
+		"H1_snr_chi": rate.gaussian_window2d(7, 7, sigma = 10),
+		"H2_snr_chi": rate.gaussian_window2d(7, 7, sigma = 10),
+		"H1H2_snr_chi": rate.gaussian_window2d(7, 7, sigma = 10),
+		"L1_snr_chi": rate.gaussian_window2d(7, 7, sigma = 10),
+		"V1_snr_chi": rate.gaussian_window2d(7, 7, sigma = 10)
 	}
 
 	def __init__(self):

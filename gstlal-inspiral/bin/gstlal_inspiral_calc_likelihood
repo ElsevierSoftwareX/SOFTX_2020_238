@@ -144,18 +144,18 @@ coincparamsdistributions, likelihood_seglists = Far.distribution_stats, Far.live
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, verbose = options.verbose)
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "computing event densities ..."
 coincparamsdistributions.finish(verbose = options.verbose)
 
 if options.write_likelihood is not None:
-	Far.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, verbose = options.verbose)	
+	Far.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)	
 	xmldoc = inspiral.gen_likelihood_control_doc(Far, ("H1", "H2", "L1", "V1"))
 	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
 
