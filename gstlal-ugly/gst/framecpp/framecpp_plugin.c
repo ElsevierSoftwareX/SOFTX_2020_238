@@ -52,6 +52,7 @@
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
 #include <framecpp_channelmux.h>
+#include <framecpp_filesink.h>
 #if HAVE_GST_BASEPARSE
 #include <framecpp_igwdparse.h>
 #endif /* HAVE_GST_BASEPARSE */
@@ -138,6 +139,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 		{"framecpp_channeldemux", GST_RANK_SECONDARY, FRAMECPP_CHANNELDEMUX_TYPE},
 		{"framecpp_channelmux", GST_RANK_SECONDARY, FRAMECPP_CHANNELMUX_TYPE},
+        {"framecpp_filesink", GST_RANK_SECONDARY, FRAMECPP_FILESINK_TYPE},
 #if HAVE_GST_BASEPARSE
 		{"framecpp_igwdparse", GST_RANK_SECONDARY, FRAMECPP_IGWDPARSE_TYPE},
 #endif

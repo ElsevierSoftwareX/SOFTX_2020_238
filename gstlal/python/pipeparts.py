@@ -159,6 +159,9 @@ def mkframecppchanneldemux(pipeline, src, **properties):
 def mkframecppchannelmux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channelmux", **properties)
 
+# Added by Branson
+def mkframecppfilesink(pipeline, src, **properties):
+    return mkgeneric(pipeline, src, "framecpp_filesink", **properties)
 
 def mkmultifilesink(pipeline, src, next_file = 0, **properties):
 	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, sync = False, async = False, **properties)

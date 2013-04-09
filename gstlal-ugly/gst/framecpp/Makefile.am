@@ -9,7 +9,8 @@ libframecpp_plugin_la_SOURCES = \
 	muxqueue.c muxqueue.h \
 	muxcollectpads.c muxcollectpads.h \
 	framecpp_channelmux.cc framecpp_channelmux.h \
-	framecpp_channeldemux.cc framecpp_channeldemux.h
+	framecpp_channeldemux.cc framecpp_channeldemux.h \
+    framecpp_filesink.c framecpp_filesink.h
 if COND_GSTBASEPARSE
 libframecpp_plugin_la_SOURCES += framecpp_igwdparse.cc framecpp_igwdparse.h
 endif
