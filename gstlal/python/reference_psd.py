@@ -76,8 +76,7 @@ from gstlal import simplehandler
 
 class PSDHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
-		# FIXME is this a suitable "empty" frequency series?
-		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+		self.psd = None
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 
 	def do_on_message(self, bus, message):
