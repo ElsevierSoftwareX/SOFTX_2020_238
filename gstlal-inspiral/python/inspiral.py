@@ -1,4 +1,4 @@
-#
+
 # Copyright (C) 2009-2011  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -70,7 +70,6 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
-from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from pylal import ligolw_tisi
 from pylal import rate
