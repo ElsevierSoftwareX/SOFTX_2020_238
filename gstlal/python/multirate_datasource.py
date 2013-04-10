@@ -41,11 +41,6 @@ from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import datasource
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw import utils
-from glue.ligolw import ligolw
-from glue import segments
-from pylal.datatypes import LIGOTimeGPS
 
 
 def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0, width = 64):
