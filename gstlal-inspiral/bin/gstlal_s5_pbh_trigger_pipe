@@ -56,6 +56,7 @@ def T050017_filename(instruments, description, start, end, extension, path = Non
 	if type(instruments) != type(str()):
 		instruments = "".join(sorted(instruments))
 	duration = end - start
+	extension = extension.strip('.')
 	if path is not None:
 		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
 	else:
