@@ -1,5 +1,4 @@
 import numpy
-import sys
 
 def duration_from_f_and_q(f, q):
 	#FIXME only approximate, Jamie make this right
