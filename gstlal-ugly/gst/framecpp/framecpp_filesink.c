@@ -134,22 +134,25 @@ static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
  */
 static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkClass *kclass)
 {
-    // Note: mkmultifilesink adds properties sync = False, async = False
-    GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
     GValue gf = {0};
     gboolean gbf = FALSE;
     g_value_init(&gf, G_TYPE_BOOLEAN);
     g_value_set_boolean(&gf, gbf);
+
+    // Create the multifilesink element.
+    GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
     g_object_set_property(G_OBJECT(multifilesink), "sync", &gf);
     g_object_set_property(G_OBJECT(multifilesink), "async", &gf);
-    GstPad *sink = gst_element_get_static_pad(multifilesink, "sink");
-    GstPad *sink_ghost = gst_ghost_pad_new_from_template("sink", sink, gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)),"sink"));
 
-    gst_object_unref(sink);
-
+    // Add the multifilesink to the bin.
     gst_bin_add(GST_BIN(element), multifilesink);
 
+    // Add the ghostpad 
+    GstPad *sink = gst_element_get_static_pad(multifilesink, "sink");
+    GstPad *sink_ghost = gst_ghost_pad_new_from_template("sink", sink, gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)),"sink"));
     gst_element_add_pad(GST_ELEMENT(element), sink_ghost);
+
+    gst_object_unref(sink);
 
     // XXX Now I've got a pad connected to a multifilesink
     // add event and buffer probes
