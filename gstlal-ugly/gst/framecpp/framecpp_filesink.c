@@ -28,7 +28,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
         GST_PAD_ALWAYS,
         GST_STATIC_CAPS(
             "application/x-igwd-frame, " \
-            "framed = (bool) true" 
+            "framed = (boolean) true" 
         )
 );
 
@@ -54,13 +54,10 @@ static void framecpp_filesink_base_init(gpointer gclass)
 static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 {
     GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
-    // XXX Not using bin_class?
-    GstBinClass *bin_class = GST_BIN_CLASS(klass);
+    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
     gst_element_class_set_details_simple(element_class, "Write frame files from muxer", "Sink/File", "Comment", "Branson Stephens <stephenb@uwm.edu>");
     gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -107,24 +104,21 @@ static gint probeEventHandler(GstEvent *event, gpointer c) {
 
 static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
     // Cast the user data context object.
-    probe_handler_context *hc;
-    hc = (probe_handler_context *) c;
+    probe_handler_context *hc = (probe_handler_context *) c;
+    guint timestamp, end_time, duration;
+    gchar *newloc;
+    GValue newLocation = {0};
 
     if (!(hc->instrument) || !(hc->frame_type)) {
         // XXX Error message or event or something.
         return 1;
     }
-    guint offset_diff, timestamp, end_time, duration;
-    gchar *newloc;
-    offset_diff = buffer->offset_end - buffer->offset;
-    timestamp = buffer->timestamp/GST_SECOND;
-    end_time = buffer->timestamp + buffer->duration;
-    end_time = ceil(((float)end_time)/((float)GST_SECOND));
+    timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
+    end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
     // Need to store the new location as a GValue
     sprintf(newloc, "%s-%s-%d-%d.gwf", hc->instrument, 
         hc->frame_type, timestamp, duration);
-    GValue newLocation = {0};
     g_value_init(&newLocation, G_TYPE_STRING);
     g_value_set_string(&newLocation, newloc);
 
@@ -187,6 +181,7 @@ static void set_property(GObject *object, guint prop_id,
 {
     // XXX Check this.
     FRAMECPPFilesink *sink = FRAMECPP_FILESINK(object);
+    GST_OBJECT_LOCK(object);
     switch (prop_id) {
     case PROP_FRAME_TYPE:
         g_free(sink->frame_type);
@@ -196,13 +191,14 @@ static void set_property(GObject *object, guint prop_id,
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
     }
+    GST_OBJECT_UNLOCK(object);
 }
 
 static void get_property(GObject *object, guint prop_id, 
                          GValue *value, GParamSpec *pspec)
 {
     FRAMECPPFilesink *sink = FRAMECPP_FILESINK(object);
-
+    GST_OBJECT_LOCK(object);
     switch (prop_id) {
     case PROP_FRAME_TYPE:
         g_value_set_string(value, sink->frame_type);
@@ -211,4 +207,5 @@ static void get_property(GObject *object, guint prop_id,
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
     }
+    GST_OBJECT_UNLOCK(object);
 }
