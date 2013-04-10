@@ -43,7 +43,6 @@ sqlite3.enable_callback_tracebacks(True)
 import copy
 from glue import iterutils
 from glue.ligolw import ligolw
-from glue.ligolw import ilwd
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
@@ -53,7 +52,6 @@ from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
 from pylal import ligolw_burca2
-from pylal import llwapp
 from pylal import rate
 
 
