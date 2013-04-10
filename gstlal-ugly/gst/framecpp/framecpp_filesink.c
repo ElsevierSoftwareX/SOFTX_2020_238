@@ -116,14 +116,11 @@ static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
     end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
-    // Need to store the new location as a GValue
     sprintf(newloc, "%s-%s-%d-%d.gwf", hc->instrument, 
         hc->frame_type, timestamp, duration);
-    g_value_init(&newLocation, G_TYPE_STRING);
-    g_value_set_string(&newLocation, newloc);
 
     // Must cast the multifilesink as a GObject first.  
-    g_object_set_property(G_OBJECT(hc->mfs), "location", &newLocation);
+    g_object_set(G_OBJECT(hc->mfs), "location", newloc, NULL);
     g_value_unset(&newLocation);
 
     return 1;
@@ -134,15 +131,9 @@ static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
  */
 static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkClass *kclass)
 {
-    GValue gf = {0};
-    gboolean gbf = FALSE;
-    g_value_init(&gf, G_TYPE_BOOLEAN);
-    g_value_set_boolean(&gf, gbf);
-
     // Create the multifilesink element.
     GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
-    g_object_set_property(G_OBJECT(multifilesink), "sync", &gf);
-    g_object_set_property(G_OBJECT(multifilesink), "async", &gf);
+    g_object_set(G_OBJECT(multifilesink), "sync", FALSE, "async", FALSE, NULL);
 
     // Add the multifilesink to the bin.
     gst_bin_add(GST_BIN(element), multifilesink);
