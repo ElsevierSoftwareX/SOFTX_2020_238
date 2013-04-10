@@ -47,8 +47,6 @@ pygst.require("0.10")
 import gst
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import param
 from glue.ligolw import utils
 import lal
 from pylal import datatypes as laltypes
