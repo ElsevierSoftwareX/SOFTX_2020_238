@@ -1,4 +1,4 @@
-import sys, os, copy, math
+import sys, os
 import subprocess, socket, tempfile
 from glue import pipeline, lal
 from glue.ligolw import utils, lsctables, array
