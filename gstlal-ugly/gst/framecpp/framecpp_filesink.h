@@ -22,6 +22,9 @@ typedef struct {
 typedef struct {
         GstBin element;
         gchar *frame_type;
+        gchar *instrument;
+        // the Multifilesink object.
+        GstElement *mfs;
 } FRAMECPPFilesink;
 
 GType framecpp_filesink_get_type(void);

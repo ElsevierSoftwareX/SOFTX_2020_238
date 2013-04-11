@@ -15,6 +15,7 @@ enum {
     PROP_CLEAN_TIMESTAMPS,
     PROP_STRICT_TIMESTAMPS,
     PROP_DIR_DIGITS,
+    PROP_INSTRUMENT,
 };
 
 static void set_property(GObject *object, guint prop_id,
@@ -71,57 +72,66 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
             )
         );
 
-}
+    g_object_class_install_property(
+        gobject_class, PROP_INSTRUMENT,
+        g_param_spec_string(
+            "instrument", "Observatory string.",
+            "The IFO, like H1, L1, V1, etc.", "H1",
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+            )
+        );
 
-// XXX Not sure if this struct thingy is going to work.
-// XXX Should the struct actually be in the .h file?
-typedef struct 
-{
-    // How do you declare a string in c?
-    gchar *instrument;
-    gchar *frame_type;
-    // To store the multifilesink object.
-    GstElement *mfs;
-} probe_handler_context;
+}
 
 // XXX It might decide to pass the probe hanlder context as a void **.
 // Hopefully this will just do a cast.
-static gint probeEventHandler(GstEvent *event, gpointer c) {
-    // Cast the user data context object.
-    probe_handler_context *hc;
-    hc = (probe_handler_context *) c;
-    
+static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
+    FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
+
     if (GST_EVENT_TYPE(event)==GST_EVENT_TAG) {
         GstTagList *tag_list;
         gst_event_parse_tag(event, &tag_list);
         gchar *value = NULL;
         if (gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value)){
-            hc->instrument = value;  
+            GST_DEBUG("setting instrument to %s", value);
+            g_object_set(G_OBJECT(element), "instrument", value, NULL);
         }
     }
-    return 1;
+
+    gst_object_unref(element);
+
+    return TRUE;
 }
 
-static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
-    // Cast the user data context object.
-    probe_handler_context *hc = (probe_handler_context *) c;
+static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data) {
+    FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *newloc;
+    gchar *instrument, *frame_type;
 
-    if (!(hc->instrument) || !(hc->frame_type)) {
+    g_object_get(G_OBJECT(element), "instrument", &instrument,
+        "frame_type", &frame_type, NULL);
+
+    if (!instrument || !frame_type) {
         // XXX Error message or event or something.
-        return 1;
+        GST_INFO("returning false.");
+        return FALSE;
     }
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
     end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
-    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", hc->instrument, 
-        hc->frame_type, timestamp, duration); 
+    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", instrument, 
+        frame_type, timestamp, duration); 
 
     // Must cast the multifilesink as a GObject first.  
-    g_object_set(G_OBJECT(hc->mfs), "location", newloc, NULL);
+    GST_DEBUG("setting write location to %s", newloc);
+    g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
 
-    return 1;
+    g_free(newloc);
+
+    gst_object_unref(element);
+
+    return TRUE;
 }
 
 /*
@@ -132,6 +142,8 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     // Create the multifilesink element.
     GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
     g_object_set(G_OBJECT(multifilesink), "sync", FALSE, "async", FALSE, NULL);
+    // Set the framecpp_filesink element's mfs property.
+    element->mfs = multifilesink;
 
     // Add the multifilesink to the bin.
     gst_bin_add(GST_BIN(element), multifilesink);
@@ -143,21 +155,9 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
 
     gst_object_unref(sink);
 
-    // XXX Now I've got a pad connected to a multifilesink
     // add event and buffer probes
-
-    // Instantiate probe hander context.
-    probe_handler_context c;
-    c.instrument = NULL;
-    c.frame_type = element->frame_type;
-    // Add the multifilesink object to the probe_handler_context.
-    // Note.  These are both pointers to a GstElement.
-    c.mfs = multifilesink;
-    // Add probes.
-    probe_handler_context c2;
-    c2 = c;
-    gst_pad_add_event_probe(sink_ghost, G_CALLBACK(probeEventHandler), &c);
-    gst_pad_add_buffer_probe(sink_ghost, G_CALLBACK(probeBufferHandler), &c2); 
+    gst_pad_add_event_probe(sink_ghost, G_CALLBACK(probeEventHandler), NULL);
+    gst_pad_add_buffer_probe(sink_ghost, G_CALLBACK(probeBufferHandler), NULL); 
 }
 
 /*
@@ -179,6 +179,10 @@ static void set_property(GObject *object, guint prop_id,
         g_free(sink->frame_type);
         sink->frame_type = g_strdup(g_value_get_string(value));
         break;
+    case PROP_INSTRUMENT:
+        g_free(sink->instrument);
+        sink->instrument = g_strdup(g_value_get_string(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -194,6 +198,9 @@ static void get_property(GObject *object, guint prop_id,
     switch (prop_id) {
     case PROP_FRAME_TYPE:
         g_value_set_string(value, sink->frame_type);
+        break;
+    case PROP_INSTRUMENT:
+        g_value_set_string(value, sink->instrument);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
