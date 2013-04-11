@@ -22,11 +22,11 @@
 # parse command line
 #
 
-# FIXME: Move some common options to a module.
+
 from optparse import OptionParser
-from gstlal.pipeutil import gst
 from gstlal import datasource
 from gstlal import reference_psd
+
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -48,6 +48,7 @@ def parse_command_line():
 
 	return options, filenames
 
+
 #
 # =============================================================================
 #
@@ -56,10 +57,13 @@ def parse_command_line():
 # =============================================================================
 #
 
+
 options, filenames = parse_command_line()
+
 
 # parse the generic "source" options, check for inconsistencies is done inside
 # the class init method
 detectors = datasource.GWDataSourceInfo(options)
+
 
 reference_psd.write_psd(options.write_psd, dict((instrument, reference_psd.measure_psd(detectors, instrument, options.sample_rate, psd_fft_length = options.psd_fft_length, verbose = options.verbose)) for instrument in detectors.channel_dict), verbose = options.verbose)
