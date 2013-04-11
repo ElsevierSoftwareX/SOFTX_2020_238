@@ -107,7 +107,6 @@ static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
     probe_handler_context *hc = (probe_handler_context *) c;
     guint timestamp, end_time, duration;
     gchar *newloc;
-    GValue newLocation = {0};
 
     if (!(hc->instrument) || !(hc->frame_type)) {
         // XXX Error message or event or something.
@@ -116,12 +115,11 @@ static gint probeBufferHandler(GstBuffer *buffer, gpointer c) {
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
     end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
-    sprintf(newloc, "%s-%s-%d-%d.gwf", hc->instrument, 
-        hc->frame_type, timestamp, duration);
+    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", hc->instrument, 
+        hc->frame_type, timestamp, duration); 
 
     // Must cast the multifilesink as a GObject first.  
     g_object_set(G_OBJECT(hc->mfs), "location", newloc, NULL);
-    g_value_unset(&newLocation);
 
     return 1;
 }
