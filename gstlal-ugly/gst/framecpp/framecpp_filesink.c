@@ -109,12 +109,8 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *newloc;
-    gchar *instrument, *frame_type;
 
-    g_object_get(G_OBJECT(element), "instrument", &instrument,
-        "frame_type", &frame_type, NULL);
-
-    if (!instrument || !frame_type) {
+    if (!(element->instrument) || !(element->frame_type)) {
         /* XXX Error message or event or something. */
         GST_INFO("returning false.");
         return FALSE;
@@ -122,8 +118,8 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
     end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
-    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", instrument, 
-        frame_type, timestamp, duration); 
+    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
+        element->frame_type, timestamp, duration); 
 
     GST_DEBUG("setting write location to %s", newloc);
     g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
