@@ -507,6 +507,7 @@ head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ),
 
 head = whitener = pipeparts.mkwhiten( pipeline, head )
 whitener.set_property( "fft-length", handler.fft_length ) 
+whitener.set_property( "expand-gaps", True ) 
 if psdfile is not None: # In other words, we have a reference PSD
 	whitener.set_property( "mean-psd", handler.psd.data )
 	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
