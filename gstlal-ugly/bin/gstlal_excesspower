@@ -411,15 +411,17 @@ if cfg.has_option( "triggering", "output-file" ):
 	handler.outfile = cfg.get( "triggering", "output-file" )
 if cfg.has_option( "triggering", "output-directory" ):
 	handler.outdir = cfg.get( "triggering", "output-directory" )
-"""
 if cfg.has_option( "triggering", "snr-thresh" ):
-	handler.snr_thresh = cfg.get( "triggering", "snr-thresh" )
+	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 if cfg.has_option( "triggering", "fap-thresh" ):
-	handler.fap = cfg.get( "triggering", "fap-thresh" )
+	handler.fap = cfg.getfloat( "triggering", "fap-thresh" )
 
-if handler.snr_thresh is not None and handler.fap_thresh is not None:
+if handler.snr_thresh is not None and handler.fap is not None:
 	print >>sys.stderr, "WARNING: Both an SNR threshold and a FAP threshold have been specified. The FAP threshold will take precedence."
-"""
+elif handler.fap is not None:
+	print "False alarm probability threshold (in Gaussian noise) is %f" % handler.fap
+else:
+	print "SNR threshold (sqrt of tile energy) is %f" % handler.snr_thresh
 
 if options.db_uploads:
 
@@ -695,14 +697,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 		# TODO: Move this into the handler
 		if handler.fap is not None:
-			# Still needs magic number... or use the EP version
+			# FIXME: Still needs magic number... or use the EP version
 			# ndof_eff = ndof * 0.62
-			snr_thresh = ep.determine_thresh_from_fap(fap, ndof)
+			snr_thresh = ep.determine_thresh_from_fap(handler.fap, ndof)**2
 		else:
 			# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
 			snr_thresh = handler.snr_thresh**2
-		# FIXME: This is a test
-		#snr_thresh = ep.determine_thresh_from_fap(1e-2, ndof)**2
 		print "SNR threshold for level %d, ndof %d: %f" % (res_level, ndof, snr_thresh)
 		durtee.set_property( "snr-thresh", snr_thresh )
 
