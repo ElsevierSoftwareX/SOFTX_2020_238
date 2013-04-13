@@ -385,7 +385,7 @@ def build_fir_sq_adder( nsamp, padding=0 ):
 	"""
 	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
-def create_bank_xml(flow, fhigh, band, duration, detector=None):
+def create_bank_xml(flow, fhigh, band, duration, ndof=1, detector=None):
 	"""
 	Create a bank of sngl_burst XML entries. This file is then used by the trigger generator to do trigger generation. Takes in the frequency parameters and filter duration and returns an ligolw entity with a sngl_burst Table which can be saved to a file.
 	"""
@@ -402,21 +402,22 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 	bank.sync_next_id()
 
 	# The first frequency band actually begins at flow, so we offset the central frequency accordingly
+	# FIXME: Is this is band/2.0 -- check where the filters actually peak
 	cfreq = flow + band
 	while cfreq + band <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
-		row.duration = duration
+		row.duration = duration * ndof
 		#row.bandwidth = 2*band
 		row.bandwidth = band
 		row.peak_frequency = cfreq
 		row.central_freq = cfreq
-		row.flow = cfreq - band / 2
-		row.fhigh = cfreq + band / 2
+		row.flow = cfreq - band / 2.0
+		row.fhigh = cfreq + band / 2.0
 		row.ifo = detector
-		row.chisq_dof = 2*band*duration
+		row.chisq_dof = 2*band*row.duration
 
-		# Stuff that doesn't matter
+		# Stuff that doesn't matter, yet
 		row.peak_time_ns = 0
 		row.peak_time = 0
 		row.start_time_ns = 0

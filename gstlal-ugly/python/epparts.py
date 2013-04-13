@@ -324,7 +324,7 @@ class EPHandler( Handler ):
 		)
 		return self.filter_bank
 
-	def build_filter_xml( self, res_level, loc="" ):
+	def build_filter_xml( self, res_level, ndof=1, loc="", verbose=False ):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
@@ -332,12 +332,12 @@ class EPHandler( Handler ):
 			self.flow,
 			self.fhigh,
 			self.base_band*(res_level+1),
-			# FIXME: Is there a factor of two here? -- No, remove the factor of two...
 			1.0 / (2*self.base_band*(res_level+1)), # resolution level starts from 0
+			ndof,
 			self.inst
 		)
 		output = "%sgstlal_excesspower_bank_%s_%s_level_%d.xml" % (loc, self.inst, self.channel, res_level)
-		utils.write_filename( self.filter_xml, output, verbose = True,
+		utils.write_filename( self.filter_xml, output, verbose = verbose,
 		       gz = (output or "stdout").endswith(".gz") )
 		return output
 
