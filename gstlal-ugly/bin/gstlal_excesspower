@@ -148,7 +148,7 @@ def on_spec_corr_change( elem, pspec, hand ):
 	if hand.psd is not None:
 		hand.rebuild_everything()
 
-def get_triggers(elem, handler, ndof):
+def get_triggers(elem, handler):
 
 	buffer = elem.emit("pull-buffer")
 
@@ -175,9 +175,6 @@ def get_triggers(elem, handler, ndof):
 	for row in sngl_bursts_from_buffer(buffer):
 		if row.peak_time in whiten_seg:
 			continue
-		row.duration *= ndof
-		row.chisq_dof *= ndof
-		# TODO Move this into the trigger generator
 		# FIXME: Determine "magic number" or remove it
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
 		if options.compat:
@@ -414,8 +411,16 @@ if cfg.has_option( "triggering", "output-file" ):
 	handler.outfile = cfg.get( "triggering", "output-file" )
 if cfg.has_option( "triggering", "output-directory" ):
 	handler.outdir = cfg.get( "triggering", "output-directory" )
+"""
+if cfg.has_option( "triggering", "snr-thresh" ):
+	handler.snr_thresh = cfg.get( "triggering", "snr-thresh" )
+if cfg.has_option( "triggering", "fap-thresh" ):
+	handler.fap = cfg.get( "triggering", "fap-thresh" )
 
-handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+if handler.snr_thresh is not None and handler.fap_thresh is not None:
+	print >>sys.stderr, "WARNING: Both an SNR threshold and a FAP threshold have been specified. The FAP threshold will take precedence."
+"""
+
 if options.db_uploads:
 
 	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
@@ -450,10 +455,6 @@ handler.rebuild_chan_mix_matrix()
 
 # Set process params in handler for use with the output xmldocs
 handler.make_process_tables( options, None )
-
-# Max trigger duration (s)
-# TODO: Uhh... what was going on here?
-#handler.max_duration
 
 #
 # =============================================================================
@@ -549,6 +550,10 @@ if diagnostics:
 		cfg.get( "diagnostics", "fir-output" )
 	)
 
+# This is used at the terminal point of each branch to agglomerate the triggers
+# into a single sink
+trigfunnel = pipeparts.mkgeneric( pipeline, None, "funnel" )
+
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
 for res_level in range(0, min(handler.max_level, nlevels)):
@@ -626,91 +631,93 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			"Energy stream level %d" % res_level
 		)
 
-	# TODO: Uncomment here
-	#head = pipeparts.mkqueue( pipeline, head )
-	#####
-
-	ndof = 2 # samples -- min number
 	# Second branch -- duration
-	# max_samp = int(handler.max_duration*rate)
-	#while duration <= max_samp:
-		#duration = duration << 1
+	max_samp = int(handler.max_duration*undersamp_rate)
+	print "Will sum up to %s degress of freedom in powers of two for this resolution level." % max_samp
+	if max_samp < 2:
+		print >>sys.stderr, "The duration for the largest tile is smaller than a single degree of freedom tile. Try increasing the requested maximum tile duration."
+		exit()
 
-	# Multi channel FIR filter -- used to add together frequency bands into 
-	# tiles
-	# FIXME: This is a workaround around until the audiofirfilter is fixed.
-	# Basically, if the firfilter gets a small enough kernel, it invokes 
-	# time-domain convolution. Something about the way it fills the buffers is
-	# wrong in regards to the way it keeps history and thus the output buffers
-	# partially desynched from the input -- even with an identity transform.
+	# samples to sum -- two is min number
+	ndof = 2
 
-	# Workaround: Zero pad the kernel past the length (32 samples) in which the 
-	# element switches to FFT convolution which doesn't exhibit bad behavior.
+	head = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+	while ndof <= max_samp:
+		print "Resolution level %d, duration %d" % (res_level, ndof)
 
-	#head = pipeparts.mkchecktimestamps( pipeline, head, "before audiofir" )
-	head = pipeparts.mkgeneric( pipeline, head, "audiofirfilter" )
-	head.set_property( "kernel", 
-		ep.build_fir_sq_adder( ndof, padding=max(0, 33-ndof) )
-	)
-	head = pipeparts.mknofakedisconts( pipeline, head )
-	#head = pipeparts.mkchecktimestamps( pipeline, head, "after audiofir" )
+		# Multi channel FIR filter -- used to add together frequency bands into 
+		# tiles
+		"""
+		FIXME: This is a workaround around until the audiofirfilter is fixed. Basically, if the firfilter gets a small enough kernel, it invokes time-domain convolution. Something about the way it fills the buffers is wrong in regards to the way it keeps history and thus the output buffers partially desynched from the input -- even with an identity transform. Workaround: Zero pad the kernel past the length (32 samples) in which the element switches to FFT convolution which doesn't exhibit bad behavior.  
+		"""
+		#head = pipeparts.mkchecktimestamps( pipeline, head, "before audiofir" )
+		durtee = pipeparts.mkgeneric( pipeline, head, "audiofirfilter" )
+		durtee.set_property( "kernel", 
+			ep.build_fir_sq_adder( ndof, padding=max(0, 33-ndof) )
+		)
+		#head = pipeparts.mkchecktimestamps( pipeline, head, "after audiofir" )
 
-	if diagnostics:
-		head = postdurtee = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
-		pipeparts.mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
+		if diagnostics:
+			durtee = postdurtee = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, durtee ) )
+			pipeparts.mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
 
-	if verbose:
-		head = pipeparts.mkprogressreport( pipeline, head, 
-			"After energy summation resolution level %d, %d DOF" % 
-				(res_level, ndof) 
+		if verbose:
+			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
+				"After energy summation resolution level %d, %d DOF" % 
+					(res_level, ndof) 
+			)
+
+		# TODO: Audio
+		if options.stream_tfmap and res_level == 0 and ndof == 2:
+			if len(options.stream_tfmap.split("=")) == 2:
+				split_opt, filename = options.stream_tfmap.split("=")
+			else:
+				filename = options.stream_tfmap
+				# TODO: Make this more elegant
+				if filename == "video": 
+					filename = None
+				split_opt = None
+
+			ep.stream_tfmap_video( pipeline, durtee, 
+				handler, 
+				filename,
+				split_opt
+			)
+
+		if options.disable_triggers:
+			pipeparts.mkfakesink( pipeline, durtee )
+			continue
+
+		# Trigger generator
+		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, ndof, 
+			bank = handler.build_filter_xml( res_level, ndof, verbose=verbose )
 		)
 
-	# TODO: Audio
-	if options.stream_tfmap:
-		if len(options.stream_tfmap.split("=")) == 2:
-			split_opt, filename = options.stream_tfmap.split("=")
+		# TODO: Move this into the handler
+		if handler.fap is not None:
+			# Still needs magic number... or use the EP version
+			# ndof_eff = ndof * 0.62
+			snr_thresh = ep.determine_thresh_from_fap(fap, ndof)
 		else:
-			filename = options.stream_tfmap
-			# TODO: Make this more elegant
-			if filename == "video": 
-				filename = None
-			split_opt = None
+			# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
+			snr_thresh = handler.snr_thresh**2
+		# FIXME: This is a test
+		#snr_thresh = ep.determine_thresh_from_fap(1e-2, ndof)**2
+		print "SNR threshold for level %d, ndof %d: %f" % (res_level, ndof, snr_thresh)
+		durtee.set_property( "snr-thresh", snr_thresh )
 
-		head = ep.stream_tfmap_video( pipeline, head, 
-			handler, 
-			filename,
-			split_opt
-		)
-		head = pipeparts.mkqueue( pipeline, head )
+		if verbose:
+			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
+				"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
+			)
+		durtee.link( trigfunnel )
 
-	if options.disable_triggers:
-		pipeparts.mkfakesink( pipeline, head )
-		continue
+		ndof = ndof << 1
+		if ndof > max_samp:
+			break
 
-	# Trigger generator
-	head = pipeparts.mkbursttriggergen( pipeline, head, ndof, 
-		bank = handler.build_filter_xml( res_level )
-	)
-
-	if handler.fap is not None:
-		# Still needs magic number... or use the EP version
-		# ndof_eff = ndof * 0.62
-		snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
-	else:
-		# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
-		snr_thresh = handler.snr_thresh**2
-	head.set_property( "snr-thresh", snr_thresh )
-
-	if verbose:
-		head = pipeparts.mkprogressreport( pipeline, head, 
-			"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
-		)
-
-	# TODO: combine trigger streams from various levels
-
-	# TODO: This will have to be linked to multiple outgoing streams
-	appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, head))
-	appsink.connect_after("new-buffer", get_triggers, handler, ndof)
+appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, trigfunnel))
+appsink.connect_after("new-buffer", get_triggers, handler)
 
 ### END OF PIPELINE
 
