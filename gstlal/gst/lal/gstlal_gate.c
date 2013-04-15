@@ -2,7 +2,7 @@
  * An element to flag buffers in a stream as silence or not based on the
  * value of a control input.
  *
- * Copyright (C) 2008-2012  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008-2013  Kipp Cannon, Chad Hanna
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1491,14 +1491,14 @@ static void gstlal_gate_init(GSTLALGate *element, GSTLALGateClass *klass)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
-	/* configure (and ref) control pad */
+	/* control pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "control");
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(control_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(control_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(control_event));
 	element->controlpad = pad;
 
-	/* configure (and ref) sink pad */
+	/* sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
 	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
@@ -1507,7 +1507,7 @@ static void gstlal_gate_init(GSTLALGate *element, GSTLALGateClass *klass)
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	element->sinkpad = pad;
 
-	/* retrieve (and ref) src pad */
+	/* src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
 	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));

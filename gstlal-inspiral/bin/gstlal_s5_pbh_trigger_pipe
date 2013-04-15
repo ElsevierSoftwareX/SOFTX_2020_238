@@ -440,7 +440,7 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 			self.output_name = T050017_filename(instruments, '%04d_LLOID_%s' % (number, sim_name), gps_start_time, gps_end_time, '.sqlite', path)
 		else:
 			self.output_name = T050017_filename(instruments, '%04d_LLOID' % number, gps_start_time, gps_end_time, '.sqlite', path)
-			self.background_name = T050017_filename(instruments, '%04d_LLOID_SNR_CHI' % number, gps_start_time, gps_end_time, '.sqlite', path) 
+			self.background_name = T050017_filename(instruments, '%04d_LLOID_SNR_CHI' % number, gps_start_time, gps_end_time, '.xml.gz', path)
 		job.number += 1
 		self.add_var_opt("output",self.output_name)
 		dag.output_cache.append(lal.CacheEntry(instruments, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))

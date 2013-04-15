@@ -169,7 +169,7 @@ class GWDataSourceInfo(object):
 		if options.frame_segments_file is not None:
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 		else:
-			self.frame_segments = dict([(instrument, None) for instrument in self.channel_dict])
+			self.frame_segments = dict((instrument, None) for instrument in self.channel_dict)
 
 		self.seekevent = None
 		self.seg = None
@@ -237,48 +237,55 @@ def _do_seek(pipeline, seekevent):
 			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
 
 
+#
+# gate controlled by a segment source
+#
+
+
+def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False):
+	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
+	# FIXME:  remove
+	if seekevent is not None:
+		_do_seek(pipeline, seekevent)
+	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
+
+
+#
+# all-in-one data source
+#
+
+
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""
 	All the conditionals and stupid pet tricks for reading real or
 	simulated h(t) data in one place.
 	"""
 
-	#
-	# data source
-	#
-
-	# First process fake data or frame data
 	if gw_data_source_info.data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "silence":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'LIGO':
+	elif gw_data_source_info.data_source == "LIGO":
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'AdvLIGO':
+	elif gw_data_source_info.data_source == "AdvLIGO":
 		src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'AdvVirgo':
+	elif gw_data_source_info.data_source == "AdvVirgo":
 		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
-			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
-			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = instrument[0], cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		# allow frame reading to occur in a diffrent thread
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
-	# Next process online data, fake data must be None for this to have gotten this far
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
+		if gw_data_source_info.frame_segments[instrument] is not None:
+			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
+			# FIXME:  make gate leaky when I'm certain that will work.
+			# FIXME:  add a mechanism to detect missing data (use a buffer probe?)
+			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
@@ -360,6 +367,14 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 0)
 
 	#
+	# seek the pipeline
+	# FIXME:  remove
+	#
+
+	if gw_data_source_info.data_source in ("while", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
+		_do_seek(pipeline, gw_data_source_info.seekevent)
+
+	#
 	# done
 	#
 
@@ -367,15 +382,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 
 #
-# gate controlled by a segment source
+# quick glitch excision trick
 #
-
-
-def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
-	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
-	# FIXME:  remove
-	_do_seek(pipeline, seekevent)
-	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
 
 
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):

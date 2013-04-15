@@ -262,20 +262,25 @@ class EPHandler( Handler ):
 		"""
 		Set the main base band FIR bank, and build the FIR matrix.
 		"""
-		self.firbank = firbank
 		firbank.set_property( "fir-matrix", self.rebuild_filter() )
+		# Impose a latency since we've advanced the filter in the 
+		# generation step. See build_filter in the excesspower library
+
+		# FIXME: This isn't set properly only on the first try
+		firbank.set_property( "latency", len(firbank.get_property("fir_matrix")[0])/2 )
+		self.firbank = firbank
 
 	def add_matmixer( self, mm, res_level ):
 		self.mmixers[ res_level ] = mm
 		self.rebuild_matrix_mixers( res_level )
 
-	def build_default_psd( self, rate, filter_len ):
+	def build_default_psd( self, rate, df, fhigh ):
 		"""
 		Builds a dummy PSD to use until we get the right one.
 		"""
 		psd = REAL8FrequencySeries()
-		psd.deltaF = float(rate)/filter_len
-		psd.data = numpy.ones( filter_len/2 + 1 ) 
+		psd.deltaF = df
+		psd.data = numpy.ones( int(fhigh/df) + 1 ) 
 		psd.f0 = 0
 		self.psd = psd
 		return psd
@@ -368,6 +373,9 @@ class EPHandler( Handler ):
 		if self.verbose:
 			print >>sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
+		latency = len(self.firbank.get_property("fir_matrix")[0])/2+1 
+		self.firbank.set_property( "latency", latency )
+		print >>sys.stderr, "New filter latency %d (%f s)" % (latency, latency/float(self.rate))
 
 		if self.verbose:
 			print >>sys.stderr, "Rebuilding matrix mixer"

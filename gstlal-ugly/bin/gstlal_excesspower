@@ -442,9 +442,9 @@ if trigger_begin and trigger_end:
 	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
 # This is invoked here, or else the default rate is used, which will cause funny behavior for the defaults with some cases
-# TODO: Less hardcodish -- update this when the rate or base_band is updated
-handler.filter_len = 2*int(2*handler.rate/handler.base_band)
-handler.build_default_psd( handler.rate, handler.filter_len )
+df = 1.0 / handler.fft_length
+handler.filter_len = 2*int(2*handler.base_band / df )
+handler.build_default_psd( handler.rate, df, handler.fhigh )
 handler.rebuild_filter()
 handler.rebuild_chan_mix_matrix()
 
@@ -507,6 +507,7 @@ head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ),
 
 head = whitener = pipeparts.mkwhiten( pipeline, head )
 whitener.set_property( "fft-length", handler.fft_length ) 
+whitener.set_property( "expand-gaps", True ) 
 if psdfile is not None: # In other words, we have a reference PSD
 	whitener.set_property( "mean-psd", handler.psd.data )
 	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED

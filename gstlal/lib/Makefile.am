@@ -59,7 +59,7 @@ INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir) --identifier-prefix Gs
 INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
 
 if HAVE_INTROSPECTION
-gstlaltypes.gir : libgstlaltypes.la
+gstlaltypes.gir : libgstlaltypes.la Makefile
 gstlaltypes_gir_INCLUDES = Gst-0.10
 gstlaltypes_gir_CFLAGS = $(INCLUDES)
 gstlaltypes_gir_LIBS = libgstlaltypes.la
