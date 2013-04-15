@@ -237,15 +237,29 @@ def _do_seek(pipeline, seekevent):
 			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
 
 
+#
+# gate controlled by a segment source
+#
+
+
+def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False):
+	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
+	# FIXME:  remove
+	if seekevent is not None:
+		_do_seek(pipeline, seekevent)
+	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
+
+
+#
+# all-in-one data source
+#
+
+
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""
 	All the conditionals and stupid pet tricks for reading real or
 	simulated h(t) data in one place.
 	"""
-
-	#
-	# data source
-	#
 
 	# First process fake data or frame data
 	if gw_data_source_info.data_source == "white":
@@ -367,15 +381,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 
 #
-# gate controlled by a segment source
+# quick glitch excision trick
 #
-
-
-def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
-	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
-	# FIXME:  remove
-	_do_seek(pipeline, seekevent)
-	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
 
 
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
