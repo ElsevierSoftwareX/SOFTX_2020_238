@@ -178,19 +178,6 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 	return mkgeneric(pipeline, None, "ndssrc", blocksize = blocksize, port = port, host = host, channel_name = "%s:%s" % (instrument, channel_name), channel_type = channel_type)
 
 
-def mkonlinehoftsrc(pipeline, instrument):
-	# This function lacks the "channel_name" argument because with the
-	# online h(t) source "onlinehoftsrc" knows the channel names that are needed
-	# for each instrument.
-	#
-	# It also lacks the "blocksize" argument because the blocksize for an
-	# "onlinehoftsrc" is not adjustable.
-	elem = gst.element_factory_make("lal_onlinehoftsrc")
-	elem.set_property("instrument", instrument)
-	pipeline.add(elem)
-	return elem
-
-
 def mkcapsfilter(pipeline, src, caps):
 	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
 
