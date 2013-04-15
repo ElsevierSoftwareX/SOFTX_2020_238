@@ -1,5 +1,5 @@
 /*
- * framecpp channel multiplexor
+ * framecpp filesink
  *
  * Copyright (C) 2013  Branson Stephens
  *
@@ -45,7 +45,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gst/gst.h>
-
+#include <gst/base/gstbasesink.h>
 
 /*
  * our own stuff
@@ -92,16 +92,20 @@ static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
     GstTagList *tag_list;
     gchar *value = NULL;
 
+    g_assert(gst_pad_is_linked(pad));
+
     if (GST_EVENT_TYPE(event)==GST_EVENT_TAG) {
         gst_event_parse_tag(event, &tag_list);
         if (gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value)){
             GST_DEBUG("setting instrument to %s", value);
             g_object_set(G_OBJECT(element), "instrument", value, NULL);
+            /* Assert success of the g_object_set operation */
+            g_assert_cmpstr(element->instrument, ==, value);
         }
     }
 
     gst_object_unref(element);
-
+    g_free(value);
     return TRUE;
 }
 
@@ -109,23 +113,40 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *newloc;
+    gchar *loc_test;
 
-    if (!(element->instrument) || !(element->frame_type)) {
-        /* XXX Error message or event or something. */
-        GST_INFO("returning false.");
-        return FALSE;
+    g_assert(gst_pad_is_linked(pad));
+
+    /* Buffer looks good, else die. */
+    g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+    g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
+
+    if (!(element->instrument)) {
+        /* Instrument should have come from via the stream, hence STREAM error. */
+        GST_ELEMENT_ERROR(element, STREAM, TYPE_NOT_FOUND, (NULL), ("instrument not set in framecpp_filesink element."));
+    } else if (!(element->frame_type)) {
+        /* frame_type is an input parameter, hence RESOURCE error. */
+        GST_ELEMENT_ERROR(element, RESOURCE, NOT_FOUND, (NULL), ("frame_type not set in framecpp_filesink element."));
     }
+
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
     end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
+    /* The interval indicated by the filename should "cover" the actual 
+    data interval. */
+    g_assert_cmpuint(duration*GST_SECOND, >=, GST_BUFFER_DURATION(buffer));
     newloc = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
         element->frame_type, timestamp, duration); 
 
     GST_DEBUG("setting write location to %s", newloc);
     g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
 
-    g_free(newloc);
+    /* Assert success of the g_object_set operation */
+    g_object_get(G_OBJECT(element->mfs), "location", &loc_test, NULL);
+    g_assert_cmpstr(loc_test, ==, newloc);
 
+    g_free(newloc);
+    g_free(loc_test);
     gst_object_unref(element);
 
     return TRUE;
@@ -174,6 +195,7 @@ static void set_property(GObject *object, guint prop_id,
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        g_assert_not_reached();
         break;
     }
     GST_OBJECT_UNLOCK(object);
@@ -194,6 +216,7 @@ static void get_property(GObject *object, guint prop_id,
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        g_assert_not_reached();
         break;
     }
     GST_OBJECT_UNLOCK(object);
@@ -254,7 +277,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         gobject_class, PROP_INSTRUMENT,
         g_param_spec_string(
             "instrument", "Observatory string.",
-            "The IFO, like H1, L1, V1, etc.", "H1",
+            "The IFO, like H1, L1, V1, etc.", NULL,
             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
             )
         );
@@ -276,12 +299,12 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     element->mfs = multifilesink;
 
     /* Add the multifilesink to the bin. */
-    gst_bin_add(GST_BIN(element), multifilesink);
+    g_assert(gst_bin_add(GST_BIN(element), multifilesink));
 
     /* Add the ghostpad */
     GstPad *sink = gst_element_get_static_pad(multifilesink, "sink");
     GstPad *sink_ghost = gst_ghost_pad_new_from_template("sink", sink, gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)),"sink"));
-    gst_element_add_pad(GST_ELEMENT(element), sink_ghost);
+    g_assert(gst_element_add_pad(GST_ELEMENT(element), sink_ghost));
 
     gst_object_unref(sink);
 
