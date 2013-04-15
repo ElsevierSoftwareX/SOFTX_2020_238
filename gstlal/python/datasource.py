@@ -261,38 +261,24 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	simulated h(t) data in one place.
 	"""
 
-	# First process fake data or frame data
 	if gw_data_source_info.data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "silence":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'LIGO':
+	elif gw_data_source_info.data_source == "LIGO":
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'AdvLIGO':
+	elif gw_data_source_info.data_source == "AdvLIGO":
 		src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
-	elif gw_data_source_info.data_source == 'AdvVirgo':
+	elif gw_data_source_info.data_source == "AdvVirgo":
 		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
 		else:
 			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = instrument[0], cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
-		# FIXME:  remove
-		_do_seek(pipeline, gw_data_source_info.seekevent)
 		# allow frame reading to occur in a diffrent thread
 		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
-	# Next process online data, fake data must be None for this to have gotten this far
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
@@ -372,6 +358,14 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# let the injection code run in a different thread than the
 		# whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 0)
+
+	#
+	# seek the pipeline
+	# FIXME:  remove
+	#
+
+	if gw_data_source_info.data_source in ("while", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
+		_do_seek(pipeline, gw_data_source_info.seekevent)
 
 	#
 	# done
