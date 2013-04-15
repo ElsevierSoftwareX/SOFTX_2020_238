@@ -169,7 +169,7 @@ class GWDataSourceInfo(object):
 		if options.frame_segments_file is not None:
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 		else:
-			self.frame_segments = dict([(instrument, None) for instrument in self.channel_dict])
+			self.frame_segments = dict((instrument, None) for instrument in self.channel_dict)
 
 		self.seekevent = None
 		self.seg = None
@@ -274,11 +274,18 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
-			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
-			src = pipeparts.mkframesrc(pipeline, location = gw_data_source_info.frame_cache, instrument = instrument, cache_src_regex = instrument[0], cache_dsc_regex = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, segment_list = gw_data_source_info.frame_segments[instrument])
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		# allow frame reading to occur in a diffrent thread
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
+		if gw_data_source_info.frame_segments[instrument] is not None:
+			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
+			# FIXME:  make gate leaky when I'm certain that will work.
+			# FIXME:  add a mechanism to detect missing data (use a buffer probe?)
+			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
 	elif gw_data_source_info.data_source == "online":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
