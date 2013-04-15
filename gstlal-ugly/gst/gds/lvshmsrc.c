@@ -1,7 +1,7 @@
 /*
  * GDS LIGO-Virgo Shared Memory frame file source element
  *
- * Copyright (C) 2011  Kipp Cannon
+ * Copyright (C) 2011--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
