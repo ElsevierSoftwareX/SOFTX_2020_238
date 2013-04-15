@@ -137,7 +137,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
-		self.add_var_opt("data-source", "online")
+		self.add_var_opt("data-source", "lvshm")
 		self.add_var_opt("control-peak-time", control_peak_time)
 		self.add_var_opt("fir-stride", fir_stride)
 		self.add_var_opt("thinca-interval", thinca_interval)

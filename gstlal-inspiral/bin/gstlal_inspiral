@@ -196,7 +196,7 @@ def parse_command_line():
 	options.psd_fft_length = 16	# seconds
 
 	# Online specific initialization
-	if options.data_source == "online":
+	if options.data_source == "lvshm":
 		# check required options in this case
 		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
 
@@ -410,7 +410,7 @@ if options.write_pipeline is not None:
 # Run pipeline
 #
 
-if options.data_source != "online":
+if options.data_source != "lvshm":
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to paused ..."
 	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
@@ -479,5 +479,5 @@ output.write_output_file(filename = options.output or output.coincs_document.T05
 # done
 #
 
-if options.data_source == "online":
+if options.data_source == "lvshm":
 	sys.exit(1) # online pipeline always ends with an error code

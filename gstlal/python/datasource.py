@@ -134,7 +134,7 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 class GWDataSourceInfo(object):
 
 	def __init__(self, options):
-		data_sources = ("frames", "online", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		data_sources = ("frames", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
 
 		# Callbacks to handle the "start" and "stop" signals from the gate
 		# element. This is useful for doing things like segments
@@ -147,7 +147,7 @@ class GWDataSourceInfo(object):
 		if options.data_source == "frames" and options.frame_cache is None:
 			raise ValueError("--frame-cache must be specified when using --data-source=frames")
 		if (options.gps_start_time is None or options.gps_end_time is None) and options.data_source == "frames":
-			raise ValueError("--gps-start-time and --gps-end-time must be specified unless --data-source=online")
+			raise ValueError("--gps-start-time and --gps-end-time must be specified unless --data-source=lvshm")
 		if len(options.channel_name) == 0:
 			raise ValueError("must specify at least one channel in the form --channel-name=IFO=CHANNEL-NAME")
 		if options.frame_segments_file is not None and options.data_source != "frames":
@@ -208,11 +208,11 @@ def append_options(parser):
 	for applications that read GW data.
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|online|nds|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
-	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=online")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm|nds|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
+	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=lvshm")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
-	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=online")
-	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=online")
+	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
+	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 	group.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
@@ -222,8 +222,8 @@ def append_options(parser):
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
-	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online data.")
-	group.add_option("--state-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online data.")
+	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
+	group.add_option("--state-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
 	parser.add_option_group(group)
 
 
@@ -286,7 +286,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME:  make gate leaky when I'm certain that will work.
 			# FIXME:  add a mechanism to detect missing data (use a buffer probe?)
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
-	elif gw_data_source_info.data_source == "online":
+	elif gw_data_source_info.data_source == "lvshm":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
 
