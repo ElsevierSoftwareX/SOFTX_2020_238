@@ -124,9 +124,12 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     if (!(element->instrument)) {
         /* Instrument should have come from via the stream, hence STREAM error. */
         GST_ELEMENT_ERROR(element, STREAM, TYPE_NOT_FOUND, (NULL), ("instrument not set in framecpp_filesink element."));
+        /* Returning false will result in the buffer being dropped.*/
+        return FALSE;
     } else if (!(element->frame_type)) {
         /* frame_type is an input parameter, hence RESOURCE error. */
         GST_ELEMENT_ERROR(element, RESOURCE, NOT_FOUND, (NULL), ("frame_type not set in framecpp_filesink element."));
+        return FALSE;
     }
 
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
