@@ -68,6 +68,78 @@
 /*
  * ========================================================================
  *
+ *                               GstURIHandler
+ *
+ * ========================================================================
+ */
+
+
+#define URI_SCHEME "lvshm"
+
+
+static GstURIType uri_get_type(GType type)
+{
+	return GST_URI_SRC;
+}
+
+
+/* 1.0:  this becomes static const gchar *const * */
+static gchar **uri_get_protocols(GType type)
+{
+	/* 1.0:  this becomes
+	static const gchar *protocols[] = {URI_SCHEME, NULL};
+	*/
+	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
+
+	return protocols;
+}
+
+
+/* 1.0:  this becomes static gchar * */
+static const gchar *uri_get_uri(GstURIHandler *handler)
+{
+	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
+
+	/* 1.0:  this won't be a memory leak */
+	return g_strdup_printf(URI_SCHEME "://%s", element->name);
+}
+
+
+/* 1.0:  this gets a GError ** argument */
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+{
+	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
+	gchar *scheme = g_uri_parse_scheme(uri);
+	gchar name[strlen(uri)];
+	gboolean success = TRUE;
+
+	success = !strcmp(scheme, URI_SCHEME);
+	if(success)
+		success &= sscanf(uri, URI_SCHEME "://%[^/]", name) == 1;
+	if(success)
+		g_object_set(G_OBJECT(element), "shm-name", name, NULL);
+
+	g_free(scheme);
+	return success;
+}
+
+
+static void uri_handler_init(gpointer g_iface, gpointer iface_data)
+{
+	GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
+
+	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
+	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
+	/* 1.0:  this is ->get_type */
+	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
+	/* 1.0:  this is ->get_protocols */
+	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+}
+
+
+/*
+ * ========================================================================
+ *
  *                                Boilerplate
  *
  * ========================================================================
@@ -80,6 +152,13 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 static void additional_initializations(GType type)
 {
+	static const GInterfaceInfo uri_handler_info = {
+		uri_handler_init,
+		NULL,
+		NULL
+	};
+	g_type_add_interface_static(type, GST_TYPE_URI_HANDLER, &uri_handler_info);
+
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
 }
 
@@ -580,7 +659,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 		g_param_spec_uint(
 			"mask",
 			"Trigger mask",
-			"To receive buffers, produces must use a mask whose bitwise logical and with this mask is non-zero.",
+			"Buffers will be received only from producers whose masks' bit-wise logical and's with this value are non-zero.",
 			0, G_MAXUINT, DEFAULT_MASK,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
