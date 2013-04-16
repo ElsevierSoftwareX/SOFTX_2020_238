@@ -65,9 +65,6 @@
 #include <framexmitsrc.h>
 
 
-#define URI_SCHEME "framexmit"
-
-
 #define FRAMERCV(element) ((framexmit::frameRecv *) element->frameRecv)
 
 
@@ -78,6 +75,9 @@
  *
  * ========================================================================
  */
+
+
+#define URI_SCHEME "framexmit"
 
 
 static GstURIType uri_get_type(GType type)
