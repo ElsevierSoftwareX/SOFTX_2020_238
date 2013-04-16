@@ -88,11 +88,17 @@ typedef struct {
 	gboolean need_new_segment;
 	GstClockTime next_timestamp;
 
+	/*<private >*/
+
 	/*
-	 * LVSHM interface
+	 * LSMP_CON consumer interface.  this is declared void * here and
+	 * type casts are used in the module proper so that other code that
+	 * uses this header can be compiled without loading the lsmp
+	 * headers from gds.  the lsmp headers require C++, and there is no
+	 * pkg-config file available for them.
 	 */
 
-	lvshm_handle handle;
+	void *partition;
 } GDSLVSHMSrc;
 
 

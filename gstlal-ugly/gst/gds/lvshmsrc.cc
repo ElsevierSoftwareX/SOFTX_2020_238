@@ -52,7 +52,7 @@
  */
 
 
-#include <gds/lvshmapi.h>
+#include <gds/lsmp_con.hh>
 #include <gds/tconv.h>
 
 
@@ -190,6 +190,9 @@ GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, a
  */
 
 
+#define lsmp_partition(element) ((LSMP_CON *) ((element)->partition))
+
+
 static GstClockTime GPSNow(void)
 {
 	/* FIXME:  why does TAInow() return the GPS time? */
@@ -214,23 +217,35 @@ static GstClockTime GPSNow(void)
 static gboolean start(GstBaseSrc *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
+	gboolean success = TRUE;
 
 	if(!element->name) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("shm-name not set"));
-		return FALSE;
+		success = FALSE;
+		goto done;
 	}
-	GST_LOG_OBJECT(element, "lvshm_init()");
-	element->handle = lvshm_init(element->name, element->mask);
-	if(!element->handle) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("lvshm_init() failed"));
-		return FALSE;
+	element->partition = new LSMP_CON(element->name, 0 /* nbuf */, element->mask);
+	if(!element->partition) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure accessing shared-memory parition \"%s\"", element->name));
+		success = FALSE;
+		goto done;
 	}
-	lvshm_setWaitTime(element->handle, element->wait_time);
+	if(!lsmp_partition(element)->isConnected()) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("failure connecting to shared-memory partition \"%s\": %s", element->name, lsmp_partition(element)->Error()));
+		delete lsmp_partition(element);
+		element->partition = NULL;
+		success = FALSE;
+		goto done;
+	}
+	GST_DEBUG_OBJECT(element, "connected to shared-memory partition \"%s\"", element->name);
+
+	lsmp_partition(element)->setTimeout(element->wait_time);
 
 	element->need_new_segment = TRUE;
 	element->next_timestamp = 0;
 
-	return TRUE;
+done:
+	return success;
 }
 
 
@@ -243,9 +258,9 @@ static gboolean stop(GstBaseSrc *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
-	GST_LOG_OBJECT(element, "lvshm_deaccess()");
-	lvshm_deaccess(element->handle);
-	element->handle = NULL;
+	delete lsmp_partition(element);
+	element->partition = NULL;
+	GST_DEBUG_OBJECT(element, "de-accessed shared-memory partition \"%s\"", element->name);
 
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 
@@ -325,7 +340,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	while(1) {
 		g_mutex_lock(element->create_thread_lock);
 		t_before = GPSNow();
-		data = lvshm_getNextBuffer(element->handle, flags);
+		data = lsmp_partition(element)->get_buffer(flags);
 		t_after = GPSNow();
 		g_mutex_unlock(element->create_thread_lock);
 		if(!data) {
@@ -385,16 +400,17 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			}
 		}
 		/*
-		 * we have successfully retrieved data.  all code paths from this
-		 * point must include a call to lvshm_releaseDataBuffer()
+		 * we have successfully retrieved data.  all code paths
+		 * from this point must include a call to
+		 * lsmp_partition(element)->free_buffer()
 		 */
-		length = lvshm_dataLength(element->handle);
-		timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
+		length = lsmp_partition(element)->getLength();
+		timestamp = lsmp_partition(element)->getEvtID() * GST_SECOND;
 		GST_LOG_OBJECT(element, "retrieved %u byte shared-memory buffer %p for GPS %" GST_TIME_SECONDS_FORMAT, length, data, GST_TIME_SECONDS_ARGS(timestamp));
 		if(timestamp >= element->next_timestamp)
 			break;
 		GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
-		lvshm_releaseDataBuffer(element->handle);
+		lsmp_partition(element)->free_buffer();
 	}
 
 	/*
@@ -442,7 +458,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 */
 
 done:
-	lvshm_releaseDataBuffer(element->handle);
+	lsmp_partition(element)->free_buffer();
 	GST_LOG_OBJECT(element, "released shared-memory buffer %p", data);
 	return result;
 }
@@ -512,8 +528,8 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	case ARG_WAIT_TIME:
 		element->wait_time = g_value_get_double(value);
-		if(element->handle)
-			lvshm_setWaitTime(element->handle, element->wait_time);
+		if(element->partition)
+			lsmp_partition(element)->setTimeout(element->wait_time);
 		break;
 
 	case ARG_ASSUMED_DURATION:
@@ -574,11 +590,10 @@ static void finalize(GObject *object)
 	element->name = NULL;
 	g_mutex_free(element->create_thread_lock);
 	element->create_thread_lock = NULL;
-	if(element->handle) {
-		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing lvshm_deaccess() in finalize() instead.");
-		GST_LOG_OBJECT(element, "lvshm_deaccess()");
-		lvshm_deaccess(element->handle);
-		element->handle = NULL;
+	if(element->partition) {
+		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing shared-memory de-access in finalize() instead.");
+		delete lsmp_partition(element);
+		element->partition = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -711,5 +726,5 @@ static void gds_lvshmsrc_init(GDSLVSHMSrc *element, GDSLVSHMSrcClass *klass)
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 	element->unblocked = FALSE;
 	element->create_thread_lock = g_mutex_new();
-	element->handle = NULL;
+	element->partition = NULL;
 }
