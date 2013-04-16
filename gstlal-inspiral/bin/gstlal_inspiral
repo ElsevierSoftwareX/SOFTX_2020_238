@@ -58,6 +58,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
+from pylal.date import XLALUTCToGPS
 from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
