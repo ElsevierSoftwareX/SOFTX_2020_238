@@ -494,13 +494,13 @@ enum property {
 };
 
 
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+static void set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_SHM_NAME:
 		g_free(element->name);
 		element->name = g_value_dup_string(value);
@@ -529,13 +529,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 }
 
 
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+static void get_property(GObject *object, guint id, GValue *value, GParamSpec *pspec)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
 	GST_OBJECT_LOCK(element);
 
-	switch(id) {
+	switch((enum property) id) {
 	case ARG_SHM_NAME:
 		g_value_set_string(value, element->name);
 		break;
@@ -650,7 +650,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			"Name",
 			"Shared memory partition name.  Suggestions:  \"LHO_Data\", \"LLO_Data\", \"VIRGO_Data\".",
 			DEFAULT_SHM_NAME,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
 	g_object_class_install_property(
@@ -661,7 +661,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			"Trigger mask",
 			"Buffers will be received only from producers whose masks' bit-wise logical and's with this value are non-zero.",
 			0, G_MAXUINT, DEFAULT_MASK,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
 	g_object_class_install_property(
@@ -672,7 +672,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			"Wait time",
 			"Wait time in seconds (<0 = wait indefinitely, 0 = never wait).",
 			-G_MAXDOUBLE, G_MAXDOUBLE, DEFAULT_WAIT_TIME,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
 	g_object_class_install_property(
@@ -683,7 +683,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 			"Assumed duration",
 			"Assume all files span this much time in seconds.",
 			1, G_MAXUINT, DEFAULT_ASSUMED_DURATION,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
 }
