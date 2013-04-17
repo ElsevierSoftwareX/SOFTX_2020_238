@@ -222,7 +222,7 @@ static gboolean start(GstBaseSrc *basesrc)
 	};
 
 	g_return_val_if_fail(element->location != NULL, FALSE);
-	g_retrun_val_if_fail(element->cache == NULL, FALSE);
+	g_return_val_if_fail(element->cache == NULL, FALSE);
 
 	element->cache = XLALFrImportCache(element->location);
 	if(!element->cache) {
