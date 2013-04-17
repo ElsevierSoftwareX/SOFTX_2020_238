@@ -80,6 +80,34 @@
 /*
  * ============================================================================
  *
+ *                                Boilerplate
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_simulation_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_simulation", 0, "lal_simulation element");
+}
+
+
+GST_BOILERPLATE_FULL(
+	GSTLALSimulation,
+	gstlal_simulation,
+	GstElement,
+	GST_TYPE_ELEMENT,
+	additional_initializations
+);
+
+
+/*
+ * ============================================================================
+ *
  *				 XML Input
  *
  * ============================================================================
@@ -719,6 +747,15 @@ done:
 
 
 /*
+ * ============================================================================
+ *
+ *                          GObject Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
  * Properties
  */
 
@@ -754,6 +791,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_UNLOCK(element);
 }
 
+
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
@@ -784,14 +822,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	GST_OBJECT_UNLOCK(element);
 }
-
-
-/*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
 
 
 /*
@@ -827,7 +857,7 @@ static void finalize(GObject * object)
  */
 
 
-static void base_init(gpointer class)
+static void gstlal_simulation_base_init(gpointer class)
 {
 }
 
@@ -837,12 +867,10 @@ static void base_init(gpointer class)
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -942,9 +970,8 @@ static void class_init(gpointer class, gpointer class_data)
  */
 
 
-static void instance_init(GTypeInstance * object, gpointer class)
+static void gstlal_simulation_init(GSTLALSimulation *element, GSTLALSimulationClass *klass)
 {
-	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -956,7 +983,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	gst_object_unref(pad);
 
 	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(object), "src");
+	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
 	element->xml_location = NULL;
@@ -965,28 +992,4 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->channel_name = NULL;
 	element->units = NULL;
 	element->simulation_series = NULL;
-}
-
-
-/*
- * gstlal_simulation_get_type()
- */
-
-
-GType gstlal_simulation_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALSimulationClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALSimulation),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALSimulation", &info, 0);
-	}
-
-	return type;
 }
