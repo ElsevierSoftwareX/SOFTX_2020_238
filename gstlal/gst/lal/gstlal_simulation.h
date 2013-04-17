@@ -1,7 +1,7 @@
 /*
  * An interface to LALSimulation.  
  *
- * Copyright (C) 2008  Chad Hanna, Kipp Cannon, Drew Keppel
+ * Copyright (C) 2008--2012  Chad Hanna, Kipp Cannon, Drew Keppel
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
