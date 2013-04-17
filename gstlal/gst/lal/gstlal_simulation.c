@@ -548,74 +548,6 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 
 
 /*
- * Properties
- */
-
-
-enum property {
-	ARG_XML_LOCATION = 1,
-	ARG_INSTRUMENT,
-	ARG_CHANNEL_NAME,
-	ARG_UNITS
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-
-	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_XML_LOCATION:
-		g_free(element->xml_location);
-		element->xml_location = g_value_dup_string(value);
-		destroy_injection_document(element->injection_document);
-		element->injection_document = NULL;
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_XML_LOCATION:
-		g_value_set_string(value, element->xml_location);
-		break;
-
-	case ARG_INSTRUMENT:
-		g_value_set_string(value, element->instrument);
-		break;
-
-	case ARG_CHANNEL_NAME:
-		g_value_set_string(value, element->channel_name);
-		break;
-
-	case ARG_UNITS:
-		g_value_set_string(value, element->units);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
  * sink event()
  */
 
@@ -787,6 +719,74 @@ done:
 
 
 /*
+ * Properties
+ */
+
+
+enum property {
+	ARG_XML_LOCATION = 1,
+	ARG_INSTRUMENT,
+	ARG_CHANNEL_NAME,
+	ARG_UNITS
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+
+	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_XML_LOCATION:
+		g_free(element->xml_location);
+		element->xml_location = g_value_dup_string(value);
+		destroy_injection_document(element->injection_document);
+		element->injection_document = NULL;
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_XML_LOCATION:
+		g_value_set_string(value, element->xml_location);
+		break;
+
+	case ARG_INSTRUMENT:
+		g_value_set_string(value, element->instrument);
+		break;
+
+	case ARG_CHANNEL_NAME:
+		g_value_set_string(value, element->channel_name);
+		break;
+
+	case ARG_UNITS:
+		g_value_set_string(value, element->units);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
  * Parent class.
  */
 
@@ -795,7 +795,7 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
@@ -823,15 +823,30 @@ static void finalize(GObject * object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * base_init()
  */
 
 
 static void base_init(gpointer class)
 {
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void class_init(gpointer class, gpointer class_data)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+
+	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -874,25 +889,6 @@ static void base_init(gpointer class)
 			)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer class, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -942,9 +938,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * instance init
  */
 
 
@@ -975,7 +969,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 
 /*
- * gstlal_simulation_get_type().
+ * gstlal_simulation_get_type()
  */
 
 
