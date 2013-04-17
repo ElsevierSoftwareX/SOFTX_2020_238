@@ -106,6 +106,7 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	result = gst_pad_alloc_buffer(pad, offset, size, GST_PAD_CAPS(pad), buf);
 	if(result != GST_FLOW_OK)
 		goto done;
+	g_assert_cmpuint(GST_BUFFER_SIZE(*buf), ==, size);
 
 	read_offset = 0;
 	do {
@@ -221,6 +222,7 @@ static gboolean start(GstBaseSrc *basesrc)
 	};
 
 	g_return_val_if_fail(element->location != NULL, FALSE);
+	g_retrun_val_if_fail(element->cache == NULL, FALSE);
 
 	element->cache = XLALFrImportCache(element->location);
 	if(!element->cache) {
@@ -259,8 +261,11 @@ static gboolean stop(GstBaseSrc *basesrc)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
 
-	XLALFrDestroyCache(element->cache);
-	element->cache = NULL;
+	if(element->cache) {
+		XLALFrDestroyCache(element->cache);
+		element->cache = NULL;
+	} else
+		g_assert_not_reached();
 
 	return TRUE;
 }
@@ -297,6 +302,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)
 		return GST_FLOW_UNEXPECTED;
 
+	GST_DEBUG_OBJECT(element, "loading '%s'", element->cache->frameFiles[element->index].url);
 	path = g_filename_from_uri(element->cache->frameFiles[element->index].url, &host, &error);
 	g_free(host);
 	if(error) {
