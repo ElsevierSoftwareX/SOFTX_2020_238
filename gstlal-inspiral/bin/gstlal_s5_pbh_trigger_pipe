@@ -825,7 +825,7 @@ p_nodes = [noninjsqlitenode]
 for injections in options.injections:
 
 	# Setup the final output names, etc.
-	injdb = T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(inj), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+	injdb = T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
 	injdbs.append(injdb)
 	injxml = injdb+".xml.gz"
 	
