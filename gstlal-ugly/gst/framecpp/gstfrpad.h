@@ -112,6 +112,8 @@ struct _GstFrPad {
 	guint channel_number;	/* FrAdcData */
 	guint nbits;		/* FrAdcData */
 	gchar *units;		/* units */
+
+	GstTagList *tags;
 };
 
 

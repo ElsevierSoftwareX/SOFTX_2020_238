@@ -28,10 +28,29 @@
  */
 
 
+/*
+ * stuff from the C library
+ */
+
+
+#include <string.h>
+
+
+/*
+ * stuff from GObject/GStreamer
+ */
+
+
 #include <glib.h>
 #include <gst/gst.h>
 
 
+/*
+ * our own stuff
+ */
+
+
+#include <gstlal/gstlal_tags.h>
 #include <gstfrpad.h>
 
 
@@ -105,6 +124,34 @@ GType gst_frpad_type_get_type(void)
 
 
 /*
+ * tags
+ */
+
+
+static gboolean update_tag_list(GstFrPad *pad)
+{
+	GstTagList *new_tags = gst_tag_list_new_full(
+		GST_TAG_CODEC, "RAW",
+		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
+		GSTLAL_TAG_INSTRUMENT, pad->instrument && strcmp(pad->instrument, "") ? pad->instrument : " ",
+		GSTLAL_TAG_CHANNEL_NAME, pad->channel_name && strcmp(pad->channel_name, "") ? pad->channel_name : " ",
+		/*GST_TAG_GEO_LOCATION_NAME, observatory,
+		GST_TAG_GEO_LOCATION_SUBLOCATION, pad->instrument,*/
+		GSTLAL_TAG_UNITS, pad->units && strcmp(pad->units, "") ? pad->units : " ",
+		NULL
+	);
+	if(!new_tags)
+		return FALSE;
+
+	gst_tag_list_free(pad->tags);
+	pad->tags = new_tags;
+	g_object_notify(G_OBJECT(pad), "tags");
+
+	return TRUE;
+}
+
+
+/*
  * ============================================================================
  *
  *                                Exported API
@@ -144,6 +191,7 @@ enum property {
 	PROP_CHANNEL_NUMBER,
 	PROP_NBITS,
 	PROP_UNITS,
+	PROP_TAGS,
 };
 
 
@@ -164,11 +212,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_INSTRUMENT:
 		g_free(pad->instrument);
 		pad->instrument = g_value_dup_string(value);
+		update_tag_list(pad);
 		break;
 
 	case PROP_CHANNEL_NAME:
 		g_free(pad->channel_name);
 		pad->channel_name = g_value_dup_string(value);
+		update_tag_list(pad);
 		break;
 
 	case PROP_CHANNEL_GROUP:
@@ -186,6 +236,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_UNITS:
 		g_free(pad->units);
 		pad->units = g_value_dup_string(value);
+		update_tag_list(pad);
 		break;
 
 	default:
@@ -232,6 +283,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, pad->units);
 		break;
 
+	case PROP_TAGS:
+		g_value_set_boxed(value, pad->tags);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -245,6 +300,8 @@ static void finalize(GObject *object)
 
 	g_free(pad->comment);
 	pad->comment = NULL;
+	gst_tag_list_free(pad->tags);
+	pad->tags = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -353,9 +410,21 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_TAGS,
+		g_param_spec_boxed(
+			"tags",
+			"Tag list",
+			"Tag list.",
+			GST_TYPE_TAG_LIST,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
 static void gst_frpad_init(GstFrPad *pad, GstFrPadClass *klass)
 {
+	pad->tags = gst_tag_list_new();
 }
