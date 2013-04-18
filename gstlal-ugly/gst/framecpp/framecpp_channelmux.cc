@@ -690,6 +690,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		GstTagList *tag_list;
 		gchar *value = NULL;
 
+		/* FIXME:  should the GstFrPad's tags property be writable,
+		 * instead? */
 		gst_event_parse_tag(event, &tag_list);
 		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value)) {
 			g_strstrip(value);
