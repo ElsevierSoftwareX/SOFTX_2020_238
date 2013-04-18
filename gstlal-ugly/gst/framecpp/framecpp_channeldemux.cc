@@ -414,8 +414,7 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 	g_signal_connect(srcpad, "notify::tags", (GCallback) src_pad_new_tags, NULL);
-	/* FIXME:  set units properly */
-	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, "units", strstr(channel, "STRAIN") ? "strain" : "", NULL);
+	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, NULL);
 
 	/*
 	 * add pad to element.  must ref it because _add_pad()
