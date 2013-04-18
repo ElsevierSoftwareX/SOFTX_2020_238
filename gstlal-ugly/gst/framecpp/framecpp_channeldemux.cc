@@ -345,6 +345,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	pad_state->need_discont = TRUE;
 	pad_state->need_new_segment = TRUE;
 	pad_state->need_tags = TRUE;
+	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
 
 	/*
