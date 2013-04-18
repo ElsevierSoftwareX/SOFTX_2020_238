@@ -101,6 +101,23 @@ class src_deferred_link(object):
 
 
 #
+# framecpp channeldemux units helper
+#
+
+
+class framecpp_channeldemux_set_units(object):
+	def __init__(self, elem, units_dict):
+		self.elem = elem
+		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, units_dict)
+
+	@staticmethod
+	def pad_added(element, pad, units_dict):
+		name = pad.get_name()
+		if name in units_dict:
+			pad.set_property("units", units_dict[name])
+
+
+#
 # =============================================================================
 #
 #                                Pipeline Parts
