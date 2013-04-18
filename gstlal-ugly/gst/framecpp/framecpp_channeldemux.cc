@@ -326,38 +326,7 @@ struct pad_state {
 	gboolean need_tags;
 	GstClockTime next_timestamp;
 	guint64 next_out_offset;
-	GstTagList *tag_list;
 };
-
-
-/*
- * tags
- */
-
-
-static GstTagList *get_pad_tag_list(GstFrPad *pad)
-{
-	gchar *instrument, *channel, *units;
-	GstTagList *tag_list = NULL;
-
-	g_object_get(pad, "instrument", &instrument, "channel-name", &channel, "units", &units, NULL);
-
-	tag_list = gst_tag_list_new_full(
-		GST_TAG_CODEC, "RAW",
-		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
-		GSTLAL_TAG_INSTRUMENT, instrument && strcmp(instrument, "") ? instrument : " ",
-		GSTLAL_TAG_CHANNEL_NAME, channel && strcmp(channel, "") ? channel : " ",
-		/*GST_TAG_GEO_LOCATION_NAME, observatory,
-		GST_TAG_GEO_LOCATION_SUBLOCATION, instrument,*/
-		GSTLAL_TAG_UNITS, units && strcmp(units, "") ? units : " ",
-		NULL
-	);
-
-	g_free(instrument);
-	g_free(channel);
-	g_free(units);
-	return tag_list;
-}
 
 
 /*
@@ -381,6 +350,19 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	/*
 	 * done
 	 */
+}
+
+
+/*
+ * pad tags notify handler
+ */
+
+
+static void src_pad_new_tags(GObject *object, GParamSpec *pspec, gpointer user_data)
+{
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(GST_PAD(object));
+
+	pad_state->need_tags = TRUE;
 }
 
 
@@ -410,30 +392,30 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 
 	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "%s"), name);
 	g_assert(srcpad != NULL);
-	/* FIXME:  set units properly */
-	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, "units", strstr(channel, "STRAIN") ? "strain" : "", NULL);
-	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
 	/*
-	 * create & initialize pad state.  FIXME:  this memory is
-	 * leaked.  something could be attached to the pad's
-	 * destroy notify signal to free the memory, but I  believe
-	 * in the long run we're going to end up defining a custom
-	 * subclass of GstPad for this element, and then these
-	 * things can be moved into the instance structure.  it's
-	 * not worth worrying about it for now.
+	 * create & initialize pad state.  FIXME:  this memory is leaked.
+	 * something could be attached to the pad's destroy notify signal
+	 * to free the memory.
 	 */
 
-	pad_state = g_new(struct pad_state, 1);
+	pad_state = g_new0(struct pad_state, 1);
 	g_assert(pad_state != NULL);
 	pad_state->need_discont = TRUE;
 	pad_state->need_new_segment = TRUE;
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
-	pad_state->tag_list = get_pad_tag_list(srcpad);
-	g_assert(pad_state->tag_list != NULL);
 	gst_pad_set_element_private(GST_PAD(srcpad), pad_state);
+
+	/*
+	 * connect signal handlers, set properties
+	 */
+
+	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
+	g_signal_connect(srcpad, "notify::tags", (GCallback) src_pad_new_tags, NULL);
+	/* FIXME:  set units properly */
+	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, "units", strstr(channel, "STRAIN") ? "strain" : "", NULL);
 
 	/*
 	 * add pad to element.  must ref it because _add_pad()
@@ -616,8 +598,10 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 */
 
 	if(pad_state->need_tags) {
-		gst_tag_list_add(pad_state->tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
-		GstTagList *tag_list = gst_tag_list_merge(element->tag_list, pad_state->tag_list, GST_TAG_MERGE_REPLACE);
+		GstTagList *tag_list;
+		g_object_get(pad, "tags", &tag_list, NULL);
+		gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
+		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
 		GST_LOG_OBJECT(pad, "pushing %P", tag_list);
 		if(!gst_pad_push_event(pad, gst_event_new_tag(tag_list)))
 			GST_ERROR_OBJECT(pad, "failed to push tags");
