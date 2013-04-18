@@ -661,7 +661,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
 		gstlal_fftw_unlock();
 		if(!element->injection_document) {
-			GST_ERROR_OBJECT(element, "error loading \"%s\"", element->xml_location);
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("error loading \"%s\"", element->xml_location));
 			gst_buffer_unref(buf);
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -673,8 +673,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(!element->instrument || !element->channel_name || !element->units) {
-		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections:  must receive tags \"%s\", \"%s\", \"%s\"", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS);
-		result = gst_pad_push(element->srcpad, buf);
+		GST_ELEMENT_ERROR(element, STREAM, FORMAT, (NULL), ("stream metadata not available:  must receive tags \"%s\", \"%s\", \"%s\"", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS));
+		gst_buffer_unref(buf);
+		result = GST_FLOW_ERROR;
 		goto done;
 	}
 
@@ -684,7 +685,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	h = gstlal_REAL8TimeSeries_from_buffer(buf, element->instrument, element->channel_name, element->units);
 	if(!h) {
-		GST_ERROR_OBJECT(element, "failure wrapping buffer in REAL8TimeSeries");
+		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure wrapping buffer in REAL8TimeSeries"));
 		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -698,7 +699,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	/* FIXME: do we need a series mutex lock here? */
 
 	if(update_simulation_series(h, element, NULL) < 0) {
-		GST_ERROR_OBJECT(element, "failure updating simulation_series");
+		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure updating simulation_series"));
 		h->data->data = NULL;
 		XLALDestroyREAL8TimeSeries(h);
 		gst_buffer_unref(buf);
@@ -711,7 +712,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(add_simulation_series(h, element, NULL) < 0) {
-		GST_ERROR_OBJECT(element, "failure performing injections");
+		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure performing injections"));
 		h->data->data = NULL;
 		XLALDestroyREAL8TimeSeries(h);
 		gst_buffer_unref(buf);
@@ -720,7 +721,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	}
 
 	/* FIXME: do we need a series mutex lock free here? */
-
 
 	/*
 	 * Free the wrapping.  Setting the data pointer to NULL prevents
