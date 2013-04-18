@@ -373,7 +373,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	# FIXME:  remove
 	#
 
-	if gw_data_source_info.data_source in ("while", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
+	if gw_data_source_info.data_source in ("white", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
 		_do_seek(pipeline, gw_data_source_info.seekevent)
 
 	#
