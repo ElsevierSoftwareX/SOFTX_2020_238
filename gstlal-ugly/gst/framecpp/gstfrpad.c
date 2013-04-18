@@ -140,13 +140,15 @@ static gboolean update_tag_list(GstFrPad *pad)
 		GSTLAL_TAG_UNITS, pad->units && strcmp(pad->units, "") ? pad->units : " ",
 		NULL
 	);
-	if(!new_tags)
+
+	if(!new_tags) {
+		GST_ERROR_OBJECT(pad, "failed to update tags");
+		g_assert_not_reached();	/* can be compiled out */
 		return FALSE;
+	}
 
 	gst_tag_list_free(pad->tags);
 	pad->tags = new_tags;
-	g_object_notify(G_OBJECT(pad), "tags");
-
 	return TRUE;
 }
 
@@ -198,6 +200,9 @@ enum property {
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GstFrPad *pad = GST_FRPAD(object);
+	gboolean got_new_tags = FALSE;
+
+	GST_OBJECT_LOCK(object);
 
 	switch(id) {
 	case PROP_PAD_TYPE:
@@ -212,13 +217,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_INSTRUMENT:
 		g_free(pad->instrument);
 		pad->instrument = g_value_dup_string(value);
-		update_tag_list(pad);
+		got_new_tags = update_tag_list(pad);
 		break;
 
 	case PROP_CHANNEL_NAME:
 		g_free(pad->channel_name);
 		pad->channel_name = g_value_dup_string(value);
-		update_tag_list(pad);
+		got_new_tags = update_tag_list(pad);
 		break;
 
 	case PROP_CHANNEL_GROUP:
@@ -236,19 +241,26 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_UNITS:
 		g_free(pad->units);
 		pad->units = g_value_dup_string(value);
-		update_tag_list(pad);
+		got_new_tags = update_tag_list(pad);
 		break;
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(object);
+
+	if(got_new_tags)
+		g_object_notify(G_OBJECT(pad), "tags");
 }
 
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GstFrPad *pad = GST_FRPAD(object);
+
+	GST_OBJECT_LOCK(object);
 
 	switch(id) {
 	case PROP_PAD_TYPE:
@@ -291,6 +303,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(object);
 }
 
 
@@ -300,6 +314,12 @@ static void finalize(GObject *object)
 
 	g_free(pad->comment);
 	pad->comment = NULL;
+	g_free(pad->instrument);
+	pad->instrument = NULL;
+	g_free(pad->channel_name);
+	pad->channel_name = NULL;
+	g_free(pad->units);
+	pad->units = NULL;
 	gst_tag_list_free(pad->tags);
 	pad->tags = NULL;
 
