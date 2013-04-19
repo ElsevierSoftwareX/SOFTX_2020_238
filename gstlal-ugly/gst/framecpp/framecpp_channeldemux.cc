@@ -117,6 +117,9 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement,
 #define DEFAULT_FRAME_NUMBER 0
 
 
+#define MAX_TIMESTAMP_JITTER 1	/* allow this many ns before calling it a discont */
+
+
 /*
  * ============================================================================
  *
@@ -195,6 +198,8 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
 	gint width = vect->GetTypeSize() * 8;
 	*rate = round(1.0 / vect->GetDim(0).GetDx());
 
+	g_assert(1.0 / *rate == vect->GetDim(0).GetDx());
+
 	switch(vect->GetType()) {
 	case FrameCPP::FrVect::FR_VECT_4R:
 	case FrameCPP::FrVect::FR_VECT_8R:
@@ -252,6 +257,67 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
 	*bitrate = *rate * 1 * width;	/* 1 channel */
 
 	return caps;
+}
+
+
+/*
+ * transfer the contents of an FrVect into a newly-created GstBuffer.
+ * caller must unref buffer when no longer needed.
+ */
+
+
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size, guint *bitrate)
+{
+	GstBuffer *buffer;
+
+	/*
+	 * trigger data decompression before calling GetNBytes()
+	 */
+
+	vect->GetDataUncompressed();
+
+	/*
+	 * allocate buffer
+	 */
+
+	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
+	if(!buffer) {
+		/* silence possibly-uninitialized warnings */
+		*rate = *unit_size = *bitrate = 0;
+		return NULL;
+	}
+
+	/*
+	 * copy data into buffer
+	 * FIXME:  it would be nice to remove the memcpy() by hooking the
+	 * GstBuffer's clean-up into framecpp's reference counting
+	 * machinery
+	 */
+
+	g_assert_cmpuint(vect->GetNDim(), ==, 1);
+	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
+
+	/*
+	 * set buffer format
+	 */
+
+	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size, bitrate);
+	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
+
+	/*
+	 * set timestamp and duration
+	 */
+
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
+	GST_BUFFER_OFFSET(buffer) = offset;
+	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
+
+	/*
+	 * done
+	 */
+
+	return buffer;
 }
 
 
@@ -330,7 +396,7 @@ struct pad_state {
 
 
 /*
- * linked event handler
+ * linked event handler.  reset pad's state
  */
 
 
@@ -338,19 +404,12 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 
-	/*
-	 * reset pad's state
-	 */
-
+	g_assert(pad_state != NULL);
 	pad_state->need_discont = TRUE;
 	pad_state->need_new_segment = TRUE;
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
-
-	/*
-	 * done
-	 */
 }
 
 
@@ -363,6 +422,7 @@ static void src_pad_new_tags(GObject *object, GParamSpec *pspec, gpointer user_d
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(GST_PAD(object));
 
+	g_assert(pad_state != NULL);
 	pad_state->need_tags = TRUE;
 }
 
@@ -373,19 +433,11 @@ static void src_pad_new_tags(GObject *object, GParamSpec *pspec, gpointer user_d
  */
 
 
-static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum gst_frpad_type_t pad_type)
+static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
 	GstFrPad *srcpad = NULL;
 	struct pad_state *pad_state;
 	char *instrument, *channel;
-
-	split_name(name, &instrument, &channel);
-	if(!instrument || !channel) {
-		/*
-		 * cannot deduce instrument and/or channel from pad's name.
-		 */
-		goto done;
-	}
 
 	/*
 	 * construct the pad
@@ -410,12 +462,20 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 	gst_pad_set_element_private(GST_PAD(srcpad), pad_state);
 
 	/*
-	 * connect signal handlers, set properties
+	 * connect signal handlers
 	 */
 
 	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 	g_signal_connect(srcpad, "notify::tags", (GCallback) src_pad_new_tags, NULL);
-	g_object_set(srcpad, "pad-type", pad_type, "instrument", instrument, "channel-name", channel, NULL);
+
+	/*
+	 * set instrument and channel-name (triggers notify::tags signal)
+	 */
+
+	split_name(name, &instrument, &channel);
+	g_object_set(srcpad, "instrument", instrument, "channel-name", channel, NULL);
+	free(instrument);
+	free(channel);
 
 	/*
 	 * add pad to element.  must ref it because _add_pad()
@@ -430,9 +490,6 @@ static GstPad *add_pad(GstFrameCPPChannelDemux *element, const char *name, enum 
 	 * done
 	 */
 
-done:
-	g_free(instrument);
-	g_free(channel);
 	return GST_PAD(srcpad);
 }
 
@@ -470,8 +527,11 @@ static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, e
 
 	srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 	if(!srcpad) {
-		srcpad = add_pad(element, name, pad_type);
-		*pad_added = TRUE;
+		srcpad = add_src_pad(element, name);
+		if(srcpad) {
+			g_object_set(srcpad, "pad-type", pad_type, NULL);
+			*pad_added = TRUE;
+		}
 	} else {
 		/* FIXME:  bother checking if pad_type is correct? */
 	}
@@ -481,80 +541,20 @@ static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, e
 
 
 /*
- * transfer the contents of an FrVect into a newly-created GstBuffer.
- * caller must unref buffer when no longer needed.
- */
-
-
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size, guint *bitrate)
-{
-	GstBuffer *buffer;
-
-	/*
-	 * trigger data decompression before calling GetNBytes()
-	 */
-
-	vect->GetDataUncompressed();
-
-	/*
-	 * allocate buffer
-	 */
-
-	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
-	if(!buffer) {
-		/* silence possibly-uninitialized warnings */
-		*rate = *unit_size = *bitrate = 0;
-		return NULL;
-	}
-
-	/*
-	 * copy data into buffer
-	 * FIXME:  it would be nice to remove the memcpy() by hooking the
-	 * GstBuffer's clean-up into framecpp's reference counting
-	 * machinery
-	 */
-
-	g_assert_cmpuint(vect->GetNDim(), ==, 1);
-	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
-
-	/*
-	 * set buffer format
-	 */
-
-	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size, bitrate);
-	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
-
-	/*
-	 * set timestamp and duration
-	 */
-
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
-	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
-	GST_BUFFER_OFFSET(buffer) = offset;
-	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
-
-	/*
-	 * done
-	 */
-
-	return buffer;
-}
-
-
-/*
  * convert an FrVect to a GstBuffer, and push out a source pad.
  */
 
 
-static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
+static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
 {
-	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
 	gint rate;
 	guint unit_size;
 	guint bitrate;
 	GstFlowReturn result = GST_FLOW_OK;
+
+	g_assert(pad_state != NULL);
 
 	/*
 	 * convert FrVect to GstBuffer
@@ -629,7 +629,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 * check for disconts
 	 */
 
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
 		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
 		pad_state->need_discont = FALSE;
 	}
@@ -653,7 +653,6 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, General::SharedPtr <
 	 */
 
 done:
-	gst_object_unref(element);
 	return result;
 }
 
@@ -748,6 +747,8 @@ static GstFlowReturn push_heart_beat(GstPad *pad, GstClockTime timestamp)
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
 
+	g_assert(pad_state != NULL);
+
 	/*
 	 * create heartbeat buffer for this pad
 	 */
@@ -762,7 +763,7 @@ static GstFlowReturn push_heart_beat(GstPad *pad, GstClockTime timestamp)
 	 * check for disconts
 	 */
 
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
 		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
 		pad_state->need_discont = FALSE;
 	}
@@ -952,7 +953,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			if(rd) {
 				for(FrameCPP::FrRawData::firstAdc_iterator current = rd->RefFirstAdc().begin(), last = rd->RefFirstAdc().end(); current != last; current++) {
 					FrameCPP::FrAdcData::data_type vects = (*current)->RefData();
-					GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
+					GstClockTime timestamp = frame_timestamp + (GstClockTimeDiff) round((*current)->GetTimeOffset() * 1e9);
 					const char *name = (*current)->GetName().c_str();
 
 					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
@@ -996,7 +997,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					/* FIXME:  what about checking "dataValid" vect in the aux list? */
 					if((*current)->GetDataValid() == 0 && vects.size()) {
 						for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-							result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+							result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 							if(result != GST_FLOW_OK) {
 								gst_object_unref(srcpad);
 								srcpad = NULL;
@@ -1029,7 +1030,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			for(FrameCPP::FrameH::procData_iterator current = frame->RefProcData().begin(), last = frame->RefProcData().end(); current != last; current++) {
 				FrameCPP::FrProcData::data_type vects = (*current)->RefData();
-				GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
+				GstClockTime timestamp = frame_timestamp + (GstClockTimeDiff) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
 
 				/*
@@ -1075,7 +1076,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
 							srcpad = NULL;
@@ -1103,7 +1104,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			for(FrameCPP::FrameH::simData_iterator current = frame->RefSimData().begin(), last = frame->RefSimData().end(); current != last; current++) {
 				FrameCPP::FrSimData::data_type vects = (*current)->RefData();
-				GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
+				GstClockTime timestamp = frame_timestamp + (GstClockTimeDiff) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
 
 				GST_LOG_OBJECT(element, "found FrSimData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
@@ -1142,7 +1143,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
-						result = frvect_to_buffer_and_push(srcpad, *vect, timestamp);
+						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
 							srcpad = NULL;
