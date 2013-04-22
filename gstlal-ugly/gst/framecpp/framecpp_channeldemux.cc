@@ -825,6 +825,16 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		if(element->last_new_segment_event)
 			gst_event_unref(element->last_new_segment_event);
 		element->last_new_segment_event = NULL;
+		/*
+		 * if there are no source pads, the EOS event will not be
+		 * recieved by any sink elements, it will not get posted to
+		 * the pipeline message bus, and the application's pipeline
+		 * handler will never find out.  this will lead to a hung
+		 * application.  FIXME:  asserts can be compiled out:  is
+		 * this a genuine error condition that should be detected
+		 * and reported, or is checking for it debugging-like?
+		 */
+		g_assert(GST_ELEMENT(element)->numsrcpads > 0);
 		break;
 
 	default:
