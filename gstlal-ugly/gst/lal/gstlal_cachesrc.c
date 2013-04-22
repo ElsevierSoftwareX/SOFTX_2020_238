@@ -299,8 +299,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	g_assert(element->cache != NULL);
 
-	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)
+	*buf = NULL;	/* just in case */
+
+	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop) {
+		GST_DEBUG_OBJECT(element, "EOS");
 		return GST_FLOW_UNEXPECTED;
+	}
 
 	GST_DEBUG_OBJECT(element, "loading '%s'", element->cache->frameFiles[element->index].url);
 	path = g_filename_from_uri(element->cache->frameFiles[element->index].url, &host, &error);
@@ -395,6 +399,10 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
 		if((GstClockTime) segment->start < min)
 			GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " uri starts at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min));
+		if(GST_CLOCK_TIME_IS_VALID(segment->stop) && (GstClockTime) segment->stop <= min) {
+			GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("no data available for segment"));
+			success = FALSE;
+		}
 		goto checkfordiscont;
 	}
 	GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
