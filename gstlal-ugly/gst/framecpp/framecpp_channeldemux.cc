@@ -556,15 +556,13 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 	 * forward most recent new segment event
 	 */
 
-	if(pad_state->need_new_segment) {
-		if(element->last_new_segment_event) {
-			gst_event_ref(element->last_new_segment_event);
-			success = gst_pad_push_event(pad, element->last_new_segment_event);
-			if(!success)
-				GST_ERROR_OBJECT(pad, "failed to push newsegment");
-			else
-				pad_state->need_new_segment = FALSE;
-		}
+	if(pad_state->need_new_segment && element->last_new_segment_event) {
+		gst_event_ref(element->last_new_segment_event);
+		success = gst_pad_push_event(pad, element->last_new_segment_event);
+		if(!success)
+			GST_ERROR_OBJECT(pad, "failed to push newsegment");
+		else
+			pad_state->need_new_segment = FALSE;
 	}
 
 	/*
@@ -682,6 +680,94 @@ done:
 
 
 /*
+ * forward_heart_beat()
+ */
+
+
+static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *pad, GstClockTime timestamp)
+{
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+	GstBuffer *buffer;
+
+	g_assert(pad_state != NULL);
+
+	/*
+	 * do pending events.  FIXME:  check for errors?
+	 */
+
+	src_pad_do_pending_events(element, pad);
+
+	/*
+	 * create heartbeat buffer for this pad
+	 */
+
+	buffer = gst_buffer_new();
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_DURATION(buffer) = 0;
+	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
+	gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+
+	/*
+	 * check for disconts
+	 */
+
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
+		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+		pad_state->need_discont = FALSE;
+	}
+
+	/*
+	 * record state for next time
+	 */
+
+	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+	/*
+	 * push buffer
+	 */
+
+	return gst_pad_push(pad, buffer);
+}
+
+
+struct push_heart_beat_data {
+	GstFrameCPPChannelDemux *element;
+	GstClockTime timestamp;
+};
+
+
+static void push_heart_beat_iter_wrapper(gpointer object, gpointer anon_data)
+{
+	GstPad *pad = GST_PAD(object);
+	struct push_heart_beat_data *data = (struct push_heart_beat_data *) anon_data;
+
+	if(gst_pad_is_linked(pad))
+		/*
+		 * push buffer.  ignore failures
+		 * FIXME:  should failures be ignored?
+		 */
+
+		push_heart_beat(data->element, pad, data->timestamp);
+
+	gst_object_unref(pad);
+}
+
+
+static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClockTime t)
+{
+	GstIterator *iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
+	struct push_heart_beat_data data = {element, t};
+	GstFlowReturn result = GST_FLOW_OK;
+
+	gst_iterator_foreach(iter, push_heart_beat_iter_wrapper, &data);
+	gst_iterator_free(iter);
+
+	return result;
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Sink Pad
@@ -756,83 +842,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	gst_event_unref(event);
 	gst_object_unref(element);
 	return success;
-}
-
-
-/*
- * forward_heart_beat()
- *
- * FIXME:  should check if we need to forward any pending events
- */
-
-
-static GstFlowReturn push_heart_beat(GstPad *pad, GstClockTime timestamp)
-{
-	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
-	GstBuffer *buffer;
-
-	g_assert(pad_state != NULL);
-
-	/*
-	 * create heartbeat buffer for this pad
-	 */
-
-	buffer = gst_buffer_new();
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
-	GST_BUFFER_DURATION(buffer) = 0;
-	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
-	gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
-
-	/*
-	 * check for disconts
-	 */
-
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
-		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
-		pad_state->need_discont = FALSE;
-	}
-
-	/*
-	 * record state for next time
-	 */
-
-	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
-	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
-
-	/*
-	 * push buffer
-	 */
-
-	return gst_pad_push(pad, buffer);
-}
-
-
-static void push_heart_beat_iter_wrapper(gpointer object, gpointer data)
-{
-	GstPad *pad = GST_PAD(object);
-	GstClockTime timestamp = *(GstClockTime *) data;
-
-	if(gst_pad_is_linked(pad))
-		/*
-		 * push buffer.  ignore failures
-		 * FIXME:  should failures be ignored?
-		 */
-
-		push_heart_beat(pad, timestamp);
-
-	gst_object_unref(pad);
-}
-
-
-static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClockTime t)
-{
-	GstIterator *iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
-	GstFlowReturn result = GST_FLOW_OK;
-
-	gst_iterator_foreach(iter, push_heart_beat_iter_wrapper, &t);
-	gst_iterator_free(iter);
-
-	return result;
 }
 
 
@@ -1035,7 +1044,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						if(!vects.size())
 							GST_DEBUG_OBJECT(element, "no FrVects");
 						GST_DEBUG_OBJECT(element, "pushing 0-length heart-beat buffer");
-						result = push_heart_beat(srcpad, timestamp);
+						result = push_heart_beat(element, srcpad, timestamp);
 						if(result != GST_FLOW_OK) {
 							gst_object_unref(srcpad);
 							srcpad = NULL;
@@ -1110,7 +1119,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					}
 				} else {
 					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
-					result = push_heart_beat(srcpad, timestamp);
+					result = push_heart_beat(element, srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
@@ -1177,7 +1186,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					}
 				} else {
 					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
-					result = push_heart_beat(srcpad, timestamp);
+					result = push_heart_beat(element, srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
 						gst_object_unref(srcpad);
 						srcpad = NULL;
