@@ -176,7 +176,7 @@ static int split_name(const char *name, char **instrument, char **channel)
 
 
 /*
- * check if a channel name is in the requested channel list.  returns TRUE
+ * check if a channel name is in the requested-channel list.  returns TRUE
  * if the channel list is empty (demultiplex all channels)
  */
 
@@ -395,20 +395,36 @@ struct pad_state {
 
 
 /*
- * linked event handler.  reset pad's state
+ * linked event handler.  create & initialize pad's state
  */
 
 
-static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
+static void src_pad_linked_handler(GstPad *pad, GstPad *peer, gpointer data)
 {
-	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+	struct pad_state *pad_state = g_new0(struct pad_state, 1);
 
-	g_assert(pad_state != NULL);
 	pad_state->need_discont = TRUE;
 	pad_state->need_new_segment = TRUE;
 	pad_state->need_tags = TRUE;
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 	pad_state->next_out_offset = 0;
+
+	g_assert(gst_pad_get_element_private(pad) == NULL);
+	gst_pad_set_element_private(pad, pad_state);
+}
+
+
+/*
+ * unlinked event handler.  free pad's state
+ */
+
+
+static void src_pad_unlinked_handler(GstPad *pad, GstPad *peer, gpointer data)
+{
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+
+	gst_pad_set_element_private(pad, NULL);
+	g_free(pad_state);
 }
 
 
@@ -417,12 +433,12 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
  */
 
 
-static void src_pad_new_tags(GObject *object, GParamSpec *pspec, gpointer user_data)
+static void src_pad_new_tags_handler(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(GST_PAD(object));
 
-	g_assert(pad_state != NULL);
-	pad_state->need_tags = TRUE;
+	if(pad_state)
+		pad_state->need_tags = TRUE;
 }
 
 
@@ -435,7 +451,6 @@ static void src_pad_new_tags(GObject *object, GParamSpec *pspec, gpointer user_d
 static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
 	GstFrPad *srcpad = NULL;
-	struct pad_state *pad_state;
 	char *instrument, *channel;
 
 	/*
@@ -446,29 +461,15 @@ static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 	g_assert(srcpad != NULL);
 
 	/*
-	 * create & initialize pad state.  FIXME:  this memory is leaked.
-	 * something could be attached to the pad's destroy notify signal
-	 * to free the memory.
-	 */
-
-	pad_state = g_new0(struct pad_state, 1);
-	g_assert(pad_state != NULL);
-	pad_state->need_discont = TRUE;
-	pad_state->need_new_segment = TRUE;
-	pad_state->need_tags = TRUE;
-	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
-	pad_state->next_out_offset = 0;
-	gst_pad_set_element_private(GST_PAD(srcpad), pad_state);
-
-	/*
 	 * connect signal handlers
 	 */
 
-	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
-	g_signal_connect(srcpad, "notify::tags", (GCallback) src_pad_new_tags, NULL);
+	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked_handler, NULL);
+	g_signal_connect(srcpad, "unlinked", (GCallback) src_pad_unlinked_handler, NULL);
+	g_signal_connect(srcpad, "notify::tags", (GCallback) src_pad_new_tags_handler, NULL);
 
 	/*
-	 * set instrument and channel-name (triggers notify::tags signal)
+	 * set instrument and channel-name
 	 */
 
 	split_name(name, &instrument, &channel);
