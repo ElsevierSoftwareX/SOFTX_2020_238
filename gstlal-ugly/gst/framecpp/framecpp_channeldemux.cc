@@ -573,12 +573,9 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 		GstTagList *tag_list;
 		g_object_get(pad, "tags", &tag_list, NULL);
 		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
-		GST_LOG_OBJECT(pad, "pushing %P", tag_list);
-		success = gst_pad_push_event(pad, gst_event_new_tag(tag_list));
-		if(!success)
-			GST_ERROR_OBJECT(pad, "failed to push tags");
-		else
-			pad_state->need_tags = FALSE;
+		GST_LOG_OBJECT(pad, "new %P", tag_list);
+		gst_element_found_tags_for_pad(GST_ELEMENT(element), pad, tag_list);
+		pad_state->need_tags = FALSE;
 	}
 
 	return success;
