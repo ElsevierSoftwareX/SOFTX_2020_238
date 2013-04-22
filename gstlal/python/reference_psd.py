@@ -149,7 +149,8 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 
 	if verbose:
 		print >>sys.stderr, "putting pipeline into playing state ..."
-	pipeline.set_state(gst.STATE_PLAYING)
+	if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."
 	mainloop.run()
