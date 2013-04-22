@@ -128,6 +128,26 @@ GType gst_frpad_type_get_type(void)
  */
 
 
+static gint get_bitrate(GstFrPad *pad)
+{
+	GstCaps *caps = GST_PAD_CAPS(pad);
+	GstStructure *s;
+	gint samples_per_second, channels, bits_per_sample;
+	gboolean success = caps != NULL;
+
+	if(success)
+		success = (s = gst_caps_get_structure(caps, 0)) != NULL;
+	if(success) {
+		success &= gst_structure_get_int(s, "rate", &samples_per_second);
+		success &= gst_structure_get_int(s, "channels", &channels);
+		if(!gst_structure_get_int(s, "depth", &bits_per_sample))
+			success &= gst_structure_get_int(s, "width", &bits_per_sample);
+	}
+
+	return success ? bits_per_sample * samples_per_second * channels : -1;
+}
+
+
 static gboolean update_tag_list(GstFrPad *pad)
 {
 	GstTagList *new_tags = gst_tag_list_new_full(
@@ -140,16 +160,31 @@ static gboolean update_tag_list(GstFrPad *pad)
 		GSTLAL_TAG_UNITS, pad->units && strcmp(pad->units, "") ? pad->units : " ",
 		NULL
 	);
+	gint bitrate = get_bitrate(pad);
 
 	if(!new_tags) {
 		GST_ERROR_OBJECT(pad, "failed to update tags");
 		g_assert_not_reached();	/* can be compiled out */
 		return FALSE;
-	}
+	} else if(bitrate >= 0)
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 
 	gst_tag_list_free(pad->tags);
 	pad->tags = new_tags;
 	return TRUE;
+}
+
+
+static void caps_notify_handler(GObject *object, GParamSpec *pspec, gpointer user_data)
+{
+	gboolean got_new_tags;
+
+	GST_OBJECT_LOCK(object);
+	got_new_tags = update_tag_list(GST_FRPAD(object));
+	GST_OBJECT_UNLOCK(object);
+
+	if(got_new_tags)
+		g_object_notify(object, "tags");
 }
 
 
@@ -447,4 +482,5 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 static void gst_frpad_init(GstFrPad *pad, GstFrPadClass *klass)
 {
 	pad->tags = gst_tag_list_new();
+	g_signal_connect_after(pad, "notify::caps", (GCallback) caps_notify_handler, NULL);
 }

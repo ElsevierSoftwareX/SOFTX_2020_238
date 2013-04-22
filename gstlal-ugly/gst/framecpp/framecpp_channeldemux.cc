@@ -1,7 +1,7 @@
 /*
  * framecpp channel demultiplexor
  *
- * Copyright (C) 2011--2012  Kipp Cannon, Ed Maros
+ * Copyright (C) 2011--2013  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -192,7 +192,7 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
  */
 
 
-static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gint *rate, guint *unit_size, guint *bitrate)
+static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gint *rate, guint *unit_size)
 {
 	GstCaps *caps;
 	gint width = vect->GetTypeSize() * 8;
@@ -254,7 +254,6 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
 	}
 
 	*unit_size = 1 * width / 8;	/* 1 channel */
-	*bitrate = *rate * 1 * width;	/* 1 channel */
 
 	return caps;
 }
@@ -266,7 +265,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
  */
 
 
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size, guint *bitrate)
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
 {
 	GstBuffer *buffer;
 
@@ -283,7 +282,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
 	if(!buffer) {
 		/* silence possibly-uninitialized warnings */
-		*rate = *unit_size = *bitrate = 0;
+		*rate = *unit_size = 0;
 		return NULL;
 	}
 
@@ -301,7 +300,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 	 * set buffer format
 	 */
 
-	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size, bitrate);
+	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size);
 	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
 
 	/*
@@ -541,6 +540,53 @@ static GstPad *get_src_pad(GstFrameCPPChannelDemux *element, const char *name, e
 
 
 /*
+ * push pending events
+ */
+
+
+static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstPad *pad)
+{
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+	gboolean success = TRUE;
+
+	g_assert(pad_state != NULL);
+
+	/*
+	 * forward most recent new segment event
+	 */
+
+	if(pad_state->need_new_segment) {
+		if(element->last_new_segment_event) {
+			gst_event_ref(element->last_new_segment_event);
+			success = gst_pad_push_event(pad, element->last_new_segment_event);
+			if(!success)
+				GST_ERROR_OBJECT(pad, "failed to push newsegment");
+			else
+				pad_state->need_new_segment = FALSE;
+		}
+	}
+
+	/*
+	 * send tags
+	 */
+
+	if(success && pad_state->need_tags) {
+		GstTagList *tag_list;
+		g_object_get(pad, "tags", &tag_list, NULL);
+		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
+		GST_LOG_OBJECT(pad, "pushing %P", tag_list);
+		success = gst_pad_push_event(pad, gst_event_new_tag(tag_list));
+		if(!success)
+			GST_ERROR_OBJECT(pad, "failed to push tags");
+		else
+			pad_state->need_tags = FALSE;
+	}
+
+	return success;
+}
+
+
+/*
  * convert an FrVect to a GstBuffer, and push out a source pad.
  */
 
@@ -551,7 +597,6 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	GstBuffer *buffer;
 	gint rate;
 	guint unit_size;
-	guint bitrate;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(pad_state != NULL);
@@ -560,7 +605,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * convert FrVect to GstBuffer
 	 */
 
-	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, &rate, &unit_size, &bitrate);
+	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, &rate, &unit_size);
 	g_assert(buffer != NULL);
 
 	/*
@@ -568,8 +613,9 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * the pad's to reduce the number of objects in memory and simplify
 	 * subsequent comparisons.  NOTE:  the caps on the source pad get
 	 * set explicitly, here, to trigger any pipeline graph adjustments
-	 * that might happen as a result of the format discovery before
-	 * pending segments and tags are pushed downstream.
+	 * that might happen as a result of the format discovery and to
+	 * trigger an update of the tags before pending segments and tags
+	 * are pushed downstream.
 	 */
 
 	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
@@ -577,36 +623,13 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	else {
 		GST_LOG_OBJECT(pad, "new caps: %P", GST_BUFFER_CAPS(buffer));
 		gst_pad_set_caps(pad, GST_BUFFER_CAPS(buffer));
-		pad_state->need_tags = TRUE;
 	}
 
 	/*
-	 * forward most recent new segment event
+	 * do pending events.  FIXME:  check for errors?
 	 */
 
-	if(pad_state->need_new_segment) {
-		if(element->last_new_segment_event) {
-			gst_event_ref(element->last_new_segment_event);
-			if(!gst_pad_push_event(pad, element->last_new_segment_event))
-				GST_ERROR_OBJECT(pad, "failed to push newsegment");
-		}
-		pad_state->need_new_segment = FALSE;
-	}
-
-	/*
-	 * send tags
-	 */
-
-	if(pad_state->need_tags) {
-		GstTagList *tag_list;
-		g_object_get(pad, "tags", &tag_list, NULL);
-		gst_tag_list_add(tag_list, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
-		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
-		GST_LOG_OBJECT(pad, "pushing %P", tag_list);
-		if(!gst_pad_push_event(pad, gst_event_new_tag(tag_list)))
-			GST_ERROR_OBJECT(pad, "failed to push tags");
-		pad_state->need_tags = FALSE;
-	}
+	src_pad_do_pending_events(element, pad);
 
 	/*
 	 * clip buffer to configured segment
