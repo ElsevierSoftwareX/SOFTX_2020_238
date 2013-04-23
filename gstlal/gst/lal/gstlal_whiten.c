@@ -60,7 +60,6 @@
 #include <lal/FrequencySeries.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/Units.h>
-#include <lal/LALComplex.h>
 #include <lal/Window.h>
 #include <lal/Units.h>
 #include <lal/TFTransform.h>
