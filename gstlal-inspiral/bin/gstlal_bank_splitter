@@ -94,7 +94,7 @@ if options.add_f_final:
 		if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
 			approximant=row.value
 		#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
-		if row.param == "--low-frequency-cutoff":
+		if row.param in ("--low-frequency-cutoff", "--flow"):
 			flow = float(row.value)
 	for row in sngl_inspiral_table:
 		if approximant=='IMRPhenomB':
