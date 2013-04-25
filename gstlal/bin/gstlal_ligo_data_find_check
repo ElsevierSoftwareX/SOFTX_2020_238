@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue import lal
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+	)
+	parser.add_option("-s", "--segments-file", metavar = "filename", help = "Load segment lists from this .xml file (required).")
+	parser.add_option("-n", "--segments-name", metavar = "name", help = "Load this segment list from the file (required).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	required = ("segments_file", "segments_name")
+	missing = [opt for opt in required if getattr(options, opt) is None]
+	if missing:
+		raise ValueError("missing options: %s" % ", ".join("--%s" % opt.replace("_", "-") for opt in missing))
+
+	return options, filenames or [None]
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load segments and subtract time spanned by cache files
+#
+
+
+seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
+
+
+for filename in filenames:
+	if options.verbose:
+		print >>sys.stderr, "loading %s ..." % (filename or "stdin")
+	for line in open(filename) if filename else sys.stdin:
+		seglists -= lal.CacheEntry(line).segmentlistdict
+
+
+#
+# check for remainders
+#
+
+
+if seglists:
+	print >>sys.stderr, "gaps found in cache.  total missing time: %s" % str(abs(seglists))
+	sys.exit(1)
