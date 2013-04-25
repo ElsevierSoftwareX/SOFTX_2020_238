@@ -76,16 +76,15 @@ for n in range(tmps):
 		maxrate = max(maxrate, frag.rate)
 		mint = min(t[0], mint)
 	pyplot.xlabel('time (s)')
-	pyplot.xlim([mint, 0])
+	#pyplot.xlim([-.5, 0])
 
 	pyplot.subplot(212)
-	pyplot.xlabel('time (s)')
+	pyplot.xlabel('samples')
 	l = len(bank.autocorrelation_bank[n,:])
 	ts = l / float(maxrate)
 	t = numpy.linspace(-ts, 0, l)
-	pyplot.plot(t, numpy.real(bank.autocorrelation_bank[n,:]))
-	pyplot.plot(t, numpy.imag(bank.autocorrelation_bank[n,:]))
-	pyplot.xlim([mint, 0])
+	pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
+	pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
 	pyplot.savefig(sys.stdout, format="svg")
 	print "</div>"
 
