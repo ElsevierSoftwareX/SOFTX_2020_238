@@ -46,6 +46,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
+from glue.ligolw import dbtables
 from glue.ligolw import utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
@@ -946,8 +947,6 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	verbose = be verbose
 	"""
 	# FIXME this code should be moved into a method of the LocalRankingData class once other cleaning is done
-	from glue.ligolw import dbtables
-
 	# set up working file names
 	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
 	connection = sqlite3.connect(working_filename)
@@ -970,8 +969,6 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 
 
 def set_far(Far, f, tmp_path = None, scale = None, verbose = False):
-	from glue.ligolw import dbtables
-
 	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
 	connection = sqlite3.connect(working_filename)
 
@@ -991,7 +988,6 @@ def get_live_time(segments, verbose = True):
 
 
 def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
-	from glue.ligolw import dbtables
 	xmldoc = dbtables.get_xml(connection)
 	farsegs = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
 	xmldoc.unlink()
