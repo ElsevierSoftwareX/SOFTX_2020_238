@@ -64,6 +64,8 @@ class upper_limit(object):
         self.instruments = []
         self.segments = segments.segmentlistdict()
         self.zero_lag_segments = segments.segmentlistdict()
+        self.start_time = None
+        self.end_time = None
         ############################################################
 
         # read the zero lag databases first
@@ -135,23 +137,33 @@ class upper_limit(object):
 
     def get_segments(self,connection):
         '''
-        Retrieve raw single IFO segments from the database.
-        Actually for now we just set segments to span wall times
+        Retrieve raw single IFO segments from the database and
+        subtract vetoes.
         '''
+        #
+        # get start and end times of the analysis, used for output
+        # naming. these may extend beyond the actual analyzed
+        # segments because of vetoes.
+        #
         start_time = int( connection.cursor().execute('SELECT MIN(start_time) FROM segment').fetchone()[0] )
         end_time = int( connection.cursor().execute('SELECT MAX(end_time) FROM segment').fetchone()[0] )
+        if not self.start_time or start_time < self.start_time:
+            self.start_time = start_time
+        if not self.end_time or end_time < self.end_time:
+            self.end_time = end_time
+
 
         # get single ifos from ifo sets
         ifos = set()
         for inst in self.instruments:
             ifos |= inst
 
-        # for each ifo, define a single segment that spans the whole time
+        # retrieve single-ifo segments
+        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), "%s:table" % opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
+
         for ifo in ifos:
             self.segments.setdefault(ifo,segments.segmentlist())
-            self.segments[ifo] |=  segments.segmentlist([segments.segment(start_time,end_time)])
-
-        self.start_time, self.end_time = self.segments.union(self.segments.keys()).extent()
+            self.segments[ifo] |=  segs[ifo]
 
         return self.segments
 
@@ -263,8 +275,10 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
     parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
     parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
-    parser.add_option("--live-time-program", default = "thinca", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"thinca\".")
+    parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
     parser.add_option("--veto-segments-name", default = None, help = "Set the name of the veto segments to use from the XML document.")
+    parser.add_option("--data-segments-name", default = "datasegments", help = "Set the name of the data segments. Default = \"datasegments\".")
+    parser.add_option("--coinc-table-name", default = "coinc_inspiral", metavar = "name", help = "Set the name of the table containing coincident triggers.  Default = \"coinc_inspiral\".")
 
     # Output data options
     parser.add_option("--user-tag", default = "SEARCH", metavar = "name", help = "Add a descriptive tag to the names of output files.")
