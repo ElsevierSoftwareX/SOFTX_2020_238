@@ -154,9 +154,8 @@ demux.connect("pad-added", pad_added_handler, (pipeline, mux))
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
-pipeline.set_state(gst.STATE_PLAYING)
-#if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-#	raise RuntimeError("pipeline did not enter playing state")
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
 
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)

@@ -725,7 +725,8 @@ signal.signal( signal.SIGINT, handler.shutdown )
 signal.signal( signal.SIGTERM, handler.shutdown )
 
 print >>sys.stderr, "Startin' up."
-pipeline.set_state( gst.STATE_PLAYING )
+if pipeline.set_state( gst.STATE_PLAYING ) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError( "pipeline failed to enter PLAYING state" )
 #if diagnostics:
 def write_pipeline_graph():
 	pipeparts.write_dump_dot(pipeline, "gstlal_excesspower", verbose = True)

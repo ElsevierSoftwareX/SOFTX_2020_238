@@ -111,12 +111,14 @@ else:
 	seek_stop_type = gst.SEEK_TYPE_SET
 	seek_stop_time = opts.gps_end_time * gst.SECOND
 
-pipeline.set_state(gst.STATE_READY)
+if pipeline.set_state(gst.STATE_READY) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
 event = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_NONE, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
 
 for elem in pipeline.iterate_sources():
 	if not elem.send_event(event):
 		raise RuntimeError("Element did not accept seek event: %r" % elem)
 
-pipeline.set_state(gst.STATE_PLAYING)
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError("pipeline railed to enter PLAYING state")
 mainloop.run()

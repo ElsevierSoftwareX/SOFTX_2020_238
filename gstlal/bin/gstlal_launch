@@ -69,5 +69,6 @@ for src in pipeline.iterate_sources():
 #
 
 handler = simplehandler.Handler(mainloop, pipeline)
-pipeline.set_state(gst.STATE_PLAYING)
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()

@@ -157,8 +157,8 @@ pipeparts.mkframesink(pipeline, head, path=outpath, frame_type=instrument, durat
 # Run it
 #
 
-pipeline.set_state(gst.STATE_PAUSED)
-pipeline.set_state(gst.STATE_PLAYING)
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
 
 mainloop.run()
 

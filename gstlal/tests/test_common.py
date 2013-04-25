@@ -107,7 +107,9 @@ def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	pipeline = gst.Pipeline(name)
 	handler = simplehandler.Handler(mainloop, pipelinefunc(pipeline, name, **pipelinefunc_kwargs))
 	if segment is not None:
-		pipeline.set_state(gst.STATE_PAUSED)
+		if pipeline.set_state(gst.STATE_PAUSED) == gst.STATE_CHANGE_FAILURE:
+			raise RuntimeError("pipeline failed to enter PLAYING state")
 		pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, segment[0].ns(), gst.SEEK_TYPE_SET, segment[1].ns())
-	pipeline.set_state(gst.STATE_PLAYING)
+	if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+		raise RuntimeError("pipeline failed to enter PLAYING state")
 	mainloop.run()
