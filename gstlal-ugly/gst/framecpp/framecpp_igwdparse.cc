@@ -353,15 +353,16 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			element->offset = SIZEOF_FRHEADER;
 			*framesize = element->offset + element->sizeof_table_6;
 		} else {
-			guint64 length;
+			guint64 structure_length;
 			guint16 klass;
 
 			/*
 			 * parse table 6, update file size
 			 */
 
-			parse_table_6(element, data + element->offset, &length, &klass);
-			*framesize = element->offset + length;
+			parse_table_6(element, data + element->offset, &structure_length, &klass);
+			g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);
+			*framesize = element->offset + structure_length;
 
 			/*
 			 * what to do?
@@ -376,12 +377,12 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 */
 
 				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-					GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) length, element->offset);
-					parse_table_7(element, data + element->offset, length, &element->eof_klass, &element->frameh_klass);
-					element->offset += length;
+					GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
+					parse_table_7(element, data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
+					element->offset += structure_length;
 					*framesize += element->sizeof_table_6;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 			} else if(klass == element->frameh_klass) {
 				/*
 				 * found frame header structure.  if it's complete,
@@ -391,16 +392,16 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
 					GstClockTime start_time, stop_time;
-					GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) length, element->offset);
-					parse_table_9(element, data + element->offset, length, &start_time, &stop_time);
+					GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
+					parse_table_9(element, data + element->offset, structure_length, &start_time, &stop_time);
 
 					element->file_start_time = MIN(element->file_start_time, start_time);
 					element->file_stop_time = MAX(element->file_stop_time, stop_time);
 
-					element->offset += length;
+					element->offset += structure_length;
 					*framesize += element->sizeof_table_6;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 			} else if(klass == element->eof_klass) {
 				/*
 				 * found end-of-file structure.  if it's complete
@@ -408,18 +409,18 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 */
 
 				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
+					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) structure_length, element->offset, *framesize);
 					element->offset = 0;
 					file_is_complete = TRUE;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 			} else {
 				/*
 				 * found something else.  skip to next structure
 				 */
 
-				GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) length, element->offset);
-				element->offset += length;
+				GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) structure_length, element->offset);
+				element->offset += structure_length;
 				*framesize += element->sizeof_table_6;
 			}
 		}
