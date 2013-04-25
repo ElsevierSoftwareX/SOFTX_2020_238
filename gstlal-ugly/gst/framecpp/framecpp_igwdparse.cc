@@ -1,7 +1,7 @@
 /*
  * IGWD frame file parser
  *
- * Copyright (C) 2012  Kipp Cannon, Ed Maros
+ * Copyright (C) 2012--2013  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
