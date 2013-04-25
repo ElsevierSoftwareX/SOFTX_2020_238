@@ -194,11 +194,14 @@ static void parse_table_6(GstFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, guint length, guint16 *eof_klass, guint16 *frameh_klass)
+static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, guint structure_length, guint16 *eof_klass, guint16 *frameh_klass)
 {
-	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
-	const gchar *name = fr_get_string(element, &reader);
+	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, structure_length - element->sizeof_table_6);
+	const gchar *name;
 
+	g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);	/* FIXME:  + sizeof table 7 */
+
+	name = fr_get_string(element, &reader);
 	if(!strcmp(name, FRENDOFFILE_NAME)) {
 		*eof_klass = fr_get_int_2u(element, &reader);
 		GST_DEBUG_OBJECT(element, "found " FRENDOFFILE_NAME " structure's class:  %d", (int) *eof_klass);
@@ -209,11 +212,14 @@ static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_9(GstFrameCPPIGWDParse *element, const guint8 *data, guint length, GstClockTime *start, GstClockTime *stop)
+static void parse_table_9(GstFrameCPPIGWDParse *element, const guint8 *data, guint structure_length, GstClockTime *start, GstClockTime *stop)
 {
-	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
-	const gchar *name = fr_get_string(element, &reader);
+	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, structure_length - element->sizeof_table_6);
+	const gchar *name;
 
+	g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);	/* FIXME:  + sizeof table 9 */
+
+	name = fr_get_string(element, &reader);
 	gst_byte_reader_skip_unchecked(&reader, 3 * element->sizeof_int_4);	/* run, frame, dataQuality */
 	*start = fr_get_int_4u(element, &reader) * GST_SECOND + fr_get_int_4u(element, &reader);
 	gst_byte_reader_skip_unchecked(&reader, element->sizeof_int_2);	/* ULeapS */
@@ -361,7 +367,6 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 */
 
 			parse_table_6(element, data + element->offset, &structure_length, &klass);
-			g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);
 			*framesize = element->offset + structure_length;
 
 			/*
