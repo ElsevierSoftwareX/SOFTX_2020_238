@@ -76,6 +76,21 @@ GST_BOILERPLATE(
 /*
  * ============================================================================
  *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define DEFAULT_FRAME_TYPE  "test_frame"
+#define DEFAULT_INSTRUMENT NULL
+#define DEFAULT_PATH "."
+#define DEFAULT_TIMESTAMP NULL
+
+
+/*
+ * ============================================================================
+ *
  *                                 Utilities
  *
  * ============================================================================
@@ -121,6 +136,10 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     /* Buffer looks good, else die. */
     g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
     g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
+
+    /* Set the element timestamp property */
+    element->timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
+    g_object_notify(G_OBJECT(element), "timestamp");
 
     if (!(element->instrument)) {
         /* Instrument should have come from via the stream, hence STREAM error. */
@@ -177,6 +196,7 @@ enum {
     PROP_PATH,
     PROP_FRAME_TYPE,
     PROP_INSTRUMENT,
+    PROP_TIMESTAMP,
 };
 
 
@@ -221,6 +241,9 @@ static void get_property(GObject *object, guint prop_id,
         break;
     case PROP_PATH:
         g_value_set_string(value, sink->path);
+        break;
+    case PROP_TIMESTAMP:
+        g_value_set_uint(value, sink->timestamp);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -276,7 +299,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         gobject_class, PROP_FRAME_TYPE,
         g_param_spec_string(
             "frame-type", "Frame type.",
-            "Type of frame, a description of its contents", "test_frame",
+            "Type of frame, a description of its contents", DEFAULT_FRAME_TYPE,
             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
             )
         );
@@ -285,7 +308,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         gobject_class, PROP_INSTRUMENT,
         g_param_spec_string(
             "instrument", "Observatory string.",
-            "The IFO, like H1, L1, V1, etc.", NULL,
+            "The IFO, like H1, L1, V1, etc.", DEFAULT_INSTRUMENT,
             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
             )
         );
@@ -294,8 +317,18 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         gobject_class, PROP_PATH,
         g_param_spec_string(
             "path", "Write path.",
-            "The directory where the frames should be written.", ".",
+            "The directory where the frames should be written.", DEFAULT_PATH,
             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+            )
+        );
+
+    g_object_class_install_property(
+        gobject_class, PROP_TIMESTAMP,
+        g_param_spec_uint(
+            "timestamp", "Buffer timestamp.",
+            "The start time (in seconds) of the current buffer.", 0, G_MAXUINT, 
+            DEFAULT_TIMESTAMP,
+            (GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
             )
         );
 
@@ -309,6 +342,9 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 
 static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkClass *kclass)
 {
+    /* initialize element timestamp property */
+    element->timestamp = GST_CLOCK_TIME_NONE;
+
     /* Create the multifilesink element. */
     GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
     g_object_set(G_OBJECT(multifilesink), "sync", FALSE, "async", FALSE, NULL);
