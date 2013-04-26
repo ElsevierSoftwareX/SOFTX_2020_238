@@ -27,19 +27,21 @@
 
 
 from optparse import OptionParser
+import sqlite3
 import sys
 
 
 from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+from glue.ligolw import dbtables
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 
 
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-lsctables.use_in(LIGOLWContentHandler)
+lsctables.use_in(XMLContentHandler)
 
 
 #
@@ -90,7 +92,12 @@ options, filenames = parse_command_line()
 #
 
 
-seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
+if options.segments_file.lower().endswith(".sqlite"):
+	if options.verbose:
+		print >>sys.stderr, "reading %s ..." % options.segments_file
+	seglists = ligolw_segments.segmenttable_get_by_name(dbtables.get_xml(sqlite3.connect(options.segments_file)), options.segments_name).coalesce()
+else:
+	seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, contenthandler = XMLContentHandler, verbose = options.verbose), options.segments_name).coalesce()
 
 
 for filename in filenames:
@@ -105,6 +112,8 @@ for filename in filenames:
 #
 
 
-if seglists:
+if any(seglists.values()):
 	print >>sys.stderr, "gaps found in cache.  total missing time: %s" % str(abs(seglists))
 	sys.exit(1)
+if options.verbose:
+	print >>sys.stderr, "cache is complete"
