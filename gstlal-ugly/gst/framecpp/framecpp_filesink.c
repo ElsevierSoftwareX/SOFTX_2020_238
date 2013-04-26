@@ -342,6 +342,8 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 
 static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkClass *kclass)
 {
+    gboolean retval;
+
     /* initialize element timestamp property */
     element->timestamp = GST_CLOCK_TIME_NONE;
 
@@ -352,12 +354,14 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     element->mfs = multifilesink;
 
     /* Add the multifilesink to the bin. */
-    g_assert(gst_bin_add(GST_BIN(element), multifilesink));
+    retval = gst_bin_add(GST_BIN(element), multifilesink); 
+    g_assert(retval == TRUE);
 
     /* Add the ghostpad */
     GstPad *sink = gst_element_get_static_pad(multifilesink, "sink");
     GstPad *sink_ghost = gst_ghost_pad_new_from_template("sink", sink, gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)),"sink"));
-    g_assert(gst_element_add_pad(GST_ELEMENT(element), sink_ghost));
+    retval = gst_element_add_pad(GST_ELEMENT(element), sink_ghost);
+    g_assert(retval == TRUE);
 
     gst_object_unref(sink);
 
