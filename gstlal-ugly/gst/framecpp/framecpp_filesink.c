@@ -1,7 +1,7 @@
 /*
  * framecpp filesink
  *
- * Copyright (C) 2013  Branson Stephens
+ * Copyright (C) 2013  Branson Stephens, Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -114,6 +114,7 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     guint timestamp, end_time, duration;
     gchar *newloc;
     gchar *loc_test;
+    gsize length;
 
     g_assert(gst_pad_is_linked(pad));
 
@@ -140,8 +141,9 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     g_assert_cmpuint(duration*GST_SECOND, >=, GST_BUFFER_DURATION(buffer));
     newloc = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
         element->frame_type, timestamp, duration); 
+    newloc = g_build_path(G_DIR_SEPARATOR_S, element->path, newloc, NULL); 
 
-    GST_DEBUG("setting write location to %s", newloc);
+    GST_DEBUG("Setting write location to %s", newloc);
     g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
 
     /* Assert success of the g_object_set operation */
@@ -174,10 +176,6 @@ enum {
     PROP_0,
     PROP_PATH,
     PROP_FRAME_TYPE,
-    PROP_DURATION,
-    PROP_CLEAN_TIMESTAMPS,
-    PROP_STRICT_TIMESTAMPS,
-    PROP_DIR_DIGITS,
     PROP_INSTRUMENT,
 };
 
@@ -195,6 +193,10 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_INSTRUMENT:
         g_free(sink->instrument);
         sink->instrument = g_strdup(g_value_get_string(value));
+        break;
+    case PROP_PATH:
+        g_free(sink->path);
+        sink->path = g_strdup(g_value_get_string(value));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -216,6 +218,9 @@ static void get_property(GObject *object, guint prop_id,
         break;
     case PROP_INSTRUMENT:
         g_value_set_string(value, sink->instrument);
+        break;
+    case PROP_PATH:
+        g_value_set_string(value, sink->path);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -281,6 +286,15 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         g_param_spec_string(
             "instrument", "Observatory string.",
             "The IFO, like H1, L1, V1, etc.", NULL,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+            )
+        );
+
+    g_object_class_install_property(
+        gobject_class, PROP_PATH,
+        g_param_spec_string(
+            "path", "Write path.",
+            "The directory where the frames should be written.", ".",
             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
             )
         );

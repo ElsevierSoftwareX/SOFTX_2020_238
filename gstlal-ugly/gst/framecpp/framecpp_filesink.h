@@ -1,7 +1,7 @@
 /*
  * framecpp filesink
  *
- * Copyright (C) 2013  Branson Stephens
+ * Copyright (C) 2013  Branson Stephens, Kipp Cannon
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,6 +49,7 @@ typedef struct {
         GstBin element;
         gchar *frame_type;
         gchar *instrument;
+        gchar *path;
         // the Multifilesink object.
         GstElement *mfs;
 } FRAMECPPFilesink;
