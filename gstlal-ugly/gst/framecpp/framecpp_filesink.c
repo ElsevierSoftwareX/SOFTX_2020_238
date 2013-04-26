@@ -114,8 +114,6 @@ static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
         if (gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value)){
             GST_DEBUG("setting instrument to %s", value);
             g_object_set(G_OBJECT(element), "instrument", value, NULL);
-            /* Assert success of the g_object_set operation */
-            g_assert_cmpstr(element->instrument, ==, value);
         }
     }
 
@@ -128,7 +126,6 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *newloc;
-    gchar *loc_test;
     gsize length;
 
     g_assert(gst_pad_is_linked(pad));
@@ -138,7 +135,7 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 
     /* Set the element timestamp property */
-    element->timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
+    element->timestamp = GST_BUFFER_TIMESTAMP(buffer);
     g_object_notify(G_OBJECT(element), "timestamp");
 
     if (!(element->instrument)) {
@@ -165,12 +162,7 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     GST_DEBUG("Setting write location to %s", newloc);
     g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
 
-    /* Assert success of the g_object_set operation */
-    g_object_get(G_OBJECT(element->mfs), "location", &loc_test, NULL);
-    g_assert_cmpstr(loc_test, ==, newloc);
-
     g_free(newloc);
-    g_free(loc_test);
     gst_object_unref(element);
 
     return TRUE;
@@ -326,7 +318,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
         gobject_class, PROP_TIMESTAMP,
         g_param_spec_uint(
             "timestamp", "Buffer timestamp.",
-            "The start time (in seconds) of the current buffer.", 0, G_MAXUINT, 
+            "Timestamp of the current buffer in nanoseconds.", 0, G_MAXUINT, 
             DEFAULT_TIMESTAMP,
             (GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
             )
@@ -348,17 +340,15 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     element->timestamp = GST_CLOCK_TIME_NONE;
 
     /* Create the multifilesink element. */
-    GstElement *multifilesink = gst_element_factory_make("multifilesink", NULL);
-    g_object_set(G_OBJECT(multifilesink), "sync", FALSE, "async", FALSE, NULL);
-    /* Set the framecpp_filesink element's mfs property.*/
-    element->mfs = multifilesink;
+    element->mfs = gst_element_factory_make("multifilesink", NULL);
+    g_object_set(G_OBJECT(element->mfs), "sync", FALSE, "async", FALSE, NULL);
 
     /* Add the multifilesink to the bin. */
-    retval = gst_bin_add(GST_BIN(element), multifilesink); 
+    retval = gst_bin_add(GST_BIN(element), element->mfs); 
     g_assert(retval == TRUE);
 
     /* Add the ghostpad */
-    GstPad *sink = gst_element_get_static_pad(multifilesink, "sink");
+    GstPad *sink = gst_element_get_static_pad(element->mfs, "sink");
     GstPad *sink_ghost = gst_ghost_pad_new_from_template("sink", sink, gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)),"sink"));
     retval = gst_element_add_pad(GST_ELEMENT(element), sink_ghost);
     g_assert(retval == TRUE);

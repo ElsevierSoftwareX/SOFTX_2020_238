@@ -50,7 +50,7 @@ typedef struct {
         gchar *frame_type;
         gchar *instrument;
         gchar *path;
-        guint timestamp;
+        GstClockTime timestamp;
         // the Multifilesink object.
         GstElement *mfs;
 } FRAMECPPFilesink;
