@@ -125,7 +125,7 @@ static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
 static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data) {
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
-    gchar *newloc;
+    gchar *filename, *location;
     gsize length;
 
     g_assert(gst_pad_is_linked(pad));
@@ -155,14 +155,15 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     /* The interval indicated by the filename should "cover" the actual 
     data interval. */
     g_assert_cmpuint(duration*GST_SECOND, >=, GST_BUFFER_DURATION(buffer));
-    newloc = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
+    filename = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
         element->frame_type, timestamp, duration); 
-    newloc = g_build_path(G_DIR_SEPARATOR_S, element->path, newloc, NULL); 
+    location = g_build_path(G_DIR_SEPARATOR_S, element->path, filename, NULL); 
+    g_free(filename);
 
-    GST_DEBUG("Setting write location to %s", newloc);
-    g_object_set(G_OBJECT(element->mfs), "location", newloc, NULL);
+    GST_DEBUG("Setting write location to %s", location);
+    g_object_set(G_OBJECT(element->mfs), "location", location, NULL);
 
-    g_free(newloc);
+    g_free(location);
     gst_object_unref(element);
 
     return TRUE;
