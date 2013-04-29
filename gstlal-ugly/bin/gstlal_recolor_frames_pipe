@@ -195,7 +195,7 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_recolor_frames node
 	"""
-	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("data-source", "frames")
@@ -207,6 +207,7 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 		path = os.getcwd()
 		self.add_var_opt("recolor-psd",recolor_psd)
 		self.add_var_opt("reference-psd",reference_psd)
+		self.add_var_opt("duration", duration)
 		self.add_var_arg("--channel-name=%s=%s" % (instrument, channel))
 		for p in p_node:
 			self.add_parent(p)
