@@ -126,7 +126,6 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *filename, *location;
-    gsize length;
 
     g_assert(gst_pad_is_linked(pad));
 
@@ -248,6 +247,28 @@ static void get_property(GObject *object, guint prop_id,
 
 
 /*
+ * Instance finalize function.
+ */
+
+
+static void finalize(GObject *object)
+{
+    FRAMECPPFilesink *element = FRAMECPP_FILESINK(object);
+    if (element->mfs)
+        gst_object_unref(GST_OBJECT(element->mfs));
+    // XXX Not sure if these are necessary.  Maybe they would've 
+    // disappeared on their own.  Also not sure it will work with
+    // a GstClocktime.
+    g_free(element->frame_type);
+    g_free(element->instrument);
+    g_free(element->path);
+    g_free(element->timestamp);
+    
+    G_OBJECT_CLASS(parent_class)->finalize(object);
+}
+
+
+/*
  * Pad template.
  */
 
@@ -287,6 +308,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+    gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
     g_object_class_install_property(
         gobject_class, PROP_FRAME_TYPE,
