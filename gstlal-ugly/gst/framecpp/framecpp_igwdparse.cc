@@ -489,6 +489,19 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 
 
 /*
+ * finalize()
+ */
+
+
+static void finalize(GObject *object)
+{
+	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(object);
+
+	G_OBJECT_CLASS(parent_class)->finalize(object);
+}
+
+
+/*
  * base_init()
  */
 
@@ -527,8 +540,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 
 static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 {
+	GObjectClass *object_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseParseClass *parse_class = GST_BASE_PARSE_CLASS(klass);
+
+	object_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	parse_class->start = GST_DEBUG_FUNCPTR(start);
 	parse_class->set_sink_caps = GST_DEBUG_FUNCPTR(set_sink_caps);
@@ -553,6 +569,6 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
  */
 
 
-static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *object, GstFrameCPPIGWDParseClass *klass)
+static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *element, GstFrameCPPIGWDParseClass *klass)
 {
 }
