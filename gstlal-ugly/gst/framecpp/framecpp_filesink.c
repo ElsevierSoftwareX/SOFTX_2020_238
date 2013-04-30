@@ -286,7 +286,7 @@ static void get_property(GObject *object, guint prop_id,
         g_value_set_string(value, sink->path);
         break;
     case PROP_TIMESTAMP:
-        g_value_set_uint(value, sink->timestamp);
+        g_value_set_uint64(value, sink->timestamp);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
