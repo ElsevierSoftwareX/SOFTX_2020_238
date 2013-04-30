@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 
 
 /*
@@ -98,6 +99,53 @@ GST_BOILERPLATE(
 
 
 /*
+ * convert a string of the form "H1,V1,H2" into a string of the form "HV".
+ * the return value must freed with g_free() when no longer needed.
+ */
+
+
+int strCmpWrap(const void *pa, const void *pb){
+    /* Incoming args are actually pointers to pointers to char.
+       Whereas g_strcmp0 expects pointers to char. 
+       Thus, we cast and dereference once. */
+    return g_strcmp0(*(char * const *)pa, *(char * const *)pb);
+}
+
+static gchar *observatory_from_instruments(const gchar *instruments)
+{
+    gchar *observatory;
+    gchar **in, **out;
+    /* split comma-delimited string */
+    gchar **split_instruments = g_strsplit(instruments, ",", 0);
+    /* strip whitespace */
+    for(in = split_instruments; *in; in++) g_strstrip(*in);
+
+    /* sort */
+    qsort(split_instruments, g_strv_length(split_instruments),
+        sizeof(*split_instruments), strCmpWrap);
+
+    /* null-terminate each instrument after 1st character */
+    for(in = split_instruments; *in; in++) {
+        if(strlen(*in) > 1)
+                (*in)[1] = '\0';
+    }
+
+    /* "remove" duplicates by setting them to 0 length */
+    for(in = out = split_instruments; *out; out = in) {
+        for(in++; !g_strcmp0(*in, *out); in++)
+                (*in)[0] = '\0';
+    }
+
+    /* concatenate */
+    observatory = g_strjoinv(NULL, split_instruments);
+    g_strfreev(split_instruments);
+
+    /* done */
+    return observatory;
+}
+
+
+/*
  * pad probe handlers
  */
 
@@ -105,20 +153,23 @@ GST_BOILERPLATE(
 static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     GstTagList *tag_list;
-    gchar *value = NULL;
+    gchar *instrumentList = NULL;
+    gchar *observatoryString = NULL;
 
     g_assert(gst_pad_is_linked(pad));
 
     if (GST_EVENT_TYPE(event)==GST_EVENT_TAG) {
         gst_event_parse_tag(event, &tag_list);
-        if (gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value)){
-            GST_DEBUG("setting instrument to %s", value);
-            g_object_set(G_OBJECT(element), "instrument", value, NULL);
+        if (gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &instrumentList)){
+            observatoryString = observatory_from_instruments(instrumentList);
+            GST_DEBUG("setting instrument to %s", observatoryString);
+            g_object_set(G_OBJECT(element), "instrument", observatoryString, NULL);
         }
     }
 
     gst_object_unref(element);
-    g_free(value);
+    g_free(instrumentList);
+    g_free(observatoryString);
     return TRUE;
 }
 
