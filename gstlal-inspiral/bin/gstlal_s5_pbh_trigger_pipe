@@ -407,7 +407,7 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, blind_injections = None, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 
 		self.set_category("INSPIRAL")
@@ -433,6 +433,8 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 		self.injections = injections
 		if self.injections is not None:
 			self.add_var_opt("injections", injections)
+		if blind_injections is not None:
+			self.add_var_opt("blind-injections", blind_injections)
 		if vetoes is not None:
 			self.add_var_opt("veto-segments-file", vetoes)
 		path = os.getcwd()
@@ -592,6 +594,7 @@ def parse_command_line():
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
+	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	# Override the datasource injection option
@@ -762,7 +765,7 @@ for i, bank_group in enumerate(bank_groups):
 			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 
 			# non injections
-			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, blind_injections = options.blind_injections, p_node = svd_nodes)
 			inspiral_nodes.append((None, noninjnode))
 
 			# injections
