@@ -243,7 +243,7 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size does not match channel and sample count", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
-		gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.matrix, & element->mixmatrix_cd.matrix, GSL_COMPLEX_ZERO, &output_channels.matrix);
+		gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.matrix, &element->mixmatrix_cd.matrix, GSL_COMPLEX_ZERO, &output_channels.matrix);
 		break;
 	}
 
@@ -372,12 +372,15 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		GST_ERROR_OBJECT(element, "unable to parse incaps %" GST_PTR_FORMAT ", outcaps %" GST_PTR_FORMAT, incaps, outcaps);
 	else {
 		guint old_datatype = element->data_type;
+
+		g_mutex_lock(element->mixmatrix_lock);
 		element->data_type = data_type;
-		if(in_channels != num_input_channels(element) || out_channels != num_output_channels(element, element->data_type)) {
+		if(element->mixmatrix_d && (in_channels != num_input_channels(element) || out_channels != num_output_channels(element, element->data_type))) {
 			GST_WARNING_OBJECT(element, "caps %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT " not accepted, wrong channel counts:  (%d in, %d out) != (%d in, %d out)", incaps, outcaps, in_channels, out_channels, num_input_channels(element), num_output_channels(element, element->data_type));
 			element->data_type = old_datatype;
 			success = FALSE;
 		}
+		g_mutex_unlock(element->mixmatrix_lock);
 	}
 
 	return success;
@@ -510,8 +513,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		for(i = 0; i < element->mixmatrix_d->size1; i++) for(j = 0; j < element->mixmatrix_d->size2; j++)
 			gsl_matrix_float_set(element->mixmatrix_s, i, j, gsl_matrix_get(element->mixmatrix_d, i, j));
 		}
-		element->mixmatrix_cd = gsl_matrix_complex_view_array(element->mixmatrix_d->data, element->mixmatrix_d->size1, element->mixmatrix_d->size2 / 2);
-		element->mixmatrix_cs = gsl_matrix_complex_float_view_array(element->mixmatrix_s->data, element->mixmatrix_s->size1, element->mixmatrix_s->size2 / 2);
+		if(element->mixmatrix_d->size2 >= 2) {
+			element->mixmatrix_cd = gsl_matrix_complex_view_array(element->mixmatrix_d->data, element->mixmatrix_d->size1, element->mixmatrix_d->size2 / 2);
+			element->mixmatrix_cs = gsl_matrix_complex_float_view_array(element->mixmatrix_s->data, element->mixmatrix_s->size1, element->mixmatrix_s->size2 / 2);
+		}
 
 		/*
 		 * if the number of channels has changed, force a caps
