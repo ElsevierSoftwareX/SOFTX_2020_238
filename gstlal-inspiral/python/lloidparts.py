@@ -693,7 +693,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, blind_injections = None):
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
@@ -711,6 +711,13 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
 		inj_seg_list = None
+		#
+		# Check to see if we are specifying blind injections now that we know
+		# we don't want real injections. Setting this
+		# detectors.injection_filename will ensure that injections are added
+		# but won't only reconstruct injection segments.
+		#
+		detectors.injection_filename = blind_injections
 
 	#
 	# construct dictionaries of whitened, conditioned, down-sampled
