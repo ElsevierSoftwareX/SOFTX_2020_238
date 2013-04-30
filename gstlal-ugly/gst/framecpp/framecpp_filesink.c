@@ -85,7 +85,7 @@ GST_BOILERPLATE(
 #define DEFAULT_FRAME_TYPE  "test_frame"
 #define DEFAULT_INSTRUMENT NULL
 #define DEFAULT_PATH "."
-#define DEFAULT_TIMESTAMP NULL
+#define DEFAULT_TIMESTAMP 0
 
 
 /*
@@ -256,13 +256,9 @@ static void finalize(GObject *object)
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(object);
     if (element->mfs)
         gst_object_unref(GST_OBJECT(element->mfs));
-    // XXX Not sure if these are necessary.  Maybe they would've 
-    // disappeared on their own.  Also not sure it will work with
-    // a GstClocktime.
     g_free(element->frame_type);
     g_free(element->instrument);
     g_free(element->path);
-    g_free(element->timestamp);
     
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -339,9 +335,9 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 
     g_object_class_install_property(
         gobject_class, PROP_TIMESTAMP,
-        g_param_spec_uint(
+        g_param_spec_uint64(
             "timestamp", "Buffer timestamp.",
-            "Timestamp of the current buffer in nanoseconds.", 0, G_MAXUINT, 
+            "Timestamp of the current buffer in nanoseconds.", 0, G_MAXUINT64, 
             DEFAULT_TIMESTAMP,
             (GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
             )
