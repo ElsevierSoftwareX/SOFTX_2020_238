@@ -141,6 +141,7 @@ def parse_command_line():
 	parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
 
 	# Online options
 
@@ -156,6 +157,9 @@ def parse_command_line():
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+
+	if options.blind_injections and options.injections:
+		raise ValueError("must use only one of --blind-injections or --injections")
 
 	required_options = []
 
@@ -331,7 +335,8 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	chisq_type = options.chisq_type,
 	track_psd = options.track_psd,
 	control_peak_time = options.control_peak_time,
-	fir_stride = options.fir_stride
+	fir_stride = options.fir_stride,
+	blind_injections = options.blind_injections
 )
 
 # FIXME this is busted, don't assume there is an h(t) gate find a better way to do this
