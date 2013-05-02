@@ -268,8 +268,8 @@ The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the lou
 
     # FAR range and resolution
     parser.add_option("--far-points", default = 50, type = "int", help = "Specify the number of FARs to compute the efficiency/search volume for.")
-    parser.add_option("--min-far", default = 1e-15, type = "float", help = "Specify the minimum FAR (Hz)")
-    parser.add_option("--max-far", default = 1e-5, type = "float", help = "Specify the maximum FAR (Hz)")
+    parser.add_option("--min-far", default = 1.0e-6/constants.LAL_YRJUL_SI, type = "float", help = "Specify the minimum FAR (Hz)") # one per million years is probably detection worthy
+    parser.add_option("--max-far", default = 12.0/constants.LAL_YRJUL_SI, type = "float", help = "Specify the maximum FAR (Hz)") # one per month is possibly EM-followup worthy
 
     # Input data options
     parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
