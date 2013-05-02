@@ -1,4 +1,4 @@
-# Copyright (C) 2009  Kipp Cannon
+# Copyright (C) 2009--2013  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -50,6 +50,8 @@ __date__ = "FIXME"
 
 
 def printable_timestamp(timestamp):
+	if timestamp is None or timestamp == gst.CLOCK_TIME_NONE:
+		return "(none)"
 	return "%d.%09d s" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
 
 
