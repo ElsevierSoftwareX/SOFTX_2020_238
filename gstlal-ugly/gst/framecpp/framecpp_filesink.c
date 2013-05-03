@@ -177,6 +177,7 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
     guint timestamp, end_time, duration;
     gchar *filename, *location;
+    gboolean success = TRUE;
 
     g_assert(gst_pad_is_linked(pad));
 
@@ -192,11 +193,13 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
         /* Instrument should have come from via the stream, hence STREAM error. */
         GST_ELEMENT_ERROR(element, STREAM, TYPE_NOT_FOUND, (NULL), ("instrument not set in framecpp_filesink element."));
         /* Returning false will result in the buffer being dropped.*/
-        return FALSE;
+        success = FALSE;
+        goto done;
     } else if (!(element->frame_type)) {
         /* frame_type is an input parameter, hence RESOURCE error. */
         GST_ELEMENT_ERROR(element, RESOURCE, NOT_FOUND, (NULL), ("frame_type not set in framecpp_filesink element."));
-        return FALSE;
+        success = FALSE;
+        goto done;
     }
 
     timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
@@ -207,16 +210,19 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
     g_assert_cmpuint(duration*GST_SECOND, >=, GST_BUFFER_DURATION(buffer));
     filename = g_strdup_printf("%s-%s-%d-%d.gwf", element->instrument, 
         element->frame_type, timestamp, duration); 
-    location = g_build_path(G_DIR_SEPARATOR_S, element->path, filename, NULL); 
+    location = g_build_path(G_DIR_SEPARATOR_S, element->path, filename, NULL);
     g_free(filename);
 
-    GST_DEBUG("Setting write location to %s", location);
-    g_object_set(G_OBJECT(element->mfs), "location", location, NULL);
+    if(element->mfs) {
+        GST_DEBUG("Setting write location to %s", location);
+        g_object_set(G_OBJECT(element->mfs), "location", location, NULL);
+    }
 
     g_free(location);
-    gst_object_unref(element);
 
-    return TRUE;
+done:
+    gst_object_unref(element);
+    return success;
 }
 
 
@@ -298,6 +304,24 @@ static void get_property(GObject *object, guint prop_id,
 
 
 /*
+ * Instance dispose function.
+ */
+
+
+static void dispose(GObject *object)
+{
+    FRAMECPPFilesink *element = FRAMECPP_FILESINK(object);
+
+    if (element->mfs) {
+        gst_object_unref(element->mfs);
+        element->mfs = NULL;
+    }
+
+    G_OBJECT_CLASS(parent_class)->dispose(object);
+}
+
+
+/*
  * Instance finalize function.
  */
 
@@ -305,12 +329,14 @@ static void get_property(GObject *object, guint prop_id,
 static void finalize(GObject *object)
 {
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(object);
-    if (element->mfs)
-        gst_object_unref(GST_OBJECT(element->mfs));
+
     g_free(element->frame_type);
+    element->frame_type = NULL;
     g_free(element->instrument);
+    element->instrument = NULL;
     g_free(element->path);
-    
+    element->path = NULL;
+
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -355,6 +381,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
 
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+    gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
     gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
     g_object_class_install_property(
@@ -410,11 +437,12 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     element->timestamp = GST_CLOCK_TIME_NONE;
 
     /* Create the multifilesink element. */
-    element->mfs = gst_element_factory_make("multifilesink", NULL);
+    element->mfs = gst_element_factory_make("multifilesink", "multifilesink");
     g_object_set(G_OBJECT(element->mfs), "sync", FALSE, "async", FALSE, NULL);
 
-    /* Add the multifilesink to the bin. */
-    retval = gst_bin_add(GST_BIN(element), element->mfs); 
+    /* Add the multifilesink to the bin (consumes one reference) */
+    gst_object_ref(element->mfs);
+    retval = gst_bin_add(GST_BIN(element), element->mfs);
     g_assert(retval == TRUE);
 
     /* Add the ghostpad */
