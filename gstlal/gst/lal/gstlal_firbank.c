@@ -32,7 +32,6 @@
 
 
 #include <complex.h>
-#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -45,8 +44,6 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstlal.h>
-#include <gstlal_firbank.h>
 
 
 /*
@@ -67,6 +64,8 @@
 
 #include <gstaudioadapter.h>
 #include <gstlal_debug.h>
+#include <gstlal.h>
+#include <gstlal_firbank.h>
 
 
 /*
@@ -1822,59 +1821,6 @@ static void gstlal_firbank_base_init(gpointer klass)
 /*
  * class_init()
  */
-
-
-static void gstlal_load_fftw_wisdom(void)
-{
-	char *filename;
-	int savederrno;
-
-	gstlal_fftw_lock();
-
-	/*
-	 * double precision
-	 */
-
-	savederrno = errno;
-	filename = getenv(GSTLAL_FFTW_WISDOM_ENV);
-	if(filename) {
-		FILE *f = fopen(filename, "r");
-		if(!f)
-			GST_ERROR("cannot open double-precision FFTW wisdom file \"%s\": %s", filename, strerror(errno));
-		else {
-			if(!fftw_import_wisdom_from_file(f))
-				GST_ERROR("failed to import double-precision FFTW wisdom from \"%s\": wisdom not loaded", filename);
-			fclose(f);
-		}
-	} else if(!fftw_import_system_wisdom())
-		GST_WARNING("failed to import system default double-precision FFTW wisdom: %s", strerror(errno));
-	errno = savederrno;
-
-	/*
-	 * single precision
-	 */
-
-	savederrno = errno;
-	filename = getenv(GSTLAL_FFTWF_WISDOM_ENV);
-	if(filename) {
-		FILE *f = fopen(filename, "r");
-		if(!f)
-			GST_ERROR("cannot open single-precision FFTW wisdom file \"%s\": %s", filename, strerror(errno));
-		else {
-			if(!fftwf_import_wisdom_from_file(f))
-				GST_ERROR("failed to import single-precision FFTW wisdom from \"%s\": wisdom not loaded", filename);
-			fclose(f);
-		}
-	} else if(!fftwf_import_system_wisdom())
-		GST_WARNING("failed to import system default single-precision FFTW wisdom: %s", strerror(errno));
-	errno = savederrno;
-
-	/*
-	 * done
-	 */
-
-	gstlal_fftw_unlock();
-}
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(

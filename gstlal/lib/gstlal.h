@@ -53,6 +53,7 @@ G_BEGIN_DECLS
 
 void gstlal_fftw_lock(void);
 void gstlal_fftw_unlock(void);
+void gstlal_load_fftw_wisdom(void);
 
 
 /* int type */
