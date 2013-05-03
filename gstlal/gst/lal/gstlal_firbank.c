@@ -1830,20 +1830,49 @@ static void gstlal_load_fftw_wisdom(void)
 	int savederrno;
 
 	gstlal_fftw_lock();
+
+	/*
+	 * double precision
+	 */
+
 	savederrno = errno;
 	filename = getenv(GSTLAL_FFTW_WISDOM_ENV);
 	if(filename) {
 		FILE *f = fopen(filename, "r");
 		if(!f)
-			GST_ERROR("cannot open FFTW wisdom file \"%s\": %s", filename, strerror(errno));
+			GST_ERROR("cannot open double-precision FFTW wisdom file \"%s\": %s", filename, strerror(errno));
 		else {
 			if(!fftw_import_wisdom_from_file(f))
-				GST_ERROR("failed to import FFTW wisdom from \"%s\": wisdom not loaded", filename);
+				GST_ERROR("failed to import double-precision FFTW wisdom from \"%s\": wisdom not loaded", filename);
 			fclose(f);
 		}
 	} else if(!fftw_import_system_wisdom())
-		GST_WARNING("failed to import system default FFTW wisdom: %s", strerror(errno));
+		GST_WARNING("failed to import system default double-precision FFTW wisdom: %s", strerror(errno));
 	errno = savederrno;
+
+	/*
+	 * single precision
+	 */
+
+	savederrno = errno;
+	filename = getenv(GSTLAL_FFTWF_WISDOM_ENV);
+	if(filename) {
+		FILE *f = fopen(filename, "r");
+		if(!f)
+			GST_ERROR("cannot open single-precision FFTW wisdom file \"%s\": %s", filename, strerror(errno));
+		else {
+			if(!fftwf_import_wisdom_from_file(f))
+				GST_ERROR("failed to import single-precision FFTW wisdom from \"%s\": wisdom not loaded", filename);
+			fclose(f);
+		}
+	} else if(!fftwf_import_system_wisdom())
+		GST_WARNING("failed to import system default single-precision FFTW wisdom: %s", strerror(errno));
+	errno = savederrno;
+
+	/*
+	 * done
+	 */
+
 	gstlal_fftw_unlock();
 }
 
