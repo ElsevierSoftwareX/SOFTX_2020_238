@@ -357,7 +357,7 @@ static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, GstSegment *segmen
 	if(offset_end - offset != GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) {
 		/* buffer lies partially outside requested segment */
 		GstBuffer *newbuf = gst_buffer_create_sub(buffer, offset * unit_size, (offset_end - offset) * unit_size);
-		gst_buffer_copy_metadata(newbuf, buffer, (GstBufferCopyFlags)( GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS));
+		gst_buffer_copy_metadata(newbuf, buffer, (GstBufferCopyFlags) (GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS));
 		GST_BUFFER_TIMESTAMP(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 		GST_BUFFER_DURATION(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset_end, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(newbuf);
 		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buffer) + offset;
@@ -866,7 +866,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 	/*
 	 * special case:  0-length input buffers are treated as heart
-	 * beats, we forward a heardbeat out each source pad
+	 * beats, we forward a heart beat out each source pad
 	 */
 
 	if(!GST_BUFFER_SIZE(inbuf)) {
