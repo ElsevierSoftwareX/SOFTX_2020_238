@@ -73,6 +73,12 @@
  */
 
 
+/*
+ * FIXME:  we don't *really* need both locks, but we can't rely on LAL to
+ * actually have a lock behind the macros, so we implement our own as well
+ * until LAL can be trusted to lock fftw
+ */
+
 static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
 
 

@@ -43,6 +43,18 @@
  */
 
 
+/*
+ * FIXME:  these functions are only here so that Python code that calls LAL
+ * FFT plan creation functions can lock the wisdom.  if LAL is compiled
+ * with locking enabled, then the use of these functions in python code
+ * outside of the plan creation functions would deadlock, therefore, if LAL
+ * is compiled with locking enabled THESE FUNCTIONS ARE NO-OPs.  don't rely
+ * on them in python code to actually acquire and release the gstlal fftw
+ * wisdom lock.  that's not what they're for.  delete them when LAL can be
+ * trusted to have locking enabled.
+ */
+
+
 static PyObject *lock(PyObject *self, PyObject *args)
 {
 #ifndef LAL_PTHREAD_LOCK
