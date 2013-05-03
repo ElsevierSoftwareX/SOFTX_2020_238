@@ -1950,12 +1950,6 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 		1,
 		G_TYPE_INT
 	);
-
-	/*
-	 * Load FFTW wisdom
-	 */
-
-	gstlal_load_fftw_wisdom();
 }
 
 

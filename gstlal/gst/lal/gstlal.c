@@ -121,6 +121,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 	gstlal_register_tags();
 
 	/*
+	 * Load FFTW wisdom
+	 */
+
+	gstlal_load_fftw_wisdom();
+
+	/*
 	 * Tell GStreamer about the elements.
 	 */
 
