@@ -30,6 +30,7 @@ import sys
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
+import lalsimulation as lalsim
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -44,6 +45,19 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
+
+gstlal_FD_approximants = set(('IMRPhenomB', 'TaylorF2', 'TaylorF2RedSpin', 'TaylorF2RedSpinTidal'))
+gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'TaylorEt', 'EOBNRv2'))
+gstlal_approximants = gstlal_FD_approximants + gstlal_TD_approximants
+
+
+def gstlal_valid_approximant(appx_str):
+	try:
+		lalsim.GetApproximantFromString(str(appx_str))
+	except RuntimeError:
+		raise ValueError("Approximant not supported by lalsimulation: %s" % appx_str)
+	if appx_str not in gstlal_approximants:
+		raise ValueError("Approximant not currently supported by gstlal, but is supported by lalsimulation: %s. Please consider preparing a patch" % appx_str)
 
 
 def add_quadrature_phase(fseries, n):
