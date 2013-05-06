@@ -68,7 +68,7 @@ allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1
 
 
 def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-	# NOTE:  we also require the masses and chi of the two events to
+	# NOTE:  we also require the masses and spin of the two events to
 	# match, but the InspiralEventList class ensures that all event
 	# pairs that make it this far are from the same template so we
 	# don't need to explicitly test for that here.
@@ -104,7 +104,7 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		dictionary key) uniquely identifying the template that
 		produced the given event.
 		"""
-		return event.mass1, event.mass2, event.chi
+		return event.mass1, event.mass2, event.spin1x, event.spin1y, event.spin1z, event.spin2x, event.spin2y, event.spin2z
 
 	def make_index(self):
 		self.index = {}
