@@ -17,11 +17,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import sys
+import os
 import StringIO
 import subprocess
 import shlex
 import re
 import json
+import copy
 from bisect import bisect_left
 from itertools import chain, ifilter
 
@@ -151,7 +153,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
-	filter_len = 2*int(2*b_wind/psd.deltaF)
+	rate = psd.deltaF * len(psd.data)
+	filter_len = 4*int(rate/b_wind)
 
 	if filter_len <= 0:
 		print >>sys.stderr, "Invalid filter length (%d). Is your filter bandwidth too small?" % filter_len
@@ -189,6 +192,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		gstlal.fftw.unlock()
 
 	filters = numpy.array([])
+	freq_filters = []
 	for band in range( bands ):
 
 		try:
@@ -209,6 +213,15 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 			statuserr += "PSD - deltaF: %f, f0 %f, npoints %d\n" % (psd.deltaF, psd.f0, len(psd.data))
 			statuserr += "spectrum correlation - npoints %d" % len(spec_corr)
 			sys.exit( statuserr )
+
+		# save the frequency domain filters, if necessary
+		# We make a deep copy here because we don't want the zero padding that
+		# is about to be done to get the filters into the time domain
+		h_wind_copy = COMPLEX16FrequencySeries()
+		h_wind_copy.f0 = h_wind.f0
+		h_wind_copy.deltaF = h_wind.deltaF
+		h_wind_copy.data = copy.deepcopy(h_wind.data)
+		freq_filters.append( h_wind_copy )
 
 		# Zero pad up to lowest frequency
 		h_wind.data = numpy.hstack((numpy.zeros((int(h_wind.f0 / h_wind.deltaF), ), dtype = "complex"), h_wind.data))
@@ -243,7 +256,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
 		## normalize the filters
 		td_filter /= numpy.sqrt( numpy.dot(td_filter, td_filter) )
-		######################
+		td_filter *= numpy.sqrt(b_wind/psd.deltaF)
 		filters = numpy.concatenate( (filters, td_filter) )
 		
 		# DEBUG: Uncomment to dump TD filters
@@ -252,10 +265,9 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 			#f.write( "%d %f\n" % (t,s) )
 		#f.close()
 
-
 	# Shape it into a "matrix-like" object
 	filters.shape = ( bands, filter_len )
-	return filters
+	return filters, freq_filters
 
 def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 	"""
@@ -287,97 +299,49 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 
 	return numpy.array(m).T
 
-def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=None, max_level=None ):
+def build_wide_filter_norm( corr, freq_filters, level, band=None, psd=None ):
 	"""
-	Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Returns a list where the indexes correspond to the 'upsample' factor - 1. For example, For 16 channels, An array of length 4 will be returned with the first index corresponding to 8 channels, second to 4, third to 2, and fourth to the single wide band channel. If level != None, then the specified index will be calculated and returned.
+	Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Requires the spectral correlation (corr) and the frequency domain filters (freq_filters), and resolution level. The bandwidth of the wide channels to normalize is 2**level*band.
 	"""
-	# TODO: can we build middle channels from one level down?
+	# TODO: This can be made even more efficient by using the calculation of
+	# lower levels for higher levels
 
-	# Recreate the Hann filter in the FD
-	total_len = flow/del_f + nfilts*band/del_f  # Hardcoded to 50 % overlap
-	total_len += 5*band/del_f # buffer at the end, shouldn't be needed
+	# number of channels to combine
+	n = 2**level
 
-	wind_len = int(band*2/del_f)
-	# Build the actual filter in the FD
-	h_wind = XLALCreateHannREAL8Window( wind_len )
-	d = h_wind.data
-	d = numpy.hstack(
-		(numpy.zeros((int(flow / del_f)), dtype = "complex"), d)
-	)
-	d = numpy.hstack((d, numpy.zeros((total_len - len(d),), dtype = "complex")))
-	d = numpy.roll( d, -wind_len/4 )
+	# prefactor
+	if band is None:
+		band = len(freq_filters[0].data)/freq_filters[0].deltaF
+	del_f = freq_filters[0].deltaF
+	mu_sq = n*band/del_f
 
-	# Set of two filters to do the integral
-	filter1 = COMPLEX16FrequencySeries()
-	filter1.deltaF = del_f
-	filter1.f0 = 0
-	filter2 = COMPLEX16FrequencySeries()
-	filter2.deltaF = del_f
-	filter2.f0 = 0
+	# This is the default normalization for the base band
+	if level == 0:
+		return numpy.ones(len(freq_filters))*mu_sq
 
+	filter_norm = numpy.zeros( len(freq_filters)/n )
 	corr = numpy.array(corr)
 
-	inner = []
-	n, itr = 1, 0
-	itr = 0
-	max_level = min( max_level, numpy.ceil(numpy.log2(nfilts)) )
-	while itr <= max_level:
-		# Only one level was requested, skip until we find it
-		#print "level %d" % itr
-		if level != None and level != itr: 
-			continue
- 
-		foff = 0
-		level_ar = []
-		
-		# The number of bands added (nb) is calculated just in case the 
-		# number of filters at the edge is not equal to the normal number 
-		# (n) at this resolution.
-		nb = nfilts % n
-		#mu_sq = n*band/del_f
-		mu_sq = n
-		for i in range( n-1 ):
-			if foff + i + 1 >= nfilts:
-				break # because we hit the end of the filter bank
+	# Construct the normalization for the i'th wide filter at this level by
+	# summing over n base band filters
+	for i in range(len(filter_norm)):
 
-			filter1.data = numpy.roll( d, (foff+i)*wind_len / 2 )
-			filter2.data = numpy.roll( d, (foff+i+1)*wind_len / 2 )
+		ip_sum = 0
+		# Sum over n base band filters
+		for j in range(n-1):
+			#if psd is None:
+			ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
+				freq_filters[i*n+j], freq_filters[i*n+j+1], corr
+			)
+			# TODO: fix if better hrss is required
+			#else:
+				#ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
+					#freq_filters[i*n+j], freq_filters[i*n+j+1], corr, psd
+				#)
 
-			# TODO: fix when psd None vs NULL is sorted out
-			if psd is None:
-				mu_sq += lalburst.XLALExcessPowerFilterInnerProduct( 
-					filter1, filter2, corr
-				) * del_f/band * 2
-			else:
-				mu_sq += lalburst.XLALExcessPowerFilterInnerProduct( 
-					filter1, filter2, corr, psd
-				) * del_f/band * 2
+		filter_norm[i] = mu_sq + 2*ip_sum
 
-
-			# DEBUG: Dump the FD filters
-			#f = open( "filters_fd_corr/hann_%dhz" % int((foff+i*band)+flow), "w" )
-			#for i, fdat in enumerate(filter1.data):
-				#f.write( "%f %f\n" % (i*filter1.deltaF, fdat) )
-			#f.close()
-
-		# TODO: Since this is pretty much filter independent
-		# drop the iteration and just multiply
-		level_ar = numpy.ones( numpy.ceil( float(nfilts)/n ) )*mu_sq 
-
-		# Filter at the end can be different than the others -- but we can't
-		# undersample it properly, so kill it
-		if( nb > 0 ):
-			level_ar[-1] = 0
-
-		# Only one level was requested, so return it.
-		inner.append( numpy.array( level_ar ) )
-		if level == itr: return inner[itr]
-
-		# Move to the next higher channel bandwidth
-		n *= 2
-		itr += 1
-		
-	return inner
+	return filter_norm
 
 def build_fir_sq_adder( nsamp, padding=0 ):
 	"""
@@ -385,7 +349,7 @@ def build_fir_sq_adder( nsamp, padding=0 ):
 	"""
 	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
-def create_bank_xml(flow, fhigh, band, duration, ndof=1, detector=None):
+def create_bank_xml(flow, fhigh, band, duration, level=1, ndof=1, detector=None):
 	"""
 	Create a bank of sngl_burst XML entries. This file is then used by the trigger generator to do trigger generation. Takes in the frequency parameters and filter duration and returns an ligolw entity with a sngl_burst Table which can be saved to a file.
 	"""
@@ -401,18 +365,27 @@ def create_bank_xml(flow, fhigh, band, duration, ndof=1, detector=None):
 	"flow", "fhigh", "bandwidth", "tfvolume", "hrss", "event_id"])
 	bank.sync_next_id()
 
-	# The first frequency band actually begins at flow, so we offset the central frequency accordingly
-	# FIXME: Is this is band/2.0 -- check where the filters actually peak
-	cfreq = flow + band
-	while cfreq + band <= fhigh:
+	# The first frequency band actually begins at flow, so we offset the central 
+	# frequency accordingly
+	if level == 0: # Hann windows
+		cfreq = flow + band
+	else: # Tukey windows
+		# The sin^2 tapering comes from the Hann windows, so we need to know how far
+		# they extend to account for the overlap at the ends
+		cfreq = flow + (int(band) >> (level+1)) + band/2
+
+	# This might overestimate the number of output channels by one, but that
+	# shoudn't be a problem since the last channel would simply never be used.
+	while cfreq <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration * ndof
-		#row.bandwidth = 2*band
 		row.bandwidth = band
 		row.peak_frequency = cfreq
 		row.central_freq = cfreq
+		# This actually marks the 50 % overlap point
 		row.flow = cfreq - band / 2.0
+		# This actually marks the 50 % overlap point
 		row.fhigh = cfreq + band / 2.0
 		row.ifo = detector
 		row.chisq_dof = 2*band*row.duration
@@ -476,6 +449,40 @@ def determine_segment_with_whitening( analysis_segment, whiten_seg ):
 		else:
 			analysis_segment -= whiten_seg
 	return analysis_segment
+	
+def append_formatted_output_path( fmt, handler, bdir="./", mkdir=True ):
+	"""
+	Append a formatted output path to the base directory (default is pwd). Acceptable options are:
+	i: instrument[0] like 'H' for 'H1'
+	I: instrument
+	S: subsystem prefix
+	c: channel without subsystem
+	C: full channel (eg. LSC-STRAIN)
+	G#: first # GPS digits
+
+	Example: fmt="I/S/c/G5"
+	=> H1/PSL/ISS_PDA_OUT_DQ/10340
+
+	Options in the format which are unrecoginze will pass through without being modified. If mkdir is set to True (default), the directory will be created if it does not already exist.
+	"""
+	gps_reg = re.compile( "^G(\d*)$" )
+	def converter( ic ):
+		gps = re.search( gps_reg, ic )
+		if gps is not None and len(gps.group(1)) > 0:
+			gps = int( gps.group(1) )
+		if ic == "i": return handler.inst[0]
+		elif ic == "I": return handler.inst
+		elif ic == "S": return handler.channel.split("-")[0]
+		elif ic == "c": return handler.channel.split("-")[-1]
+		elif ic == "C": return handler.channel
+		elif type(gps) is int: return str(int(handler.time_since_dump))[:gps]
+		elif gps is not None: return str(handler.time_since_dump)
+		return ic
+
+	subdir = bdir + "/".join( [ converter(seg) for seg in fmt.strip().split("/") ] )
+	if mkdir:
+		os.makedirs( subdir )
+	return subdir
 
 def make_cache_parseable_name( inst, tag, start, stop, ext, dir="./" ):
 	"""
