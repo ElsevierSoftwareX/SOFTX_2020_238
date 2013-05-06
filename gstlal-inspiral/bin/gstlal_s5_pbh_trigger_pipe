@@ -581,6 +581,7 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
 	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
 	
 	# trigger generation options
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
@@ -757,7 +758,7 @@ for i, bank_group in enumerate(bank_groups):
 					svd_bank_name = T050017_filename(ifo, '%d_%d_SVD' % (i, n), seg[0].seconds, seg[1].seconds, '.xml.gz')
 					s += '%s:%s,' % (ifo, svd_bank_name)
 					# FIXME bank id should be global??
-					svd_nodes.append(gstlal_svd_bank_node(svdJob, dag, f, ifo, svd_bank_name, tolerance = options.tolerance, reference_psd = psd_nodes[hash_seg(ifos, seg)].output_name, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = n, p_node = [psd_nodes[hash_seg(ifos, seg)]]))
+					svd_nodes.append(gstlal_svd_bank_node(svdJob, dag, f, ifo, svd_bank_name, tolerance = options.tolerance, reference_psd = psd_nodes[hash_seg(ifos, seg)].output_name, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, autocorrelation_length = options.autocorrelation_length, bank_id = n, p_node = [psd_nodes[hash_seg(ifos, seg)]], identity_transform = options.identity_transform))
 
 			s = s.strip(',')
 
