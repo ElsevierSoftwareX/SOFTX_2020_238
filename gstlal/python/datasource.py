@@ -288,6 +288,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME:  make gate leaky when I'm certain that will work.
 			# FIXME:  add a mechanism to detect missing data (use a buffer probe?)
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
+		# FIXME:  remove this when pipeline can handle disconts
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	elif gw_data_source_info.data_source == "lvshm":
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
