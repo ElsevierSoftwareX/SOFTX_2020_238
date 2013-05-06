@@ -51,7 +51,7 @@ from glue.lal import Cache
 from optparse import OptionParser
 
 parser = OptionParser()
-parser.add_option("-c", "--channels", action="store", help="Comma separated list of channels. Will plot triggers only from the channels indicated. Otherwise, all channels will be plotted.")
+parser.add_option("-c", "--channels", action="append", help="Comma separated list of channels. Will plot triggers only from the channels indicated. Otherwise, all channels will be plotted.")
 parser.add_option("-o", "--output-file", action="store", help="File to output image to. Default: trigmap.png")
 parser.add_option("-i", "--instruments", action="store", help="Comma separates list of instruments. Will plot channels only from the instruments indicated. Otherwise, all no instrument selection is done.")
 parser.add_option("-I", "--input-cache", action="store", help="Use this argument as the file list rather than specifying on the command line.")
@@ -165,9 +165,10 @@ if opts.high_frequency is None:
 if opts.mark_loudest not in [None, 'snr', 'conf']:
 	exit( "Invalid argument to '--mark-loudest', please choose one of 'snr' or 'conf'" )
 
-if opts.channels is not None:
-	channels = opts.channels.split(",")
-else: channels = None
+if opts.channels is None:
+	channels = None
+else:
+	channels = opts.channels
 
 if opts.instruments is not None:
 	print instruments
@@ -396,7 +397,7 @@ for channel, selected_events in event_iter:
 		sys.stdout.write( statstr )
 		statlen = len(statstr)
 		# 1. plot tile 
-		start = event.get_start()# + event.start_time_ns*1e-9
+		start = float(event.get_start())# + event.start_time_ns*1e-9
 		tile = matplotlib.patches.Rectangle(
 			# lower left point
 			( start,
@@ -448,15 +449,17 @@ for channel, selected_events in event_iter:
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
 	if opts.plotting_type == "marker":
-		# SNR 3-5.5
 		markers = numpy.array(markers)
+		marker_thresh = numpy.array([6, 10])**2
+		if 'c' in logaxes:
+			marker_thresh = numpy.log10(marker_thresh)
 		def sizef( m ):
-			if m <= 5.5:
+			if m <= marker_thresh[0]:
 				return 1
-			elif m > 5.5 and m < 10:
+			elif m > marker_thresh[0] and m < marker_thresh[1]:
 				return 5
 			else:
-				return 50
+				return 15
 		size = map(sizef, markers[2])
 		ax.scatter( markers[0], markers[1], c=markers[2], s=size, lw=0, cmap=matplotlib.cm.copper_r ) # with circles
 	elif opts.plotting_type == "both":
@@ -662,4 +665,4 @@ filename, filext = os.path.splitext(filename)
 if len(filext) == 0: filext = None
 if opts.mark_time: filename += "_%d" % int(opts.mark_time)
 print "Saving " + filename
-fig.savefig( "%s.%s" % (filename, filext or "png") )
+fig.savefig( "%s.%s" % (filename, filext[1:] or "png") )
