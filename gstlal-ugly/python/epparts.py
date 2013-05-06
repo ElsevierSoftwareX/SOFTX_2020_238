@@ -75,6 +75,7 @@ from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 from pylal import snglcluster
 from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+from pylal.xlal.datatypes.lalunit import LALUnit
 #from pylal.xlal.datatypes.snglburst import SnglBurst
 
 #
@@ -122,7 +123,9 @@ class EPHandler( Handler ):
 
 		# Defaults -- filtering
 		self.filter_len = 2*int(2*self.rate/self.base_band)
+		self.filter_xml = {}
 		self.filter_bank = None
+		self.freq_filter_bank = None
 		# TODO: Maybe not necessary
 		self.firbank = None
 
@@ -138,11 +141,8 @@ class EPHandler( Handler ):
 		# This is used to store the change from the previous PSD power
 		self.psd_change = 0.0
 
-		# Defaults -- Two-point spectral correlation settings
-		self.cache_spec_corr = False
-
 		# Defaults -- mixer matrices
-		self.chan_matrix = None
+		self.chan_matrix = {}
 		self.mmixers = {}
 
 		# Defaults -- data products
@@ -152,13 +152,14 @@ class EPHandler( Handler ):
 		self.process = None
 		self.outfile = "test.xml"
 		self.outdir = "./"
+		self.outdirfmt = ""
 		self.make_output_table()
 		self.output_cache = Cache()
 		self.output_cache_name = None
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
-		self.max_events = 1e4
+		self.max_events = 1e6
 		self.time_since_dump = self.start
 		self.db_thresh = None  # off
 		self.db_client = None  # off
@@ -266,7 +267,10 @@ class EPHandler( Handler ):
 		# Impose a latency since we've advanced the filter in the 
 		# generation step. See build_filter in the excesspower library
 
-		# FIXME: This isn't set properly only on the first try
+		# FIXME: This isn't set properly only on the first try --- that is to say,
+		# the value of the latency for the firbank is reset, but the setting has np
+		# further effect on any of the timestamps emitted by the FIR bank. This is
+		# notedi, but not resolved in gstlal_firbank.c
 		firbank.set_property( "latency", len(firbank.get_property("fir_matrix")[0])/2 )
 		self.firbank = firbank
 
@@ -280,7 +284,8 @@ class EPHandler( Handler ):
 		"""
 		psd = REAL8FrequencySeries()
 		psd.deltaF = df
-		psd.data = numpy.ones( int(fhigh/df) + 1 ) 
+		psd.sampleUnits = LALUnit( "s strain^2" )
+		psd.data = numpy.ones( int(rate/2/df) + 1 ) 
 		psd.f0 = 0
 		self.psd = psd
 		return psd
@@ -298,23 +303,30 @@ class EPHandler( Handler ):
 		Rebuilds the matrix mixer matrices from the coefficients calculated in rebuild_chan_mix_matrix and assigns them to their proper element.
 		"""
 		for i, mm in self.mmixers.iteritems():
-			if res_level != None and res_level != i: 
+			if res_level is not None and res_level != i: 
 				continue
 
 			nchannels = self.filter_bank.shape[0]
-			up_factor = int(numpy.log2(nchannels/(nchannels >> i)))
+			self.chan_matrix[i] = ep.build_wide_filter_norm( 
+				corr = self.spec_corr, 
+				freq_filters = self.freq_filter_bank,
+				level = i,
+				band = self.base_band
+			)
 			cmatrix = ep.build_chan_matrix( 
 				nchannels = nchannels,
-				up_factor = up_factor,
-				norm = self.chan_matrix[i] 
-			)
+				up_factor = i,
+				norm = self.chan_matrix[i]
+			) 
+			# DEBUG: Uncommet to get matrix mixer elements
+			#cmatrix.tofile( open("matrix_level_%d" % i, "w") )
 			mm.set_property( "matrix", cmatrix )
 
 	def rebuild_filter( self ):
 		"""
 		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.filter_bank = ep.build_filter( 
+		self.filter_bank, self.freq_filter_bank = ep.build_filter( 
 			fhigh = self.fhigh, 
 			flow=self.flow, 
 			rate=self.rate, 
@@ -328,39 +340,36 @@ class EPHandler( Handler ):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
-		self.filter_xml = ep.create_bank_xml(
+		self.filter_xml[(res_level, ndof)] = ep.create_bank_xml(
 			self.flow,
 			self.fhigh,
-			self.base_band*(res_level+1),
-			1.0 / (2*self.base_band*(res_level+1)), # resolution level starts from 0
+			self.base_band*2**res_level,
+			1.0 / (2*self.base_band*2**res_level), # resolution level starts from 0
+			res_level,
 			ndof,
 			self.inst
 		)
-		output = "%sgstlal_excesspower_bank_%s_%s_level_%d.xml" % (loc, self.inst, self.channel, res_level)
-		utils.write_filename( self.filter_xml, output, verbose = verbose,
+		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
+		self.filter_xml[output] = self.filter_xml[(res_level, ndof)]
+		utils.write_filename( self.filter_xml[output], output, verbose = verbose,
 		       gz = (output or "stdout").endswith(".gz") )
 		return output
 
 	def destroy_filter_xml( self, loc="" ):
 		"""
-		FIXME: This is really inelegant.
+		Remove the filter XML files.
 		"""
-		for f in glob.glob( "%sgstlal_excesspower_bank_%s_%s_level_*.xml" % (loc, self.inst, self.channel) ):
-			os.remove( f )
+		for f, v in self.filter_xml.iteritems():
+			if os.path.exists( str(f) ):
+				os.remove( f )
 
 	def rebuild_chan_mix_matrix( self ):
 		"""
 		Calling this function rebuilds the matrix mixer coefficients for higher resolution components. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.chan_matrix = ep.build_inner_product_norm( 
+		self.chan_matrix = ep.build_wide_filter_norm( 
 			corr = self.spec_corr, 
-			band = self.base_band, 
-			del_f = self.psd.deltaF,
-			nfilts = len(self.filter_bank),
-			flow = self.flow,
-			# TODO: PSD option to lalburst IP doesn't work
-			# This should be fixed, let's reenable it
-			#psd = self.psd
+			freq_filters = self.freq_filter_bank,
 			max_level = self.max_level
 		)
 		return self.chan_matrix
@@ -379,7 +388,7 @@ class EPHandler( Handler ):
 
 		if self.verbose:
 			print >>sys.stderr, "Rebuilding matrix mixer"
-		self.rebuild_chan_mix_matrix()
+		#self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
 
@@ -690,13 +699,16 @@ class EPHandler( Handler ):
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 
+		subdir = ""
+		if self.outdirfmt is not None:
+			subdir = ep.append_formatted_output_path( self.outdirfmt, self )
 		outfile = ep.make_cache_parseable_name(
 			inst = self.inst,	
 			tag = self.channel,
 			start = self.time_since_dump,
 			stop = self.stop,
 			ext = "xml",
-			dir = self.outdir
+			dir = self.outdir + subdir
 		)
 		self.write_triggers( False, filename = outfile )
 
