@@ -122,6 +122,7 @@ def parse_command_line():
 	# append all the datasource specific options
 	datasource.append_options(parser)
 
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
@@ -197,10 +198,6 @@ def parse_command_line():
 
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
-	# hard-coded.  this number is needed in a few places, and storing
-	# it in with the options is a convenient home
-	options.psd_fft_length = 16	# seconds
-
 	# Online specific initialization
 	if options.data_source == "lvshm":
 		# check required options in this case
@@ -209,8 +206,6 @@ def parse_command_line():
 		missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 		if missing_options:
 			raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
-		# shorter whitening filter online
-		options.psd_fft_length = 8	# seconds
 
 		# make an "infinite" extent segment
 		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
