@@ -407,7 +407,7 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, blind_injections = None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, psd_fft_length = 16, blind_injections = None, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 
 		self.set_category("INSPIRAL")
@@ -416,6 +416,7 @@ class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 			self.add_var_opt("time-slide-file", time_slide_file)
 		if ht_gate_thresh is not None:
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
+		self.add_var_opt("psd-fft-length", psd_fft_length)
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("frame-segments-file", frame_segments_file)
 		self.add_var_opt("frame-segments-name", frame_segments_name)
@@ -570,7 +571,8 @@ def parse_command_line():
 
 	# generic data source options
 	datasource.append_options(parser)
-
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
@@ -720,7 +722,7 @@ psd_nodes = {}
 bank_nodes = {}
 for ifos in segsdict:
 	for seg in segsdict[ifos]:
-		psd_nodes[hash_seg(ifos, seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, p_node=[])
+		psd_nodes[hash_seg(ifos, seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, bank_cache.keys(), channel_dict, injections=None, psd_fft_length = options.psd_fft_length, p_node=[])
 
 # plot the horizon distance
 name_tag = "plots/sub-solar-mass-%d-%d_" % (int(boundary_seg[0]), int(boundary_seg[1]))
@@ -766,12 +768,12 @@ for i, bank_group in enumerate(bank_groups):
 			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 
 			# non injections
-			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, blind_injections = options.blind_injections, p_node = svd_nodes)
+			noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, blind_injections = options.blind_injections, psd_fft_length = options.psd_fft_length, p_node = svd_nodes)
 			inspiral_nodes.append((None, noninjnode))
 
 			# injections
 			for injections in options.injections:	
-				injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, p_node = svd_nodes)
+				injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, this_channel_dict, reference_psd=psd_nodes[hash_seg(ifos, seg)].output_name, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = "".join(sorted(ifos)), ht_gate_thresh = options.ht_gate_threshold, psd_fft_length = options.psd_fft_length, p_node = svd_nodes)
 				inspiral_nodes.append((injections, injnode))
 
 	# likelihood jobs for non injections
