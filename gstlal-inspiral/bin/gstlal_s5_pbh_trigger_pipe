@@ -571,7 +571,7 @@ def parse_command_line():
 
 	# generic data source options
 	datasource.append_options(parser)
-	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "FFT length, default 32s")
 	
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
