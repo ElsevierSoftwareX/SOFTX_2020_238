@@ -32,6 +32,11 @@ from optparse import OptionParser
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+from glue.ligolw import array
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import param
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
@@ -107,7 +112,7 @@ for url in urls:
 	#
 
 	try:
-		in_xmldoc = utils.load_url(url, verbose = options.verbose)
+		in_xmldoc = utils.load_url(url, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
 	except IOError:
 		# IOError is raised when an on-disk file is missing.
 		# urllib2.URLError is raised when a URL cannot be loaded,
