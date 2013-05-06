@@ -162,7 +162,9 @@ sinkpad = sink.get_pad("%s:%s" % (instrument, channel_name))
 src.link(sink)
 sinkpad.set_property("comment", "conditioned h(t) for inspiral search")
 sinkpad.set_property("pad-type", "FrProcData")
-pipeparts.mkmultifilesink(pipeline, sink, location = os.path.join(options.output_path, "%s-%s-%%05d.gwf" % (instrument, options.description)), post_messages = True)
+
+fs = pipeparts.mkframecppfilesink(pipeline, sink, frame_type = options.description, path = options.output_path, message_forward = True)
+fs.set_property("multifilesink::post-messages", True)
 
 if options.verbose:
 	print >>sys.stderr, "done"
