@@ -77,14 +77,12 @@ def read_approximant(xmldoc):
 		process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
 		approximant |= set(row.pyvalue for row in lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
 
-	supported_approximants = (u"FindChirpSP", u"TaylorF2", u"IMRPhenomB")
 	if not approximant:
 		raise ValueError, "document must contain an approximant process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs)
 	if len(approximant) > 1:
 		raise ValueError, "document must contain only one approximant"
 	approximant = approximant.pop()
-	if approximant not in supported_approximants:
-		raise ValueError, "unsupported approximant '%s'" % approximant
+	templates.gstlal_valid_approximant(approximant)
 	return approximant
 
 #
