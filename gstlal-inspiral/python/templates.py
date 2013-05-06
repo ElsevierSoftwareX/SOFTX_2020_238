@@ -48,7 +48,7 @@ __date__ = "FIXME"
 
 gstlal_FD_approximants = set(('IMRPhenomB', 'TaylorF2', 'TaylorF2RedSpin', 'TaylorF2RedSpinTidal'))
 gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'TaylorEt', 'EOBNRv2'))
-gstlal_approximants = gstlal_FD_approximants + gstlal_TD_approximants
+gstlal_approximants = gstlal_FD_approximants | gstlal_TD_approximants
 
 
 def gstlal_valid_approximant(appx_str):
