@@ -530,11 +530,12 @@ def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_k
 
 def interpolate_psd(psd, deltaF):
 	#
-	# no-op?
+	# no-op?  and disallow resolution reduction
 	#
 
 	if deltaF == psd.deltaF:
 		return psd
+	assert deltaF < psd.deltaF
 
 	#
 	# interpolate PSD by clipping/zero-padding time-domain impulse
