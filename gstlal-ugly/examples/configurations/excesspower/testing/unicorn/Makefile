@@ -16,7 +16,7 @@ no_inj:
 		--channel-name=H1=FAKE-STRAIN \
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
-		--gps-end-time 10000 \
+		--gps-end-time 2000 \
 		--file-cache \
 		--file-cache-name H1_no_inj.cache \
 		--data-source AdvLIGO  \
@@ -64,5 +64,5 @@ unicorn_movie: H_BTLWNB_unicorn_100.xml
 		--sample-rate 4096  
 
 clean:
-	rm -rf *triggers*.xml *level*.xml *.xml.gz *.cache ${output}
+	rm -rf *triggers*.xml *level*.xml H1-*.xml *.json *.xml.gz *.cache ${output}
 
