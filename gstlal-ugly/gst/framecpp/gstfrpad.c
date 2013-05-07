@@ -85,8 +85,6 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 #define DEFAULT_NBITS 1	/* FIXME:  is there a "not set" value?  -1? */
 #define DEFAULT_UNITS ""
 
-static GParamSpec *tags_pspec;
-
 
 /*
  * ============================================================================
@@ -186,7 +184,7 @@ static void caps_notify_handler(GObject *object, GParamSpec *pspec, gpointer use
 	GST_OBJECT_UNLOCK(object);
 
 	if(got_new_tags)
-		g_object_notify_by_pspec(object, tags_pspec);
+		g_object_notify(object, "tags");
 }
 
 
@@ -289,7 +287,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_UNLOCK(object);
 
 	if(got_new_tags)
-		g_object_notify_by_pspec(G_OBJECT(pad), tags_pspec);
+		g_object_notify(G_OBJECT(pad), "tags");
 }
 
 
@@ -470,7 +468,7 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		PROP_TAGS,
-		tags_pspec = g_param_spec_boxed(
+		g_param_spec_boxed(
 			"tags",
 			"Tag list",
 			"Tag list.",
