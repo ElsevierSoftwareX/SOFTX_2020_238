@@ -648,6 +648,8 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * check for disconts
 	 */
 
+	if(GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && GST_BUFFER_TIMESTAMP(buffer) < pad_state->next_timestamp)
+		GST_WARNING_OBJECT(pad, "time reversal detected:  expected %" GST_TIME_SECONDS_FORMAT ", got %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(pad_state->next_timestamp), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
 		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
 		pad_state->need_discont = FALSE;
