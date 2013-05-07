@@ -589,6 +589,7 @@ FROM
 				(r"Effective Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mchirp"),
 				(r"Chirp Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_chirp_dist(instrument) for instrument in instruments)[1], "chirpdist_vs_mchirp"),
 				(r"Effective Distance vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mtotal"),
+				(r"Effective Distance vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_chi"),
 				(r"Effective Distance vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_t")
 			)):
 				fig, axes = create_plot(x_label, y_label)
@@ -702,6 +703,11 @@ FROM
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs], "kx")
 			yield fig, "deff_acc_frac_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
+			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
+			axes.plot([(sim.mass1*sim.spin1z + sim.mass2*sim.spin2z)/(sim.mass1+sim.mass2) for sim, sngl in pairs], [(sngl.mass1*sngl.spin1z + sngl.mass2*sngl.spin2z)/(sngl.mass1+sngl.mass2) for sim, sngl in pairs], "kx")
+			yield fig, "chi_acc_%s_%s" % (waveform, instrument), False
 
 
 #

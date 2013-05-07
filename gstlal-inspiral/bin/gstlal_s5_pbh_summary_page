@@ -122,6 +122,9 @@ page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgta
 page.subpages["injection_params_acc"].add_section("deff_param_acc","Effective Distance Accuracy")
 imgtable = cbcwebpage.image_glob(base_name+'2_deff_acc_frac*.png')
 page.subpages["injection_params_acc"].sections["deff_param_acc"].add_table(imgtable, "Effective Distance Accuracy", "Accuracy of effective distance")
+page.subpages["injection_params_acc"].add_section("spin_param_acc","Effective Spin Accuracy")
+imgtable = cbcwebpage.image_glob(base_name+'2_chi_acc*.png')
+page.subpages["injection_params_acc"].sections["spin_param_acc"].add_table(imgtable, "Effective Spin Accuracy", "Accuracy of mass-weighted spin")
 
 ### MISSED FOUND ###
 page.add_subpage("missed_found","Missed Found", "Missed Found")
@@ -157,6 +160,10 @@ page.subpages["missed_found"].sections["found_missed_mtotal"].add_table(imgtable
 page.subpages["missed_found"].add_section("found_missed_time","Found / Missed Time")
 imgtable = cbcwebpage.image_glob(base_name+'1_deff_vs_t_*.png')
 page.subpages["missed_found"].sections["found_missed_time"].add_table(imgtable, "Missed Found vs Time", "Effective distance of found and missed injections as a function of time")
+
+page.subpages["missed_found"].add_section("found_missed_chi","Found / Missed Spin")
+imgtable = cbcwebpage.image_glob(base_name+'1_deff_vs_chi_*.png')
+page.subpages["missed_found"].sections["found_missed_chi"].add_table(imgtable, "Missed Found vs Spin", "Effective distance of found and missed injections as a function of mass-weighted spin")
 
 # SEARCH SENSITIVITY PLOTS #
 page.add_subpage("search_sensitivity","Search Sensitivity", "Search Sensitivity")
