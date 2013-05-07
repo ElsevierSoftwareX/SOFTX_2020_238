@@ -36,7 +36,7 @@ def parse_command_line():
 
 	# add our own options
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
-	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
+	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
 	parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
