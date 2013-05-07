@@ -43,6 +43,7 @@
 
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 
 /*
@@ -98,8 +99,8 @@ static void additional_initializations(GType type)
 GST_BOILERPLATE_FULL(
 	GSTLALSimulation,
 	gstlal_simulation,
-	GstElement,
-	GST_TYPE_ELEMENT,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
 
@@ -564,13 +565,12 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 /*
  * ============================================================================
  *
- *			     GStreamer Element
+ *                         GstBaseTransform Overrides
  *
  * ============================================================================
  */
 
 
-/* FIXME:  re-write this as a subclass of the base transform class */
 /* FIXME:  or maybe as a source element, and let the adder do the mixing work */
 
 
@@ -579,22 +579,29 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
  */
 
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
-	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
+	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
 
-	if (GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
+	if(GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
-		/* Attempt to extract all 3 tags from the event's taglist. */
+		/*
+		 * attempt to extract all 3 tags from the event's taglist
+		 */
+
 		gst_event_parse_tag(event, &taglist);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 
 		if(instrument || channel_name || units) {
-			/* If any of the 3 tags were provided, we discard the old, stored values. */
+			/*
+			 * if any of the 3 tags were provided discard
+			 * all current values
+			 */
+
 			g_free(element->instrument);
 			element->instrument = NULL;
 			g_free(element->channel_name);
@@ -603,21 +610,31 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			element->units = NULL;
 
 			if(instrument && channel_name && units) {
-				/* If all 3 tags were provided, we save the new values. */
+				/*
+				 * if all 3 tags were provided, save as the
+				 * new values
+				 */
+
 				element->instrument = instrument;
 				element->channel_name = channel_name;
 				element->units = units;
 			}
 
-			/* do notifies for all three */
+			/*
+			 * do notifies
+			 */
+
 			g_object_notify(G_OBJECT(element), "instrument");
 			g_object_notify(G_OBJECT(element), "channel-name");
 			g_object_notify(G_OBJECT(element), "units");
 		}
 	}
 
-	/* Allow the default event handler to take over. Downstream elements may want to look at tags too. */
-	return gst_pad_event_default(pad, event);
+	/*
+	 * done.  forward all events
+	 */
+
+	return TRUE;
 }
 
 
@@ -626,9 +643,9 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
+static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
-	GSTLALSimulation *element = GSTLAL_SIMULATION(gst_pad_get_parent(pad));
+	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 	REAL8TimeSeries *h;
 
@@ -636,10 +653,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * If no injection list, reduce to pass-through
 	 */
 
-	if(!element->xml_location) {
-		result = gst_pad_push(element->srcpad, buf);
+	if(!element->xml_location)
 		goto done;
-	}
 
 	/*
 	 * Load injections if needed
@@ -661,7 +676,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		gstlal_fftw_unlock();
 		if(!element->injection_document) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("error loading \"%s\"", element->xml_location));
-			gst_buffer_unref(buf);
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -673,7 +687,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	if(!element->instrument || !element->channel_name || !element->units) {
 		GST_ELEMENT_ERROR(element, STREAM, FORMAT, (NULL), ("stream metadata not available:  must receive tags \"%s\", \"%s\", \"%s\"", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS));
-		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -685,7 +698,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	h = gstlal_REAL8TimeSeries_from_buffer(buf, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure wrapping buffer in REAL8TimeSeries"));
-		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -699,11 +711,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	if(update_simulation_series(h, element, NULL) < 0) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure updating simulation_series"));
-		h->data->data = NULL;
-		XLALDestroyREAL8TimeSeries(h);
-		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
-		goto done;
+		goto release_h;
 	}
 
 	/*
@@ -712,11 +721,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	if(add_simulation_series(h, element, NULL) < 0) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure performing injections"));
-		h->data->data = NULL;
-		XLALDestroyREAL8TimeSeries(h);
-		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
-		goto done;
+		goto release_h;
 	}
 
 	/* FIXME: do we need a series mutex lock free here? */
@@ -726,21 +732,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * XLALDestroyREAL8TimeSeries() from free()ing the buffer's data.
 	 */
 
+release_h:
 	h->data->data = NULL;
 	XLALDestroyREAL8TimeSeries(h);
-
-	/*
-	 * Push data out srcpad
-	 */
-
-	result = gst_pad_push(element->srcpad, buf);
 
 	/*
 	 * Done
 	 */
 
 done:
-	gst_object_unref(element);
 	return result;
 }
 
@@ -832,8 +832,6 @@ static void finalize(GObject * object)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
-	gst_object_unref(element->srcpad);
-	element->srcpad = NULL;
 	g_free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
@@ -870,10 +868,14 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -971,24 +973,12 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 
 static void gstlal_simulation_init(GSTLALSimulation *element, GSTLALSimulationClass *klass)
 {
-	GstPad *pad;
-
-	gst_element_create_all_pads(GST_ELEMENT(element));
-
-	/* configure sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
-	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
-	gst_object_unref(pad);
-
-	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-
-	/* internal data */
 	element->xml_location = NULL;
 	element->injection_document = NULL;
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->units = NULL;
 	element->simulation_series = NULL;
+
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

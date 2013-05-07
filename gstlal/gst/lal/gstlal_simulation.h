@@ -24,6 +24,7 @@
 
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 
 #include <lal/LIGOMetadataTables.h>
@@ -45,14 +46,12 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstElementClass parent_class;
+	GstBaseTransformClass parent_class;
 } GSTLALSimulationClass;
 
 
 typedef struct {
-	GstElement element;
-
-	GstPad *srcpad;
+	GstBaseTransform parent;
 
 	char *xml_location;
 
@@ -70,7 +69,6 @@ typedef struct {
 	char *units;
 
 	REAL8TimeSeries *simulation_series;
-
 } GSTLALSimulation;
 
 
