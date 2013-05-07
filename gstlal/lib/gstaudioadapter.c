@@ -57,18 +57,6 @@ enum property {
 /*
  * ============================================================================
  *
- *                                 Parameters
- *
- * ============================================================================
- */
-
-
-static GParamSpec *size_pspec;
-
-
-/*
- * ============================================================================
- *
  *                               Internal Code
  *
  * ============================================================================
@@ -134,7 +122,7 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
 		gst_buffer_unref(GST_BUFFER(buf));
 	adapter->size = 0;
 	adapter->skip = 0;
-	g_object_notify_by_pspec(G_OBJECT(adapter), size_pspec);
+	g_object_notify(G_OBJECT(adapter), "size");
 }
 
 
@@ -144,7 +132,7 @@ void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
 	g_queue_push_tail(adapter->queue, buf);
 	adapter->size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
-	g_object_notify_by_pspec(G_OBJECT(adapter), size_pspec);
+	g_object_notify(G_OBJECT(adapter), "size");
 }
 
 
@@ -377,7 +365,7 @@ void gst_audioadapter_flush_samples(GstAudioAdapter *adapter, guint samples)
 		}
 	}
 
-	g_object_notify_by_pspec(G_OBJECT(adapter), size_pspec);
+	g_object_notify(G_OBJECT(adapter), "size");
 	return;
 }
 
@@ -490,7 +478,7 @@ static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		PROP_SIZE,
-		size_pspec = g_param_spec_uint(
+		g_param_spec_uint(
 			"size",
 			"size",
 			"The number of frames in the adapter.",
