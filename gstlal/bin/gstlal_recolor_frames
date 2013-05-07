@@ -70,7 +70,7 @@ parser.add_option("--duration", metavar = "s", default = 64, type = "int", help 
 parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
+parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz")
 
 #
 # Parse options
@@ -129,7 +129,6 @@ max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1
 rpsd.data = 1. / rpsd.data[:max_sample]
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 # add latency to fix the time stamps
-latency -= 1	# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
 head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = 32 * sr)
 
 # put the units back to strain before writing to frames
