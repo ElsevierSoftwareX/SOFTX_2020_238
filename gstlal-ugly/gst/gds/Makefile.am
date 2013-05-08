@@ -4,6 +4,7 @@ plugin_LTLIBRARIES = libgds_plugin.la
 
 libgds_plugin_la_SOURCES = \
 	gds_plugin.c \
+	framexmitsink.h framexmitsink.cc \
 	framexmitsrc.h framexmitsrc.cc \
 	lvshmsrc.h lvshmsrc.cc \
 	lvshmsink.h lvshmsink.cc

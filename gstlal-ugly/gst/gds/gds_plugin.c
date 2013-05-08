@@ -1,7 +1,7 @@
 /*
  * gds stuff wrapped in gstreamer elements.
  *
- * Copyright (C) 2011  Kipp Cannon
+ * Copyright (C) 2011--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@
  */
 
 
+#include <framexmitsink.h>
 #include <framexmitsrc.h>
 #include <lvshmsink.h>
 #include <lvshmsrc.h>
@@ -61,6 +62,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"gds_framexmitsink", GDS_FRAMEXMITSINK_TYPE},
 		{"gds_framexmitsrc", GDS_FRAMEXMITSRC_TYPE},
 		{"gds_lvshmsink", GDS_LVSHMSINK_TYPE},
 		{"gds_lvshmsrc", GDS_LVSHMSRC_TYPE},
