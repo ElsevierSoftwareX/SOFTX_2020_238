@@ -180,10 +180,24 @@ def condition_imr_template(approximant, data, sample_rate_max, max_mass):
 	return data
 
 
-def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 128):
-	maxpsd = max(psd.data)
+def movingmedian(interval, window_size):
+	tmp = numpy.copy(interval)
+	for i in range(window_size, len(interval)-window_size):
+		tmp[i] = numpy.median(interval[i-window_size:i+window_size])
+	return tmp
+
+
+def movingaverage(interval, window_size):
+	window = lal.CreateTukeyREAL8Window(window_size, 0.5).data.data
+	return numpy.convolve(interval, window, 'same')
+
+
+def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
+	assert newdeltaF < psd.deltaF
 	psddata = psd.data
-	psd.data = psddata
+	psddata[int(0.85*len(psddata)):] = max(psddata)
+	psd.data = movingmedian(psddata, avgwindow)
+	psd.data = movingaverage(psd.data, avgwindow)
 	half_impulse = len(psd.data) - 1
 	kernel, latency, sample_rate = psd_to_fir_kernel(psd)
 	# FIXME is this a no-op? Is the latency returned correct?
@@ -197,9 +211,9 @@ def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 128):
 	newdata = scipy.fft(out)
 	newdata = abs(newdata)**2
 	newdata = newdata[:length//2+1] / len(newdata)**.5 * (newdeltaF / psd.deltaF)**.5
-	newdata[int(0.95*len(newdata)):] = max(newdata)
+	newdata[int(0.85*len(newdata)):] = max(newdata)
 	newdata[:int(minf / newdeltaF)] = max(newdata)
-	
+
 	return laltypes.REAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
