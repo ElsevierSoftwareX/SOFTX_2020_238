@@ -877,8 +877,8 @@ plotnodes.append( gstlal_inspiral_plotsummary_node(plotSummaryJob, dag, name_tag
 plotnodes.append( gstlal_inspiral_plot_sensitivity_node(plotSensitivityJob, dag, name_tag, injdbs=injdbs, zldbs=[noninjdb], p_node=[farnode]) )
 
 # make a web page
-gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=plotnodes)
-gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), p_node=plotnodes)
+gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=plotnodes)
+gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="gstlal-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), p_node=plotnodes)
 
 #
 # all done
