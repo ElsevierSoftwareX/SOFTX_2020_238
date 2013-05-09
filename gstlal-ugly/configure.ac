@@ -271,7 +271,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.24])
+AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.25])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -294,6 +294,8 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	AC_DEFINE([HAVE_FRAMECPP], [1], [Defined if you have framecpp])
 	framecpp_VERSION=`$PKG_CONFIG --modversion framecpp`
 	AC_MSG_NOTICE([framecpp version: $framecpp_VERSION])
+	# we now require this version so this isn't needed, it's left as an
+	# example
 	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [1.19.25], [
 		AC_DEFINE([HAVE_FRAMECPP_FrameLibraryName], [1], [Defined if framecpp supplies FrameLibraryName() function])
 	])

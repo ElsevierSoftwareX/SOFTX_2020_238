@@ -129,28 +129,6 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement,
  */
 
 
-/* FIXME:  remove when we can rely on new-enough framecpp */
-#ifndef HAVE_FRAMECPP_FrameLibraryName
-static const char *get_frame_library_name(FrameCPP::IFrameStream *ifs)
-{
-	static const char *frame_library_names[] = {
-		"unknown",
-		"FrameL",
-		"framecpp",
-	};
-	FrameCPP::Common::FrHeader::frame_library_type frame_library_type = ifs->FrameLibrary();
-	g_assert_cmpint(frame_library_type, >=, 0);
-	g_assert_cmpint(frame_library_type, <=, 2);
-	return frame_library_names[frame_library_type];
-}
-#else
-static const char *get_frame_library_name(FrameCPP::IFrameStream *ifs)
-{
-	return ifs->FrameLibraryName().c_str();
-}
-#endif
-
-
 /*
  * split a string of the form "INSTRUMENT:CHANNEL" into two strings
  * containing the instrument and channel parts separately.  the pointers
@@ -929,9 +907,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			element->frame_library_version = ifs.LibraryRevision();
 			g_object_notify(G_OBJECT(element), "frame-library-version");
 		}
-		if(g_strcmp0(get_frame_library_name(&ifs), element->frame_library_name)) {
+		if(g_strcmp0(ifs.FrameLibraryName().c_str(), element->frame_library_name)) {
 			g_free(element->frame_library_name);
-			element->frame_library_name = g_strdup(get_frame_library_name(&ifs));
+			element->frame_library_name = g_strdup(ifs.FrameLibraryName().c_str());
 			g_object_notify(G_OBJECT(element), "frame-library-name");
 		}
 
