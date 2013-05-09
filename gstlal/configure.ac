@@ -92,9 +92,6 @@ AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
 # Debian and SL6.  FIXME:  find a way to do this properly
 PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
-# AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
 
 
 #
