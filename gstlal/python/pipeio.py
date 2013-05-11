@@ -56,7 +56,8 @@ def repack_complex_array_to_real(arr):
 	# types to gobject
 	if arr.dtype.kind != "c":
 		raise TypeError(arr)
-	return arr.view(dtype = numpy.dtype("f%d" % (arr.dtype.itemsize / 2)))
+	assert arr.dtype.itemsize % 2 == 0
+	return arr.view(dtype = numpy.dtype("f%d" % (arr.dtype.itemsize // 2)))
 
 
 def repack_real_array_to_complex(arr):
@@ -87,9 +88,11 @@ def get_unit_size(caps):
 	struct = caps[0]
 	name = struct.get_name()
 	if name in ("audio/x-raw-complex", "audio/x-raw-float", "audio/x-raw-int"):
-		return struct["channels"] * struct["width"] / 8
+		assert struct["width"] % 8 == 0
+		return struct["channels"] * struct["width"] // 8
 	elif name == "video/x-raw-rgb":
-		return struct["width"] * struct["height"] * struct["bpp"] / 8
+		assert struct["bpp"] % 8 == 0
+		return struct["width"] * struct["height"] * struct["bpp"] // 8
 	raise ValueError(caps)
 
 
@@ -97,21 +100,24 @@ def numpy_dtype_from_caps(caps):
 	struct = caps[0]
 	name = struct.get_name()
 	if name == "audio/x-raw-float":
-		return "f%d" % (struct["width"] / 8)
+		assert struct["width"] % 8 == 0
+		return "f%d" % (struct["width"] // 8)
 	elif name == "audio/x-raw-int":
+		assert struct["width"] % 8 == 0
 		if struct["signed"]:
-			return "i%d" % (struct["width"] / 8)
+			return "i%d" % (struct["width"] // 8)
 		else:
-			return "u%d" % (struct["width"] / 8)
+			return "u%d" % (struct["width"] // 8)
 	elif name == "audio/x-raw-complex":
-		return "c%d" % (struct["width"] / 8)
+		assert struct["width"] % 8 == 0
+		return "c%d" % (struct["width"] // 8)
 	raise ValueError(name)
 
 
 def array_from_audio_buffer(buf):
 	channels = buf.caps[0]["channels"]
 	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
-	a.shape = (len(a) / channels, channels)
+	a.shape = (len(a) // channels, channels)
 	return a
 
 
