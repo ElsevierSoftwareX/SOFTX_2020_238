@@ -44,7 +44,7 @@ __date__ = "FIXME"
 #
 
 
-def repack_complex_array_to_real(input):
+def repack_complex_array_to_real(arr):
 	"""
 	Repack a complex-valued array into a real-valued array with twice
 	as many columns.  Used to set complex arrays as values on elements
@@ -54,12 +54,12 @@ def repack_complex_array_to_real(input):
 	"""
 	# FIXME:  this function shouldn't exist, we should add complex
 	# types to gobject
-	if input.dtype.kind != "c":
-		raise TypeError(input)
-	return input.view(dtype = numpy.dtype("f%d" % (input.dtype.itemsize / 2)))
+	if arr.dtype.kind != "c":
+		raise TypeError(arr)
+	return arr.view(dtype = numpy.dtype("f%d" % (arr.dtype.itemsize / 2)))
 
 
-def repack_real_array_to_complex(input):
+def repack_real_array_to_complex(arr):
 	"""
 	Repack a real-valued array into a complex-valued array with half as
 	many columns.  Used to retrieve complex arrays from elements that
@@ -69,9 +69,9 @@ def repack_real_array_to_complex(input):
 	"""
 	# FIXME:  this function shouldn't exist, we should add complex
 	# types to gobject
-	if input.dtype.kind != "f":
-		raise TypeError(input)
-	return input.view(dtype = numpy.dtype("c%d" % (input.dtype.itemsize * 2)))
+	if arr.dtype.kind != "f":
+		raise TypeError(arr)
+	return arr.view(dtype = numpy.dtype("c%d" % (arr.dtype.itemsize * 2)))
 
 
 #
