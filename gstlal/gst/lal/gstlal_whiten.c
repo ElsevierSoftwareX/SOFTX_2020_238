@@ -382,6 +382,16 @@ static void free_workspace(GSTLALWhiten *element)
 }
 
 
+static gboolean contains_nan(const COMPLEX16FrequencySeries *fseries)
+{
+	unsigned i;
+	for(i = 0; i < fseries->data->length; i++)
+		if(isnan(fseries->data->data[i]))
+			return TRUE;
+	return FALSE;
+}
+
+
 /*
  * psd-related
  */
@@ -713,10 +723,10 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 
 			/*
 			 * Add frequency domain data to spectrum averager
-			 * if not contaminated by gaps
+			 * if not contaminated by gaps or NaNs
 			 */
 
-			if(!block_contains_gaps) {
+			if(!(block_contains_gaps || contains_nan(element->fdworkspace))) {
 				guint n_samples_before = XLALPSDRegressorGetNSamples(element->psd_regressor);
 				if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
