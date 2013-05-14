@@ -238,19 +238,13 @@ def mkshift(pipeline, src, **properties):
 
 def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	properties = {"blocksize": blocksize}
-	if instrument is not None:
-		properties["instrument"] = instrument
-	if channel_name is not None:
-		properties["channel_name"] = channel_name
+	properties.update((name, val) for name, val in (("instrument", instrument), ("channel_name", channel_name)) if val is not None)
 	return mkgeneric(pipeline, None, "lal_fakeligosrc", **properties)
 
 
 def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	properties = {"blocksize": blocksize}
-	if instrument is not None:
-		properties["instrument"] = instrument
-	if channel_name is not None:
-		properties["channel_name"] = channel_name
+	properties.update((name, val) for name, val in (("instrument", instrument), ("channel_name", channel_name)) if val is not None)
 	return mkgeneric(pipeline, None, "lal_fakeadvligosrc", **properties)
 
 
@@ -321,15 +315,11 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 
 
 def mkiirbank(pipeline, src, a1, b0, delay, name=None):
-	properties = {}
-	if name is not None:
-		properties["name"] = name
+	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
 	if a1 is not None:
 		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
 	if b0 is not None:
 		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
-	if delay is not None:
-		properties["delay_matrix"] = delay
 	elem = mkgeneric(pipeline, src, "lal_iirbank", **properties)
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
