@@ -957,11 +957,11 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			if(src_value < 0) {
 				GST_WARNING_OBJECT(element, "requested percentage < 0, clipping to 0");
 				offset = 0;
-			} else if(src_value > 100) {
+			} else if(src_value > GST_FORMAT_PERCENT_MAX) {
 				GST_WARNING_OBJECT(element, "requested percentage > 100, clipping to 100");
 				offset = time_to_offset(element, basesrc->segment.stop);
 			} else
-				offset = gst_util_uint64_scale_int_round(src_value, time_to_offset(element, basesrc->segment.stop), 100);
+				offset = gst_util_uint64_scale_int_round(src_value, time_to_offset(element, basesrc->segment.stop), GST_FORMAT_PERCENT_MAX);
 			break;
 
 		default:
@@ -988,7 +988,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			break;
 
 		case GST_FORMAT_PERCENT:
-			dest_value = gst_util_uint64_scale_int_round(offset, 100, time_to_offset(element, basesrc->segment.stop));
+			dest_value = gst_util_uint64_scale_int_round(offset, GST_FORMAT_PERCENT_MAX, time_to_offset(element, basesrc->segment.stop));
 			break;
 
 		default:
