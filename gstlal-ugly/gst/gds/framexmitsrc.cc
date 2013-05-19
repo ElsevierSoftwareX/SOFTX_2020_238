@@ -1,7 +1,7 @@
 /*
  * GDS framexmit broadcast receiver source element
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012.2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -359,7 +359,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		}
 		goto done;
 	} else
-		GST_DEBUG_OBJECT(element, "recieved %d byte buffer for [%u s, %u s)", len, timestamp, timestamp + duration);
+		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
 
 	/*
 	 * prepare output
@@ -459,10 +459,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 	switch((enum property) id) {
 	case ARG_MULTICAST_IFACE: {
-		const gchar *group;
+		const gchar *iface;
 		g_free(element->iface);
-		if((group = g_value_get_string(value)))
-			element->iface = g_strdup(group);
+		if((iface = g_value_get_string(value)))
+			element->iface = g_strdup(iface);
 		else
 			element->iface = g_strdup(DEFAULT_MULTICAST_IFACE);
 		break;
