@@ -480,7 +480,7 @@ def append_formatted_output_path( fmt, handler, bdir="./", mkdir=True ):
 		return ic
 
 	subdir = bdir + "/".join( [ converter(seg) for seg in fmt.strip().split("/") ] )
-	if mkdir:
+	if mkdir and not os.path.exists( subdir ):
 		os.makedirs( subdir )
 	return subdir
 
