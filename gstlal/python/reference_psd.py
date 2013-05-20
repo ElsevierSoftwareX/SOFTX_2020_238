@@ -374,8 +374,7 @@ def psd_to_fir_kernel(psd):
 	# the kernel's latency
 	#
 
-	# FIXME:  should this be (len(kernel) - 1) / 2 ?
-	latency = (len(kernel) + 1) / 2
+	latency = (len(kernel) - 1) / 2
 
 	#
 	# done
@@ -457,8 +456,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd):
 	# the kernel's latency
 	#
 
-	# FIXME:  should this be (len(kernel) - 1) / 2 ?
-	latency = (len(kernel) + 1) / 2
+	latency = (len(kernel) - 1) / 2
 
 	#
 	# done

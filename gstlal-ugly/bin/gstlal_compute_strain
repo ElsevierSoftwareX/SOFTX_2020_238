@@ -203,7 +203,7 @@ max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1
 rpsd.data = 1. / rpsd.data[:max_sample]
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 # Add latency to fix the time stamps
-latency -= 2# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
+latency -= 1# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
 psl = pipeparts.mkfirbank(pipeline, psl, latency = latency, fir_matrix = [fir_matrix], block_stride = sr)
 # Put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line

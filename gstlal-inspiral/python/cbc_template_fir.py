@@ -201,7 +201,7 @@ def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
 	half_impulse = len(psd.data) - 1
 	kernel, latency, sample_rate = psd_to_fir_kernel(psd)
 	# FIXME is this a no-op? Is the latency returned correct?
-	d = kernel[latency-half_impulse-1:latency+half_impulse]
+	d = kernel[latency-half_impulse:latency+half_impulse+1]
 	# FIXME check even/odd
 	length = int(round(psd.deltaF / newdeltaF * 2 * half_impulse))
 	# FIXME maybe don't do the uwrapping??
