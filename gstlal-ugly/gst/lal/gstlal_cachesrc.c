@@ -195,6 +195,29 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
+static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
+{
+	guint i;
+
+	g_assert(element->cache != NULL);
+
+	/*
+	 * the loop assumes the cache entries are in time order and
+	 * searches for the first file whose end is past the requested
+	 * time
+	 */
+
+	for(i = 0; i < element->cache->numFrameFiles; i++) {
+		if(i)
+			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
+		if(cache_entry_end_time(element, i) > t)
+			break;
+	}
+
+	return i;
+}
+
+
 /*
  * ============================================================================
  *
@@ -384,34 +407,25 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	}
 
 	/*
-	 * do the seek.  the loop assumes the cache entries are in time
-	 * order and searches for the first file whose end is past the
-	 * requested time.
+	 * do the seek.
 	 */
 
-	for(i = 0; i < element->cache->numFrameFiles; i++) {
-		GstClockTime min = cache_entry_start_time(element, i);
-		GstClockTime max = cache_entry_end_time(element, i);
-		if(i)
-			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
-		if(max <= (GstClockTime) segment->start)
-			continue;
-		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(min), GST_TIME_SECONDS_ARGS(max));
-		if((GstClockTime) segment->start < min)
-			GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " uri starts at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(min));
-		if(GST_CLOCK_TIME_IS_VALID(segment->stop) && (GstClockTime) segment->stop <= min) {
-			GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("no data available for segment"));
-			success = FALSE;
-		}
-		goto checkfordiscont;
-	}
-	GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
+	i = time_to_index(element, segment->start);
+	if(i >= element->cache->numFrameFiles)
+		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
+	else if(GST_CLOCK_TIME_IS_VALID(segment->stop) && (GstClockTime) segment->stop <= cache_entry_start_time(element, i)) {
+		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("no data available for segment"));
+		success = FALSE;
+		goto done;
+	} else if((GstClockTime) segment->start < cache_entry_start_time(element, i))
+		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));
+	else
+		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->frameFiles[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));
 
 	/*
 	 * done
 	 */
 
-checkfordiscont:
 	if(i != element->index) {
 		basesrc->offset = 0;
 		element->index = i;
@@ -436,6 +450,81 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		success = parent_class->query(basesrc, query);
 	else {
 		switch(GST_QUERY_TYPE(query)) {
+		case GST_QUERY_FORMATS:
+			gst_query_set_formats(query, 3, GST_FORMAT_TIME, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
+			break;
+
+		case GST_QUERY_CONVERT: {
+			GstFormat src_format, dst_format;
+			gint64 src_value, dst_value;
+			GstClockTime time;
+
+			g_return_val_if_fail(element->cache != NULL, FALSE);
+
+			gst_query_parse_convert(query, &src_format, &src_value, &dst_format, &dst_value);
+
+			/*
+			 * convert all source formats to a time
+			 */
+
+			switch(src_format) {
+			case GST_FORMAT_TIME:
+				time = src_value;
+				break;
+
+			case GST_FORMAT_BUFFERS:
+				if(src_value < 0)
+					time = cache_entry_start_time(element, 0);
+				else if(src_value < element->cache->numFrameFiles)
+					time = cache_entry_start_time(element, src_value);
+				else
+					time = cache_entry_end_time(element, element->cache->numFrameFiles - 1);
+				break;
+
+			case GST_FORMAT_PERCENT:
+				if(src_value < 0)
+					time = cache_entry_start_time(element, 0);
+				else if(src_value <= GST_FORMAT_PERCENT_MAX)
+					time = cache_entry_start_time(element, 0) + gst_util_uint64_scale_round(cache_entry_start_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), src_value, GST_FORMAT_PERCENT_MAX);
+				else
+					time = cache_entry_end_time(element, element->cache->numFrameFiles - 1);
+				break;
+
+			default:
+				g_assert_not_reached();
+				success = FALSE;
+				break;
+			}
+
+			/*
+			 * convert time to destination format
+			 */
+
+			switch(dst_format) {
+			case GST_FORMAT_TIME:
+				dst_value = time;
+				break;
+
+			case GST_FORMAT_BUFFERS:
+				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_start_time(element, element->cache->numFrameFiles - 1));
+				dst_value = time_to_index(element, time);
+				break;
+
+			case GST_FORMAT_PERCENT:
+				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_start_time(element, element->cache->numFrameFiles - 1));
+				dst_value = gst_util_uint64_scale_round(cache_entry_start_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), GST_FORMAT_PERCENT_MAX, time - cache_entry_start_time(element, 0));
+				break;
+
+			default:
+				g_assert_not_reached();
+				success = FALSE;
+				break;
+			}
+
+			gst_query_set_convert(query, src_format, src_value, dst_format, dst_value);
+			break;
+		}
+
 		case GST_QUERY_POSITION:
 			if(element->index < element->cache->numFrameFiles)
 				/* report start of next file */
