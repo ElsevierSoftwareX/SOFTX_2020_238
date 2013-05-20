@@ -43,7 +43,7 @@ from gstlal import reference_psd
 from gstlal import datasource
 
 
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0, width = 64):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -67,15 +67,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
-	# add a reblock element.  to reduce disk I/O gstlal_inspiral asks
-	# framesrc to provide enormous buffers, and it helps reduce the RAM
-	# pressure of the pipeline by slicing them up.  also, the
-	# whitener's gap support isn't 100% yet and giving it smaller input
-	# buffers works around the remaining weaknesses (namely that when
-	# it sees a gap buffer large enough to drain its internal history,
-	# it doesn't know enough to produce a short non-gap buffer to drain
-	# its history followed by a gap buffer, it just produces one huge
-	# non-gap buffer that's mostly zeros).
+	# add a reblock element.  the whitener's gap support isn't 100% yet
+	# and giving it smaller input buffers works around the remaining
+	# weaknesses (namely that when it sees a gap buffer large enough to
+	# drain its internal history, it doesn't know enough to produce a
+	# short non-gap buffer to drain its history followed by a gap
+	# buffer, it just produces one huge non-gap buffer that's mostly
+	# zeros).
 	#
 
 	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
