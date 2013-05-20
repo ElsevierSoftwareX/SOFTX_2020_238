@@ -190,7 +190,8 @@ enum property {
 	ARG_SNR_THRESH,
 	ARG_BANK_FILENAME,
 	ARG_SIGMASQ,
-	ARG_AUTOCORRELATION_MATRIX
+	ARG_AUTOCORRELATION_MATRIX,
+	ARG_AUTOCORRELATION_MASK
 };
 
 
@@ -263,6 +264,19 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 	}
 
+	case ARG_AUTOCORRELATION_MASK: {
+		unsigned channels;
+		g_mutex_lock(element->bank_lock);
+
+		if(element->autocorrelation_mask)
+			gsl_matrix_int_free(element->autocorrelation_mask);
+
+		element->autocorrelation_mask = gstlal_gsl_matrix_int_from_g_value_array(g_value_get_boxed(value));
+
+		g_mutex_unlock(element->bank_lock);
+		break;
+	}
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -316,6 +330,17 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
 		else {
 			GST_WARNING_OBJECT(element, "no autocorrelation matrix");
+			g_value_take_boxed(value, g_value_array_new(0));
+			}
+		g_mutex_unlock(element->bank_lock);
+		break;
+
+	case ARG_AUTOCORRELATION_MASK:
+		g_mutex_lock(element->bank_lock);
+		if(element->autocorrelation_mask)
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->autocorrelation_mask));
+		else {
+			GST_WARNING_OBJECT(element, "no autocorrelation mask");
 			g_value_take_boxed(value, g_value_array_new(0));
 			}
 		g_mutex_unlock(element->bank_lock);
@@ -463,7 +488,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
-			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			}
 		if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
@@ -655,6 +680,10 @@ static void finalize(GObject *object)
 		gsl_matrix_complex_free(element->autocorrelation_matrix);
 		element->autocorrelation_matrix = NULL;
 	}
+	if(element->autocorrelation_mask) {
+		gsl_matrix_int_free(element->autocorrelation_mask);
+		element->autocorrelation_mask = NULL;
+	}
 	if(element->autocorrelation_norm) {
 		gsl_vector_free(element->autocorrelation_norm);
 		element->autocorrelation_norm = NULL;
@@ -810,6 +839,32 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_AUTOCORRELATION_MASK,
+		g_param_spec_value_array(
+			"autocorrelation-mask",
+			"Autocorrelation Mask",
+			"Array of integer autocorrelation mask vectors.  Number of vectors (rows) in mask sets number of channels.  All vectors must have the same length. The mask values are either 0 or 1 and indicate whether to use the corresponding matrix entry in computing the autocorrelation chi-sq statistic.",
+			g_param_spec_value_array(
+				"autocorrelation",
+				"Autocorrelation",
+				"Array of autocorrelation mask values.",
+				/* FIXME:  should be complex */
+				g_param_spec_double(
+					"sample",
+					"Sample",
+					"Autocorrelation mask value",
+					0, 1, 0.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
 }
 
 
@@ -860,6 +915,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->EOS = FALSE;
 	element->snr_mat = NULL;
 	element->autocorrelation_matrix = NULL;
+	element->autocorrelation_mask = NULL;
 	element->autocorrelation_norm = NULL;
 }
 

@@ -180,6 +180,16 @@ def condition_imr_template(approximant, data, sample_rate_max, max_mass):
 	return data
 
 
+def compute_autocorrelation_mask( autocorrelation ):
+	'''
+	Given an autocorrelation time series, estimate the optimal
+	autocorrelation length to use and return a matrix which masks
+	out the unwanted elements. FIXME TODO for now just returns
+	ones
+	'''
+	return numpy.ones( autocorrelation.shape, dtype="int" )
+
+
 def movingmedian(interval, window_size):
 	tmp = numpy.copy(interval)
 	for i in range(window_size, len(interval)-window_size):
@@ -263,8 +273,10 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if not (autocorrelation_length % 2):
 			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
 		autocorrelation_bank = numpy.zeros((len(template_table), autocorrelation_length), dtype = "cdouble")
+		autocorrelation_mask = compute_autocorrelation_mask( autocorrelation_bank )
 	else:
 		autocorrelation_bank = None
+		autocorrelation_mask = None
 
 	# Have one template bank for each time_slice
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
@@ -364,7 +376,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			template_bank[frag_num][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
 			template_bank[frag_num][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
-	return template_bank, autocorrelation_bank, sigmasq
+	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq
 
 
 def decompose_templates(template_bank, tolerance, identity = False):

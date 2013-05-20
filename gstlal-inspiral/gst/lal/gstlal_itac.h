@@ -84,6 +84,7 @@ typedef struct {
 	gboolean EOS;
 	void *snr_mat;
 	gsl_matrix_complex *autocorrelation_matrix;
+	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
 	
 	GMutex *bank_lock;

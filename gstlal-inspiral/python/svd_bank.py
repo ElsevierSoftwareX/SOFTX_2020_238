@@ -147,7 +147,7 @@ class Bank(object):
 		self.bank_id = bank_id
 
 		# Generate downsampled templates
-		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
+		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
 			read_approximant(bank_xmldoc),
 			psd,
@@ -266,6 +266,7 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = Def
 	# Add root-level arrays
 	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
 	root.appendChild(array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
+	root.appendChild(array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
 	root.appendChild(array.from_array('sigmasq', numpy.array(bank.sigmasq)))
 
 	# Write bank fragments
@@ -328,6 +329,7 @@ def read_bank(filename, contenthandler = DefaultContentHandler, verbose = False)
 	autocorrelation_bank_real = array.get_array(root, 'autocorrelation_bank_real').array
 	autocorrelation_bank_imag = array.get_array(root, 'autocorrelation_bank_imag').array
 	bank.autocorrelation_bank = autocorrelation_bank_real + (0+1j) * autocorrelation_bank_imag
+	bank.autocorrelation_mask = array.get_array(root, 'autocorrelation_mask').array
 	bank.sigmasq = array.get_array(root, 'sigmasq').array
 
 	bank_fragments = []
