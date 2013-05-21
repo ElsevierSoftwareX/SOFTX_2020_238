@@ -202,6 +202,14 @@ FIXME
 	imgtable = cbcwebpage.image_glob(base_name+'3_chi2_vs_rho_*closedbox.png')
 	page.subpages["chisq"].sections["chisq"].add_table(imgtable, "Chi-squared Vs SNR", "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 
+	page.subpages["chisq"].add_section("snr","Signal-to-Noise Ratio")
+	imgtable = cbcwebpage.image_glob(base_name+'4_rho_*_vs_*closedbox.png')
+	page.subpages["chisq"].sections["snr"].add_table(imgtable, "Signal-to-Noise Ratio", "Comparison of SNR in pairs of detectors.")
+
+	page.subpages["chisq"].add_section("deff","Effective Distance")
+	imgtable = cbcwebpage.image_glob(base_name+'4_deff_*_vs_*closedbox.png')
+	page.subpages["chisq"].sections["deff"].add_table(imgtable, "Effective Distance", "Comparison of effective distance in pairs of detectors.")
+
 	### Money Plots ###
 	page.add_subpage("money","Money Plots", "Money Plots")
 	page.subpages["money"].div("""
@@ -232,6 +240,14 @@ FIXME
 	page.subpages["chisq"].add_section("chisq","Chi-squared vs SNR")
 	imgtable = cbcwebpage.image_glob(base_name+'3_chi2_vs_rho_*openbox.png')
 	page.subpages["chisq"].sections["chisq"].add_table(imgtable, "Chi-squared Vs SNR", "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+
+	page.subpages["chisq"].add_section("snr","Signal-to-Noise Ratio")
+	imgtable = cbcwebpage.image_glob(base_name+'4_rho_*_vs_*openbox.png')
+	page.subpages["chisq"].sections["snr"].add_table(imgtable, "Signal-to-Noise Ratio", "Comparison of SNR in pairs of detectors.")
+
+	page.subpages["chisq"].add_section("deff","Effective Distance")
+	imgtable = cbcwebpage.image_glob(base_name+'4_deff_*_vs_*openbox.png')
+	page.subpages["chisq"].sections["deff"].add_table(imgtable, "Effective Distance", "Comparison of effective distance in pairs of detectors.")
 
 	### Money Plots ###
 	page.add_subpage("money","Money Plots", "Money Plots")
