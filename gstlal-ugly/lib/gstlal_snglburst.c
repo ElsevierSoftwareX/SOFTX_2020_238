@@ -79,13 +79,13 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_peak_state
 	GstBuffer *srcbuf = NULL;
 	GstCaps *caps = GST_PAD_CAPS(pad);
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
+	if (result != GST_FLOW_OK)
+		return srcbuf;
+
 	SnglBurst *output = (SnglBurst *) GST_BUFFER_DATA(srcbuf);
 	guint channel;
 	double *maxdata = input->values.as_double;
 	guint *maxsample = input->samples;
-
-	if (result != GST_FLOW_OK)
-		return srcbuf;
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
