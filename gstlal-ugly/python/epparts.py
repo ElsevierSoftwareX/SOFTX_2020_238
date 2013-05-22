@@ -227,7 +227,8 @@ class EPHandler( Handler ):
 			self.shutdown(None, None)
 			return
 		elif message.type == gst.MESSAGE_LATENCY:
-			print >>sys.stderr, "Got latency message, ignoring for now."
+			if self.verbose:
+				print >>sys.stderr, "Got latency message, ignoring for now."
 			return
 		elif message.structure is None: 
 			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored." % str(message.type)
