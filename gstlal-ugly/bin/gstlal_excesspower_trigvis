@@ -68,6 +68,7 @@ parser.add_option("-X", "--overlay-summary", action="append", help="Parse the se
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
+parser.add_option("-O", "--tile-opacity", type=float, action="store", default=1.0, help="Set the opacity of the plotted tiles. This is useful in the case of non-clustered output to see tiles which may obscured by others. Set to a value between 0 and 1. Default is 1.")
 parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
 parser.add_option("-j", "--plot-injections-from-file", action="store", help="Plot all injections from the file indicated. File must contain a sim_burst or sim_inspiral table. If a sim_inspiral table is found, will plot the 3.5 PN time-frequency track. If a sim_burst table is found, will plot the approximate extent of the time frequency area on the map.")
 
@@ -327,7 +328,7 @@ for channel, selected_events in event_iter:
 	if channel not in channels: continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
+	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf"), selected_events )
 	if opts.exclude_outside_segments:
 		for k in segs.keys():
 			try:
@@ -445,7 +446,7 @@ for channel, selected_events in event_iter:
 
 	# TODO: See if replacing data speeds up the process
 	if opts.plotting_type in ["tile", "both"]:
-		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
+		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False, alpha=options.tile_opacity )
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
 	if opts.plotting_type == "marker":
@@ -662,7 +663,9 @@ for channel, selected_events in event_iter:
 # Drop the file
 filename = opts.output_file or "trigmap"
 filename, filext = os.path.splitext(filename)
-if len(filext) == 0: filext = None
+if len(filext) == 0: filext = "png"
+else: filext = filext[1:]
 if opts.mark_time: filename += "_%d" % int(opts.mark_time)
+filename = "%s.%s" % (filename, filext)
 print "Saving " + filename
-fig.savefig( "%s.%s" % (filename, filext[1:] or "png") )
+fig.savefig( filename )
