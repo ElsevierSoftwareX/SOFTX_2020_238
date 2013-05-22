@@ -239,7 +239,7 @@ def get_triggers(elem, handler):
 			uniq += 1
 		"""
 
-		handler.process_triggers( [], cluster_passes = True )
+		#handler.process_triggers( [], cluster_passes = True )
 		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
 
@@ -564,10 +564,6 @@ print "FIR bank constructed with %d %f Hz channels" % (nchannels, handler.base_b
 if verbose:
 	head = pipeparts.mkprogressreport( pipeline, head, "FIR bank stream" )
 
-# This is used at the terminal point of each branch to agglomerate the triggers
-# into a single sink
-trigfunnel = pipeparts.mkgeneric( pipeline, None, "funnel" )
-
 postfirtee = pipeparts.mktee( pipeline, head )
 
 # First branch -- send fully sampled data to wider channels for processing
@@ -654,7 +650,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# samples to sum -- two is min number
 	ndof = 2
 
-	head = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+	#head = pipeparts.mktee( pipeline, pipeparts.mkqueue( pipeline, head ) )
+	head = pipeparts.mktee( pipeline, head )
 	while ndof <= max_samp:
 		if fix_dof is not None and ndof != fix_dof:
 			ndof <<= 1
@@ -736,16 +733,13 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
 				"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 			)
-
 		# Funnel the triggers for this subbranch to the appsink
-		durtee.link( trigfunnel )
+		appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, durtee))
+		appsink.connect_after("new-buffer", get_triggers, handler)
 
 		ndof <<= 1
 		if ndof > max_samp:
 			break
-
-appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, trigfunnel))
-appsink.connect_after("new-buffer", get_triggers, handler)
 
 ### END OF PIPELINE
 
