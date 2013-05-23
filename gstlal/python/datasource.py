@@ -127,6 +127,25 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 
 	return onstr, offstr
 
+
+#
+# look-up table to map instrument name to framexmit multicast address and
+# port
+#
+# FIXME:  this is only here temporarily while we test this approach to data
+# aquisition.  obviously we can't hard-code this stuff
+#
+
+
+framexmit_ports = {
+	"CIT": {
+		"H1": ("224.3.2.1", 7096),
+		"L1": ("224.3.2.2", 7097),
+		"V1": ("224.3.2.3", 7098),
+	}
+}
+
+
 #
 # Class to hold the data associated with data sources
 #
@@ -295,8 +314,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
 
-		# FIXME make wait_time adjustable through web interface or command line or both
-		src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
+		# FIXME:  add framexmit as a distinct input choice
+		if True:
+			# FIXME make wait_time adjustable through web interface or command line or both
+			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
+		else:
+			src = pipeparts.mkgeneric(pipeline, None, "gds_framexmitsrc", multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1])
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
