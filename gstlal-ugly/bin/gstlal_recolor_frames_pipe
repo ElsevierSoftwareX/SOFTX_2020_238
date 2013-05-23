@@ -109,6 +109,25 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
 
+class gstlal_median_psd_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_median_psd job
+	"""
+	def __init__(self, executable=which('gstlal_ninja_median_of_psds'), tag_base='gstlal_ninja_median_of_psds'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_ninja_median_of_psds'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
+
+
 class gstlal_ninja_smooth_reference_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_ninja_smooth_reference_psd job
@@ -166,6 +185,25 @@ class gstlal_ninja_smooth_reference_psd_node(pipeline.CondorDAGNode):
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
+
+
+class gstlal_median_psd_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_median_psd node
+	"""
+	def __init__(self, job, dag, instrument, input_psds, output, p_node=[]):
+		pipeline.CondorDAGNode.__init__(self,job)
+		path = os.getcwd()
+		#FIXME shouldn't be hardcoding stuff like this
+		output_name = self.output_name = output
+		self.add_var_opt("instrument", instrument)
+		self.add_var_opt("output-name", output_name)
+		for psd in input_psds:
+			self.add_file_arg(psd)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
 
 #
 # classes for generating recolored frames
@@ -267,14 +305,25 @@ breakupsegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()
 smoothJob = gstlal_ninja_smooth_reference_psd_job()
+medianJob = gstlal_median_psd_job()
 colorJob = gstlal_recolor_frames_job()
 
+smoothnode = {}
+mediannode = {}
+
 for instrument, seglist in seglists.iteritems():
+	mediannode[instrument] = {}
+	smoothnode[instrument] = {}
 	for seg in seglist:
 		#FIXME if there are sements without frame caches this will barf
 		psdnode = gstlal_reference_psd_node(psdJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], injections=options.injections, p_node=[])
-		smoothnode = gstlal_ninja_smooth_reference_psd_node(smoothJob, dag, instrument, psdnode.output_name,  p_node=[psdnode])
-		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=smoothnode.output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], p_node=[smoothnode])
+		smoothnode[instrument][seg] = gstlal_ninja_smooth_reference_psd_node(smoothJob, dag, instrument, psdnode.output_name,  p_node=[psdnode])
+
+	mediannode[instrument] = gstlal_median_psd_node(medianJob, dag, instrument, [v.output_name for v in smoothnode[instrument].values()], "%s_median_psd.xml.gz" % instrument, p_node=smoothnode[instrument].values())
+
+for instrument, seglist in seglists.iteritems():
+	for seg in seglist:
+		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], p_node=[mediannode[instrument]])
 		
 dag.write_sub_files()
 dag.write_dag()
