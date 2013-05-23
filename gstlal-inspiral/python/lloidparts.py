@@ -333,7 +333,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 #
 
 
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, nxydump_segment = None, fir_stride = None, control_peak_time = None):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None):
 	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
@@ -429,7 +429,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return src
 
 
-def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, block_duration = None, snrslices = None):
+def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None):
 	"""Build the pipeline fragment that creates the SnrSlices associated with different sample rates from hoft."""
 	#
 	# parameters
@@ -479,6 +479,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			control_snksrc,
 			peak_half_width,
 			peak_half_width,
+			block_duration,
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time
@@ -769,12 +770,12 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			hoftdicts[instrument],
 			bank,
 			control_snksrc,
+			block_duration,
 			verbose = verbose,
 			logname = suffix,
 			nxydump_segment = nxydump_segment,
 			control_peak_time = control_peak_time,
 			fir_stride = fir_stride,
-			block_duration = block_duration,
 			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
