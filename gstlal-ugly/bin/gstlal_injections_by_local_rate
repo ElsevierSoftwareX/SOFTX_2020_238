@@ -110,7 +110,7 @@ class source(object):
 parser = OptionParser(description = __doc__)
 parser.add_option("--gps-start-time", metavar = "seconds", type = "int", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", type = "int", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--bns-waveform", metavar = "str", default = "TaylorT4threePointFivePN", help = "Set the name of the bns waveform, default = TaylorT4threePointFivePN")
+parser.add_option("--bns-waveform", metavar = "str", default = "SpinTaylorT4threePointFivePN", help = "Set the name of the bns waveform, default = TaylorT4threePointFivePN")
 parser.add_option("--nsbh-waveform", metavar = "str", default = "SpinTaylorT4threePointFivePN", help = "Set the name of the nsbh waveform, default = SpinTaylorT4threePointFivePN")
 parser.add_option("--bbh-waveform", metavar = "str", default = "EOBNRv2HMpseudoFourPN", help = "Set the name of the bbh waveform, default = EOBNRv2HMpseudoFourPN")
 parser.add_option("--bns-local-rate", metavar = "mergers / Mpc^3 / Myr", default = 1.0, type = "float", help = "set the local merger rate in mergers / Mpc^3 / Myr. Setting to 0.0 or less will disable the BNS distribution - default = 1.0")
@@ -122,6 +122,8 @@ parser.add_option("--nsbh-max-distance", metavar = "Mpc", type = "float", defaul
 parser.add_option("--bbh-max-distance", metavar = "Mpc", type = "float", default = 5000., help = "set the bbh maximum distance (respected approximately) default = 5000")
 parser.add_option("--ns-min-mass", metavar = "Msun", type = "float", default = 1.0, help = "set the minimum mass of the neutron star, default = 1.0")
 parser.add_option("--ns-max-mass", metavar = "Msun", type = "float", default = 2.0, help = "set the maximum mass of the neutron star, default = 2.0")
+parser.add_option("--ns-min-spin", metavar = "dimensionless", type = "float", default = 0., help = "set the min neutron star spin, default = 0")
+parser.add_option("--ns-max-spin", metavar = "dimensionless", type = "float", default = 0., help = "set the max neutron star spin, default = 0")
 parser.add_option("--bh-min-mass", metavar = "Msun", type = "float", default = 5.0, help = "set the minimum mass of the black hole, default = 5.0")
 parser.add_option("--bh-max-mass", metavar = "Msun", type = "float", default = 20.0, help = "set the maximum mass of the black hole, default = 20.0")
 parser.add_option("--bh-min-spin", metavar = "dimensionless", type = "float", default = 0., help = "set the min black hole spin, default = 0")
@@ -153,7 +155,7 @@ random.seed(options.seed)
 # set up the types of sources
 srcs = []
 if options.bns_local_rate > 0.0:
-	srcs.append(source(options.bns_waveform, (options.ns_min_mass, options.ns_max_mass), (options.ns_min_mass, options.ns_max_mass), (0,0), (0,0), options.bns_local_rate, options.bns_max_distance, start, stop))
+	srcs.append(source(options.bns_waveform, (options.ns_min_mass, options.ns_max_mass), (options.ns_min_mass, options.ns_max_mass), (options.ns_min_spin, options.ns_max_spin), (options.ns_min_spin, options.ns_max_spin), options.bns_local_rate, options.bns_max_distance, start, stop))
 if options.nsbh_local_rate > 0.0:
 	srcs.append(source(options.nsbh_waveform, (options.ns_min_mass,options.ns_max_mass), (options.bh_min_mass, options.bh_max_mass), (0,0), (options.bh_min_spin, options.bh_max_spin), options.nsbh_local_rate, options.nsbh_max_distance, start, stop))
 if options.bbh_local_rate > 0.0:
