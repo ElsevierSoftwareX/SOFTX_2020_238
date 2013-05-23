@@ -201,7 +201,9 @@ class GWDataSourceInfo(object):
 		self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
 		self.dq_channel_type = "LLD"
 		if options.dq_channel_name is not None:
-			self.dq_channel_dict.update( channel_dict_from_channel_list(options.dq_channel_name) )
+			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
+			instrument = dq_channel_dict_from_options.keys()[0]
+			self.dq_channel_dict.update( dq_channel_dict_from_options )
 			dq_channel = self.dq_channel_dict[instrument]
 			if dq_channel.split("-")[1][:3] == "ODC":
 				self.dq_channel_type = "ODC"
