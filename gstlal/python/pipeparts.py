@@ -40,6 +40,7 @@ import gst
 
 from glue import segments
 from gstlal import pipeio
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -101,12 +102,33 @@ class src_deferred_link(object):
 
 
 #
-# framecpp channeldemux units helper
+# framecpp channeldemux helpers
 #
 
 
 class framecpp_channeldemux_set_units(object):
 	def __init__(self, elem, units_dict):
+		"""
+		Connect a handler for the pad-added signal of the
+		framecpp_channeldemux element elem, and when a pad is added
+		to the element if the pad's name appears as a key in the
+		units_dict dictionary that pad's units property will be set
+		to the string value associated with that key in the
+		dictionary.
+
+		Example:
+
+		>>> framecpp_channeldemux_set_units(elem, {"H1:LSC-STRAIN": "strain"})
+
+		NOTE:  this is a work-around to address the problem that
+		most (all?) frame files do not have units set on their
+		channel data, whereas downstream consumers of the data
+		might require information about the units.  The demuxer
+		provides the units as part of a tag event, and
+		framecpp_channeldemux_set_units() can be used to override
+		the values, thereby correcting absent or incorrect units
+		information.
+		"""
 		self.elem = elem
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, units_dict)
 
@@ -115,6 +137,32 @@ class framecpp_channeldemux_set_units(object):
 		name = pad.get_name()
 		if name in units_dict:
 			pad.set_property("units", units_dict[name])
+
+
+class framecpp_channeldemux_check_segments(object):
+	def __init__(self, elem, seglists):
+		self.elem = elem
+		self.buffer_probe_handler_ids = {}
+		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
+
+	@staticmethod
+	def pad_added(element, pad, seglists):
+		name = pad.get_name()
+		if name in self.buffer_probe_handler_ids:
+			pad.remove_buffer_probe(self.buffer_probe_handler_ids.pop(name))
+		if name in seglists:
+			self.buffer_probe_handler_ids[name] = pad.add_buffer_probe(self.buffer_probe, seglists[name])
+
+	@staticmethod
+	def buffer_probe(pad, buf, seglist):
+		# remove the current buffer from the data we're expecting
+		# to see
+		seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(buf.timestamp), LIGOTimeGPS(buf.timestamp + buf.duration)))])
+		# are we still expecting to see anything that precedes the
+		# current buffer?
+		preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(buf.timestamp)))
+		if seglist.intersects_segment(preceding):
+			raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & preceding))
 
 
 #
@@ -173,8 +221,13 @@ def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
 
-def mkframecppchannelmux(pipeline, src, **properties):
-	return mkgeneric(pipeline, src, "framecpp_channelmux", **properties)
+def mkframecppchannelmux(pipeline, src, units = None, seglists = None, **properties):
+	elem = mkgeneric(pipeline, src, "framecpp_channelmux", **properties)
+	if units is not None:
+		framecpp_channeldemux_set_units(elem, units)
+	if seglists is not None:
+		framecpp_channeldemux_check_segments(elem, seglists)
+	return elem
 
 
 def mkframecppfilesink(pipeline, src, **properties):
