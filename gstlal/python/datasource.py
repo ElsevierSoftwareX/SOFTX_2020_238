@@ -279,6 +279,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, use_mmap = True, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
 		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
+		pipeparts.framecpp_channeldemux_check_segments(demux, dict(("%s:%s" % (instrument, channel), gw_data_source_info.frame_segments[instrument]) for instrument, channel in gw_data_source_info.channel_dict.items()))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
 		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 2, max_size_bytes = 0, max_size_time = 0)
