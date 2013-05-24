@@ -1,4 +1,4 @@
-# Copyright (C) 2009--2011  LIGO Scientific Collaboration
+# Copyright (C) 2009--2013  LIGO Scientific Collaboration
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the

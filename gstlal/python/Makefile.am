@@ -1,3 +1,5 @@
+SUBDIRS = pipeparts
+
 INCLUDES = -I$(top_srcdir)/lib
 
 # This is a trick taken from the gst-python automake setup.
@@ -17,7 +19,6 @@ pkgpython_PYTHON = \
 	misc.py \
 	multirate_datasource.py \
 	pipeio.py \
-	pipeparts.py \
 	pipeutil.py \
 	reference_psd.py \
 	simplehandler.py \
