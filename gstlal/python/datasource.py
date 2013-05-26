@@ -300,7 +300,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, use_mmap = True, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
 		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
-		pipeparts.framecpp_channeldemux_check_segments(demux, dict(("%s:%s" % (instrument, channel), gw_data_source_info.frame_segments[instrument]) for instrument, channel in gw_data_source_info.channel_dict.items()))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
 		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 2, max_size_bytes = 0, max_size_time = 0)
@@ -308,8 +307,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
-			# FIXME:  add a mechanism to detect missing data (use a buffer probe?)
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
+			# FIXME:  this is busted
+			#pipeparts.framecpp_channeldemux_check_segments(src, dict(("%s:%s" % (instrument, channel), gw_data_source_info.frame_segments[instrument]) for instrument, channel in gw_data_source_info.channel_dict.items()))
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	elif gw_data_source_info.data_source == "lvshm":
