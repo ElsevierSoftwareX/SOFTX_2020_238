@@ -336,7 +336,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# integral properly
 		#
 
-		sigmasq.append(norm * psd_initial_deltaF / 2.)
+		sigmasq.append(norm)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
