@@ -348,7 +348,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# integral properly
 		#
 
-		sigmasq.append(norm)
+		sigmasq.append(2*norm)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
