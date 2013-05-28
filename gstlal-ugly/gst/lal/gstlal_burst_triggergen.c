@@ -347,7 +347,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
+		success = gst_pad_set_caps(element->sinkpad, caps);
 
 	/*
 	 * update the element metadata
@@ -388,32 +388,33 @@ static void update_state(GSTLALBurst_Triggergen *element, GstBuffer *srcbuf)
 static GstFlowReturn push_buffer(GSTLALBurst_Triggergen *element, GstBuffer *srcbuf)
 {
 	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	return gst_pad_push(element->srcpad, srcbuf);
+	GstFlowReturn result = gst_pad_push(element->srcpad, srcbuf);
+	element->total_offset = 0;
+	element->event_buffer = NULL;
+	return result;
 }
 
 static GstFlowReturn push_gap(GSTLALBurst_Triggergen *element, guint samps)
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	/* Clearing the max data structure causes the resulting buffer to be a GAP */
+	/* Clearing the max data structure and advance the offset */
 	gstlal_peak_state_clear(element->maxdata);
 	gstlal_peak_state_clear(element->maxdatad);
-	/* create the output buffer */
-	switch(element->data_type){
-		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE:
-			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, &(element->count));
-			break;
-		case GSTLAL_BURSTTRIGGEN_DOUBLE:
-			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, &(element->count));
-			break;
-		default:
-			g_assert_not_reached();
-			break;
+
+	element->total_offset += samps;
+
+	/* potentially push the result */
+	GstClockTime total_duration = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, element->total_offset, element->rate);
+	if (total_duration >= 1e10 || element->EOS) {
+		srcbuf = gstlal_snglburst_new_buffer_from_list(element->event_buffer, element->srcpad, element->next_output_offset, element->total_offset, element->next_output_timestamp, element->rate, &(element->count));
+
+		if (srcbuf == NULL) { 
+			return GST_FLOW_ERROR;
+		}
+		update_state(element, srcbuf);
+		result = push_buffer(element, srcbuf);
 	}
-	/* set the time stamp and offset state */
-	update_state(element, srcbuf);
-	/* push the result */
-	result = push_buffer(element, srcbuf);
 	return result;
 }
 
@@ -425,6 +426,10 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 	double complex *dataptr = NULL;
 	double *dataptrd = NULL;
 
+	/* advance the offset */
+	GstClockTime total_duration = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, element->total_offset, element->rate);
+	element->total_offset += outsamps;
+
 	switch(element->data_type){
 		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE:
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
@@ -433,8 +438,10 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 			/* Find the peak */
 			gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
-			/* create the output buffer */
-			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, &(element->count));
+			/* Either update the current buffer or create the new output buffer */
+			if (element->maxdata->num_events != 0) {
+				element->event_buffer = gstlal_snglburst_new_list_from_peak(element->maxdata, element->bankarray, element->next_output_timestamp + total_duration, element->rate, element->event_buffer);
+			}
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
@@ -443,14 +450,23 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			dataptrd = element->datad + element->maxdatad->pad * element->maxdatad->channels;
 			/* Find the peak */
 			gstlal_double_peak_over_window(element->maxdatad, (const double*) dataptrd, outsamps);
-			/* create the output buffer */
-			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, &(element->count));
+			/* Either update the current buffer or create the new output buffer */
+			if (element->maxdatad->num_events != 0) {
+				element->event_buffer = gstlal_snglburst_new_list_from_double_peak(element->maxdatad, element->bankarray, element->next_output_timestamp + total_duration, element->rate, element->event_buffer);
+		}
 			break;
 	}
-	/* set the time stamp and offset state */
-	update_state(element, srcbuf);
-	/* push the result */
-	result = push_buffer(element, srcbuf);
+
+	/* potentially push the result */
+	if (total_duration >= 1e10 || element->EOS) {
+		srcbuf = gstlal_snglburst_new_buffer_from_list(element->event_buffer, element->srcpad, element->next_output_offset, element->total_offset, element->next_output_timestamp, element->rate, &(element->count));
+
+		if (srcbuf == NULL) { 
+			return GST_FLOW_ERROR;
+		}
+		update_state(element, srcbuf);
+		result = push_buffer(element, srcbuf);
+	}
 	return result;
 }
 
@@ -799,6 +815,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->channel_name = NULL;
 	element->bankarray = NULL;
 	element->bank_filename = NULL;
+	element->event_buffer = NULL;
 	element->data = NULL;
 	element->maxdata = NULL;
 	element->bank_lock = g_mutex_new();

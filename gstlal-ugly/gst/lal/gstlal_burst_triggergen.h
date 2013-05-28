@@ -65,11 +65,14 @@ typedef struct {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 	GstAudioAdapter *adapter;
+	
+	SnglBurst *event_buffer;
 
 	gint rate;
 	guint n;
 	guint channels;
 	guint64 count;
+	guint64 total_offset;
 	gdouble snr_thresh;
 	/* TODO: Right now we're just copying all the data structures */
 	struct gstlal_peak_state *maxdata;
