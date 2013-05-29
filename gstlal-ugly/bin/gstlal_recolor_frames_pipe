@@ -233,7 +233,7 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_recolor_frames node
 	"""
-	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, output_path = None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, output_path = None, frame_type = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("data-source", "frames")
@@ -245,6 +245,7 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 			self.add_var_opt("injections", injections)
 		if output_path is not None:
 			self.add_var_opt("output-path", output_path)
+		self.add_var_opt("frame-type", frame_type)
 		self.add_var_opt("recolor-psd",recolor_psd)
 		self.add_var_opt("reference-psd",reference_psd)
 		self.add_var_opt("duration", duration)
@@ -274,11 +275,12 @@ def parse_command_line():
 	parser.add_option("--input-channel", metavar = "name", action = "append", help = "Set the channel name like H1=LSC-STRAIN. can be given more than once and is required")
 	parser.add_option("--output-channel", metavar = "name", action = "append", help = "Set the channel name like H1=LSC-STRAIN. can be given more than once and is required")
 	parser.add_option("--output-path", metavar = "PATH", action = "append", help = "Set the instrument dependent output path for frames, defaults to current working directory. eg H1=/path/to/H1/frames. Can be given more than once.")
+	parser.add_option("--frame-type", metavar = "name", action = "append", help = "Set the instrument dependent frame type, H1=TYPE. Can be given more than once and is required for each instrument processed.")
 	
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("segment_file","min_segment_length", "frame_cache"):
+	for option in ("segment_file","min_segment_length", "frame_cache", "frame_type"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -290,6 +292,7 @@ def parse_command_line():
 		framecache[ifo] = cache
 	inchannels = datasource.channel_dict_from_channel_list(options.input_channel)
 	outchannels = datasource.channel_dict_from_channel_list(options.output_channel)
+	frametypes = datasource.channel_dict_from_channel_list(options.frame_type)
 	if options.output_path is None:
 		outpaths = {}
 	else:
@@ -298,10 +301,10 @@ def parse_command_line():
 	if not (set(framecache) == set(inchannels) == set(outchannels)):
 		raise ValueError('--frame-cache, --input-channels and --output-channels must contain same instruments')
 
-	return options, filenames, framecache, inchannels, outchannels, outpaths#, process_params
+	return options, filenames, framecache, inchannels, outchannels, outpaths, frametypes#, process_params
 
 
-options, filenames, frame_cache, inchannels, outchannels, outpaths = parse_command_line()
+options, filenames, frame_cache, inchannels, outchannels, outpaths, frametypes = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -334,7 +337,7 @@ for instrument, seglist in seglists.iteritems():
 	except KeyError:
 		output_path = None
 	for seg in seglist:
-		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], output_path = output_path, p_node=[mediannode[instrument]])
+		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], output_path = output_path, frame_type = frametypes[instrument], p_node=[mediannode[instrument]])
 		
 dag.write_sub_files()
 dag.write_dag()
