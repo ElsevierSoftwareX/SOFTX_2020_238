@@ -233,7 +233,7 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_recolor_frames node
 	"""
-	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, p_node=[]):
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, output_path = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("data-source", "frames")
@@ -241,8 +241,10 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("output-channel-name", output_channel_name)
-		if injections: self.add_var_opt("injections", injections)
-		path = os.getcwd()
+		if injections is not None:
+			self.add_var_opt("injections", injections)
+		if output_path is not None:
+			self.add_var_opt("output-path", output_path)
 		self.add_var_opt("recolor-psd",recolor_psd)
 		self.add_var_opt("reference-psd",reference_psd)
 		self.add_var_opt("duration", duration)
@@ -271,6 +273,7 @@ def parse_command_line():
 	#FIXME get this from the cache?
 	parser.add_option("--input-channel", metavar = "name", action = "append", help = "Set the channel name like H1=LSC-STRAIN. can be given more than once and is required")
 	parser.add_option("--output-channel", metavar = "name", action = "append", help = "Set the channel name like H1=LSC-STRAIN. can be given more than once and is required")
+	parser.add_option("--output-path", metavar = "PATH", action = "append", help = "Set the instrument dependent output path for frames, defaults to current working directory. eg H1=/path/to/H1/frames. Can be given more than once.")
 	
 	options, filenames = parser.parse_args()
 
@@ -287,14 +290,18 @@ def parse_command_line():
 		framecache[ifo] = cache
 	inchannels = datasource.channel_dict_from_channel_list(options.input_channel)
 	outchannels = datasource.channel_dict_from_channel_list(options.output_channel)
+	if options.output_path is None:
+		outpaths = {}
+	else:
+		outpaths = datasource.channel_dict_from_channel_list(options.output_path)
 
 	if not (set(framecache) == set(inchannels) == set(outchannels)):
 		raise ValueError('--frame-cache, --input-channels and --output-channels must contain same instruments')
 
-	return options, filenames, framecache, inchannels, outchannels#, process_params
+	return options, filenames, framecache, inchannels, outchannels, outpaths#, process_params
 
 
-options, filenames, frame_cache, inchannels, outchannels = parse_command_line()
+options, filenames, frame_cache, inchannels, outchannels, outpaths = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -322,8 +329,12 @@ for instrument, seglist in seglists.iteritems():
 	mediannode[instrument] = gstlal_median_psd_node(medianJob, dag, instrument, [v.output_name for v in smoothnode[instrument].values()], "%s_median_psd.xml.gz" % instrument, p_node=smoothnode[instrument].values())
 
 for instrument, seglist in seglists.iteritems():
+	try:
+		output_path = outpaths[instrument]
+	except KeyError:
+		output_path = None
 	for seg in seglist:
-		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], p_node=[mediannode[instrument]])
+		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], output_path = output_path, p_node=[mediannode[instrument]])
 		
 dag.write_sub_files()
 dag.write_dag()
