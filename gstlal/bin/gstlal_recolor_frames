@@ -66,6 +66,7 @@ parser.add_option("--output-channel-name", metavar = "name", help = "The name of
 parser.add_option("--reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
 parser.add_option("--output-path", metavar = "name", help = "Path to output frame files.")
+parser.add_option("--frame-type", metavar = "name", help = "Frame type, required")
 parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
@@ -81,6 +82,9 @@ options, filenames = parser.parse_args()
 if options.output_channel_name is None:
 	options.output_channel_name = options.channel_name
 
+if options.frame_type is None:
+	raise ValueError("--frame-type is required")
+	
 sr = options.sample_rate
 
 gw_data_source = datasource.GWDataSourceInfo(options)
@@ -138,18 +142,17 @@ head = pipeparts.mktaginject(pipeline, head, tagstr)
 if options.injections is not None:
 	head = pipeparts.mkinjections(pipeline, head, options.injections)
 
-outfolder = instrument+"-"+options.output_channel_name
 if options.output_path is not None:
-        outpath = os.path.join(options.output_path,outfolder)
+        outpath = options.output_path
 else:
-        outpath = outfolder
+        outpath = os.getcwd()
 
 try:
         os.makedirs(outpath)
 except:
         pass
 
-pipeparts.mkframesink(pipeline, head, path=outpath, frame_type=instrument, duration = options.duration)
+pipeparts.mkframesink(pipeline, head, path=outpath, frame_type=options.frame_type, duration=options.duration, dir_digits=5)
 
 #
 # Run it
