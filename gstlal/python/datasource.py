@@ -60,7 +60,7 @@ def channel_dict_from_channel_list(channel_list):
 	"""
 	Given a list of channels like this ["H1=LSC-STRAIN",
 	H2="SOMETHING-ELSE"] produce a dictionary keyed by ifo of channel
-	names.  The default values are LSC-STRAIN for all detectors
+	names.
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
