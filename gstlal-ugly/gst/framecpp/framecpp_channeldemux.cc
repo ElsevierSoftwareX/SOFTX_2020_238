@@ -675,6 +675,15 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	src_pad_do_pending_events(element, pad);
 
 	/*
+	 * don't push a heart beat if the caps aren't set yet
+	 */
+
+	if(!GST_PAD_CAPS(pad)) {
+		GST_WARNING_OBJECT(pad, "caps not set, not pushing heart beat;  if this is a problem, consider setting caps on this pad manually");
+		return GST_FLOW_OK;
+	}
+
+	/*
 	 * create heartbeat buffer for this pad
 	 */
 
