@@ -575,12 +575,19 @@ def mkappsink(pipeline, src, max_buffers = 1, drop = False, **properties):
 class AppSync(object):
 	def __init__(self, appsink_new_buffer, appsinks = []):
 		self.lock = threading.Lock()
+		# handler to invoke on availability of new time-ordered
+		# buffer
 		self.appsink_new_buffer = appsink_new_buffer
+		# element --> timestamp of current buffer or None if no
+		# buffer yet available
 		self.appsinks = {}
+		# set of sink elements that are currently at EOS
 		self.at_eos = set()
+		# do equivalent of .add_sink() for each pre-built appsink
+		# element provided at this time
 		for elem in appsinks:
 			if elem in self.appsinks:
-				raise ValueError("duplicate appsinks")
+				raise ValueError("duplicate appsinks %s" % repr(elem))
 			elem.connect("new-buffer", self.appsink_handler, False)
 			elem.connect("eos", self.appsink_handler, True)
 			self.appsinks[elem] = None
