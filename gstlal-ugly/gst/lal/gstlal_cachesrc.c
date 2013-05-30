@@ -485,7 +485,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				if(src_value < 0)
 					time = cache_entry_start_time(element, 0);
 				else if(src_value <= GST_FORMAT_PERCENT_MAX)
-					time = cache_entry_start_time(element, 0) + gst_util_uint64_scale_round(cache_entry_start_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), src_value, GST_FORMAT_PERCENT_MAX);
+					time = cache_entry_start_time(element, 0) + gst_util_uint64_scale_round(cache_entry_end_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), src_value, GST_FORMAT_PERCENT_MAX);
 				else
 					time = cache_entry_end_time(element, element->cache->numFrameFiles - 1);
 				break;
@@ -506,13 +506,13 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				break;
 
 			case GST_FORMAT_BUFFERS:
-				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_start_time(element, element->cache->numFrameFiles - 1));
+				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_end_time(element, element->cache->numFrameFiles - 1));
 				dst_value = time_to_index(element, time);
 				break;
 
 			case GST_FORMAT_PERCENT:
-				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_start_time(element, element->cache->numFrameFiles - 1));
-				dst_value = gst_util_uint64_scale_round(cache_entry_start_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), GST_FORMAT_PERCENT_MAX, time - cache_entry_start_time(element, 0));
+				time = MIN(MAX(time, cache_entry_start_time(element, 0)), cache_entry_end_time(element, element->cache->numFrameFiles - 1));
+				dst_value = gst_util_uint64_scale_round(cache_entry_end_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0), GST_FORMAT_PERCENT_MAX, time - cache_entry_start_time(element, 0));
 				break;
 
 			default:
@@ -538,9 +538,16 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			gst_query_set_duration(query, GST_FORMAT_TIME, cache_entry_end_time(element, element->cache->numFrameFiles - 1) - cache_entry_start_time(element, 0));
 			break;
 
-		case GST_QUERY_SEGMENT:
-			gst_query_set_segment(query, 1.0, GST_FORMAT_TIME, cache_entry_start_time(element, 0), cache_entry_end_time(element, element->cache->numFrameFiles - 1));
+		case GST_QUERY_SEEKING:
+			gst_query_set_seeking(query, GST_FORMAT_TIME, TRUE, cache_entry_start_time(element, 0), cache_entry_end_time(element, element->cache->numFrameFiles - 1));
 			break;
+
+		case GST_QUERY_SEGMENT: {
+			GstClockTime segstart = GST_CLOCK_TIME_IS_VALID(basesrc->segment.start) ? MAX((GstClockTime) basesrc->segment.start, cache_entry_start_time(element, 0)) : cache_entry_start_time(element, 0);
+			GstClockTime segstop = GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) ? MIN((GstClockTime) basesrc->segment.stop, cache_entry_end_time(element, element->cache->numFrameFiles - 1)) : cache_entry_end_time(element, element->cache->numFrameFiles - 1);
+			gst_query_set_segment(query, 1.0, GST_FORMAT_TIME, segstart, segstop);
+			break;
+		}
 
 		case GST_QUERY_URI:
 			gst_query_set_uri(query, element->cache->frameFiles[element->index].url);
