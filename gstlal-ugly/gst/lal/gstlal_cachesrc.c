@@ -324,7 +324,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	*buf = NULL;	/* just in case */
 
-	if(element->index >= element->cache->numFrameFiles || cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop) {
+	if(element->index >= element->cache->numFrameFiles || (GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) && cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)) {
 		GST_DEBUG_OBJECT(element, "EOS");
 		return GST_FLOW_UNEXPECTED;
 	}
