@@ -248,7 +248,7 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
-def _do_seek(pipeline, seekevent):
+def do_seek(pipeline, seekevent):
 	# FIXME:  remove.  seek the pipeline instead
 	# DO NOT USE IN NEW CODE!!!!
 	for src in pipeline.iterate_sources():
@@ -267,7 +267,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
 	# FIXME:  remove
 	if seekevent is not None:
-		_do_seek(pipeline, seekevent)
+		do_seek(pipeline, seekevent)
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
 
 
@@ -403,7 +403,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	#
 
 	if gw_data_source_info.data_source in ("white", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
-		_do_seek(pipeline, gw_data_source_info.seekevent)
+		do_seek(pipeline, gw_data_source_info.seekevent)
 
 	#
 	# done
