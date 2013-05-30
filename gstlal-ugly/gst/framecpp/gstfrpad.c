@@ -52,6 +52,7 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <gstfrpad.h>
+#include <gstfrhistory.h>
 
 
 
@@ -229,6 +230,7 @@ enum property {
 	PROP_NBITS,
 	PROP_UNITS,
 	PROP_TAGS,
+	PROP_HISTORY,
 };
 
 
@@ -277,6 +279,12 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		g_free(pad->units);
 		pad->units = g_value_dup_string(value);
 		got_new_tags = update_tag_list(pad);
+		break;
+
+	case PROP_HISTORY:
+		if(pad->history)
+			g_value_array_free(pad->history);
+		pad->history = g_value_array_copy(g_value_get_boxed(value));
 		break;
 
 	default:
@@ -334,6 +342,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_boxed(value, pad->tags);
 		break;
 
+	case PROP_HISTORY:
+		if(pad->history)
+			g_value_set_boxed(value, pad->history);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -357,6 +370,10 @@ static void finalize(GObject *object)
 	pad->units = NULL;
 	gst_tag_list_free(pad->tags);
 	pad->tags = NULL;
+	if(pad->history) {
+		g_value_array_free(pad->history);
+		pad->history = NULL;
+	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -474,6 +491,23 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Tag list.",
 			GST_TYPE_TAG_LIST,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_HISTORY,
+		g_param_spec_value_array(
+			"history",
+			"History list",
+			"List of GstFrHistory objects.  Validity:  FrProcData.",
+			g_param_spec_boxed(
+				"history",
+				"History entry",
+				"GstFrHistory object.",
+				GST_FRHISTORY_TYPE,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
 }

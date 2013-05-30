@@ -1075,7 +1075,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					continue;
 				}
 				srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRPROCDATA, &pads_added);
-				/* FIXME: units */
+				/* FIXME: units, history */
 				g_object_set(srcpad,
 					"comment", (*current)->GetComment().c_str(),
 					NULL
