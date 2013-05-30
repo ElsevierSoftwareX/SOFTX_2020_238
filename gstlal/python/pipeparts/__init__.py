@@ -143,26 +143,34 @@ class framecpp_channeldemux_check_segments(object):
 	def __init__(self, elem, seglists):
 		self.elem = elem
 		self.buffer_probe_handler_ids = {}
+		# keep a copy of the segmentlistdict incase the calling
+		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
 
-	@staticmethod
-	def pad_added(element, pad, seglists):
+	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
 		if name in self.buffer_probe_handler_ids:
 			pad.remove_buffer_probe(self.buffer_probe_handler_ids.pop(name))
 		if name in seglists:
-			self.buffer_probe_handler_ids[name] = pad.add_buffer_probe(self.buffer_probe, seglists[name])
+			self.buffer_probe_handler_ids[name] = self.set_bufer_probe(pad, seglists[name])
+
+	@staticmethod
+	def set_buffer_probe(pad, seglist):
+		# use a copy of the segmentlist so the probe can modify it
+		return pad.add_buffer_probe(framecpp_channeldemux_check_segments.buffer_probe, segments.segmentlist(seglist))
 
 	@staticmethod
 	def buffer_probe(pad, buf, seglist):
-		# remove the current buffer from the data we're expecting
-		# to see
-		seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(buf.timestamp), LIGOTimeGPS(buf.timestamp + buf.duration)))])
-		# are we still expecting to see anything that precedes the
+		if not buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+			# remove the current buffer from the data we're
+			# expecting to see
+			seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(buf.timestamp), LIGOTimeGPS(buf.timestamp + buf.duration)))])
+		# are we still expecting to see something that precedes the
 		# current buffer?
 		preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(buf.timestamp)))
 		if seglist.intersects_segment(preceding):
-			raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & preceding))
+			raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
+		return True
 
 
 #
