@@ -70,6 +70,7 @@
  */
 
 
+#include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
@@ -954,25 +955,23 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			element->frame_number = frame->GetFrame();
 			g_object_notify(G_OBJECT(element), "frame-number");
 
-#if 0
 			/*
-			 * FIXME:  tag-related stuff that I'm not sure how to use */
-			 *
-			 * GPS epoch - Unix epoch = 315964800 s
-			 *
-			 * from pylal.xlal.datatypes import LIGOTimeGPS
-			 * from pylal import date
-			 * import calendar
-			 * print calendar.timegm(date.XLALGPSToUTC(LIGOTimeGPS(0)))
+			 * populate tags from frame metadata.  the tags
+			 * pushed out a source pad are taken from the pad's
+			 * own metadata and this list populated from the
+			 * frame metadata.  this list is updated for each
+			 * new frame, but a new tag list will only be
+			 * pushed out a source pad if that pad's own tags
+			 * are changed.
 			 */
+
 			{
-			GstDateTime *date_time = gst_date_time_new_from_unix_epoch_utc(frame_timestamp / GST_SECOND + 315964800);
-			char container_format[] = "IGWD frame file v%d";	/* ok up to version 99 */
-			g_assert_cmpint(ifs.Version(), <, 100);
-			snprintf(container_format, sizeof(container_format), container_format, element->frame_format_version);
-			gst_tag_list_add(tag_list, GST_TAG_MERGE_APPEND, GST_TAG_CONTAINER_FORMAT, container_format, GST_TAG_ENCODER, element->frame_library_name, GST_TAG_ENCODER_VERSION, element->frame_library_version, GST_TAG_ORGANIZATION, element->frame_name, NULL);
+			GstDateTime *date_time = gstlal_datetime_new_from_gps(frame_timestamp);
+			gchar *container_format = g_strdup_printf("IGWD frame file v%d", element->frame_format_version);
+			gst_tag_list_add(element->tag_list, GST_TAG_MERGE_KEEP, GST_TAG_DATE_TIME, date_time, GST_TAG_CONTAINER_FORMAT, container_format, GST_TAG_ENCODER, element->frame_library_name, GST_TAG_ENCODER_VERSION, element->frame_library_version, GST_TAG_ORGANIZATION, element->frame_name, NULL);
+			gst_date_time_unref(date_time);
+			g_free(container_format);
 			}
-#endif
 
 			/*
 			 * process ADC data
