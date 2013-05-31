@@ -33,6 +33,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 
 /*
@@ -802,4 +803,27 @@ LALUnit gstlal_lalStrainPerADCCount(void)
 LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit)
 {
 	return *XLALUnitMultiply(&unit, XLALUnitSquare(&unit, &unit), &lalSecondUnit);
+}
+
+
+/**
+ * Build a GstDateTime from GPS nanoseconds
+ *
+ * Returns a new reference.  Use gst_date_time_unref() to free.
+ */
+
+
+GstDateTime *gstlal_datetime_new_from_gps(GstClockTime gps)
+{
+	struct tm utc;
+	XLALGPSToUTC(&utc, GST_TIME_AS_SECONDS(gps));
+	return gst_date_time_new(
+		0.0,	/* time zone offset */
+		1900 + utc.tm_year,
+		1 + utc.tm_mon,
+		utc.tm_mday,
+		utc.tm_hour,
+		utc.tm_min,
+		utc.tm_sec + (double) (gps % GST_SECOND) / GST_SECOND
+	);
 }

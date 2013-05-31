@@ -90,6 +90,7 @@ char *gstlal_build_full_channel_name(const char *, const char *);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *, const char *, const char *, const char *);
 LALUnit gstlal_lalStrainPerADCCount(void);
 LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit);
+GstDateTime *gstlal_datetime_new_from_gps(GstClockTime);
 
 
 G_END_DECLS
