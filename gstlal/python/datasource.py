@@ -184,17 +184,20 @@ class GWDataSourceInfo(object):
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
 
-		# Parse the frame segments if they exist
-		if options.frame_segments_file is not None:
-			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
-		else:
-			self.frame_segments = dict((instrument, None) for instrument in self.channel_dict)
-
 		self.seekevent = None
 		self.seg = None
 		if options.gps_start_time is not None:
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
+
+		# Parse the frame segments if they exist
+		if options.frame_segments_file is not None:
+			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
+			if self.seg is not None:
+				# clip to seek segment
+				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in self.frame_segments.items())
+		else:
+			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
 		# Set up default dictionary for the DQ (state vector) channel and 
 		# override if the user asks
