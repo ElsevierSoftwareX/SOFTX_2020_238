@@ -195,7 +195,7 @@ class GWDataSourceInfo(object):
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 			if self.seg is not None:
 				# clip to seek segment
-				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in self.frame_segments.items())
+				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([self.seg])) for instrument, seglist in self.frame_segments.items())
 		else:
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
