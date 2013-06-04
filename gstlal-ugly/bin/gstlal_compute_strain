@@ -73,6 +73,9 @@ parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, will be written to file.")
 parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the required-on bits for the ODC to DQ vector conversion.")
+parser.add_option("--buffer-mode", metavar = "number", type = "int", default = 2, help = "Set the buffer mode for the lvshmsink element. (Default=2)")
+parser.add_option("--frame-type", metavar = "name", default = "FAKE_STRAIN", help = "Set the frame type as input to the frame writing element. (Default=FAKE_STRAIN)")
+parser.add_option("--output-path", metavar = "name", default = ".", help = "Set the output path for writing frame files. (Default=Current)")
 
 #
 # Parse options
@@ -273,11 +276,11 @@ if options.write_to_shm_partition is not None:
 	lvshmsink.set_property("shm-name", options.write_to_shm_partition)
 	lvshmsink.set_property("num-buffers", 10)
 	lvshmsink.set_property("blocksize", 405338 * options.frame_duration * options.frames_per_file)
-	lvshmsink.set_property("buffer-mode", 2)
+	lvshmsink.set_property("buffer-mode", options.buffer_mode)
 	pipeline.add(lvshmsink)
 	mux.link(lvshmsink)
 else:
-	pipeparts.mkmultifilesink(pipeline, mux, location="TEST_%05d.gwf", next_file = 0) 
+	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = options.frame_type, path = options.output_path, instrument = instrument) 
 
 # Run pipeline
 
