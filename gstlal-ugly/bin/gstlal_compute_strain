@@ -47,9 +47,9 @@ def psd_resolution_changed(elem, pspec, psd):
 	psd = reference_psd.interpolate_psd(psd, delta_f)
 	elem.set_property("mean-psd", psd.data[:n])
 
-def write_graph(demux, srcpad):
+def write_graph(demux):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
-
+	
 parser = OptionParser(description = __doc__)
 
 #
@@ -125,27 +125,35 @@ if not options.verbose:
 	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
 
 if options.data_source == "lvshm":
-	# FIXME make wait_time adjustable through web interface or command line or both
-	demux = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0, assumed_duration = 1), do_file_checksum = True, skip_bad_files = True)
-	# Write the pipeline graph after pads have been hooked up to the demuxer
-	if options.write_pipeline is not None:
-		demux.connect("pad-added", write_graph)
-	
-	# Set up the PSL and ODC state vector branches
-	psl = pipeparts.mkqueue(pipeline, None)
-	odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
+	src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], wait_time = 120.0, assumed_duration = 1)
+elif options.data_source == "frames":
+	src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source.frame_cache, cache_dsc_regex = instrument)
+else:
+	raise ValueError("invalid --data-source %s" % options.data_source)
 
-	# Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
+channel_list = gw_data_source.channel_dict.items()
+dq_channel_list = (instrument, gw_data_source.dq_channel_dict[instrument])
+channel_list.append(dq_channel_list)
+demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+# Write the pipeline graph after pads have been hooked up to the demuxer
+if options.write_pipeline is not None:
+	demux.connect("no-more-pads", write_graph)	
 
-if options.data_source == "frames":
-	psl = pipeparts.mkframesrc(pipeline, location = gw_data_source.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source.channel_dict[instrument], blocksize = gw_data_source.block_size, segment_list = gw_data_source.frame_segments[instrument]) 
-	psl = pipeparts.mkreblock(pipeline, psl, block_duration = gst.SECOND)
+# Set up the PSL and ODC state vector branches
+psl = pipeparts.mkqueue(pipeline, None)
+odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
 
-	odcstatevector = pipeparts.mkframesrc(pipeline, location = gw_data_source.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = gw_data_source.dq_channel_dict[instrument], blocksize = gw_data_source.block_size, segment_list = gw_data_source.frame_segments[instrument]) 
-	odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
-	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
+# Hook up the PSL and ODC state vector branches to appropriate channels in the demuxer
+pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), psl.get_pad("sink"))
+pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
+
+psl = pipeparts.mkreblock(pipeline, psl, block_duration = gst.SECOND)
+odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+
+# When reading from disk, clip PSL stream to segment list
+if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
+	psl = pipeparts.mkgate(pipeline, psl, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
+
 #
 # ODC STATE VECTOR BRANCH
 #
@@ -203,7 +211,7 @@ max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1
 rpsd.data = 1. / rpsd.data[:max_sample]
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 # Add latency to fix the time stamps
-latency -= 1# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
+latency += 1# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
 psl = pipeparts.mkfirbank(pipeline, psl, latency = latency, fir_matrix = [fir_matrix], block_stride = sr)
 # Put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line
@@ -276,13 +284,14 @@ else:
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
 
+if gw_data_source.data_source == "frames":
+	datasource.do_seek(pipeline, gw_data_source.seekevent)
+	print >>sys.stderr, "seeking GPS start and stop times ..."
+
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
 if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
-	raise RuntimeError("pipelined failed to enter PLAYING state")
-
-if options.write_pipeline is not None:
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+	raise RuntimeError("pipeline failed to enter PLAYING state")
 	
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
@@ -292,7 +301,7 @@ mainloop.run()
 
 # THIS IS THE ACTUAL CALIBRATION PIECE OF THE PIPELINE, WHICH IS CURRENTLY NOT BEING USED (IT IS ALL COMMENTED OUT).  INSTEAD, RECOLORING IS BEING DONE AS SHOWN ABOVE.  THE PIPELINE BELOW WILL CONTINUE TO BE DEVELOPED AND WILL EVENTUALLY BE USED IN PLACE OF THE RECOLORING.
 
-"""\
+"""
 Generate h(t).
 
 It tries to mimic the behavior of lalapps_ComputeStrainDriver (which
@@ -335,10 +344,10 @@ be generated from an old one with calfilters2npz.py (in examples/utilities).
 #            opts.filters_file, opts.frame_cache, opts.ifo]:
 #    print 'Missing required option (sorry for the oxymoron).\n'
 #    parser.print_help()
-#    print """\nExample:
+#    print \nExample:
 #  %s --gps-start-time 943009024  --gps-end-time $((943009024+64)) \\
 #     --filters-file filters.npz  --frame-cache data.cache  --ifo H1 \\
-#     --frame-type H1_GSTLAL_C02""" % sys.argv[0]
+#     --frame-type H1_GSTLAL_C02 % sys.argv[0]
 #    sys.exit()
 
 
