@@ -220,6 +220,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		gint64 start, stop, position;
 		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
 		gst_event_unref(event);
+		GST_DEBUG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", start, stop);
 
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 		gst_segment_set_newsegment_full(&data->segment, update, rate, applied_rate, format, start, stop, position);
@@ -241,11 +242,14 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
+		GST_DEBUG_OBJECT(pad, "received EOS");
 		gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
 		data->eos = TRUE;
-		if(all_pads_are_at_eos(collectpads) && event_func)
-			success &= event_func(pad, event);
-		else
+		if(all_pads_are_at_eos(collectpads)) {
+			GST_DEBUG_OBJECT(collectpads, "all sink pads are at EOS");
+			if(event_func)
+				success &= event_func(pad, event);
+		} else
 			gst_event_unref(event);
 		break;
 
