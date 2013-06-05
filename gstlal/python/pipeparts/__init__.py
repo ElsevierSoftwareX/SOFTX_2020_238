@@ -233,8 +233,13 @@ def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
 
-def mkframecppchannelmux(pipeline, src, units = None, seglists = None, **properties):
-	elem = mkgeneric(pipeline, src, "framecpp_channelmux", **properties)
+def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, **properties):
+	elem = mkgeneric(pipeline, None, "framecpp_channelmux", **properties)
+	if channel_src_map is not None:
+		for channel, src in channel_src_map.items():
+			for srcpad in src.src_pads():
+				if srcpad.link(elem.get_pad(channel)) == gst.PAD_LINK_OK:
+					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
 	if seglists is not None:
