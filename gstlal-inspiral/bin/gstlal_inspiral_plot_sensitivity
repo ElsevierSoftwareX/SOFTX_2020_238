@@ -413,7 +413,7 @@ for bin_type in opts.bin_types:
             pyplot.errorbar( fars, [v[mmid] for v in vols], yerr = [e[mmid] for e in errs], label=label )
 
         #tag = "%s-%s_VOLUME_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        tag = "%s_VOLUME_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        tag = "%s_%s_VOLUME_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
 
         # Put a legend to the right of the current axis
         if bin_type == "Mass1_Mass2":
@@ -427,6 +427,7 @@ for bin_type in opts.bin_types:
         pyplot.ylim(ymin=0)
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Volume*T (Mpc$^3$ yr)")
+        pyplot.title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
         pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
         pyplot.close()
 
@@ -457,7 +458,7 @@ for bin_type in opts.bin_types:
             pyplot.errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
         #tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        tag = "%s_RANGE_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        tag = "%s_%s_RANGE_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
 
         # Put a legend to the right of the current axis
         if bin_type == "Mass1_Mass2":
@@ -471,6 +472,7 @@ for bin_type in opts.bin_types:
         pyplot.ylim(ymin=0)
         pyplot.xlabel("FAR (Hz)")
         pyplot.ylabel("Mean Sensitive Range (Mpc)")
+        pyplot.title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
         pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
         pyplot.close()
 
