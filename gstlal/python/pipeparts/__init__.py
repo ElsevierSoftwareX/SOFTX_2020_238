@@ -150,26 +150,30 @@ class framecpp_channeldemux_check_segments(object):
 	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
 		if name in self.probe_handler_ids:
-			pad.remove_buffer_probe(self.probe_handler_ids.pop(name))
+			pad.remove_data_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name])
 
 	@staticmethod
 	def set_probe(pad, seglist):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_buffer_probe(framecpp_channeldemux_check_segments.probe, segments.segmentlist(seglist))
+		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, segments.segmentlist(seglist))
 
 	@staticmethod
-	def probe(pad, buf, seglist):
-		if not buf.flag_is_set(gst.BUFFER_FLAG_GAP):
-			# remove the current buffer from the data we're
-			# expecting to see
-			seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(buf.timestamp), LIGOTimeGPS(buf.timestamp + buf.duration)))])
-		# are we still expecting to see something that precedes the
-		# current buffer?
-		preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(buf.timestamp)))
-		if seglist.intersects_segment(preceding):
-			raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
+	def probe(pad, obj, seglist):
+		if isinstance(obj, gst.Buffer):
+			if not obj.flag_is_set(gst.BUFFER_FLAG_GAP):
+				# remove the current buffer from the data
+				# we're expecting to see
+				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
+			# are we still expecting to see something that
+			# precedes the current buffer?
+			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
+			if seglist.intersects_segment(preceding):
+				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
+		elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_EOS:
+			if seglist:
+				raise ValueError("%s: at EOS detected missing data: %s" % (pad.get_name(), seglist))
 		return True
 
 
