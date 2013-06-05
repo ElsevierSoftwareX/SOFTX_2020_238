@@ -24,11 +24,12 @@
 #
 
 
-import sys, os
-import numpy
+import math
+import os
+import sys
 import threading
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -175,6 +176,26 @@ class framecpp_channeldemux_check_segments(object):
 			if seglist:
 				raise ValueError("%s: at EOS detected missing data: %s" % (pad.get_name(), seglist))
 		return True
+
+
+#
+# framecpp file sink helpers
+#
+
+
+def framecpp_filesink_ldas_path_handler(elem, timestamp, (outpath, dir_digits)):
+	# truncate to integer seconds
+	timestamp //= gst.SECOND
+
+	# extract leading digits
+	leading_digits = timestamp // 10**int(math.log10(timestamp) + 1 - 5)
+
+	# get metadata
+	instrument = elem.get_property("instrument")
+	frame_type = elem.get_property("frame-type")
+
+	# set path
+	elem.set_property("path", os.path.join(outpath, "%s-%s-%d" % (instrument, frame_type, leading_digits)))
 
 
 #
@@ -747,7 +768,7 @@ def audioresample_variance_gain(quality, num, den):
 
 	>>> from gstlal.pipeutil import *
 	>>> from gstlal.pipeparts import audioresample_variance_gain
-	>>> import gstlal.pipeio as pipeio
+	>>> from gstlal import pipeio
 	>>> import numpy
 	>>> nsamples = 2 ** 17
 	>>> num = 2
