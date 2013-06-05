@@ -241,6 +241,7 @@ class gstlal_inspiral_plot_sensitivity_node(inspiral_pipe.InspiralNode):
 		if len(base.split("/")) > 1:
 			self.add_var_opt("output-dir", base.rstrip(base.split("/")[-1]))
 		self.add_var_opt("tmp-space", tmp_space)
+		self.add_var_opt("veto-segments-name", "vetoes")
 		if bin_by_total_mass:
 			self.add_var_arg("--bin-by-total-mass")
 		if bin_by_mass1_mass2:
