@@ -58,8 +58,11 @@ def framesrc_test_01a(pipeline, name):
 	# build pipeline
 	#
 
-	head = pipeparts.mkframesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name)
-	head = pipeparts.mkqueue(pipeline, head, max_size_time = 8 * gst.SECOND)
+	head = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mkcachesrc(pipeline, location = location, cache_src_regex = "%s.*" % instrument[0]))
+	elem = pipeparts.mkqueue(pipeline, None, max_size_time = 8 * gst.SECOND)
+	pipeparts.src_deferred_link(head, "%s:%s" % (instrument, channel_name), elem.get_pad("sink"))
+	head = elem
+
 	head = pipeparts.mkprogressreport(pipeline, head, "src")
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mkfakesink(pipeline, head)
