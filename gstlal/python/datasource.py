@@ -311,7 +311,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
-			pipeparts.framecpp_channeldemux_check_segments.set_buffer_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
+			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	elif gw_data_source_info.data_source == "lvshm":

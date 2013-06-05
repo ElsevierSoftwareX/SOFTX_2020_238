@@ -142,25 +142,25 @@ class framecpp_channeldemux_set_units(object):
 class framecpp_channeldemux_check_segments(object):
 	def __init__(self, elem, seglists):
 		self.elem = elem
-		self.buffer_probe_handler_ids = {}
+		self.probe_handler_ids = {}
 		# keep a copy of the segmentlistdict incase the calling
 		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
 
 	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
-		if name in self.buffer_probe_handler_ids:
-			pad.remove_buffer_probe(self.buffer_probe_handler_ids.pop(name))
+		if name in self.probe_handler_ids:
+			pad.remove_buffer_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
-			self.buffer_probe_handler_ids[name] = self.set_bufer_probe(pad, seglists[name])
+			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name])
 
 	@staticmethod
-	def set_buffer_probe(pad, seglist):
+	def set_probe(pad, seglist):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_buffer_probe(framecpp_channeldemux_check_segments.buffer_probe, segments.segmentlist(seglist))
+		return pad.add_buffer_probe(framecpp_channeldemux_check_segments.probe, segments.segmentlist(seglist))
 
 	@staticmethod
-	def buffer_probe(pad, buf, seglist):
+	def probe(pad, buf, seglist):
 		if not buf.flag_is_set(gst.BUFFER_FLAG_GAP):
 			# remove the current buffer from the data we're
 			# expecting to see
