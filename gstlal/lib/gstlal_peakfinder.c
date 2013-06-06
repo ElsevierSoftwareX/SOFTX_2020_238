@@ -5,6 +5,7 @@
 #include <complex.h>
 #include <string.h>
 #include <math.h>
+#include <lal/TriggerInterpolation.h>
 
 /*
  * Type agnostic functions
@@ -18,6 +19,7 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 	if (!new) return NULL;
 	new->channels = channels;
 	new->samples = g_malloc0(sizeof(guint) * channels);
+	new->interpsamples = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
 	new->pad = 0;
 	new->thresh = 0;
@@ -28,27 +30,35 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 		case GSTLAL_PEAK_FLOAT:
 		new->unit = sizeof(float);
 		new->values.as_float = (float *) g_malloc0(new->unit * channels);
+		new->interpvalues.as_float = (float *) g_malloc0(new->unit * channels);
 		break;
 		
 		case GSTLAL_PEAK_DOUBLE:
 		new->unit = sizeof(double);
 		new->values.as_double = (double *) g_malloc0(new->unit * channels);
+		new->interpvalues.as_double = (double *) g_malloc0(new->unit * channels);
 		break;
 		
 		case GSTLAL_PEAK_COMPLEX:
 		new->unit = sizeof(float complex);
 		new->values.as_float_complex = (float complex *) g_malloc0(new->unit * channels);
+		new->interpvalues.as_float_complex = (float complex *) g_malloc0(new->unit * channels);
 		break;
 
 		case GSTLAL_PEAK_DOUBLE_COMPLEX:
 		new->unit = sizeof(double complex);
 		new->values.as_double_complex = (double complex *) g_malloc0(new->unit * channels);
+		new->interpvalues.as_double_complex = (double complex *) g_malloc0(new->unit * channels);
 		break;
 
 		default:
 		g_assert(new->type < GSTLAL_PEAK_TYPE_COUNT);
 		return NULL;
 	}
+
+	/* Interpolator */
+	/* FIXME perhaps expose this property ? */
+	new->interp = XLALCreateLanczosTriggerInterpolant(GSTLAL_PEAK_INTERP_LENGTH);
 	
 	return new;
 }
@@ -57,7 +67,10 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 int gstlal_peak_state_free(struct gstlal_peak_state *val)
 {
 	g_free(val->samples);
+	g_free(val->interpsamples);
 	g_free(val->values.as_float);
+	g_free(val->interpvalues.as_float);
+	XLALDestroyLanczosTriggerInterpolant(val->interp);
 	return 0;
 }
 
@@ -65,7 +78,9 @@ int gstlal_peak_state_free(struct gstlal_peak_state *val)
 int gstlal_peak_state_clear(struct gstlal_peak_state *val)
 {
 	memset(val->samples, 0.0, val->channels * sizeof(guint));
+	memset(val->interpsamples, 0.0, val->channels * sizeof(double));
 	memset(val->values.as_float, 0.0, val->channels * val->unit);
+	memset(val->interpvalues.as_float, 0.0, val->channels * val->unit);
 	val->num_events = 0;
 	return 0;
 }
@@ -193,36 +208,44 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 /* float */
 #define ABSFUNC(x) (fabsf(x))
 #define TYPE_STRING float
+#define XLAL_TYPE_STRING REAL4
 #define TYPE float
 #include "gstlal_peakfinder.ct"
 #undef TYPE
 #undef TYPE_STRING
+#undef XLAL_TYPE_STRING
 #undef ABSFUNC
 
 /* double */
 #define ABSFUNC(x) (fabs(x))
 #define TYPE_STRING double
+#define XLAL_TYPE_STRING REAL8
 #define TYPE double
 #include "gstlal_peakfinder.ct"
 #undef TYPE
 #undef TYPE_STRING
+#undef XLAL_TYPE_STRING
 #undef ABSFUNC
 
 /* float complex */
 #define ABSFUNC(x) (cabsf(x))
 #define TYPE_STRING float_complex
+#define XLAL_TYPE_STRING COMPLEX8
 #define TYPE float complex
 #include "gstlal_peakfinder.ct"
 #undef TYPE
 #undef TYPE_STRING
+#undef XLAL_TYPE_STRING
 #undef ABSFUNC
 
 /* double complex */
 #define ABSFUNC(x) (cabs(x))
 #define TYPE_STRING double_complex
+#define XLAL_TYPE_STRING COMPLEX16
 #define TYPE double complex
 #include "gstlal_peakfinder.ct"
 #undef TYPE
 #undef TYPE_STRING
+#undef XLAL_TYPE_STRING
 #undef ABSFUNC
 

@@ -5,8 +5,11 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <complex.h>
+#include <lal/TriggerInterpolation.h>
 
 G_BEGIN_DECLS
+
+#define GSTLAL_PEAK_INTERP_LENGTH 5
 
 typedef enum tag_gstlal_peak_type_specifier {
 	GSTLAL_PEAK_FLOAT,
@@ -20,6 +23,7 @@ struct gstlal_peak_state {
 	guint channels;
 	guint num_events;
 	guint *samples;
+	double *interpsamples;
 	/* should sync with gstlal_peak_type */
 	union	{
 		float * as_float;
@@ -27,10 +31,20 @@ struct gstlal_peak_state {
 		float complex * as_float_complex;
 		double complex * as_double_complex;
 		} values;
+	/* should sync with gstlal_peak_type */
+	union	{
+		float * as_float;
+		double * as_double;
+		float complex * as_float_complex;
+		double complex * as_double_complex;
+		} interpvalues;
 	gstlal_peak_type_specifier type;
 	guint unit;
 	guint pad;
 	double thresh;
+
+	/* Interpolator */
+	LanczosTriggerInterpolant *interp;
 };
 
 
@@ -50,9 +64,7 @@ int gstlal_peak_state_clear(struct gstlal_peak_state *state);
 
 /* Convenience functions */
 GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate);
-
 int gstlal_peak_over_window(struct gstlal_peak_state *state, const void *data, guint64 length);
-
 int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void *outputmat, guint n);
 
 

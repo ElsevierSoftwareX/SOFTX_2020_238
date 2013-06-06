@@ -1,6 +1,9 @@
+#define NOUSPASTER3(x,y,z) x ## y ## z
 #define PASTER3(x,y,z) x ## _ ## y ## _ ## z
-#define EVALUATOR3(x,y,z)  PASTER3(x,y,z)
+#define EVALUATOR3(x,y,z) PASTER3(x,y,z)
+#define NOUSEVALUATOR3(x,y,z) NOUSPASTER3(x,y,z)
 #define NAME(fun1,fun2) EVALUATOR3(fun1, TYPE_STRING, fun2)
+#define XLALNAME(fun1,fun2) NOUSEVALUATOR3(fun1, XLAL_TYPE_STRING, fun2)
 
 #define PASTER2(x,y) x ## _ ## y
 #define EVALUATOR2(x,y)  PASTER2(x,y)
@@ -34,6 +37,52 @@ int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *d
 		}
 	}
 	
+	return 0;
+}
+
+/*
+ * Simple peak over window algorithm with sub sample interpolation
+ */
+
+int NAME(gstlal,peak_over_window_interp)(struct gstlal_peak_state *state, const TYPE *data, guint64 length)
+{
+	guint channel;
+	gint sample;
+	gint index;
+	
+	guint *maxsample = state->samples;
+	double tmax;
+	double *interpsample = state->interpsamples;
+	TYPE *maxdata = MEMBER(state->values.as);
+	TYPE *maxdatainterp = MEMBER(state->interpvalues.as);
+	XLAL_TYPE_STRING ymax;
+	XLAL_TYPE_STRING interp_array[GSTLAL_PEAK_INTERP_LENGTH*2+1];
+	
+	/* clear the state array */
+	gstlal_peak_state_clear(state);
+	
+	/* assert that this peak structure has a padding so that we can reliably interpolate at the edges */
+	g_assert(state->pad >= GSTLAL_PEAK_INTERP_LENGTH); /* one-side length of interp filter */
+
+	/* call the normal peak over window function */
+	NAME(gstlal,peak_over_window)(state, data, length);
+	for (channel = 0; channel < state->channels; channel++) {
+		if (maxdata[channel]) {
+			for (sample = -GSTLAL_PEAK_INTERP_LENGTH; sample <= GSTLAL_PEAK_INTERP_LENGTH; sample++) {
+				index = ((gint) maxsample[channel] + sample) * state->channels + channel;
+				interp_array[sample+GSTLAL_PEAK_INTERP_LENGTH] = *(data + index);
+				}
+			/* Handle the case where interpolation fails by filling the values with the noninterpolated values */
+			if (XLALNAME(XLAL,ApplyLanczosTriggerInterpolant)(state->interp, &tmax, &ymax, &interp_array[GSTLAL_PEAK_INTERP_LENGTH]) != 0) {
+				interpsample[channel] = maxsample[channel];
+				maxdatainterp[channel] = maxdata[channel];
+				}
+			else {
+				interpsample[channel] = tmax + maxsample[channel];
+				maxdatainterp[channel] = ymax;
+				} 
+			}
+		}
 	return 0;
 }
 
@@ -90,6 +139,9 @@ int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data,
 #undef PASTER3
 #undef EVALUATOR3
 #undef NAME
+#undef NOUSPASTER3
+#undef NOUSEVALUATOR3
+#undef XLALNAME
 #undef PASTER2
 #undef EVALUATOR2
 #undef MEMBER

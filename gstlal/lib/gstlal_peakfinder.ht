@@ -5,6 +5,9 @@
 /* find a peak over a fixed window */
 int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *data, guint64 length);
 
+/* find a peak over a fixed window with sub sample interpolation */
+int NAME(gstlal,peak_over_window_interp)(struct gstlal_peak_state *state, const TYPE *data, guint64 length);
+
 /* Pull out peak snippets */
 int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data, TYPE *outputmat, guint n);
 
