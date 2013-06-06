@@ -183,12 +183,17 @@ class framecpp_channeldemux_check_segments(object):
 #
 
 
-def framecpp_filesink_ldas_path_handler(elem, timestamp, (outpath, dir_digits)):
-	# truncate to integer seconds
-	timestamp //= gst.SECOND
+def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
+	"""
+	Example:
+
+	>>> filesinkelem.connect("notify::timestamp", framecpp_filesink_ldas_path_handler, (".", 5))
+	"""
+	# get timestamp and truncate to integer seconds
+	timestamp = elem.get_property("timestamp") // gst.SECOND
 
 	# extract leading digits
-	leading_digits = timestamp // 10**int(math.log10(timestamp) + 1 - 5)
+	leading_digits = timestamp // 10**int(math.log10(timestamp) + 1 - dir_digits)
 
 	# get metadata
 	instrument = elem.get_property("instrument")
