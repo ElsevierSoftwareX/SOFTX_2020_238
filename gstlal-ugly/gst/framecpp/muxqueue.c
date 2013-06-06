@@ -232,7 +232,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	result = gst_audioadapter_get_list(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
 	if(result) {
-		/* set timestamp and duration of first buffer */
+		/* correct timestamp and duration of first buffer */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
 		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_TIMESTAMP(origbuf);
 		result->data = gst_buffer_make_metadata_writable(GST_BUFFER(result->data));
@@ -250,7 +250,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 		g_assert_cmpuint(GST_BUFFER_OFFSET_END(this), ==, GST_BUFFER_OFFSET(next));
 	}
 	if(head) {
-		/* adjust duration of last buffer */
+		/* correct duration of last buffer */
 		GstBuffer *buf = head->data = gst_buffer_make_metadata_writable(GST_BUFFER(head->data));
 		GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf), GST_SECOND, queue->rate);
 	}
