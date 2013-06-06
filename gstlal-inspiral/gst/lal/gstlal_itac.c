@@ -469,12 +469,12 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 		dataptr.as_complex = ((float complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
-		gstlal_float_complex_peak_over_window(element->maxdata, dataptr.as_complex, outsamps);
+		gstlal_float_complex_peak_over_window_interp(element->maxdata, dataptr.as_complex, outsamps);
 		}
 	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 		dataptr.as_double_complex = ((double complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
-		gstlal_double_complex_peak_over_window(element->maxdata, dataptr.as_double_complex, outsamps);
+		gstlal_double_complex_peak_over_window_interp(element->maxdata, dataptr.as_double_complex, outsamps);
 		}
 
 	/* compute \chi^2 values if we can */
