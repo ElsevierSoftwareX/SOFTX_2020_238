@@ -97,7 +97,12 @@ class InspiralJob(pipeline.CondorDAGJob):
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
 		self.number = 1
-
+		# make an output directory for files
+		self.output_path = tag_base
+		try:
+			os.mkdir(self.output_path)
+		except:
+			pass
 
 class InspiralNode(pipeline.CondorDAGNode):
 	"""
