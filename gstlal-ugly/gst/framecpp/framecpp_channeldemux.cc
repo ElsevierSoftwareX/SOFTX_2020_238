@@ -714,6 +714,7 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	 * push buffer
 	 */
 
+	GST_LOG_OBJECT(pad, "pushing 0-length heart-beat buffer");
 	return gst_pad_push(pad, buffer);
 }
 
@@ -868,6 +869,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	 * decode frame file
 	 */
 
+	GST_LOG_OBJECT(element, "begin IGWD file decode");
+
 	try {
 		if(element->do_file_checksum) {
 			/*
@@ -1009,7 +1012,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						NULL
 					);
 					if(!gst_pad_is_linked(srcpad)) {
-						GST_LOG_OBJECT(element, "skipping: not linked");
+						GST_LOG_OBJECT(srcpad, "skipping: not linked");
 						gst_object_unref(srcpad);
 						srcpad = NULL;
 						continue;
@@ -1027,23 +1030,22 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 							result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 							if(result != GST_FLOW_OK) {
+								GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 								gst_object_unref(srcpad);
 								srcpad = NULL;
-								GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 								goto done;
 							}
 						}
 					} else {
 						if((*current)->GetDataValid() != 0)
-							GST_DEBUG_OBJECT(element, "FrAdcData invalid (dataValid=0x%04x)", (*current)->GetDataValid());
+							GST_DEBUG_OBJECT(srcpad, "FrAdcData invalid (dataValid=0x%04x)", (*current)->GetDataValid());
 						if(!vects.size())
-							GST_DEBUG_OBJECT(element, "no FrVects");
-						GST_DEBUG_OBJECT(element, "pushing 0-length heart-beat buffer");
+							GST_DEBUG_OBJECT(srcpad, "no FrVects");
 						result = push_heart_beat(element, srcpad, timestamp);
 						if(result != GST_FLOW_OK) {
+							GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 							gst_object_unref(srcpad);
 							srcpad = NULL;
-							GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 							goto done;
 						}
 					}
@@ -1089,7 +1091,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					NULL
 				);
 				if(!gst_pad_is_linked(srcpad)) {
-					GST_LOG_OBJECT(element, "skipping: not linked");
+					GST_LOG_OBJECT(srcpad, "skipping: not linked");
 					gst_object_unref(srcpad);
 					srcpad = NULL;
 					continue;
@@ -1106,19 +1108,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
+							GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 							gst_object_unref(srcpad);
 							srcpad = NULL;
-							GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 							goto done;
 						}
 					}
 				} else {
-					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
+					GST_LOG_OBJECT(srcpad, "no FrVects");
 					result = push_heart_beat(element, srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
+						GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 						gst_object_unref(srcpad);
 						srcpad = NULL;
-						GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 						goto done;
 					}
 				}
@@ -1156,7 +1158,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					NULL
 				);
 				if(!gst_pad_is_linked(srcpad)) {
-					GST_LOG_OBJECT(element, "skipping: not linked");
+					GST_LOG_OBJECT(srcpad, "skipping: not linked");
 					gst_object_unref(srcpad);
 					srcpad = NULL;
 					continue;
@@ -1173,19 +1175,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
 						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
+							GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 							gst_object_unref(srcpad);
 							srcpad = NULL;
-							GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 							goto done;
 						}
 					}
 				} else {
-					GST_DEBUG_OBJECT(element, "no FrVects.  pushing 0-length heart-beat buffer");
+					GST_LOG_OBJECT(srcpad, "no FrVects");
 					result = push_heart_beat(element, srcpad, timestamp);
 					if(result != GST_FLOW_OK) {
+						GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
 						gst_object_unref(srcpad);
 						srcpad = NULL;
-						GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
 						goto done;
 					}
 				}
@@ -1224,6 +1226,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	/*
 	 * Done
 	 */
+
+	GST_LOG_OBJECT(element, "finished IGWD file decode");
 
 done:
 	if(pads_added)
