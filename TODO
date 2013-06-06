@@ -1,0 +1,39 @@
+Development TODO in no particular order:
+
+* sub-sample interpolation of triggers (done 2013-06-06)
+* understand range discrepancy
+* add to the gstlal summary page
+  * population statement plot
+  * plots showing likelihood distributions and background pdfs, etc.
+  * histograms for injection accuracy
+* make offline pipeline more i/o and cluster friendly.  Try to get it do do something sane on 1 core??
+  * add data pre-staging and serial processing of banks
+* block diagonal matrix support to reduce number of threads
+* fix known gstreamer bugs:  small gaps crash resampler, audiofirfilter
+has "timestamp" bugs (?), funnel won't work in time-ordered mode, ...
+* fix known gstlal bugs:  compute strain in ER3 revealed bugs in
+something, can't remember what, has fallen off radar.
+* framecpp demuxer and muxer cannot decode/encode gaps using "DataValid"
+bit vector stream.  figure out how and fix.  (probably required to
+implement offline pipeline's data staging, maybe not)
+* framecpp demuxer and muxer cannot decode/encode FrHistory objects.
+figure out how and fix.  (will be required for calibration work, not
+required for inspiral search)
+* finish turning the appropriate bits of the Data class into a pipeline
+handler, and get the input and output segments recorded correctly
+* fix service discovery to allow more than one job to be running on the
+same computer and remove need for URL dump files to be exchanged via
+filesystem.
+* complete port to swig bindings (long term, divest ourselves of pylal).
+* separate likelihood code from burst pipelines.
+* fix the numerator in the likelihood ratio ranking statistic to account
+for inter-instrument correlations in signal parameters (my student's
+work on implementing the rate estimation code might have turned up some
+code that'll do a good brute-force job of this).
+* switch online code to framexmitsrc
+* review readiness:  remove dead code, create tests for elements, create
+validation tests for applications.
+* incorporate rate estimation code into pipeline (have student working
+on this)
+* have offline dag split output across multiple directories (done 2013-06-06)
+* give jobs human-readable names in dag
