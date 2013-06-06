@@ -305,7 +305,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
-		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 2, max_size_bytes = 0, max_size_time = 0)
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
 		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
