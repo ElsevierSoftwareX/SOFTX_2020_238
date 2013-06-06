@@ -127,11 +127,11 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			switch (input->type)
 				{
 				case GSTLAL_PEAK_COMPLEX:
-				maxdata_channel = (double complex) input->values.as_float_complex[channel];
+				maxdata_channel = (double complex) input->interpvalues.as_float_complex[channel];
 				break;
 		
 				case GSTLAL_PEAK_DOUBLE_COMPLEX:
-				maxdata_channel = (double complex) input->values.as_double_complex[channel];
+				maxdata_channel = (double complex) input->interpvalues.as_double_complex[channel];
 				break;
 
 				default:
@@ -141,7 +141,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			if ( maxdata_channel ) {
 				LIGOTimeGPS end_time;
 				XLALINT8NSToGPS(&end_time, time);
-				XLALGPSAdd(&end_time, (double) input->samples[channel] / rate);
+				XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
 				memcpy(output, &(bankarray[channel]), sizeof(*bankarray));
 				output->snr = cabs(maxdata_channel);
 				output->coa_phase = carg(maxdata_channel);
