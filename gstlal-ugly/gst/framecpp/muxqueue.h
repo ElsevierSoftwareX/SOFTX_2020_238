@@ -113,6 +113,7 @@ GstClockTime framecpp_muxqueue_timestamp(FrameCPPMuxQueue *);
 GstClockTime framecpp_muxqueue_duration(FrameCPPMuxQueue *);
 GstFlowReturn framecpp_muxqueue_push(FrameCPPMuxQueue *, GstBuffer *);
 void framecpp_muxqueue_flush(FrameCPPMuxQueue *, GstClockTime);
+void framecpp_muxqueue_clear(FrameCPPMuxQueue *);
 void framecpp_muxqueue_set_flushing(FrameCPPMuxQueue *, gboolean);
 gboolean framecpp_muxqueue_get_flushing(FrameCPPMuxQueue *);
 GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *, GstClockTime);
