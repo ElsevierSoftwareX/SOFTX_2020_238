@@ -675,6 +675,57 @@ void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t
 }
 
 
+/**
+ * Join contiguous buffers in the buffer list into single buffers.  Returns
+ * the new list.
+ */
+
+/*
+ * FIXME:  this is an easy implementation, but calling gst_buffer_merge()
+ * for every pair of adjacent buffers results in many more malloc()s and
+ * memcpy()s than required.  for example, if the entire list can be merged
+ * into a single buffer then there should be a single malloc and each byte
+ * of every buffer should be copied into the new region, and that's it.
+ * but this implementation does a new malloc for every buffer, and then
+ * recopies all previously copied bytes into the new buffer.
+ */
+
+GList *framecpp_muxcollectpads_buffer_list_join(GList *list)
+{
+	GList *this;
+
+	for(this = list; this; this = g_list_next(this)) {
+		GstBuffer *this_buf = GST_BUFFER(this->data);
+		GList *next;
+
+		while((next = g_list_next(this))) {
+			GstBuffer *next_buf = GST_BUFFER(next->data);
+
+			/* allow 1 ns of timestamp mismatch */
+			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_TIMESTAMP(next_buf))) > 1)
+				break;
+
+			/* can't merge gaps with non-gaps */
+			if(GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+				break;
+
+			list = g_list_delete_link(list, next);
+
+			/* _merge() and _join() do not copy caps and flags,
+			 * so we have to do it ourselves, so we have to use
+			 * _merge() to keep the source buffers around */
+			this->data = gst_buffer_make_metadata_writable(gst_buffer_merge(this_buf, next_buf));
+			gst_buffer_copy_metadata(this->data, this_buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+			gst_buffer_unref(this_buf);
+			gst_buffer_unref(next_buf);
+			this_buf = this->data;
+		}
+	}
+
+	return list;
+}
+
+
 /*
  * ============================================================================
  *
