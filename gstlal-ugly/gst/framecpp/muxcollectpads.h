@@ -150,7 +150,7 @@ gboolean framecpp_muxcollectpads_get_common_span(FrameCPPMuxCollectPads *, GstCl
 gboolean framecpp_muxcollectpads_get_span(FrameCPPMuxCollectPads *, GstClockTime *, GstClockTime *);
 GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *, GstClockTime);
 void framecpp_muxcollectpads_buffer_list_boundaries(GList *, GstClockTime *, GstClockTime *);
-GList *framecpp_muxcollectpads_buffer_list_join(GList *);
+GList *framecpp_muxcollectpads_buffer_list_join(GList *, gboolean);
 
 
 GType framecpp_muxcollectpads_get_type(void);

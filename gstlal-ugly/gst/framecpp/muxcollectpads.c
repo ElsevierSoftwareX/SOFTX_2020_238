@@ -690,7 +690,7 @@ void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t
  * recopies all previously copied bytes into the new buffer.
  */
 
-GList *framecpp_muxcollectpads_buffer_list_join(GList *list)
+GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_gaps)
 {
 	GList *this;
 
@@ -705,8 +705,9 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list)
 			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_TIMESTAMP(next_buf))) > 1)
 				break;
 
-			/* can't merge gaps with non-gaps */
-			if(GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+			/* if distinct_gaps == TRUE, can't merge gaps with
+			 * non-gaps */
+			if(distinct_gaps && GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
 				break;
 
 			list = g_list_delete_link(list, next);
@@ -716,6 +717,8 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list)
 			 * _merge() to keep the source buffers around */
 			this->data = gst_buffer_make_metadata_writable(gst_buffer_merge(this_buf, next_buf));
 			gst_buffer_copy_metadata(this->data, this_buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+			if(!GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+				GST_BUFFER_FLAG_UNSET(this->data, GST_BUFFER_FLAG_GAP);
 			gst_buffer_unref(this_buf);
 			gst_buffer_unref(next_buf);
 			this_buf = this->data;
