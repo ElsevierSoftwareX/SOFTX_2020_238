@@ -1,6 +1,5 @@
 Development TODO in no particular order:
 
-* sub-sample interpolation of triggers (done 2013-06-06)
 * understand range discrepancy
 * add to the gstlal summary page
   * population statement plot
@@ -35,5 +34,9 @@ code that'll do a good brute-force job of this).
 validation tests for applications.
 * incorporate rate estimation code into pipeline (have student working
 on this)
-* have offline dag split output across multiple directories (done 2013-06-06)
 * give jobs human-readable names in dag
+* merge fake data generation programs into one
+
+Completed tasks
+* sub-sample interpolation of triggers (done 2013-06-06)
+* have offline dag split output across multiple directories (done 2013-06-06)
