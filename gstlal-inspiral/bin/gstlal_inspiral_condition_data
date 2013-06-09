@@ -151,9 +151,9 @@ if options.sample_rate is not None:
 	src = pipeparts.mkresample(pipeline, src, quality = 9)
 	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % options.sample_rate)
 src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = 8, frames_per_file = 128)
-sinkpad = src.get_pad("%s:%s" % (instrument, channel_name))
-sinkpad.set_property("comment", "conditioned h(t) for inspiral search")
-sinkpad.set_property("pad-type", "FrProcData")
+for pad in src.sink_pads():
+	pad.set_property("comment", "cached h(t) for inspiral search")
+	pad.set_property("pad-type", "FrProcData")
 
 pipeparts.mkframecppfilesink(pipeline, src, frame_type = options.description, path = options.output_path)
 
