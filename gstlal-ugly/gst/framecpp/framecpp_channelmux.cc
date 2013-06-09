@@ -243,10 +243,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		 * loop over frames
 		 */
 
-		for(frame_t_start = gwf_t_start, frame_t_end = MIN(gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration, gwf_t_end); frame_t_end <= gwf_t_end; frame_t_start = frame_t_end, frame_t_end += mux->frame_duration) {
+		for(frame_t_start = gwf_t_start, frame_t_end = MIN(gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration, gwf_t_end); frame_t_start < gwf_t_end; frame_t_start = frame_t_end, frame_t_end = MIN(frame_t_end + mux->frame_duration, gwf_t_end)) {
 			GSList *collectdatalist;
 			General::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
-			General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) mux->frame_duration / GST_SECOND));
+			General::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
+
 			GST_LOG_OBJECT(mux, "building frame %d [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", mux->frame_number, GST_TIME_SECONDS_ARGS(frame_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
 
 			/*
