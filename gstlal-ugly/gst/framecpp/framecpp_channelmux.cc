@@ -230,6 +230,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 	GstBuffer *outbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	g_assert_cmpuint(gwf_t_start, <=, gwf_t_end);
+
 	GST_LOG_OBJECT(mux, "building frame file [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(gwf_t_start), GST_TIME_SECONDS_ARGS(gwf_t_end));
 
 	try {
@@ -423,6 +425,8 @@ static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
 	GstClockTime gwf_t_start, gwf_t_end;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	GST_LOG_OBJECT(mux, "flushing enqueued data");
+
 	/*
 	 * get span
 	 */
@@ -450,13 +454,13 @@ static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
 	 * loop over available data
 	 */
 
-	for(gwf_t_start = collected_t_start, gwf_t_end = MIN(collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux), collected_t_end); gwf_t_end <= collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end += FRAME_FILE_DURATION(mux)) {
+	for(gwf_t_start = collected_t_start, gwf_t_end = MIN(collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux), collected_t_end); gwf_t_start < gwf_t_end; gwf_t_start = gwf_t_end, gwf_t_end = MIN(gwf_t_end + FRAME_FILE_DURATION(mux), collected_t_end)) {
+		g_assert_cmpuint(gwf_t_end, <=, collected_t_end);
 		result = build_and_push_frame_file(mux, gwf_t_start, gwf_t_end);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
-	if(gwf_t_start < collected_t_end)
-		GST_DEBUG_OBJECT(mux, "%" GST_TIME_SECONDS_FORMAT " not flushed from queues", GST_TIME_SECONDS_ARGS(collected_t_end - gwf_t_start));
+	g_assert_cmpuint(gwf_t_start, ==, collected_t_end);
 
 	/*
 	 * done
