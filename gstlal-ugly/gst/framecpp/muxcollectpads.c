@@ -388,6 +388,12 @@ static void waiting_handler(FrameCPPMuxQueue *queue, FrameCPPMuxCollectPadsData 
 	/*
 	 * if the common interval of data has changed, wake up the
 	 * streaming task
+	 *
+	 * FIXME:  if one or more pads are flushing they won't be aquiring
+	 * new data, and so eventually one of them will define min_t_end
+	 * which will then never change and this whole circus will jam up.
+	 * should get_common_span() only check the intervals spanned by the
+	 * non-flushing pads?
 	 */
 
 	if(!get_common_span(collectpads, &min_t_start, &min_t_end)) {
