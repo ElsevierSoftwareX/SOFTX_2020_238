@@ -4,7 +4,6 @@
 import sys
 import numpy
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -13,8 +12,8 @@ import pygst
 pygst.require('0.10')
 import gst
 
-from gstlal import pipeutil
 
+from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import pipeparts
 
@@ -75,15 +74,12 @@ def test_firbank(pipeline):
 
 
 def test_segmentsrc(pipeline):
-	elems = []
-	segs = numpy.array([[40,50],[20,40],[2, 3]], dtype=numpy.int64) * gst.SECOND
-	elems.append(pipeutil.mkelem("lal_segmentsrc", {"invert-output":False, "segment-list":segs}))
-	elems.append(pipeutil.mkelem("progressreport"))
-	elems.append(pipeutil.mkelem("audioconvert"))
-	elems.append(pipeutil.mkelem("lal_nxydump"))
-	elems.append(pipeutil.mkelem("filesink", {"location":"test.txt"}))
-	for elem in elems: pipeline.add(elem)
-	gst.element_link_many(*elems)
+	segs = [(40, 50), (20, 40), (2, 3)]
+	head = pipeparts.mksegmentsrc(pipeline, segments.segmentlist(segments.segment((LIGOTimeGPS(a), LIGOTimeGPS(b))) for (a, b) in segs))
+	head = pipeparts.mkprogressreport(pipeline, head, "progress")
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, head, "test.txt")
+
 
 def test_timeslicechisq(pipeline):
 	timeslicesnrs = []
