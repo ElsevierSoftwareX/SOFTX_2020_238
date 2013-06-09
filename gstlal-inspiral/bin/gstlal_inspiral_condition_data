@@ -106,16 +106,16 @@ def parse_command_line():
 
 
 class Handler(simplehandler.Handler):
-	def init_cache(self, instrument, description):
-		self.cache_instrument = instrument
-		self.cache_description = description
+	def __init__(self, *args, **kwargs):
+		super(Handler, self).__init__(*args, **kwargs)
 		self.cache = []
 
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
+			fcppmfs = message.src.get_parent()
 			start = LIGOTimeGPS(0, message.structure["timestamp"])
 			end = start + LIGOTimeGPS(0, message.structure["duration"])
-			self.cache.append(lal.CacheEntry(self.cache_instrument, self.cache_description, segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"])))
+			self.cache.append(lal.CacheEntry(fcppmfs.get_property("instrument"), fcppmfs.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"])))
 
 
 #
@@ -145,7 +145,6 @@ data_source_info = datasource.GWDataSourceInfo(options)
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("gstlal_inspiral_condition_data")
 handler = Handler(mainloop, pipeline)
-handler.init_cache(instrument, options.description)
 
 
 if options.verbose:
