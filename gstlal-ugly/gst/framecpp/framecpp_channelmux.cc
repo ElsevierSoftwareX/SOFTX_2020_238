@@ -454,13 +454,12 @@ static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
 	 * loop over available data
 	 */
 
-	for(gwf_t_start = collected_t_start, gwf_t_end = MIN(collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux), collected_t_end); gwf_t_start < gwf_t_end; gwf_t_start = gwf_t_end, gwf_t_end = MIN(gwf_t_end + FRAME_FILE_DURATION(mux), collected_t_end)) {
-		g_assert_cmpuint(gwf_t_end, <=, collected_t_end);
+	for(gwf_t_start = collected_t_start, gwf_t_end = MIN(collected_t_start - collected_t_start % FRAME_FILE_DURATION(mux) + FRAME_FILE_DURATION(mux), collected_t_end); gwf_t_start < collected_t_end; gwf_t_start = gwf_t_end, gwf_t_end = MIN(gwf_t_end + FRAME_FILE_DURATION(mux), collected_t_end)) {
 		result = build_and_push_frame_file(mux, gwf_t_start, gwf_t_end);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
-	g_assert_cmpuint(gwf_t_start, ==, collected_t_end);
+	g_assert_cmpuint(gwf_t_start, ==, collected_t_end);	/* safety check */
 
 	/*
 	 * done
