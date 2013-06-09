@@ -39,6 +39,7 @@ pygst.require('0.10')
 import gst
 
 
+from glue import lal
 from glue import segments
 from gstlal import pipeio
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
@@ -204,6 +205,24 @@ def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
 	if not os.path.exists(path):
 		os.makedirs(path)
 	elem.set_property("path", path)
+
+
+def framecpp_filesink_cache_entry_from_mfs_message(message):
+	"""
+	Translate an element message posted by the multifilesink element
+	inside a framecpp_filesink bin into a lal.CacheEntry object
+	describing the file being written by the multifilesink element.
+	"""
+	# extract the segment spanned by the file from the message directly
+	start = LIGOTimeGPS(0, message.structure["timestamp"])
+	end = start + LIGOTimeGPS(0, message.structure["duration"])
+
+	# retrieve the framecpp_filesink bin (for instrument/observatory
+	# and frame file type)
+	parent = message.src.get_parent()
+
+	# construct and return a CacheEntry object
+	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"]))
 
 
 #

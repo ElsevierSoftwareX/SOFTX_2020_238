@@ -41,12 +41,9 @@ pygst.require("0.10")
 import gst
 
 
-from glue import lal
-from glue import segments
 from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
@@ -112,10 +109,7 @@ class Handler(simplehandler.Handler):
 
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
-			fcppmfs = message.src.get_parent()
-			start = LIGOTimeGPS(0, message.structure["timestamp"])
-			end = start + LIGOTimeGPS(0, message.structure["duration"])
-			self.cache.append(lal.CacheEntry(fcppmfs.get_property("instrument"), fcppmfs.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"])))
+			self.cache.append(pipeparts.framecpp_filesink_cache_entry_from_mfs_message(message))
 
 
 #
