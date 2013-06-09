@@ -128,6 +128,21 @@ static gboolean all_pads_are_at_eos(FrameCPPMuxCollectPads *collectpads)
 }
 
 
+static gboolean all_pads_are_flushing(FrameCPPMuxCollectPads *collectpads)
+{
+	GSList *collectdatalist;
+
+	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
+	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist))
+		if(!framecpp_muxqueue_get_flushing(((FrameCPPMuxCollectPadsData *) collectdatalist->data)->queue)) {
+			FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+			return FALSE;
+		}
+	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+	return TRUE;
+}
+
+
 static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 {
 	GSList *collectdatalist;
@@ -233,8 +248,18 @@ static gboolean event(GstPad *pad, GstEvent *event)
 	}
 
 	case GST_EVENT_FLUSH_START:
+		framecpp_muxqueue_set_flushing(data->queue, TRUE);
+		if(all_pads_are_flushing(collectpads)) {
+			GST_DEBUG_OBJECT(collectpads, "all sink pads are flushing");
+			if(event_func)
+				success &= event_func(pad, event);
+		} else
+			gst_event_unref(event);
+		break;
+
 	case GST_EVENT_FLUSH_STOP:
-		framecpp_muxqueue_set_flushing(data->queue, GST_EVENT_TYPE(event) == GST_EVENT_FLUSH_START);
+		framecpp_muxqueue_set_flushing(data->queue, FALSE);
+		GST_DEBUG_OBJECT(collectpads, "not all sink pads are flushing");
 		if(event_func)
 			success &= event_func(pad, event);
 		else
