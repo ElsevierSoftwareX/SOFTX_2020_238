@@ -195,12 +195,15 @@ def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
 	# extract leading digits
 	leading_digits = timestamp // 10**int(math.log10(timestamp) + 1 - dir_digits)
 
-	# get metadata
+	# get other metadata
 	instrument = elem.get_property("instrument")
 	frame_type = elem.get_property("frame-type")
 
-	# set path
-	elem.set_property("path", os.path.join(outpath, "%s-%s-%d" % (instrument, frame_type, leading_digits)))
+	# make target directory, and set path
+	path = os.path.join(outpath, "%s-%s-%d" % (instrument, frame_type, leading_digits))
+	if not os.path.exists(path):
+		os.makedirs(path)
+	elem.set_property("path", path)
 
 
 #
