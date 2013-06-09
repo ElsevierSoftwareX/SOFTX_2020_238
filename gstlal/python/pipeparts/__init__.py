@@ -256,19 +256,6 @@ def mklalcachesrc(pipeline, location, **properties):
 	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, **properties)
 
 
-def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, cache_src_regex = None, cache_dsc_regex = None, segment_list = None):
-	# default blocksize is 1 second of double precision floats at
-	# 16384 Hz, e.g., LIGO h(t)
-	properties = {}
-	if segment_list is not None:
-		properties["segment_list"] = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list)
-	if cache_src_regex is not None:
-		properties["cache_src_regex"] = cache_src_regex
-	if cache_dsc_regex is not None:
-		properties["cache_dsc_regex"] = cache_dsc_regex
-	return mkgeneric(pipeline, None, "lal_framesrc", blocksize = blocksize, location = location, instrument = instrument, channel_name = channel_name, **properties)
-
-
 def mklvshmsrc(pipeline, shm_name, **properties):
 	return mkgeneric(pipeline, None, "gds_lvshmsrc", shm_name = shm_name, **properties)
 

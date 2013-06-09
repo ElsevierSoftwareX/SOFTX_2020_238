@@ -9,7 +9,6 @@ libgstlal_la_SOURCES = \
 	gstlal_drop.h gstlal_drop.c \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_framesink.h gstlal_framesink.c \
-	gstlal_framesrc.h gstlal_framesrc.c \
 	gstlal_gate.h gstlal_gate.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \

@@ -56,7 +56,6 @@
 #include <gstlal_drop.h>
 #include <gstlal_firbank.h>
 #include <gstlal_framesink.h>
-#include <gstlal_framesrc.h>
 #include <gstlal_gate.h>
 #include <gstlal_matrixmixer.h>
 #include <gstlal_nofakedisconts.h>
@@ -91,7 +90,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_drop", GSTLAL_DROP_TYPE},
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{"lal_framesink", GST_TYPE_LALFRAME_SINK},
-		{"lal_framesrc", GSTLAL_FRAMESRC_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
 		{"lal_matrixmixer", GSTLAL_MATRIXMIXER_TYPE},
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
