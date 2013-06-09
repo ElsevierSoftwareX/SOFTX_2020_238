@@ -28,14 +28,16 @@ from gstlal import pipeparts
 
 
 def test_histogram(pipeline):
-	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
+	head = pipeparts.mkprogressreport(pipeline, None, "src")
+	pipeparts.src_deferred_link(pipeparts.mkframecppchanneldemux(pipleine, pipeparts.mkcachesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", cache_src_regex = "H.*")), "H1:LSC-STRAIN", head.get_pad("sink"))
 	head = pipeparts.mkwhiten(pipeline, head)
 	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkspectrumplot(pipeline, head.get_pad("mean-psd")), "video/x-raw-rgb, width=640, height=480")))
 	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogramplot(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")))
 
 
 def test_channelgram(pipeline):
-	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
+	head = pipeparts.mkprogressreport(pipeline, None, "src")
+	pipeparts.src_deferred_link(pipeparts.mkframecppchanneldemux(pipleine, pipeparts.mkcachesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", cache_src_regex = "H.*")), "H1:LSC-STRAIN", head.get_pad("sink"))
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=1024")
 
 	head = pipeparts.mkwhiten(pipeline, head)
