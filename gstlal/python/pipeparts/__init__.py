@@ -276,8 +276,14 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	return elem
 
 
-def mkframecppfilesink(pipeline, src, **properties):
-	return mkgeneric(pipeline, src, "framecpp_filesink", **properties)
+def mkframecppfilesink(pipeline, src, message_forward = True, **properties):
+	post_messages = properties.pop("post_messages", True)
+	elem = mkgeneric(pipeline, src, "framecpp_filesink", message_forward = message_forward, **properties)
+	# FIXME:  there's supposed to be some sort of proxy mechanism for
+	# setting properties on child elements, but we can't seem to get
+	# anything to work
+	elem.get_by_name("multifilesink").set_property("post-messages", post_messages)
+	return elem
 
 
 def mkmultifilesink(pipeline, src, next_file = 0, sync = False, async = False, **properties):
