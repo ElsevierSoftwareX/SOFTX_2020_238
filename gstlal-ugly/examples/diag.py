@@ -28,21 +28,6 @@ from gstlal import pipeparts
 #
 
 
-def play_asq(pipeline):
-	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-AS_Q"), "src")
-	head = pipeparts.mkaudiochebband(pipeline, head, 40, 2500)
-	pipeparts.mkplaybacksink(pipeline, head, amplification=3e-2)
-
-
-def play_hoft(pipeline):
-	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
-	#head = pipeparts.mkaudiochebband(pipeline, head, 50, 4096)
-	#pipeparts.mkplaybacksink(pipeline, head, amplification=3e17)
-	head = pipeparts.mkwhiten(pipeline, head, zero_pad = 0, fft_length = 4)
-	head = pipeparts.mknofakedisconts(pipeline, head)
-	pipeparts.mkplaybacksink(pipeline, head)
-
-
 def test_histogram(pipeline):
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
 	head = pipeparts.mkwhiten(pipeline, head)
@@ -172,7 +157,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-play_hoft(pipeline)
+test_segmentsrc(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
