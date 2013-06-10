@@ -71,6 +71,7 @@ parser.add_option("-l", "--logscale", action="append", help="Set logscale on an 
 parser.add_option("-O", "--tile-opacity", type=float, action="store", default=1.0, help="Set the opacity of the plotted tiles. This is useful in the case of non-clustered output to see tiles which may obscured by others. Set to a value between 0 and 1. Default is 1.")
 parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
 parser.add_option("-j", "--plot-injections-from-file", action="store", help="Plot all injections from the file indicated. File must contain a sim_burst or sim_inspiral table. If a sim_inspiral table is found, will plot the 3.5 PN time-frequency track. If a sim_burst table is found, will plot the approximate extent of the time frequency area on the map.")
+parser.add_option("-d", "--restrict-dof", action="append", help="Only plot tiles with these DOF.")
 
 opts, args = parser.parse_args()
 
@@ -100,7 +101,8 @@ def plot_wnb( sim_burst ):
 		sim_burst.duration,
 		sim_burst.bandwidth,
 		linewidth=1.2,
-		linestyle='dashdot'
+		linestyle='dashdot',
+		facecolor='none'
 	)
 
 def plot_csg( sim_burst ):
@@ -221,6 +223,10 @@ for pid, eventlist in event_map.iteritems():
 	#for ss in search_map[pid]:
 		#all_events += filter(lambda sb: sb.peak_time in ss.get_out(), eventlist )
 	#all_events += eventlist
+	for e in eventlist:
+		if e.chisq_dof == float('nan'):
+			e.chisq_dof = e.duration*e.bandwidth*2
+
 	events += eventlist
 
 if len(events) == 0:
@@ -324,11 +330,16 @@ pn=0
 events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
 event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
 
+only_dof = 2.0**numpy.arange(1,16)
+if opts.restrict_dof:
+	only_dof = map(float, opts.restrict_dof)
+	print "Restricting to tiles with DOF = %s" % ",".join(map(str,only_dof))
+
 for channel, selected_events in event_iter:
 	if channel not in channels: continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf"), selected_events )
+	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf") and event.chisq_dof in only_dof, selected_events )
 	if opts.exclude_outside_segments:
 		for k in segs.keys():
 			try:
@@ -346,7 +357,10 @@ for channel, selected_events in event_iter:
 		high_frequency = max( [e.central_freq for e in selected_events] )
 	low_frequency = opts.low_frequency or 0
 
-	inst, channel = channel.split(":")
+	try:
+		inst, channel = channel.split(":")
+	except ValueError:
+		_, inst, channel = channel.split(":")
 
 	ax = pyplot.subplot(gs[pn])
 	# Extent in time
@@ -446,7 +460,7 @@ for channel, selected_events in event_iter:
 
 	# TODO: See if replacing data speeds up the process
 	if opts.plotting_type in ["tile", "both"]:
-		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False, alpha=options.tile_opacity )
+		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False, alpha=opts.tile_opacity )
 		patches.set_array( numpy.array(snrs) )
 		ax.add_collection( patches )
 	if opts.plotting_type == "marker":
@@ -493,10 +507,12 @@ for channel, selected_events in event_iter:
 			
 				if not (sb.time_geocent_gps > viewseg[0] and sb.time_geocent_gps < viewseg[1]):
 					continue # outside, skip
-				print "plotting %s with gps time %d.%d" % (sb.waveform, sb.time_geocent_gps, sb.time_geocent_gps_ns)
+				print "plotting %s with params" % sb.waveform
 				if sb.waveform == "BTLWNB":
+					print "\tt:%10.2f +/- %4.2f f: %4.2f +/- %4.2f" % (sb.get_time_geocent(), sb.duration/2.0, sb.frequency, sb.bandwidth/2.0)
 					ax.add_patch( plot_wnb( sb ) )
 				elif sb.waveform == "SineGaussian":
+					print "\tt:%10.2f f: %4.2f q: %4.2f" % (sb.get_time_geocent(), sb.frequency, sb.q)
 					ax.add_patch( plot_csg( sb ) )
 					
 		except ValueError:
