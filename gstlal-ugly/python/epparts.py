@@ -148,6 +148,7 @@ class EPHandler( Handler ):
 
 		# Defaults -- data products
 		self.output = True
+		self.output_lock = False
 		self.triggers = None
 		self.process_params = None
 		self.process = None
@@ -522,7 +523,7 @@ class EPHandler( Handler ):
 
 	def write_triggers( self, flush=True, filename=None, output_type="xml" ):
 
-		if not self.output: 
+		if not self.output:
 			return
 		if filename == None:
 			filename = self.outfile
@@ -589,6 +590,9 @@ class EPHandler( Handler ):
 
 		self.seglist["state"] = segmentlist([])
 
+		if self.stop < 0: # indication that we're quitting with no output
+			return
+
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
@@ -651,11 +655,13 @@ class EPHandler( Handler ):
 
 			rates = self.stats.event_rate()
 			stat_json["event_rates"] = list(rates)
-			esig = self.stats.event_significance()
+			def rank_sb( sb ):
+				return sb.snr/sb.chisq_dof - 1
+			esig = self.stats.event_significance( rank_fcn=rank_sb )
 			stat_json["event_significance"] = list(esig)
 			if self.verbose:
 				print >>sys.stderr, "Event rate in current segment: %g" % erate
-				print >>sys.stderr, "Event significance:\nSNR\t\tsig"
+				print >>sys.stderr, "Event significance:\nrank\t\tsig"
 				for (snr, sig) in esig:
 					print >>sys.stderr, "%4.2f\t\t%4.2f" % (snr, sig)
 

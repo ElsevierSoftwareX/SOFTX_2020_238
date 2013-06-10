@@ -231,11 +231,10 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		h_wind.data = numpy.hstack((d, numpy.zeros((len(psd.data) - len(d),), dtype = "complex")))
 
 		# DEBUG: Uncomment to dump FD filters
-		#f = open( "filters_fd/hann_%dhz" % int( flow + band*b_wind*overlap ), "w" )
+		#f = open( "filters_fd/hann_%dhz" % int( flow + band*b_wind ), "w" )
 		#for freq, s in enumerate( h_wind.data ):
-			#f.write( "%f %f\n" % (freq*h_wind.deltaF,s) )
+			#f.write( "%f %g\n" % (freq*h_wind.deltaF,s) )
 		#f.close()
-
 
 		# IFFT the window into a time series for use as a TD filter
 		try:
@@ -250,7 +249,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 				ifftplan
 			)
 		except:
-			sys.exit( "Failed to get time domain filters. The usual cause of this is a filter length which is only a few PSD bins wide. Try increaseing the fft-length property of the whitener." )
+			sys.exit( "Failed to get time domain filters. The usual cause of this is a filter length which is only a few PSD bins wide. Try increasing the fft-length property of the whitener." )
 
 		td_filter = t_series.data
 		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
@@ -260,9 +259,9 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		filters = numpy.concatenate( (filters, td_filter) )
 		
 		# DEBUG: Uncomment to dump TD filters
-		#f = open( "filters_td/hann_%dhz" % int( flow + band*b_wind*overlap ), "w" )
+		#f = open( "filters_td/hann_%dhz" % int( flow + band*b_wind ), "w" )
 		#for t, s in enumerate( td_filter ):
-			#f.write( "%d %f\n" % (t,s) )
+			#f.write( "%g %g\n" % (t/rate,s) )
 		#f.close()
 
 	# Shape it into a "matrix-like" object
@@ -638,23 +637,25 @@ class SBStats(object):
 		return onrate
 
 	# FIXME: Have event_sig call event_rate
-	def event_significance( self, nevents=10 ):
+	def event_significance( self, nevents=10, rank_fcn=None):
 		"""
 		Calculate the Poissonian significance of the 'on source' trial set for up to the loudest nevents.
 		"""
+		if rank_fcn is None:
+			rank_fcn = lambda e: e.snr
 
 		offtime = float(abs(segmentlist(self.offsource.keys())))
 		offsource = sorted( chain(*self.offsource.values()), key=lambda sb: -sb.snr )
 		offrate = zip( offsource, map( lambda i:i/offtime, range(1, len(offsource)+1) ) )
 		offrate = offrate[::-1]
 		offsource = offsource[::-1]
-		offsnr = [sb.snr for sb in offsource]
+		offsnr = map(rank_fcn, offsource)
 
 		ontime = float(abs(segmentlist(self.onsource.keys())))
 		if ontime == 0:
 			return []
 		onsource = sorted( chain(*self.onsource.values()), key=lambda sb: -sb.snr )
-		onsnr = [sb.snr for sb in onsource]
+		onsnr = map(rank_fcn, onsource)
 		onrate = []
 		for snr in onsnr:
 			try:
@@ -670,7 +671,7 @@ class SBStats(object):
 			exp_num = onrate[i]*ontime
 			# FIXME: requires scipy >= 0.10
 			#onsource_sig.append( [sb.snr, -poisson.logsf(i, exp_num)] )
-			onsource_sig.append( [sb.snr, -numpy.log(poisson.sf(i, exp_num))] )
+			onsource_sig.append( [rank_fcn(sb), -numpy.log(poisson.sf(i, exp_num))] )
 
 		return onsource_sig
 
