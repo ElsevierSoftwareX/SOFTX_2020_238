@@ -210,7 +210,6 @@ def get_triggers(elem, handler):
 
 	if handler.stop - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
 
-		print >>sys.stderr, handler.start, handler.time_since_dump, handler.stop
 		subdir = ep.append_formatted_output_path( handler.outdirfmt, handler )
 		fname = ep.make_cache_parseable_name(
 			inst = handler.inst,
@@ -240,8 +239,13 @@ def get_triggers(elem, handler):
 		"""
 
 		#handler.process_triggers( [], cluster_passes = True )
-		handler.write_triggers( filename = fname, flush = True )
-		handler.time_since_dump = handler.stop 
+		if not handler.output_lock:
+			handler.output_lock = True
+			handler.write_triggers( filename = fname, flush = True )
+			handler.time_since_dump = handler.stop 
+			handler.output_lock = False
+		else:
+			print >>sys.stderr, "Element %s wants to write, but is deferring." % elem
 
 #
 # =============================================================================
@@ -528,7 +532,7 @@ if gw_data_source_opts.data_source == "lvshm":
 elif gw_data_source_opts.seg is not None:
 	handler.start = float(gw_data_source_opts.seg[0])
 
-handler.time_since_dump = handler.start
+handler.time_since_dump = handler.stop = handler.start
 
 # Resample down to the requested rate
 head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
@@ -565,6 +569,11 @@ if verbose:
 	head = pipeparts.mkprogressreport( pipeline, head, "FIR bank stream" )
 
 postfirtee = pipeparts.mktee( pipeline, head )
+
+# object to handle the synchronization of the appsinks
+def get_triggers_with_handler( elem ):
+	return get_triggers( elem, handler )
+appsync = pipeparts.AppSync(appsink_new_buffer = get_triggers_with_handler)
 
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
@@ -617,9 +626,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			"Undersampled stream level %d" % res_level
 		)
 
-	# This converts N base band channels into M wider channels via the use of a NxM 
-	# matrix with M block diagonal elements containing the proper renormalization 
-	# per row
+	# This converts N base band channels into M wider channels via the use of 
+	# a NxM matrix with M block diagonal elements containing the proper 
+	# renormalization per row
 	head = matmixer = pipeparts.mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
@@ -661,16 +670,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 		# Multi channel FIR filter -- used to add together frequency bands into 
 		# tiles
-		"""
-		FIXME: This is a workaround around until the audiofirfilter is fixed. Basically, if the firfilter gets a small enough kernel, it invokes time-domain convolution. Something about the way it fills the buffers is wrong in regards to the way it keeps history and thus the output buffers partially desynched from the input -- even with an identity transform. Workaround: Zero pad the kernel past the length (32 samples) in which the element switches to FFT convolution which doesn't exhibit bad behavior.  
-		"""
-		#head = pipeparts.mkchecktimestamps( pipeline, head, "before audiofir" )
 		durtee = pipeparts.mkqueue( pipeline, head )
-		durtee = pipeparts.mkgeneric( pipeline, durtee, "audiofirfilter" )
-		durtee.set_property( "kernel", 
-			ep.build_fir_sq_adder( ndof, padding=max(0, 33-ndof) )
-		)
-		#head = pipeparts.mkchecktimestamps( pipeline, head, "after audiofir" )
+		durtee = pipeparts.mkmean( pipeline, durtee )
+		durtee.set_property( "n", ndof )
+		durtee.set_property( "type", 2 )
+		durtee.set_property( "moment", 1 )
 
 		if verbose:
 			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
@@ -733,9 +737,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
 				"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 			)
+
 		# Funnel the triggers for this subbranch to the appsink
-		appsink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, durtee))
-		appsink.connect_after("new-buffer", get_triggers, handler)
+		# FIXME: Why doesn't this negotiate the caps properly?
+		#appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )
+		appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee) )
 
 		ndof <<= 1
 		if ndof > max_samp:
