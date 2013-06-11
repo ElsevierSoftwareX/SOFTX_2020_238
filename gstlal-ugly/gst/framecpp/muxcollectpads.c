@@ -235,7 +235,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		gint64 start, stop, position;
 		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
 		gst_event_unref(event);
-		GST_DEBUG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", start, stop);
+		GST_LOG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", start, stop);
 
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 		gst_segment_set_newsegment_full(&data->segment, update, rate, applied_rate, format, start, stop, position);
@@ -250,7 +250,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 	case GST_EVENT_FLUSH_START:
 		framecpp_muxqueue_set_flushing(data->queue, TRUE);
 		if(all_pads_are_flushing(collectpads)) {
-			GST_DEBUG_OBJECT(collectpads, "all sink pads are flushing");
+			GST_LOG_OBJECT(collectpads, "all sink pads are flushing");
 			if(event_func)
 				success &= event_func(pad, event);
 		} else
@@ -259,7 +259,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 
 	case GST_EVENT_FLUSH_STOP:
 		framecpp_muxqueue_set_flushing(data->queue, FALSE);
-		GST_DEBUG_OBJECT(collectpads, "not all sink pads are flushing");
+		GST_LOG_OBJECT(collectpads, "not all sink pads are flushing");
 		if(event_func)
 			success &= event_func(pad, event);
 		else
@@ -267,11 +267,11 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
-		GST_DEBUG_OBJECT(pad, "received EOS");
+		GST_LOG_OBJECT(pad, "received EOS");
 		gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
 		data->eos = TRUE;
 		if(all_pads_are_at_eos(collectpads)) {
-			GST_DEBUG_OBJECT(collectpads, "all sink pads are at EOS");
+			GST_LOG_OBJECT(collectpads, "all sink pads are at EOS");
 			if(event_func)
 				success &= event_func(pad, event);
 		} else
@@ -678,9 +678,9 @@ GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *data, GstCl
 	 */
 
 	if(result)
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->pad), "(%s): taking %" GST_BUFFER_LIST_BOUNDARIES_FORMAT, GST_PAD_NAME(data->pad), GST_BUFFER_LIST_BOUNDARIES_ARGS(result));
+		GST_DEBUG_OBJECT(data->collect, "(%" GST_PTR_FORMAT ") taking %" GST_BUFFER_LIST_BOUNDARIES_FORMAT, data->pad, GST_BUFFER_LIST_BOUNDARIES_ARGS(result));
 	else
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->pad), "(%s): nothing available prior to %" GST_TIME_SECONDS_FORMAT, GST_PAD_NAME(data->pad), GST_TIME_SECONDS_ARGS(t_end));
+		GST_DEBUG_OBJECT(data->collect, "(%" GST_PTR_FORMAT ") nothing available prior to %" GST_TIME_SECONDS_FORMAT, data->pad, GST_TIME_SECONDS_ARGS(t_end));
 	return result;
 }
 
