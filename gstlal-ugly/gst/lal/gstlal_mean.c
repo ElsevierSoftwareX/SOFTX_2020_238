@@ -52,6 +52,16 @@
 
 #include <gstlal_mean.h>
 
+/*
+ * Defined here for use in process functions which do multiple types.
+ */
+#define TYPE_MEAN 1
+#define TYPE_INTEGRAL 2
+#define TYPE_MAX_OVER_N 3
+#define TYPE_MAX_EVERY_N 4
+#define TYPE_THRESH 5
+#define TYPE_INVERTED_THRESH 6
+#define TYPE_VARIANCE 7
 
 /*
  * ============================================================================
@@ -79,9 +89,8 @@ static int mean_process(GSTLALMean *element, guint64 available_length, guint64 o
 	/* pre compute the sum for the first sample */
 	guint64 offset = available_length - output_length;
 	for (j = 0; j < channels; j++) {
-		for(k = 0; k < element->n-1; k++) {
-			if(k > offset) break;
-			element->sum2[j] += pow(in[(offset - k) * channels + j], element->moment);
+		for(k = 0; k < element->n-1 && k <= offset; k++) {
+			element->sum2[j] += pow(in[k * channels + j], element->moment);
 		}
 	}
 	
@@ -90,8 +99,12 @@ static int mean_process(GSTLALMean *element, guint64 available_length, guint64 o
 		offset = available_length - output_length + i;
 		for (j = 0; j < channels; j++) {
 			element->sum2[j] += pow(in[offset * channels + j], element->moment);
+			if (element->type == TYPE_MEAN) {
+				out[i*channels +j] = (element->sum2[j] - element->sum1[j]) / element->n;
+			} else if (element->type == TYPE_INTEGRAL) {
+				out[i*channels +j] = element->sum2[j] - element->sum1[j];
+			}
 			element->sum1[j] += pow(in[(offset - element->n + 1) * channels + j], element->moment);
-			out[i*channels +j] = (element->sum2[j] - element->sum1[j]) / element->n;
 		}
 	}
 	return 0;
@@ -380,7 +393,7 @@ static GstFlowReturn filter(GSTLALMean *element, GstBuffer *outbuf, guint64 outp
 	 * flush data from the adapter.  we want n-1 samples to remain
 	 */
 
-	flush(element, available_length-element->n + 1);
+	flush(element, available_length);
 
 	/*
 	 * set buffer metadata
@@ -452,13 +465,6 @@ enum property {
 #define DEFAULT_MOMENT 2
 #define DEFAULT_TYPE 1
 #define DEFAULT_THRESH 5.0
-#define TYPE_MEAN 1
-#define TYPE_INTEGRAL 2
-#define TYPE_MAX_OVER_N 3
-#define TYPE_MAX_EVERY_N 4
-#define TYPE_THRESH 5
-#define TYPE_INVERTED_THRESH 6
-#define TYPE_VARIANCE 7
 
 /*
  * ============================================================================
@@ -610,6 +616,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		element->need_discont = TRUE;
+
+		/*
+		 * Get ourselves a buffer
+		 */
+		push_zeros(element, element->n - 1);
 	}
 
 	/*
