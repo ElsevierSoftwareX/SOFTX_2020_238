@@ -30,19 +30,23 @@ from glue.ligolw import utils
 from pylal import series as lalseries
 from gstlal import reference_psd
 
-if len(sys.argv) != 3:
-	print "USAGE gstlal_plot_psd psd_name output_name"
+if len(sys.argv) < 3:
+	print "USAGE gstlal_plot_psd OUTPUT-NAME PSD-FILE-1 PSD-FILE-2 ..."
 	sys.exit()
 
-fname = sys.argv[1]
-outname = sys.argv[2]
+outname = sys.argv[1]
 
-psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
-for k,v in psds.items():
-	h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, 4096)
-	pyplot.loglog(v.deltaF * numpy.arange(len(v.data)), v.data, label = '%s: %0.f Mpc' % (k, h))
-	pyplot.xlabel('Frequency (Hz)')
-	pyplot.ylabel('Strain/Hz')
+for fname in sys.argv[2:]:
+	psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+	for k,v in psds.items():
+		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, 4096)
+		if len(sys.argv[2:]) > 1:
+			flabel = fname
+		else:
+			flabel = ""
+		pyplot.loglog(v.deltaF * numpy.arange(len(v.data)), v.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
+		pyplot.xlabel('Frequency (Hz)')
+		pyplot.ylabel('Strain/Hz')
 pyplot.legend()
 pyplot.grid()
 pyplot.savefig(outname)
