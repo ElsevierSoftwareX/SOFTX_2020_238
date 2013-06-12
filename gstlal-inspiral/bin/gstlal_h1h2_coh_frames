@@ -345,7 +345,7 @@ nullhead = coherent_null_bin.get_pad("NULLsrc")
 
 cohhead = pipeparts.mkprogressreport(pipeline, cohhead, "progress_coherent")
 cohhead = pipeparts.mktaginject(pipeline, cohhead, "instrument=H1H2, channel-name=LSC-STRAIN_HPLUS")
-pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2", duration = 4096)
+pipeparts.mkframecppfilesink(pipeline, pipeparts.mkframecppchannelmux(pipeline, {"H1H2:LSC-STRAIN_HPLUS" : cohhead}, frame_duration = 1, frames_per_file = 4096), frame_type = "H1H2")
 
 # null veto
 nullhead = pipeparts.mkprogressreport(pipeline, nullhead, "progress_null")
@@ -354,7 +354,7 @@ nullhead = pipeparts.mkwhiten(pipeline, nullhead, zero_pad = handler.zero_pad_le
 if options.write_null_frames is not None:
 	nullhead = pipeparts.mktee(pipeline, nullhead)
 	nullframehead = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, nullhead), "instrument=H1H2, channel-name=LSC-STRAIN_HNULL")
-	pipeparts.mkframesink(pipeline, nullframehead, clean_timestamps = False, dir_digits = 0, frame_type = "H1H2_NULL", duration = 4096)
+	pipeparts.mkframecppfilesink(pipeline, pipeparts.mkframecppchannelmux(pipeline, {"H1H2:LSC-STRAIN_HNULL" : nullframehead}, frame_duration = 1, frames_per_file = 4096), frame_type = "H1H2_NULL")
 
 nullhead = datasource.mkhtgate(pipeline, nullhead, threshold = 8.0)
 nullhead.set_property("emit-signals", True)
