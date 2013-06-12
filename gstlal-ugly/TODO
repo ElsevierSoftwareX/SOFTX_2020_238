@@ -8,46 +8,17 @@ General
 
 * Verify that all elements support discontinuities.
 * Verify that all elements support gaps.
-* Divide the gstlal_inspiral pipeline into reusable components, e.g. bins.
-* Add the "restrict" keyword wherever possible in C code.
 
 
 Plugins/elements to hand over to GStreamer
 ==========================================
 
-* ``cairovis`` plugin
-* ``unary`` plugin
 * ``lal_gate`` element
 * ``lal_reblock`` element
 * ``lal_adder`` element: make the stock ``adder`` synchronous, or figure out how to use it
 * ``lal_firbank`` element
 * ``lal_matrixmixer`` element
-
-
-``gstlal`` plugin
-=================
-
-* Add gap support to lal_whiten.
-* Factor chi square calculation out of lal_triggergen.
-* Backport the new time-symmetric trigger algorithm from s6online to master.
-* Add support for partial coincidences (coincidences in which not all detectors
-  participate) to lal_skymap.
-* Come up with a trigger format that is less inspiral-centric so that all
-  transient searches can share some common elements for trigger I/O, coincidence,
-  and Bayesian localization.
-* Add single-precision support to the following elements:
-
-  * lal_firbank
-  * lal_triggergen
-  * lal_nxydump
-
-
-``cairovis`` plugin
-===================
-
-* Add direct output to png, pdf, etc.
-* Add colorbar
-* Add adaptive histograms
+* ``lal_nxydump`` element
 
 
 Streaming with gstreamer
