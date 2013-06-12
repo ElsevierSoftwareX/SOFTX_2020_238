@@ -24,7 +24,6 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
-* understand range discrepancy
 * add to the gstlal summary page
   * population statement plot
   * plots showing likelihood distributions and background pdfs, etc.
