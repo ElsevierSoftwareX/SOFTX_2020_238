@@ -1,4 +1,28 @@
-Development TODO in no particular order:
+General
+=======
+
+* Verify that all elements support discontinuities.
+* Verify that all elements support gaps.
+
+
+Plugins/elements to hand over to GStreamer
+==========================================
+
+* ``lal_gate`` element
+* ``lal_reblock`` element
+* ``lal_adder`` element: make the stock ``adder`` synchronous, or figure out how to use it
+* ``lal_firbank`` element
+* ``lal_matrixmixer`` element
+* ``lal_nxydump`` element
+
+
+Streaming with gstreamer
+============================
+
+* Figure out how to do live streaming thru web (pcdev1 or ATLAS) of a OmegaGram  movie
+
+Immediate development tasks in no particular order
+==================================================
 
 * understand range discrepancy
 * add to the gstlal summary page
