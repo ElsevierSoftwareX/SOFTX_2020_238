@@ -53,6 +53,7 @@ import gst
 
 
 from gstlal import pipeio
+from gstlal import reference_psd
 from gstlal.elements import matplotlibcaps
 
 
@@ -188,13 +189,14 @@ class lal_spectrumplot(gst.BaseTransform):
 		imax = bisect.bisect_right(f, self.f_max)
 
 		for psd in data[:]:
-			axes.loglog(f[imin:imax], psd[imin:imax], alpha = 0.7)
+			axes.loglog(f[imin:imax], psd[imin:imax], alpha = 0.7, label = "%s:%s (%.4g Mpc BNS horizon)" % ((self.instrument or "Unknown Instrument"), (self.channel_name or "Unknown Channel").replace("_", r"\_"), reference_psd.horizon_distance(reference_psd.laltypes.REAL8FrequencySeries(f0 = f[0], deltaF = self.delta_f, data = psd), 1.4, 1.4, 8.0, 10.0)))
 
 		axes.grid(True)
 		axes.set_xlim((self.f_min, self.f_max))
-		axes.set_title(r"Spectral Density of %s, %s at %.11g s" % (self.instrument or "Unknown Instrument", (self.channel_name or "Unknown Channel").replace("_", r"\_"), float(inbuf.timestamp) / gst.SECOND))
+		axes.set_title(r"Spectral Density at %.11g s" % (float(inbuf.timestamp) / gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
 		axes.set_ylabel(r"Spectral Density (%s)" % self.sample_units)
+		axes.legend(loc = "lower left")
 
 		#
 		# extract pixel data
