@@ -661,7 +661,7 @@ class Data(object):
 						except TypeError:
 							self.ranking_data.scale[ifos] = 1
 							print >>sys.stderr, "could not set scale factor, probably because we do not have live time info yet.  seg is: %s" % str(self.ranking_data.livetime_seg)
-							
+
 					# write the new distribution stats to disk
 					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
