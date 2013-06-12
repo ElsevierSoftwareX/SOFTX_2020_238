@@ -729,30 +729,81 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 		GstBuffer *this_buf = GST_BUFFER(this->data);
 		GList *next;
 
+		/*
+		 * safety checks
+		 */
+
+		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(this_buf));
+		g_assert(GST_BUFFER_DURATION_IS_VALID(this_buf));
+
 		while((next = g_list_next(this))) {
 			GstBuffer *next_buf = GST_BUFFER(next->data);
 
-			/* allow 1 ns of timestamp mismatch */
+			/*
+			 * safety checks
+			 */
+
+			g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(next_buf));
+			g_assert(GST_BUFFER_DURATION_IS_VALID(next_buf));
+
+			/*
+			 * allow 1 ns of timestamp mismatch
+			 */
+
 			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_TIMESTAMP(next_buf))) > 1)
 				break;
 
-			/* if distinct_gaps == TRUE, can't merge gaps with
-			 * non-gaps */
+			/*
+			 * if distinct_gaps == TRUE, can't merge gaps with
+			 * non-gaps
+			 */
+
 			if(distinct_gaps && GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
 				break;
 
-			list = g_list_delete_link(list, next);
+			/*
+			 * remove next_buf from the linked list
+			 */
 
-			/* _merge() and _join() do not copy caps and flags,
-			 * so we have to do it ourselves, so we have to use
-			 * _merge() to keep the source buffers around */
-			this->data = gst_buffer_make_metadata_writable(gst_buffer_merge(this_buf, next_buf));
-			gst_buffer_copy_metadata(this->data, this_buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
-			if(!GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
-				GST_BUFFER_FLAG_UNSET(this->data, GST_BUFFER_FLAG_GAP);
-			gst_buffer_unref(this_buf);
-			gst_buffer_unref(next_buf);
-			this_buf = this->data;
+			{
+			GList *new_list = g_list_delete_link(list, next);
+			/* safety check */
+			g_assert(new_list == list);
+			}
+
+			/*
+			 * _merge() can't handle one or the other buffers
+			 * having zero size, so we need to put those in as
+			 * special cases
+			 */
+
+			if(GST_BUFFER_DURATION(this_buf) && GST_BUFFER_DURATION(next_buf)) {
+				/* _merge() and _join() do not copy caps
+				 * and flags, so we have to do it
+				 * ourselves, so we have to use _merge() to
+				 * keep the source buffers around */
+				this->data = gst_buffer_make_metadata_writable(gst_buffer_merge(this_buf, next_buf));
+				gst_buffer_copy_metadata(this->data, this_buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+				if(!GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+					GST_BUFFER_FLAG_UNSET(this->data, GST_BUFFER_FLAG_GAP);
+				gst_buffer_unref(this_buf);
+				gst_buffer_unref(next_buf);
+				this_buf = this->data;
+			} else if(!GST_BUFFER_DURATION(next_buf)) {
+				/*
+				 * next_buf is zero length, just drop it
+				 */
+
+				gst_buffer_unref(next_buf);
+			} else {
+				/*
+				 * this_buf is zero length but next_buf
+				 * isn't, replace this with next
+				 */
+
+				gst_buffer_unref(this_buf);
+				this->data = this_buf = next_buf;
+			}
 		}
 	}
 
