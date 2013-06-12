@@ -54,8 +54,6 @@ opts, args = OptionParser(usage = "%prog [options]" + __doc__, option_list = [
 from gstlal.pipeutil import gst, gobject
 from gstlal import pipeparts
 from gstlal.simplehandler import Handler
-from pylal.Fr import frputvect
-import os, os.path, errno
 
 
 # Output location parameters
@@ -88,9 +86,10 @@ src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = opts.instrument, channel
 src = pipeparts.mkprogressreport(pipeline, src, "progress_hoft")
 src = pipeparts.mktee(pipeline, src)
 
-# appsink for capturing buffers and writing them to frame files
+# writing buffers to frame files
 head = pipeparts.mkqueue(pipeline, src, max_size_time = 2 * frame_duration * gst.SECOND, max_size_buffers = 0, max_size_bytes = 0)
-pipeparts.mkframesink(pipeline, head, frame_type = "%s_MOCK" % opts.instrument, duration = frame_duration)
+head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (opts.instrument, channel_name): head}, frame_duration = frame_duration, frames_per_file = 1)
+pipeparts.mkframecppfilesink(pipeline, head, frame_type = "%s_MOCK" % opts.instrument)
 
 # Create optional TCP server
 if opts.port is not None:
