@@ -29,11 +29,18 @@ parser.add_option("--instrument", help="instrument, e.g. H1")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
 parser.add_option("--df", metavar = "float", type = "float", default = 0.25, help = "set the frequency resolution to interpolate to, default = 0.25")
 parser.add_option("--invert", action = "store_true", help = "if set put 1/psd into the file")
+parser.add_option("--type", metavar = "ASD|PSD", default = "ASD", help = "input is ASD or PSD, default ASD")
+
 options, filenames = parser.parse_args()
 
 data = numpy.loadtxt(filenames[0], comments = '#')
 f = data[:,0]
-psd = data[:,1]**2
+if options.type == "ASD":
+	psd = data[:,1]**2
+elif options.type == "PSD":
+	psd = data[:,1]
+else:
+	raise ValueError("--type must be ASD or PSD")
 
 #FIXME hack to pad the series since it doesn't start at 0 :(
 f_padded = numpy.concatenate((numpy.arange(0, f[0], options.df), f))
