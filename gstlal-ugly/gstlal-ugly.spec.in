@@ -6,8 +6,8 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= @MIN_GSTLAL_VERSION@ python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalframe >= @MIN_LALFRAME_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalburst >= @MIN_LALBURST_VERSION@ gsl ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@ gds-core >= @MIN_GDS_VERSION@ gds-crtools >= @MIN_GDS_VERSION@ gds-services >= @MIN_GDS_VERSION@ cyrus-sasl-lib nds2-client orc >= 0.4.16
-BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalframe-devel >= @MIN_LALFRAME_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@ gds-devel >= @MIN_GDS_VERSION@ cyrus-sasl-devel nds2-client-devel nds2-client-headers orc >= 0.4.16
+Requires: gstlal >= @MIN_GSTLAL_VERSION@ python >= 2.6 glue >= 1.42 glue-segments >= 1.42 python-pylal >= 0.2.0 fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalburst >= @MIN_LALBURST_VERSION@ gsl ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@ gds-core >= @MIN_GDS_VERSION@ gds-crtools >= @MIN_GDS_VERSION@ gds-services >= @MIN_GDS_VERSION@ cyrus-sasl-lib nds2-client orc >= 0.4.16
+BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@ gds-devel >= @MIN_GDS_VERSION@ cyrus-sasl-devel nds2-client-devel nds2-client-headers orc >= 0.4.16
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Xavier Amador <xavier.amador@gravity.phys.uwm.edu>
@@ -26,7 +26,7 @@ gstlal-based applications.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalframe-devel >= @MIN_LALFRAME_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel nds2-client-headers
+Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel nds2-client-headers
 %description devel
 This package contains the files needed for building gstlal-ugly based
 plugins and programs.

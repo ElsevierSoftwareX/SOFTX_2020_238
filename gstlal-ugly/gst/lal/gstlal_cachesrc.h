@@ -37,7 +37,7 @@
 #include <gst/base/gstbasesrc.h>
 
 
-#include <lal/FrameCache.h>
+#include <lal/LALCache.h>
 
 
 G_BEGIN_DECLS
@@ -88,7 +88,7 @@ struct _GstLALCacheSrc {
 	gchar *cache_dsc_regex;
 	gboolean use_mmap;
 
-	FrCache *cache;
+	LALCache *cache;
 	guint index;
 	gboolean need_discont;
 };
