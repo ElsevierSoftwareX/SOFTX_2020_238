@@ -26,21 +26,22 @@
 #
 
 
+import copy
 import itertools
 import math
 import numpy
 from scipy import interpolate
 from scipy import optimize
 from scipy import stats
-import sys
 try:
 	import sqlite3
 except ImportError:
 	# pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 sqlite3.enable_callback_tracebacks(True)
+import sys
 
-import copy
+
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
