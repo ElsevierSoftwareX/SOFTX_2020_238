@@ -96,7 +96,7 @@ def parse_command_line():
 #
 # =============================================================================
 #
-#                                Custom Handler
+#                                   Pipeline
 #
 # =============================================================================
 #
@@ -110,6 +110,41 @@ class Handler(simplehandler.Handler):
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
 			self.cache.append(pipeparts.framecpp_filesink_cache_entry_from_mfs_message(message))
+
+
+def build_pipeline(pipeline, data_source_info, sample_rate = None, frame_duration = 1, frames_per_file = 2048, verbose = False):
+	#
+	# get instrument and channel name (requires exactly one
+	# instrument+channel)
+	#
+
+	(instrument, channel_name), = data_source_info.channel_dict.items()
+
+	#
+	# retrieve h(t)
+	#
+
+	src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = verbose)
+
+	#
+	# optionally resample
+	#
+
+	if sample_rate is not None:
+		# make sure we're *down*sampling
+		src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % sample_rate)
+		src = pipeparts.mkresample(pipeline, src, quality = 9)
+		src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % sample_rate)
+
+	#
+	# pack into frame files for output
+	#
+
+	src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
+	for pad in src.sink_pads():
+		pad.set_property("comment", "cached h(t) for inspiral search")
+		pad.set_property("pad-type", "FrProcData")
+	pipeparts.mkframecppfilesink(pipeline, src, frame_type = options.description, path = options.output_path)
 
 
 #
@@ -128,7 +163,6 @@ class Handler(simplehandler.Handler):
 
 options, output_cache_filename = parse_command_line()
 data_source_info = datasource.GWDataSourceInfo(options)
-(instrument, channel_name), = data_source_info.channel_dict.items()
 
 
 #
@@ -143,20 +177,7 @@ handler = Handler(mainloop, pipeline)
 
 if options.verbose:
 	print >>sys.stderr, "assembling pipeline ...",
-
-src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = options.verbose)
-if options.sample_rate is not None:
-	# make sure we're *down*sampling
-	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % options.sample_rate)
-	src = pipeparts.mkresample(pipeline, src, quality = 9)
-	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % options.sample_rate)
-src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = 8, frames_per_file = 128)
-for pad in src.sink_pads():
-	pad.set_property("comment", "cached h(t) for inspiral search")
-	pad.set_property("pad-type", "FrProcData")
-
-pipeparts.mkframecppfilesink(pipeline, src, frame_type = options.description, path = options.output_path)
-
+build_pipeline(pipeline, data_source_info, sample_rate = options.sample_rate, verbose = options.verbose)
 if options.verbose:
 	print >>sys.stderr, "done"
 
