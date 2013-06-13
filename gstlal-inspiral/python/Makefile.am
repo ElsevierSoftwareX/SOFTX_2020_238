@@ -10,6 +10,7 @@ pkgpython_PYTHON = \
 	cbc_template_fir.py \
 	cbc_template_iir.py \
 	far.py \
+	hoftcache.py \
 	inspiral_pipe.py \
 	inspiral.py \
 	lloidparts.py \
