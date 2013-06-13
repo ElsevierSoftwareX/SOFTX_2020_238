@@ -28,7 +28,6 @@ parser = OptionParser(description = __doc__)
 parser.add_option("--instrument", help="instrument, e.g. H1")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
 parser.add_option("--df", metavar = "float", type = "float", default = 0.25, help = "set the frequency resolution to interpolate to, default = 0.25")
-parser.add_option("--invert", action = "store_true", help = "if set put 1/psd into the file")
 parser.add_option("--type", metavar = "ASD|PSD", default = "ASD", help = "input is ASD or PSD, default ASD")
 
 options, filenames = parser.parse_args()
@@ -51,8 +50,5 @@ psdinterp = interp1d(f_padded, psd_padded)
 
 psd = psdinterp(uniformf)
 
-if options.invert:
-	psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=1.0/psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0) # note the inverse of the psd but not the units.
-else:
-	psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0)
+psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0)
 reference_psd.write_psd(options.output, {options.instrument: psdseries})
