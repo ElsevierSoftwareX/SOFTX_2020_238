@@ -89,7 +89,8 @@ class upper_limit(object):
         self.get_livetime()                   #get the livetime for the chosen set of instruments
 
         # open up injection databases
-        self.found_injections = {}
+        self.found_injections_fars = {}
+        self.found_injections_snrs = {}
         self.total_injections = {}
         for f in self.opts.injection_database:
             if opts.verbose:
@@ -97,18 +98,27 @@ class upper_limit(object):
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
             connection = sqlite3.connect(working_filename)
             for inst in self.instruments:
-                self.found_injections.setdefault(inst,[])
+                self.found_injections_fars.setdefault(inst,[])
+                self.found_injections_snrs.setdefault(inst,[])
                 self.total_injections.setdefault(inst,[])
+
+                # get sim-far relationships
                 found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
-                self.found_injections[inst] += found
+                self.found_injections_fars[inst] += found
                 self.total_injections[inst] += total
+
+                # get sim-snr relationships
+                found, total, missed = imr_utils.get_max_snr_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                self.found_injections_snrs[inst] += found
+
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
 
         # remove injections that violate user-imposed constraints and
         # symmetrize between m1-m2
         for instr in self.instruments:
             self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
-            self.found_injections[instr] = self.filter_injections(self.found_injections[instr])
+            self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
+            self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
 
 
     def get_on_instruments(self,connection):
@@ -259,17 +269,17 @@ def parse_command_line():
     description = '''
    description:
 
-The program lalapps_cbc_svim computes the sensitive volume of a CBC search from a database containing triggers from simulation experiments. These triggers need to be ranked by false alarm rate, the detection statistic used in S6 searches. Then injections which register a trigger louder than the loudest event, by false alarm rate, are considered found. All others are considered missed. The efficiency of detecting an event depends on the source parameters, such as its component masses, distance, spin, inclination, sky position, etc. However, lalapps_cbc_svim only considers the dependency of the efficiency on distance and mass, marginalizing over the other parameters. Injections are binned in distance and mass and the estimated efficiency is integrated over distance to convert the efficiency into a physical volume.
-
-The output of lalapps_cbc_svim is input for lalapps_cbc_sink, which uses the loudest event statistic method (Biswas, Creighton, Fairhurst, 2007) to compute a posterior on the rate, given the observed volumes.
+The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a CBC search from input databases containing triggers from simulation experiments. These triggers need to be ranked by false alarm rate, the detection statistic used in S6 searches. Then injections which register a trigger louder than the loudest event, by false alarm rate, are considered found. All others are considered missed. The efficiency of detecting an event depends on the source parameters, such as its component masses, distance, spin, inclination, sky position, etc. However, lalapps_cbc_svim only considers the dependency of the efficiency on distance and mass, marginalizing over the other parameters. Injections are binned in distance and mass and the estimated efficiency is integrated over distance to convert the efficiency into a physical volume.
 '''
 
     parser = OptionParser(version = git_version.verbose_msg, usage = description)
 
     # FAR range and resolution
-    parser.add_option("--far-points", default = 50, type = "int", help = "Specify the number of FARs to compute the efficiency/search volume for.")
+    parser.add_option("--xaxis-points", default = 50, type = "int", help = "Specify the number of FARs/SNRs for which to compute the search volume.")
     parser.add_option("--min-far", default = 1.0e-6/constants.LAL_YRJUL_SI, type = "float", help = "Specify the minimum FAR (Hz)") # one per million years is probably detection worthy
     parser.add_option("--max-far", default = 12.0/constants.LAL_YRJUL_SI, type = "float", help = "Specify the maximum FAR (Hz)") # one per month is possibly EM-followup worthy
+    parser.add_option("--min-snr", default = 7, type = "float", help = "Specify the minimum SNR for volume calculation.")
+    parser.add_option("--max-snr", default = 15, type = "float", help = "Specify the maximum SNR for volume calculation.")
 
     # Input data options
     parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
@@ -361,45 +371,67 @@ def write_cache(cache_list, fileout):
 opts, database = parse_command_line()
 
 # read in data from input database, store in upper limit object
-if opts.verbose: print "\n\nSetting up the upper limit calculation...\n"
+if opts.verbose: print "\n\nSetting up the search volume calculations...\n"
 UL = upper_limit(opts)
 
-# loop over the requested instruments and mass bin types,
-# compute the search volume and volume derivative at the specified
-# FAR for the given mass bin
+# get the range of xaxis values to use
+fars = numpy.logspace(numpy.log10(opts.min_far), numpy.log10(opts.max_far), opts.xaxis_points)
+snrs = numpy.logspace(numpy.log10(opts.min_snr), numpy.log10(opts.max_snr), opts.xaxis_points)
+
+# guess max distance (for unifying extent of plot axes)
+dmax = 0
+for instr in UL.instruments:
+    dm_tmp_far = max(sim.distance for far, sim in UL.found_injections_fars[instr] if far < opts.max_far)/2.26
+    dm_tmp_snr = max(sim.distance for snr, sim in UL.found_injections_snrs[instr] if snr > opts.min_snr)/2.26
+    dmax = max(dmax, dm_tmp_far, dm_tmp_snr) # divide by 2.26 for sky average
+
+#
+# loop over the requested instruments and mass bin types, compute the
+# search volume as a function of FAR and SNR threshold
 #
 for bin_type in opts.bin_types:
+
     for instr in UL.instruments:
+
+        # check for empty injection sets
+        if UL.total_injections[instr]:
+            bins, s2b = UL.set_bins(bin_type,instr)
+        else:
+            print >> sys.stderr, "No injections performed in %s time. Skipping..." % "".join(sorted(list(instr)))
+            continue
+
         if opts.verbose:
             print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
 
-        # set up mass distance bins
-        bins, s2b = UL.set_bins(bin_type,instr)
+        vols_far, errs_far, vols_snr, errs_snr = [], [], [], []
+        for k, far, snr in zip(range(opts.xaxis_points), fars, snrs):
 
-        #compute volume first and second moments above the loudest event
-        fars = numpy.logspace(numpy.log10(opts.min_far),numpy.log10(opts.max_far),opts.far_points)
-        vols, errs = [],[]
-        for k,far in enumerate(fars):
-            found = imr_utils.found_injections_below_far(UL.found_injections[instr],far)
-            vol, err = imr_utils.compute_search_volume_in_bins(found, UL.total_injections[instr], bins, s2b)
+            found_by_far = [s for f, s in UL.found_injections_fars[instr] if f < far]
+            found_by_snr = [s for rho, s in UL.found_injections_snrs[instr] if rho > snr]
+            vol, err = imr_utils.compute_search_volume_in_bins(found_by_far, UL.total_injections[instr], bins, s2b)
             vol.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
             err.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
-            vols.append(vol)
-            errs.append(err)
+            vols_far.append(vol)
+            errs_far.append(err)
 
-        # set up figure for putting legend outside of plot
-        if bin_type == "Mass1_Mass2":
-            fig = pyplot.figure()
-            xsize, ysize = fig.get_size_inches()
-            fig.set_size_inches(2*xsize, ysize)
+            vol, err = imr_utils.compute_search_volume_in_bins(found_by_snr, UL.total_injections[instr], bins, s2b)
+            vol.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            err.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols_snr.append(vol)
+            errs_snr.append(err)
 
-            pyplot.subplot(121)
+        # set up figures for plots
+        fig_far_vol, fig_far_range, fig_snr_vol, fig_snr_range = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
+        figs = [fig_far_vol, fig_far_range, fig_snr_vol, fig_snr_range]
 
-        # plot the volume versus far for each bin
+        # plot the volume/range versus far/snr for each bin
         mbins = rate.NDBins(bins[1:])
+        labels = []
         for mlo, mmid, mhi in zip(iterutils.MultiIter(*mbins.lower()),
                                   iterutils.MultiIter(*mbins.centres()),
                                   iterutils.MultiIter(*mbins.upper())):
+
+            # plot labels
             if bin_type == "Aligned_Spin":
                 label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Mass_Ratio":
@@ -410,71 +442,72 @@ for bin_type in opts.bin_types:
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
-            pyplot.errorbar( fars, [v[mmid] for v in vols], yerr = [e[mmid] for e in errs], label=label )
+            labels.append(label)
 
-        #tag = "%s-%s_VOLUME_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag,bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        tag = "%s_%s_VOLUME_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+            # volume plots
+            fig_far_vol.gca().errorbar( fars, [v[mmid] for v in vols_far], yerr = [e[mmid] for e in errs_far], label=label )
+            fig_snr_vol.gca().errorbar( snrs, [v[mmid] for v in vols_snr], yerr = [e[mmid] for e in errs_snr], label=label )
 
-        # Put a legend to the right of the current axis
-        if bin_type == "Mass1_Mass2":
-            pyplot.gca().legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
-        else:
-            pyplot.gca().legend(loc='upper left')
+            # range plots
+            dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols_far ]
+            derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs_far, vols_far, dist) ]
+            fig_far_range.gca().errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
-        pyplot.semilogx()
-        pyplot.grid()
-        pyplot.xlim([min(fars),max(fars)])
-        pyplot.ylim(ymin=0)
-        pyplot.xlabel("FAR (Hz)")
-        pyplot.ylabel("Volume*T (Mpc$^3$ yr)")
-        pyplot.title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
-        pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
-        pyplot.close()
+            dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols_snr ]
+            derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs_snr, vols_snr, dist) ]
+            fig_snr_range.gca().errorbar( snrs, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
-        # set up figure for putting legend outside of plot
-        if bin_type == "Mass1_Mass2":
-            fig = pyplot.figure()
-            xsize, ysize = fig.get_size_inches()
-            fig.set_size_inches(2*xsize, ysize)
+        # customize axes
+        ax = fig_far_vol.gca()
+        ax.set_xlabel("Combined FAR (Hz)")
+        ax.set_ylabel("VT (Mpc$^3$ yr)")
+        ax.set_xscale("log")
+        ax.set_xlim([min(fars), max(fars)])
+        ax.invert_xaxis()
+        ax.set_ylim(ymin=0)
 
-            pyplot.subplot(121)
+        ax = fig_snr_vol.gca()
+        ax.set_xlabel("Network SNR")
+        ax.set_ylabel("VT (Mpc$^3$ yr)")
+        ax.set_xlim([min(snrs), max(snrs)])
+        ax.set_ylim(ymin=0)
 
-        # plot the sensitive range versus far for each bin
-        dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols ]
-        derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs,vols,dist) ]
-        for mlo, mmid, mhi in zip(iterutils.MultiIter(*mbins.lower()),
-                                  iterutils.MultiIter(*mbins.centres()),
-                                  iterutils.MultiIter(*mbins.upper())):
-            if bin_type == "Aligned_Spin":
-                label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
-            if bin_type == "Mass_Ratio":
-                label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
-            if bin_type == "Total_Mass":
-                label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
-            if bin_type == "Mass1_Mass2":
-                if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
-                    continue
-                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
-            pyplot.errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
+        ax = fig_far_range.gca()
+        ax.set_xlabel("Combined FAR (Hz)")
+        ax.set_ylabel("Range (Mpc)")
+        ax.set_xscale("log")
+        ax.set_xlim([min(fars), max(fars)])
+        ax.invert_xaxis()
+        ax.set_ylim([0, dmax])
 
-        #tag = "%s-%s_RANGE_BINNED_BY_%s-%d-%d" % ("".join(sorted(list(instr))),opts.user_tag.strip("_"),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        tag = "%s_%s_RANGE_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        ax = fig_snr_range.gca()
+        ax.set_xlabel("Network SNR")
+        ax.set_ylabel("Range (Mpc)")
+        ax.set_xlim([min(snrs), max(snrs)])
+        ax.set_ylim([0, dmax])
 
-        # Put a legend to the right of the current axis
-        if bin_type == "Mass1_Mass2":
-            pyplot.gca().legend(loc='center left', bbox_to_anchor=(1.1, 0.5))
-        else:
-            pyplot.gca().legend(loc='lower right')
+        # common to all figures
+        for fig in figs:
+            ax = fig.gca()
+            ax.grid()
+            ax.legend(loc="upper right")
+            ax.set_title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
 
-        pyplot.semilogx()
-        pyplot.grid()
-        pyplot.xlim([min(fars),max(fars)])
-        pyplot.ylim(ymin=0)
-        pyplot.xlabel("FAR (Hz)")
-        pyplot.ylabel("Mean Sensitive Range (Mpc)")
-        pyplot.title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
-        pyplot.savefig("%s/%s.png"%(opts.output_dir,tag))
-        pyplot.close()
+        # save and close figures
+        tag = "%s_%s_VOLUME_VS_FAR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        fig_far_vol.savefig("%s/%s.png"%(opts.output_dir,tag))
+
+        tag = "%s_%s_VOLUME_VS_SNR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        fig_snr_vol.savefig("%s/%s.png"%(opts.output_dir,tag))
+
+        tag = "%s_%s_RANGE_VS_FAR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        fig_far_range.savefig("%s/%s.png"%(opts.output_dir,tag))
+
+        tag = "%s_%s_RANGE_VS_SNR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
+        fig_snr_range.savefig("%s/%s.png"%(opts.output_dir,tag))
+
+        #for fig in figs:
+        #    fig.close()
 
 # write a cache file describing the files generated during by this program
 if opts.output_cache:
