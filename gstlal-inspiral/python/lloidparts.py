@@ -1,4 +1,4 @@
-# Copyright (C) 2009--2012  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2009--2013  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
