@@ -58,10 +58,17 @@ page.front = "<big>Welcome</big>"
 ### Summary info. 
 page.add_subpage("summary", "Summary information", "Summary information")
 page.subpages["summary"].div("""
-Summary information
+Summary information: This page provides information on the number of triggers, live time and horizon distance.
 """)
+
+# number of triggers
 tab, name = cbcwebpage.wiki_table_parse(base_name+'num_trigs_table.txt')
-page.subpages["summary"].add_table(tab[0], "Livetime / coinc events summary", "This table gives the live times for all detector combinations as well as the number of coincident events")
+page.subpages["summary"].add_table(tab[0], "Coinc events summary", "This table gives the number of coincident events")
+
+# livetime
+tab, name = cbcwebpage.wiki_table_parse(base_name+'live_time_table.txt')
+page.subpages["summary"].add_table(tab[0], "Live time summary", "This table gives the summary of the live time")
+
 imgtable = cbcwebpage.image_glob(base_name+'horizon.png')
 page.subpages["summary"].add_table(imgtable, "Horizon Distance", "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form. ")
 
@@ -94,7 +101,7 @@ page.subpages["injection_params"].sections["ra_dec"].add_table(imgtable, "Inject
 
 page.subpages["injection_params"].add_section("inc_pol","Injected Parameters inclination and polarization")
 imgtable = cbcwebpage.image_glob(base_name+'6_sim_dist_inc_pol*.png')
-page.subpages["injection_params"].sections["inc_pol"].add_table(imgtable, "Injection Inclination and polarization", "Unless doing a directed search injections are uniform in inclination and polarizations.  Note that there was a bug introduced into inspinj that caused polarizations to be set to zero.")
+page.subpages["injection_params"].sections["inc_pol"].add_table(imgtable, "Injection Inclination and polarization", "Unless doing a directed search injections are uniform in sin(inclination) and polarizations.")
 
 page.subpages["injection_params"].add_section("spin","Injected Parameters Z component spin")
 imgtable = cbcwebpage.image_glob(base_name+'6_sim_dist_spin1z_spin2z*.png')
@@ -185,6 +192,28 @@ imgtable = cbcwebpage.image_glob(base_name+'*BINNED_BY_MASS_RATIO*.png')
 page.subpages["search_sensitivity"].sections["mass_ratio"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance", "Binned by mass ratio")
 
 
+# BACKGROUND#
+page.add_subpage("background","Background", "Background")
+page.subpages["background"].div("""
+<big><b>OVERVIEW:</b></big><br><br>
+This page shows the ingredients that go into ranking events and determining the False alarm probability.
+""")
+page.subpages["background"].add_section("background","Background")
+page.subpages["background"].sections["background"].div("This section gives the SNR / Chisq background statistics.  This P(snr, chisq|n) serves as the denominator for the likelihood ranking.")
+imgtable = cbcwebpage.image_glob(base_name+'*background-post_calc_likelihood_*_LLOID_SNR_CHI-*.xml.gz.png')
+page.subpages["background"].sections["background"].add_table(imgtable, "","")
+
+page.subpages["background"].add_section("likelihood","Likelihood")
+page.subpages["background"].sections["likelihood"].div("This section gives the SNR / Chisq likelihood distribution.  This is L = p(snr, chisq|s) / p(snr, chisq|n)")
+imgtable = cbcwebpage.image_glob(base_name+'*likelihood-post_calc_likelihood_*_LLOID_SNR_CHI-*.xml.gz.png')
+page.subpages["background"].sections["likelihood"].add_table(imgtable, "","")
+
+page.subpages["background"].add_section("combined_background","Combined background")
+page.subpages["background"].sections["likelihood"].div("This section gives the likelihood distribution in noise p(L|n) for the various detector combinations taking into account the trials factor of observing the number of coincs that were observed")
+imgtable = cbcwebpage.image_glob(base_name+'*-marginalized_likelihood_cdf.png')
+page.subpages["background"].sections["combined_background"].add_table(imgtable, "","")
+
+
 #
 # CLOSED BOX
 #
@@ -196,7 +225,6 @@ if not opts.open_box:
 	page.subpages["chisq"].div("""
 <big><b>OVERVIEW:</b></big><br><br>
 The chi-squared test checks that the snr accumulated matches expectation. 
-FIXME
 	""")
 	page.subpages["chisq"].add_section("chisq","Chi-squared vs SNR")
 	imgtable = cbcwebpage.image_glob(base_name+'3_chi2_vs_rho_*closedbox.png')
@@ -214,7 +242,7 @@ FIXME
 	page.add_subpage("money","Money Plots", "Money Plots")
 	page.subpages["money"].div("""
 <big><b>OVERVIEW:</b></big><br><br>
-This section provides the detection statistic plots and a summary of the loudest event.  The ranking statistic is inverse false alarm rate (IFAR)
+This section provides the detection statistic plots and a summary of the loudest event.
 """)
 	page.subpages["money"].add_section("ifar","Rate vs. IFAR Threshold")
 	imgtable = cbcwebpage.image_glob(base_name+'5_count_vs_ifar*closedbox.png')
@@ -253,7 +281,7 @@ FIXME
 	page.add_subpage("money","Money Plots", "Money Plots")
 	page.subpages["money"].div("""
 <big><b>OVERVIEW:</b></big><br><br>
-This section provides the detection statistic plots and a summary of the loudest event.  The ranking statistic is inverse false alarm rate (IFAR)
+This section provides the detection statistic plots and a summary of the loudest event.
 """)
 	page.subpages["money"].add_section("ifar","Rate vs. IFAR Threshold")
 	imgtable = cbcwebpage.image_glob(base_name+'5_count_vs_ifar*openbox.png')
