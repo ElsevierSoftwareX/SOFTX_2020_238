@@ -6,6 +6,7 @@ libgstlal_la_SOURCES = \
 	gstlal.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
+	gstlal_cachesrc.h gstlal_cachesrc.c \
 	gstlal_drop.h gstlal_drop.c \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_gate.h gstlal_gate.c \

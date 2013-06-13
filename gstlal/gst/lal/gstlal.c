@@ -53,6 +53,7 @@
 #include <gstlal.h>
 #include <gstlal_audioundersample.h>
 #include <gstlal_autochisq.h>
+#include <gstlal_cachesrc.h>
 #include <gstlal_drop.h>
 #include <gstlal_firbank.h>
 #include <gstlal_gate.h>
@@ -86,6 +87,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 		{"lal_audioundersample", GSTLAL_AUDIOUNDERSAMPLE_TYPE},
 		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
+		{"lal_cachesrc", GSTLAL_CACHESRC_TYPE},
 		{"lal_drop", GSTLAL_DROP_TYPE},
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
