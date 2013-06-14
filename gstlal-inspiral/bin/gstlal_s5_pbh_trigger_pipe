@@ -234,7 +234,7 @@ class gstlal_inspiral_plot_sensitivity_node(inspiral_pipe.InspiralNode):
 	A gstlal_inspiral_plot_sensitivity_node
 	"""
 	# FIXME are all needed options here?
-	def __init__(self, job, dag, base, injdbs=[], zldbs=[], tmp_space=inspiral_pipe.log_path(), p_node=[], bin_by_total_mass=True, bin_by_mass1_mass2=True, bin_by_mass_ratio=True, include_play=True):
+	def __init__(self, job, dag, base, injdbs=[], zldbs=[], tmp_space=inspiral_pipe.log_path(), p_node=[], bin_by_total_mass=True, bin_by_mass1_mass2=False, bin_by_mass_ratio=True, include_play=True):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("user-tag", base.split("/")[-1])
 		if len(base.split("/")) > 1:
