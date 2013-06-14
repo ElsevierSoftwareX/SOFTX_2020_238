@@ -126,7 +126,7 @@ for instruments, total_injections in IMR.total_injections_by_instrument_set.item
 	dist_bins = imr_utils.guess_nd_bins(total_injections, {"distance": (15, rate.LinearBins)})
 
 	for i, far in enumerate(options.far):
-		found_below_far = imr_utils.found_injections_below_far(IMR.found_injections_by_instrument_set[instruments], far_thresh = far)
+		found_below_far = [s for f, s in IMR.found_injections_by_instrument_set[instruments] if f < far]
 		if options.verbose:
 			print >> sys.stderr, "Found %d injections in %s below FAR %e" % (len(found_below_far), "".join(instruments), far)
 		eff, yerr = imr_utils.compute_search_efficiency_in_bins(found_below_far, total_injections, dist_bins)
