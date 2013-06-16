@@ -381,9 +381,17 @@ snrs = numpy.logspace(numpy.log10(opts.min_snr), numpy.log10(opts.max_snr), opts
 # guess max distance (for unifying extent of plot axes)
 dmax = 0
 for instr in UL.instruments:
-    dm_tmp_far = max(sim.distance for far, sim in UL.found_injections_fars[instr] if far < opts.max_far)/2.26
-    dm_tmp_snr = max(sim.distance for snr, sim in UL.found_injections_snrs[instr] if snr > opts.min_snr)/2.26
-    dmax = max(dmax, dm_tmp_far, dm_tmp_snr) # divide by 2.26 for sky average
+
+    found_by_far = [sim.distance for far, sim in UL.found_injections_fars[instr] if far < opts.max_far]
+    found_by_snr = [sim.distance for snr, sim in UL.found_injections_snrs[instr] if snr > opts.min_snr]
+
+    dm_tmp_far = 0
+    dm_tmp_snr = 0
+    if found_by_far:
+        dm_tmp_far = max(found_by_far)
+    if found_by_snr:
+        dm_tmp_snr = max(found_by_snr)
+    dmax = max(dmax, dm_tmp_far/2.26, dm_tmp_snr/2.26) # divide by 2.26 for sky average
 
 #
 # loop over the requested instruments and mass bin types, compute the
