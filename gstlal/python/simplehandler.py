@@ -73,8 +73,8 @@ class Handler(object):
 
 	def on_message(self, bus, message):
 		if self.do_on_message(bus, message):
-			return
-		if message.type == gst.MESSAGE_EOS:
+			pass
+		elif message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_INFO:
@@ -85,6 +85,7 @@ class Handler(object):
 			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
+			# FIXME:  this deadlocks.  shouldn't we be doing this?
+			#self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
