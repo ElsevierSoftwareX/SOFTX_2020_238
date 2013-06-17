@@ -52,7 +52,7 @@ Here are some typical usage cases:
 
 	Recoloring can be thought of as first whitening data and then applying a coloring filter.
 
-	gstlal_fake_frames --whiten --whiten-reference-psd V1_median_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /home/channa/rctest/T1300121_V1_EARLY_RECOLORED_V2 --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.V1.cache --channel-name=V1=h_16384Hz --verbose
+	gstlal_fake_frames --whiten-reference-psd V1_median_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /home/channa/rctest/T1300121_V1_EARLY_RECOLORED_V2 --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.V1.cache --channel-name=V1=h_16384Hz --verbose
 
 2) Producing colored Gaussian noise
 
@@ -79,7 +79,6 @@ datasource.append_options(parser)
 
 parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz")
-parser.add_option("--whiten", action = "store_true", help = "Whiten whatever data is coming out of datasource")
 parser.add_option("--whiten-reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 parser.add_option("--whiten-track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
@@ -96,9 +95,6 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 
 options, filenames = parser.parse_args()
 gw_data_source = datasource.GWDataSourceInfo(options)
-
-if not options.whiten and (options.whiten_reference_psd or options.whiten_track_psd):
-	raise ValueError("if specifying --whiten-track-psd or --whiten_reference_psd --whiten must be specified")
 
 if options.frame_type is None:
 	raise ValueError("--frame-type is required")
@@ -156,13 +152,12 @@ if options.shift is not None:
 # first whiten and or downsample
 #
 
-if options.whiten:
-	if options.whiten_reference_psd is not None:
-		wpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
-	else:
-		wpsd = None
-		if options.verbose:
-			print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
+if options.whiten_reference_psd:
+	wpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+else:
+	wpsd = None
+
+if options.whiten_reference_psd or options.whiten_track_psd:
 	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd)[options.sample_rate]
 else:
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % options.sample_rate)
