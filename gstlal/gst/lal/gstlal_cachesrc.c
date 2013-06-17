@@ -340,16 +340,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	if(fd < 0) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s", path, sys_errlist[errno]));
 		result = GST_FLOW_ERROR;
-		/* FIXME: for some reason GST_ELEMENT_ERROR is not
-		 * resulting in errors being posted to the message bus,
-		 * just warnings, and so the relatively common condition of
-		 * a path being wrong leaves users with mystery failures
-		 * that aren't properly reported.  so ... until we can
-		 * figure why errors aren't being reported as errors, this
-		 * particular case needs to be made a hard fatal condition.
-		 * this is not a good way to deal with errors.  do not
-		 * copy, this failure mode is a special case */
-		g_assert_not_reached();
 		goto done;
 	}
 
