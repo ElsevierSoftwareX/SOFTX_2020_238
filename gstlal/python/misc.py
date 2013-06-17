@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2010  Kipp Cannon <kipp.cannon@ligo.org>
+# Copyright (C) 2010,2011  Kipp Cannon <kipp.cannon@ligo.org>
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
