@@ -883,9 +883,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			 */
 
 			FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
-
 			ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
-
 			FrameCPP::IFrameStream ifs(ibuf);
 
 			FrameCPP::Common::Verify verifier;
@@ -902,10 +900,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo());
 		}
+
 		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
-
 		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
-
 		FrameCPP::IFrameStream ifs(ibuf);
 
 		/*
