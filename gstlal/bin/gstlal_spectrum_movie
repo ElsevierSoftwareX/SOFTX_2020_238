@@ -103,7 +103,7 @@ options, filenames = parse_command_line()
 gw_data_source_info = datasource.GWDataSourceInfo(options)
 if len(gw_data_source_info.channel_dict) != 1:
 	raise ValueError("can only specify one channel, one instrument")
-instrument = gw_data_source_info.channel_dict.keys()[0]
+instrument, = gw_data_source_info.channel_dict.keys()
 
 
 #
