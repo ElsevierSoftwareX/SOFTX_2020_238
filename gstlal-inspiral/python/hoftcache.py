@@ -114,6 +114,8 @@ class Handler(simplehandler.Handler):
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
 			self.cache.append(pipeparts.framecpp_filesink_cache_entry_from_mfs_message(message))
+			return True
+		return False
 
 	def write_cache(self, fileobj):
 		for cacheentry in self.cache:
