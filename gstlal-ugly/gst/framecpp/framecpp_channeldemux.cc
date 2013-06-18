@@ -536,10 +536,11 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 	 */
 
 	if(pad_state->need_new_segment && element->last_new_segment_event) {
+		GST_LOG_OBJECT(pad, "new segment %" GST_PTR_FORMAT, element->last_new_segment_event);
 		gst_event_ref(element->last_new_segment_event);
 		success = gst_pad_push_event(pad, element->last_new_segment_event);
 		if(!success)
-			GST_ERROR_OBJECT(pad, "failed to push newsegment");
+			GST_ERROR_OBJECT(pad, "failed to push new segment");
 		else
 			pad_state->need_new_segment = FALSE;
 	}
