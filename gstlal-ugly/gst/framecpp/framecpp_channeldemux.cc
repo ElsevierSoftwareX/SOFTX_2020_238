@@ -536,7 +536,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 	 */
 
 	if(pad_state->need_new_segment && element->last_new_segment_event) {
-		GST_LOG_OBJECT(pad, "new segment %" GST_PTR_FORMAT, element->last_new_segment_event);
+		GST_LOG_OBJECT(pad, "push %" GST_PTR_FORMAT, element->last_new_segment_event);
 		gst_event_ref(element->last_new_segment_event);
 		success = gst_pad_push_event(pad, element->last_new_segment_event);
 		if(!success)
@@ -553,7 +553,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 		GstTagList *tag_list;
 		g_object_get(pad, "tags", &tag_list, NULL);
 		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
-		GST_LOG_OBJECT(pad, "new %P", tag_list);
+		GST_LOG_OBJECT(pad, "push new %" GST_PTR_FORMAT, tag_list);
 		gst_element_found_tags_for_pad(GST_ELEMENT(element), pad, tag_list);
 		pad_state->need_tags = FALSE;
 	}
