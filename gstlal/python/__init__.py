@@ -31,7 +31,7 @@ __date__ = "FIXME"
 
 __all__ = ["fftw"]
 
-try:
-	from gstlal._gstfrhistory import *
-except:
-	pass
+#try:
+#	from gstlal._gstfrhistory import *
+#except:
+#	pass
