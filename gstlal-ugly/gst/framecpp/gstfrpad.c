@@ -282,8 +282,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case PROP_HISTORY:
-		if(pad->history)
-			g_value_array_free(pad->history);
+		g_value_array_free(pad->history);
 		pad->history = g_value_array_copy(g_value_get_boxed(value));
 		break;
 
@@ -343,8 +342,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case PROP_HISTORY:
-		if(pad->history)
-			g_value_set_boxed(value, pad->history);
+		g_value_set_boxed(value, pad->history);
 		break;
 
 	default:
@@ -370,10 +368,8 @@ static void finalize(GObject *object)
 	pad->units = NULL;
 	gst_tag_list_free(pad->tags);
 	pad->tags = NULL;
-	if(pad->history) {
-		g_value_array_free(pad->history);
-		pad->history = NULL;
-	}
+	g_value_array_free(pad->history);
+	pad->history = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -515,6 +511,7 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 
 static void gst_frpad_init(GstFrPad *pad, GstFrPadClass *klass)
 {
+	pad->history = g_value_array_new(0);
 	pad->tags = gst_tag_list_new();
 	g_signal_connect_after(pad, "notify::caps", (GCallback) caps_notify_handler, NULL);
 }
