@@ -650,7 +650,8 @@ gboolean framecpp_muxcollectpads_get_span(FrameCPPMuxCollectPads *collectpads, G
  * the order in which they were received) containing samples taken from the
  * start of the queue upto (not including) the timestamp t_end.  The list
  * returned might be empty if the queue does not have data prior to the
- * requested time.  The data (if any) is flushed from the queue.
+ * requested time and it might end prior to t_end if the queue does.  The
+ * data (if any) is flushed from the queue.
  *
  * It is an error to request a timestamp t_end beyond the end of the
  * currently en-queued data.
@@ -680,8 +681,9 @@ GList *framecpp_muxcollectpads_take_list(FrameCPPMuxCollectPadsData *data, GstCl
 
 	queue_timestamp = framecpp_muxqueue_timestamp(data->queue);
 	if(GST_CLOCK_TIME_IS_VALID(queue_timestamp) && t_end > queue_timestamp) {
-		result = framecpp_muxqueue_get_list(data->queue, t_end - queue_timestamp);
-		framecpp_muxqueue_flush(data->queue, t_end - queue_timestamp);
+		GstClockTime time = MIN(t_end - queue_timestamp, framecpp_muxqueue_duration(data->queue));
+		result = framecpp_muxqueue_get_list(data->queue, time);
+		framecpp_muxqueue_flush(data->queue, time);
 	}
 
 	/*
