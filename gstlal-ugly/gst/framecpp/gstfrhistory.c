@@ -69,6 +69,7 @@ GstFrHistory *gst_frhistory_new(const gchar *name)
 {
 	GstFrHistory *new = g_slice_new(GstFrHistory);
 
+	new->type = GST_FRHISTORY_TYPE;
 	new->name = g_strdup(name);
 	new->time = -1;
 	new->comment = NULL;
@@ -85,7 +86,7 @@ GstFrHistory *gst_frhistory_new(const gchar *name)
  *
  * Free function:  gst_frhistory_free
  *
- * Returns: (transfer full): a new #GstFrHistory
+ * Returns: a new #GstFrHistory
  */
 
 
@@ -114,7 +115,7 @@ GstFrHistory *gst_frhistory_copy(const GstFrHistory *frhistory)
 
 gchar *gst_frhistory_to_string(const GstFrHistory *frhistory)
 {
-	g_return_val_if_fail(frhistory != NULL, NULL);
+	g_return_val_if_fail(GST_IS_FRHISTORY(frhistory), NULL);
 
 	return g_strdup_printf("%s @ %u s: %s", frhistory->name, frhistory->time, frhistory->comment);
 }
@@ -127,14 +128,14 @@ gchar *gst_frhistory_to_string(const GstFrHistory *frhistory)
  *
  * FrHistory objects can only store 32-bit integer second timestamps.  This
  * function adapts GStreamer's native 64-bit integer nanosecond timestamps
- * to a value suitable for an FrHistory.  The time is truncated to the
- * largest integer second not greater than the timestamp.
+ * to a value suitable for an FrHistory by truncating to the largest
+ * integer second not greater than the timestamp.
  */
 
 
 void gst_frhistory_set_timestamp(GstFrHistory *frhistory, GstClockTime time)
 {
-	g_return_if_fail(frhistory != NULL);
+	g_return_if_fail(GST_IS_FRHISTORY(frhistory));
 
 	frhistory->time = GST_CLOCK_TIME_IS_VALID(time) ? time / GST_SECOND : (guint32) -1;
 }
@@ -144,17 +145,13 @@ void gst_frhistory_set_timestamp(GstFrHistory *frhistory, GstClockTime time)
  * gst_frhistory_get_timestamp:
  * @frhistory: #GstFrHistory whose timestamp is to be retrieved
  *
- * FrHistory objects can only store 32-bit integer second timestamps.  This
- * function adapts the 32-bit timestamp to GStreamer's native 64-bit
- * integer nanosecond timestamps.
- *
  * Returns:  the GstClockTime timestamp
  */
 
 
 GstClockTime gst_frhistory_get_timestamp(const GstFrHistory *frhistory)
 {
-	g_return_val_if_fail(frhistory != NULL, GST_CLOCK_TIME_NONE);
+	g_return_val_if_fail(GST_IS_FRHISTORY(frhistory), GST_CLOCK_TIME_NONE);
 
 	return frhistory->time == (guint32) -1 ? GST_CLOCK_TIME_NONE : frhistory->time * GST_SECOND;
 }
@@ -165,14 +162,14 @@ GstClockTime gst_frhistory_get_timestamp(const GstFrHistory *frhistory)
  * @frhistory: #GstFrHistory whose comment is to be set
  * @comment: comment string
  *
- * Sets the comment string the @frhistory to @comment.  Any previous value
- * will be #g_free()ed, and the new comment duplicated.
+ * Sets the comment string of the @frhistory to a copy of @comment.  Any
+ * previous value will be #g_free()ed.
  */
 
 
 void gst_frhistory_set_comment(GstFrHistory *frhistory, const gchar *comment)
 {
-	g_return_if_fail(frhistory != NULL);
+	g_return_if_fail(GST_IS_FRHISTORY(frhistory));
 
 	g_free(frhistory->comment);
 	frhistory->comment = g_strdup(comment);
@@ -193,7 +190,7 @@ void gst_frhistory_set_comment(GstFrHistory *frhistory, const gchar *comment)
 
 const gchar *gst_frhistory_get_comment(const GstFrHistory *frhistory)
 {
-	g_return_val_if_fail(frhistory != NULL, NULL);
+	g_return_val_if_fail(GST_IS_FRHISTORY(frhistory), NULL);
 
 	return frhistory->comment;
 }
@@ -213,7 +210,7 @@ const gchar *gst_frhistory_get_comment(const GstFrHistory *frhistory)
 
 const gchar *gst_frhistory_get_name(const GstFrHistory *frhistory)
 {
-	g_return_val_if_fail(frhistory != NULL, NULL);
+	g_return_val_if_fail(GST_IS_FRHISTORY(frhistory), NULL);
 
 	return frhistory->name;
 }
@@ -254,7 +251,7 @@ gint gst_frhistory_compare_by_time(gconstpointer a, gconstpointer b)
 {
 	guint32 t_a, t_b;
 
-	g_return_val_if_fail(a != NULL && b != NULL, -1);
+	g_return_val_if_fail(GST_IS_FRHISTORY(a) && GST_IS_FRHISTORY(b), -1);
 
 	t_a = ((const GstFrHistory *) a)->time;
 	t_b = ((const GstFrHistory *) b)->time;
