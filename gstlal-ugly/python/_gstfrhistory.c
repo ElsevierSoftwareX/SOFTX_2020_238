@@ -104,7 +104,7 @@ static int set_timestamp(PyObject *obj, PyObject *val, void *data)
 static struct PyGetSetDef getset[] = {
 	{"name", get_name, NULL, "name (string or None, read-only)", NULL},
 	{"comment", get_comment, set_comment, "comment (string or None)", NULL},
-	{"timestamp", get_timestamp, set_timestamp, "timestamp (long)", NULL},
+	{"timestamp", get_timestamp, set_timestamp, "timestamp (long, nanoseconds, will be truncated to nearest integer second)", NULL},
 	{NULL,}
 };
 
