@@ -186,6 +186,9 @@ PyMODINIT_FUNC init_gstfrhistory(void)
 {
 	PyObject *module = Py_InitModule3(MODULE_NAME, functions, "Wrapper for GstFrHistory type.");
 
+	/* FIXME:  remove for glib >= 2.36 */
+	g_type_init();
+
 	if(PyType_Ready(&PyGstFrHistory_Type) < 0)
 		return;
 	Py_INCREF((PyObject *) &PyGstFrHistory_Type);
