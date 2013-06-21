@@ -227,6 +227,15 @@ static gboolean event(GstPad *pad, GstEvent *event)
 
 	GST_OBJECT_LOCK(collectpads);
 
+	/*
+	 * stream state
+	 *
+	 *                   segment format    eos
+	 * at start up         undefined      false
+	 * after newsegment   !undefined      false
+	 * after eos          !undefined      true
+	 */
+
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT: {
 		gboolean update;
@@ -235,6 +244,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		gint64 start, stop, position;
 		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
 		gst_event_unref(event);
+		g_assert(format != GST_FORMAT_UNDEFINED);
 		GST_LOG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", start, stop);
 
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
@@ -268,7 +278,6 @@ static gboolean event(GstPad *pad, GstEvent *event)
 
 	case GST_EVENT_EOS:
 		GST_LOG_OBJECT(pad, "received EOS");
-		gst_segment_init(&data->segment, GST_FORMAT_UNDEFINED);
 		data->eos = TRUE;
 		if(all_pads_are_at_eos(collectpads)) {
 			GST_LOG_OBJECT(collectpads, "all sink pads are at EOS");
@@ -295,6 +304,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 static gboolean get_common_span(FrameCPPMuxCollectPads *collectpads, GstClockTime *min_t_start, GstClockTime *min_t_end)
 {
 	GSList *collectdatalist;
+	GstClockTime max_eos_t_end = GST_CLOCK_TIME_NONE;
 
 	*min_t_start = *min_t_end = GST_CLOCK_TIME_NONE;
 
@@ -322,9 +332,15 @@ static gboolean get_common_span(FrameCPPMuxCollectPads *collectpads, GstClockTim
 		g_assert(GST_CLOCK_TIME_IS_VALID(t_end));
 		g_assert_cmpuint(t_start, <=, t_end);
 		*min_t_start = GST_CLOCK_TIME_IS_VALID(*min_t_start) ? MIN(*min_t_start, t_start) : t_start;
-		*min_t_end = GST_CLOCK_TIME_IS_VALID(*min_t_end) ? MIN(*min_t_end, t_end) : t_end;
+		if(data->eos)
+			max_eos_t_end = GST_CLOCK_TIME_IS_VALID(max_eos_t_end) ? MAX(max_eos_t_end, t_end) : t_end;
+		else
+			*min_t_end = GST_CLOCK_TIME_IS_VALID(*min_t_end) ? MIN(*min_t_end, t_end) : t_end;
 	}
 	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+
+	if(!GST_CLOCK_TIME_IS_VALID(*min_t_end))
+		*min_t_end = max_eos_t_end;
 
 	g_assert(GST_CLOCK_TIME_IS_VALID(*min_t_start));
 	g_assert(GST_CLOCK_TIME_IS_VALID(*min_t_end));
@@ -388,12 +404,6 @@ static void waiting_handler(FrameCPPMuxQueue *queue, FrameCPPMuxCollectPadsData 
 	/*
 	 * if the common interval of data has changed, wake up the
 	 * streaming task
-	 *
-	 * FIXME:  if one or more pads are flushing they won't be aquiring
-	 * new data, and so eventually one of them will define min_t_end
-	 * which will then never change and this whole circus will jam up.
-	 * should get_common_span() only check the intervals spanned by the
-	 * non-flushing pads?
 	 */
 
 	if(!get_common_span(collectpads, &min_t_start, &min_t_end)) {
@@ -536,10 +546,10 @@ FrameCPPMuxCollectPadsData *framecpp_muxcollectpads_get_data(GstPad *pad)
  * Newsegment and EOS events are intercepted, and only chained to the
  * handler set using this function when all pads on the
  * FrameCPPMuxCollectPads have received newsegments or EOS events,
- * respectively.  That is, when the user-supplied event function will only
- * see one EOS event regardless of how many sink pads it has, and when it
- * sees an EOS event all sink pads are at EOS and the element should
- * respond appropriately.
+ * respectively.  That is, the user-supplied event function will only see
+ * one EOS event regardless of how many sink pads it has, and when it sees
+ * that EOS event it can assume all sink pads are at EOS and should respond
+ * appropriately.
  *
  * The event handler is invoked with the collectpads' object lock held.
  */
@@ -605,9 +615,10 @@ void framecpp_muxcollectpads_stop(FrameCPPMuxCollectPads *collectpads)
  * have data or segment information.  On success, min_t_start will be
  * populated with the earliest time for which data is available;  min_t_end
  * will be populated with the earliest of the last times for which data is
- * available.  Not all pads will have data for all times in between.  On
- * failure min_t_start and min_t_end are undefined.  Should be called with
- * the colledpads' object lock held.
+ * available.  Not all pads will have data for all times in between, in
+ * particular pads that are at EOS might have data that ends before
+ * min_t_end.  On failure min_t_start and min_t_end are undefined.  Should
+ * be called with the colledpads' object lock held.
  */
 
 
