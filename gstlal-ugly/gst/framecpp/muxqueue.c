@@ -193,7 +193,7 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 void framecpp_muxqueue_flush(FrameCPPMuxQueue *queue, GstClockTime time)
 {
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	gst_audioadapter_flush(GST_AUDIOADAPTER(queue), gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
+	gst_audioadapter_flush_samples(GST_AUDIOADAPTER(queue), gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
 	g_cond_broadcast(queue->activity);
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 }
@@ -230,7 +230,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	GList *result;
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	result = gst_audioadapter_get_list(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
+	result = gst_audioadapter_get_list_samples(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
 	if(result) {
 		/* correct timestamp and duration of first buffer */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
