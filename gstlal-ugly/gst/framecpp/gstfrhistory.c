@@ -117,6 +117,8 @@ gchar *gst_frhistory_to_string(const GstFrHistory *frhistory)
 {
 	g_return_val_if_fail(GST_IS_FRHISTORY(frhistory), NULL);
 
+	if(frhistory->time == (guint32) -1)
+		return g_strdup_printf("%s @ (unknown) s: %s", frhistory->name, frhistory->comment);
 	return g_strdup_printf("%s @ %u s: %s", frhistory->name, frhistory->time, frhistory->comment);
 }
 
