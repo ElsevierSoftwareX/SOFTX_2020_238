@@ -48,7 +48,6 @@ G_BEGIN_DECLS
  */
 
 
-typedef struct _GstFrHistoryClass GstFrHistoryClass;
 typedef struct _GstFrHistory GstFrHistory;
 
 
@@ -57,7 +56,7 @@ typedef struct _GstFrHistory GstFrHistory;
 #define GST_FRHISTORY(obj) \
 	((GstFrHistory *) (obj))
 #define GST_IS_FRHISTORY(obj) \
-	((obj) && (GST_FRHISTORY(obj)->type == GST_FRHISTORY_TYPE)
+	((obj) && (GST_FRHISTORY(obj)->type == GST_FRHISTORY_TYPE))
 
 
 /**
