@@ -74,17 +74,13 @@ static guint samples_remaining(GstBuffer *buf, guint skip)
 static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
 {
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
-	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
-	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+	return GST_BUFFER_TIMESTAMP_IS_VALID(buf) ? GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) : GST_CLOCK_TIME_NONE;
 }
 
 
 static guint64 expected_offset(GstAudioAdapter *adapter)
 {
-	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
-	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
-	return GST_BUFFER_OFFSET_END(buf);
+	return GST_BUFFER_OFFSET_END(GST_BUFFER(g_queue_peek_tail(adapter->queue)));
 }
 
 
@@ -128,6 +124,8 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
 
 void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 {
+	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
 	g_queue_push_tail(adapter->queue, buf);
