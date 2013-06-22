@@ -258,14 +258,6 @@ done:
 }
 
 
-#undef gst_audioadapter_copy
-void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, gboolean *copied_gap, gboolean *copied_nongap)
-{
-	/* compatibility stub */
-	gst_audioadapter_copy_samples(adapter, dst, samples, copied_gap, copied_nongap);
-}
-
-
 GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples)
 {
 	GList *head;
@@ -334,14 +326,6 @@ done:
 }
 
 
-#undef gst_audioadapter_get_list
-GList *gst_audioadapter_get_list(GstAudioAdapter *adapter, guint samples)
-{
-	/* compatibility stub */
-	return gst_audioadapter_get_list_samples(adapter, samples);
-}
-
-
 void gst_audioadapter_flush_samples(GstAudioAdapter *adapter, guint samples)
 {
 	g_assert_cmpuint(samples, <=, adapter->size);
@@ -367,14 +351,6 @@ void gst_audioadapter_flush_samples(GstAudioAdapter *adapter, guint samples)
 
 	g_object_notify(G_OBJECT(adapter), "size");
 	return;
-}
-
-
-#undef gst_audioadapter_flush
-void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
-{
-	/* compatibility stub */
-	gst_audioadapter_flush_samples(adapter, samples);
 }
 
 
