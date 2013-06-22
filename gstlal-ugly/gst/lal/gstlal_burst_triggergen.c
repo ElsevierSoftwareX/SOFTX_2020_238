@@ -433,7 +433,7 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 	switch(element->data_type){
 		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE:
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-			gst_audioadapter_copy(element->adapter, (void *) element->data, copysamps, &copied_gap, &copied_nongap);
+			gst_audioadapter_copy_samples(element->adapter, (void *) element->data, copysamps, &copied_gap, &copied_nongap);
 			/* put the data pointer one pad length in */
 			dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 			/* Find the peak */
@@ -445,7 +445,7 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-			gst_audioadapter_copy(element->adapter, (void *) element->datad, copysamps, &copied_gap, &copied_nongap);
+			gst_audioadapter_copy_samples(element->adapter, (void *) element->datad, copysamps, &copied_gap, &copied_nongap);
 			/* put the data pointer one pad length in */
 			dataptrd = element->datad + element->maxdatad->pad * element->maxdatad->channels;
 			/* Find the peak */
@@ -496,7 +496,7 @@ static GstFlowReturn process(GSTLALBurst_Triggergen *element)
 			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 			}
 		/* The check to see if we have enough nongap samples to compute an output, else it is a gap too */
 		else if (nongapsamps <= 2 * padbuf) {
@@ -504,7 +504,7 @@ static GstFlowReturn process(GSTLALBurst_Triggergen *element)
 			outsamps = nongapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 			}
 		/* Else we have enough nongap samples to actually compute an output, but the first and last buffer might still be a gap */
 		else {
@@ -519,14 +519,14 @@ static GstFlowReturn process(GSTLALBurst_Triggergen *element)
 			outsamps = (copysamps == nongapsamps) ? (copysamps - 2 * padbuf) : element->n;
 			result = push_nongap(element, copysamps, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 
 			/* We are on another gap boundary so push the end transient as a gap */
 			if (copysamps == nongapsamps) {
 				element->last_gap = FALSE;
 				if (padbuf > 0) {
 					result = push_gap(element, padbuf);
-					gst_audioadapter_flush(element->adapter, 2 * padbuf);
+					gst_audioadapter_flush_samples(element->adapter, 2 * padbuf);
 					}
 				}
 			}
