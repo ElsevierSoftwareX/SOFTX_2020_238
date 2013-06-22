@@ -115,11 +115,6 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *, void *, guint, gboolean *,
 GList *gst_audioadapter_get_list_samples(GstAudioAdapter *, guint);
 void gst_audioadapter_flush_samples(GstAudioAdapter *, guint);
 
-/* backwards compatibility */
-#define gst_audioadapter_copy gst_audioadapter_copy_samples
-#define gst_audioadapter_get_list gst_audioadapter_get_list_samples
-#define gst_audioadapter_flush gst_audioadapter_flush_samples
-
 
 G_END_DECLS
 
