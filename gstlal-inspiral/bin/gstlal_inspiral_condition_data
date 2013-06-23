@@ -112,35 +112,11 @@ data_source_info = datasource.GWDataSourceInfo(options)
 
 
 #
-# Build pipeline
+# Cache h(t)
 #
 
 
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("gstlal_inspiral_condition_data")
-handler = hoftcache.Handler(mainloop, pipeline)
-
-
-if options.verbose:
-	print >>sys.stderr, "assembling pipeline ...",
-hoftcache.build_pipeline(pipeline, data_source_info, options.output_path, sample_rate = options.sample_rate, description = options.description, channel_comment = "cached h(t) for inspiral search", verbose = options.verbose)
-if options.verbose:
-	print >>sys.stderr, "done"
-
-
-#
-# Run pipeline
-#
-
-
-if options.verbose:
-	print >>sys.stderr, "setting pipeline state to playing ..."
-if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError("pipeline did not enter playing state")
-
-if options.verbose:
-	print >>sys.stderr, "running pipeline ..."
-mainloop.run()
+cache = hoftcache.cache_hoft(data_source_info, output_path = options.output_path, sample_rate = options.sample_rate, description = options.description, verbose = options.verbose)
 
 
 #
@@ -150,7 +126,9 @@ mainloop.run()
 
 if options.verbose:
 	print >>sys.stderr, "writing %s ..." % output_cache_filename
-handler.write_cache(open(output_cache_filename, "w"))
+cache_file = open(output_cache_filename, "w")
+for entry in cache:
+	print >>cache_file, str(entry)
 
 
 #

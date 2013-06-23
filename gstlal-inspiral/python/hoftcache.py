@@ -25,6 +25,7 @@
 
 
 import os
+import sys
 import tempfile
 
 
@@ -117,10 +118,6 @@ class Handler(simplehandler.Handler):
 			return True
 		return False
 
-	def write_cache(self, fileobj):
-		for cacheentry in self.cache:
-			print >>fileobj, str(cacheentry)
-
 
 #
 # =============================================================================
@@ -165,3 +162,55 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 			pad.set_property("comment", channel_comment)
 		pad.set_property("pad-type", "FrProcData")
 	pipeparts.mkframecppfilesink(pipeline, src, frame_type = description, path = output_path)
+
+
+#
+# =============================================================================
+#
+#                            Collect and Cache h(t)
+#
+# =============================================================================
+#
+
+
+def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral search", verbose = False, **kwargs):
+	#
+	# build pipeline
+	#
+
+
+	mainloop = gobject.MainLoop()
+	pipeline = gst.Pipeline("pipeline")
+	handler = Handler(mainloop, pipeline)
+
+
+	if verbose:
+		print >>sys.stderr, "assembling pipeline ...",
+	build_pipeline(pipeline, data_source_info, channel_comment = channel_comment, verbose = verbose, **kwargs)
+	if verbose:
+		print >>sys.stderr, "done"
+
+
+	#
+	# run pipeline
+	#
+
+
+	if verbose:
+		print >>sys.stderr, "setting pipeline state to playing ..."
+	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError("pipeline did not enter playing state")
+
+	if verbose:
+		print >>sys.stderr, "running pipeline ..."
+	mainloop.run()
+
+
+	#
+	# return tempcache object.  when this object is garbage collected
+	# the frame files will be deleted.  keep a reference alive as long
+	# as you wish to preserve the files.
+	#
+
+
+	return handler.cache
