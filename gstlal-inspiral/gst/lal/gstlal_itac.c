@@ -463,7 +463,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	/* make sure the snr threshold is up-to-date */
 	element->maxdata->thresh = element->snr_thresh;
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
+	gst_audioadapter_copy_samples(element->adapter, element->data, copysamps, NULL, NULL);
 	
 	/* put the data pointer one pad length in */
 	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
@@ -525,7 +525,7 @@ static GstFlowReturn process(GSTLALItac *element)
 			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 			}
 		/* The check to see if we have enough nongap samples to compute an output, else it is a gap too */
 		else if (nongapsamps <= 2 * element->maxdata->pad) {
@@ -533,7 +533,7 @@ static GstFlowReturn process(GSTLALItac *element)
 			outsamps = nongapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 			}
 		/* Else we have enough nongap samples to actually compute an output, but the first and last buffer might still be a gap */
 		else {
@@ -548,14 +548,14 @@ static GstFlowReturn process(GSTLALItac *element)
 			outsamps = (copysamps == nongapsamps) ? (copysamps - 2 * element->maxdata->pad) : element->n;
 			result = push_nongap(element, copysamps, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_audioadapter_flush(element->adapter, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
 
 			/* We are on another gap boundary so push the end transient as a gap */
 			if (copysamps == nongapsamps) {
 				element->last_gap = FALSE;
 				if (element->maxdata->pad > 0) {
 					result = push_gap(element, element->maxdata->pad);
-					gst_audioadapter_flush(element->adapter, 2 * element->maxdata->pad);
+					gst_audioadapter_flush_samples(element->adapter, 2 * element->maxdata->pad);
 					}
 				}
 			}
