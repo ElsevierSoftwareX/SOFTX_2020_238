@@ -53,6 +53,7 @@ typedef struct {
 } PyGstFrHistory;
 
 
+/* for forward references */
 static PyTypeObject PyGstFrHistory_Type;
 
 
@@ -185,12 +186,14 @@ static struct PyMethodDef functions[] = {
 PyMODINIT_FUNC init_gstfrhistory(void)
 {
 	PyObject *module = Py_InitModule3(MODULE_NAME, functions, "Wrapper for GstFrHistory type.");
+	if(!module)
+		return;
 
 	/* FIXME:  remove for glib >= 2.36 */
 	g_type_init();
 
 	if(PyType_Ready(&PyGstFrHistory_Type) < 0)
 		return;
-	Py_INCREF((PyObject *) &PyGstFrHistory_Type);
+	Py_INCREF(&PyGstFrHistory_Type);
 	PyModule_AddObject(module, "GstFrHistory", (PyObject *) &PyGstFrHistory_Type);
 }
