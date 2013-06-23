@@ -391,7 +391,11 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 	GST_DEBUG_OBJECT(element, "requested segment is [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), stream time %" GST_TIME_SECONDS_FORMAT ", accum %" GST_TIME_SECONDS_FORMAT ", last_stop %" GST_TIME_SECONDS_FORMAT ", duration %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->time), GST_TIME_SECONDS_ARGS(segment->accum), GST_TIME_SECONDS_ARGS(segment->last_stop), GST_TIME_SECONDS_ARGS(segment->duration));
 
-	g_return_val_if_fail(element->cache != NULL, FALSE);
+	if(!element->cache) {
+		GST_ERROR_OBJECT(element, "no file cache loaded");
+		success = FALSE;
+		goto done;
+	}
 
 	/*
 	 * require a start time
@@ -404,7 +408,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	}
 
 	/*
-	 * do the seek.
+	 * do the seek
 	 */
 
 	i = time_to_index(element, segment->start);
@@ -455,8 +459,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			GstFormat src_format, dst_format;
 			gint64 src_value, dst_value;
 			GstClockTime time;
-
-			g_return_val_if_fail(element->cache != NULL, FALSE);
 
 			gst_query_parse_convert(query, &src_format, &src_value, &dst_format, &dst_value);
 
