@@ -4,9 +4,8 @@ lib_LTLIBRARIES = libgstframecpp.la
 
 libgstframecpp_la_SOURCES = \
 	gstfrhistory.c gstfrhistory.h
-libgstframecpp_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(framecpp_CFLAGS)
-libgstframecpp_la_CXXFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(framecpp_CFLAGS) -D__STDC_CONSTANT_MACROS
-libgstframecpp_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS) $(framecpp_LIBS)
+libgstframecpp_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
+libgstframecpp_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS)
 
 plugin_LTLIBRARIES = libframecpp_plugin.la
 
