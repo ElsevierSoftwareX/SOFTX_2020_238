@@ -36,7 +36,6 @@ from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FF
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 from pylal.xlal.datatypes.complex16frequencyseries import COMPLEX16FrequencySeries
 from pylal.xlal.datatypes.real8timeseries import REAL8TimeSeries
-from pylal.xlal.window import XLALCreateHannREAL8Window
 
 from glue.ligolw import ligolw
 from glue.ligolw import ilwd
@@ -171,7 +170,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# NOTE: The default behavior is relative to the Hann window used in the
 		# filter bank and NOT the whitener. It's just not right. Fair warning.
 		# TODO: Is this default even needed anymore?
-		if( corr == None ):
+		if corr == None:
 			wfftplan = XLALCreateForwardREAL8FFTPlan( filter_len, 1 )
 			spec_corr = lalburst.XLALREAL8WindowTwoPointSpectralCorrelation(
 				XLALCreateHannREAL8Window( filter_len ),
