@@ -20,4 +20,5 @@ configure
 */gnuscripts/ltsugar.m4
 */gnuscripts/ltversion.m4
 */gnuscripts/lt~obsolete.m4
+*/gnuscripts/test-driver
 libtool
