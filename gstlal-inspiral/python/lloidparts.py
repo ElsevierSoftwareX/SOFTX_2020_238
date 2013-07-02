@@ -49,10 +49,11 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import bottle
-from gstlal import pipeparts
-from gstlal import simulation
 from gstlal import datasource
 from gstlal import multirate_datasource
+from gstlal import pipeparts
+from gstlal import simplehandler
+from gstlal import simulation
 from pylal.datatypes import LIGOTimeGPS
 
 
@@ -152,7 +153,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	return snk, src
 
 
-class Handler(object):
+class Handler(simplehandler.Handler):
 	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
 		"""
 		here gates is a dict of gate names and messages for example
@@ -160,14 +161,10 @@ class Handler(object):
 
 		my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
 		"""
-		self.mainloop = mainloop
-		self.pipeline = pipeline
+		super(Handler, self).__init__(mainloop, pipeline)
+
 		self.dataclass = dataclass
 		self.lock = threading.Lock()
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
 
 		self.segments = segments.segmentlistdict()
 		self.current_segment_start = {}
@@ -183,29 +180,16 @@ class Handler(object):
 
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
 
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.flush_segments_to_disk()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_INFO:
-			gerr, dbgmsg = message.parse_info()
-			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_WARNING:
-			gerr, dbgmsg = message.parse_warning()
-			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-		elif message.type == gst.MESSAGE_APPLICATION:
+	def do_on_message(self, bus, message):
+		if message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
 				self.flush_segments_to_disk()
 				try:
 					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 				except TypeError as te:
 					print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
+				return True
+		return False
 
 	def flush_segments_to_disk(self):
 		self.lock.acquire()
