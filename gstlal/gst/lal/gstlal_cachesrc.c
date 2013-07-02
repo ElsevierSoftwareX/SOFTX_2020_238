@@ -46,7 +46,7 @@
 #include <lal/LALCache.h>
 
 
-#include <gstlal/gstlal_debug.h>
+#include <gstlal_debug.h>
 #include <gstlal_cachesrc.h>
 
 
