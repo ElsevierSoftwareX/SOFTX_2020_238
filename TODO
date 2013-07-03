@@ -24,6 +24,8 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* Incorporate bank veto
+* Add PSDs to upload or use -a for second file
 * add to the gstlal summary page
   * population statement plot
   * plots showing likelihood distributions and background pdfs, etc.
