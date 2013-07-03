@@ -48,6 +48,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
 from gstlal import bottle
 from gstlal import datasource
 from gstlal import multirate_datasource
@@ -173,7 +174,7 @@ class Handler(simplehandler.Handler):
 		self.verbose = verbose
 		for (name,msg) in self.gates.items():
 			self.segments[name] = segments.segmentlist([])
-			elem = pipeline.get_by_name(name)
+			elem = self.pipeline.get_by_name(name)
 			elem.set_property("emit-signals", True)
 			elem.connect("start", self.gatehandler, "on")
 			elem.connect("stop", self.gatehandler, "off")
@@ -183,7 +184,8 @@ class Handler(simplehandler.Handler):
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
-				self.flush_segments_to_disk()
+				# FIXME make a custom parser for CHECKPOINT messages?
+				self.flush_segments_to_disk(message.structure["timestamp"])
 				try:
 					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 				except TypeError as te:
@@ -191,9 +193,19 @@ class Handler(simplehandler.Handler):
 				return True
 		return False
 
-	def flush_segments_to_disk(self):
+	def flush_segments_to_disk(self, timestamp):
 		self.lock.acquire()
 		try:
+			# close out existing segments
+			for name, elem in [(name, self.pipeline.get_by_name(name)) for name in self.gates]:
+				if name in self.current_segment_start:
+					# By construction these gates should be
+					# in the on state.  We fake a state
+					# transition to off in order to flush
+					# the segments
+					self.gatehandler(elem, timestamp, "off")
+					# But we have to remember to put it back
+					self.gatehandler(elem, timestamp, "on")
 			xmldoc = self.gen_segments_doc()
 			# FIXME Can't use extent_all() since one list might be empty.
 			ext = self.segments.union(self.segments.keys()).extent()
@@ -215,6 +227,7 @@ class Handler(simplehandler.Handler):
 		if self.verbose:
 			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, str(timestamp))
 
+		# If there is a current_segment_start for this then the state transition has to be off
 		if name in self.current_segment_start:
 			self.segments[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
 		if segment_type == "on":
@@ -225,35 +238,10 @@ class Handler(simplehandler.Handler):
 	def gen_segments_doc(self):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		seg_def = lsctables.New(lsctables.SegmentDefTable, ligolw_segments.LigolwSegmentList.segment_def_columns)
-		xmldoc.childNodes[0].appendChild(seg_def)
-		segtab = lsctables.New(lsctables.SegmentTable, ligolw_segments.LigolwSegmentList.segment_columns)
-		xmldoc.childNodes[0].appendChild(segtab)
-
-		ids = {}
-		for k in self.segments.keys():
-			ifo, name = k.split('_')[0], "_".join(k.split('_')[1:])
-			row = seg_def.RowType()
-			id = seg_def.get_next_id()
-			row.set_ifos([ifo])
-			row.segment_def_id = id
-			row.process_id = None
-			row.name = name
-			row.version = None
-			row.comment = None
-			row.insertion_time = None
-			ids[k] = id
-			seg_def.append(row)
-
-		for k, segl in self.segments.items():
-			for seg in segl:
-				row = segtab.RowType()
-				row.segment_def_id = ids[k]
-				row.segment_id = segtab.get_next_id()
-				row.process_id = None
-				row.set(seg)
-				segtab.append(row)
-
+		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
+		ligolwsegments.insert_from_segmentlistdict(self.segments, name = "datasegments", version = None, insertion_time = None, comment = "LLOID snapshot")
+		ligolwsegments.finalize(process)
 		return xmldoc
 
 	def web_get_segments_xml(self):
