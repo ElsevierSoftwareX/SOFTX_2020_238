@@ -149,7 +149,7 @@ def parse_command_line():
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-	parser.add_option("--likelihood-snapshot-interval", default = 28800, type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+	parser.add_option("--likelihood-snapshot-interval", default = 14400, type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files. Default: 14400 seconds.")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
