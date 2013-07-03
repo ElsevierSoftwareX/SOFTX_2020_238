@@ -92,8 +92,10 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 #
 
 
-def message_new_checkpoint(src):
-	return gst.message_new_application(src, gst.Structure("CHECKPOINT"))
+def message_new_checkpoint(src, timestamp = None):
+	s = gst.Structure("CHECKPOINT")
+	s.set_value("timestamp", timestamp)
+	return gst.message_new_application(src, s)
 
 
 def channel_dict_from_channel_list(channel_list, channel_dict = {"H1" : "LSC-STRAIN", "H2" : "LSC-STRAIN", "L1" : "LSC-STRAIN", "V1" : "LSC-STRAIN"}):
@@ -559,8 +561,6 @@ class Data(object):
 		self.marginalized_likelihood_file = marginalized_likelihood_file
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
-		# Setup custom checkpoint message
-		self.checkpointmsg = message_new_checkpoint(pipeline)
 		# Set to 1.0 to disable background data decay
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
@@ -641,7 +641,7 @@ class Data(object):
 			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 				# Post a checkpoint message
-				self.pipeline.get_bus().post(self.checkpointmsg)
+				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 				if self.assign_likelihoods:
 					assert self.marginalized_likelihood_file is not None
 					# smooth the distribution_stats
