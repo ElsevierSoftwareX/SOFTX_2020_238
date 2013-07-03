@@ -314,7 +314,6 @@ if options.verbose:
 
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
-handler = simplehandler.Handler(mainloop, pipeline)
 
 
 triggersrc = lloidparts.mkLLOIDmulti(
@@ -334,14 +333,6 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	blind_injections = options.blind_injections
 )
 
-# FIXME this is busted, don't assume there is an h(t) gate find a better way to do this
-# special gates to attach signal handlers to
-#gates = {}
-#for ifo in detectors:
-	# defined in datasource.mkbasicsrc
-#	gates["%s_state_vector_gate" % ifo] = "state vector gate"
-	# defined in multirate_datasource.mkwhitened_multirate_src
-#	gates["%s_%d_ht_gate" % (ifo, max(rate for bank in banks[ifo] for rate in bank.get_rates()))] = "ht gate"
 
 if options.verbose:
 	print >>sys.stderr, "done"
@@ -391,6 +382,13 @@ output = inspiral.Data(
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
+
+# setup the pipeline hander with dq gates if in online mode
+if options.data_source == "lvshm":
+	gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
+else:
+	gates = {}
+handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
