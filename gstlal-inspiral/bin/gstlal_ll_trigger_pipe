@@ -128,7 +128,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, data_source = "lvshm", copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -137,7 +137,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
-		self.add_var_opt("data-source", "lvshm")
+		self.add_var_opt("data-source", data_source)
 		self.add_var_opt("control-peak-time", control_peak_time)
 		self.add_var_opt("fir-stride", fir_stride)
 		self.add_var_opt("thinca-interval", thinca_interval)
@@ -151,8 +151,6 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 			self.add_var_opt("gracedb-group", gracedb_group)
 		if gracedb_type is not None:
 			self.add_var_opt("gracedb-type", gracedb_type)
-		if fake_data is not None:
-			self.add_var_opt("fake-data", fake_data)
 		if injections is not None:
 			self.add_var_opt("injections", injections)
 		if veto_segments_file is not None:
@@ -202,7 +200,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
-	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
 	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
@@ -259,7 +257,7 @@ margNode = gstlal_inspiral_marginalize_likelihoods_online_node(margJob, dag, opt
 ###############################################################################
 
 for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name, state_vector_on_off_dict = options.state_vector_on_off_dict)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, data_source = options.data_source, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name, state_vector_on_off_dict = options.state_vector_on_off_dict)
 
 
 dag.write_sub_files()
