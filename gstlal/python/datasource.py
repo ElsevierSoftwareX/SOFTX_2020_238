@@ -153,7 +153,7 @@ framexmit_ports = {
 class GWDataSourceInfo(object):
 
 	def __init__(self, options):
-		data_sources = ("frames", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		data_sources = ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
 
 		# Callbacks to handle the "start" and "stop" signals from the gate
 		# element. This is useful for doing things like segments
@@ -162,7 +162,7 @@ class GWDataSourceInfo(object):
 
 		# Sanity check the options
 		if options.data_source not in data_sources:
-			raise ValueError("--data-source not in " + repr(data_sources))
+			raise ValueError("--data-source must be one of %s" % ", ".join(data_sources))
 		if options.data_source == "frames" and options.frame_cache is None:
 			raise ValueError("--frame-cache must be specified when using --data-source=frames")
 		if (options.gps_start_time is None or options.gps_end_time is None) and options.data_source == "frames":
@@ -232,8 +232,8 @@ def append_options(parser):
 	for applications that read GW data.
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm|nds|white|silence|AdvVirgo|LIGO|AdvLIGO].  Required")
-	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is not used if --data-source=lvshm")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
+	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence, AdvVirgo, LIGO, AdvLIGO, nds.")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
@@ -314,16 +314,19 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
-	elif gw_data_source_info.data_source == "lvshm":
+	elif gw_data_source_info.data_source in ("framexmit", "lvshm"):
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
 
-		# FIXME:  add framexmit as a distinct input choice
-		if True:
+		if gw_data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
+		elif gw_data_source_info.data_source == "framexmit":
+			src = pipeparts.mkframexmitsrc(pipeline, multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1])
 		else:
-			src = pipeparts.mkgeneric(pipeline, None, "gds_framexmitsrc", multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1])
+			# impossible code path
+			raise ValueError(gw_data_source_info.data_source)
+
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
