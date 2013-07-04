@@ -33,6 +33,11 @@ from optparse import OptionParser
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
@@ -52,6 +57,7 @@ from gstlal.inspiral import gen_likelihood_control_doc
 
 def parse_command_line():
 	parser = OptionParser()
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the xml file containing the marginalized likelihood")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 	options, urls = parser.parse_args()
 	return options, urls
@@ -84,7 +90,7 @@ for url in urls:
 	# load input document
 	#
 
-	in_xmldoc = utils.load_url(url, verbose = options.verbose)
+	in_xmldoc = utils.load_url(url, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
 	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
 	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
 	ifos = search_summary_row.get_ifos()
@@ -98,3 +104,27 @@ for url in urls:
 	xmldoc = gen_likelihood_control_doc(likelihood_data, ifos)
 
 	utils.write_filename(xmldoc, url, gz = url.endswith(".gz"), verbose = options.verbose)
+
+# Reset the marginalized likelihood file if it exists too
+if options.marginalized_likelihood_file is not None:
+	
+	marg, procid = far.RankingData.from_xml(utils.load_filename(options.marginalized_likelihood_file, contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
+	
+	for k in marg.trials_table:
+		marg.trials_table[k].count = 0
+		marg.trials_table[k].count_below_thresh = 0
+	
+	marg.livetime_seg = segments.segment(None,None)
+
+	xmldoc = ligolw.Document()
+	node = xmldoc.appendChild(ligolw.LIGO_LW())
+	node.appendChild(lsctables.New(lsctables.ProcessTable))
+	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
+	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_reset_likelihood", options.__dict__)
+	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
+	search_summary.set_out(marg.livetime_seg)
+	xmldoc.childNodes[-1].appendChild(marg.to_xml(process, search_summary))
+	ligolw_process.set_process_end_time(process)
+	outname = options.marginalized_likelihood_file
+	utils.write_filename(xmldoc, outname, gz = outname.endswith(".gz"), verbose = options.verbose)
