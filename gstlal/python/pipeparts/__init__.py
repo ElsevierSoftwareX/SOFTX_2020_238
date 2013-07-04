@@ -260,8 +260,16 @@ def mklvshmsrc(pipeline, shm_name, **properties):
 	return mkgeneric(pipeline, None, "gds_lvshmsrc", shm_name = shm_name, **properties)
 
 
+def mkframexmitsrc(pipeline, multicast_group, port, **properties):
+	return mkgeneric(pipeline, None, "gds_framexmitsrc", multicast_group = multicast_group, port = port, **properties)
+
+
 def mkigwdparse(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_igwdparse", **properties)
+
+
+def mkuridecodebin(pipeline, uri, caps = "application/x-igwd-frame,framed=true", **properties):
+	return mkgeneric(pipeline, None, uri = uri, caps = gst.Caps(caps), **properties)
 
 
 def mkframecppchanneldemux(pipeline, src, **properties):
