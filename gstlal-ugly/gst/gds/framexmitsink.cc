@@ -461,7 +461,7 @@ static void gds_framexmitsink_class_init(GstGDSFramexmitSinkClass *klass)
 		g_param_spec_string(
 			"multicast-iface",
 			"IP address",
-			"The network interface on which to join the multicast group.",
+			"The network interface on which to join the multicast group.  If the interface is omitted, the default interface will be used.  In general, one can use the subnet address as the interface address.  The transmitter will go through the list of all local interfaces and determine the closest match.",
 			DEFAULT_MULTICAST_IFACE,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
@@ -472,7 +472,7 @@ static void gds_framexmitsink_class_init(GstGDSFramexmitSinkClass *klass)
 		g_param_spec_string(
 			"multicast-group",
 			"IP address",
-			"The address of multicast group to join.",
+			"The address of the multicast group to transmit to.  If the address is not a multicast address, the transmitter will UDP/IP broadcast instead of multicast.",
 			DEFAULT_MULTICAST_GROUP,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
@@ -483,7 +483,7 @@ static void gds_framexmitsink_class_init(GstGDSFramexmitSinkClass *klass)
 		g_param_spec_int(
 			"port",
 			"Port",
-			"The port to receive the packets from (0 = allocate).",
+			"The local port from which to transmit the packets from (0 = allocate).",
 			0, 65535, DEFAULT_PORT,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
