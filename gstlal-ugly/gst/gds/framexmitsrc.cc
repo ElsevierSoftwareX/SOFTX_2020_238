@@ -606,7 +606,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
 		g_param_spec_string(
 			"multicast-iface",
 			"IP address",
-			"The network interface on which to join the multicast group.",
+			"The network interface on which to join the multicast group.  If the interface is obmitted, the default interface will be used.  In general, one can use the subnet address as the interface address argument. The receiver will go through the list of all local interfaces and determine the closest match.",
 			DEFAULT_MULTICAST_IFACE,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
@@ -617,7 +617,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
 		g_param_spec_string(
 			"multicast-group",
 			"IP address",
-			"The address of multicast group to join.",
+			"The address of multicast group to join.  If no multicast address is supplied, the receiver will listen for UDP/IP broadcast transmissions at the specified port.",
 			DEFAULT_MULTICAST_GROUP,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
@@ -628,7 +628,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
 		g_param_spec_int(
 			"port",
 			"Port",
-			"The port to receive the packets from (0 = allocate).",
+			"The local port on which to receive broadcasts (0 = allocate).  These ports can be reused by multiple applications.",
 			0, 65535, DEFAULT_PORT,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
