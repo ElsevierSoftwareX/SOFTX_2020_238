@@ -284,25 +284,27 @@ else:
 # There are three modes for psds in this program
 # 1) --reference-psd without --track-psd - a fixed psd (provided by the user) will be used to whiten the data
 # 2) --track-psd without --reference-psd - a psd will me measured and used on the fly
-# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
+# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first guess will come from the users provided psd
 #
 
 
 if options.reference_psd is not None:
 	psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
-	psd = dict([(instrument, None) for instrument in detectors.channel_dict])
+	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
 
 #
 # Parse template banks
 #
 
+
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
 @bottle.route("/bank.txt")
 def get_filter_length_and_chirpmass(banks = banks):
 	bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
 	yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
+
 
 #
 # Build pipeline
@@ -351,6 +353,7 @@ else:
 	# that this job will analyze
 	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
 
+
 #
 # build output document
 #
@@ -397,9 +400,11 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
+
 #
 # if we request a dot graph of the pipeline, set it up
 #
+
 
 if options.write_pipeline is not None:
 	pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
@@ -409,6 +414,7 @@ if options.write_pipeline is not None:
 #
 # Run pipeline
 #
+
 
 if options.data_source != "lvshm":
 	if options.verbose:
