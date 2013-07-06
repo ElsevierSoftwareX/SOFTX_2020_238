@@ -378,20 +378,6 @@ UL = upper_limit(opts)
 fars = numpy.logspace(numpy.log10(opts.min_far), numpy.log10(opts.max_far), opts.xaxis_points)
 snrs = numpy.logspace(numpy.log10(opts.min_snr), numpy.log10(opts.max_snr), opts.xaxis_points)
 
-# guess max distance (for unifying extent of plot axes)
-dmax = 0
-for instr in UL.instruments:
-
-    found_by_far = [sim.distance for far, sim in UL.found_injections_fars[instr] if far < opts.max_far]
-    found_by_snr = [sim.distance for snr, sim in UL.found_injections_snrs[instr] if snr > opts.min_snr]
-
-    dm_tmp_far = 0
-    dm_tmp_snr = 0
-    if found_by_far:
-        dm_tmp_far = max(found_by_far)
-    if found_by_snr:
-        dm_tmp_snr = max(found_by_snr)
-    dmax = max(dmax, dm_tmp_far/2.26, dm_tmp_snr/2.26) # divide by 2.26 for sky average
 
 #
 # loop over the requested instruments and mass bin types, compute the
@@ -559,13 +545,13 @@ for bin_type in opts.bin_types:
         ax.set_xscale("log")
         ax.set_xlim([min(fars), max(fars)])
         ax.invert_xaxis()
-        ax.set_ylim([0, dmax])
+        ax.set_ylim(ymin=0)
 
         ax = fig_snr_range.gca()
         ax.set_xlabel("Network SNR")
         ax.set_ylabel("Range (Mpc)")
         ax.set_xlim([min(snrs), max(snrs)])
-        ax.set_ylim([0, dmax])
+        ax.set_ylim(ymin=0)
 
         # common to all figures
         for fig in figs:
