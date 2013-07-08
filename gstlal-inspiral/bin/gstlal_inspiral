@@ -136,7 +136,6 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
@@ -147,9 +146,10 @@ def parse_command_line():
 	# Online options
 
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-	parser.add_option("--likelihood-snapshot-interval", default = 14400, type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files. Default: 14400 seconds.")
+	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
@@ -199,6 +199,7 @@ def parse_command_line():
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	# Online specific initialization
+	# FIXME someday support other online sources
 	if options.data_source == "lvshm":
 		# check required options in this case
 		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
@@ -242,7 +243,13 @@ def parse_command_line():
 
 		[f.write(l) for l in register(fname)]
 		f.close()
-
+	else:
+		bad_options = []
+		for option in ["likelihood_file", "job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+			if getattr(options, option) is not None:
+				bad_options.append(option)
+		if bad_options:
+			raise ValueError("%s options should only be given for online running" % ",".join(bad_options))
 	# we're done
 	return options, filenames, process_params, svd_banks, detectors
 
