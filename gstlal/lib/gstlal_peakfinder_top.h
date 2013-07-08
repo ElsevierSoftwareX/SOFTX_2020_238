@@ -4,6 +4,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
+#include <gst/gst.h>
 #include <complex.h>
 #include <lal/TriggerInterpolation.h>
 
