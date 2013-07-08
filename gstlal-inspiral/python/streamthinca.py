@@ -164,12 +164,13 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval
 		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
 		self.last_coincs = {}
 		self.trials_table = trials_table
+		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
 
 		# when using the normal coincidence function from
@@ -391,6 +392,15 @@ class StreamThinca(object):
 			map(real_coinc_event_map_table.append, coinc_event_map_table)
 			map(real_coinc_event_table.append, coinc_event_table)
 			map(real_coinc_inspiral_table.append, coinc_inspiral_table)
+
+		# save all sngls above the requested sngls SNR threshold
+		# (all snlgs that participated in coincs are already in the
+		# document, so only need to check for ones in the
+		# non-coincident sngls list for this iteration)
+		if self.sngls_snr_threshold is not None:
+			for event in noncoinc_sngls:
+				if event.snr >= self.sngls_snr_threshold:
+					real_sngl_inspiral_table.append(event)
 
 		# record boundary
 		self.last_boundary = boundary
