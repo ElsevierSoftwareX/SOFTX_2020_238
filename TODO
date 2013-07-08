@@ -24,6 +24,7 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* move headers into a gstlal/ sub-directory in the source tree so the same #include's work in and out of the source tree (e.g., simplifies moving elements between packages)
 * Incorporate bank veto
 * add to the gstlal summary page
   * population statement plot
