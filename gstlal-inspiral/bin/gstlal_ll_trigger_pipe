@@ -131,6 +131,8 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, data_source = "lvshm", copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
+		# FIXME add as an argument rather than hard code
+		self.add_var_opt("likelihood-snapshot-interval", 14400)
 		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
 		if reference_psd is not None:
 			self.add_var_opt("reference-psd", reference_psd)
