@@ -538,7 +538,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, sngls_snr_threshold = 8.0, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -592,7 +592,8 @@ class Data(object):
 		self.stream_thinca = streamthinca.StreamThinca(
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = thinca_interval,	# seconds
-			trials_table = self.far.trials_table
+			trials_table = self.far.trials_table,
+			sngls_snr_threshold = sngls_snr_threshold
 		)
 
 		#
@@ -924,6 +925,33 @@ class Data(object):
 			else:
 				self.gracedb_far_threshold = None
 				yield "OK: rate=\n"
+		except:
+			yield "error\n"
+		finally:
+			self.lock.release()
+
+
+	def web_get_sngls_snr_threshold(self):
+		self.lock.acquire()
+		try:
+			if self.stream_thinca.sngls_snr_threshold is not None:
+				yield "snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
+			else:
+				yield "snr=\n"
+		finally:
+			self.lock.release()
+
+
+	def web_set_sngls_snr_threshold(self):
+		self.lock.acquire()
+		try:
+			snr_threshold = bottle.request.forms["snr"]
+			if snr_threshold:
+				self.stream_thinca.sngls_snr_threshold = float(rate)
+				yield "OK: snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
+			else:
+				self.stream_thinca.sngls_snr_threshold = None
+				yield "OK: snr=\n"
 		except:
 			yield "error\n"
 		finally:
