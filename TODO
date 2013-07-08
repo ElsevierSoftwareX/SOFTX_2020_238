@@ -36,6 +36,7 @@ Immediate development tasks in no particular order
   * calc_likelihood command lines are too long:  use caches of likelihood files
 * finish turning the appropriate bits of the Data class into a pipeline
 handler, and get the input and output segments recorded correctly
+* complete the removal of deprecated data input and conditioning code from lloidparts.py
 * block diagonal matrix support to reduce number of threads
 * fix known gstreamer bugs:
   * small gaps crash resampler,
