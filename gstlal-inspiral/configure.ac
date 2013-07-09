@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	lib/Makefile \
 	lib/skymap/Makefile \
 	python/Makefile \
+	python/emcee/Makefile \
 	gst/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
