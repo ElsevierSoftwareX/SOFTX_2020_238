@@ -12,7 +12,8 @@ try:
 except ImportError:
     acor = None
 
-import emcee as em
+from .sampler import Sampler
+from .ensemble import EnsembleSampler
 import multiprocessing as multi
 import numpy as np
 import numpy.random as nr
@@ -65,7 +66,7 @@ class PTPost(object):
         return self._beta * ll + lp, ll
 
 
-class PTSampler(em.Sampler):
+class PTSampler(Sampler):
     """
     A parallel-tempered ensemble sampler, using :class:`EnsembleSampler`
     for sampling within each parallel chain.
@@ -124,7 +125,7 @@ class PTSampler(em.Sampler):
         if threads > 1 and pool is None:
             self.pool = multi.Pool(threads)
 
-        self.samplers = [em.EnsembleSampler(nwalkers, dim,
+        self.samplers = [EnsembleSampler(nwalkers, dim,
                                             PTPost(logl, logp, b),
                                             pool=self.pool)
                                     for b in self.betas]
