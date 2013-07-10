@@ -641,7 +641,7 @@ class Data(object):
 				event.event_id = self.coincs_document.get_next_sngl_id()
 
 			# update likelihood snapshot if needed
-			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
+			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 				# Post a checkpoint message
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
