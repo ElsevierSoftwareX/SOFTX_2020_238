@@ -71,7 +71,9 @@ parser.add_option("-l", "--logscale", action="append", help="Set logscale on an 
 parser.add_option("-O", "--tile-opacity", type=float, action="store", default=1.0, help="Set the opacity of the plotted tiles. This is useful in the case of non-clustered output to see tiles which may obscured by others. Set to a value between 0 and 1. Default is 1.")
 parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
 parser.add_option("-j", "--plot-injections-from-file", action="store", help="Plot all injections from the file indicated. File must contain a sim_burst or sim_inspiral table. If a sim_inspiral table is found, will plot the 3.5 PN time-frequency track. If a sim_burst table is found, will plot the approximate extent of the time frequency area on the map.")
-parser.add_option("-d", "--restrict-dof", action="append", help="Only plot tiles with these DOF.")
+parser.add_option("-d", "--restrict-dof", action="append", help="Only plot tiles with these DOF. This option can be given several times.")
+parser.add_option("-D", "--restrict-duration", action="append", help="Only plot tiles with these durations. This option can be given several times.")
+parser.add_option("-b", "--restrict-bandwidth", action="append", help="Only plot tiles with these bandwidths. This option can be given several times.")
 
 opts, args = parser.parse_args()
 
@@ -330,16 +332,28 @@ pn=0
 events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
 event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
 
-only_dof = 2.0**numpy.arange(1,16)
+only_dof = segments.segment(0, segments.PosInfinity)
 if opts.restrict_dof:
 	only_dof = map(float, opts.restrict_dof)
 	print "Restricting to tiles with DOF = %s" % ",".join(map(str,only_dof))
+
+only_dur = segments.segment(0, segments.PosInfinity)
+if opts.restrict_duration:
+	only_dur = map(float, opts.restrict_duration)
+	print "Restricting to tiles with duration = %s" % ",".join(map(str,only_dur))
+
+only_bnd = segments.segment(0, segments.PosInfinity)
+if opts.restrict_bandwidth:
+	only_bnd = map(float, opts.restrict_bandwidth)
+	print "Restricting to tiles with bandwidth = %s" % ",".join(map(str,only_bnd))
 
 for channel, selected_events in event_iter:
 	if channel not in channels: continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf") and event.chisq_dof in only_dof, selected_events )
+	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf") , selected_events )
+	selected_events = filter( lambda event: event.chisq_dof in only_dof and event.bandwidth in only_bnd and event.duration in only_dur, selected_events )
+
 	if opts.exclude_outside_segments:
 		for k in segs.keys():
 			try:
@@ -428,10 +442,14 @@ for channel, selected_events in event_iter:
 		if opts.plotting_type in ["tile", "both"]:
 			tiles.append( tile )
 		if opts.plotting_type in ["marker", "both"]:
+			try:
+				freq = event.peak_frequency
+			except AttributeError:
+				freq = event.central_freq
 			if 'c' in logaxes:
-				markers.append( (float(event.get_peak()), event.central_freq, numpy.log10(event.snr)) )
+				markers.append( (float(event.get_peak()), freq, numpy.log10(event.snr)) )
 			else:
-				markers.append( (float(event.get_peak()), event.central_freq, event.snr) )
+				markers.append( (float(event.get_peak()), freq, event.snr) )
 
 		if 'c' in logaxes:
 			snrs.append( numpy.log10(event.snr) )
