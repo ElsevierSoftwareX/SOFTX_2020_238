@@ -178,7 +178,8 @@ parser = OptionParser(description = __doc__)
 datasource.append_options(parser)
 
 parser.add_option("--frame-type", metavar = "name", help = "Specify the non-instrumental part of the frame type. The full frame type will be constructed by prepending the instrument.")
-parser.add_option("--frame-duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
+parser.add_option("--frame-duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frames")
+parser.add_option("--frames-per-file", metavar = "s", default = 1, type = "int", help = "Output frames per file")
 parser.add_option("--output-channel-name", metavar = "name", help = "If an additional frame cache is requested, indicate the channel name to extract.")
 parser.add_option("--output-path", metavar = "name", help = "Path to output frame files.")
 parser.add_option("--output-type", metavar = "name", help = "Method of output. Valid choices are files 'files' (default) and shared memory 'shm'", default = "files")
@@ -242,7 +243,8 @@ except Exception as e:
     print "Failed with %s" % e
 
 # Define the muxer.
-mux = pipeparts.mkframecppchannelmux(pipeline, None, frames_per_file = 1, 
+mux = pipeparts.mkframecppchannelmux(pipeline, None, 
+    frames_per_file = options.frames_per_file, 
     frame_duration = options.frame_duration)
 
 # Link the source to the muxer. 
