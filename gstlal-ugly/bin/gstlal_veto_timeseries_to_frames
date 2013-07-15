@@ -75,6 +75,9 @@ class vetoSource:
         self.inputExt = inputExt
         filePathList = self.check_for_new_files()
         self.fileQueue = deque(filePathList)
+        # This is the offset of a given buffer with respect to the global stream in 
+        # units of *samples*.
+        self.current_offset = 0
     
         # Determine the rate by looking at the first file in the list.
         # XXX If the files with a given prefix have different rates, this will break.
@@ -131,13 +134,15 @@ class vetoSource:
                 buf.timestamp = gpsstart * gst.SECOND
                 gap_duration = self.next_output_timestamp - gpsstart * gst.SECOND
                 buf.duration = gap_duration
-                buf.offset = 0
+                buf.offset = self.current_offset
                 # FIXME: What if the gap_duration != normal duration?
                 # A: We'll need a next_output_offset as well
-                buf.offset_end = gap_duration * self.rate
+                buf.offset_end = self.current_offset + gap_duration * self.rate
                 buf.flag_set(gst.BUFFER_FLAG_GAP)
                 self.next_output_timestamp += buf.gap_duration * gst.SECOND
                 src.emit("push-buffer", buf)
+
+                self.current_offset = buf.offset_end
                 return
            
             # Load the numpy array.
@@ -154,8 +159,8 @@ class vetoSource:
             # The offset is zero since our data begin at the beginning 
             # of the buffer.
             buf.duration = duration * gst.SECOND
-            buf.offset = 0
-            buf.offset_end = duration * self.rate
+            buf.offset = self.current_offset
+            buf.offset_end = self.current_offset + duration * self.rate
             buf.caps = self.caps
 
             self.next_output_timestamp += buf.duration * gst.SECOND
@@ -163,6 +168,8 @@ class vetoSource:
             # Push the buffer into the stream (a side effect of 
             # emitting this signal).
             src.emit("push-buffer", buf)
+
+            self.current_offset = buf.offset_end
         except IndexError:
             src.emit("end-of-stream")
 
