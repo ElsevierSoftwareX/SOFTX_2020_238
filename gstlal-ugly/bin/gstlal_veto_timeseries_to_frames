@@ -145,8 +145,9 @@ class vetoSource:
             veto_vals = veto_vals.astype(np.float64)
 
             # Build the buffer.
-            buf = gst.buffer_new_and_alloc(self.buffer_len)
-            buf[:self.buffer_len-1] = np.getbuffer(veto_vals)
+            buffer_len = veto_vals.nbytes
+            buf = gst.buffer_new_and_alloc(buffer_len)
+            buf[:buffer_len-1] = np.getbuffer(veto_vals)
             buf.timestamp = gpsstart * gst.SECOND
             # gst buffers require:
             # buffer_duration * rate / gst.SECOND = (offset_end - offset)
