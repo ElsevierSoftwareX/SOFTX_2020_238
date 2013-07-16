@@ -190,7 +190,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# Give the lock back
 		gstlal.fftw.unlock()
 
-	filters = numpy.array([])
+	filters = numpy.zeros((filter_len-1)*bands)
 	freq_filters = []
 	for band in range( bands ):
 
@@ -223,11 +223,11 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		freq_filters.append( h_wind_copy )
 
 		# Zero pad up to lowest frequency
-		h_wind.data = numpy.hstack((numpy.zeros((int(h_wind.f0 / h_wind.deltaF), ), dtype = "complex"), h_wind.data))
+		tmpdata = numpy.zeros(len(psd.data), dtype=numpy.complex128)
+		offset = int(h_wind.f0/h_wind.deltaF)
+		tmpdata[offset:offset+len(h_wind_copy.data)] = h_wind_copy.data
+		h_wind.data = tmpdata
 		h_wind.f0 = 0.0
-		d = h_wind.data
-		# Zero pad window to get up to Nyquist
-		h_wind.data = numpy.hstack((d, numpy.zeros((len(psd.data) - len(d),), dtype = "complex")))
 
 		# DEBUG: Uncomment to dump FD filters
 		#f = open( "filters_fd/hann_%dhz" % int( flow + band*b_wind ), "w" )
@@ -251,11 +251,15 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 			sys.exit( "Failed to get time domain filters. The usual cause of this is a filter length which is only a few PSD bins wide. Try increasing the fft-length property of the whitener." )
 
 		td_filter = t_series.data
-		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
+		# FIXME: This is a work around for a yet unfound timestamp
+		# drift. Once it's found this should be reverted.
+		#td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
+		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len-1]
 		## normalize the filters
 		td_filter /= numpy.sqrt( numpy.dot(td_filter, td_filter) )
 		td_filter *= numpy.sqrt(b_wind/psd.deltaF)
-		filters = numpy.concatenate( (filters, td_filter) )
+		#filters = numpy.concatenate( (filters, td_filter) )
+		filters[(filter_len-1)*band:(filter_len-1)*(band+1)] = td_filter
 		
 		# DEBUG: Uncomment to dump TD filters
 		#f = open( "filters_td/hann_%dhz" % int( flow + band*b_wind ), "w" )
@@ -264,7 +268,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		#f.close()
 
 	# Shape it into a "matrix-like" object
-	filters.shape = ( bands, filter_len )
+	#filters.shape = ( bands, filter_len )
+	filters.shape = ( bands, filter_len-1 )
 	return filters, freq_filters
 
 def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):

@@ -138,7 +138,7 @@ class EPHandler( Handler ):
 		self.cache_psd = None
 		self.cache_psd_dir = "./"
 		self.last_psd_cache = 0
-		self.psd_change_thresh = 0.2
+		self.psd_change_thresh = 0.06
 		# This is used to store the change from the previous PSD power
 		self.psd_change = 0.0
 
