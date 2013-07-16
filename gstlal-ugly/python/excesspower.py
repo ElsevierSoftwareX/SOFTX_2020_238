@@ -190,7 +190,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# Give the lock back
 		gstlal.fftw.unlock()
 
-	filters = numpy.array([])
+	filters = numpy.zeros(filter_len*bands)
 	freq_filters = []
 	for band in range( bands ):
 
@@ -223,11 +223,11 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		freq_filters.append( h_wind_copy )
 
 		# Zero pad up to lowest frequency
-		h_wind.data = numpy.hstack((numpy.zeros((int(h_wind.f0 / h_wind.deltaF), ), dtype = "complex"), h_wind.data))
+		tmpdata = numpy.zeros(len(psd.data), dtype=numpy.complex128)
+		offset = int(h_wind.f0/h_wind.deltaF)
+		tmpdata[offset:offset+len(h_wind_copy.data)] = h_wind_copy.data
+		h_wind.data = tmpdata
 		h_wind.f0 = 0.0
-		d = h_wind.data
-		# Zero pad window to get up to Nyquist
-		h_wind.data = numpy.hstack((d, numpy.zeros((len(psd.data) - len(d),), dtype = "complex")))
 
 		# DEBUG: Uncomment to dump FD filters
 		#f = open( "filters_fd/hann_%dhz" % int( flow + band*b_wind ), "w" )
@@ -258,7 +258,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		## normalize the filters
 		td_filter /= numpy.sqrt( numpy.dot(td_filter, td_filter) )
 		td_filter *= numpy.sqrt(b_wind/psd.deltaF)
-		filters = numpy.concatenate( (filters, td_filter) )
+		#filters = numpy.concatenate( (filters, td_filter) )
+		filters[filter_len*band:filter_len*(band+1)] = td_filter
 		
 		# DEBUG: Uncomment to dump TD filters
 		#f = open( "filters_td/hann_%dhz" % int( flow + band*b_wind ), "w" )
