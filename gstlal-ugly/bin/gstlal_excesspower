@@ -186,9 +186,9 @@ def get_triggers(elem, handler):
 		if row.peak_time in whiten_seg:
 			continue
 		# FIXME: Determine "magic number" or remove it
-		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
-		if options.compat:
-			row.snr = row.snr / ndof - 1
+		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
+		#if options.compat:
+		row.snr = row.snr / row.chisq_dof - 1
 
 		# This is done here so that the current PSD is used rather than
 		# what might be there when the triggers are actually output
@@ -267,7 +267,7 @@ parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", h
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
 parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
 parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
-parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
+#parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
@@ -515,8 +515,8 @@ head = datasource.mkbasicsrc( pipeline,
 	verbose 
 )
 # Drop first PSD estimates until it settles
-#if psdfile is not None:
-	#head = pipeparts.mkdrop( pipeline, head, handler.fft_length*8*handler.rate )
+if psdfile is None:
+	head = pipeparts.mkdrop( pipeline, head, handler.fft_length*8*handler.rate )
 
 # If we're running online, we need to set up a few things
 if gw_data_source_opts.data_source == "lvshm":
@@ -666,6 +666,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			ndof <<= 1
 			continue
 
+		if ndof/undersamp_rate > handler.max_duration:
+			break
+
 		print "Resolution level %d, DOFs: %d" % (res_level, ndof)
 
 		# Multi channel FIR filter -- used to add together frequency bands into 
@@ -713,12 +716,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			tmptee = pipeparts.mkhistogram( pipeline, tmptee )
 			#tmptee = pipeparts.mkcolorspace( pipeline, tmptee )
 			#pipeparts.mkgeneric( pipeline, tmptee, "autovideosink", filter_caps=gst.caps_from_string("video/x-raw-rgb") )
-			pipeparts.mkogmvideosink( pipeline, tmptee, "test_%d.ogm" % ndof )
+			pipeparts.mkogmvideosink( pipeline, tmptee, "test_%d_%d.ogm" % (res_level, ndof) )
 
 		# Trigger generator
 		# Since we sum over ndof samples to get a tile, we take the peak over ndof
 		# samples in the trigger generator
-		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, ndof, 
+		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, ndof/2, 
 			bank = handler.build_filter_xml( res_level, ndof, verbose=verbose )
 		)
 
