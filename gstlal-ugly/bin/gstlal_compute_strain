@@ -124,7 +124,7 @@ handler = simplehandler.Handler(mainloop, pipeline)
 # Turn off debugging tools or verboseness
 #
 
-#pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 if not options.verbose:
 	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
 
@@ -137,10 +137,10 @@ if options.data_source == "lvshm":
 elif options.data_source == "frames":
 	src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source.frame_cache, cache_dsc_regex = instrument)
 elif options.data_source == "white":
-	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=16384, volume=1e-20, do_timestamp = True, timestamp_offset=options.offset)
+	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=16384, blocksize = 16384 * 4 * 1, timestamp_offset = options.offset)
 	rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=32, rate=16384")	
 
-	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=16384, volume=1e-20, do_timestamp = True, timestamp_offset=options.offset)
+	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=16384, blocksize = 16384 * 4 * 1, timestamp_offset = options.offset)
 	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=16384")
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
@@ -175,6 +175,7 @@ if options.data_source == "frames" and gw_data_source.frame_segments[instrument]
 # ODC STATE VECTOR BRANCH
 #
 
+#odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x3)
 odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x7)
 odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
@@ -203,20 +204,21 @@ rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_h
 
 # Whiten the raw strain channel and apply recoloring kernel, if this pipeline is meant to recolor
 if not options.calibrate:
-	rawstrain = pipeparts.mkwhiten(pipeline, rawstrain, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-	if wpsd is None:
-		# use running average PSD
-		rawstrain.set_property("psd-mode", 0)
-	else:
-		# use running psd
-		if options.track_psd:
+	if options.data_source != "white":
+		rawstrain = pipeparts.mkwhiten(pipeline, rawstrain, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		if wpsd is None:
+			# use running average PSD
 			rawstrain.set_property("psd-mode", 0)
-		# use fixed PSD
 		else:
-			rawstrain.set_property("psd-mode", 1)
-		rawstrain.connect_after("notify::f-nyquist", psd_resolution_changed, wpsd)
-		rawstrain.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
-	rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_whitehoft" % (instrument, sr))	
+			# use running psd
+			if options.track_psd:
+				rawstrain.set_property("psd-mode", 0)
+			# use fixed PSD
+			else:
+				rawstrain.set_property("psd-mode", 1)
+			rawstrain.connect_after("notify::f-nyquist", psd_resolution_changed, wpsd)
+			rawstrain.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
+		rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_whitehoft" % (instrument, sr))	
 
 	# Recolor kernel
 	max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
@@ -342,6 +344,8 @@ if options.write_to_shm_partition is not None:
 	lvshmsink.set_property("num-buffers", 10)
 	lvshmsink.set_property("blocksize", 405338 * options.frame_duration * options.frames_per_file)
 	lvshmsink.set_property("buffer-mode", options.buffer_mode)
+	if options.data_source == "white":
+		lvshmsink.set_property("ts-offset", -options.offset)
 	pipeline.add(lvshmsink)
 	mux.link(lvshmsink)
 else:
