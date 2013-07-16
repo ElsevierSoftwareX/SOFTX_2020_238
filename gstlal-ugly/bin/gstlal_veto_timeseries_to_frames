@@ -97,8 +97,6 @@ class vetoSource:
         self.rate = int(float(firstVals.size)/float(self.duration) + 0.1)
         # Now that we have the rate, we can set the caps for the appsrc
         self.caps = "audio/x-raw-float,width=64,depth=64,channels=1,rate=%d" % self.rate
-        # XXX Set the buffer length. Assume fixed for all files!
-        self.buffer_len = firstVals.nbytes
 
     def check_for_new_files(self, timestamp=0):
         # get the file list
@@ -131,19 +129,24 @@ class vetoSource:
             if gpsstart * gst.SECOND > self.next_output_timestamp:
                 # Build the buffer.
                 buf = gst.buffer_new_and_alloc(0)
-                buf.timestamp = gpsstart * gst.SECOND
-                gap_duration = self.next_output_timestamp - gpsstart * gst.SECOND
+                buf.flag_set(gst.BUFFER_FLAG_GAP)
+#                buf.timestamp = gpsstart * gst.SECOND
+#                gap_duration = self.next_output_timestamp - gpsstart * gst.SECOND
+#                buf.duration = gap_duration
+                buf.timestamp = self.next_output_timestamp
+                gap_duration = gpsstart * gst.SECOND - buf.timestamp
+                gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
                 buf.duration = gap_duration
                 buf.offset = self.current_offset
                 # FIXME: What if the gap_duration != normal duration?
                 # A: We'll need a next_output_offset as well
-                buf.offset_end = self.current_offset + gap_duration * self.rate
-                buf.flag_set(gst.BUFFER_FLAG_GAP)
-                self.next_output_timestamp += buf.gap_duration * gst.SECOND
+                buf.offset_end = self.current_offset + gap_samples
                 src.emit("push-buffer", buf)
 
+                self.next_output_timestamp += buf.duration 
                 self.current_offset = buf.offset_end
-                return
+                # FIXME I don't think we should actually be returning here.
+                # return
            
             # Load the numpy array.
             veto_vals = wrapNpLoad(filePath)
@@ -163,7 +166,7 @@ class vetoSource:
             buf.offset_end = self.current_offset + duration * self.rate
             buf.caps = self.caps
 
-            self.next_output_timestamp += buf.duration * gst.SECOND
+            self.next_output_timestamp += buf.duration 
 
             # Push the buffer into the stream (a side effect of 
             # emitting this signal).
@@ -234,14 +237,11 @@ if not instrument.startswith(obsStr):
 vetoSrc = vetoSource(options.input_path, options.input_prefix,
             options.input_ext)
 
-
-# XXX Need is_live property?
-caps = vetoSrc.caps
-appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(caps), 
-    format="time", max_bytes=0, blocksize = vetoSrc.buffer_len)
+# Create the appsrc with accoutrements
+appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(vetoSrc.caps), 
+    format="time")
 appsrc.connect('need-data', vetoSrc.need_data)
-src = pipeparts.mkcapsfilter(pipeline, appsrc, caps)
-src = pipeparts.mktaginject(pipeline, src, 
+src = pipeparts.mktaginject(pipeline, appsrc, 
     "instrument=%s,channel-name=%s,units=cats" % (instrument, channel_name))
 
 try:
@@ -261,7 +261,7 @@ src.get_pad("src").link(mux.get_pad(options.output_channel_name))
 progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
 
 # Final destination.
-# XXX We eventually want this to be shared memory or multicast.  
+# XXX multicast?
 if options.output_type == "files":
     path = options.output_path
     if path:
@@ -274,8 +274,13 @@ elif options.output_type == "shm":
     lvshmsink = pipeparts.mkgeneric(pipeline, progRep, "gds_lvshmsink")
     lvshmsink.set_property("shm-name", options.shm_partition)
     lvshmsink.set_property("num-buffers", 10)
-    # FIXME: Is this proper for the blocksize?
-    lvshmsink.set_property("blocksize", vetoSrc.blocksize * 10)
+    # Let's guess the blocksize, then multiply by a fudge factor.
+    # Note: This assumes the stream consists of 64-bit samples.
+    # XXX This could be done better by attaching a pad probe to the lvhsmsink
+    # sink pad and setting blocksize according to the size of the incoming buffers
+    blocksize = vetoSrc.rate * 8 * options.frame_duration * options.frames_per_file
+    blocksize = blocksize * 2
+    lvshmsink.set_property("blocksize", blocksize)
     # FIXME: I think this means it needs to be read at least once
     lvshmsink.set_property("buffer-mode", 1)
 else:
