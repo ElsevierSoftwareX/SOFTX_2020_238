@@ -204,21 +204,20 @@ rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_h
 
 # Whiten the raw strain channel and apply recoloring kernel, if this pipeline is meant to recolor
 if not options.calibrate:
-	if options.data_source != "white":
-		rawstrain = pipeparts.mkwhiten(pipeline, rawstrain, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-		if wpsd is None:
-			# use running average PSD
+	rawstrain = pipeparts.mkwhiten(pipeline, rawstrain, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+	if wpsd is None:
+		# use running average PSD
+		rawstrain.set_property("psd-mode", 0)
+	else:
+		# use running psd
+		if options.track_psd:
 			rawstrain.set_property("psd-mode", 0)
+		# use fixed PSD
 		else:
-			# use running psd
-			if options.track_psd:
-				rawstrain.set_property("psd-mode", 0)
-			# use fixed PSD
-			else:
-				rawstrain.set_property("psd-mode", 1)
-			rawstrain.connect_after("notify::f-nyquist", psd_resolution_changed, wpsd)
-			rawstrain.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
-		rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_whitehoft" % (instrument, sr))	
+			rawstrain.set_property("psd-mode", 1)
+		rawstrain.connect_after("notify::f-nyquist", psd_resolution_changed, wpsd)
+		rawstrain.connect_after("notify::delta-f", psd_resolution_changed, wpsd)
+	rawstrain = pipeparts.mkchecktimestamps(pipeline, rawstrain, "%s_timestamps_%d_whitehoft" % (instrument, sr))	
 
 	# Recolor kernel
 	max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
