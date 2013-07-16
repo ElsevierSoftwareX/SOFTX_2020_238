@@ -113,8 +113,10 @@ SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *
 			memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
 			LIGOTimeGPS peak_time;
 			XLALINT8NSToGPS(&peak_time, time);
-			XLALGPSAdd(&peak_time, -new_event->duration/2);
 			XLALGPSAdd(&peak_time, (double) maxsample[channel] / rate);
+			XLALGPSAdd(&peak_time, -new_event->duration/2);
+			// Center the tile
+			XLALGPSAdd(&peak_time, 1.0/(2.0*rate));
 			LIGOTimeGPS start_time = peak_time;
 			XLALGPSAdd(&start_time, -new_event->duration/2);
 			new_event->snr = fabs(maxdata[channel]);
