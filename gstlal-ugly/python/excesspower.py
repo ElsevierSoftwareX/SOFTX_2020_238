@@ -190,7 +190,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# Give the lock back
 		gstlal.fftw.unlock()
 
-	filters = numpy.zeros(filter_len*bands)
+	filters = numpy.zeros((filter_len-1)*bands)
 	freq_filters = []
 	for band in range( bands ):
 
@@ -259,7 +259,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		td_filter /= numpy.sqrt( numpy.dot(td_filter, td_filter) )
 		td_filter *= numpy.sqrt(b_wind/psd.deltaF)
 		#filters = numpy.concatenate( (filters, td_filter) )
-		filters[filter_len*band:filter_len*(band+1)] = td_filter
+		filters[(filter_len-1)*band:(filter_len-1)*(band+1)] = td_filter
 		
 		# DEBUG: Uncomment to dump TD filters
 		#f = open( "filters_td/hann_%dhz" % int( flow + band*b_wind ), "w" )
