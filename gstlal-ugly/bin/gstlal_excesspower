@@ -271,6 +271,7 @@ parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="sto
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
+parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
 
 (options, args) = parser.parse_args()
 
@@ -721,7 +722,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		# Trigger generator
 		# Since we sum over ndof samples to get a tile, we take the peak over ndof
 		# samples in the trigger generator
-		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, ndof/2, 
+		peak_samples = max(1, int((options.peak_fraction or 0) * ndof))
+		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, 
+			peak_samples, 
 			bank = handler.build_filter_xml( res_level, ndof, verbose=verbose )
 		)
 
@@ -733,7 +736,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		else:
 			# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
 			snr_thresh = handler.snr_thresh**2
-		print "SNR threshold for level %d, ndof %d: %f" % (res_level, ndof, snr_thresh)
+		if verbose:
+			print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
 		durtee.set_property( "snr-thresh", snr_thresh )
 
 		if verbose:
