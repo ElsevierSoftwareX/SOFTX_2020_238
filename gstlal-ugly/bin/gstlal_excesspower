@@ -754,6 +754,15 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		if ndof > max_samp:
 			break
 
+# Check for empty frame segments list if handed frames 
+for ifo, seglist in gw_data_source_opts.frame_segments.iteritems():
+	if seglist is not None and abs( seglist ) == 0:
+		fname = ep.make_cache_parseable_name( inst = handler.inst, tag = handler.channel, start = float(gw_data_source_opts.seg[0]), stop = float(gw_data_source_opts.seg[1]), ext = "xml", dir = handler.outdir )
+		handler.write_triggers( filename = fname )
+		if verbose:
+			print "No analyzable livetime in requested segment."
+	sys.exit( 0 )
+
 ### END OF PIPELINE
 
 # Spectrum notification processing
