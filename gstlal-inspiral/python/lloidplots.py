@@ -119,7 +119,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	from mpl_toolkits.basemap import Basemap, shiftgrid
 	import numpy as np
 	from pylal.xlal import constants
-	from pylal.xlal import tools
+	from pylal import inject
 	from pylal.datatypes import LIGOTimeGPS
 	from pylal.date import XLALGreenwichMeanSiderealTime
 	from glue.iterutils import choices
@@ -129,14 +129,8 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 
 	def location_for_site(prefix):
 		"""Get the Cartesian (WGS84) coordinates of a site, given its prefix
-		(h for Hanford, l for Livingston...)."""
-		# Dictionary mapping detector site prefixes to nick names
-		matching_detectors = [x for x in tools.cached_detector.values() if x.prefix.startswith(prefix)]
-		if len(matching_detectors) > 1:
-			raise ValueError("Found more than one matching detector: %s" % prefix)
-		if len(matching_detectors) == 0:
-			raise ValueError("Found no matching detectors: %s" % prefix)
-		return matching_detectors[0].location
+		(H1 for Hanford, L1 for Livingston...)."""
+		return inject.cached_detector[inject.prefix_to_name[prefix]].location
 
 	def cart2spherical(cart):
 		"""Convert a Cartesian vector to spherical polar azimuth (phi) and elevation (theta) in radians."""

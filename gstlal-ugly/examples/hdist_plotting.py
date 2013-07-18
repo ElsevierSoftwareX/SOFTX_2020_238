@@ -38,8 +38,7 @@ from gstlal.pipeutil import mkelem
 from gstlal import pipeio
 from pylal import lalconstants as lc
 from pylal import date
-from pylal.xlal.tools import cached_detector
-from pylal.xlal.inject import XLALComputeDetAMResponse
+from pylal.inject import cached_detector, XLALComputeDetAMResponse
 from pylal.xlal.constants import LAL_PI, LAL_TWOPI, LAL_PI_2, LAL_PI_4
 
 
