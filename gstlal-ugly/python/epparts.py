@@ -655,9 +655,7 @@ class EPHandler( Handler ):
 
 			rates = self.stats.event_rate()
 			stat_json["event_rates"] = list(rates)
-			def rank_sb( sb ):
-				return sb.snr/sb.chisq_dof - 1
-			esig = self.stats.event_significance( rank_fcn=rank_sb )
+			esig = self.stats.event_significance()
 			stat_json["event_significance"] = list(esig)
 			if self.verbose:
 				print >>sys.stderr, "Event rate in current segment: %g" % erate
