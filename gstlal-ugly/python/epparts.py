@@ -570,7 +570,7 @@ class EPHandler( Handler ):
 		# prevents that segment from being added to the outgoing search
 		# summary.
 		cur_seg = None
-		if self.current_segment is not None and float(self.current_segment[0]) > self.analysis_segment[1]:
+		if self.current_segment is not None and float(self.current_segment[0]) > analysis_segment[1]:
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
 			self.seglist["state"].append( cur_seg )
@@ -655,9 +655,7 @@ class EPHandler( Handler ):
 
 			rates = self.stats.event_rate()
 			stat_json["event_rates"] = list(rates)
-			def rank_sb( sb ):
-				return sb.snr/sb.chisq_dof - 1
-			esig = self.stats.event_significance( rank_fcn=rank_sb )
+			esig = self.stats.event_significance()
 			stat_json["event_significance"] = list(esig)
 			if self.verbose:
 				print >>sys.stderr, "Event rate in current segment: %g" % erate

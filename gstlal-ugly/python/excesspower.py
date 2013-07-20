@@ -453,32 +453,36 @@ def determine_segment_with_whitening( analysis_segment, whiten_seg ):
 			analysis_segment -= whiten_seg
 	return analysis_segment
 	
-def append_formatted_output_path( fmt, handler, bdir="./", mkdir=True ):
+def append_formatted_output_path( fmt, handler, bdir="./", mkdir=False ):
 	"""
 	Append a formatted output path to the base directory (default is pwd). Acceptable options are:
-	i: instrument[0] like 'H' for 'H1'
-	I: instrument
-	S: subsystem prefix
-	c: channel without subsystem
-	C: full channel (eg. LSC-STRAIN)
-	G#: first # GPS digits
+	%i: instrument[0] like 'H' for 'H1'
+	%I: instrument
+	%S: subsystem prefix
+	%c: channel without subsystem
+	%C: full channel (eg. LSC-STRAIN)
+	%G#: first # GPS digits
 
-	Example: fmt="I/S/c/G5"
+	Example: fmt="%I/%S/%c/%G5"
 	=> H1/PSL/ISS_PDA_OUT_DQ/10340
 
-	Options in the format which are unrecoginze will pass through without being modified. If mkdir is set to True (default), the directory will be created if it does not already exist.
+	Example: fmt="%I/%C_excesspower/%G5"
+	=> H1/PSL-ISS_PDA_OUT_DQ_excesspower/10340
+
+	Options in the format which are unrecoginzed will pass through without being modified. If mkdir is set to True, the directory will be created if it does not already exist.
 	"""
-	gps_reg = re.compile( "^G(\d*)$" )
+	gps_reg = re.compile( "^%G(\d*)$" )
 	def converter( ic ):
 		gps = re.search( gps_reg, ic )
 		if gps is not None and len(gps.group(1)) > 0:
 			gps = int( gps.group(1) )
-		if ic == "i": return handler.inst[0]
-		elif ic == "I": return handler.inst
-		elif ic == "S": return handler.channel.split("-")[0]
-		elif ic == "c": return handler.channel.split("-")[-1]
-		elif ic == "C": return handler.channel
-		elif type(gps) is int: return str(int(handler.time_since_dump))[:gps]
+		if "%i" in ic: ic = ic.replace( "%i", handler.inst[0] )
+		if "%I" in ic: ic = ic.replace( "%I", handler.inst )
+		if "%S" in ic: ic = ic.replace( "%S", handler.channel.split("-")[0] )
+		if "%c" in ic: ic = ic.replace( "%c", handler.channel.split("-")[-1] )
+		if "%C" in ic: ic = ic.replace( "%C", handler.channel )
+		# FIXME: This will replace the entire path segment
+		if type(gps) is int: return str(int(handler.time_since_dump))[:gps]
 		elif gps is not None: return str(handler.time_since_dump)
 		return ic
 
