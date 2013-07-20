@@ -255,7 +255,7 @@ mux = pipeparts.mkframecppchannelmux(pipeline, None,
     frame_duration = options.frame_duration)
 
 # Link the source to the muxer. 
-src.get_pad("src").link(mux.get_pad(options.output_channel_name))
+src.get_pad("src").link(mux.get_pad(instrument + ':' + channel_name))
 
 # Stick progress report in pipeline.
 progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
