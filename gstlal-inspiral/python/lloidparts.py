@@ -793,7 +793,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 #
 
 
-def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}):
+def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -805,10 +805,17 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# extract segments from the injection file for selected reconstruction
 	#
 
-	if injection_filename is not None:
+	if detectors.injection_filename is not None:
 		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
 	else:
 		inj_seg_list = None
+		#
+		# Check to see if we are specifying blind injections now that we know
+		# we don't want real injections. Setting this
+		# detectors.injection_filename will ensure that injections are added
+		# but won't only reconstruct injection segments.
+		#
+		detectors.injection_filename = blind_injections
 
 	#
 	# construct dictionaries of whitened, conditioned, down-sampled
@@ -816,14 +823,13 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	#
 
 	hoftdicts = {}
-	for instrument in detectors:
-		print instrument
+	for instrument in detectors.channel_dict:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
+		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:
-			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd)
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = detectors.seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd)
 		else:
-			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd)
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = detectors.seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd)
 
 	#
 	# construct trigger generators
@@ -840,7 +846,7 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			instrument,
 			verbose = verbose,
 			nxydump_segment = nxydump_segment,
-			quality = 4,
+			quality = 4
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 
@@ -936,3 +942,4 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 		prehead = head
 
 	return head
+
