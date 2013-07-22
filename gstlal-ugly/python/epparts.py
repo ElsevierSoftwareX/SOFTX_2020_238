@@ -152,7 +152,7 @@ class EPHandler( Handler ):
 		self.triggers = None
 		self.process_params = None
 		self.process = None
-		self.outfile = "test.xml"
+		self.outfile = "test.xml.gz"
 		self.outdir = "./"
 		self.outdirfmt = ""
 		self.make_output_table()
@@ -713,7 +713,7 @@ class EPHandler( Handler ):
 			tag = self.channel,
 			start = self.time_since_dump,
 			stop = self.stop,
-			ext = "xml",
+			ext = "xml.gz",
 			dir = self.outdir + subdir
 		)
 		self.write_triggers( False, filename = outfile )
