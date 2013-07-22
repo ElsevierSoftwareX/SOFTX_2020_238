@@ -69,7 +69,7 @@ typedef struct {
 	 * input stream
 	 */
 
-	gint rate;
+	gint rate, width;
 	GstAdapter *adapter;
 	guint zeros_in_adapter;
 
