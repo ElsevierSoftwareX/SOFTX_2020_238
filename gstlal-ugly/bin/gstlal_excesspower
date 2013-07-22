@@ -174,6 +174,7 @@ def get_triggers(elem, handler):
 	# well defined before the pipeline starts, and thus shouldn't be checked 
 	# until after we start running. We must know handler.start by the time we 
 	# start drawing triggers, though
+	# FIXME: This probably isn't needed anymore because of the drop time
 	whiten_seg = segment( 
 		LIGOTimeGPS(handler.start), 
 		LIGOTimeGPS(handler.start + handler.whitener_offset)
@@ -226,24 +227,6 @@ def get_triggers(elem, handler):
 			ext = "xml.gz",
 			dir = subdir
 		)
-
-		# It's possible that triggers come out so fast that the filename would
-		# be identical and overwrite those triggers. This appends an integer
-		# identified to prevent thtat.
-		# FIXME: This never ends well
-		"""
-		uniq = 1
-		while os.path.exists( fname ):
-			fname = ep.make_cache_parseable_name(
-				inst = handler.inst,
-				tag = "%s_%d" % (handler.channel, uniq),
-				start = handler.time_since_dump,
-				stop = handler.stop,
-				ext = "xml.gz",
-				dir = handler.outdir
-			)
-			uniq += 1
-		"""
 
 		if handler.clustering:
 			handler.process_triggers( [], cluster_passes = True )
@@ -322,7 +305,6 @@ gw_data_source_opts = datasource.GWDataSourceInfo( options )
 
 # Verbosity and diagnostics
 verbose = options.verbose
-#diagnostics = options.diagnostics
 
 #
 # =============================================================================
@@ -447,8 +429,8 @@ if cfg.has_option( "triggering", "output-dir-format" ):
 
 handler.output = not options.disable_triggers
 
-# FAP thresh overrides SNR thresh, because multiple resolutions will have different
-# SNR thresholds, nominally.
+# FAP thresh overrides SNR thresh, because multiple resolutions will have 
+# different SNR thresholds, nominally.
 if cfg.has_option( "triggering", "snr-thresh" ):
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 if cfg.has_option( "triggering", "fap-thresh" ):
@@ -461,9 +443,10 @@ elif handler.fap is not None:
 else:
 	print "SNR threshold (sqrt of tile energy) is %f" % handler.snr_thresh
 
-# If one wishes to try and automatically upload events to an event database (read:
-# gracedb and friends) these options will be sufficient to the pipeline to do such
-# a thing
+# If one wishes to try and automatically upload events to an event database 
+# (read: gracedb and friends) these options will be sufficient to the pipeline 
+# to do such a thing
+# FIXME: Rework or delete... this probably isn't going to work in realtime
 if options.db_uploads:
 
 	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
@@ -475,14 +458,14 @@ if options.db_uploads:
 		print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
 		handler.db_thresh = None
 
-# Maximum number of events (+/- a few in the buffer) before which we drop an output
-# file
+# Maximum number of events (+/- a few in the buffer) before which we drop an 
+# output file
 if cfg.has_option( "triggering", "events_per_file" ):
 	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
 
 # If a specific (trigger) time is of interest, specify its GPS here
 # TODO: Read from sngl_inspirals and sngl_bursts
-# TODO: Make this useful
+# TODO: Make this useful -- incorporate into scan
 trigger_begin, trigger_end = None, None
 if cfg.has_option( "triggering", "trig_time_start" ):
 	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
@@ -491,8 +474,10 @@ if cfg.has_option( "triggering", "trig_time_end" ):
 if trigger_begin and trigger_end:
 	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
-# This is invoked here, or else the default rate is used, which will cause funny behavior for the defaults with some cases
-# FIXME: Can we move this back now?
+# This is invoked here, or else the default rate is used, which will cause
+# funny behavior for the defaults with some cases
+# FIXME: Can we move this back now? This probably isn't even needed with the 
+# drop samples
 df = 1.0 / handler.fft_length
 handler.filter_len = 2*int(2*handler.rate / handler.base_band )
 if handler.psd is None:
@@ -565,8 +550,8 @@ head = pipeparts.mkfirbank( pipeline, head,
 	block_stride=handler.rate 
 )
 
-# This function stores a reference to the FIR bank, creates the appropriate filters
-# and sets the other options appropriately
+# This function stores a reference to the FIR bank, creates the appropriate 
+# filters and sets the other options appropriately
 handler.add_firbank( head )
 nchannels = handler.filter_bank.shape[0]
 print "FIR bank constructed with %d %f Hz channels" % (nchannels, handler.base_band)
@@ -725,8 +710,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			pipeparts.mkogmvideosink( pipeline, tmptee, "test_%d_%d.ogm" % (res_level, ndof) )
 
 		# Trigger generator
-		# Since we sum over ndof samples to get a tile, we take the peak over ndof
-		# samples in the trigger generator
+		# Number of tiles to peak over, if necessary
 		peak_samples = max(1, int((options.peak_fraction or 0) * ndof))
 		durtee = pipeparts.mkbursttriggergen( pipeline, durtee, 
 			peak_samples, 
@@ -739,7 +723,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			# ndof_eff = ndof * 0.62
 			snr_thresh = ep.determine_thresh_from_fap(handler.fap, ndof)**2
 		else:
-			# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
+			# TODO: Make clear in the ini file that the thresh is power SNR, 
+			# not amplitude and then remove the square here
 			snr_thresh = handler.snr_thresh**2
 		if verbose:
 			print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
