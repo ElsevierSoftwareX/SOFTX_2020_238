@@ -122,6 +122,8 @@ def on_psd_change( elem, pspec, hand ):
 	# filter bank.
 	hand.psd_power = sum(new_psd.data)*hand.psd.deltaF
 	#hand.psd_change = (hand.psd_power - psd_power) / (hand.psd_power + psd_power) 
+	
+	whitener_pos = elem.query_position(gst.FORMAT_TIME)[0]*1e-9
 
 	# This will get triggered in two cases: the rate (and thus bin length)
 	# has changed, or we had the default PSD in place previously.
@@ -139,7 +141,7 @@ def on_psd_change( elem, pspec, hand ):
 	#print >>sys.stderr , "PSD estimate: %g / %g (min: %g, max: %g)" % (sum(hand.psd.data),sum(new_psd.data), min(psd_change), max(psd_change))
 	#print >>sys.stderr , "change estimate: %f" % hand.psd_change
 
-	if abs(hand.psd_change) > hand.psd_change_thresh:
+	if abs(hand.psd_change) > hand.psd_change_thresh and whitener_pos - handler.start > 0.75*options.drop_time:
 		if options.verbose:
 			print >> sys.stderr, "Processed signal, change estimate: %f, regenerating filters" % hand.psd_change
 		hand.psd = new_psd
@@ -273,6 +275,7 @@ parser.add_option("-C", "--clustering", dest="clustering", action="store_true", 
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
 parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
+parser.add_option("-d", "--drop-start-time", type=float, default=120.0, dest="drop_time", help="Drop this amount of time (in seconds) in the beginning of a run. This is to allow time for the whitener to settle to the mean PSD. Default is 120 s.")
 
 (options, args) = parser.parse_args()
 
@@ -549,7 +552,7 @@ if psdfile is not None: # In other words, we have a reference PSD
 
 # Drop first PSD estimates until it settles
 if psdfile is None:
-	head = pipeparts.mkdrop( pipeline, head, 120*handler.rate )
+	head = pipeparts.mkdrop( pipeline, head, int(options.drop_time*handler.rate) )
 
 head = pipeparts.mkqueue( pipeline, head )
 
