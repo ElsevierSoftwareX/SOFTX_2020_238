@@ -76,6 +76,7 @@ from gstlal import bottle
 from gstlal import reference_psd
 from gstlal import streamthinca
 from gstlal import svd_bank
+from gstlal import cbc_template_iir
 from gstlal import far
 from pylal import llwapp
 from pylal import datatypes as laltypes
@@ -207,6 +208,26 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 				bank.snr_threshold = snr_threshold
 
 	return banks
+
+def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
+	"""
+	given a dictionary of lists of iir template bank file names parse them
+	into a dictionary of bank classes
+	"""
+
+	banks = {}
+
+	for instrument, files in iir_banks.items():
+		for n, filename in enumerate(files):
+			# FIXME over ride the file name stored in the bank file with
+			# this file name this bank I/O code needs to be fixed
+			bank = cbc_template_iir.load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, verbose = verbose)
+			bank.template_bank_filename = filename
+			bank.logname = "%sbank%d" % (instrument,n)
+			banks.setdefault(instrument,[]).append(bank)
+
+	return banks
+
 
 
 #
