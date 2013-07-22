@@ -27,12 +27,17 @@ import time
 import numpy
 import scipy
 from scipy import integrate
+from scipy import interpolate
 import math
 from pylal import lalconstants
 import pdb
 import csv
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
+import pdb
+
+class XMLContentHandler(ligolw.LIGOLWContentHandler):
+	pass
 
 def Theta(eta, Mtot, t):
 	Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
@@ -360,7 +365,7 @@ def smooth_and_interp(psd, width=1, length = 10):
         out = numpy.zeros(ln)
         for i,d in enumerate(data[width*length:ln-width*length]):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
-        return scipy.interpolate.interp1d(f, out)
+        return interpolate.interp1d(f, out)
 
 def get_matrices_from_xml(xmldoc):
         root = xmldoc
@@ -391,7 +396,7 @@ class Bank(object):
 		#self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
 
 	def get_rates(self, verbose = False):
-		bank_xmldoc = utils.load_filename(self.template_bank_filename, verbose = verbose)
+		bank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = XMLContentHandler, verbose = verbose)
 		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
 
 	# FIXME: remove set_template_bank_filename when no longer needed
@@ -399,8 +404,8 @@ class Bank(object):
 	def set_template_bank_filename(self,name):
 		self.template_bank_filename = name
 
-def load_iirbank(filename, snr_threshold, verbose = False):
-	bank_xmldoc = utils.load_filename(filename, verbose = verbose)
+def load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, verbose = False):
+	bank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 	bank = Bank.__new__(Bank)
 	bank = Bank(
