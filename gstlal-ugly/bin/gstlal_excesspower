@@ -763,7 +763,7 @@ for ifo, seglist in gw_data_source_opts.frame_segments.iteritems():
 		handler.write_triggers( filename = fname )
 		if verbose:
 			print "No analyzable livetime in requested segment."
-	sys.exit( 0 )
+		sys.exit( 0 )
 
 ### END OF PIPELINE
 
