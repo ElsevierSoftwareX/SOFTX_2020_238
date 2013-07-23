@@ -362,7 +362,7 @@ if gw_data_source.data_source == "frames":
 if options.data_source == "white":
 	tm = time.gmtime()
 	NOW = XLALUTCToGPS(tm).ns()
-	seek = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_NONE, 0)
+	seek = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
 	datasource.do_seek(pipeline, seek)	
 
 if options.verbose:
