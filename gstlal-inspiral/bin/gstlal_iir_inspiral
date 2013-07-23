@@ -139,6 +139,12 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
+	#FIXME: in order to be compatible with SVD method, the following paramters are kept though not used for iir filtering
+	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
+	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
+	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+
+
 
 	#FIXME: do not consider online paramters yet
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
@@ -163,6 +169,10 @@ def parse_command_line():
 	required_options = []
 	
 	missing_options = []
+	# FIXME: wield way to be compatible with SVD method
+	if options.svd_bank is not None:
+		options.iir_bank = options.svd_bank
+
 	if options.iir_bank is None:
 		missing_options += ["--iir-bank"]
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
@@ -174,6 +184,7 @@ def parse_command_line():
 	detectors = datasource.GWDataSourceInfo(options)
 	if len(detectors.channel_dict) < 2:
 		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
+
 
 	# Get the banks and make the detectors
 	iir_banks = inspiral.parse_banks(options.iir_bank)
@@ -225,7 +236,7 @@ def parse_command_line():
 		@bottle.route("/registry.txt")
 		def register(fname = None):
 
-			yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
+			yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(iir_banks.keys())))
 
 			# First do urls that do not depend on instruments
 			for request in ("registry.txt", "gracedb_far_threshold.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt", "segments.xml"):
@@ -233,7 +244,7 @@ def parse_command_line():
 				yield "http://%s:16953/%s\n" % (host, request)
 
 			# Then do instrument dependent urls
-			for ifo in set(svd_banks.keys()):
+			for ifo in set(iir_banks.keys()):
 				for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt", "psd.txt"):
 					# FIXME don't hardcode port number
 					yield "http://%s:16953/%s/%s\n" % (host, ifo, request)
