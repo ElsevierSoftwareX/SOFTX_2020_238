@@ -155,7 +155,7 @@ class EPHandler( Handler ):
 		self.outfile = "test.xml.gz"
 		self.outdir = "./"
 		self.outdirfmt = ""
-		self.make_output_table()
+		self.triggers = self.make_output_table()
 		self.output_cache = Cache()
 		self.output_cache_name = None
 		self.snr_thresh = 5.5
@@ -428,7 +428,7 @@ class EPHandler( Handler ):
 
 	# TODO: Move this into library code
 	def make_output_table( self ):
-		self.triggers = lsctables.New(lsctables.SnglBurstTable,
+		return lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
 			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
@@ -436,7 +436,6 @@ class EPHandler( Handler ):
 			#"peak_frequency",
 			#"stop_time", "peak_time_ns", "start_time_ns", "stop_time_ns",
  			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
-		return self.triggers
 
 	def process_triggers( self, newtrigs, cluster_passes=0 ):
 		"""
@@ -521,7 +520,7 @@ class EPHandler( Handler ):
 		ligolw_bucluster.ExcessPowerPostFunc( self.triggers, off )
 		#self.triggers = newtrigs
 
-	def write_triggers( self, flush=True, filename=None, output_type="xml" ):
+	def write_triggers( self, flush=True, filename=None, seg=None ):
 
 		if not self.output:
 			return
@@ -531,7 +530,7 @@ class EPHandler( Handler ):
 		output = ligolw.Document()
 		output.appendChild(ligolw.LIGO_LW())
 
-		requested_segment = segment(
+		requested_segment = seg or segment(
 			LIGOTimeGPS( self.time_since_dump ), 
 			LIGOTimeGPS( self.stop )
 		)
@@ -550,7 +549,19 @@ class EPHandler( Handler ):
 
 		process = self.make_process_tables( None, output )
 
-		output.childNodes[0].appendChild( self.triggers )
+		# Append only triggers in requested segment
+		outtable = self.make_output_table()
+		remainder = self.make_output_table()
+		for sb in self.triggers:
+			# FIXME: Less than here rather than a check for being in the segment
+			# This is because triggers can arrive "late" and thus not be put in
+			# the proper file span. This might be a bug in the AppSync.
+			if sb.get_peak() < analysis_segment[1]:
+				outtable.append(sb)	
+			else:
+				remainder.append(sb)
+		output.childNodes[0].appendChild( outtable )
+		self.triggers = remainder
 
 		add_cbc_metadata( output, process, requested_segment )
 		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
@@ -670,7 +681,7 @@ class EPHandler( Handler ):
 			self.lock.release()
 
 		if flush: 
-			self.make_output_table()
+			self.triggers = self.make_output_table()
 		if self.db_thresh is None: 
 			return
 
