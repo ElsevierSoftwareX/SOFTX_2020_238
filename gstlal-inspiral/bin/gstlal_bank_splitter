@@ -97,17 +97,18 @@ if options.add_f_final:
 		if row.param in ("--low-frequency-cutoff", "--flow"):
 			flow = float(row.value)
 	for row in sngl_inspiral_table:
+		chi = (row.mass1*row.spin1z + row.mass2*row.spin2z)/(row.mass1+row.mass2)
 		if approximant=='IMRPhenomB':
-			row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,row.chi) # over sample these waveforms
+			row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
 			if options.max_f_final and row.f_final>options.max_f_final:
 				row.f_final=options.max_f_final
-			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,row.chi) + 100 * (row.mass1 + row.mass2) * 5e-6 # 100 M in seconds for plenty of ringdown padding
+			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,chi) + 100 * (row.mass1 + row.mass2) * 5e-6 # 100 M in seconds for plenty of ringdown padding
 		else:
 			row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'bkl_isco')
 			if options.max_f_final and (row.f_final > options.max_f_final):
-				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,row.chi)))
+				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,chi)))
 				row.f_final=options.max_f_final
-			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,row.chi)
+			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,chi)
 
 for row in sngl_inspiral_table:
 	row.ifo = options.instrument
