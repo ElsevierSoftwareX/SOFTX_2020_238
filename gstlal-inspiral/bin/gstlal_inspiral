@@ -452,7 +452,8 @@ else:
 			if self.count == 1:
 				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
 				try:
-					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline))
+					#FIXME how do I choose a timestamp?
+					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
 					if not self.pipeline.send_event(gst.event_new_eos()):
 						raise Exception("pipeline.send_event(EOS) returned failure")
 				except Exception, e:
