@@ -98,7 +98,7 @@ if options.add_f_final:
 			flow = float(row.value)
 	for row in sngl_inspiral_table:
 		chi = (row.mass1*row.spin1z + row.mass2*row.spin2z)/(row.mass1+row.mass2)
-		if approximant=='IMRPhenomB':
+		if approximant in ['IMRPhenomB', 'EOBNRv2']:
 			row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
 			if options.max_f_final and row.f_final>options.max_f_final:
 				row.f_final=options.max_f_final
