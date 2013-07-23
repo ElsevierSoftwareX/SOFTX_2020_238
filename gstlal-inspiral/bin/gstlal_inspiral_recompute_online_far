@@ -21,8 +21,14 @@ import numpy
 from scipy import interpolate, random
 from scipy.stats import poisson
 from glue import segments
-from glue.ligolw import lsctables
+from glue.ligolw import ligolw
 from glue.ligolw import utils
+from glue.ligolw import lsctables
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
@@ -61,7 +67,7 @@ options, filenames = parse_command_line()
 # Pull out background and injections distribution and set up the FAR class
 #
 
-global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
+global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
