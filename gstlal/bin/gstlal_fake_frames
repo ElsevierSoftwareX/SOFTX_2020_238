@@ -40,6 +40,7 @@ pygst.require("0.10")
 import gst
 import sys
 import os
+import numpy
 
 __doc__ = """
 This program will make fake data in a variety of ways.  Its input is anything
@@ -64,6 +65,9 @@ Here are some typical usage cases:
 
 Other things are certainly possible.
 """
+
+def digits(num):
+	return int(numpy.ceil(numpy.log10(float(num))))
 
 parser = OptionParser(description = __doc__)
 
@@ -215,7 +219,8 @@ else:
 
 head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file)
 head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type)
-head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
+# Put O(100) frames in each directory
+head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, digits(options.gps_start_time) - digits(options.frame_duration * options.frames_per_file * 100)))
 
 #
 # Run it
