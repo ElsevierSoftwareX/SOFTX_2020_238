@@ -578,7 +578,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * Instance finalize function.
+ * finalize()
  */
 
 
@@ -601,9 +601,7 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * base_init()
  */
 
 
@@ -613,9 +611,7 @@ static void gds_lvshmsrc_base_init(gpointer klass)
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * class_init()
  */
 
 
@@ -705,9 +701,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * init()
  */
 
 

@@ -528,7 +528,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * Instance finalize function.
+ * finalize()
  */
 
 
@@ -548,7 +548,7 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.
+ * base_init()
  */
 
 
@@ -558,7 +558,7 @@ static void gds_framexmitsrc_base_init(gpointer klass)
 
 
 /*
- * Class init function.
+ * class_init()
  */
 
 
@@ -648,7 +648,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
 
 
 /*
- * Instance init function.
+ * init()
  */
 
 
