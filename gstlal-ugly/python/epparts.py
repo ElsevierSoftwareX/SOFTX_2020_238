@@ -719,13 +719,18 @@ class EPHandler( Handler ):
 		subdir = ""
 		if self.outdirfmt is not None:
 			subdir = ep.append_formatted_output_path( self.outdirfmt, self )
+			subdir = handler.outdir + "/" + subdir
+		if not os.path.exists( subdir ):
+			handler.lock.acquire()
+			os.makedirs( subdir )
+			handler.lock.release()
 		outfile = ep.make_cache_parseable_name(
 			inst = self.inst,	
 			tag = self.channel,
 			start = self.time_since_dump,
 			stop = self.stop,
 			ext = "xml.gz",
-			dir = self.outdir + subdir
+			dir = subdir
 		)
 		self.write_triggers( False, filename = outfile )
 
