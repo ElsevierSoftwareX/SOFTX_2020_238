@@ -200,7 +200,7 @@ def parse_command_line():
 
 	# Online specific initialization
 	# FIXME someday support other online sources
-	if options.data_source == "lvshm":
+	if options.data_source in ("lvshm", "framexmit"):
 		# check required options in this case
 		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
 
