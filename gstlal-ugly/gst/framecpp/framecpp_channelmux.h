@@ -32,6 +32,16 @@
 
 G_BEGIN_DECLS
 
+/*
+ *  framecpp_channelmux_compression_scheme enum type
+ */
+
+
+#define FRAMECPP_CHANNELMUX_COMPRESSION_SCHEME_TYPE \
+        (framecpp_channelmux_compression_scheme_get_type())
+
+
+GType framecpp_channelmux_compression_scheme_get_type(void);
 
 /*
  * framecpp_channelmux element
@@ -65,6 +75,9 @@ typedef struct {
 	gboolean need_discont;
 	gboolean need_tag_list;
 	guint64 next_out_offset;
+
+	guint compression_scheme;
+	guint compression_level;
 
 	GstClockTime frame_duration;
 	guint frames_per_file;
