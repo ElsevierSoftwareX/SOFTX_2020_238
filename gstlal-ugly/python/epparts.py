@@ -716,10 +716,10 @@ class EPHandler( Handler ):
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 
-		subdir = ""
+		subdir = "./"
 		if self.outdirfmt is not None:
 			subdir = ep.append_formatted_output_path( self.outdirfmt, self )
-			subdir = handler.outdir + "/" + subdir
+			subdir = self.outdir + "/" + subdir
 		if not os.path.exists( subdir ):
 			handler.lock.acquire()
 			os.makedirs( subdir )
