@@ -721,9 +721,9 @@ class EPHandler( Handler ):
 			subdir = ep.append_formatted_output_path( self.outdirfmt, self )
 			subdir = self.outdir + "/" + subdir
 		if not os.path.exists( subdir ):
-			handler.lock.acquire()
+			self.lock.acquire()
 			os.makedirs( subdir )
-			handler.lock.release()
+			self.lock.release()
 		outfile = ep.make_cache_parseable_name(
 			inst = self.inst,	
 			tag = self.channel,
