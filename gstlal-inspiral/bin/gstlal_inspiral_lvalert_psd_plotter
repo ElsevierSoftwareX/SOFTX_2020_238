@@ -26,6 +26,7 @@
 #
 
 
+import httplib
 import logging
 import math
 import matplotlib
@@ -88,10 +89,10 @@ lsctables.use_in(ContentHandler)
 def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 10.0, ignore_404 = False):
 	for i in range(retries):
 		logging.info("retrieving \"%s\" for %s" % (filename, graceid))
-		response = gracedb_client.rest("/event/%s/files/%s" % (graceid, filename))
-		if response.status == 200:
+		response = gracedb_client.files(graceid, filename)
+		if response.status == httplib.OK:
 			return response
-		if response.status == 404 and ignore_404:
+		if response.status == httplib.NOT_FOUND and ignore_404:
 			logging.warning("retrieving \"%s\" for %s: (%d) %s.  skipping ..." % (filename, graceid, response.status, response.reason))
 			return None
 		logging.warning("retrieving \"%s\" for %s: (%d) %s.  pausing ..." % (filename, graceid, response.status, response.reason))
@@ -113,8 +114,9 @@ def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
 def plot_psds(psds, coinc_xmldoc, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
 	coinc_event, = lsctables.table.get_table(coinc_xmldoc, lsctables.CoincTable.tableName)
 	coinc_inspiral, = lsctables.table.get_table(coinc_xmldoc, lsctables.CoincInspiralTable.tableName)
-	offset_vector = lsctables.table.get_table(coinc_xmldoc, lsctables.TimeSlideTable.tableName).as_dict()[coinc_event.time_slide_id]
-	process, = lsctables.table.get_table(coinc_xmldoc, lsctables.ProcessTable.tableName)
+	offset_vector = lsctables.table.get_table(coinc_xmldoc, lsctables.TimeSlideTable.tableName).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
+	# FIXME:  MBTA uploads are missing process table
+	#process, = lsctables.table.get_table(coinc_xmldoc, lsctables.ProcessTable.tableName)
 	sngl_inspirals = dict((row.ifo, row) for row in lsctables.table.get_table(coinc_xmldoc, lsctables.SnglInspiralTable.tableName))
 
 	mass1 = sngl_inspirals.values()[0].mass1
@@ -161,8 +163,8 @@ def upload_fig(fig, gracedb_client, graceid, filename = "psd.png"):
 	plotfile = StringIO.StringIO()
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
-	response = gracedb_client.upload(str(graceid), filename, filecontents = plotfile.getvalue(), comment = "strain spectral densities")
-	if "error" in response:
+	response = gracedb_client.writeLog(graceid, "strain spectral densities", filename = filename, filecontents = plotfile.getvalue())
+	if response.status != httplib.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
 
