@@ -214,7 +214,7 @@ for n, filename in enumerate(filenames):
 		events_func = lambda cursor, coinc_event_id: sngl_inspiral_events_func(cursor, coinc_event_id, sngl_inspiral_table.row_from_cols),
 		veto_func = sngl_inspiral_veto_func,
 		likelihood_ratio_func = likelihood_ratio_func,
-		likelihood_params_func = coincparamsdistributions.likelihood_params_func,
+		likelihood_params_func = coincparamsdistributions.coinc_params,
 		verbose = options.verbose
 	)
 

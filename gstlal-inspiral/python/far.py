@@ -384,18 +384,8 @@ class ThincaCoincParamsDistributions(ligolw_burca_tailor.CoincParamsDistribution
 	# files.
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
 
-
-#
-# Paramter Distributions
-#
-
-
-class DistributionsStats(object):
-	"""
-	A class used to populate a ThincaCoincParamsDistribution instance using
-	event parameter data.
-	"""
-
+	# FIXME:  lower boundaries need to be adjusted to match search SNR
+	# threshold
 	binnings = {
 		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
@@ -417,9 +407,29 @@ class DistributionsStats(object):
 		"V1_snr_chi": rate.gaussian_window(7, 7, sigma = 10)
 	}
 
+	@staticmethod
+	def coinc_params(events, offsetvector):
+		instruments = set(event.ifo for event in events)
+		# don't allow both H1 and H2 to participate in the same
+		# coinc.  if both have participated favour H1
+		if "H1" in instruments:
+			instruments.discard("H2")
+		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
+
+
+#
+# Paramter Distributions
+#
+
+
+class DistributionsStats(object):
+	"""
+	A class used to populate a ThincaCoincParamsDistribution instance using
+	event parameter data.
+	"""
 	def __init__(self):
-		self.raw_distributions = ThincaCoincParamsDistributions(**self.binnings)
-		self.smoothed_distributions = ThincaCoincParamsDistributions(**self.binnings)
+		self.raw_distributions = ThincaCoincParamsDistributions()
+		self.smoothed_distributions = ThincaCoincParamsDistributions()
 		self.likelihood_pdfs = {}
 		self.target_length = 1000
 
@@ -430,21 +440,12 @@ class DistributionsStats(object):
 		#FIXME do we also add the smoothed distributions??
 		return out
 
-	@staticmethod
-	def likelihood_params_func(events, offsetvector):
-		instruments = set(event.ifo for event in events)
-		# don't allow both H1 and H2 to participate in the same
-		# coinc.  if both have participated favour H1
-		if "H1" in instruments:
-			instruments.discard("H2")
-		return dict(("%s_snr_chi" % event.ifo, (numpy.clip(event.snr, 0., 99.9), event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
-
 	def add_single(self, event):
-		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
+		self.raw_distributions.add_background(self.raw_distributions.coinc_params((event,), None))
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions()
 		for param, binarr in newdist.background_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -474,7 +475,7 @@ class DistributionsStats(object):
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions()
 		for param, binarr in newdist.background_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -512,7 +513,7 @@ class DistributionsStats(object):
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions()
 		for param, binarr in newdist.injection_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -546,7 +547,7 @@ class DistributionsStats(object):
 
 	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
-		#self.smoothed_distributions.finish(filters = self.filters, verbose = verbose)
+		#self.smoothed_distributions.finish(verbose = verbose)
 		# FIXME:  should be the line above, we'll temporarily do
 		# the following.  the difference is that the above produces
 		# PDFs while what follows produces probabilities in each
@@ -556,7 +557,7 @@ class DistributionsStats(object):
 		for name, binnedarray in itertools.chain(self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
 			if verbose:
 				print >>sys.stderr, "%s," % name,
-			rate.filter_array(binnedarray.array, self.filters[name])
+			rate.filter_array(binnedarray.array, self.raw_distributions.filters[name])
 			numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
 			binnedarray.array /= binnedarray.array.sum()
 		if verbose:
@@ -601,10 +602,9 @@ class DistributionsStats(object):
 	@classmethod
 	def from_xml(cls, xml, name):
 		self = cls()
+		# FIXME:  produce error if raw_distributions' binnings don't match the arrays in the file?
 		self.raw_distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
-		# FIXME:  produce error if binnings don't match this class's binnings attribute?
-		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ThincaCoincParamsDistributions(**binnings)
+		self.smoothed_distributions = ThincaCoincParamsDistributions()
 		return self, process_id
 
 	@classmethod
@@ -613,7 +613,7 @@ class DistributionsStats(object):
 		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, ThincaCoincParamsDistributions, u"gstlal_inspiral_likelihood", contenthandler = contenthandler, verbose = verbose)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
 		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ThincaCoincParamsDistributions(**binnings)
+		self.smoothed_distributions = ThincaCoincParamsDistributions()
 		return self, seglists
 
 	def to_xml(self, process, name):

@@ -598,7 +598,6 @@ class Data(object):
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Set to 1.0 to disable background data decay
-		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
@@ -693,7 +692,7 @@ class Data(object):
 					# smooth the distribution_stats
 					self.far.smooth_distribution_stats(verbose = self.verbose)
 					# update stream thinca's likelihood data
-					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
+					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.distributions)
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = LIGOLWContentHandler))

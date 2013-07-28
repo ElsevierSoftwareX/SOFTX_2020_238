@@ -164,10 +164,10 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, trials_table = None, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval
-		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
+		self.set_likelihood_data(coinc_params_distributions)
 		self.last_coincs = {}
 		self.trials_table = trials_table
 		self.sngls_snr_threshold = sngls_snr_threshold
@@ -187,14 +187,13 @@ class StreamThinca(object):
 		self.ids = set()
 
 
-	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
-		if coinc_params_distributions is not None:
-			assert likelihood_params_func is not None
-			self.likelihood_func = ligolw_burca2.LikelihoodRatio(coinc_params_distributions)
-		else:
-			assert likelihood_params_func is None
+	def set_likelihood_data(self, coinc_params_distributions):
+		if coinc_params_distributions is None:
 			self.likelihood_func = None
-		self.likelihood_params_func = likelihood_params_func
+			self.likelihood_params_func = None
+		else:
+			self.likelihood_func = ligolw_burca2.LikelihoodRatio(coinc_params_distributions)
+			self.likelihood_params_func = coinc_params_distributions.coinc_params
 
 
 	def add_events(self, xmldoc, process_id, events, boundary, FAP = None):
