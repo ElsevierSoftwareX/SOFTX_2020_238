@@ -874,13 +874,10 @@ class RankingData(object):
 			ccdf /= ccdf[0]
 			# try making ccdf + cdf == 1.  nothing really cares
 			# if this identity doesn't exactly hold, but we
-			# might as well avoid weirdness where we can.  the
-			# one whose tail is biggest gets adjusted to avoid
-			# getting negative probabilities.
-			if cdf[0] <= ccdf[-1]:
-				ccdf -= cdf[0]
-			else:
-				cdf -= ccdf[-1]
+			# might as well avoid weirdness where we can.
+			s = ccdf + cdf
+			cdf /= s
+			ccdf /= s
 			# build interpolators
 			self.cdf_interpolator[key] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[key] = interpolate.interp1d(ranks, ccdf)
