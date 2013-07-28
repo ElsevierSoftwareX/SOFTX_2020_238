@@ -345,6 +345,19 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 # =============================================================================
 #
 
+#
+# Inspiral-specific CoincParamsDistributions sub-class
+#
+
+
+class ThincaCoincParamsDistributions(ligolw_burca_tailor.CoincParamsDistributions):
+	# FIXME:  this is the name used for the burca distributions.
+	# existing XML files were written using this name, so for
+	# compatibility we stick to it for now, but in the future we should
+	# pick a unique name so the files can't be confused for burca
+	# files.
+	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
+
 
 #
 # Paramter Distributions
@@ -353,7 +366,7 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 
 class DistributionsStats(object):
 	"""
-	A class used to populate a BurcaCoincParamsDistribution instance using
+	A class used to populate a ThincaCoincParamsDistribution instance using
 	event parameter data.
 	"""
 
@@ -379,8 +392,8 @@ class DistributionsStats(object):
 	}
 
 	def __init__(self):
-		self.raw_distributions = ligolw_burca_tailor.BurcaCoincParamsDistributions(**self.binnings)
-		self.smoothed_distributions = ligolw_burca_tailor.BurcaCoincParamsDistributions(**self.binnings)
+		self.raw_distributions = ThincaCoincParamsDistributions(**self.binnings)
+		self.smoothed_distributions = ThincaCoincParamsDistributions(**self.binnings)
 		self.likelihood_pdfs = {}
 		self.target_length = 1000
 
@@ -403,7 +416,7 @@ class DistributionsStats(object):
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		# Make a new empty coinc param distributions
-		newdist = ligolw_burca_tailor.BurcaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions(**self.binnings)
 		for param, binarr in newdist.background_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -433,7 +446,7 @@ class DistributionsStats(object):
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		# Make a new empty coinc param distributions
-		newdist = ligolw_burca_tailor.BurcaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions(**self.binnings)
 		for param, binarr in newdist.background_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -471,7 +484,7 @@ class DistributionsStats(object):
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		# Make a new empty coinc param distributions
-		newdist = ligolw_burca_tailor.BurcaCoincParamsDistributions(**self.binnings)
+		newdist = ThincaCoincParamsDistributions(**self.binnings)
 		for param, binarr in newdist.injection_rates.items():
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
@@ -559,19 +572,19 @@ class DistributionsStats(object):
 	@classmethod
 	def from_xml(cls, xml, name):
 		self = cls()
-		self.raw_distributions, process_id = ligolw_burca_tailor.BurcaCoincParamsDistributions.from_xml(xml, name)
+		self.raw_distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
 		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ligolw_burca_tailor.BurcaCoincParamsDistributions(**binnings)
+		self.smoothed_distributions = ThincaCoincParamsDistributions(**binnings)
 		return self, process_id
 
 	@classmethod
 	def from_filenames(cls, filenames, contenthandler = DefaultContentHandler, verbose = False):
 		self = cls()
-		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", contenthandler = contenthandler, verbose = verbose)
+		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, ThincaCoincParamsDistributions, u"gstlal_inspiral_likelihood", contenthandler = contenthandler, verbose = verbose)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
 		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ligolw_burca_tailor.BurcaCoincParamsDistributions(**binnings)
+		self.smoothed_distributions = ThincaCoincParamsDistributions(**binnings)
 		return self, seglists
 
 	def to_xml(self, process, name):
