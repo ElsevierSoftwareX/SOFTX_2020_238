@@ -45,8 +45,8 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstlal.h>
-#include <gstlal_debug.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_autochisq.h>
 
 
@@ -67,8 +67,8 @@
  */
 
 
-#include <gstaudioadapter.h>
-#include <gstlal_autocorrelation_chi2.h>
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_autocorrelation_chi2.h>
 
 
 #define GST_CAT_DEFAULT gstlal_autochisq_debug

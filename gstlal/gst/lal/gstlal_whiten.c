@@ -70,11 +70,11 @@
  */
 
 
-#include <gstlal.h>
-#include <gstaudioadapter.h>
-#include <gstlal_tags.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_tags.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_whiten.h>
-#include <gstlal_debug.h>
 
 
 static const LIGOTimeGPS GPS_ZERO = {0, 0};

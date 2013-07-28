@@ -1,6 +1,6 @@
 gstlal.spec
-lib/gstlal.pc
-lib/gstlaltypes.gir
-lib/gstlaltypes.typelib
+lib/gstlal/gstlal.pc
+lib/gstlal/gstlaltypes.gir
+lib/gstlal/gstlaltypes.typelib
 tests/*.pyc
 tests/*.dump

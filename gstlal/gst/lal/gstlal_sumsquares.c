@@ -50,9 +50,9 @@
  */
 
 
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_sumsquares.h>
-#include <gstlal_debug.h>
 
 
 /*

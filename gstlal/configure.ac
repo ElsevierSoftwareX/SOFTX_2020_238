@@ -16,8 +16,9 @@ AC_CONFIG_FILES([ \
 	gstlal.spec \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal.pc \
 	lib/Makefile \
+	lib/gstlal/gstlal.pc \
+	lib/gstlal/Makefile \
 	python/Makefile \
 	python/pipeparts/Makefile \
 	gst/Makefile \

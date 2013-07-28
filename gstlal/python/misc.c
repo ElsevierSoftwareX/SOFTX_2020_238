@@ -31,7 +31,7 @@
 #include <stdlib.h>
 
 
-#include <gstlal_cdf_weighted_chisq_P.h>
+#include <gstlal/gstlal_cdf_weighted_chisq_P.h>
 
 
 /*

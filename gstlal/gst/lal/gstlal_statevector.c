@@ -41,9 +41,9 @@
  */
 
 
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_statevector.h>
-#include <gstlal_debug.h>
 
 
 #define GST_CAT_DEFAULT gstlal_statevector_debug

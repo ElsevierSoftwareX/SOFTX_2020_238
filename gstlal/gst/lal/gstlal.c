@@ -49,8 +49,8 @@
  */
 
 
-#include <gstlal_tags.h>
-#include <gstlal.h>
+#include <gstlal/gstlal_tags.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_audioundersample.h>
 #include <gstlal_autochisq.h>
 #include <gstlal_cachesrc.h>
