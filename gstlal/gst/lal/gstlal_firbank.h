@@ -36,11 +36,12 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstaudioadapter.h>
 
 
 #include <fftw3.h>
 #include <gsl/gsl_matrix.h>
+
+#include <gstlal/gstaudioadapter.h>
 
 
 G_BEGIN_DECLS

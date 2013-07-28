@@ -48,10 +48,10 @@
  * our own stuff
  */
 
-#include <gstlal_debug.h>
+#include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_peakfinder.h>
+#include <gstlal/gstaudioadapter.h>
 #include <gstlal_peak.h>
-#include <gstlal_peakfinder.h>
-#include <gstaudioadapter.h>
 
 static guint64 output_num_samps(GSTLALPeak *element)
 {

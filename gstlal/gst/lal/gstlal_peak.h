@@ -33,8 +33,9 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstlal_peakfinder.h>
-#include <gstaudioadapter.h>
+
+#include <gstlal/gstlal_peakfinder.h>
+#include <gstlal/gstaudioadapter.h>
 
 G_BEGIN_DECLS
 

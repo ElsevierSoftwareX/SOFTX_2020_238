@@ -47,7 +47,7 @@
  */
 
 
-#include <gstlal_debug.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_reblock.h>
 
 

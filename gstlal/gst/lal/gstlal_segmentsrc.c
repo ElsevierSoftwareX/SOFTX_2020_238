@@ -24,7 +24,7 @@
  * stuff from gstlal
  */
 
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_segmentsrc.h>
 
 
