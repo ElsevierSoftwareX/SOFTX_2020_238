@@ -379,28 +379,34 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  switch to new default when possible
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
 
-	# FIXME:  lower boundaries need to be adjusted to match search SNR
-	# threshold
+	# range of SNRs covered by this object
+	# FIXME:  must ensure lower boundary matches search threshold
+	snr_min = 4.
+	snr_max = 100.
+
+	# binnings and filters
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H1H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H1H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
 	}
 
-	# FIXME the characteristic width (which is relevant for smoothing)
-	# should be roughly 1.41 in SNR (from Gaussian noise expectations).  So
-	# it is tied to how many bins there are per SNR range.  With 200 bins
-	# between 4 and 26 each bin is .11 wide in SNR. So a width of 13 bins
-	# corresponds to 1.43 which is close to 1.41
+	def snr_chi_filter(bins, snr_width_at_8 = math.sqrt(2) / 4.0, sigma = 10):
+		snr_bins = bins[0]
+		bin_width_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.0]]
+		return rate.gaussian_window(snr_width_at_8 / bin_width_at_8, 7, sigma = sigma)
+
 	filters = {
-		"H1_snr_chi": rate.gaussian_window(7, 7, sigma = 10),
-		"H2_snr_chi": rate.gaussian_window(7, 7, sigma = 10),
-		"H1H2_snr_chi": rate.gaussian_window(7, 7, sigma = 10),
-		"L1_snr_chi": rate.gaussian_window(7, 7, sigma = 10),
-		"V1_snr_chi": rate.gaussian_window(7, 7, sigma = 10)
+		"H1_snr_chi": snr_chi_filter(binnings["H1_snr_chi"]),
+		"H2_snr_chi": snr_chi_filter(binnings["H2_snr_chi"]),
+		"H1H2_snr_chi": snr_chi_filter(binnings["H1H2_snr_chi"]),
+		"L1_snr_chi": snr_chi_filter(binnings["L1_snr_chi"]),
+		"V1_snr_chi": snr_chi_filter(binnings["V1_snr_chi"])
 	}
+
+	del snr_chi_filter
 
 	@staticmethod
 	def coinc_params(events, offsetvector):
