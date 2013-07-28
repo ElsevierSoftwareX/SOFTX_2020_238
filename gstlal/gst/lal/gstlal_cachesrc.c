@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -106,6 +107,7 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	result = gst_pad_alloc_buffer(pad, offset, size, GST_PAD_CAPS(pad), buf);
 	if(result != GST_FLOW_OK)
 		goto done;
+	g_assert_cmpuint(GST_BUFFER_OFFSET(*buf), ==, offset);
 	g_assert_cmpuint(GST_BUFFER_SIZE(*buf), ==, size);
 
 	read_offset = 0;
@@ -121,6 +123,8 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 		read_offset += bytes_read;
 	} while(read_offset < size);
 	g_assert_cmpuint(read_offset, ==, size);
+
+	GST_BUFFER_OFFSET_END(*buf) = offset + size;
 
 done:
 	return result;
@@ -156,17 +160,14 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	}
 	GST_BUFFER_SIZE(*buf) = size;
 	GST_BUFFER_OFFSET(*buf) = offset;
+	GST_BUFFER_OFFSET_END(*buf) = offset + size;
 	gst_buffer_set_caps(*buf, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
 
 	/*
 	 * hack to get both the data pointer and the size to the munmap()
 	 * call.  the mallocdata pointer is set to the buffer object
 	 * itself, and the freefunc looks inside to get the real pointer
-	 * and the size.  this probably goes really wrong if a subbuffer is
-	 * ever made from the buffer, but then the application can choose
-	 * not to use mmap()ed buffers if it wants to be able to do
-	 * subbuffering.  for the .gwf frame file use case, subbuffering is
-	 * (mostly) nonsensical anyway.
+	 * and the size.
 	 */
 
 	GST_BUFFER_MALLOCDATA(*buf) = (void *) *buf;
@@ -195,26 +196,28 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
+static int time_to_index_compare_func(const void *_t, const void *_cache_entry)
+{
+	const GstClockTime *t = _t;
+	const LALCacheEntry *cache_entry = _cache_entry;
+
+	if(*t < (GstClockTime) (cache_entry->t0 * GST_SECOND))
+		return -1;
+	if(*t < (GstClockTime) ((cache_entry->t0 + cache_entry->dt) * GST_SECOND))
+		return 0;
+	return +1;
+}
+
+
 static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
 {
-	guint i;
+	const LALCacheEntry *target = bsearch(&t, element->cache->list, element->cache->length, sizeof(*element->cache->list), time_to_index_compare_func);
 
-	g_assert(element->cache != NULL);
-
-	/*
-	 * the loop assumes the cache entries are in time order and
-	 * searches for the first file whose end is past the requested
-	 * time
-	 */
-
-	for(i = 0; i < element->cache->length; i++) {
-		if(i)
-			g_assert_cmpuint(cache_entry_start_time(element, i), >=, cache_entry_start_time(element, i - 1));
-		if(cache_entry_end_time(element, i) > t)
-			break;
-	}
-
-	return i;
+	if(target)
+		return target - element->cache->list;
+	else if(!element->cache->list || t < cache_entry_start_time(element, 0))
+		return 0;
+	return element->cache->length;
 }
 
 
@@ -255,6 +258,8 @@ static gboolean start(GstBaseSrc *basesrc)
 		return FALSE;
 	}
 	GST_DEBUG_OBJECT(element, "%d item(s) remain in cache after sieve", element->cache->length);
+	if(!element->cache->length)
+		GST_WARNING_OBJECT(element, "cache is empty!");
 
 	if(XLALCacheSort(element->cache)) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("error sorting cache '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
@@ -358,12 +363,15 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	if(result != GST_FLOW_OK)
 		goto done;
 
+	/*
+	 * finish setting buffer metadata.  need_discont is TRUE for the
+	 * first buffer, so cache_entry_end_time() won't be invoked with an
+	 * index of -1
+	 */
+
 	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
-	GST_BUFFER_OFFSET_END(*buf) = GST_BUFFER_OFFSET(*buf) + GST_BUFFER_SIZE(*buf);
-	basesrc->offset += GST_BUFFER_SIZE(*buf);
-	/* need_discont is TRUE for the first buffer, so
-	 * cache_entry_end_time() won't be invoked with an index of -1 */
+	basesrc->offset = GST_BUFFER_OFFSET_END(*buf);
 	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
