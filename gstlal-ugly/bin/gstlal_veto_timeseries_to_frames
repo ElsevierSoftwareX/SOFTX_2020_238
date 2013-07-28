@@ -95,7 +95,7 @@ class vetoSource:
         self.duration = int(rest[:rest.find(inputExt)])
         self.next_output_timestamp = int(gps_start) * gst.SECOND
 
-        # XXX The rate determination assumes the file contains N values with
+        # The rate determination assumes the file contains N values with
         # t_i = gpsstart + (i-1)*Delta_t ,
         # such that the last data point is at time t = (gpsstart+duration)-Delta_t.
         # NOTE gstreamer expects an integer rate in Hz.
@@ -156,7 +156,6 @@ class vetoSource:
                 # Push a gap before continuing to process the file we have.
                 buf = gst.buffer_new_and_alloc(0)
                 buf.flag_set(gst.BUFFER_FLAG_GAP)
-                buf.flag_set(gst.BUFFER_COPY_FLAGS)
                 buf.timestamp = self.next_output_timestamp
                 gap_duration = gpsstart * gst.SECOND - buf.timestamp
                 gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
@@ -185,7 +184,6 @@ class vetoSource:
         buf.offset = self.current_offset
         buf.offset_end = self.current_offset + duration * self.rate
         buf.caps = self.caps
-        buf.flag_set(gst.BUFFER_COPY_FLAGS)
         # Push the buffer into the stream (a side effect of 
         # emitting this signal).
         src.emit("push-buffer", buf)
@@ -259,8 +257,6 @@ vetoSrc = vetoSource(options.input_path, options.input_prefix,
 appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(vetoSrc.caps), 
     format="time")
 appsrc.connect('need-data', vetoSrc.need_data)
-src = pipeparts.mktaginject(pipeline, appsrc, 
-    "instrument=%s,channel-name=%s,units=cats" % (instrument, channel_name))
 
 try:
     os.makedirs(options.output_path)
@@ -273,7 +269,7 @@ mux = pipeparts.mkframecppchannelmux(pipeline, None,
     frame_duration = options.frame_duration)
 
 # Link the source to the muxer. 
-src.get_pad("src").link(mux.get_pad(instrument + ':' + channel_name))
+appsrc.get_pad("src").link(mux.get_pad(instrument + ':' + channel_name))
 
 # Stick progress report in pipeline.
 progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
@@ -281,9 +277,14 @@ progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
 # Final destination.
 # XXX multicast?
 if options.output_type == "files":
+    # Inject tags.  The framecpp_filesink element uses the tags to figure
+    # out the output filename.
+    tagInj = pipeparts.mktaginject(pipeline, progRep, 
+        "instrument=%s,channel-name=%s" % (instrument, channel_name))
+
     path = options.output_path
     if path:
-        fs = pipeparts.mkframecppfilesink(pipeline, progRep, 
+        fs = pipeparts.mkframecppfilesink(pipeline, tagInj, 
             frame_type = options.frame_type, path = options.output_path)
     else:
         fs = pipeparts.mkframecppfilesink(pipeline, progRep, 
