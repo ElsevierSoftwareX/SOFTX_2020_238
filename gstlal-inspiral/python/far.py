@@ -62,11 +62,11 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from glue.segmentsUtils import vote
-from pylal import ligolw_burca_tailor
 from pylal import ligolw_burca2
 from pylal import inject
 from pylal import progress
 from pylal import rate
+from pylal import snglcoinc
 
 
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
@@ -376,12 +376,8 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 #
 
 
-class ThincaCoincParamsDistributions(ligolw_burca_tailor.CoincParamsDistributions):
-	# FIXME:  this is the name used for the burca distributions.
-	# existing XML files were written using this name, so for
-	# compatibility we stick to it for now, but in the future we should
-	# pick a unique name so the files can't be confused for burca
-	# files.
+class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
+	# FIXME:  switch to new default when possible
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
 
 	# FIXME:  lower boundaries need to be adjusted to match search SNR
@@ -606,15 +602,6 @@ class DistributionsStats(object):
 		self.raw_distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
 		self.smoothed_distributions = ThincaCoincParamsDistributions()
 		return self, process_id
-
-	@classmethod
-	def from_filenames(cls, filenames, contenthandler = DefaultContentHandler, verbose = False):
-		self = cls()
-		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, ThincaCoincParamsDistributions, u"gstlal_inspiral_likelihood", contenthandler = contenthandler, verbose = verbose)
-		# FIXME:  produce error if binnings don't match this class's binnings attribute?
-		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ThincaCoincParamsDistributions()
-		return self, seglists
 
 	def to_xml(self, process, name):
 		return self.raw_distributions.to_xml(process, name)
