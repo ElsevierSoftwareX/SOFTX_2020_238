@@ -445,29 +445,29 @@ class DistributionsStats(object):
 		self.raw_distributions.add_background(self.raw_distributions.coinc_params((event,), None))
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
-		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions()
-		for param, binarr in newdist.background_rates.items():
+		for param, binarr in self.raw_distributions.background_rates.items():
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
 			if instruments is not None and instrument not in instruments:
 				continue
 			# Custom handle the first and last over flow bins
-			snrs = binarr.bins[0].centres()
+			snrs = new_binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
 			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
 			for snr in snrs:
 				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
 				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
 				for chi2_over_snr2 in chi2_over_snr2s:
-					binarr[snr, chi2_over_snr2] += p
+					new_binarr[snr, chi2_over_snr2] += p
 			# normalize to the requested count
-			binarr.array /= binarr.array.sum()
-			binarr.array *= n
-		self.raw_distributions += newdist
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
 
 		# FIXME, an adhoc way of adding glitches, us a signal distribution with bad matches
 		# FIXME if we keep this, make a function that can be reused for both signal and background
@@ -475,9 +475,9 @@ class DistributionsStats(object):
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions()
-		for param, binarr in newdist.background_rates.items():
+		for param, binarr in self.raw_distributions.background_rates.items():
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
 			if instruments is not None and instrument not in instruments:
@@ -485,10 +485,10 @@ class DistributionsStats(object):
 			if verbose:
 				print >> sys.stderr, "synthesizing background for %s" % param
 			# Custom handle the first and last over flow bins
-			snrs = binarr.bins[0].centres()
+			snrs = new_binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
 			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
 			for i, snr in enumerate(snrs):
@@ -502,20 +502,20 @@ class DistributionsStats(object):
 							dist += v
 					dist *= (snr / snrs[0])**-4
 					if numpy.isfinite(dist):
-						binarr[snr, chi2_over_snr2] += dist
+						new_binarr[snr, chi2_over_snr2] += dist
 			# normalize to the requested count
-			binarr.array /= binarr.array.sum()
-			binarr.array *= n
-		self.raw_distributions += newdist
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
 
 	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		# Make a new empty coinc param distributions
-		newdist = ThincaCoincParamsDistributions()
-		for param, binarr in newdist.injection_rates.items():
+		for param, binarr in self.raw_distributions.injection_rates.items():
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
 			# save some computation if we only requested certain instruments
 			if instruments is not None and instrument not in instruments:
@@ -523,10 +523,10 @@ class DistributionsStats(object):
 			if verbose:
 				print >> sys.stderr, "synthesizing injections for %s" % param
 			# Custom handle the first and last over flow bins
-			snrs = binarr.bins[0].centres()
+			snrs = new_binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
 			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
 			for i, snr in enumerate(snrs):
@@ -540,11 +540,11 @@ class DistributionsStats(object):
 							dist += v
 					dist *= (snr / snrs[0])**-4
 					if numpy.isfinite(dist):
-						binarr[snr, chi2_over_snr2] += dist
+						new_binarr[snr, chi2_over_snr2] += dist
 			# normalize to the requested count
-			binarr.array /= binarr.array.sum()
-			binarr.array *= n
-		self.raw_distributions += newdist
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
 
 	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
