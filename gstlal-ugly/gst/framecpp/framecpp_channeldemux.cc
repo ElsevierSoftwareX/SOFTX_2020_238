@@ -1026,6 +1026,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					/* FIXME:  what about checking "dataValid" vect in the aux list? */
 					if((*current)->GetDataValid() == 0 && vects.size()) {
 						for(FrameCPP::FrAdcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+							/* FIXME:  do something like this? */
+							/*g_object_set(srcpad, "compression-scheme", vect->GetCompress(), NULL);*/
 							result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 							if(result != GST_FLOW_OK) {
 								GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
@@ -1104,6 +1106,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrProcData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+						/* FIXME:  do something like this? */
+						/*g_object_set(srcpad, "compression-scheme", vect->GetCompress(), NULL);*/
 						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
 							GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
@@ -1171,6 +1175,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/* FIXME:  what about checking "dataValid" vect in the aux list? */
 				if(vects.size()) {
 					for(FrameCPP::FrSimData::data_type::iterator vect = vects.begin(), last_vect = vects.end(); vect != last_vect; vect++) {
+						/* FIXME:  do something like this? */
+						/*g_object_set(srcpad, "compression-scheme", vect->GetCompress(), NULL);*/
 						result = frvect_to_buffer_and_push(element, srcpad, *vect, timestamp);
 						if(result != GST_FLOW_OK) {
 							GST_ERROR_OBJECT(srcpad, "failure: %s", gst_flow_get_name(result));
