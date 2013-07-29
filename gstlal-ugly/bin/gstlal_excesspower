@@ -214,7 +214,6 @@ def get_triggers(elem, handler):
 	# We use the buffer timestamp here, since it's always guaranteed to be the
 	# latest available buffer, so we guarantee that the span of triggers is
 	# always greater than file stride duration
-	print >>sys.stderr, buf_ts, handler.time_since_dump
 	if buf_ts - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
 		outseg = segment( LIGOTimeGPS(handler.time_since_dump), LIGOTimeGPS(handler.time_since_dump + handler.dump_frequency) )
 
