@@ -75,7 +75,7 @@ class gstlal_iir_inspiral_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_iir_inspiral job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_iir_ll_inspiral'), tag_base='gstlal_iir_inspiral'):
+	def __init__(self, executable=dagparts.which('gstlal_iir_inspiral'), tag_base='gstlal_iir_inspiral'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_iir_inspiral'
