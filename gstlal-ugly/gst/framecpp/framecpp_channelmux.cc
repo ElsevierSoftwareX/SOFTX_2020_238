@@ -99,6 +99,32 @@ static void additional_initializations(GType type)
 
 GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
 
+/*
+ * Compression scheme enum type
+ */
+
+
+GType framecpp_channelmux_compression_scheme_get_type(void)
+{
+	static GType type = 0;
+	if(!type) {
+		static GEnumValue values[] = {
+			{FrameCPP::FrVect::RAW, "RAW", "No compression."},
+			{FrameCPP::FrVect::GZIP, "GZIP", "Use gzip compression."},
+			{FrameCPP::FrVect::DIFF_GZIP, "DIFF_GZIP", "Use gzip compression, differential values."},
+			{FrameCPP::FrVect::ZERO_SUPPRESS_WORD_2, "ZERO_SUPPRESS_WORD_2", "Use zero suppression."},
+			{FrameCPP::FrVect::ZERO_SUPPRESS_OTHERWISE_GZIP, "ZERO_SUPPRESS_OTHERWISE_GZIP", "Use zero suppression for integer values, gzip on floats."},
+			{FrameCPP::FrVect::ZERO_SUPPRESS_WORD_4, "ZERO_SUPPRESS_WORD_4", "Use zero suppression for 4 byte words, gzip on on all others."},
+			{FrameCPP::FrVect::BEST_COMPRESSION, "BEST_COMPRESSION", "Use best available compression."},
+			{FrameCPP::FrVect::ZERO_SUPPRESS_WORD_8, "ZERO_SUPPRESS_WORD_8", "Use zero supression for 8 byte words."},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("framecpp_channelmux_compression_scheme", values);
+	}
+
+	return type;
+}
 
 /*
  * ============================================================================
@@ -114,6 +140,8 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST
 #define DEFAULT_FRAME_NAME ""
 #define DEFAULT_FRAME_RUN -1
 #define DEFAULT_FRAME_NUMBER 0
+#define DEFAULT_COMPRESSION_SCHEME FrameCPP::FrVect::RAW
+#define DEFAULT_COMPRESSION_LEVEL 0
 
 
 #define FRAME_FILE_DURATION(mux) ((mux)->frames_per_file * (mux)->frame_duration)
@@ -357,7 +385,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			 * add frame to file
 			 */
 
-			ofs.WriteFrame(frame, FrameCPP::Common::CheckSum::CRC);
+			ofs.WriteFrame(frame, (gushort)mux->compression_scheme, (gushort)mux->compression_level, FrameCPP::Common::CheckSum::CRC);
 			mux->frame_number++;
 			g_object_notify(G_OBJECT(mux), "frame-number");
 		}
@@ -960,7 +988,9 @@ enum property {
 	ARG_FRAMES_PER_FILE,
 	ARG_FRAME_NAME,
 	ARG_FRAME_RUN,
-	ARG_FRAME_NUMBER
+	ARG_FRAME_NUMBER,
+	ARG_COMPRESSION_SCHEME,
+	ARG_COMPRESSION_LEVEL
 };
 
 
@@ -994,6 +1024,14 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		element->frame_number = g_value_get_uint(value);
 		break;
 
+	case ARG_COMPRESSION_SCHEME:
+		element->compression_scheme = (enum FrameCPP::FrVect::compression_scheme_type) g_value_get_enum(value);
+		break;
+
+	case ARG_COMPRESSION_LEVEL:
+		element->compression_level = g_value_get_uint(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1010,6 +1048,14 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 	GST_OBJECT_LOCK(element);
 
 	switch((enum property) id) {
+	case ARG_COMPRESSION_SCHEME:
+		g_value_set_enum(value, element->compression_scheme);
+		break;
+
+	case ARG_COMPRESSION_LEVEL:
+		g_value_set_uint(value, element->compression_level);
+		break;
+
 	case ARG_FRAME_DURATION:
 		g_value_set_uint(value, element->frame_duration / GST_SECOND);
 		break;
@@ -1217,6 +1263,29 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 			"Frame number",
 			"Current frame number.  Automatically incremented for each new frame.",
 			0, G_MAXUINT, DEFAULT_FRAME_NUMBER,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_COMPRESSION_SCHEME,
+		g_param_spec_enum(
+			"compression-scheme",
+			"Compression scheme",
+			"Scheme to use in compression of data.",
+			FRAMECPP_CHANNELMUX_COMPRESSION_SCHEME_TYPE,
+			DEFAULT_COMPRESSION_SCHEME,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_COMPRESSION_LEVEL,
+		g_param_spec_uint(
+			"compression-level",
+			"Compression level",
+			"Compression level to use where applicable.",
+			0, G_MAXUINT, DEFAULT_COMPRESSION_LEVEL,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);

@@ -25,10 +25,31 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy
 import matplotlib.pyplot as plt
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-from gstlal import reference_psd
 cgitb.enable()
 form = cgi.FieldStorage()
+from gstlal import far
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables, param, array
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+import copy
+import StringIO
+import base64
+import time
+
+
+def now():
+	#FIXME use pylal when available
+	return time.time() - 315964785
+
+def to_png_image():
+	f = StringIO.StringIO()
+	plt.savefig(f, format="png")
+	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	f.close()
+
 
 def D(m1, m2, fname):
 	"""
@@ -43,13 +64,19 @@ def D(m1, m2, fname):
 	f = A[:,0]
 	Sn = A[:,1]
 
-	psd = REAL8FrequencySeries(
-		f0 = f[0],
-		deltaF = f[1] - f[0],
-		data = Sn
-	)
+	pi = numpy.pi
+	c = 3.0e8
+	Mpc = 3.08e22
+	G = 6.67e-11
+	Ms = 1.99e30
+	m1, m2 = m1*Ms, m2*Ms
+	Mc = (m1 * m2 / (m1 + m2))**0.6 * (m1 + m2)**0.4
 
-	return reference_psd.horizon_distance(psd, m1, m2, 8., 10.)
+	df = f[1] - f[0]
+	klow = int(10. / df)
+	khigh = int(0.99 * A.shape[0])
+	integral = (4. * f[klow:khigh]**(-7./3.) / Sn[klow:khigh] * df).sum()
+	return 1./8. * (5. * pi / 24. / c**3)**.5 * (G*Mc)**(5./6.) * pi**(-7./6.) * integral**.5 / Mpc
 
 def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None):
 	fig = plt.figure(figsize=(5,3.5),)
@@ -60,7 +87,7 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None
 	try:
 		data = numpy.loadtxt(dataurl)
 	except IOError:
-		print "<h2>Data could not be loaded</h2>"
+		print "Data could not be loaded"
 		return
 	except ValueError:
 		print "<h2>Data is mis formatted, perhaps the webserver returned an error</h2>"
@@ -107,7 +134,7 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 		livetimedata = numpy.loadtxt(livetimeurl)
 		discontdata = numpy.loadtxt(disconturl)
 	except IOError:
-		print "<h2>Data could not be loaded</h2>"
+		print "Data could not be loaded"
 		return
 
 	dt = livetimedata[2]
@@ -143,51 +170,88 @@ print """
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
 <meta http-equiv="refresh" content="300">
+  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
+  <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+  <script type="text/javascript"> $(function() {
+    $("#accordion").accordion({
+    });
+
+  });</script>
 </head>
-<body bgcolor=#E0E0E0>
-<img src="../lcbo.jpg"> <font size=10>Low-latency Compact Binary Online</font><hr><br>
-"""
+<body>
+<img src="../lcbo.jpg"> <font size=10>Low-latency Compact Binary Online %d </font><hr><br>
+""" % (now(),)
 
-print "<table face='Arial'>"
+print '<div id="accordion">'
 
-print "<tr><td><div id='canvasa'>"
+print '<h1>Trigger stats</h1><div>'
 plot(baseurl+'_latency_history.txt', "history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")
-print "</div></td>"
-
-print "<td><div id='canvasb'>"
 plot(baseurl+'_latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
-print "</div></td>"
-
-print "<td><div id='canvasc'>"
 plot(baseurl+'_snr_history.txt', "history", ylabel = "SNR", xlabel = "Time since last trigger (s)")
-print "</div></td>"
-
-print "<td><div id='canvasd'>"
 plot(baseurl+'_ram_history.txt', "history", ylabel = "RAM (GB)", xlabel = "Time before now (s)")
-print "</div></td></tr>"
-
-print"</table>"
-
+print "</div>"
 
 # Pie table
-print "<table face='Arial'><tr>"
+print "<h1> Live time </h1><div>"
 for ifo in ("H1", "L1", "V1"):
-	print "<td><div id='canvas%spie'>" % (ifo,)
 	try:
 		livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
 	except:
 		print "could not get livetime data for ", ifo 
-	print "</div></td>"
-print"</tr></table>"
+print"</div>"
 
 # Psd table
-print "<table face='Arial'><tr>"
+print "<h1>PSDs</h1><div>"
 for ifo in ("H1", "L1", "V1"):
-	print "<td><div id='canvas%spsd'>" % (ifo,)
 	dist = D(1.4, 1.4, baseurl+'_%spsd.txt' % ifo)
 	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo, textbox = "Horizon %.0f Mpc" % dist)
-	print "</div></td>"
-print"</tr></table>"
+print"</div>"
 
+# likelihoods
+path = form.getlist("url")[0]
+
+likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+
+print >> sys.stderr, "smooth" in form
+
+if "smooth" in form:
+	likelihood_data.distribution_stats.finish()
+	counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
+	inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
+else:
+	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
+	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+
+bgcol = (224/255.,224/255.,224/255.)
+
+likely = copy.deepcopy(inj)
+for i, ifo in enumerate(['H1','L1', 'V1']):
+	print "<h1>%s SNR / CHISQ stats</h1>" % ifo
+	print "<div>"
+	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
+	for name, obj in (("background", counts), ("injections", inj), ("likelihood", likely)):
+		fig = plt.figure(figsize=(6,4), facecolor = 'g')
+		fig.patch.set_alpha(0.0)
+		#plt.gray()
+		H1 = obj[ifo+"_snr_chi"].array
+		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+		chi[0] = 0 # not inf
+		ax = plt.subplot(111)
+		plt.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
+		ax.set_yscale('log')
+		plt.colorbar()
+		plt.xlabel('SNR')
+		plt.ylabel('reduced chi^2 / SNR^2')
+		plt.ylim([.001, .5])
+		plt.xlim([4,26])
+		plt.title('%s: %s log base 10 (number + 1)' % (ifo, name))
+		plt.grid(color=(0.1,0.4,0.5), linewidth=2)
+		to_png_image()
+	print "</div>"
+
+
+print"</div>"
 print "</body>"
 

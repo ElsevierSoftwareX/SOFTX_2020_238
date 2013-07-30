@@ -25,7 +25,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstaudioadapter.h>
+#include <gstlal/gstaudioadapter.h>
 
 
 #include <lal/LALDatatypes.h>

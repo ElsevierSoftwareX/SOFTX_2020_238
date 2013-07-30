@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.6.1],[gstlal-discuss@ligo.org],[gstlal])
+AC_INIT([gstlal],[0.6.2],[gstlal-discuss@ligo.org],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2013 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -16,8 +16,9 @@ AC_CONFIG_FILES([ \
 	gstlal.spec \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal.pc \
 	lib/Makefile \
+	lib/gstlal/gstlal.pc \
+	lib/gstlal/Makefile \
 	python/Makefile \
 	python/pipeparts/Makefile \
 	gst/Makefile \

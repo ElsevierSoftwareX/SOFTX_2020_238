@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2013  Branson Stephens
+# Copyright (C) 2013  Branson Stephens and Chris Pankow
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -40,6 +40,7 @@ import math
 import glob
 import gzip
 import os
+import time
 from collections import deque
 from glue import segments
 import numpy as np
@@ -67,14 +68,16 @@ def wrapNpLoad(filePath):
 # A class for handling the veto timeseries files.
 
 class vetoSource:
-    def __init__(self, inputPath, inputPre, inputExt):
+    def __init__(self, inputPath, inputPre, inputExt, waitTime):
         # get the file list
         pathPrefix = os.path.join(inputPath,inputPre)
         self.pathPrefix = pathPrefix
-        self.inputPre = inputPre
-        self.inputExt = inputExt
-        filePathList = self.check_for_new_files()
-        self.fileQueue = deque(filePathList)
+        self.inputPre   = inputPre
+        self.inputExt   = inputExt
+        self.waitTime   = waitTime
+
+        # Initialize the list of files.
+        self.check_for_new_files()
         # This is the offset of a given buffer with respect to the global stream in 
         # units of *samples*.
         self.current_offset = 0
@@ -83,7 +86,10 @@ class vetoSource:
         # XXX If the files with a given prefix have different rates, this will break.
         # Assume file names are of the form:
         # <input_prefix><gpsstart>-<duration><input_ext>
-        filePath = filePathList[0]
+        # get the first one.
+        filePath = self.fileQueue.popleft()
+        # put it back, since this is just for informational purposes.
+        self.fileQueue.extendleft([filePath])
         firstVals = wrapNpLoad(filePath)
         gps_start, rest = filePath[len(pathPrefix):].split('-')
         self.duration = int(rest[:rest.find(inputExt)])
@@ -99,82 +105,93 @@ class vetoSource:
         self.caps = "audio/x-raw-float,width=64,depth=64,channels=1,rate=%d" % self.rate
 
     def check_for_new_files(self, timestamp=0):
-        # get the file list
         pattern = self.pathPrefix + '*' + self.inputExt
         def is_current_file(path):
             filePath = os.path.basename(path)
             rest = filePath[len(self.inputPre):]
             if len(rest)>0:
-                return int(rest.split('-')[0])>=timestamp
+                return int(rest.split('-')[0])*gst.SECOND>=timestamp
             else:
                 return None
         filePathList = filter(is_current_file, glob.glob(pattern))
         filePathList.sort()
-        return filePathList
+        self.fileQueue = deque(filePathList)
+        return
         
     def need_data(self, src, need_bytes=None):
         # Check if new data has arrived on disk.
-        self.fileQueue.extend(self.check_for_new_files(self.next_output_timestamp))
+        self.check_for_new_files(self.next_output_timestamp)
         try:
-            # Get the gpsstart time from the filename.
+            filePath = self.fileQueue.popleft()
+        except IndexError:
+            time.sleep(self.waitTime)
+            self.check_for_new_files(self.next_output_timestamp)
+            try:
+                filePath = self.fileQueue.popleft()
+            except IndexError:
+                # I give up!
+                src.emit("end-of-stream")
+                return True
+
+        # Oh, you're still here?  That means you must have a file!
+        # Get the gpsstart time from the filename.
+        rest = filePath[len(self.pathPrefix):]
+        gpsstart = int(rest.split('-')[0])
+        # Let's re-derive the duration.  maybe it changed?
+        rest = rest.split('-')[1]
+        duration = int(rest[:rest.find(self.inputExt)])
+
+        # Is this the file we were expecting?  If not, we'll wait 
+        # to see if the file we want shows up.
+        if gpsstart * gst.SECOND > self.next_output_timestamp:
+            time.sleep(self.waitTime)
+            self.check_for_new_files(self.next_output_timestamp)
             filePath = self.fileQueue.popleft()
             rest = filePath[len(self.pathPrefix):]
             gpsstart = int(rest.split('-')[0])
-            # Let's re-derive the duration.  maybe it changed?
             rest = rest.split('-')[1]
             duration = int(rest[:rest.find(self.inputExt)])
-
-            # Push gap if the current block is ahead of our timestamps.
-            # FIXME: Give user some wiggle room to wait for the next file?
+             
             if gpsstart * gst.SECOND > self.next_output_timestamp:
-                # Build the buffer.
+                # Push a gap before continuing to process the file we have.
                 buf = gst.buffer_new_and_alloc(0)
                 buf.flag_set(gst.BUFFER_FLAG_GAP)
-#                buf.timestamp = gpsstart * gst.SECOND
-#                gap_duration = self.next_output_timestamp - gpsstart * gst.SECOND
-#                buf.duration = gap_duration
+                buf.flag_set(gst.BUFFER_COPY_FLAGS)
                 buf.timestamp = self.next_output_timestamp
                 gap_duration = gpsstart * gst.SECOND - buf.timestamp
                 gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
                 buf.duration = gap_duration
                 buf.offset = self.current_offset
-                # FIXME: What if the gap_duration != normal duration?
-                # A: We'll need a next_output_offset as well
                 buf.offset_end = self.current_offset + gap_samples
                 src.emit("push-buffer", buf)
 
                 self.next_output_timestamp += buf.duration 
                 self.current_offset = buf.offset_end
-                # FIXME I don't think we should actually be returning here.
-                # return
-           
-            # Load the numpy array.
-            veto_vals = wrapNpLoad(filePath)
-            veto_vals = veto_vals.astype(np.float64)
+       
+        # Load the numpy array.
+        veto_vals = wrapNpLoad(filePath)
+        veto_vals = veto_vals.astype(np.float64)
 
-            # Build the buffer.
-            buffer_len = veto_vals.nbytes
-            buf = gst.buffer_new_and_alloc(buffer_len)
-            buf[:buffer_len-1] = np.getbuffer(veto_vals)
-            buf.timestamp = gpsstart * gst.SECOND
-            # gst buffers require:
-            # buffer_duration * rate / gst.SECOND = (offset_end - offset)
-            # The offset is zero since our data begin at the beginning 
-            # of the buffer.
-            buf.duration = duration * gst.SECOND
-            buf.offset = self.current_offset
-            buf.offset_end = self.current_offset + duration * self.rate
-            buf.caps = self.caps
-
-            self.next_output_timestamp += buf.duration 
-
-            # Push the buffer into the stream (a side effect of 
-            # emitting this signal).
-            src.emit("push-buffer", buf)
-
-            self.current_offset = buf.offset_end
-        except IndexError:
-            src.emit("end-of-stream")
+        # Build the buffer.
+        buffer_len = veto_vals.nbytes
+        buf = gst.buffer_new_and_alloc(buffer_len)
+        buf[:buffer_len-1] = np.getbuffer(veto_vals)
+        buf.timestamp = gpsstart * gst.SECOND
+        # gst buffers require:
+        # buffer_duration * rate / gst.SECOND = (offset_end - offset)
+        # The offset is zero since our data begin at the beginning 
+        # of the buffer.
+        buf.duration = duration * gst.SECOND
+        buf.offset = self.current_offset
+        buf.offset_end = self.current_offset + duration * self.rate
+        buf.caps = self.caps
+        buf.flag_set(gst.BUFFER_COPY_FLAGS)
+        # Push the buffer into the stream (a side effect of 
+        # emitting this signal).
+        src.emit("push-buffer", buf)
+        self.next_output_timestamp += buf.duration 
+        self.current_offset = buf.offset_end
+        return True
 
 #
 # =============================================================================
@@ -188,6 +205,7 @@ parser = OptionParser(description = __doc__)
 datasource.append_options(parser)
 
 parser.add_option("--frame-type", metavar = "name", help = "Specify the non-instrumental part of the frame type. The full frame type will be constructed by prepending the instrument.")
+parser.add_option("--wait-time", metavar = "s", default = 64, type = "int", help = "Time to wait for next input file before giving up.")
 parser.add_option("--frame-duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frames")
 parser.add_option("--frames-per-file", metavar = "s", default = 1, type = "int", help = "Output frames per file")
 parser.add_option("--output-channel-name", metavar = "name", help = "If an additional frame cache is requested, indicate the channel name to extract.")
@@ -235,7 +253,7 @@ if not instrument.startswith(obsStr):
 
 # Setup the source class
 vetoSrc = vetoSource(options.input_path, options.input_prefix,
-            options.input_ext)
+            options.input_ext, options.wait_time)
 
 # Create the appsrc with accoutrements
 appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(vetoSrc.caps), 

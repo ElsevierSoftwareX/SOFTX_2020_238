@@ -4,7 +4,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
-#include <gstlal_segments.h>
+#include <gstlal/gstlal_segments.h>
 
 G_BEGIN_DECLS
 

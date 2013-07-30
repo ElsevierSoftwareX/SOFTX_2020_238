@@ -55,7 +55,7 @@
 #include <gsl/gsl_vector.h>
 
 
-#include <gstaudioadapter.h>
+#include <gstlal/gstaudioadapter.h>
 
 
 G_BEGIN_DECLS

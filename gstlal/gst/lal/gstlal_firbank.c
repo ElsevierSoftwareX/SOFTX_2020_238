@@ -62,9 +62,9 @@
  */
 
 
-#include <gstaudioadapter.h>
-#include <gstlal_debug.h>
-#include <gstlal.h>
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_firbank.h>
 
 

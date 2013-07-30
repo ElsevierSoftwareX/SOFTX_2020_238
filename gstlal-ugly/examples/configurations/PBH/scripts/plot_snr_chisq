@@ -14,7 +14,7 @@ coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelih
 counts = coincparamsdistributions.background_rates
 inj = coincparamsdistributions.injection_rates
 
-wn = rate.gaussian_window2d(5,5, sigma = 8)
+wn = rate.gaussian_window(5, 5, sigma = 8)
 
 for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 	for name, obj in (("background", counts), ("injections", inj)):

@@ -10,7 +10,7 @@ from glue.ligolw import utils
 from scipy import interpolate
 
 def get_smoothed_array(xmldoc, ifo, stride = 5):
-	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=2*stride)
+	wn = rate.gaussian_window(3*stride,3*stride, sigma=2*stride)
 	A = rate.binned_array_from_xml(xmldoc, ifo)
 	return rate.filter_array(A.array.T,wn)
 

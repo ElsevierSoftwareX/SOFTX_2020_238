@@ -29,6 +29,11 @@ from pylal import ligolw_burca_tailor
 import copy
 import itertools
 from gstlal import far
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables, param, array
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 import StringIO,base64
 import cgi
 import cgitb
@@ -77,7 +82,7 @@ print """
 print '<div id="accordion">'
 path = form.getlist("url")[0]
 
-likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path))
+likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 

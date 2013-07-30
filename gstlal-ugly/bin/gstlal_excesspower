@@ -211,7 +211,11 @@ def get_triggers(elem, handler):
 	else:
 		handler.process_triggers( trigs )
 
-	if handler.stop - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
+	# We use the buffer timestamp here, since it's always guaranteed to be the
+	# latest available buffer, so we guarantee that the span of triggers is
+	# always greater than file stride duration
+	if buf_ts - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
+		outseg = segment( LIGOTimeGPS(handler.time_since_dump), LIGOTimeGPS(handler.time_since_dump + handler.dump_frequency) )
 
 		subdir = ep.append_formatted_output_path( handler.outdirfmt, handler, mkdir=False )
 		subdir = handler.outdir + "/" + subdir
@@ -222,16 +226,17 @@ def get_triggers(elem, handler):
 		fname = ep.make_cache_parseable_name(
 			inst = handler.inst,
 			tag = handler.channel,
-			start = handler.time_since_dump,
-			stop = handler.stop,
+			start = float(outseg[0]),
+			stop = float(outseg[1]),
 			ext = "xml.gz",
 			dir = subdir
 		)
 
 		if handler.clustering:
 			handler.process_triggers( [], cluster_passes = True )
-		handler.write_triggers( filename = fname, flush = True )
-		handler.time_since_dump = handler.stop 
+		handler.write_triggers( filename = fname, seg = outseg )
+		#handler.time_since_dump = handler.stop 
+		handler.time_since_dump = float(outseg[1])
 
 #
 # =============================================================================
