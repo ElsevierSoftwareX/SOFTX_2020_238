@@ -68,7 +68,8 @@ from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import datasource
 import pdb
-#pdb.set_trace()
+import sys
+
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
 	# exceptions that occur inside python code invoked as a call-back
@@ -310,7 +311,7 @@ else:
 if options.reference_psd is not None:
 	psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
-	        psd = dict((instrument, None) for instrument in detectors)
+	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
 
 #
