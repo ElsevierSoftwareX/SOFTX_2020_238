@@ -37,7 +37,7 @@ form = cgi.FieldStorage()
 import time
 from pylal.date import XLALUTCToGPS
 
-from glue.ligolw import ligolw, lsctables, param, array
+from glue.ligolw import ligolw, table, lsctables, param, array
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
@@ -80,8 +80,15 @@ def header(f):
 
 	print >>f, '<div id="accordion">'
 
+if len(sys.argv) == 1:
+	xmldoc = utils.load_filename(filename = None, contenthandler = ligolw.LIGOLWContentHandler)
+	lv_table = table.get_table(xmldoc, "LVAlert:table")
+	for r in lv_table:
+        	if r.alert_type == "new":
+		        gid = r.uid
+else:
+	gid = sys.argv[1]
 
-gid = form.getlist("gid")[0]
 fname = "%s_snrchi.html" % gid
 f = open(fname, "w")
 
