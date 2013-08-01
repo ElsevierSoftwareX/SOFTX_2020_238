@@ -178,31 +178,32 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf)
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
-	unsigned num_templates, num_filters;
+	uint num_templates, num_filters;
 	num_templates = element->a1->size1;
 	num_filters = element->a1->size2;
 	complex double ytemp;
 
-	unsigned iter_tplts, iter_flts, iter_length, y_index, out_index; 
+	uint iter_tplts, iter_flts, iter_length, y_index, out_index; 
 
 	for (iter_tplts = 0; iter_tplts < num_templates; iter_tplts++) {
 		for (iter_flts = 0; iter_flts < num_filters; iter_flts++) {
-			y_index = iter_tplts * num_templates + iter_flts;
-			ytemp = y[y_index];
+			ytemp = *y;
 			double *in = &input[dmax -*d];
+			complex double *out = output;
 
 			for(iter_length = 0; iter_length < output_length; iter_length++) { /* sample # */
-				ytemp = *a1 * ytemp + *b0 * in[iter_length] + 1e-20;
-				out_index = iter_tplts * num_templates + iter_length;
-				output[out_index] += ytemp;
+				ytemp = *a1 * ytemp + *b0 * ((double)(*(in + iter_length))) + 1e-20;
+				*out += ytemp;
+				out += num_templates;
 			}
-			y[y_index] = ytemp;
+			*y = ytemp;
+			y++;
 			a1++;
 			b0++;
 			d++;
 		}
+		output++;
 	}
-
 	/*
 	 * flush the data from the adapter
 	 */
@@ -243,7 +244,6 @@ static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf)
 	int dmax, dmin;
 	complex double * restrict y, * restrict a1, * restrict b0;
 	int * restrict d;
-
 	y = (complex double *) gsl_matrix_complex_ptr(element->y, 0, 0);
 	a1 = (complex double *) gsl_matrix_complex_ptr(element->a1, 0, 0);
 	b0 = (complex double *) gsl_matrix_complex_ptr(element->b0, 0, 0);
@@ -276,34 +276,37 @@ static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf)
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
-	unsigned num_templates, num_filters;
+	uint num_templates, num_filters;
 	num_templates = element->a1->size1;
 	num_filters = element->a1->size2;
 	complex double ytemp;
 
-	unsigned iter_tplts, iter_flts, iter_length, y_index, out_index; 
+	uint iter_tplts, iter_flts, iter_length, y_index, out_index; 
 
 	for (iter_tplts = 0; iter_tplts < num_templates; iter_tplts++) {
 		for (iter_flts = 0; iter_flts < num_filters; iter_flts++) {
-			y_index = iter_tplts * num_templates + iter_flts;
-			ytemp = y[y_index];
+			ytemp = *y;
 			float *in = &input[dmax -*d];
+			complex float *out = output;
 
 			for(iter_length = 0; iter_length < output_length; iter_length++) { /* sample # */
-				ytemp = *a1 * ytemp + *b0 * in[iter_length] + 1e-20;
-				out_index = iter_tplts * num_templates + iter_length;
-				output[out_index] += ((float)creal(ytemp) + (float)cimag(ytemp) * _Complex_I);
+				ytemp = *a1 * ytemp + *b0 * ((double)(*(in + iter_length))) + 1e-20;
+				*out += ((float)creal(ytemp) + (float)cimag(ytemp) * _Complex_I);
+				out += num_templates;
 			}
-			y[y_index] = ytemp;
+			*y = ytemp;
+			y++;
 			a1++;
 			b0++;
 			d++;
 		}
+		output++;
 	}
 
 	/*
 	 * flush the data from the adapter
 	 */
+	g_assert(gst_adapter_available(element->adapter) >= (output_length * element->width / 8));
 
 	gst_adapter_flush(element->adapter, output_length * (element->width / 8));
 	if(element->zeros_in_adapter > available_length - output_length)
@@ -664,7 +667,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * flush adapter. Erase contents of adaptor. Push dmax - dmin zeros, so the IIR filter bank can start filtering from t0.
 		 */
-
 		gst_adapter_clear(element->adapter);
 		element->zeros_in_adapter = 0;
 
@@ -705,8 +707,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->zeros_in_adapter = 0;
 		if (element->width == 64)
 			result = filter_d(element, outbuf);
-		else if (element->width == 32)
+		else if (element->width == 32){
 			result = filter_s(element, outbuf);
+		}
 	} else if(TRUE) {
 		/*
 		 * input is 0s, FIXME here. Make dependent on decay rate.
@@ -715,22 +718,21 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		push_zeros(element, length);
 		if (element->width == 64)
 			result = filter_d(element, outbuf);
-		else if (element->width == 32)
+		else if (element->width == 32){
 			result = filter_s(element, outbuf);
+		}
 	}
 	//fprintf(stderr, "TIMESTAMP %f, BUFFERSIZE %d\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_SIZE(inbuf) / sizeof(double));
 
 	int dmin, dmax;
 	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 	dmin = 0;
-	/*fprintf(stderr, "IIR elem %29s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
+	/*fprintf(stderr, "IIR elem %29s : input timestamp %llu, input offset %llu, input next offset %llu\n",
 		GST_ELEMENT_NAME(element),
 		GST_BUFFER_TIMESTAMP(inbuf),
-		GST_BUFFER_TIMESTAMP(outbuf),
 		GST_BUFFER_OFFSET(inbuf),
-		GST_BUFFER_OFFSET(outbuf),
-		dmin,
-		dmax);*/
+		GST_BUFFER_OFFSET_END(inbuf)
+		); */
 	//fprintf(stderr, "IIR elem %17s : input offset %llu, output offset %llu, %d, %d\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), GST_BUFFER_OFFSET(outbuf), dmin, dmax);
 	/*
 	 * done

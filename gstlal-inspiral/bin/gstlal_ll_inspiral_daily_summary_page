@@ -44,7 +44,6 @@ triggerIFAR = rate.BinnedArray(rate.NDBins((rate.IrregularBins((0.8, 50)), rate.
 out = open('H1L1V1-LLOID_DAILY_SUMMARY-%d-%d.html' % (int(analysis_segment[0]), int(abs(analysis_segment))), "w")
 print >> out, "<html>"
 print >> out, """
-<html>
 <head>
   <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
   <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
@@ -54,13 +53,67 @@ print >> out, """
     });
 
   });</script>
+<style>
+
+table
+{
+        letter-spacing: -0.1em;
+        font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+        font-size: 18pt;
+        background: #fff;
+        margin: 8px;
+        border-collapse: collapse;
+        text-align: left;
+        overflow: auto;
+        padding: 15px;
+}
+
+th
+{
+        font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+        font-size: 18pt;
+        font-style: bold;
+        color: #039;
+        padding: 15px;
+        border-bottom: 2px solid #6678b1;
+}
+
+td
+{
+        color: #669;
+        padding: 15px;
+        vertical-align: text-top
+}
+
+tbody tr:hover td
+{
+        color: #009;
+}
+
+</style>
+
 </head>"""
+
+def cluster(tab):
+	out = {}
+	print len(tab)
+	for r in tab:
+		if r.end_time in out:
+			if r.combined_far < out[r.end_time].combined_far:
+				out[r.end_time] = r
+		else:
+			out[r.end_time] = r
+	print len(out.values())
+	return out.values()
+
+
 print >> out, "<body>"
-print >> out, "<h1>LLOID analysis covering %s</h1><br>" % str(analysis_segment)
+
+path = sys.argv[1]
+
+print >> out, "<h1>LLOID analysis covering %s, %s</h1><br>" % (str(analysis_segment), path)
 
 ifars = iterutils.Highest(max = 100)
-
-path = sys.argv[0]
 
 for c in glob_trigger_files(path, analysis_segment):
 
@@ -68,12 +121,12 @@ for c in glob_trigger_files(path, analysis_segment):
 		xmldoc = utils.load_filename(c.path, gz = c.path.endswith('.gz'), verbose = True, contenthandler = ContentHandler)
 	except IOError as e:
 		print >> out, "Could not load %s: %s" % (c.path, e)
-	for n, event in enumerate(table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)):
-		if event.end_time in analysis_segment and event.snr < 10:
+	for n, event in enumerate(cluster(table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName))):
+		if event.end_time in analysis_segment and event.snr < 25:
 			triggerSNR[(event.mchirp, event.end_time, event.snr)] += 1
 		if event.end_time in analysis_segment and 1. / event.combined_far < 1.e15 and 1. / event.combined_far > 1.:
 			triggerIFAR[(event.mchirp, event.end_time, 1. / event.combined_far)] += 1
-			ifars.append((1. / event.combined_far, event.end_time, event.end_time_ns, event.ifos, event.mchirp, event.mass, event.snr))
+		ifars.append((1. / event.combined_far, event.end_time + 1e-9 * event.end_time_ns, event.ifos, event.mchirp, event.mass, event.snr))
 
 print >> out, '<div id="accordion">'
 for n, (mchirp_start, mchirp_end) in enumerate(zip(triggerSNR.bins[0].lower(), triggerSNR.bins[0].upper())):
@@ -82,35 +135,38 @@ for n, (mchirp_start, mchirp_end) in enumerate(zip(triggerSNR.bins[0].lower(), t
 	
 	print >> out, "<div>"
 	# SNR plot
-	plt.figure(figsize=(20,5))
-	plt.pcolor(triggerSNR.centres()[1], triggerSNR.centres()[2], numpy.log(triggerSNR.array[n,:,:].T + 1.))
-	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
-	plt.xlabel('GPS Time')
+	plt.figure(figsize=(20,4.5))
+	plt.pcolor((triggerSNR.centres()[1]-triggerSNR.centres()[1][0]) / 3600., triggerSNR.centres()[2], numpy.log(triggerSNR.array[n,:,:].T + 1.))
+	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.15)
+	plt.xlabel('Hour')
 	plt.ylabel('SNR')
-	plt.xlim(int(analysis_segment[0]), int(analysis_segment[1]))
+	plt.xlim(0,24)
+	plt.xticks(numpy.arange(25))
 	plt.ylim(5.5, 25)
 	to_png_image(out)
 	
 	# IFAR plot
 	plt.figure(figsize=(20,5))
 	ax = plt.subplot(111)
-	plt.pcolormesh(triggerIFAR.centres()[1], triggerIFAR.centres()[2], numpy.log(triggerIFAR.array[n,:,:].T + 1.))
+	plt.pcolormesh((triggerIFAR.centres()[1]-triggerIFAR.centres()[1][0]) / 3600., triggerIFAR.centres()[2], numpy.log(triggerIFAR.array[n,:,:].T + 1.))
 	ax.set_yscale('log')
 	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
-	plt.xlabel('GPS Time')
+	plt.xlabel('Hour')
 	plt.ylabel('IFAR (s)')
-	plt.xlim(int(analysis_segment[0]), int(analysis_segment[1]))
+	plt.xlim(0,24)
+	plt.xticks(numpy.arange(25))
 	plt.ylim(1, 1e15)
 	to_png_image(out)
 
 	print >> out, "</div>"
 
 print >> out, "<h2>Loudest</h2>"
-print >> out, "<div><table>"
-print >> out, "<tr><th>FAR (Hz)</th> <th>GPS time</th> <th>GPS time ns</th> <th>IFOs</th> <th>chirp mass</th> <th>Total Mass</th> <th>SNR</th> </tr>"
-for n, event in enumerate(ifar):
-	print >> out, "".join(["<tr>%s</tr>" repr(col) for col in ifar])
-	if n >= 10:
+print >> out, '<div><table style="padding:10pt">'
+print >> out, "<tr><th>Rank</th> <th>GPS time</th> <th>IFAR (s)</th> <th>IFOs</th> <th>chirp mass</th> <th>Total Mass</th> <th>SNR</th> </tr>"
+for n, event in enumerate(ifars):
+	url = "https://gracedb.ligo.org/events/search/?query=%d..%d" % (int(event[1]-1), int(event[1]+1))
+	print >> out, "<tr>", '<td>%d</td><td><a href=%s target="_blank">%s</a></td>' % (n+1, url, event[1]), "".join(['<td>%s</td>' % str(col) for col in [event[0]]+list(event[2:])]), "</a></tr>"
+	if n+1 >= 10:
 		break
 print >> out, "</table></div>"
 
@@ -127,6 +183,8 @@ down = eN - eN**.5
 down[down < 0.9] = 0.9
 
 plt.figure()
+
+print ifars[::-1], N[::-1]
 plt.loglog(ifars[::-1], N[::-1])
 
 plt.fill_between(expected_ifars[::-1], down[::-1], up[::-1], alpha=0.1)

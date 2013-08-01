@@ -86,9 +86,35 @@ static gchar **uri_get_protocols(GType type)
 static const gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(handler);
+	GString *uri = g_string_new(URI_SCHEME "://");
+	gchar separator = '?';
 
-	/* 1.0:  this won't be a memory leak */
-	return g_strdup_printf(URI_SCHEME "://%s", element->location);
+	g_string_append_uri_escaped(uri, element->location, NULL, FALSE);
+
+	if(element->cache_src_regex) {
+		g_string_append_c(uri, separator);
+		g_string_append(uri, "cache-src-regex=");
+		g_string_append_uri_escaped(uri, element->cache_src_regex, NULL, FALSE);
+		separator = '&';
+	}
+
+	if(element->cache_dsc_regex) {
+		g_string_append_c(uri, separator);
+		g_string_append(uri, "cache-dsc-regex=");
+		g_string_append_uri_escaped(uri, element->cache_dsc_regex, NULL, FALSE);
+	}
+
+	/* 1.0:  returning this value won't be a memory leak */
+	return g_string_free(uri, FALSE);
+}
+
+
+static gchar *g_uri_unescape_string_inplace(gchar **s)
+{
+	gchar *unescaped = g_uri_unescape_string(*s, NULL);
+	g_free(*s);
+	*s = unescaped;
+	return *s;
 }
 
 
@@ -97,15 +123,50 @@ static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
-	gchar location[strlen(uri)];
+	int query_offset;
+	gchar *location = NULL;
+	gchar *cache_src_regex = NULL;
+	gchar *cache_dsc_regex = NULL;
 	gboolean success = TRUE;
 
 	success = !strcmp(scheme, URI_SCHEME);
+	if(success) {
+		success &= sscanf(uri, URI_SCHEME "://%m[^?]%n", &location, &query_offset) >= 1;
+		if(!success)
+			GST_ERROR_OBJECT(element, "bad uri '%s'", uri);
+	} else
+		GST_ERROR_OBJECT(element, "wrong scheme '%s'", scheme);
+	if(success && uri[query_offset] == '?') {
+		gchar **fragments = g_strsplit(&uri[++query_offset], "&", 0);
+		gchar **fragment;
+		for(fragment = fragments; *fragment; fragment++) {
+			gchar **namevalue = g_strsplit(*fragment, "=", 2);
+			success &= namevalue[0] && namevalue[1];
+			if(success) {
+				g_uri_unescape_string_inplace(&namevalue[0]);
+				g_uri_unescape_string_inplace(&namevalue[1]);
+				if(!g_strcmp0("cache-src-regex", namevalue[0])) {
+					g_free(cache_src_regex);
+					cache_src_regex = g_strdup(namevalue[1]);
+				} else if(!g_strcmp0("cache-dsc-regex", namevalue[0])) {
+					g_free(cache_dsc_regex);
+					cache_dsc_regex = g_strdup(namevalue[1]);
+				} else {
+					GST_ERROR_OBJECT(element, "query '%s' not recognized", namevalue[0]);
+					success = FALSE;
+				}
+			} else
+				GST_ERROR_OBJECT(element, "invalid query '%s'", *fragment);
+			g_strfreev(namevalue);
+		}
+		g_strfreev(fragments);
+	}
 	if(success)
-		success &= sscanf(uri, URI_SCHEME "://%[^?]", location) == 1;
-	if(success)
-		g_object_set(G_OBJECT(element), "location", location, NULL);
+		g_object_set(G_OBJECT(element), "location", g_uri_unescape_string_inplace(&location), "cache-src-regex", cache_src_regex, "cache-dsc-regex", cache_dsc_regex, NULL);
 
+	g_free(location);
+	g_free(cache_src_regex);
+	g_free(cache_dsc_regex);
 	g_free(scheme);
 	return success;
 }
@@ -337,10 +398,10 @@ static gboolean start(GstBaseSrc *basesrc)
 		return FALSE;
 	}
 	GST_DEBUG_OBJECT(element, "%d item(s) remain in cache after sieve", element->cache->length);
+
 	if(!element->cache->length)
 		GST_WARNING_OBJECT(element, "cache is empty!");
-
-	if(XLALCacheSort(element->cache)) {
+	else if(XLALCacheSort(element->cache)) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("error sorting cache '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);

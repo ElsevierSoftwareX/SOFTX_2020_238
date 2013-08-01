@@ -1,0 +1,139 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys, os
+from pylal import rate
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+from scipy.stats import chi2
+from glue.ligolw import utils
+from pylal import ligolw_burca_tailor
+import copy
+import itertools
+from gstlal import far
+import StringIO,base64
+import cgi
+import cgitb
+cgitb.enable()
+form = cgi.FieldStorage()
+import time
+from pylal.date import XLALUTCToGPS
+
+from glue.ligolw import ligolw, table, lsctables, param, array
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+
+import urllib
+
+from ligo.gracedb.rest import GraceDb
+import ast
+
+if len(sys.argv) == 1:
+	xmldoc = utils.load_filename(filename = None, contenthandler = ligolw.LIGOLWContentHandler)
+	lv_table = table.get_table(xmldoc, "LVAlert:table")
+	for r in lv_table:
+        	if r.alert_type == "new":
+		        gid = r.uid
+else:
+	gid = sys.argv[1]
+
+gracedb = GraceDb()
+fdict = ast.literal_eval(gracedb.files(gid).read().strip())
+xmldoc, checksum = utils.load_fileobj(gracedb.get(fdict['coinc.xml']), contenthandler = ligolw.LIGOLWContentHandler)
+coinc_inspiral_row = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)[0]
+sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+process = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
+params = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
+for r in sngl_inspiral_table:
+	snr_chisq_dict[r.ifo] = (r.snr, r.chisq)
+for r in params:
+	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
+		path = r.value
+for r in process:
+	if r.program == "gstlal_inspiral":
+		node = r.node
+#
+# SNR / Time plot
+#
+
+#FIXME don't hardcode port number
+t,snr = numpy.loadtxt(urllib.urlopen("http://%s:16953/snr_history.txt" % node), unpack = True)
+t -= coinc_inspiral_row.get_end()
+pylab.figure()
+pylab.semilogy(t, snr)
+pylab.ylabel('SNR')
+pylab.xlabel('Time from event (s)')
+fname = '%s_snrtime.png' % gid
+pylab.ylim([min(snr), max(snr)])
+pylab.xlim([min(t), max(t)])
+pylab.grid()
+pylab.savefig(fname)
+gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname).read())
+
+#
+# SNR / Chisq plots
+#
+
+likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+
+if "smooth" in form:
+	likelihood_data.distribution_stats.finish()
+	counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
+	inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
+else:
+	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
+	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+
+bgcol = (224/255.,224/255.,224/255.)
+
+likely = copy.deepcopy(inj)
+for i, ifo in enumerate(['H1', 'L1', 'V1']):
+	snrm, chisqm = snr_chisq_dict[ifo]
+	if snrm is None:
+		continue
+	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
+	for name, obj in (("background", counts),):
+		fig = pylab.figure(figsize=(6,4), facecolor = 'g')
+		fig.patch.set_alpha(0.0)
+		H1 = obj[ifo+"_snr_chi"].array
+		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+		chi[0] = 0 # not inf
+		ax = pylab.subplot(111)
+		pylab.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
+		if snrm is not None and chisqm is not None:
+			pylab.plot(snrm, chisqm / snrm / snrm, 'ko', mfc = 'None', ms = 14, mew=4)
+		if "Log" in str(obj[ifo+"_snr_chi"].bins[0]):
+			ax.set_xscale('log')
+		if "Log" in str(obj[ifo+"_snr_chi"].bins[1]):
+			ax.set_yscale('log')
+		pylab.colorbar()
+		pylab.xlabel('SNR')
+		pylab.ylabel('reduced chi^2 / SNR^2')
+		pylab.ylim([chi[1], chi[-1]])
+		pylab.xlim([snr[1],snr[-1]])
+		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
+		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
+		fname = '%s_%s_snrchi.png' % (gid, ifo)
+		pylab.savefig(fname)
+		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read())
