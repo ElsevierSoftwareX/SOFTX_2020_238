@@ -98,8 +98,9 @@ def cluster(tab):
 	out = {}
 	print len(tab)
 	for r in tab:
-		if r.end_time in out and r.snr > out[r.end_time].snr:
-			out[r.end_time] = r
+		if r.end_time in out:
+			if r.combined_far < out[r.end_time].combined_far:
+				out[r.end_time] = r
 		else:
 			out[r.end_time] = r
 	print len(out.values())
