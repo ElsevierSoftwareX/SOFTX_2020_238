@@ -139,11 +139,11 @@ if options.data_source == "lvshm":
 elif options.data_source == "frames":
 	src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source.frame_cache, cache_dsc_regex = instrument)
 elif options.data_source == "white":
-	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=16384, blocksize = 16384 * 4 * 1)
-	rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=32, rate=16384")	
+	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=32768, blocksize = 32768 * 4 * 1)
+	rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=32, rate=32768")	
 
-	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=16384, blocksize = 16384 * 4 * 1)
-	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=16384")
+	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=32768, blocksize = 32768 * 4 * 1)
+	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=32768")
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
 else:
@@ -181,8 +181,12 @@ if options.data_source == "frames" and gw_data_source.frame_segments[instrument]
 odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x7)
 odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
+odccontrol = pipeparts.mkstatevector(pipeline, odcstatevectortee, required_on = 0x3)
+odccontroltee = pipeparts.mktee(pipeline, odccontrol)
+
 # This is the branch that gets converted to the DQ vector
-odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevectortee)
+odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 100), attack_length = -32768, hold_length = -32768)
+odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 
@@ -191,9 +195,7 @@ odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_
 #
 
 # Use the ODC state vector to gate the raw strain channel
-odccontrol = pipeparts.mkqueue(pipeline, odcstatevectortee)
-odccontrol = pipeparts.mkstatevector(pipeline, odccontrol, required_on = 0x3)
-rawstrain = pipeparts.mkgate(pipeline, rawstrain, threshold = 1, default_state = False, control =  odccontrol)
+rawstrain = pipeparts.mkgate(pipeline, rawstrain, threshold = 1, default_state = False, control =  pipeparts.mkqueue(pipeline, odccontroltee))
 
 # Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
 rawstrain = pipeparts.mkaudioconvert(pipeline, rawstrain)
@@ -315,7 +317,7 @@ dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
 """
 
 # Until the above code is fixed, make the LLD-DQ_VECTOR by gating the DQ vector with the strain to check for gaps
-dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee), hold_length = -1)
+dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 100))
 dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
 dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
 dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
