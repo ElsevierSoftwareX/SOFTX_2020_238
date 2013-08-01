@@ -17,10 +17,14 @@ pkgpython_PYTHON = \
 	servicediscovery.py \
     vetosrc.py
 
-pkgpyexec_LTLIBRARIES = _gstfrhistory.la
+pkgpyexec_LTLIBRARIES =
+
+if COND_FRAMECPP
+pkgpyexec_LTLIBRARIES += _gstfrhistory.la
 
 _gstfrhistory_la_SOURCES = _gstfrhistory.c
 _gstfrhistory_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
 _gstfrhistory_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
 _gstfrhistory_la_LIBADD = $(top_srcdir)/gst/framecpp/libgstframecpp.la
 _gstfrhistory_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS) $(PYTHON_LDFLAGS) -module -avoid-version
+endif
