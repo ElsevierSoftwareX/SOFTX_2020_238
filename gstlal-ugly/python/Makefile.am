@@ -14,7 +14,8 @@ pkgpython_PYTHON = \
 	gviz_api.py \
 	httpinterface.py \
 	omega.py \
-	servicediscovery.py
+	servicediscovery.py \
+    vetosrc.py
 
 pkgpyexec_LTLIBRARIES = _gstfrhistory.la
 

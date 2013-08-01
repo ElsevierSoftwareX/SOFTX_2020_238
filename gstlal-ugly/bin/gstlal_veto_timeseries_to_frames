@@ -35,161 +35,9 @@ import gst
 from gstlal import simplehandler
 from gstlal import pipeparts
 from gstlal import datasource
+from gstlal import vetosrc
 from optparse import OptionParser, Option
-import math
-import glob
-import gzip
 import os
-import time
-from collections import deque
-from glue import segments
-import numpy as np
-
-#
-# =============================================================================
-#
-#                                   Utilities
-#
-# =============================================================================
-#
-
-# Older versions of numpy.load choke on .gz files.
-# Not sure what version fixes this, but the numpy package 
-# for debian squeeze (1.4.1) doesn't. See
-# https://github.com/numpy/numpy/issues/1593
-
-def wrapNpLoad(filePath):
-    if filePath.endswith('gz'):
-        fileObj = gzip.open(filePath)
-        return np.load(fileObj)
-    else:
-        return np.load(filePath)
-
-# A class for handling the veto timeseries files.
-
-class vetoSource:
-    def __init__(self, inputPath, inputPre, inputExt, waitTime):
-        # get the file list
-        pathPrefix = os.path.join(inputPath,inputPre)
-        self.pathPrefix = pathPrefix
-        self.inputPre   = inputPre
-        self.inputExt   = inputExt
-        self.waitTime   = waitTime
-
-        # Initialize the list of files.
-        self.check_for_new_files()
-        # This is the offset of a given buffer with respect to the global stream in 
-        # units of *samples*.
-        self.current_offset = 0
-    
-        # Determine the rate by looking at the first file in the list.
-        # XXX If the files with a given prefix have different rates, this will break.
-        # Assume file names are of the form:
-        # <input_prefix><gpsstart>-<duration><input_ext>
-        # get the first one.
-        filePath = self.fileQueue.popleft()
-        # put it back, since this is just for informational purposes.
-        self.fileQueue.extendleft([filePath])
-        firstVals = wrapNpLoad(filePath)
-        gps_start, rest = filePath[len(pathPrefix):].split('-')
-        self.duration = int(rest[:rest.find(inputExt)])
-        self.next_output_timestamp = int(gps_start) * gst.SECOND
-
-        # The rate determination assumes the file contains N values with
-        # t_i = gpsstart + (i-1)*Delta_t ,
-        # such that the last data point is at time t = (gpsstart+duration)-Delta_t.
-        # NOTE gstreamer expects an integer rate in Hz.
-        # XXX This cast makes me uncomfortable.  That's why I added 0.1.
-        self.rate = int(float(firstVals.size)/float(self.duration) + 0.1)
-        # Now that we have the rate, we can set the caps for the appsrc
-        self.caps = "audio/x-raw-float,width=64,depth=64,channels=1,rate=%d" % self.rate
-
-    def check_for_new_files(self, timestamp=0):
-        pattern = self.pathPrefix + '*' + self.inputExt
-        def is_current_file(path):
-            filePath = os.path.basename(path)
-            rest = filePath[len(self.inputPre):]
-            if len(rest)>0:
-                return int(rest.split('-')[0])*gst.SECOND>=timestamp
-            else:
-                return None
-        filePathList = filter(is_current_file, glob.glob(pattern))
-        filePathList.sort()
-        self.fileQueue = deque(filePathList)
-        return
-        
-    def need_data(self, src, need_bytes=None):
-        # Check if new data has arrived on disk.
-        self.check_for_new_files(self.next_output_timestamp)
-        try:
-            filePath = self.fileQueue.popleft()
-        except IndexError:
-            time.sleep(self.waitTime)
-            self.check_for_new_files(self.next_output_timestamp)
-            try:
-                filePath = self.fileQueue.popleft()
-            except IndexError:
-                # I give up!
-                src.emit("end-of-stream")
-                return True
-
-        # Oh, you're still here?  That means you must have a file!
-        # Get the gpsstart time from the filename.
-        rest = filePath[len(self.pathPrefix):]
-        gpsstart = int(rest.split('-')[0])
-        # Let's re-derive the duration.  maybe it changed?
-        rest = rest.split('-')[1]
-        duration = int(rest[:rest.find(self.inputExt)])
-
-        # Is this the file we were expecting?  If not, we'll wait 
-        # to see if the file we want shows up.
-        if gpsstart * gst.SECOND > self.next_output_timestamp:
-            time.sleep(self.waitTime)
-            self.check_for_new_files(self.next_output_timestamp)
-            filePath = self.fileQueue.popleft()
-            rest = filePath[len(self.pathPrefix):]
-            gpsstart = int(rest.split('-')[0])
-            rest = rest.split('-')[1]
-            duration = int(rest[:rest.find(self.inputExt)])
-             
-            if gpsstart * gst.SECOND > self.next_output_timestamp:
-                # Push a gap before continuing to process the file we have.
-                buf = gst.buffer_new_and_alloc(0)
-                buf.flag_set(gst.BUFFER_FLAG_GAP)
-                buf.timestamp = self.next_output_timestamp
-                gap_duration = gpsstart * gst.SECOND - buf.timestamp
-                gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
-                buf.duration = gap_duration
-                buf.offset = self.current_offset
-                buf.offset_end = self.current_offset + gap_samples
-                src.emit("push-buffer", buf)
-
-                self.next_output_timestamp += buf.duration 
-                self.current_offset = buf.offset_end
-       
-        # Load the numpy array.
-        veto_vals = wrapNpLoad(filePath)
-        veto_vals = veto_vals.astype(np.float64)
-
-        # Build the buffer.
-        buffer_len = veto_vals.nbytes
-        buf = gst.buffer_new_and_alloc(buffer_len)
-        buf[:buffer_len-1] = np.getbuffer(veto_vals)
-        buf.timestamp = gpsstart * gst.SECOND
-        # gst buffers require:
-        # buffer_duration * rate / gst.SECOND = (offset_end - offset)
-        # The offset is zero since our data begin at the beginning 
-        # of the buffer.
-        buf.duration = duration * gst.SECOND
-        buf.offset = self.current_offset
-        buf.offset_end = self.current_offset + duration * self.rate
-        buf.caps = self.caps
-        # Push the buffer into the stream (a side effect of 
-        # emitting this signal).
-        src.emit("push-buffer", buf)
-        self.next_output_timestamp += buf.duration 
-        self.current_offset = buf.offset_end
-        return True
 
 #
 # =============================================================================
@@ -248,15 +96,19 @@ obsStr = options.input_prefix.split('-')[0]
 if not instrument.startswith(obsStr):
     raise ValueError("Output channel instrument clashes with input prefix.")
 
-
 # Setup the source class
-vetoSrc = vetoSource(options.input_path, options.input_prefix,
+vetosrc = vetosrc.vetoSource(options.input_path, options.input_prefix,
             options.input_ext, options.wait_time)
 
 # Create the appsrc with accoutrements
-appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(vetoSrc.caps), 
+appsrc = pipeparts.mkgeneric(pipeline, None, "appsrc", caps=gst.Caps(vetosrc.caps), 
     format="time")
-appsrc.connect('need-data', vetoSrc.need_data)
+appsrc.connect('need-data', vetosrc.need_data)
+
+# XXX You can force the appsrc to spit out debug info.  But this
+# doesn't seem to be very useful for logging purposes.
+#gst.debug_set_threshold_for_name('appsrc', gst.LEVEL_DEBUG)
+gst.debug_set_threshold_for_name('python', gst.LEVEL_INFO)
 
 try:
     os.makedirs(options.output_path)
@@ -274,6 +126,10 @@ appsrc.get_pad("src").link(mux.get_pad(instrument + ':' + channel_name))
 # Stick progress report in pipeline.
 progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
 
+# For debugging, an example of how to hook up the handler.
+#progRepSinkPad = progRep.get_pad("sink")
+#progRepSinkPad.add_buffer_probe(probeBufferHandler)
+
 # Final destination.
 # XXX multicast?
 if options.output_type == "files":
@@ -289,6 +145,7 @@ if options.output_type == "files":
     else:
         fs = pipeparts.mkframecppfilesink(pipeline, progRep, 
             frame_type = options.frame_type)
+
 elif options.output_type == "shm":
     lvshmsink = pipeparts.mkgeneric(pipeline, progRep, "gds_lvshmsink")
     lvshmsink.set_property("shm-name", options.shm_partition)
@@ -297,7 +154,7 @@ elif options.output_type == "shm":
     # Note: This assumes the stream consists of 64-bit samples.
     # XXX This could be done better by attaching a pad probe to the lvhsmsink
     # sink pad and setting blocksize according to the size of the incoming buffers
-    blocksize = vetoSrc.rate * 8 * options.frame_duration * options.frames_per_file
+    blocksize = vetosrc.rate * 8 * options.frame_duration * options.frames_per_file
     blocksize = blocksize * 2
     lvshmsink.set_property("blocksize", blocksize)
     # FIXME: I think this means it needs to be read at least once
