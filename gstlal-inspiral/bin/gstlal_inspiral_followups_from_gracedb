@@ -29,23 +29,17 @@ from pylal import ligolw_burca_tailor
 import copy
 import itertools
 from gstlal import far
-import StringIO,base64
-import cgi
-import cgitb
-cgitb.enable()
-form = cgi.FieldStorage()
 import time
 from pylal.date import XLALUTCToGPS
-
 from glue.ligolw import ligolw, table, lsctables, param, array
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
-
 import urllib
-
+import subprocess
 from ligo.gracedb.rest import GraceDb
 import ast
+import glob
 
 if len(sys.argv) == 1:
 	xmldoc = utils.load_filename(filename = None, contenthandler = ligolw.LIGOLWContentHandler)
@@ -55,6 +49,11 @@ if len(sys.argv) == 1:
 		        gid = r.uid
 else:
 	gid = sys.argv[1]
+
+try:
+	os.mkdir(gid)
+except OSError:
+	pass
 
 gracedb = GraceDb()
 fdict = ast.literal_eval(gracedb.files(gid).read().strip())
@@ -72,6 +71,8 @@ for r in params:
 for r in process:
 	if r.program == "gstlal_inspiral":
 		node = r.node
+
+
 #
 # SNR / Time plot
 #
@@ -83,7 +84,7 @@ pylab.figure()
 pylab.semilogy(t, snr)
 pylab.ylabel('SNR')
 pylab.xlabel('Time from event (s)')
-fname = '%s_snrtime.png' % gid
+fname = '%s/%s_snrtime.png' % (gid, gid)
 pylab.ylim([min(snr), max(snr)])
 pylab.xlim([min(t), max(t)])
 pylab.grid()
@@ -96,13 +97,8 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 
 likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
 
-if "smooth" in form:
-	likelihood_data.distribution_stats.finish()
-	counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
-	inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
-else:
-	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
-	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+counts = likelihood_data.distribution_stats.raw_distributions.background_rates
+inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
@@ -134,6 +130,48 @@ for i, ifo in enumerate(['H1', 'L1', 'V1']):
 		pylab.xlim([snr[1],snr[-1]])
 		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
 		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
-		fname = '%s_%s_snrchi.png' % (gid, ifo)
+		fname = '%s/%s_%s_snrchi.png' % (gid, gid, ifo)
 		pylab.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read())
+
+
+#
+# QScans
+#
+
+for r in sngl_inspiral_table:
+	cachefile = "%s/%sframes.cache" % (gid, r.ifo)
+	subprocess.call(["createframecache.pl", cachefile, "/scratch/llcache/llhoft/%s" % r.ifo])
+	conffile = "%s/%sconfig.txt" % (gid, r.ifo)
+	f = open(conffile , "w")
+	channel = "%s:%s" % (r.ifo, r.channel)
+	f.write("""[%s,%s]
+
+{
+   channelName:                 '%s'
+   frameType:                   '%s_llhoft'
+   sampleFrequency:             16384
+   searchFrequencyRange:        [10 2048]
+   #searchChirpRange:            [+0 +0]
+   searchTimeRange:              64
+   searchQRange:                [4 64]
+   searchMaximumEnergyLoss:     0.2
+   searchWindowDuration:        0.25
+   whiteNoiseFalseRate:         1e-3
+   plotTimeRanges:              10
+   plotFrequencyRange:          []
+   plotNormalizedEnergyRange:   [0 25.5]
+   alwaysPlotFlag:               1
+} """ % (channel, channel, channel, r.ifo))
+	f.close()
+
+	tstr = str(r.get_end())
+
+	# actually run the scan
+	subprocess.call(["dmt_wscan", str(r.get_end()), conffile, cachefile, gid, "1", "1"])
+
+# upload some plots to gracedb
+for f in glob.glob("%s/*_spectrogram_autoscaled.png" % gid):
+	gracedb.writeLog(gid, "DMT omega scan", filename = f, filecontents = open(f).read())
+	
+sys.exit()
