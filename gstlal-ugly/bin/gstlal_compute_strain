@@ -167,7 +167,7 @@ if options.data_source != "white":
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
 
 rawstrain = pipeparts.mkreblock(pipeline, rawstrain, block_duration = gst.SECOND)
-odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND * 10)
 
 # When reading from disk, clip raw strain stream to segment list
 if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
@@ -185,9 +185,10 @@ odccontrol = pipeparts.mkstatevector(pipeline, odcstatevectortee, required_on = 
 odccontroltee = pipeparts.mktee(pipeline, odccontrol)
 
 # This is the branch that gets converted to the DQ vector
-odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 100), attack_length = -32768, hold_length = -32768)
+odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 100), hold_length = -32768)
 odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
+odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 
 #
@@ -317,7 +318,7 @@ dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
 """
 
 # Until the above code is fixed, make the LLD-DQ_VECTOR by gating the DQ vector with the strain to check for gaps
-dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 100))
+dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 100), hold_length = -1)
 dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
 dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
 dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
