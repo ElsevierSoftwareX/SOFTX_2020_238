@@ -304,12 +304,6 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	gst_buffer_set_caps(*buf, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
 
 	/*
-	 * help the kernel with the mmap()ed buffer
-	 */
-
-	madvise(GST_BUFFER_DATA(*buf), GST_BUFFER_SIZE(*buf), MADV_WILLNEED | MADV_SEQUENTIAL | MADV_DONTDUMP);
-
-	/*
 	 * hack to get both the data pointer and the size to the munmap()
 	 * call.  the mallocdata pointer is set to the buffer object
 	 * itself, and the freefunc looks inside to get the real pointer
