@@ -30,8 +30,8 @@ import bisect
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
-from pylal import ligolw_burca2
 from pylal import ligolw_thinca
+from pylal import snglcoinc
 from pylal.date import XLALUTCToGPS
 import time
 
@@ -192,7 +192,7 @@ class StreamThinca(object):
 			self.likelihood_func = None
 			self.likelihood_params_func = None
 		else:
-			self.likelihood_func = ligolw_burca2.LikelihoodRatio(coinc_params_distributions)
+			self.likelihood_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
 			self.likelihood_params_func = coinc_params_distributions.coinc_params
 
 

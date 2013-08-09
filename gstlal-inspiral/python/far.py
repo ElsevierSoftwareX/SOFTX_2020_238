@@ -62,7 +62,6 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from glue.segmentsUtils import vote
-from pylal import ligolw_burca2
 from pylal import inject
 from pylal import progress
 from pylal import rate
@@ -561,7 +560,7 @@ class DistributionsStats(object):
 
 	def compute_single_instrument_background(self, instruments = None, verbose = False):
 		# initialize a likelihood ratio evaluator
-		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.smoothed_distributions)
+		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.smoothed_distributions)
 
 		# reduce typing
 		background = self.smoothed_distributions.background_rates

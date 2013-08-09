@@ -41,6 +41,7 @@ from glue.ligolw import dbtables
 from glue.ligolw import utils
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
+from pylal import snglcoinc
 from gstlal import far
 from gstlal import inspiral
 
@@ -160,7 +161,7 @@ if options.write_likelihood is not None:
 	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
 
 #FIXME should this come from somewhere else now?
-likelihood_ratio_func = ligolw_burca2.LikelihoodRatio(coincparamsdistributions.smoothed_distributions)
+likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions.smoothed_distributions)
 
 
 #
