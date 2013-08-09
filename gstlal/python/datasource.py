@@ -208,7 +208,7 @@ class GWDataSourceInfo(object):
 			instrument = dq_channel_dict_from_options.keys()[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
 			dq_channel = self.dq_channel_dict[instrument]
-			if dq_channel.split("-")[1][:3] == "ODC":
+			if "ODC_" in dq_channel.split("-")[1]:
 				self.dq_channel_type = "ODC"
 	
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
