@@ -52,6 +52,8 @@ from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
 from pylal import ligolw_burca2
+from pylal import inject
+from pylal import progress
 from pylal import rate
 
 
@@ -590,6 +592,98 @@ class DistributionsStats(object):
 
 	def to_xml(self, process, name):
 		return self.raw_distributions.to_xml(process, name)
+
+
+#
+# Joint probability density for measured SNRs
+#
+
+
+def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbins, verbose = False):
+	"""
+	A function which returns a BinnedArray representing the joint
+	probability density of measuring a set of SNRs from a network of
+	instruments.  The inst_horiz_mapping is a dictionary mapping
+	instrument name (e.g., "H1") to horizon distance (arbitrary units).
+	snr_threshold is the lowest accepted SNR (must be > 3), and
+	n_samples is the number of lines over which to calculate the
+	density in the SNR space.  The axes of the PDF correspond to the
+	instruments in alphabetical order.
+	"""
+	snr_threshold = float(snr_threshold)	# just to be sure
+	snr_max = float(snr_max)	# just to be sure
+
+	# An effective threshold used in the calculations in order to simulate
+	# noise effects
+	snr_min = snr_threshold - 3.0
+	assert snr_max > snr_threshold
+	assert snr_min > 0.0
+
+	nbins = int(round(nbins * (snr_max - snr_min) / (snr_max - snr_threshold)))
+
+	# get instrument names in alphabetical order
+	names = sorted(inst_horiz_mapping)
+	# get horizon distances and responses in that same order
+	DH = numpy.array([inst_horiz_mapping[inst] for inst in names])
+	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
+
+	pdf = rate.BinnedArray(rate.NDBins([rate.LinearBins(snr_min, snr_max, nbins)] * len(names)))
+
+	psi = gmst = 0.0
+
+	if verbose:
+		progressbar = progress.ProgressBar("%s SNR joint PDF" % ", ".join(names))
+	else:
+		progressbar = None
+
+	for i in xrange(n_samples):
+		theta = math.acos(numpy.random.uniform(-1, 1))
+		phi = numpy.random.uniform(0, 2*numpy.pi)
+		cosi2 = numpy.random.uniform(-1, 1)**2
+
+		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, numpy.pi/2 - theta, psi, gmst) for resp in resps])**2
+
+		snr_times_D = 8*DH*numpy.dot(fpfc2, numpy.array([(1.0+cosi2)**2/4, cosi2]))**0.5
+
+		# index of instrument whose SNR grows fastest with decreasing D
+		axis = snr_times_D.argmax()
+
+		# furthest an event can be and still be above snr_min in
+		# all instruments, and the SNR that corresponds to in the
+		# instrument whose SNR grows fastest
+		snr_start = snr_times_D[axis] / (snr_times_D.min() / snr_min)
+
+		# 10 steps per bin
+		delta_snr = (snr_max - snr_min) / nbins / 10.0
+		for snr in numpy.arange(snr_start, snr_max, delta_snr):
+			# from SNR in fastest growing instrument, compute
+			# SNR in all instruments and current step size in D
+			D = snr_times_D[axis] / snr
+			delta_D = -D / snr * delta_snr
+			snr = snr_times_D / D
+			snr = snr.clip(snr_min, numpy.inf)	# round-off safety
+
+			pdf[tuple(snr)] += D**2 * abs(delta_D)
+
+		if progressbar is not None:
+			progressbar.update((i + 1.) / n_samples)
+
+	# number of bins per unit in SNR in the binnings.  For use as the 
+	# width parameter in the filtering.
+	bins_per_snr = nbins/(snr_max-snr_min)
+	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr] * len(inst_horiz_mapping))))
+	numpy.clip(pdf.array, 0, float("inf"), pdf.array)
+	# set the region where any SNR is lower than the input threshold to 
+	# zero before normalizing the pdf and returning.
+	range_all = slice(None,None)
+	range_low = slice(snr_min, snr_threshold)
+	for i in xrange(len(inst_horiz_mapping)):
+		slices = [range_all] * len(inst_horiz_mapping)
+		slices[i] = range_low
+		pdf[tuple(slices)] = 0
+
+	pdf.to_pdf()
+	return pdf
 
 
 #
