@@ -291,7 +291,8 @@ class EPHandler( Handler ):
 		self.mmixers[ res_level ] = mm
 		self.rebuild_matrix_mixers( res_level )
 
-	def build_default_psd( self, rate, df, fhigh ):
+	@staticmethod
+	def build_default_psd( rate, df, fhigh ):
 		"""
 		Builds a dummy PSD to use until we get the right one.
 		"""
@@ -300,13 +301,14 @@ class EPHandler( Handler ):
 		psd.sampleUnits = LALUnit( "s strain^2" )
 		psd.data = numpy.ones( int(rate/2/df) + 1 ) 
 		psd.f0 = 0
-		self.psd = psd
 		return psd
 
-	def build_default_correlation( self, rate ):
+	@staticmethod
+	def build_default_correlation( rate ):
 		"""
 		Builds a Kronecker delta correlation series for k, k'.
 		"""
+		# FIXME: rate isn't right
 		corr = numpy.zeros(rate + 1)
 		corr[0] = 1
 		return corr
