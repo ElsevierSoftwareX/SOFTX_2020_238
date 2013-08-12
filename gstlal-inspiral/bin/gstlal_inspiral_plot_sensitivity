@@ -116,7 +116,7 @@ class upper_limit(object):
         # remove injections that violate user-imposed constraints and
         # symmetrize between m1-m2
         for instr in self.instruments:
-            self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
+            self.total_injections[instr] = imr_utils.symmetrize_sims(self.total_injections[instr], "mass1", "mass2")
             self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
             self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
 
