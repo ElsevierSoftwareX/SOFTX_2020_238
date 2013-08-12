@@ -145,11 +145,11 @@ coincparamsdistributions, likelihood_seglists = Far.distribution_stats, Far.live
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.raw_distributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.raw_distributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "computing event densities ..."

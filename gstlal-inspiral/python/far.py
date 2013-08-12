@@ -417,6 +417,71 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			instruments.discard("H2")
 		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
 
+	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
+		for param, binarr in self.background_rates.items():
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# FIXME only works if there is a 1-1 relationship between params and instruments
+			instrument = param.split("_")[0]
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
+			# Custom handle the first and last over flow bins
+			snrs = new_binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = new_binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for snr in snrs:
+				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
+				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
+				for chi2_over_snr2 in chi2_over_snr2s:
+					new_binarr[snr, chi2_over_snr2] += p
+			# normalize to the requested count
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
+
+		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
+		self.add_foreground_prior(n = n, prefactors_range = prefactors_range, df = df, instruments = instruments, verbose = verbose)
+
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
+		# FIXME:  for maintainability, this should be modified to
+		# use the .add_injection() method of self, but that will slow this down
+		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
+		for param, binarr in self.injection_rates.items():
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# FIXME only works if there is a 1-1 relationship between params and instruments
+			instrument = param.split("_")[0]
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
+			if verbose:
+				print >> sys.stderr, "synthesizing background/injections for %s" % param
+			# Custom handle the first and last over flow bins
+			snrs = new_binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = new_binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for i, snr in enumerate(snrs):
+				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
+					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
+					dist = 0
+					for pf in pfs:
+						nc = pf * snr**2
+						v = stats.ncx2.pdf(chisq, df, nc)
+						if numpy.isfinite(v):
+							dist += v
+					dist *= (snr / snrs[0])**-4
+					if numpy.isfinite(dist):
+						new_binarr[snr, chi2_over_snr2] += dist
+			# normalize to the requested count
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
+
 
 #
 # Paramter Distributions
@@ -443,108 +508,6 @@ class DistributionsStats(object):
 
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.raw_distributions.coinc_params((event,), None))
-
-	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
-		for param, binarr in self.raw_distributions.background_rates.items():
-			new_binarr = rate.BinnedArray(binarr.bins)
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
-				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
-				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
-				for chi2_over_snr2 in chi2_over_snr2s:
-					new_binarr[snr, chi2_over_snr2] += p
-			# normalize to the requested count
-			new_binarr.array *= n / new_binarr.array.sum()
-			# add to raw counts
-			binarr += new_binarr
-
-		# FIXME, an adhoc way of adding glitches, us a signal distribution with bad matches
-		# FIXME if we keep this, make a function that can be reused for both signal and background
-		# FIXME:  for maintainability, this should be modified to
-		# use the .add_injection() method of the .raw_distributions
-		# attribute, but that will slow this down
-		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for param, binarr in self.raw_distributions.background_rates.items():
-			new_binarr = rate.BinnedArray(binarr.bins)
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
-			if verbose:
-				print >> sys.stderr, "synthesizing background for %s" % param
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
-				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
-					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
-					dist = 0
-					for pf in pfs:
-						nc = pf * snr**2
-						v = stats.ncx2.pdf(chisq, df, nc)
-						if numpy.isfinite(v):
-							dist += v
-					dist *= (snr / snrs[0])**-4
-					if numpy.isfinite(dist):
-						new_binarr[snr, chi2_over_snr2] += dist
-			# normalize to the requested count
-			new_binarr.array *= n / new_binarr.array.sum()
-			# add to raw counts
-			binarr += new_binarr
-
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
-		# FIXME:  for maintainability, this should be modified to
-		# use the .add_injection() method of the .raw_distributions
-		# attribute, but that will slow this down
-		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for param, binarr in self.raw_distributions.injection_rates.items():
-			new_binarr = rate.BinnedArray(binarr.bins)
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
-			if verbose:
-				print >> sys.stderr, "synthesizing injections for %s" % param
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
-				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
-					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
-					dist = 0
-					for pf in pfs:
-						nc = pf * snr**2
-						v = stats.ncx2.pdf(chisq, df, nc)
-						if numpy.isfinite(v):
-							dist += v
-					dist *= (snr / snrs[0])**-4
-					if numpy.isfinite(dist):
-						new_binarr[snr, chi2_over_snr2] += dist
-			# normalize to the requested count
-			new_binarr.array *= n / new_binarr.array.sum()
-			# add to raw counts
-			binarr += new_binarr
 
 	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy()
