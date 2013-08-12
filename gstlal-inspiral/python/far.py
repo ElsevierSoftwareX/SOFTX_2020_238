@@ -547,7 +547,7 @@ class DistributionsStats(object):
 			binarr += new_binarr
 
 	def finish(self, verbose = False):
-		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
+		self.smoothed_distributions = self.raw_distributions.copy()
 		#self.smoothed_distributions.finish(verbose = verbose)
 		# FIXME:  should be the line above, we'll temporarily do
 		# the following.  the difference is that the above produces
