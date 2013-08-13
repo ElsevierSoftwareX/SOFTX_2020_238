@@ -88,7 +88,7 @@ typedef struct {
 	gboolean need_new_segment;
 	GstClockTime next_timestamp;
 
-	/*<private >*/
+	/*< private >*/
 
 	/*
 	 * LSMP_CON consumer interface.  this is declared void * here and

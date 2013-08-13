@@ -71,8 +71,14 @@ struct _GstGDSFramexmitSink {
 	gchar *group;
 	gint port;
 
+	/*< private >*/
+
 	/*
-	 * opaque frame transmitter
+	 * framexmit::frameSend interface.  this is declared void * here
+	 * and type casts are used in the module proper so that other code
+	 * that uses this header can be compiled without loading the
+	 * framexmit headers from gds.  the framexmit headers require C++
+	 * and there is no pkg-config file available for them.
 	 */
 
 	void *frameSend;
