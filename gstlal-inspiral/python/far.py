@@ -408,6 +408,64 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	del snr_chi_filter
 
+	#
+	# class-level cache of pre-computed SNR joint PDFs.  structure is like
+	#
+	# 	= {
+	#		frozenset([("H1", horiz_dist), ("L1", horiz_dist)]): (InterpBinnedArray, BinnedArray, age),
+	#		...
+	#	}
+	#
+	# at most max_cached_snr_joint_pdfs will be stored.  if a PDF is
+	# required that cannot be found in the cache, and there is no more
+	# room, the oldest PDF (the one with the *smallest* age) is pop()ed
+	# to make room, and the new one added with its age set to the
+	# highest age in the cache + 1.
+	#
+
+	max_cached_snr_joint_pdfs = 15
+	snr_joint_pdf_cache = {}
+
+	def get_snr_joint_pdf(self, instrument_horizon_distance_mapping, log_distance_tolerance = math.log(1.2)):
+		#
+		# key for cache:  frozen set of (instrument, horizon
+		# distance) pairs.  horizon distances are normalized to
+		# fractions of the largest among them and then are
+		# quantized to integer powers of
+		# exp(log_distance_tolerance)
+		#
+		# FIXME:  is the default distance tolerance appropriate?
+		#
+
+		horizon_distance_norm = max(instrument_horizon_distance_mapping.values())
+		key = frozenset((instrument, math.exp(math.floor(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance)) for instrument, horizon_distance in instrument_horizon_distance_mapping.items())
+
+		#
+		# retrieve cached PDF, or build new one
+		#
+
+		try:
+			# FIXME:  need to check that the result is
+			# appropriate for the SNR threshold and regenerate
+			# if not
+			pdf = self.snr_joint_pdf_cache[key][0]
+		except KeyError:
+			# no entries in cache for this instrument combo and
+			# set of horizon distances
+			if self.snr_joint_pdf_cache:
+				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
+			else:
+				age = 0
+			# FIXME:  turn off verbose
+			binnedarray = joint_pdf_of_snrs(dict(key), snr_threshold = self.snr_min, snr_max = self.snr_max, verbose = True)
+			pdf = rate.InterpBinnedArray(binnedarray)
+			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
+			# if the cache is full, delete the entry with the
+			# smallest age
+			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
+				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+		return pdf
+
 	@staticmethod
 	def coinc_params(events, offsetvector):
 		instruments = set(event.ifo for event in events)
@@ -415,7 +473,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# coinc.  if both have participated favour H1
 		if "H1" in instruments:
 			instruments.discard("H2")
-		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
+		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
+		return params
+
+	def P_noise(self, params):
+		if params is None:
+			return None
+		P = 1.0
+		for name, value in params.items():
+			if name.endswith("_snr_chi"):
+				P *= float(self.background_rates_interp[name](*value))
+		return P
+
+	def P_signal(self, params):
+		if params is None:
+			return None
+
+		# (instrument, snr) pairs sorted alphabetically by instrument name
+		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
+		# retrieve the SNR PDF
+		snr_pdf = self.get_snr_joint_pdf(dict((instrument, self.horizon_distances[instrument]) for instrument, rho in snrs))
+		# evaluate it (snrs are alphabetical by instrument)
+		P = float(snr_pdf(*tuple(rho for instrument, rho in snrs)))
+
+		for name, value in params.items():
+			if name.endswith("_snr_chi"):
+				P *= float(self.injection_rates_interp[name](*value))
+		return P
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		for param, binarr in self.background_rates.items():
@@ -481,6 +565,56 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
+
+	def finish(self, *args, **kwargs):
+		super(ThincaCoincParamsDistributions, self).finish(*args, **kwargs)
+
+		# NOTE:  because we use custom PDF constructions, the stock
+		# .__iadd__() method for this class will not result in
+		# valid PDFs.  the rates arrays *are* handled correctly by
+		# the .__iadd__() method, by fiat, so just remember to
+		# invoke .finish() to get the PDFs in shape afterwards
+
+		# FIXME:  the presence of the next bit breaks the existing
+		# ranking statistic code and must be disabled somehow
+		# before using it
+
+		# convert signal (aka injection) (rho, chi^2/rho^2) PDFs
+		# into P(chi^2/rho^2 | rho)
+		for name, pdf in self.injection_rates.items():
+			if not name.endswith("_snr_chi"):
+				continue
+			bin_sizes = pdf.bins[1].upper() - pdf.bins[1].lower()
+			for i in xrange(pdf.array.shape[0]):
+				nonzero = pdf.array[i] != 0
+				pdf.array[i] /= numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
+			# rebuild the interpolator
+			self.injection_rates_interp[name] = rate.InterpBinnedArray(pdf)
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
+		xml = self.get_xml_root(xml, name)
+		prefix = u"cached_snr_joint_pdf"
+		for elem in [elem for elem in xml.childNodes if elem.getAttribute(u"Name").startswith(u"%s:" % prefix)]:
+			key = frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in ligolw_param.get_pyvalue(elem, u"key").strip().split(u",")))
+			binnedarray = rate.binned_array_from_xml(elem, prefix)
+			if self.snr_joint_pdf_cache:
+				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
+			else:
+				age = 0
+			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(binnedarray), binnedarray, age
+			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
+				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+		return self
+
+	def to_xml(self, name):
+		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
+		prefix = u"cached_snr_joint_pdf"
+		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
+			elem = xml.appendChild(rate.binned_array_to_xml(binnedarray, prefix))
+			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key))))
+		return xml
 
 
 #
