@@ -354,6 +354,11 @@ def build_filter_from_xml(psd, sb_table, corr=None):
 			statuserr += "spectrum correlation - npoints %d" % len(spec_corr)
 			sys.exit( statuserr )
 
+		# NOTE: The filter that come out of this are not normalized to
+		# band/deltaF, they are actually a factor of two too small.
+		# This is probably okay, because we renormalize the time domain versions
+		# and so we never see the factor of two difference
+		#print numpy.dot(abs(h_wind.data), abs(h_wind.data))
 		# save the frequency domain filters, if necessary
 		# We make a deep copy here because we don't want the zero padding that
 		# is about to be done to get the filters into the time domain
@@ -492,7 +497,7 @@ def build_fir_sq_adder( nsamp, padding=0 ):
 	"""
 	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
-def create_bank_xml(flow, fhigh, band, duration, level=1, ndof=1, detector=None):
+def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_overlap=0, detector=None):
 	"""
 	Create a bank of sngl_burst XML entries. This file is then used by the trigger generator to do trigger generation. Takes in the frequency parameters and filter duration and returns an ligolw entity with a sngl_burst Table which can be saved to a file.
 	"""
@@ -552,7 +557,8 @@ def create_bank_xml(flow, fhigh, band, duration, level=1, ndof=1, detector=None)
 		row.process_id = ilwd.ilwdchar( u"process:process_id:0" )
 
 		bank.append( row )
-		cfreq += band #band is half the full width of the window, so this is 50% overlap
+		#cfreq += band #band is half the full width of the window, so this is 50% overlap
+		cfreq += band * (1-frequency_overlap)
 
 	xmldoc.childNodes[0].appendChild(bank)
 	return xmldoc
