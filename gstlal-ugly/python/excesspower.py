@@ -143,6 +143,10 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested.
 	"""
 
+	# Filter length needs to be long enough to get the pertinent features in
+	# the time domain
+	rate = 2 * psd.deltaF * len(psd.data)
+
 	if fhigh > rate/2:
 		print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than sampling rate / 2, adjusting to match." % fhigh
 		fhigh = rate/2
@@ -150,9 +154,6 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	if fhigh == rate/2:
 		print >> sys.stderr, "WARNING: high frequency (%f) is equal to Nyquist. Filters will probably be bad. Reduce the high frequency." % fhigh
 
-	# Filter length needs to be long enough to get the pertinent features in
-	# the time domain
-	rate = psd.deltaF * len(psd.data)
 	filter_len = 4*int(rate/b_wind)
 
 	if filter_len <= 0:
@@ -317,7 +318,8 @@ def build_filter_from_xml(psd, sb_table, corr=None):
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
-	rate = psd.deltaF * len(psd.data)
+	rate = 2 * psd.deltaF * len(psd.data)
+	# FIXME: Since rate was fixed, do we need the 4 below?
 	filter_len = 4*int(rate/sb_table[0].bandwidth)
 	
 	# TODO: For filters with different durations, we'll have to keep track of
@@ -327,7 +329,7 @@ def build_filter_from_xml(psd, sb_table, corr=None):
 	for i, row in enumerate(sb_table):
 		# cfreq + band since the filters are actually 2*band wide
 		if row.central_freq + row.bandwidth > rate/2:
-			print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than Nyquist, adjusting to match." % (row.central_freq + row.bandwidth)
+			print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than Nyquist (%f), adjusting to match." % (row.central_freq + row.bandwidth, rate/2.0)
 			continue
 
 		if row.central_freq + row.bandwidth == rate/2:
@@ -506,8 +508,8 @@ def create_bank_xml(flow, fhigh, band, duration, level=1, ndof=1, detector=None)
 	"flow", "fhigh", "bandwidth", "tfvolume", "hrss", "event_id"])
 	bank.sync_next_id()
 
-	# The first frequency band actually begins at flow, so we offset the central 
-	# frequency accordingly
+	# The first frequency band actually begins at flow, so we offset the 
+	# central frequency accordingly
 	if level == 0: # Hann windows
 		cfreq = flow + band
 	else: # Tukey windows
