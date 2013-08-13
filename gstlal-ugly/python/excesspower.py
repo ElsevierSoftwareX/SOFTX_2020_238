@@ -417,7 +417,7 @@ def build_filter_from_xml(psd, sb_table, corr=None):
 	filters.shape = ( len(sb_table), filter_len-1 )
 	return filters, freq_filters
 
-def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
+def build_chan_matrix( nchannels=1, frequency_overlap=0.0, up_factor=0, norm=None ):
 	"""
 	Build the matrix to properly normalize nchannels coming out of the FIR filter. Norm should be an array of length equal to the number of output channels, with the proper normalization factor. up_factor controls the number of output channels. E.g. If thirty two input channels are indicated, and an up_factor of two is input, then an array of length eight corresponding to eight output channels are required. The output matrix uses 1/sqrt(A_i) where A_i is the element of the input norm array.
 	"""
@@ -434,32 +434,48 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 	# Number of non-zero elements in that row
 	n = 2**up_factor
 
+	# Samples to skip for frequency overlap
+	m = int(1.0/(1-frequency_overlap))
+
 	# Matrix row
-	r0 = numpy.zeros(nchannels)
-	m = []
-	for i, mu_sq in enumerate(norm):
-		r = r0.copy()
+	mat = numpy.zeros((len(norm), nchannels))
+	mset, i = 0, 0
+	indices = numpy.linspace(i, i+n-1, n)*m
+	for mu_sq in norm:
 		if mu_sq > 0:
-			r[i*n:(i+1)*n] = numpy.sqrt(1.0/mu_sq)
-		else:  # End of the filter bank which we're killing
-			r[i*n:(i+1)*n] = 0
-		m.append( r )
+			mat[i, map(int,indices)] = numpy.sqrt(1.0/mu_sq)
+			if mset == m-1:
+				indices += n*m - mset
+				mset = 0
+			else:
+				indices += 1
+				mset += 1
+		#else:  # End of the filter bank which we're killing
+		i += 1
 
-	return numpy.array(m).T
+	return numpy.array(mat).T
 
-def build_wide_filter_norm( corr, freq_filters, level, band=None, psd=None ):
+# FIXME: Remove band
+def build_wide_filter_norm( corr, freq_filters, level, frequency_overlap=0, band=None, psd=None ):
 	"""
-	Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Requires the spectral correlation (corr) and the frequency domain filters (freq_filters), and resolution level. The bandwidth of the wide channels to normalize is 2**level*band.
+	Determine the mu^2(f_low, n*b) for higher bandwidth channels from the base band. Requires the spectral correlation (corr), the frequency domain filters (freq_filters), and resolution level. The bandwidth of the wide channels to normalize is 2**level*band. Overlap of channels (frequency_overlap) will divide the channels into sets of 1/(1-frequency_overlap) channels and sum the sets together rather than adjacent channels.
 	"""
 	# TODO: This can be made even more efficient by using the calculation of
 	# lower levels for higher levels
 
 	# number of channels to combine
 	n = 2**level
-
+	# frequency overlap requires every mth sample
+	# for frequency_overlap = 0.0, sets = 1 (adjacent)
+	# for frequency_overlap = 0.5 (50%), sets = 2
+	# for frequency_overlap = 0.25 (75%), sets = 4
+	# FIXME: What happens when frequency_overlap isn't a negative power of two?
+	sets = int(1/(1-frequency_overlap))
+	
 	# prefactor
 	if band is None:
-		band = len(freq_filters[0].data)/freq_filters[0].deltaF
+		# NOTE: The filter is 2 bandwidths long
+		band = len(freq_filters[0].data)/2*freq_filters[0].deltaF
 	del_f = freq_filters[0].deltaF
 	mu_sq = n*band/del_f
 
@@ -472,22 +488,30 @@ def build_wide_filter_norm( corr, freq_filters, level, band=None, psd=None ):
 
 	# Construct the normalization for the i'th wide filter at this level by
 	# summing over n base band filters
-	for i in range(len(filter_norm)):
+	for s in range(sets):
+		# This is the mth set of filters to sum
+		filter_set = filter(lambda i: i % sets == s, range(len(freq_filters)))
+		# Divided into n bands
+		filter_n = 0
+		for bands in [filter_set[i:i+n] for i in range(0, len(filter_set), n)]:
+			if len(bands) != n:
+				continue
 
-		ip_sum = 0
-		# Sum over n base band filters
-		for j in range(n-1):
-			#if psd is None:
-			ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
-				freq_filters[i*n+j], freq_filters[i*n+j+1], corr
-			)
-			# TODO: fix if better hrss is required
-			#else:
-				#ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
-					#freq_filters[i*n+j], freq_filters[i*n+j+1], corr, psd
-				#)
+			ip_sum = 0
+			# Sum over n base band filters
+			for j in range(len(bands)-1):
+				#if psd is None:
+				ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
+					freq_filters[bands[j]], freq_filters[bands[j+1]], corr
+				)
+				# TODO: fix if better hrss is required
+				#else:
+					#ip_sum += lalburst.XLALExcessPowerFilterInnerProduct( 
+						#freq_filters[i*n+j], freq_filters[i*n+j+1], corr, psd
+					#)
 
-		filter_norm[i] = mu_sq + 2*ip_sum
+			filter_norm[sets*filter_n+s] = mu_sq + 2*ip_sum
+			filter_n += 1
 
 	return filter_norm
 
