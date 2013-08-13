@@ -1,7 +1,7 @@
 /*
  * GDS framexmit broadcast receiver source element
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012--2013  Kipp Cannon
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #define __GDS_FRAMEXMITSRC_H__
 
 
-#include <signal.h>
+#include <pthread.h>
 
 
 #include <glib.h>
@@ -84,6 +84,17 @@ struct _GstGDSFramexmitSrc {
 	GstPushSrc element;
 
 	/*
+	 * receive thread
+	 */
+
+	pthread_t recv_thread;
+	GstFlowReturn recv_status;
+	GstBuffer *buffer;
+	GMutex *buffer_lock;
+	GCond *received_buffer;
+	gboolean unblocked;
+
+	/*
 	 * properties
 	 */
 
@@ -91,6 +102,7 @@ struct _GstGDSFramexmitSrc {
 	gchar *group;
 	gint port;
 	enum gds_framexmitsrc_qos qos;
+	gdouble wait_time;
 
 	/*
 	 * latency
@@ -103,14 +115,17 @@ struct _GstGDSFramexmitSrc {
 	 * state
 	 */
 
-	gboolean unblocked;
-	pthread_t create_thread;
-	GMutex *create_thread_lock;
 	gboolean need_new_segment;
 	GstClockTime next_timestamp;
 
+	/*< private >*/
+
 	/*
-	 * opaque frame receiver
+	 * framexmit::frameRecv interface.  this is declared void * here
+	 * and type casts are used in the module proper so that other code
+	 * that uses this header can be compiled without loading the
+	 * framexmit headers from gds.  the framexmit headers require C++
+	 * and there is no pkg-config file available for them.
 	 */
 
 	void *frameRecv;
