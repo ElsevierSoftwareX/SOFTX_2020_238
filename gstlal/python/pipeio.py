@@ -116,7 +116,13 @@ def numpy_dtype_from_caps(caps):
 
 def array_from_audio_buffer(buf):
 	channels = buf.caps[0]["channels"]
-	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
+	# FIXME:  conditional is work-around for broken handling of
+	# zero-length buffers in numpy < 1.7.  remove and use frombuffer()
+	# unconditionally when we can rely on numpy >= 1.7
+	if len(buf) > 0:
+		a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
+	else:
+		a = numpy.array((), dtype = numpy_dtype_from_caps(buf.caps))
 	a.shape = (len(a) // channels, channels)
 	return a
 
