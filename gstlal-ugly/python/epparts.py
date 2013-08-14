@@ -100,9 +100,7 @@ class EPHandler( Handler ):
 		self.seglist["state"] = segmentlist([])
 		self.current_segment = None
 		# How long of a time to ignore output from the whitener stabilizing
-		# FIXME: This should be ~number of PSDs stored in history * fft_length
-		# Right now that's probably something like 80 s.
-		self.whitener_offset = 40
+		self.whitener_offset = 0
 
 		# Keep track of units -- enable us to go below rates of 1 Hz
 		self.units = ep.EXCESSPOWER_UNIT_SCALE['Hz']
@@ -112,14 +110,13 @@ class EPHandler( Handler ):
 		self.flow = 64 
 		self.fhigh = 1000
 		self.fft_length = 8 # s
+		self.frequency_overlap = 0 # %
 
 		# Defaults -- Resolution settings
 		self.rate = 2048
-		#self.rate = 4096
 		self.max_level = 1
 
 		# Defaults -- filtering
-		self.filter_len = 2*int(2*self.rate/self.base_band)
 		self.filter_xml = {}
 		self.filter_bank = None
 		self.freq_filter_bank = None
@@ -146,11 +143,9 @@ class EPHandler( Handler ):
 
 		# Defaults -- data products
 		self.output = True
-		self.output_lock = False
 		self.triggers = None
 		self.process_params = None
 		self.process = None
-		self.outfile = "test.xml.gz"
 		self.outdir = "./"
 		self.outdirfmt = ""
 		self.triggers = EPHandler.make_output_table()
@@ -279,11 +274,6 @@ class EPHandler( Handler ):
 		firbank.set_property( "fir-matrix", self.rebuild_filter() )
 		# Impose a latency since we've advanced the filter in the 
 		# generation step. See build_filter in the excesspower library
-
-		# FIXME: This isn't set properly only on the first try --- that is to say,
-		# the value of the latency for the firbank is reset, but the setting has np
-		# further effect on any of the timestamps emitted by the FIR bank. This is
-		# notedi, but not resolved in gstlal_firbank.c
 		firbank.set_property( "latency", len(firbank.get_property("fir_matrix")[0])/2 )
 		self.firbank = firbank
 
@@ -326,10 +316,12 @@ class EPHandler( Handler ):
 				corr = self.spec_corr, 
 				freq_filters = self.freq_filter_bank,
 				level = i,
+				frequency_overlap = self.frequency_overlap,
 				band = self.base_band
 			)
 			cmatrix = ep.build_chan_matrix( 
 				nchannels = nchannels,
+				frequency_overlap = self.frequency_overlap,
 				up_factor = i,
 				norm = self.chan_matrix[i]
 			) 
@@ -343,15 +335,15 @@ class EPHandler( Handler ):
 		"""
 		self.filter_bank, self.freq_filter_bank = ep.build_filter( 
 			fhigh = self.fhigh, 
-			flow=self.flow, 
-			rate=self.rate, 
+			flow = self.flow, 
+			rate = self.rate, 
 			psd = self.psd, 
 			corr = self.spec_corr, 
 			b_wind = self.base_band 
 		)
 		return self.filter_bank
 
-	def build_filter_xml( self, res_level, ndof=1, loc="", verbose=False ):
+	def build_filter_xml( self, res_level, ndof=1, frequency_overlap=0, loc="", verbose=False ):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
@@ -362,6 +354,7 @@ class EPHandler( Handler ):
 			1.0 / (2*self.base_band*2**res_level), # resolution level starts from 0
 			res_level,
 			ndof,
+			frequency_overlap,
 			self.inst
 		)
 		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
@@ -385,7 +378,8 @@ class EPHandler( Handler ):
 		self.chan_matrix = ep.build_wide_filter_norm( 
 			corr = self.spec_corr, 
 			freq_filters = self.freq_filter_bank,
-			max_level = self.max_level
+			level = self.max_level,
+			frequency_overlap = self.frequency_overlap
 		)
 		return self.chan_matrix
 
@@ -598,12 +592,10 @@ class EPHandler( Handler ):
 				break
 		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
 
-	def write_triggers( self, flush=True, filename=None, seg=None ):
+	def write_triggers( self, filename, flush=True, seg=None ):
 
 		if not self.output:
 			return
-		if filename == None:
-			filename = self.outfile
 
 		output = ligolw.Document()
 		output.appendChild(ligolw.LIGO_LW())
