@@ -194,10 +194,25 @@ scan_sec.add_option("--scan-segment-end", type=float, dest="scan_end", help="End
 parser.add_option_group(scan_sec)
 
 (options, args) = parser.parse_args()
+gw_data_source_opts = datasource.GWDataSourceInfo( options )
 
-# FIXME: This needs to be moved to after the option parsing
-if options.data_source == "frames" and options.frame_cache is None:
-	if options.gps_start_time is None or options.gps_end_time is None:
+# Locate and load the initialization file
+if not options.infile:
+	print >>sys.stderr, "Initialization file required."
+elif not os.path.exists( options.infile ):
+	print >>sys.stderr, "Initialization file path is invalid."
+	sys.exit(-1)
+
+cfg = SafeConfigParser()
+cfg.read( options.infile )
+
+#
+# This supplants the ligo_data_find step and is mostly convenience
+#
+# TODO: Move to a utility library
+
+if gw_data_source_opts.data_source == "frames" and gw_data_source_opts.frame_cache is None:
+	if gw_data_source_opts.seg is None:
 		sys.exit( "No frame cache present, and no GPS times set. Cannot query for data without an interval to query in." )
 
 	# Shamelessly stolen from gw_data_find
@@ -219,11 +234,13 @@ if options.data_source == "frames" and options.frame_cache is None:
 	connection =  \
 		datafind.GWDataFindHTTPConnection(host=server, port=port)
 	print "Equivalent command line is "
-	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start_time, options.gps_end_time, frame_type)
-	cache = connection.find_frame_urls( handler.inst[0], 
+	# FIXME: Multiple instruments?
+	inst = gw_data_source_opts.channel_dict.keys()[0]
+	print "gw_data_find -o %s -s %d -e %d -u file -t %s" % (inst[0], gw_data_source_opts.seg[0], gw_data_source_opts.seg[1], frame_type)
+	cache = connection.find_frame_urls( inst[0], 
 		frame_type,
-		options.gps_start_time,
-		options.gps_end_time,
+		gw_data_source_opts.seg[0],
+		gw_data_source_opts.seg[1],
 		urltype="file",
 		on_gaps="error"
 	)
@@ -232,12 +249,7 @@ if options.data_source == "frames" and options.frame_cache is None:
 	print "Writing cache of %d files to %s" % (len(cache), tmpname)
 	cache.tofile( open(tmpname, "w") )
 	connection.close()
-	options.frame_cache = tmpname
-
-gw_data_source_opts = datasource.GWDataSourceInfo( options )
-
-# Verbosity and diagnostics
-verbose = options.verbose
+	gw_data_source_opts.frame_cache = tmpname
 
 #
 # =============================================================================
@@ -246,6 +258,9 @@ verbose = options.verbose
 #
 # =============================================================================
 #
+
+# Verbosity and diagnostics
+verbose = options.verbose
 
 # We need a pipeline and pipeline handler instance to configure
 pipeline = gst.Pipeline( "gstlal_excesspower" )
@@ -258,7 +273,6 @@ if options.channel_monitoring:
 
 # If a sample rate other than the native rate is requested, we'll need to keep
 # track of it
-# TODO: Link this to the datasource options
 if options.sample_rate is not None:
 	handler.rate = options.sample_rate
 
@@ -276,30 +290,16 @@ handler.clustering = options.clustering
 # Be verbose?
 handler.verbose = options.verbose
 
-# Locate and load the initialization file
-if not options.infile:
-	print >>sys.stderr, "Initialization file required."
-elif not os.path.exists( options.infile ):
-	print >>sys.stderr, "Initialization file path is invalid."
-	sys.exit(-1)
-
-cfg = SafeConfigParser()
-cfg.read( options.infile )
-
 # Instruments and channels
-# FIXME: Remove the manual options, datasource should take care of this
+# FIXME: Multiple instruments
 if len(gw_data_source_opts.channel_dict.keys()) == 1:
 	handler.inst = gw_data_source_opts.channel_dict.keys()[0]
-elif cfg.has_option( "instrument", "detector" ):
-	handler.inst = cfg.get( "instrument", "detector" )
 else:
 	sys.exit( "Unable to determine instrument." )
 
-# FIXME: Remove the manual options, datasource should take care of this
+# FIXME: Multiple instruments
 if gw_data_source_opts.channel_dict[handler.inst] is not None:
 	handler.channel = gw_data_source_opts.channel_dict[handler.inst]
-elif cfg.has_option( "instrument", "channel" ):
-	handler.channel = cfg.get( "instrument", "channel" )
 else:
 	# TODO: In the future, we may request multiple channels for the same 
 	# instrument -- e.g. from a single raw frame
@@ -354,9 +354,8 @@ if cfg.has_option( "cache", "reference-psd" ):
 		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
 
 # Triggering options
-# FIXME: Make this option go away, it's more trouble than its worth
-if cfg.has_option( "triggering", "output-file" ):
-	handler.outfile = cfg.get( "triggering", "output-file" )
+if cfg.has_option( "triggering", "output-file-stride" ):
+	handler.dump_frequency = cfg.getint( "triggering", "output-file-stride" )
 if cfg.has_option( "triggering", "output-directory" ):
 	handler.outdir = cfg.get( "triggering", "output-directory" )
 if cfg.has_option( "triggering", "output-dir-format" ):
@@ -408,9 +407,8 @@ if options.scan_start and options.scan_end:
 # FIXME: Can we move this back now? This probably isn't even needed with the 
 # drop samples
 df = 1.0 / handler.fft_length
-handler.filter_len = 2*int(2*handler.rate / handler.base_band )
 if handler.psd is None:
-	handler.build_default_psd( handler.rate, df, handler.fhigh )
+	handler.psd = EPHandler.build_default_psd( handler.rate, df, handler.fhigh )
 handler.rebuild_filter()
 handler.rebuild_matrix_mixers()
 
@@ -425,7 +423,7 @@ handler.make_process_tables( options, None )
 # =============================================================================
 #
 
-if options.verbose:
+if verbose:
 	print "Assembling pipeline... this is gstlal_excesspower, version code name %s\n" % __version__,
 
 head = datasource.mkbasicsrc( pipeline, 
@@ -470,6 +468,7 @@ handler.whitener.set_property( "expand-gaps", True )
 
 # Drop first PSD estimates until it settles
 if psdfile is None:
+	handler.whitener_offset = options.drop_time
 	head = pipeparts.mkdrop( pipeline, head, int(options.drop_time*handler.rate) )
 
 # Scan piece: Save the whitened time series
