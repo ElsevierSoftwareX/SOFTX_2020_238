@@ -24,6 +24,7 @@ import shlex
 import re
 import json
 import copy
+import warnings
 from bisect import bisect_left
 from itertools import chain, ifilter
 
@@ -141,7 +142,10 @@ DEFAULT_DQ_VECTOR_OFF = EXCESSPOWER_DQ_VECTOR["RESERVED"]
 def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, corr=None):
 	"""
 	Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested.
+
+	Note: Anything that can be done with this function can be done in a more flexible manner with build_filter_from_xml, so this function is likely to disappear.
 	"""
+	warnings.warn("The use of excesspower.build_filter is deprecated.", DeprecationWarning)
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
@@ -329,11 +333,11 @@ def build_filter_from_xml(psd, sb_table, corr=None):
 	for i, row in enumerate(sb_table):
 		# cfreq + band since the filters are actually 2*band wide
 		if row.central_freq + row.bandwidth > rate/2:
-			print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than Nyquist (%f), adjusting to match." % (row.central_freq + row.bandwidth, rate/2.0)
+			raise ValueError("Filter high frequency (%f) requested is higher than Nyquist (%f), adjusting to match." % (row.central_freq + row.bandwidth, rate/2.0))
 			continue
 
 		if row.central_freq + row.bandwidth == rate/2:
-			print >> sys.stderr, "WARNING: high frequency (%f) is equal to Nyquist. Filters will probably be bad. Reduce the high frequency." % (row.central_freq+ row.bandwidth)
+			warnings.warn("Filter high frequency (%f) is equal to Nyquist. Filters could potentially be bad. Suggest to reduce the high frequency." % (row.central_freq+ row.bandwidth))
 
 		try:
 			# Create the EP filter in the FD
@@ -518,7 +522,10 @@ def build_wide_filter_norm( corr, freq_filters, level, frequency_overlap=0, band
 def build_fir_sq_adder( nsamp, padding=0 ):
 	"""
 	Just a square window of nsamp long. Used to sum samples in time. Setting the padding will pad the end with that many 0s. Padding is required in many cases because the audiofirfilter element in gstreamer defaults to time domain convolution for filters < 32 samples. However, TD convolution in audiofirfilter is broken, thus we invoke the FFT based convolution with a filter > 32 samples.
+
+	Note: now that excesspower has switched to using lal_mean, this is no longer necessary, and is likely to be removed soon.
 	"""
+	warnings.warn("excesspower.build_fir_sq_adder is deprecated and could be removed soon.", DeprecationWarning)
 	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
 def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_overlap=0, detector=None):
@@ -675,7 +682,10 @@ def make_cache_parseable_name( inst, tag, start, stop, ext, dir="./" ):
 def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "glitchdb" ):
 	"""
 	Upload a sngl_burst event to glitchdb. The 'search' and 'type' variables will be supplied to glitchdb for its search and type respectively. If no type is specified, the function will attempt to determine it from the channel. If it can't, it will default to GlitchTirgger.
+
+	Note: This function is not useful enough to warrant its inclusion and is like to go away or be replaced with the gracedb api.
 	"""
+	warnings.warn("excesspower.upload_to_db is deprecated and will probably be removed in the future.", DeprecationWarning)
 	try: 
 		type = sb_event_table[0].channel.split("-")[0]
 	# FIXME: Default to glitchtrigger if the subsystem isn't in the channel name
