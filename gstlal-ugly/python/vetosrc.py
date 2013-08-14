@@ -115,7 +115,7 @@ class vetoSource:
         # XXX This cast makes me uncomfortable.  That's why I added 0.1.
         self.rate = int(float(firstVals.size)/float(self.duration) + 0.1)
         # Now that we have the rate, we can set the caps for the appsrc
-        self.caps = "audio/x-raw-float,width=64,depth=64,channels=1,rate=%d" % self.rate
+        self.caps = "audio/x-raw-float,width=32,channels=1,rate=%d" % self.rate
 
     def check_for_new_files(self, timestamp=0):
         pattern = self.pathPrefix + '*' + self.inputExt
@@ -182,7 +182,7 @@ class vetoSource:
         # Load the numpy array.
         src.info("processing %s" % filePath)
         veto_vals = wrapNpLoad(filePath)
-        veto_vals = veto_vals.astype(np.float64)
+        veto_vals = veto_vals.astype(np.float32)
 
         # Build the buffer.
         buffer_len = veto_vals.nbytes
