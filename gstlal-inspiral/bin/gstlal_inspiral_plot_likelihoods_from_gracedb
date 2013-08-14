@@ -112,11 +112,11 @@ print >> sys.stderr, "smooth" in form
 
 if "smooth" in form:
 	likelihood_data.distribution_stats.finish()
-	counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
-	inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
+	counts = likelihood_data.distribution_stats.distributions.background_pdf
+	inj = likelihood_data.distribution_stats.distributions.injection_pdf
 else:
-	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
-	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+	counts = likelihood_data.distribution_stats.distributions.background_rates
+	inj = likelihood_data.distribution_stats.distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 

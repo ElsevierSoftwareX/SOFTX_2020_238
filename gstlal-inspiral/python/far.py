@@ -482,7 +482,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		P = 1.0
 		for name, value in params.items():
 			if name.endswith("_snr_chi"):
-				P *= float(self.background_rates_interp[name](*value))
+				P *= float(self.background_pdf_interp[name](*value))
 		return P
 
 	def P_signal(self, params):
@@ -498,7 +498,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		for name, value in params.items():
 			if name.endswith("_snr_chi"):
-				P *= float(self.injection_rates_interp[name](*value))
+				P *= float(self.injection_pdf_interp[name](*value))
 		return P
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
@@ -530,8 +530,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.add_foreground_prior(n = n, prefactors_range = prefactors_range, df = df, instruments = instruments, verbose = verbose)
 
 	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
-		# FIXME:  for maintainability, this should be modified to
-		# use the .add_injection() method of self, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for param, binarr in self.injection_rates.items():
 			new_binarr = rate.BinnedArray(binarr.bins)
@@ -581,7 +579,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# convert signal (aka injection) (rho, chi^2/rho^2) PDFs
 		# into P(chi^2/rho^2 | rho)
-		for name, pdf in self.injection_rates.items():
+		for name, pdf in self.injection_pdf.items():
 			if not name.endswith("_snr_chi"):
 				continue
 			bin_sizes = pdf.bins[1].upper() - pdf.bins[1].lower()
@@ -589,7 +587,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				nonzero = pdf.array[i] != 0
 				pdf.array[i] /= numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
 			# rebuild the interpolator
-			self.injection_rates_interp[name] = rate.InterpBinnedArray(pdf)
+			self.injection_pdf_interp[name] = rate.InterpBinnedArray(pdf)
 
 	@classmethod
 	def from_xml(cls, xml, name):
@@ -622,52 +620,51 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 #
 
 
+class FilterThread(snglcoinc.CoincParamsFilterThread):
+	# populate the bins with probabilities (not probability densities
+	# as in the default implementation)
+	def run(self):
+		with self.cpu:
+			if self.verbose:
+				with self.stderr:
+					print >>sys.stderr, "%s," % self.getName(),
+			rate.filter_array(self.binnedarray.array, self.filter)
+			self.binnedarray.array /= self.binnedarray.array.sum()
+
+
 class DistributionsStats(object):
 	"""
 	A class used to populate a ThincaCoincParamsDistribution instance using
 	event parameter data.
 	"""
 	def __init__(self):
-		self.raw_distributions = ThincaCoincParamsDistributions()
-		self.smoothed_distributions = ThincaCoincParamsDistributions()
+		self.distributions = ThincaCoincParamsDistributions()
 		self.likelihood_pdfs = {}
 		self.target_length = 1000
 
 	def __add__(self, other):
 		out = type(self)()
-		out.raw_distributions += self.raw_distributions
-		out.raw_distributions += other.raw_distributions
-		#FIXME do we also add the smoothed distributions??
+		out.distributions += self.distributions
+		out.distributions += other.distributions
 		return out
 
 	def add_single(self, event):
-		self.raw_distributions.add_background(self.raw_distributions.coinc_params((event,), None))
+		self.distributions.add_background(self.distributions.coinc_params((event,), None))
 
 	def finish(self, verbose = False):
-		self.smoothed_distributions = self.raw_distributions.copy()
-		#self.smoothed_distributions.finish(verbose = verbose)
-		# FIXME:  should be the line above, we'll temporarily do
-		# the following.  the difference is that the above produces
-		# PDFs while what follows produces probabilities in each
-		# bin
 		if verbose:
 			print >>sys.stderr, "smoothing parameter distributions ...",
-		for name, binnedarray in itertools.chain(self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
-			if verbose:
-				print >>sys.stderr, "%s," % name,
-			rate.filter_array(binnedarray.array, self.raw_distributions.filters[name])
-			numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
-			binnedarray.array /= binnedarray.array.sum()
+		self.distributions.finish(verbose = verbose, filterthread = FilterThread)
 		if verbose:
 			print >>sys.stderr, "done"
 
 	def compute_single_instrument_background(self, instruments = None, verbose = False):
 		# initialize a likelihood ratio evaluator
-		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.smoothed_distributions)
+		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.distributions)
 
 		# reduce typing
-		background = self.smoothed_distributions.background_rates
-		injections = self.smoothed_distributions.injection_rates
+		background = self.distributions.background_pdf
+		injections = self.distributions.injection_pdf
 
 		self.likelihood_pdfs.clear()
 		for param in background:
@@ -700,13 +697,12 @@ class DistributionsStats(object):
 	@classmethod
 	def from_xml(cls, xml, name):
 		self = cls()
-		# FIXME:  produce error if raw_distributions' binnings don't match the arrays in the file?
-		self.raw_distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
-		self.smoothed_distributions = ThincaCoincParamsDistributions()
+		# FIXME:  produce error if distributions' binnings don't match the arrays in the file?
+		self.distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
 		return self, process_id
 
 	def to_xml(self, process, name):
-		return self.raw_distributions.to_xml(process, name)
+		return self.distributions.to_xml(process, name)
 
 
 #

@@ -49,8 +49,8 @@ total_count = {'H1':0., 'L1':0., 'V1':0.}
 for f in files:
 	Far = far.LocalRankingData.from_filenames([f], verbose = options.verbose)
 	dists, segs = Far.distribution_stats, Far.livetime_seg
-	counts = dists.raw_distributions.background_rates
-	inj = dists.raw_distributions.injection_rates
+	counts = dists.distributions.background_rates
+	inj = dists.distributions.injection_rates
 	likely = copy.deepcopy(inj)
 
 	for i, ifo in enumerate(['H1','L1', 'V1']):	

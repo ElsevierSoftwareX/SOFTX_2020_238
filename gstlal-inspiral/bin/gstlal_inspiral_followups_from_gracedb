@@ -97,8 +97,8 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 
 likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
 
-counts = likelihood_data.distribution_stats.raw_distributions.background_rates
-inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+counts = likelihood_data.distribution_stats.distributions.background_rates
+inj = likelihood_data.distribution_stats.distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
