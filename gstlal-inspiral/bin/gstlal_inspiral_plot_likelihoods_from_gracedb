@@ -111,12 +111,12 @@ likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path,
 print >> sys.stderr, "smooth" in form
 
 if "smooth" in form:
-	likelihood_data.distribution_stats.finish()
-	counts = likelihood_data.distribution_stats.distributions.background_pdf
-	inj = likelihood_data.distribution_stats.distributions.injection_pdf
+	likelihood_data.smooth_distribution_stats()
+	counts = likelihood_data.distributions.background_pdf
+	inj = likelihood_data.distributions.injection_pdf
 else:
-	counts = likelihood_data.distribution_stats.distributions.background_rates
-	inj = likelihood_data.distribution_stats.distributions.injection_rates
+	counts = likelihood_data.distributions.background_rates
+	inj = likelihood_data.distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 

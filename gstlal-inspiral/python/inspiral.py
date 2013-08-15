@@ -689,10 +689,10 @@ class Data(object):
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 				if self.assign_likelihoods:
 					assert self.marginalized_likelihood_file is not None
-					# smooth the distribution_stats
+					# smooth the distributions
 					self.far.smooth_distribution_stats(verbose = self.verbose)
 					# update stream thinca's likelihood data
-					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.distributions)
+					self.stream_thinca.set_likelihood_data(self.far.distributions)
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = LIGOLWContentHandler))
@@ -717,7 +717,7 @@ class Data(object):
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
 			for event in noncoinc_sngls:
-				self.far.distribution_stats.add_single(event)
+				self.far.distributions.add_background(self.far.distributions.coinc_params((event,), None))
 
 			# update output document
 			self.coincs_document.commit()
@@ -747,7 +747,7 @@ class Data(object):
 		else:
 			FAP = None
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, FAP = FAP):
-			self.far.distribution_stats.add_single(event)
+			self.far.distributions.add_background(self.far.distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 
 		# do GraceDB alerts

@@ -375,6 +375,18 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 #
 
 
+class FilterThread(snglcoinc.CoincParamsFilterThread):
+	# populate the bins with probabilities (not probability densities
+	# as in the default implementation)
+	def run(self):
+		with self.cpu:
+			if self.verbose:
+				with self.stderr:
+					print >>sys.stderr, "%s," % self.getName(),
+			rate.filter_array(self.binnedarray.array, self.filter)
+			self.binnedarray.array /= self.binnedarray.array.sum()
+
+
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  switch to new default when possible
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
@@ -613,96 +625,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			elem = xml.appendChild(rate.binned_array_to_xml(binnedarray, prefix))
 			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key))))
 		return xml
-
-
-#
-# Paramter Distributions
-#
-
-
-class FilterThread(snglcoinc.CoincParamsFilterThread):
-	# populate the bins with probabilities (not probability densities
-	# as in the default implementation)
-	def run(self):
-		with self.cpu:
-			if self.verbose:
-				with self.stderr:
-					print >>sys.stderr, "%s," % self.getName(),
-			rate.filter_array(self.binnedarray.array, self.filter)
-			self.binnedarray.array /= self.binnedarray.array.sum()
-
-
-class DistributionsStats(object):
-	"""
-	A class used to populate a ThincaCoincParamsDistribution instance using
-	event parameter data.
-	"""
-	def __init__(self):
-		self.distributions = ThincaCoincParamsDistributions()
-		self.likelihood_pdfs = {}
-		self.target_length = 1000
-
-	def __add__(self, other):
-		out = type(self)()
-		out.distributions += self.distributions
-		out.distributions += other.distributions
-		return out
-
-	def add_single(self, event):
-		self.distributions.add_background(self.distributions.coinc_params((event,), None))
-
-	def finish(self, verbose = False):
-		if verbose:
-			print >>sys.stderr, "smoothing parameter distributions ...",
-		self.distributions.finish(verbose = verbose, filterthread = FilterThread)
-		if verbose:
-			print >>sys.stderr, "done"
-
-	def compute_single_instrument_background(self, instruments = None, verbose = False):
-		# initialize a likelihood ratio evaluator
-		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.distributions)
-
-		# reduce typing
-		background = self.distributions.background_pdf
-		injections = self.distributions.injection_pdf
-
-		self.likelihood_pdfs.clear()
-		for param in background:
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
-
-			if verbose:
-				print >>sys.stderr, "updating likelihood background for %s" % instrument
-
-			likelihoods = injections[param].array / background[param].array
-			# ignore infs and nans because background is never
-			# found in those bins.  the boolean array indexing
-			# flattens the array
-			minlikelihood, maxlikelihood = likelihood_bin_boundaries(likelihoods, background[param].array)
-			# construct PDF
-			# FIXME:  because the background array contains
-			# probabilities and not probability densities, the
-			# likelihood_pdfs contain probabilities and not
-			# densities, as well, when this is done
-			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
-			for coords in iterutils.MultiIter(*background[param].bins.centres()):
-				likelihood = likelihood_ratio_evaluator({param: coords})
-				if numpy.isfinite(likelihood):
-					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		self = cls()
-		# FIXME:  produce error if distributions' binnings don't match the arrays in the file?
-		self.distributions, process_id = ThincaCoincParamsDistributions.from_xml(xml, name)
-		return self, process_id
-
-	def to_xml(self, process, name):
-		return self.distributions.to_xml(process, name)
 
 
 #
@@ -955,12 +877,13 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 
 
 class LocalRankingData(object):
-	def __init__(self, livetime_seg, distribution_stats, trials_table = None, target_length = 1000):
-		self.distribution_stats = distribution_stats
+	def __init__(self, livetime_seg, coinc_params_distributions, trials_table = None, target_length = 1000):
+		self.distributions = coinc_params_distributions
 		if trials_table is None:
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
+		self.likelihood_pdfs = {}
 		self.joint_likelihood_pdfs = {}
 		self.livetime_seg = livetime_seg
 
@@ -972,7 +895,7 @@ class LocalRankingData(object):
 		self.target_length = target_length
 
 	def __iadd__(self, other):
-		self.distribution_stats += other.distribution_stats
+		self.distributions += other.distributions
 		self.trials_table += other.trials_table
 		if self.livetime_seg[0] is None and other.livetime_seg[0] is not None:
 			minstart = other.livetime_seg[0]
@@ -990,13 +913,13 @@ class LocalRankingData(object):
 	@classmethod
 	def from_xml(cls, xml, name = u"gstlal_inspiral_likelihood"):
 		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
-		distribution_stats, process_id = DistributionsStats.from_xml(llw_elem, name)
+		distributions, process_id = ThincaCoincParamsDistributions.from_xml(llw_elem, name)
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
 		# table.  uninitialized segments got recorded as
 		# [None,None)
 		livetime_seg, = (row.get_out() for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
-		self = cls(livetime_seg, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
+		self = cls(livetime_seg, coinc_params_distributions = distributions, trials_table = TrialsTable.from_xml(llw_elem))
 
 		# pull out the joint likelihood arrays if they are present
 		for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and "_joint_likelihood" in elem.getAttribute(u"Name")]:
@@ -1016,31 +939,70 @@ class LocalRankingData(object):
 	def to_xml(self, process, name = u"gstlal_inspiral_likelihood"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
-		xml.appendChild(self.distribution_stats.to_xml(process, name))
+		xml.appendChild(self.distributions.to_xml(process, name))
 		for key in self.joint_likelihood_pdfs:
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
 			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], "%s_joint_likelihood" % (ifostr,)))
 		return xml
 
 	def smooth_distribution_stats(self, verbose = False):
-		if self.distribution_stats is not None:
-			# FIXME:  this results in the
-			# .smoothed_distributions object containing
-			# *probabilities* not probability densities. this
-			# might be changed in the future.
-			self.distribution_stats.finish(verbose = verbose)
+		if self.distributions is not None:
+			# FIXME:  this results in the .distributions
+			# object's PDF arrays containing *probabilities*
+			# not probability densities. this might be changed
+			# in the future.
+			if verbose:
+				print >>sys.stderr, "smoothing parameter distributions ...",
+			self.distributions.finish(verbose = verbose, filterthread = FilterThread)
+			if verbose:
+				print >>sys.stderr, "done"
+
+	def compute_single_instrument_background(self, instruments = None, verbose = False):
+		# initialize a likelihood ratio evaluator
+		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.distributions)
+
+		# reduce typing
+		background = self.distributions.background_pdf
+		injections = self.distributions.injection_pdf
+
+		self.likelihood_pdfs.clear()
+		for param in background:
+			# FIXME only works if there is a 1-1 relationship between params and instruments
+			instrument = param.split("_")[0]
+
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
+
+			if verbose:
+				print >>sys.stderr, "updating likelihood background for %s" % instrument
+
+			likelihoods = injections[param].array / background[param].array
+			# ignore infs and nans because background is never
+			# found in those bins.  the boolean array indexing
+			# flattens the array
+			minlikelihood, maxlikelihood = likelihood_bin_boundaries(likelihoods, background[param].array)
+			# construct PDF
+			# FIXME:  because the background array contains
+			# probabilities and not probability densities, the
+			# likelihood_pdfs contain probabilities and not
+			# densities, as well, when this is done
+			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
+			for coords in iterutils.MultiIter(*background[param].bins.centres()):
+				likelihood = likelihood_ratio_evaluator({param: coords})
+				if numpy.isfinite(likelihood):
+					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
 
 	def compute_joint_instrument_background(self, remap, instruments = None, verbose = False):
 		# first get the single detector distributions
-		self.distribution_stats.compute_single_instrument_background(instruments = instruments, verbose = verbose)
+		self.compute_single_instrument_background(instruments = instruments, verbose = verbose)
 
 		self.joint_likelihood_pdfs.clear()
 
 		# calculate all of the possible ifo combinations with at least
 		# 2 detectors in order to get the joint likelihood pdfs
-		likelihood_pdfs = self.distribution_stats.likelihood_pdfs
 		if instruments is None:
-			instruments = likelihood_pdfs.keys()
+			instruments = self.likelihood_pdfs.keys()
 		for n in range(2, len(instruments) + 1):
 			for ifos in iterutils.choices(instruments, n):
 				ifo_set = frozenset(ifos)
@@ -1053,7 +1015,7 @@ class LocalRankingData(object):
 				# may not be if a certain remap set is
 				# provided
 				if remap_set not in self.joint_likelihood_pdfs:
-					self.joint_likelihood_pdfs[remap_set] = possible_ranks_array(likelihood_pdfs, remap_set, self.target_length)
+					self.joint_likelihood_pdfs[remap_set] = possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
 
 				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
 

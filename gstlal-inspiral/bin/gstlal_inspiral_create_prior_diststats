@@ -97,12 +97,12 @@ options, filenames = parse_command_line()
 # Create likelihood data
 #
 
-coincparamsdistributions = far.DistributionsStats()
+coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
 if options.background_prior != 0:
-	coincparamsdistributions.distributions.add_background_prior(options.background_prior, instruments = options.instrument, verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(options.background_prior, instruments = options.instrument, verbose = options.verbose)
 
-coincparamsdistributions.distributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count, instruments = options.instrument)
+coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count, instruments = options.instrument)
 
 # no segments, this file is independent of time
 FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)

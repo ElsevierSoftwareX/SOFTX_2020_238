@@ -141,15 +141,15 @@ options, filenames = parse_command_line()
 
 
 Far = far.LocalRankingData.from_filenames(options.likelihood_filenames, verbose = options.verbose)
-coincparamsdistributions, likelihood_seglists = Far.distribution_stats, Far.livetime_seg
+coincparamsdistributions, likelihood_seglists = Far.distributions, Far.livetime_seg
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.distributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
-	coincparamsdistributions.distributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "computing event densities ..."
@@ -160,8 +160,7 @@ if options.write_likelihood is not None:
 	xmldoc = inspiral.gen_likelihood_control_doc(Far, ("H1", "H2", "L1", "V1"))
 	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
 
-#FIXME should this come from somewhere else now?
-likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions.distributions)
+likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 
 
 #

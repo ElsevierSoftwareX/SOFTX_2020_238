@@ -424,9 +424,9 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.data_source in ("lvshm", "framexmit"):
 		FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 	else:
-		FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
-		# initialize an empty trials table with the combinations of detectors
-		# that this job will analyze
+		FAR = far.LocalRankingData(segments.segment(None, None), far.ThincaCoincParamsDistributions())
+		# initialize an empty trials table with the combinations of
+		# detectors that this job will analyze
 		FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
 
 	#
