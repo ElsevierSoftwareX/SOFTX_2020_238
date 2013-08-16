@@ -138,7 +138,7 @@ GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement,
  */
 
 
-static int split_name(const char *name, char **instrument, char **channel)
+static int split_name(const char *name, gchar **instrument, gchar **channel)
 {
 	const char *colon = strchr(name, ':');
 
@@ -147,8 +147,8 @@ static int split_name(const char *name, char **instrument, char **channel)
 		return -1;
 	}
 
-	*instrument = strndup(name, colon - name);
-	*channel = strdup(colon + 1);
+	*instrument = g_strndup(name, colon - name);
+	*channel = g_strdup(colon + 1);
 
 	return 0;
 }
@@ -430,7 +430,7 @@ static void src_pad_new_tags_handler(GObject *object, GParamSpec *pspec, gpointe
 static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 {
 	GstFrPad *srcpad = NULL;
-	char *instrument, *channel;
+	gchar *instrument, *channel;
 
 	/*
 	 * construct the pad
@@ -453,8 +453,8 @@ static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 
 	split_name(name, &instrument, &channel);
 	g_object_set(srcpad, "instrument", instrument, "channel-name", channel, NULL);
-	free(instrument);
-	free(channel);
+	g_free(instrument);
+	g_free(channel);
 
 	/*
 	 * add pad to element.  must ref it because _add_pad()

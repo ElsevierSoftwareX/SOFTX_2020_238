@@ -66,9 +66,8 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import simplehandler
 from gstlal import inspiral
+from gstlal import httpinterface
 from gstlal import datasource
-import pdb
-import sys
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -209,7 +208,7 @@ def parse_command_line():
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	# Online specific initialization
-	if options.data_source == "lvshm":
+	if options.data_source in ("lvshm", "framexmit"):
 		# check required options in this case
 		required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
 
@@ -339,8 +338,6 @@ if options.verbose:
 
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
-handler = simplehandler.Handler(mainloop, pipeline)
-
 
 triggersrc = lloidparts.mkSPIIRmulti(
 	pipeline,
@@ -402,9 +399,15 @@ output = inspiral.Data(
 	gracedb_group = options.gracedb_group,
 	verbose = options.verbose
 )
-
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
+
+# setup the pipeline hander with dq gates if in online mode
+if options.data_source in ("lvshm", "framexmit"):
+	gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
+else:
+	gates = {}
+handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
@@ -413,17 +416,66 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
+
 #
 # if we request a dot graph of the pipeline, set it up
 #
+
 
 if options.write_pipeline is not None:
 	pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
+
 #
 # Run pipeline
 #
+
+
+if options.data_source not in ("lvshm", "framexmit"):
+	if options.verbose:
+		print >>sys.stderr, "setting pipeline state to paused ..."
+	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError, "pipeline did not enter paused state"
+else:
+	#
+	# start http interface
+	#
+
+	# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+	httpinterface.start_servers(16953, verbose = options.verbose)
+	#
+	# setup sigint handler to shutdown pipeline.  this is how the program stops
+	# gracefully, it is the only way to stop it.  Otherwise it runs forever
+	# man.
+	#
+
+
+	class OneTimeSignalHandler(object):
+		def __init__(self, pipeline):
+			self.pipeline = pipeline
+			self.count = 0
+
+		def __call__(self, signum, frame):
+			self.count += 1
+			if self.count == 1:
+				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+				try:
+					#FIXME how do I choose a timestamp?
+					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+					if not self.pipeline.send_event(gst.event_new_eos()):
+						raise Exception("pipeline.send_event(EOS) returned failure")
+				except Exception, e:
+					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+					os._exit(1)
+			else:
+				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+	# FIXME get rid of this someday: Repair the shared memory just in case before starting
+	for partition in ("LHO_Data", "LLO_Data", "VIRGO_Data"):
+		subprocess.call(["smrepair", partition])
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
@@ -437,6 +489,7 @@ if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
 mainloop.run()
 
+
 #
 # write output file
 #
@@ -446,7 +499,9 @@ output.write_output_file(filename = options.output or output.coincs_document.T05
 
 
 #
-
-#
 # done
 #
+
+if options.data_source in ("lvshm", "framexmit"):
+	sys.exit(1) # online pipeline always ends with an error code
+

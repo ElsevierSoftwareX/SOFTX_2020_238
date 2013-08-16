@@ -116,7 +116,7 @@ class upper_limit(object):
         # remove injections that violate user-imposed constraints and
         # symmetrize between m1-m2
         for instr in self.instruments:
-            self.total_injections[inst] = imr_utils.symmetrize_sims(self.total_injections[inst], "mass1", "mass2")
+            self.total_injections[instr] = imr_utils.symmetrize_sims(self.total_injections[instr], "mass1", "mass2")
             self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
             self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
 
@@ -286,7 +286,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
     parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
-    parser.add_option("--veto-segments-name", default = None, help = "Set the name of the veto segments to use from the XML document.")
+    parser.add_option("--veto-segments-name", default = "vetoes", help = "Set the name of the veto segments to use from the XML document.")
     parser.add_option("--data-segments-name", default = "datasegments", help = "Set the name of the data segments. Default = \"datasegments\".")
     parser.add_option("--coinc-table-name", default = "coinc_inspiral", metavar = "name", help = "Set the name of the table containing coincident triggers.  Default = \"coinc_inspiral\".")
 
@@ -378,20 +378,6 @@ UL = upper_limit(opts)
 fars = numpy.logspace(numpy.log10(opts.min_far), numpy.log10(opts.max_far), opts.xaxis_points)
 snrs = numpy.logspace(numpy.log10(opts.min_snr), numpy.log10(opts.max_snr), opts.xaxis_points)
 
-# guess max distance (for unifying extent of plot axes)
-dmax = 0
-for instr in UL.instruments:
-
-    found_by_far = [sim.distance for far, sim in UL.found_injections_fars[instr] if far < opts.max_far]
-    found_by_snr = [sim.distance for snr, sim in UL.found_injections_snrs[instr] if snr > opts.min_snr]
-
-    dm_tmp_far = 0
-    dm_tmp_snr = 0
-    if found_by_far:
-        dm_tmp_far = max(found_by_far)
-    if found_by_snr:
-        dm_tmp_snr = max(found_by_snr)
-    dmax = max(dmax, dm_tmp_far/2.26, dm_tmp_snr/2.26) # divide by 2.26 for sky average
 
 #
 # loop over the requested instruments and mass bin types, compute the
@@ -559,13 +545,13 @@ for bin_type in opts.bin_types:
         ax.set_xscale("log")
         ax.set_xlim([min(fars), max(fars)])
         ax.invert_xaxis()
-        ax.set_ylim([0, dmax])
+        ax.set_ylim(ymin=0)
 
         ax = fig_snr_range.gca()
         ax.set_xlabel("Network SNR")
         ax.set_ylabel("Range (Mpc)")
         ax.set_xlim([min(snrs), max(snrs)])
-        ax.set_ylim([0, dmax])
+        ax.set_ylim(ymin=0)
 
         # common to all figures
         for fig in figs:

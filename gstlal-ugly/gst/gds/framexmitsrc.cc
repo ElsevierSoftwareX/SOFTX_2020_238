@@ -33,7 +33,7 @@
  */
 
 
-#include <signal.h>
+#include <pthread.h>
 #include <string.h>
 
 
@@ -183,6 +183,7 @@ GST_BOILERPLATE_FULL(GstGDSFramexmitSrc, gds_framexmitsrc, GstPushSrc, GST_TYPE_
 #define DEFAULT_MULTICAST_GROUP "0.0.0.0"
 #define DEFAULT_PORT 0
 #define DEFAULT_QOS 2
+#define DEFAULT_WAIT_TIME -1.0
 
 
 /*
@@ -232,6 +233,63 @@ static GstClockTime GPSNow(void)
 /*
  * ============================================================================
  *
+ *                               Receive Thread
+ *
+ * ============================================================================
+ */
+
+
+static void *receive_thread(void *arg)
+{
+	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(arg);
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	element->recv_status = GST_FLOW_OK;
+
+	/* FIXME:  this will leak memory if killed at the wrong spot */
+	while(TRUE) {
+		GstBuffer *buffer;
+		char *data = NULL;
+		int len;
+		unsigned sequence, timestamp, duration;
+
+		len = FRAMERCV(element)->receive(data, 0, &sequence, &timestamp, &duration);
+		if(len < 0) {
+			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.receive() failed"));
+			g_mutex_lock(element->buffer_lock);
+			element->recv_status = GST_FLOW_ERROR;
+			g_cond_signal(element->received_buffer);
+			g_mutex_unlock(element->buffer_lock);
+			free(data);
+			break;
+		}
+		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
+
+		buffer = gst_buffer_new();
+		gst_buffer_set_caps(buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(GST_BASE_SRC(element))));
+		GST_BUFFER_DATA(buffer) = GST_BUFFER_MALLOCDATA(buffer) = (guint8 *) data;
+		GST_BUFFER_SIZE(buffer) = len;
+		GST_BUFFER_TIMESTAMP(buffer) = timestamp * GST_SECOND;
+		GST_BUFFER_DURATION(buffer) = duration * GST_SECOND;
+		GST_BUFFER_OFFSET(buffer) = sequence;
+		GST_BUFFER_OFFSET_END(buffer) = sequence + 1;
+
+		g_mutex_lock(element->buffer_lock);
+		if(element->buffer)
+			gst_buffer_unref(element->buffer);
+		element->buffer = buffer;
+		g_cond_signal(element->received_buffer);
+		g_mutex_unlock(element->buffer_lock);
+	}
+
+	return NULL;
+}
+
+
+/*
+ * ============================================================================
+ *
  *                        GstBaseSrc Method Overrides
  *
  * ============================================================================
@@ -246,12 +304,24 @@ static GstClockTime GPSNow(void)
 static gboolean start(GstBaseSrc *object)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(object);
+	int retval;
 	gboolean success = TRUE;
+
+	g_assert(element->buffer == NULL);
 
 	element->frameRecv = new framexmit::frameRecv(element->qos);
 	success = FRAMERCV(element)->open(element->group, element->iface, element->port);
 	if(!success) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.open(group = \"%s\", iface = \"%s\", port = %d) failed", element->group, element->iface, element->port));
+		FRAMERCV(element)->close();
+		element->frameRecv = NULL;
+		goto done;
+	}
+
+	retval = pthread_create(&element->recv_thread, NULL, receive_thread, element);
+	success = retval == 0;
+	if(!success) {
+		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("failure creating receiver thread (%d): %s", retval, strerror(retval)));
 		FRAMERCV(element)->close();
 		element->frameRecv = NULL;
 		goto done;
@@ -273,6 +343,16 @@ done:
 static gboolean stop(GstBaseSrc *object)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(object);
+	gboolean success = TRUE;
+
+	success &= pthread_cancel(element->recv_thread) == 0;
+	success &= pthread_join(element->recv_thread, NULL) == 0;
+	g_mutex_lock(element->buffer_lock);
+	if(element->buffer) {
+		gst_buffer_unref(element->buffer);
+		element->buffer = NULL;
+	}
+	g_mutex_unlock(element->buffer_lock);
 
 	FRAMERCV(element)->close();
 	delete FRAMERCV(element);
@@ -280,7 +360,7 @@ static gboolean stop(GstBaseSrc *object)
 
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 
-	return TRUE;
+	return success;
 }
 
 
@@ -294,12 +374,10 @@ static gboolean unlock(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
+	g_mutex_lock(element->buffer_lock);
 	element->unblocked = TRUE;
-
-	if(!g_mutex_trylock(element->create_thread_lock))
-		success = !pthread_kill(element->create_thread, SIGALRM);
-	else
-		g_mutex_unlock(element->create_thread_lock);
+	g_cond_signal(element->received_buffer);
+	g_mutex_unlock(element->buffer_lock);
 
 	return success;
 }
@@ -315,7 +393,9 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
+	g_mutex_lock(element->buffer_lock);
 	element->unblocked = FALSE;
+	g_mutex_unlock(element->buffer_lock);
 
 	return success;
 }
@@ -329,54 +409,97 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
-	char *data = NULL;
-	int len;
-	unsigned sequence, timestamp, duration;
+	GstClockTime t_before;
+	gboolean timeout;
 	GstFlowReturn result = GST_FLOW_OK;
-
-	if(element->unblocked) {
-		GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-		result = GST_FLOW_UNEXPECTED;
-		goto done;
-	}
 
 	/*
 	 * retrieve data
 	 */
 
-	element->create_thread = pthread_self();
-	g_mutex_lock(element->create_thread_lock);
-	len = FRAMERCV(element)->receive(data, 0, &sequence, &timestamp, &duration);
-	g_mutex_unlock(element->create_thread_lock);
-
-	if(len < 0) {
-		if(element->unblocked) {
-			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-			result = GST_FLOW_UNEXPECTED;
-		} else {
-			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.receive() failed"));
-			result = GST_FLOW_ERROR;
-		}
-		goto done;
-	} else
-		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
+try_again:
+	g_mutex_lock(element->buffer_lock);
+	timeout = FALSE;
+	t_before = GST_CLOCK_TIME_NONE;
+	while(!element->buffer && !element->unblocked && !timeout && element->recv_status == GST_FLOW_OK) {
+		GTimeVal timeout_time;
+		g_get_current_time(&timeout_time);
+		g_time_val_add(&timeout_time, element->wait_time * G_USEC_PER_SEC);
+		t_before = GPSNow();
+		timeout = !g_cond_timed_wait(element->received_buffer, element->buffer_lock, element->wait_time < 0 ? NULL : &timeout_time);
+	}
+	*buffer = element->buffer;
+	element->buffer = NULL;
+	g_mutex_unlock(element->buffer_lock);
 
 	/*
-	 * prepare output
+	 * if no data, try to guess cause
 	 */
 
-	*buffer = gst_buffer_new();
-	g_assert(*buffer != NULL);
-	gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-	GST_BUFFER_DATA(*buffer) = GST_BUFFER_MALLOCDATA(*buffer) = (guint8 *) data;
-	GST_BUFFER_SIZE(*buffer) = len;
-	GST_BUFFER_TIMESTAMP(*buffer) = timestamp * GST_SECOND;
-	GST_BUFFER_DURATION(*buffer) = duration * GST_SECOND;
-	GST_BUFFER_OFFSET(*buffer) = sequence;
-	GST_BUFFER_OFFSET_END(*buffer) = sequence + 1;
-	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_TIMESTAMP(*buffer) != element->next_timestamp)
-		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+	if(!*buffer) {
+		/*
+		 * failure in receive thread?
+		 */
 
+		if(element->recv_status != GST_FLOW_OK) {
+			result = element->recv_status;
+			goto done;
+		}
+
+		/*
+		 * application shutting us down?
+		 */
+
+		else if(element->unblocked) {
+			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
+			result = GST_FLOW_UNEXPECTED;
+			goto done;
+		}
+
+		/*
+		 * timeout?  create a 0-length buffer with a guess as to
+		 * the timestamp of the missing data.  guess:  the time
+		 * when we started waiting for the data adjusted by the
+		 * most recently measured latency
+		 */
+
+		else if(timeout) {
+			GST_WARNING_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
+			g_assert(GST_CLOCK_TIME_IS_VALID(t_before));
+
+			*buffer = gst_buffer_new();
+			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
+			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
+				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+			if(GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+				GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
+				gst_buffer_unref(*buffer);
+				*buffer = NULL;
+				goto try_again;
+			}
+			GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+			GST_BUFFER_DURATION(*buffer) = 0;
+			GST_BUFFER_OFFSET(*buffer) = GST_BUFFER_OFFSET_NONE;
+			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+		}
+
+		/*
+		 * there are no other possible causes of failure
+		 */
+
+		else
+			g_assert_not_reached();
+	}
+
+	/*
+	 * check for disconts
+	 */
+
+	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_TIMESTAMP(*buffer) != element->next_timestamp) {
+		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+		GST_WARNING_OBJECT(element, "discontinuity @ %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+	}
 	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
 
 	/*
@@ -385,7 +508,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(*buffer), GPSNow());
 	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
-	GST_DEBUG_OBJECT(element, "latency = %" G_GINT64_FORMAT " ns -- %" G_GINT64_FORMAT " ns", element->min_latency, element->max_latency);
+	GST_DEBUG_OBJECT(element, "latency = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->min_latency), GST_TIME_SECONDS_ARGS(element->max_latency));
 
 	/*
 	 * adjust segment
@@ -447,7 +570,8 @@ enum property {
 	ARG_MULTICAST_IFACE = 1,
 	ARG_MULTICAST_GROUP,
 	ARG_PORT,
-	ARG_QOS
+	ARG_QOS,
+	ARG_WAIT_TIME,
 };
 
 
@@ -486,6 +610,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		element->qos = (enum gds_framexmitsrc_qos) g_value_get_enum(value);
 		break;
 
+	case ARG_WAIT_TIME:
+		element->wait_time = g_value_get_double(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -518,6 +646,10 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 		g_value_set_enum(value, element->qos);
 		break;
 
+	case ARG_WAIT_TIME:
+		g_value_set_double(value, element->wait_time);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -536,12 +668,18 @@ static void finalize(GObject *object)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(object);
 
+	if(element->buffer) {
+		gst_buffer_unref(element->buffer);
+		element->buffer = NULL;
+	}
+	g_mutex_free(element->buffer_lock);
+	element->buffer_lock = NULL;
+	g_cond_free(element->received_buffer);
+	element->received_buffer = NULL;
 	g_free(element->iface);
 	element->iface = NULL;
 	g_free(element->group);
 	element->group = NULL;
-	g_mutex_free(element->create_thread_lock);
-	element->create_thread_lock = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -644,6 +782,17 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_WAIT_TIME,
+		g_param_spec_double(
+			"wait-time",
+			"Wait time",
+			"Wait time in seconds (<0 = wait indefinitely, 0 = never wait).",
+			-G_MAXDOUBLE, G_MAXDOUBLE, DEFAULT_WAIT_TIME,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
 }
 
 
@@ -660,13 +809,20 @@ static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element, GstGDSFramexmitSr
 	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 
 	/*
+	 * receive thread
+	 */
+
+	element->buffer = NULL;
+	element->buffer_lock = g_mutex_new();
+	element->received_buffer = g_cond_new();
+	element->unblocked = FALSE;
+
+	/*
 	 * internal data
 	 */
 
 	element->iface = NULL;
 	element->group = NULL;
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
-	element->unblocked = FALSE;
-	element->create_thread_lock = g_mutex_new();
 	element->frameRecv = NULL;
 }

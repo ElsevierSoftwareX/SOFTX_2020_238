@@ -581,7 +581,7 @@ class EPHandler( Handler ):
 		# prevents that segment from being added to the outgoing search
 		# summary.
 		cur_seg = None
-		if self.current_segment is not None and float(self.current_segment[0]) > analysis_segment[1]:
+		if self.current_segment is not None and float(self.current_segment[0]) <= analysis_segment[1]:
 			# add the current segment
 			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
 			self.seglist["state"].append( cur_seg )
