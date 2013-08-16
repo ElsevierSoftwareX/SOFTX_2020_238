@@ -302,7 +302,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	filters.shape = ( bands, filter_len-1 )
 	return filters, freq_filters
 
-def build_filter_from_xml(psd, sb_table, corr=None):
+def build_filter_from_xml(sb_table, psd, corr=None):
 	"""
 	Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested.
 	"""
