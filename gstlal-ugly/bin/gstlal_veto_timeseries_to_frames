@@ -132,9 +132,6 @@ mux = pipeparts.mkframecppchannelmux(pipeline, None,
 # Link the source to the muxer. 
 appsrc.get_pad("src").link(mux.get_pad(instrument + ':' + channel_name))
 
-muxSink = mux.get_pad(instrument + ':' + channel_name)
-muxSink.add_buffer_probe(probeBufferHandler)
-
 # Stick progress report in pipeline.
 progRep = pipeparts.mkprogressreport(pipeline, mux, "progress_sink")
 

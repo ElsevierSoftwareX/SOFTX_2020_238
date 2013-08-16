@@ -185,7 +185,7 @@ class vetoSource:
                 buf.offset_end = self.current_offset + gap_samples
                 src.emit("push-buffer", buf)
                 src.info("No files! Pushed gap with start=%d, duration=%d latency=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
                 self.next_output_timestamp += buf.duration
                 self.current_offset = buf.offset_end
                 return True
@@ -228,7 +228,7 @@ class vetoSource:
                 src.emit("push-buffer", buf)
                 src.info("gst clock = %d" % int(src.get_clock().get_time()))
                 src.info("pushed gap with start=%d, duration=%d, latency=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
                 self.next_output_timestamp += buf.duration
                 self.current_offset = buf.offset_end
 
@@ -253,11 +253,12 @@ class vetoSource:
         # Push the buffer into the stream (a side effect of 
         # emitting this signal).
         src.emit("push-buffer", buf)
+        # XXX FIXME Use a real gstreamer clock for latency instead? Make sure to fix it in 
+        # the other places too. Okay?
+        #src.info("pushed buffer with start=%d, duration=%d, latency=%d" % 
+        #    (gpsstart,duration, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
         src.info("pushed buffer with start=%d, duration=%d, latency=%d" % 
-            (gpsstart,duration, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
-        # XXX testing
-        src.info("gst clock = %d" % int(src.get_clock().get_time()))
-        src.info("other latency = %d" % (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart)))
+            (gpsstart,duration, (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
         self.next_output_timestamp += buf.duration
         self.current_offset = buf.offset_end
         return True
