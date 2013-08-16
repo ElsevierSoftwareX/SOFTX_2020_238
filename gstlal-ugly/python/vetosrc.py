@@ -38,7 +38,7 @@ import os
 import time
 from collections import deque
 import numpy as np
-
+from glue import gpstime
 
 #
 # =============================================================================
@@ -71,24 +71,26 @@ def wrapNpLoad(filePath):
 #
 
 # Pad probe handler.  Useful for debugging.
-#def probeBufferHandler(pad,gst_buffer):
-#    print 'gpsstart  = %s' % gst_buffer.timestamp
-#    print 'offset    = %s' % gst_buffer.offset
-#    return True
+def probeBufferHandler(pad,gst_buffer):
+    print 'gpsstart  = %s' % gst_buffer.timestamp
+    print 'offset    = %s' % gst_buffer.offset
+    print 'is gap    = %s' % gst_buffer.flag_is_set(gst.BUFFER_FLAG_GAP)
+    return True
 
 # A class for handling the veto timeseries files.
 
 class vetoSource:
-    def __init__(self, inputPath, inputPre, inputExt, waitTime):
-        # get the file list
-        pathPrefix = os.path.join(inputPath,inputPre)
-        self.pathPrefix = pathPrefix
+    def __init__(self, inputPath, inputPre, inputExt, waitTime, initTime=None, dirDigits=5):
+        self.inputPath  = inputPath
         self.inputPre   = inputPre
         self.inputExt   = inputExt
         self.waitTime   = waitTime
-
+        self.dirDigits  = dirDigits
+        self.fullCurrentPrefix = ""
         # Initialize the list of files.
-        self.check_for_new_files()
+        if not initTime:
+            initTime = int(gpstime.GpsSecondsFromPyUTC(time.time()))
+        self.check_for_new_files(initTime*gst.SECOND)
         # This is the offset of a given buffer with respect to the global stream in 
         # units of *samples*.
         self.current_offset = 0
@@ -104,7 +106,7 @@ class vetoSource:
         # put it back, since this is just for informational purposes.
         self.fileQueue.extendleft([filePath])
         firstVals = wrapNpLoad(filePath)
-        training_period, gps_start, rest = filePath[len(pathPrefix):].split('-')
+        training_period, gps_start, rest = filePath[len(self.fullCurrentPrefix):].split('-')
         self.duration = int(rest[:rest.find(inputExt)])
         self.next_output_timestamp = int(gps_start) * gst.SECOND
 
@@ -115,10 +117,20 @@ class vetoSource:
         # XXX This cast makes me uncomfortable.  That's why I added 0.1.
         self.rate = int(float(firstVals.size)/float(self.duration) + 0.1)
         # Now that we have the rate, we can set the caps for the appsrc
-        self.caps = "audio/x-raw-float,width=64,depth=64,channels=1,rate=%d" % self.rate
+        self.caps = "audio/x-raw-float,width=32,channels=1,rate=%d" % self.rate
 
     def check_for_new_files(self, timestamp=0):
-        pattern = self.pathPrefix + '*' + self.inputExt
+        # Figure out which directory the files should be in.
+        timeStr = str(timestamp/gst.SECOND)
+        if len(timeStr)>=self.dirDigits:
+            dirSuffix = timeStr[:self.dirDigits]
+        else:
+            # What is this? The 1980s? Let's just pad with zeros.
+            dirSuffix = timeStr.zfill(self.dirDigits)
+        inputPath = self.inputPath + dirSuffix
+        self.fullCurrentPrefix = os.path.join(inputPath,self.inputPre)
+        pattern = self.fullCurrentPrefix + '*' + self.inputExt
+
         def is_current_file(path):
             filePath = os.path.basename(path)
             rest = filePath[len(self.inputPre):]
@@ -134,19 +146,53 @@ class vetoSource:
     def need_data(self, src, need_bytes=None):
         src.info("----------------------------------------------------")
         src.info("Received need-data signal, %s." % time.asctime())
-        # Keep circling until you find a file.
-        noFile = True
-        while noFile:
-            # Check if new data has arrived on disk.
+#        # Keep circling until you find a file.
+#        noFile = True
+#        while noFile:
+#            # Check if new data has arrived on disk.
+#            self.check_for_new_files(self.next_output_timestamp)
+#            try:
+#                filePath = self.fileQueue.popleft()
+#                noFile = False
+#            except IndexError:
+#                time.sleep(self.waitTime)
+
+        # Instead, will press on after the wait time and push a gap.
+        self.check_for_new_files(self.next_output_timestamp)
+        try:
+            filePath = self.fileQueue.popleft()
+        except IndexError:
+            time.sleep(self.waitTime)
+            # Try it again.
             self.check_for_new_files(self.next_output_timestamp)
             try:
                 filePath = self.fileQueue.popleft()
-                noFile = False
-            except IndexError:
-                time.sleep(self.waitTime)
-
+            except IndexError: 
+                # Push gap equivalent to the wait time and return.
+                # FIXME The gap should be a real gap, not a buffer full of zeros.
+                gap_duration = self.waitTime * gst.SECOND
+                gap_samples = self.waitTime * self.rate
+                #gap_samples = 0
+                gap_vals = np.zeros(gap_samples)
+                gap_vals = gap_vals.astype(np.float32)
+                buffer_len = gap_vals.nbytes
+                buf = gst.buffer_new_and_alloc(buffer_len)
+                buf[:buffer_len-1] = np.getbuffer(gap_vals)
+                #buf.flag_set(gst.BUFFER_FLAG_GAP)
+                buf.timestamp = self.next_output_timestamp
+                buf.duration = gap_duration
+                buf.offset = self.current_offset
+                buf.offset_end = self.current_offset + gap_samples
+                src.emit("push-buffer", buf)
+                src.info("No files! Pushed gap with start=%d, duration=%d latency=%d" %
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
+                self.next_output_timestamp += buf.duration
+                self.current_offset = buf.offset_end
+                return True
+                    
+        # Ah, we have a file.
         # Get the gpsstart time from the filename.
-        rest = filePath[len(self.pathPrefix):]
+        rest = filePath[len(self.fullCurrentPrefix):]
         gpsstart = int(rest.split('-')[1])
         # Let's re-derive the duration.  maybe it changed?
         rest = rest.split('-')[2]
@@ -158,31 +204,38 @@ class vetoSource:
             time.sleep(self.waitTime)
             self.check_for_new_files(self.next_output_timestamp)
             filePath = self.fileQueue.popleft()
-            rest = filePath[len(self.pathPrefix):]
+            rest = filePath[len(self.fullCurrentPrefix):]
             gpsstart = int(rest.split('-')[1])
             rest = rest.split('-')[2]
             duration = int(rest[:rest.find(self.inputExt)])
 
             if gpsstart * gst.SECOND > self.next_output_timestamp:
                 # Push a gap before continuing to process the file we have.
-                buf = gst.buffer_new_and_alloc(0)
-                buf.flag_set(gst.BUFFER_FLAG_GAP)
-                buf.timestamp = self.next_output_timestamp
-                gap_duration = gpsstart * gst.SECOND - buf.timestamp
+                # FIXME The gap should be a real gap, not a buffer full of zeros.
+                gap_duration = gpsstart * gst.SECOND - self.next_output_timestamp
                 gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
+                #gap_samples = 0
+                gap_vals = np.zeros(gap_samples)
+                gap_vals = gap_vals.astype(np.float32)
+                buffer_len = gap_vals.nbytes
+                buf = gst.buffer_new_and_alloc(buffer_len)
+                buf[:buffer_len-1] = np.getbuffer(gap_vals)
+                #buf.flag_set(gst.BUFFER_FLAG_GAP)
+                buf.timestamp = self.next_output_timestamp
                 buf.duration = gap_duration
                 buf.offset = self.current_offset
                 buf.offset_end = self.current_offset + gap_samples
                 src.emit("push-buffer", buf)
-                src.info("pushed gap with start=%d, duration=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND))
+                src.info("gst clock = %d" % int(src.get_clock().get_time()))
+                src.info("pushed gap with start=%d, duration=%d, latency=%d" %
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
                 self.next_output_timestamp += buf.duration
                 self.current_offset = buf.offset_end
 
         # Load the numpy array.
         src.info("processing %s" % filePath)
         veto_vals = wrapNpLoad(filePath)
-        veto_vals = veto_vals.astype(np.float64)
+        veto_vals = veto_vals.astype(np.float32)
 
         # Build the buffer.
         buffer_len = veto_vals.nbytes
@@ -200,7 +253,11 @@ class vetoSource:
         # Push the buffer into the stream (a side effect of 
         # emitting this signal).
         src.emit("push-buffer", buf)
-        src.info("pushed buffer with start=%d, duration=%d" % (gpsstart,duration))
+        src.info("pushed buffer with start=%d, duration=%d, latency=%d" % 
+            (gpsstart,duration, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
+        # XXX testing
+        src.info("gst clock = %d" % int(src.get_clock().get_time()))
+        src.info("other latency = %d" % (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart)))
         self.next_output_timestamp += buf.duration
         self.current_offset = buf.offset_end
         return True
