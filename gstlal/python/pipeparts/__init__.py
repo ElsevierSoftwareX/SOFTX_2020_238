@@ -687,9 +687,13 @@ class AppSync(object):
 				# have buffers before proceding
 				if timestamp is None:
 					break
-				# pass element to handler func and clear timestamp
-				self.appsink_new_buffer(elem_with_oldest)
+				# clear timestamp and pass element to
+				# handler func.  function call is done last
+				# so that all of our book-keeping has been
+				# taken care of in case an exception gets
+				# raised
 				self.appsinks[elem_with_oldest] = None
+				self.appsink_new_buffer(elem_with_oldest)
 		finally:
 			self.lock.release()
 
