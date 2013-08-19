@@ -82,7 +82,7 @@ print """
 print '<div id="accordion">'
 path = form.getlist("url")[0]
 
-likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+likelihood_data = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 

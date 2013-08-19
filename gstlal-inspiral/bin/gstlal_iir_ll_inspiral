@@ -377,7 +377,7 @@ if options.verbose:
 #
 
 
-FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+FAR = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 
 
 #

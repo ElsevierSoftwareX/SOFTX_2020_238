@@ -136,7 +136,7 @@ for url in urls:
 	except ValueError:
 		pass
 
-	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
+	likelihood_data = far.LocalRankingData.from_xml(in_xmldoc)
 	in_xmldoc.unlink()
 
 	#

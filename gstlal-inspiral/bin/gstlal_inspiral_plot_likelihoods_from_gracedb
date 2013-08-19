@@ -106,7 +106,7 @@ for r in params:
 	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
 		path = r.value
 
-likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+likelihood_data = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 

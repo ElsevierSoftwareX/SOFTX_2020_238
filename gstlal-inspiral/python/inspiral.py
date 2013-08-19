@@ -407,13 +407,11 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 	xmldoc = ligolw.Document()
 	node = xmldoc.appendChild(ligolw.LIGO_LW())
 
-	node.appendChild(lsctables.New(lsctables.ProcessTable))
-	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
-	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	process = ligolw_process.append_process(xmldoc, comment = comment)
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, comment = comment)
+	far.distributions.process_id = process.process_id
 	ligolw_search_summary.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
 
-	node.appendChild(far.to_xml(process, name))
+	node.appendChild(far.to_xml(name))
 
 	ligolw_process.set_process_end_time(process)
 	return xmldoc
@@ -439,7 +437,7 @@ class CoincsDocument(object):
 
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = instruments)
+		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral", process_params, comment = comment, ifos = instruments)
 		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg)
 		# FIXME:  argh, ugly
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")))

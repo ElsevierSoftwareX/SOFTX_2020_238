@@ -349,7 +349,7 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
-FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = XMLContentHandler))
+FAR = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = XMLContentHandler))
 
 #
 # build output document

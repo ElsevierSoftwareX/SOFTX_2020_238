@@ -57,7 +57,6 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
@@ -913,12 +912,21 @@ class LocalRankingData(object):
 	@classmethod
 	def from_xml(cls, xml, name = u"gstlal_inspiral_likelihood"):
 		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
-		distributions, process_id = ThincaCoincParamsDistributions.from_xml(llw_elem, name)
+		distributions = ThincaCoincParamsDistributions.from_xml(llw_elem, name)
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
 		# table.  uninitialized segments got recorded as
 		# [None,None)
-		livetime_seg, = (row.get_out() for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
+		# FIXME:  move livetime info into segment tables, and
+		# instead of doing what follows attach a segment list name
+		# to this class that gets recorded as a Param and don't try
+		# to store livetime info in this class at all
+		try:
+			search_summary_table = lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName)
+		except ValueError:
+			livetime_seg = segments.segment(None, None)
+		else:
+			livetime_seg, = (row.get_out() for row in search_summary_table if row.process_id == distributions.process_id)
 		self = cls(livetime_seg, coinc_params_distributions = distributions, trials_table = TrialsTable.from_xml(llw_elem))
 
 		# pull out the joint likelihood arrays if they are present
@@ -926,20 +934,19 @@ class LocalRankingData(object):
 			ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
 			self.joint_likelihood_pdfs[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.getAttribute(u"Name").split(":")[0])
 		
-		return self, process_id
+		return self
 
 	@classmethod
 	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", contenthandler = DefaultContentHandler, verbose = False):
-		self, process_id = LocalRankingData.from_xml(ligolw_utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
+		self = LocalRankingData.from_xml(ligolw_utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
 		for f in filenames[1:]:
-			s, p = LocalRankingData.from_xml(ligolw_utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
-			self += s
+			self += LocalRankingData.from_xml(ligolw_utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
 		return self
 		
-	def to_xml(self, process, name = u"gstlal_inspiral_likelihood"):
+	def to_xml(self, name = u"gstlal_inspiral_likelihood"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
-		xml.appendChild(self.distributions.to_xml(process, name))
+		xml.appendChild(self.distributions.to_xml(name))
 		for key in self.joint_likelihood_pdfs:
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
 			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], "%s_joint_likelihood" % (ifostr,)))

@@ -98,8 +98,8 @@ for url in urls:
 	#
 
 	in_xmldoc = utils.load_url(url, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
-	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
-	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
+	likelihood_data = far.LocalRankingData.from_xml(in_xmldoc)
+	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == likelihood_data.distributions.process_id)
 	ifos = search_summary_row.get_ifos()
 	# reset the clock to None
 	likelihood_data.livetime_seg = segments.segment(None,None)
