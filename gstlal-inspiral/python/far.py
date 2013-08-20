@@ -493,7 +493,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		P = 1.0
 		for name, value in params.items():
 			if name.endswith("_snr_chi"):
-				P *= float(self.background_pdf_interp[name](*value))
+				P *= self.background_pdf_interp[name](*value)
 		return P
 
 	def P_signal(self, params):
@@ -505,11 +505,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# retrieve the SNR PDF
 		snr_pdf = self.get_snr_joint_pdf(dict((instrument, self.horizon_distances[instrument]) for instrument, rho in snrs))
 		# evaluate it (snrs are alphabetical by instrument)
-		P = float(snr_pdf(*tuple(rho for instrument, rho in snrs)))
+		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
 		for name, value in params.items():
 			if name.endswith("_snr_chi"):
-				P *= float(self.injection_pdf_interp[name](*value))
+				P *= self.injection_pdf_interp[name](*value)
 		return P
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
