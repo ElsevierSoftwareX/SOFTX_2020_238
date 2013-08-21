@@ -61,6 +61,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from glue.segmentsUtils import vote
+from gstlal import emcee
 from pylal import inject
 from pylal import progress
 from pylal import rate
@@ -374,18 +375,6 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 #
 
 
-class FilterThread(snglcoinc.CoincParamsFilterThread):
-	# populate the bins with probabilities (not probability densities
-	# as in the default implementation)
-	def run(self):
-		with self.cpu:
-			if self.verbose:
-				with self.stderr:
-					print >>sys.stderr, "%s," % self.getName(),
-			rate.filter_array(self.binnedarray.array, self.filter)
-			self.binnedarray.array /= self.binnedarray.array.sum()
-
-
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  switch to new default when possible
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
@@ -511,6 +500,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if name.endswith("_snr_chi"):
 				P *= self.injection_pdf_interp[name](*value)
 		return P
+
+	@staticmethod
+	def create_emcee_lnprob_wrapper(lnprobfunc, keys):
+		keys = tuple(sorted(keys))
+		# coords[0::2] = rho
+		# coords[1::2] = chi^2/rho^2
+		return lambda coords: lnprobfunc(dict(zip(keys, zip(coords[0::2], coords[1::2]))))
 
 	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		for param, binarr in self.background_rates.items():
@@ -820,54 +816,83 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 #
 
 
-def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-14)):
+def binned_likelihood_rates_from_samples(samples, bins_per_decade = 250.0, min_bins = 1000, limits = None):
 	"""
-	A function to choose the likelihood bin boundaries based on a certain
-	interval in the likelihood pdfs set by minint and maxint. This should typically
-	be combined with Overflow binning to catch the edges
+	Construct and return a BinnedArray containing a histogram of a
+	sequence of samples.  If limits is None (default) then the limits
+	of the binning will be determined automatically from the sequence,
+	otherwise limits is expected to be a tuple or other two-element
+	sequence providing the (low, high) limits, and in that case the
+	sequence can be a generator.
 	"""
-	finite_likelihoods = numpy.isfinite(likelihoods)
-	likelihoods = likelihoods[finite_likelihoods]
-	background_pdf = probabilities[finite_likelihoods]
-	
-	sortindex = likelihoods.argsort()
-	likelihoods = likelihoods[sortindex]
-	background_pdf = background_pdf[sortindex]
+	if limits is None:
+		# add a factor of 10 of padding for the smoothing that will
+		# be done later
+		lo, hi = min(samples) / 10.0, max(samples) * 10.0
+	else:
+		lo, hi = limits
+		if lo >= hi:
+			raise ValueError("limits out of order (%g, %g)" % limits)
+	nbins = max(int(round(bins_per_decade * math.log10(hi / lo))), min_bins)
+	if nbins < 1:
+		raise ValueError("bins_per_decade (%g) too small for limits (%g, %g)" % (nbins, lo, hi))
+	signal_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
+	noise_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
+	for lamb, lnP_signal, lnP_noise in samples:
+		signal_rates[lamb,] += math.exp(lnP_signal)
+		noise_rates[lamb,] += math.exp(lnP_noise)
+	return signal_rates, noise_rates
 
-	s = background_pdf.cumsum() / background_pdf.sum()
-	# restrict range to a reasonable confidence interval to make the best use of our bin resolution
-	minlikelihood = likelihoods[s.searchsorted(minint, side = 'right')]
-	maxlikelihood = likelihoods[s.searchsorted(maxint)]
-	if minlikelihood == 0:
-		minlikelihood = max(likelihoods[likelihoods != 0].min(), 1e-100) # to prevent numerical issues
-	return minlikelihood, maxlikelihood
 
+def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, args = (), n_burn = 100, mean = 1.0, stdev = 1.0):
+	"""
+	A generator function that yields samples distributed according to a
+	user-supplied probability density function that need not be
+	normalized.  lnprobfunc computes and returns the natural logarithm
+	of the probability density, up to a constant offset.  n_dim sets
+	the number of dimensions of the parameter space over which the PDF
+	is defined and args gives any additional arguments to be passed to
+	lnprobfunc, whose signature must be
 
-def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
-	# start with an identity array to seed the outerproduct chain
-	ranks = numpy.array([1.0])
-	vals = numpy.array([1.0])
-	# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
-	for ifo in ifo_set:
-		likelihood_pdf = likelihood_pdfs[ifo]
-		# FIXME lower instead of centres() to avoid inf in the last bin
-		ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
-		vals = numpy.outer(vals, likelihood_pdf.array)
-		ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
-		vals = vals.reshape((vals.shape[0] * vals.shape[1],))
-		# rebin the outer-product
-		minlikelihood, maxlikelihood = likelihood_bin_boundaries(ranks, vals)
-		new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
-		for rank,val in zip(ranks,vals):
-			new_likelihood_pdf[rank,] += val
-		ranks = new_likelihood_pdf.bins.lower()[0]
-		vals = new_likelihood_pdf.array
+		ln(P) = lnprobfunc(X, *args)
 
-	# FIXME the size of these is targetlen which has to be small
-	# since it is squared in the outer product.  We can afford to
-	# store a 1e6 array.  Maybe we should try to make the resulting
-	# pdf bigger somehow?
-	return new_likelihood_pdf
+	where X is a numpy array of length n_dim.
+
+	The generator yields a total of n_walkers * n_samples_per_walker
+	samples drawn from the n_dim-dimensional parameter space.  Each
+	sample is returned as a numpy array.
+
+	mean and stdev adjust the Gaussian random number generator used to
+	set the initial co-ordinates of the walkers.  n_burn iterations of
+	the MCMC sampler will be executed and discarded to allow the system
+	to stabilize before samples are yielded to the calling code.
+	"""
+	#
+	# construct a sampler
+	#
+
+	sampler = emcee.EnsembleSampler(n_walkers, n_dim, lnprobfunc, args = args, threads = 1)
+
+	#
+	# start the walkers at Gaussian-distributed initial positions, and
+	# run for a while to get better initial positions
+	#
+	# FIXME:  these starting points work OK, but don't know how to tune
+	# for sure
+	#
+
+	pos0 = numpy.random.normal(loc = mean, scale = stdev, size = (n_walkers, n_dim))
+	pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
+
+	#
+	# reset and yield positions distributed according to the supplied
+	# PDF
+	#
+
+	sampler.reset()
+	for coordslist, ignored, ignored in sampler.sample(pos0, iterations = n_samples_per_walker, storechain = False):
+		 for coords in coordslist:
+		 	yield coords
 
 
 #
@@ -876,22 +901,18 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 
 
 class LocalRankingData(object):
-	def __init__(self, livetime_seg, coinc_params_distributions, trials_table = None, target_length = 1000):
+	def __init__(self, livetime_seg, coinc_params_distributions, trials_table = None):
 		self.distributions = coinc_params_distributions
+		self.likelihoodratio = snglcoinc.LikelihoodRatio(coinc_params_distributions)
 		if trials_table is None:
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
-		self.likelihood_pdfs = {}
-		self.joint_likelihood_pdfs = {}
+		self.background_likelihood_rates = {}
+		self.background_likelihood_pdfs = {}
+		self.signal_likelihood_rates = {}
+		self.signal_likelihood_pdfs = {}
 		self.livetime_seg = livetime_seg
-
-		#
-		# the target FAP resolution is 1000 bins by default. This is purely
-		# for memory/CPU requirements
-		#
-
-		self.target_length = target_length
 
 	def __iadd__(self, other):
 		self.distributions += other.distributions
@@ -906,6 +927,9 @@ class LocalRankingData(object):
 		# None is always less than everything else, so this is okay
 		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
 		self.livetime_seg = segments.segment(minstart, maxend)
+
+		self.distributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
+		self.distributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
 
 		return self
 
@@ -930,10 +954,15 @@ class LocalRankingData(object):
 		self = cls(livetime_seg, coinc_params_distributions = distributions, trials_table = TrialsTable.from_xml(llw_elem))
 
 		# pull out the joint likelihood arrays if they are present
-		for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and "_joint_likelihood" in elem.getAttribute(u"Name")]:
-			ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
-			self.joint_likelihood_pdfs[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.getAttribute(u"Name").split(":")[0])
-		
+		def reconstruct(xml, prefix, target_dict):
+			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.getAttribute(u"Name")]:
+				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
+				target_dict[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.getAttribute(u"Name").split(":")[0])
+		reconstruct(xml, u"background_likelihood_rate", self.background_likelihood_rates)
+		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
+		reconstruct(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
+		reconstruct(xml, u"signal_likelihood_pdf", self.signal_likelihood_pdfs)
+
 		return self
 
 	@classmethod
@@ -942,99 +971,118 @@ class LocalRankingData(object):
 		for f in filenames[1:]:
 			self += LocalRankingData.from_xml(ligolw_utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
 		return self
-		
+
 	def to_xml(self, name = u"gstlal_inspiral_likelihood"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
 		xml.appendChild(self.distributions.to_xml(name))
-		for key in self.joint_likelihood_pdfs:
-			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], "%s_joint_likelihood" % (ifostr,)))
+		def store(xml, prefix, source_dict):
+			for key, binnedarray in source_dict.items():
+				ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+				xml.appendChild(rate.binned_array_to_xml(binnedarray, u"%s_%s" % (ifostr, prefix)))
+		store(xml, u"background_likelihood_rate", self.background_likelihood_rates)
+		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
+		store(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
+		store(xml, u"signal_likelihood_pdf", self.signal_likelihood_pdfs)
+
 		return xml
 
+	def finish(self):
+		self.background_likelihood_pdfs.clear()
+		self.signal_likelihood_pdfs.clear()
+		for key, binnedarray in self.background_likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % key
+			# copy counts
+			self.background_likelihood_pdfs[key] = binnedarray.copy()
+			# smooth on a scale ~= 1/4 unit of SNR
+			bins_per_efold = binnedarray.bins[0].n / math.log(binnedarray.bins[0].max / binnedarray.bins[0].min)
+			rate.filter_array(self.background_likelihood_pdfs[key].array, rate.gaussian_window(.25 * bins_per_efold))
+			# guard against round-off in FFT convolution
+			# yielding negative probability densities
+			numpy.clip(self.background_likelihood_pdfs[key].array, 0.0, PosInf, self.background_likelihood_pdfs[key].array)
+			# convert to normalized PDF
+			self.background_likelihood_pdfs[key].to_pdf()
+		for key, binnedarray in self.signal_likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % key
+			# copy counts
+			self.signal_likelihood_pdfs[key] = binnedarray.copy()
+			# smooth on a scale ~= 1/4 unit of SNR
+			bins_per_efold = binnedarray.bins[0].n / math.log(binnedarray.bins[0].max / binnedarray.bins[0].min)
+			rate.filter_array(self.signal_likelihood_pdfs[key].array, rate.gaussian_window(.25 * bins_per_efold))
+			# guard against round-off in FFT convolution
+			# yielding negative probability densities
+			numpy.clip(self.signal_likelihood_pdfs[key].array, 0.0, PosInf, self.signal_likelihood_pdfs[key].array)
+			# convert to normalized PDF
+			self.signal_likelihood_pdfs[key].to_pdf()
+
 	def smooth_distribution_stats(self, verbose = False):
-		if self.distributions is not None:
-			# FIXME:  this results in the .distributions
-			# object's PDF arrays containing *probabilities*
-			# not probability densities. this might be changed
-			# in the future.
-			if verbose:
-				print >>sys.stderr, "smoothing parameter distributions ...",
-			self.distributions.finish(verbose = verbose, filterthread = FilterThread)
-			if verbose:
-				print >>sys.stderr, "done"
+		if verbose:
+			print >>sys.stderr, "smoothing parameter distributions ...",
+		self.distributions.finish()
+		if verbose:
+			print >>sys.stderr, "done"
 
-	def compute_single_instrument_background(self, instruments = None, verbose = False):
-		# initialize a likelihood ratio evaluator
-		likelihood_ratio_evaluator = snglcoinc.LikelihoodRatio(self.distributions)
+	def likelihoodratio_samples(self, ln_prob, keys, ndim, nwalkers = None, nburn = 5000, nsamples = 100000):
+		keys = tuple(sorted(keys))
+		# FIXME:  don't know how to tune nwalkers.  must be even, and >
+		# 2 * ndim
+		if nwalkers is None:
+			nwalkers = 24 * ndim
+		for coords in run_mcmc(nwalkers, ndim, nsamples, ln_prob, n_burn = nburn):
+			# coords[0::2] = rho
+			# coords[1::2] = chi^2/rho^2
+			lamb = self.likelihoodratio(dict(zip(keys, zip(coords[0::2], coords[1::2]))))
+			if not math.isinf(lamb) and not math.isnan(lamb):	# FIXME:  is this needed?
+				yield lamb
 
-		# reduce typing
-		background = self.distributions.background_pdf
-		injections = self.distributions.injection_pdf
+	def compute_likelihood_pdfs(self, remap, instruments = None, verbose = False):
+		self.background_likelihood_rates.clear()
+		self.signal_likelihood_rates.clear()
 
-		self.likelihood_pdfs.clear()
-		for param in background:
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
-
-			if verbose:
-				print >>sys.stderr, "updating likelihood background for %s" % instrument
-
-			likelihoods = injections[param].array / background[param].array
-			# ignore infs and nans because background is never
-			# found in those bins.  the boolean array indexing
-			# flattens the array
-			minlikelihood, maxlikelihood = likelihood_bin_boundaries(likelihoods, background[param].array)
-			# construct PDF
-			# FIXME:  because the background array contains
-			# probabilities and not probability densities, the
-			# likelihood_pdfs contain probabilities and not
-			# densities, as well, when this is done
-			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
-			for coords in iterutils.MultiIter(*background[param].bins.centres()):
-				likelihood = likelihood_ratio_evaluator({param: coords})
-				if numpy.isfinite(likelihood):
-					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
-
-	def compute_joint_instrument_background(self, remap, instruments = None, verbose = False):
-		# first get the single detector distributions
-		self.compute_single_instrument_background(instruments = instruments, verbose = verbose)
-
-		self.joint_likelihood_pdfs.clear()
+		# get default instruments from whatever we have SNR PDFs for
+		if instruments is None:
+			instruments = set()
+			for key in self.distributions.snr_joint_pdf_cache:
+				instruments |= set(instrument for instrument, distance in key)
+		instruments = tuple(instruments)
 
 		# calculate all of the possible ifo combinations with at least
 		# 2 detectors in order to get the joint likelihood pdfs
-		if instruments is None:
-			instruments = self.likelihood_pdfs.keys()
 		for n in range(2, len(instruments) + 1):
 			for ifos in iterutils.choices(instruments, n):
 				ifo_set = frozenset(ifos)
 				remap_set = remap.setdefault(ifo_set, ifo_set)
 
 				if verbose:
-					print >>sys.stderr, "computing joint likelihood background for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
+					print >>sys.stderr, "computing likelihood PDFs for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
 
 				# only recompute if necessary, some choices
-				# may not be if a certain remap set is
+				# might not be if a certain remap set is
 				# provided
-				if remap_set not in self.joint_likelihood_pdfs:
-					self.joint_likelihood_pdfs[remap_set] = possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
+				if remap_set not in self.background_likelihood_rates:
+					ndim = 2 * len(ifo_set)
+					keys = frozenset("%s_snr_chi" % inst for inst in ifo_set)
 
-				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
+					ln_prob = self.distributions.create_emcee_lnprob_wrapper(self.distributions.lnP_signal, keys)
+					self.signal_likelihood_rates[remap_set] = binned_rates_from_samples(self.likelihoodratio_samples(ln_prob, keys, ndim), limits = (1e-2, 1e+100))
+
+					ln_prob = self.distributions.create_emcee_lnprob_wrapper(self.distributions.lnP_noise, keys)
+					self.background_likelihood_rates[remap_set] = binned_rates_from_samples(self.likelihoodratio_samples(ln_prob, keys, ndim), limits = (1e-2, 1e+100))
+
+				self.background_likelihood_rates[ifo_set] = self.background_likelihood_rates[remap_set]
+				self.signal_likelihood_rates[ifo_set] = self.signal_likelihood_rates[remap_set]
+
+		self.finish()
 
 
 class RankingData(object):
 	def __init__(self, local_ranking_data):
 		# ensure the trials tables' keys match the likelihood
 		# histograms' keys
-		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table)
+		assert set(local_ranking_data.background_likelihood_pdfs) == set(local_ranking_data.trials_table)
 
 		# copy likelihood ratio PDFs
-		self.joint_likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.joint_likelihood_pdfs.items())
+		self.likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.background_likelihood_pdfs.items())
 
 		# copy trials table counts
 		self.trials_table = TrialsTable()
@@ -1058,10 +1106,10 @@ class RankingData(object):
 			pass
 		fake_local_ranking_data = fake_local_ranking_data()
 		fake_local_ranking_data.trials_table = TrialsTable.from_xml(llw_elem)
-		fake_local_ranking_data.joint_likelihood_pdfs = {}
+		fake_local_ranking_data.background_likelihood_pdfs = {}
 		for key in fake_local_ranking_data.trials_table:
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			fake_local_ranking_data.joint_likelihood_pdfs[key] = rate.binned_array_from_xml(llw_elem, ifostr)
+			fake_local_ranking_data.background_likelihood_pdfs[key] = rate.binned_array_from_xml(llw_elem, ifostr)
 
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
@@ -1079,9 +1127,9 @@ class RankingData(object):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_ranking_data" % name})
 		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", process.process_id))
 		xml.appendChild(self.trials_table.to_xml())
-		for key in self.joint_likelihood_pdfs:
+		for key in self.likelihood_pdfs:
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], ifostr))
+			xml.appendChild(rate.binned_array_to_xml(self.likelihood_pdfs[key], ifostr))
 		assert search_summary.process_id == process.process_id
 		search_summary.set_out(self.livetime_seg)
 		return xml
@@ -1091,29 +1139,29 @@ class RankingData(object):
 		our_trials = self.trials_table
 		other_trials = other.trials_table
 
-		our_keys = set(self.joint_likelihood_pdfs)
-		other_keys  = set(other.joint_likelihood_pdfs)
+		our_keys = set(self.likelihood_pdfs)
+		other_keys  = set(other.likelihood_pdfs)
 
 		# PDFs that only we have are unmodified
 		pass
 
 		# PDFs that only the new data has get copied verbatim
 		for k in other_keys - our_keys:
-			self.joint_likelihood_pdfs[k] = copy.deepcopy(other.joint_likelihood_pdfs[k])
+			self.likelihood_pdfs[k] = copy.deepcopy(other.likelihood_pdfs[k])
 
 		# PDFs that we have and are in the new data get replaced
 		# with the weighted sum, re-binned
 		for k in our_keys & other_keys:
-			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
-			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
-			new_joint_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
+			minself, maxself, nself = self.likelihood_pdfs[k].bins[0].min, self.likelihood_pdfs[k].bins[0].max, self.likelihood_pdfs[k].bins[0].n
+			minother, maxother, nother = other.likelihood_pdfs[k].bins[0].min, other.likelihood_pdfs[k].bins[0].max, other.likelihood_pdfs[k].bins[0].n
+			new_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
 
-			for x in self.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
-			for x in other.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += other.joint_likelihood_pdfs[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
+			for x in self.likelihood_pdfs[k].centres()[0]:
+				new_likelihood_pdf[x,] += self.likelihood_pdfs[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
+			for x in other.likelihood_pdfs[k].centres()[0]:
+				new_likelihood_pdf[x,] += other.likelihood_pdfs[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
 
-			self.joint_likelihood_pdfs[k] = new_joint_likelihood_pdf
+			self.likelihood_pdfs[k] = new_likelihood_pdf
 
 		# combined trials counts
 		self.trials_table += other.trials_table
@@ -1128,7 +1176,7 @@ class RankingData(object):
 		self.maxrank.clear()
 		self.cdf_interpolator.clear()
 		self.ccdf_interpolator.clear()
-		for key, lpdf in self.joint_likelihood_pdfs.items():
+		for key, lpdf in self.likelihood_pdfs.items():
 			ranks = lpdf.bins.lower()[0]
 			weights = lpdf.array
 			# cumulative distribution function and its

@@ -145,7 +145,7 @@ for url in urls:
 
 	# FIXME This assumes that a trials table was initialized for all jobs with the same set of instruments.  It will only compute the likelihood background for those instruments to save time.
 	likelihood_data.smooth_distribution_stats(verbose = options.verbose)
-	likelihood_data.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = likelihood_data.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	likelihood_data.compute_likelihood_pdfs(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = likelihood_data.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 	#
 	# merge into marginalized data

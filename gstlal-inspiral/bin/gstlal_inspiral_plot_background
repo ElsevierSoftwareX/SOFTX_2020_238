@@ -83,7 +83,7 @@ if options.marginalized_file:
 	marg, procid = far.RankingData.from_xml(utils.load_filename(options.marginalized_file, contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
 	marg.compute_joint_cdfs()
 
-	for k in marg.joint_likelihood_pdfs:
+	for k in marg.likelihood_pdfs:
 		N = sum(total_count[ifo] for ifo in k)
 		#FIXME hardcoded num_slides to 2, don't do that!
 		m = marg.trials_table[k].count * marg.trials_table[k].count_below_thresh / marg.trials_table[k].thresh / float(abs(marg.livetime_seg)) * marg.trials_table.num_nonzero_count() / 2

@@ -156,7 +156,7 @@ if options.verbose:
 coincparamsdistributions.finish(verbose = options.verbose)
 
 if options.write_likelihood is not None:
-	Far.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)	
+	Far.compute_likelihood_pdfs(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)	
 	xmldoc = inspiral.gen_likelihood_control_doc(Far, ("H1", "H2", "L1", "V1"))
 	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
 
