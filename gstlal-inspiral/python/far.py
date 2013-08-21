@@ -840,57 +840,6 @@ def binned_likelihood_rates_from_samples(samples, bins_per_decade = 250.0, min_b
 	return signal_rates, noise_rates
 
 
-def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, args = (), n_burn = 100, mean = 1.0, stdev = 1.0):
-	"""
-	A generator function that yields samples distributed according to a
-	user-supplied probability density function that need not be
-	normalized.  lnprobfunc computes and returns the natural logarithm
-	of the probability density, up to a constant offset.  n_dim sets
-	the number of dimensions of the parameter space over which the PDF
-	is defined and args gives any additional arguments to be passed to
-	lnprobfunc, whose signature must be
-
-		ln(P) = lnprobfunc(X, *args)
-
-	where X is a numpy array of length n_dim.
-
-	The generator yields a total of n_walkers * n_samples_per_walker
-	samples drawn from the n_dim-dimensional parameter space.  Each
-	sample is returned as a numpy array.
-
-	mean and stdev adjust the Gaussian random number generator used to
-	set the initial co-ordinates of the walkers.  n_burn iterations of
-	the MCMC sampler will be executed and discarded to allow the system
-	to stabilize before samples are yielded to the calling code.
-	"""
-	#
-	# construct a sampler
-	#
-
-	sampler = emcee.EnsembleSampler(n_walkers, n_dim, lnprobfunc, args = args, threads = 1)
-
-	#
-	# start the walkers at Gaussian-distributed initial positions, and
-	# run for a while to get better initial positions
-	#
-	# FIXME:  these starting points work OK, but don't know how to tune
-	# for sure
-	#
-
-	pos0 = numpy.random.normal(loc = mean, scale = stdev, size = (n_walkers, n_dim))
-	pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
-
-	#
-	# reset and yield positions distributed according to the supplied
-	# PDF
-	#
-
-	sampler.reset()
-	for coordslist, ignored, ignored in sampler.sample(pos0, iterations = n_samples_per_walker, storechain = False):
-		 for coords in coordslist:
-		 	yield coords
-
-
 #
 # Class to handle the computation of FAPs/FARs
 #
@@ -1357,3 +1306,252 @@ def get_live_time_segs_from_search_summary_table(connection, program_name = "gst
 	farsegs = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
 	xmldoc.unlink()
 	return farsegs
+
+
+#
+# =============================================================================
+#
+#                            Event Rate Posteriors
+#
+# =============================================================================
+#
+
+
+def RatesLnPDF((Rf, Rb), f_over_b, lnpriorfunc = lambda Rf, Rb: -0.5 * math.log(Rf * Rb)):
+	"""
+	Compute the log probability density of the foreground and
+	background rates given by equation (21) in Farr et al., "Counting
+	and Confusion:  Bayesian Rate Estimation With Multiple
+	Populations", arXiv:1302.5341.  The default prior is that specified
+	in the paper but it can be overridden with the lnpriorfunc keyword
+	argument (giving a function that returns the natural log of the
+	prior given Rf, Rb).
+	"""
+	if Rf <= 0. or Rb <= 0.:
+		return NegInf
+	return numpy.log1p((Rf / Rb) * f_over_b).sum() + len(f_over_b) * math.log(Rb) - (Rf + Rb) + lnpriorfunc(Rf, Rb)
+
+
+def maximum_likelihood_rates(f_over_b):
+	def F(x):
+		return -RatesLnPDF(x, f_over_b)
+	from scipy.optimize import fmin
+	return fmin(F, (1.0, float(len(f_over_b))), disp = True)
+
+
+def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, args = (), n_burn = 100, progressbar = None):
+	"""
+	A generator function that yields samples distributed according to a
+	user-supplied probability density function that need not be
+	normalized.  lnprobfunc computes and returns the natural logarithm
+	of the probability density, up to a constant offset.  n_dim sets
+	the number of dimensions of the parameter space over which the PDF
+	is defined and args gives any additional arguments to be passed to
+	lnprobfunc, whose signature must be
+
+		ln(P) = lnprobfunc(X, *args)
+
+	where X is a numpy array of length n_dim.
+
+	The generator yields a total of n_walkers * n_samples_per_walker
+	samples drawn from the n_dim-dimensional parameter space.  Each
+	sample is returned as a numpy array.
+
+	mean and stdev adjust the Gaussian random number generator used to
+	set the initial co-ordinates of the walkers.  n_burn iterations of
+	the MCMC sampler will be executed and discarded to allow the system
+	to stabilize before samples are yielded to the calling code.
+	"""
+	#
+	# construct a sampler
+	#
+
+	sampler = emcee.EnsembleSampler(n_walkers, n_dim, lnprobfunc, args = args, threads = 2)
+
+	#
+	# set walkers at initial positions
+	#
+
+	# FIXME:  implement
+	assert pos0 is not None, "auto-selection of initial positions not implemented"
+
+	#
+	# burn-in:  run for a while to get better initial positions
+	#
+
+	pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
+	if progressbar is not None:
+		progressbar.next(delta = n_burn)
+	if sampler.acceptance_fraction.min() < 0.4:
+		print >>sys.stderr, "\nwarning:  low burn-in acceptance fraction (min = %g)" % sampler.acceptance_fraction.min()
+
+	#
+	# reset and yield positions distributed according to the supplied
+	# PDF
+	#
+
+	sampler.reset()
+	for coordslist, ignored, ignored in sampler.sample(pos0, iterations = n_samples_per_walker, storechain = False):
+		for coords in coordslist:
+			yield coords
+		if progressbar is not None:
+			progressbar.next()
+	if sampler.acceptance_fraction.min() < 0.5:
+		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
+
+
+def binned_rates_from_samples(samples):
+	"""
+	Construct and return a BinnedArray containing a histogram of a
+	sequence of samples.  If limits is None (default) then the limits
+	of the binning will be determined automatically from the sequence,
+	otherwise limits is expected to be a tuple or other two-element
+	sequence providing the (low, high) limits, and in that case the
+	sequence can be a generator.
+	"""
+	lo, hi = math.floor(samples.min()), math.ceil(samples.max())
+	nbins = len(samples) // 600
+	binnedarray = rate.BinnedArray(rate.NDBins((rate.LinearBins(lo, hi, nbins),)))
+	for sample in samples:
+		binnedarray[sample,] += 1.
+	rate.filter_array(binnedarray.array, rate.gaussian_window(3))
+	numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
+	return binnedarray
+
+
+def calculate_rate_posteriors(ranking_data, likelihood_ratios, progressbar = None):
+	"""
+	FIXME:  document this
+	"""
+	#
+	# check for funny input
+	#
+
+	if any(math.isnan(lr) for lr in likelihood_ratios):
+		raise ValueError("NaN likelihood ratio encountered")
+	# FIXME;  clip likelihood ratios to some maximum value?
+	if any(math.isinf(lr) for lr in likelihood_ratios):
+		raise ValueError("infinite likelihood ratio encountered")
+
+	#
+	# for each sample of the ranking statistic, evaluate the ratio of
+	# the signal ranking statistic PDF to background ranking statistic
+	# PDF.  since order is irrelevant in what follows, construct the
+	# array in ascending order for better numerical behaviour in the
+	# cost function.  the sort order is stored in a look-up table in
+	# case we want to do something with it later (the Farr et al.
+	# paper provides a technique for assessing the probability that
+	# each event individually is a signal and if we ever implement that
+	# here then we need to have not lost the original event order).
+	#
+
+	order = range(len(likelihood_ratios))
+	order.sort(key = likelihood_ratios.__getitem__)
+	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[None][likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[None][likelihood_ratios[index],] for index in order])
+
+	# remove NaNs.  these occur because the ranking statistic PDFs have
+	# been zeroed at the cut-off and some events get pulled out of the
+	# database with ranking statistic values in that bin
+	#
+	# FIXME:  re-investigate the decision to zero the bin at threshold.
+	# the original motivation for doing it might not be there any
+	# longer
+	f_over_b = f_over_b[~numpy.isnan(f_over_b)]
+	# safety check
+	if numpy.isinf(f_over_b).any():
+		raise ValueError("infinity encountered in ranking statistic PDF ratios")
+
+	#
+	# run MCMC sampler to generate (foreground rate, background rate)
+	# samples.
+	#
+
+	ndim = 2
+	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
+	nsample = 40000
+	nburn = 1000
+
+	if progressbar is not None:
+		progressbar.max = nsample + nburn
+		progressbar.show()
+
+	if True:
+		pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+		pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
+		pos0[:,1] = numpy.random.poisson(lam = len(likelihood_ratios), size = (nwalkers,))
+		samples = numpy.empty((nwalkers * nsample, ndim), dtype = "double")
+		for i, sample in enumerate(run_mcmc(nwalkers, ndim, nsample, RatesLnPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar)):
+			samples[i] = sample
+		import pickle
+		pickle.dump(samples, open("rate_posterior_samples.pickle", "w"))
+	else:
+		import pickle
+		samples = pickle.load(open("rate_posterior_samples.pickle"))
+		progressbar.next(delta = progressbar.max)
+	if samples.min() < 0:
+		raise ValueError("MCMC sampler yielded negative rate(s)")
+
+	#
+	# compute marginalized PDFs for the foreground and background rates
+	#
+
+	Rf_pdf = binned_rates_from_samples(samples[:,0])
+	Rf_pdf.to_pdf()
+	Rb_pdf = binned_rates_from_samples(samples[:,1])
+	Rb_pdf.to_pdf()
+
+	#
+	# done
+	#
+
+	return Rf_pdf, Rb_pdf
+
+
+def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
+	"""
+	Constructs a confidence interval based on a BinnedArray object
+	containing a normalized 1-D PDF.  Returns the tuple (mode, lower bound,
+	upper bound).
+	"""
+	# check for funny input
+	if numpy.isnan(binned_array.array).any():
+		raise ValueError("NaNs encountered in rate PDF")
+	if numpy.isinf(binned_array.array).any():
+		raise ValueError("infinities encountered in rate PDF")
+	if (binned_array.array < 0.).any():
+		raise ValueError("negative values encountered in rate PDF")
+	if not 0.0 <= confidence <= 1.0:
+		raise ValueError("confidence must be in [0, 1]")
+
+	mode_index = numpy.argmax(binned_array.array)
+
+	centres, = binned_array.centres()
+	upper = binned_array.bins[0].upper()
+	lower = binned_array.bins[0].lower()
+	bin_widths = upper - lower
+	if (bin_widths <= 0.).any():
+		raise ValueError("rate PDF bin sizes must be positive")
+	assert not numpy.isinf(bin_widths).any(), "infinite bin sizes not supported"
+	P = binned_array.array * bin_widths
+	if abs(P.sum() - 1.0) > 1e-13:
+		raise ValueError("rate PDF is not normalized")
+
+	li = ri = mode_index
+	P_sum = P[mode_index]
+	while P_sum < confidence:
+		if li <= 0 and ri >= len(P) - 1:
+			raise ValueError("failed to achieve requested confidence")
+		P_li = P[li - 1] if li > 0 else 0.
+		P_ri = P[ri + 1] if ri < len(P) - 1 else 0.
+		assert P_li >= 0. and P_ri >= 0.
+		if P_li > P_ri:
+			P_sum += P_li
+			li -= 1
+		elif P_ri > P_li:
+			P_sum += P_ri
+			ri += 1
+		else:
+			P_sum += P_li + P_ri
+			li = max(li - 1, 0)
+			ri = min(ri + 1, len(P) - 1)
+	return centres[mode_index], lower[li], upper[ri]
