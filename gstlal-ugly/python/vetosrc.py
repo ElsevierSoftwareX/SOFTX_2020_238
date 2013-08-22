@@ -89,7 +89,8 @@ class vetoSource:
         self.fullCurrentPrefix = ""
         # Initialize the list of files.
         if not initTime:
-            initTime = int(gpstime.GpsSecondsFromPyUTC(time.time()))
+            # FIXME:  Badness.  Sutracting max iDQ latency by hand.
+            initTime = int(gpstime.GpsSecondsFromPyUTC(time.time())) - (62 + 2*128)
         self.check_for_new_files(initTime*gst.SECOND)
         # This is the offset of a given buffer with respect to the global stream in 
         # units of *samples*.
