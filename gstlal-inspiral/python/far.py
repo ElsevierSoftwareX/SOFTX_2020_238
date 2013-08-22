@@ -580,10 +580,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# the .__iadd__() method, by fiat, so just remember to
 		# invoke .finish() to get the PDFs in shape afterwards
 
-		# FIXME:  the presence of the next bit breaks the existing
-		# ranking statistic code and must be disabled somehow
-		# before using it
-
 		# convert signal (aka injection) (rho, chi^2/rho^2) PDFs
 		# into P(chi^2/rho^2 | rho)
 		for name, pdf in self.injection_pdf.items():
@@ -1079,10 +1075,12 @@ class RankingData(object):
 	def __init__(self, local_ranking_data):
 		# ensure the trials tables' keys match the likelihood
 		# histograms' keys
-		assert set(local_ranking_data.background_likelihood_pdfs) == set(local_ranking_data.trials_table)
+		assert set(local_ranking_data.background_likelihood_rates) == set(local_ranking_data.trials_table)
 
-		# copy likelihood ratio PDFs
-		self.likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.background_likelihood_pdfs.items())
+		# copy likelihood ratio counts
+		# FIXME:  the raw bin counts haven't been smoothed.
+		# figure out how.
+		self.likelihood_rates = dict((key, value.copy()) for key, value in local_ranking_data.background_likelihood_rates.items())
 
 		# copy trials table counts
 		self.trials_table = TrialsTable()
@@ -1106,10 +1104,10 @@ class RankingData(object):
 			pass
 		fake_local_ranking_data = fake_local_ranking_data()
 		fake_local_ranking_data.trials_table = TrialsTable.from_xml(llw_elem)
-		fake_local_ranking_data.background_likelihood_pdfs = {}
+		fake_local_ranking_data.background_likelihood_rates = {}
 		for key in fake_local_ranking_data.trials_table:
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			fake_local_ranking_data.background_likelihood_pdfs[key] = rate.binned_array_from_xml(llw_elem, ifostr)
+			fake_local_ranking_data.background_likelihood_rates[key] = rate.binned_array_from_xml(llw_elem, ifostr)
 
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
@@ -1127,9 +1125,9 @@ class RankingData(object):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_ranking_data" % name})
 		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", process.process_id))
 		xml.appendChild(self.trials_table.to_xml())
-		for key in self.likelihood_pdfs:
+		for key, binnedarray in self.likelihood_rates.items():
 			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			xml.appendChild(rate.binned_array_to_xml(self.likelihood_pdfs[key], ifostr))
+			xml.appendChild(rate.binned_array_to_xml(binnedarray, ifostr))
 		assert search_summary.process_id == process.process_id
 		search_summary.set_out(self.livetime_seg)
 		return xml
@@ -1139,29 +1137,29 @@ class RankingData(object):
 		our_trials = self.trials_table
 		other_trials = other.trials_table
 
-		our_keys = set(self.likelihood_pdfs)
-		other_keys  = set(other.likelihood_pdfs)
+		our_keys = set(self.likelihood_rates)
+		other_keys  = set(other.likelihood_rates)
 
-		# PDFs that only we have are unmodified
+		# rates that only we have are unmodified
 		pass
 
-		# PDFs that only the new data has get copied verbatim
+		# rates that only the new data has get copied verbatim
 		for k in other_keys - our_keys:
-			self.likelihood_pdfs[k] = copy.deepcopy(other.likelihood_pdfs[k])
+			self.likelihood_rates[k] = other.likelihood_rates[k].copy()
 
-		# PDFs that we have and are in the new data get replaced
+		# rates that we have and are in the new data get replaced
 		# with the weighted sum, re-binned
 		for k in our_keys & other_keys:
-			minself, maxself, nself = self.likelihood_pdfs[k].bins[0].min, self.likelihood_pdfs[k].bins[0].max, self.likelihood_pdfs[k].bins[0].n
-			minother, maxother, nother = other.likelihood_pdfs[k].bins[0].min, other.likelihood_pdfs[k].bins[0].max, other.likelihood_pdfs[k].bins[0].n
-			new_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
+			minself, maxself, nself = self.likelihood_rates[k].bins[0].min, self.likelihood_rates[k].bins[0].max, self.likelihood_rates[k].bins[0].n
+			minother, maxother, nother = other.likelihood_rates[k].bins[0].min, other.likelihood_rates[k].bins[0].max, other.likelihood_rates[k].bins[0].n
+			new_likelihood_rates =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
 
-			for x in self.likelihood_pdfs[k].centres()[0]:
-				new_likelihood_pdf[x,] += self.likelihood_pdfs[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
-			for x in other.likelihood_pdfs[k].centres()[0]:
-				new_likelihood_pdf[x,] += other.likelihood_pdfs[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
+			for x in self.likelihood_rates[k].centres()[0]:
+				new_likelihood_rates[x,] += self.likelihood_rates[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
+			for x in other.likelihood_rates[k].centres()[0]:
+				new_likelihood_rates[x,] += other.likelihood_rates[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
 
-			self.likelihood_pdfs[k] = new_likelihood_pdf
+			self.likelihood_rates[k] = new_likelihood_rates
 
 		# combined trials counts
 		self.trials_table += other.trials_table
@@ -1176,9 +1174,9 @@ class RankingData(object):
 		self.maxrank.clear()
 		self.cdf_interpolator.clear()
 		self.ccdf_interpolator.clear()
-		for key, lpdf in self.likelihood_pdfs.items():
-			ranks = lpdf.bins.lower()[0]
-			weights = lpdf.array
+		for instruments, binnedarray in self.likelihood_rates.items():
+			ranks, = binnedarray.bins.lower()
+			weights = binnedarray.array
 			# cumulative distribution function and its
 			# complement.  it's numerically better to recompute
 			# the ccdf by reversing the array of weights than
@@ -1194,11 +1192,11 @@ class RankingData(object):
 			cdf /= s
 			ccdf /= s
 			# build interpolators
-			self.cdf_interpolator[key] = interpolate.interp1d(ranks, cdf)
-			self.ccdf_interpolator[key] = interpolate.interp1d(ranks, ccdf)
+			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
+			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
 			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-			self.minrank[key] = min(ranks)
-			self.maxrank[key] = max(ranks)
+			self.minrank[instruments] = min(ranks)
+			self.maxrank[instruments] = max(ranks)
 
 	def fap_from_rank(self, rank, ifos):
 		ifos = frozenset(ifos)
