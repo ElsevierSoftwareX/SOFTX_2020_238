@@ -58,6 +58,7 @@ def wrapNpLoad(filePath):
     if filePath.endswith('gz'):
         fileObj = gzip.open(filePath)
         return np.load(fileObj)
+        fileObj.close()
     else:
         return np.load(filePath)
 
@@ -171,8 +172,10 @@ class vetoSource:
             except IndexError: 
                 # Push gap equivalent to the wait time and return.
                 # FIXME The gap should be a real gap, not a buffer full of zeros.
+                gap_start = self.next_output_timestamp / gst.SECOND
                 gap_duration = self.waitTime * gst.SECOND
                 gap_samples = self.waitTime * self.rate
+                gap_end = gap_start + self.waitTime
                 #gap_samples = 0
                 gap_vals = np.zeros(gap_samples)
                 gap_vals = gap_vals.astype(np.float32)
@@ -186,7 +189,7 @@ class vetoSource:
                 buf.offset_end = self.current_offset + gap_samples
                 src.emit("push-buffer", buf)
                 src.info("No files! Pushed gap with start=%d, duration=%d latency=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end)))
                 self.next_output_timestamp += buf.duration
                 self.current_offset = buf.offset_end
                 return True
@@ -218,6 +221,7 @@ class vetoSource:
                 #gap_samples = 0
                 gap_vals = np.zeros(gap_samples)
                 gap_vals = gap_vals.astype(np.float32)
+                gap_end = gap_duration/gst.SECOND + gpsstart
                 buffer_len = gap_vals.nbytes
                 buf = gst.buffer_new_and_alloc(buffer_len)
                 buf[:buffer_len-1] = np.getbuffer(gap_vals)
@@ -229,7 +233,7 @@ class vetoSource:
                 src.emit("push-buffer", buf)
                 src.info("gst clock = %d" % int(src.get_clock().get_time()))
                 src.info("pushed gap with start=%d, duration=%d, latency=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
+                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end)))
                 self.next_output_timestamp += buf.duration
                 self.current_offset = buf.offset_end
 
@@ -247,6 +251,7 @@ class vetoSource:
         # buffer_duration * rate / gst.SECOND = (offset_end - offset)
         # The offset is zero since our data begin at the beginning 
         # of the buffer.
+        buf_end = gpsstart + duration
         buf.duration = duration * gst.SECOND
         buf.offset = self.current_offset
         buf.offset_end = self.current_offset + duration * self.rate
@@ -259,7 +264,7 @@ class vetoSource:
         #src.info("pushed buffer with start=%d, duration=%d, latency=%d" % 
         #    (gpsstart,duration, (int(src.get_clock().get_time())-buf.timestamp)/gst.SECOND))
         src.info("pushed buffer with start=%d, duration=%d, latency=%d" % 
-            (gpsstart,duration, (int(gpstime.GpsSecondsFromPyUTC(time.time())) - int(gpsstart))))
+            (gpsstart,duration,(gpstime.GpsSecondsFromPyUTC(time.time()) - buf_end)))
         self.next_output_timestamp += buf.duration
         self.current_offset = buf.offset_end
         return True
