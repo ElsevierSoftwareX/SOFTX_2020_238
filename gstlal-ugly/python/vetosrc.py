@@ -57,8 +57,9 @@ from glue import gpstime
 def wrapNpLoad(filePath):
     if filePath.endswith('gz'):
         fileObj = gzip.open(filePath)
-        return np.load(fileObj)
+				payload = np.load(fileObj)
         fileObj.close()
+        return payload
     else:
         return np.load(filePath)
 
