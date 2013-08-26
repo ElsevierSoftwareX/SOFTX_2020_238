@@ -27,22 +27,11 @@
 
 
 from optparse import OptionParser
-try:
-	import sqlite3
-except ImportError:
-	# pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
-import sys
 
 
-from glue.lal import CacheEntry
 from glue import segments
-from glue.ligolw.utils import segments as ligolwsegments
-from pylal.datatypes import LIGOTimeGPS as GPS
-from pylal import ligolw_burca2
-from pylal import ligolw_thinca
-from gstlal import far
 from gstlal import inspiral
+from gstlal import far
 from glue.ligolw import utils
 
 
@@ -94,21 +83,37 @@ options, filenames = parse_command_line()
 
 
 #
-# Create likelihood data
+# create parameter distribution priors
 #
+
 
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(options.background_prior, instruments = options.instrument, verbose = options.verbose)
-
 coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count, instruments = options.instrument)
 
+
+#
 # no segments, this file is independent of time
+#
+
+
 FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
 
+
+#
 # initialize the trials table to 0
+#
+
+
 FAR.trials_table.initialize_from_sngl_ifos(options.instrument, count = 0, count_below_thresh = 0, thresh = options.trials_far_thresh)
+
+
+#
+# done
+#
+
 
 xmldoc = inspiral.gen_likelihood_control_doc(FAR, options.instrument)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
