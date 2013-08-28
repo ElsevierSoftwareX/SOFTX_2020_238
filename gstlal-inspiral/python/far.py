@@ -379,6 +379,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  switch to new default when possible
 	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
 
+	instrument_categories = snglcoinc.InstrumentCategories()
+
 	# range of SNRs covered by this object
 	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
@@ -386,6 +388,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	# binnings and filters
 	binnings = {
+		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
 		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
 		"H1H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
@@ -468,12 +471,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@staticmethod
 	def coinc_params(events, offsetvector):
-		instruments = set(event.ifo for event in events)
+		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		# don't allow both H1 and H2 to participate in the same
 		# coinc.  if both have participated favour H1
-		if "H1" in instruments:
-			instruments.discard("H2")
-		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
+		if "H2_snr_chi" in params and "H1_snr_chi" in params:
+			del params["H2_snr_chi"]
+		# FIXME:  currently this is not used to form part of the
+		# ranking statistic's parameters.  it *is* used to track
+		# non-coincident singles rates and zero-lag coinc rates
+		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
 		return params
 
 	def P_noise(self, params):
@@ -508,14 +514,87 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# coords[1::2] = chi^2/rho^2
 		return lambda coords: lnprobfunc(dict(zip(keys, zip(coords[0::2], coords[1::2]))))
 
-	def add_background_prior(self, n = 1., transition = 10., instruments = None, prefactors_range = (1.0, 10.0), df = 40, verbose = False):
-		for param, binarr in self.background_rates.items():
+	def add_background_prior(self, segs, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
+		#
+		# populate instrument combination binning.  assume the
+		# single-instrument categories in the background rates
+		# instruments binning provide the background event counts
+		# for the segment lists provided.  NOTE:  we're using the
+		# counts in the single-instrument categories for input, and
+		# the output only goes into the 2-instrument and higher
+		# categories, so this procedure does not result in a loss
+		# of information and can be performed multiple times
+		# without altering the statistics of the input data.
+		#
+		# FIXME:  we need to know the coincidence window to do this
+		# correctly.  we assume 5ms.  get the correct number.
+		#
+		# FIXME:  should this be done in .finish()?  but we'd need
+		# the segment lists
+
+		coincsynth = snglcoinc.CoincSynthesizer(
+			eventlists = dict((instrument, self.background_rates["instruments"][self.instrument_categories.category([instrument]),]) for instrument in segs),
+			segmentlists = segs,
+			delta_t = 0.005
+		)
+		# assume the single-instrument events are being collected
+		# in several disjoint bins so that events from different
+		# instruments that occur at the same time but in different
+		# bins are not coincident.  if there are M bins for each
+		# instrument, the probability that N events all occur in
+		# the same bin is (1/M)^(N-1).  the number of bins, M, is
+		# therefore given by the (N-1)th root of the ratio of the
+		# predicted number of N-instrument coincs to the observed
+		# number of N-instrument coincs.  use the average of M
+		# measured from all instrument combinations.
+		#
+		# finding M by comparing predicted to observed zero-lag
+		# counts assumes we are in a noise-dominated regime, i.e.,
+		# that the observed relative abundances of coincs are not
+		# significantly contaminated by signals.  if signals are
+		# present in large numbers, and occur in different
+		# abundances than the noise events, averaging the apparent
+		# M over different instrument combinations helps to
+		# suppress the contamination.  NOTE:  the number of
+		# coincidence bins, M, should be very close to the number
+		# of templates (experience shows that it is not equal to
+		# the number of templates, though I don't know why).
+		livetime = get_live_time(segs)
+		n = 0
+		coincidence_bins = 0.
+		for instruments in coincsynth.all_instrument_combos:
+			predicted_count = coincsynth.rates[frozenset(instruments)] * livetime
+			observed_count = self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),]
+			if predicted_count > 0 and observed_count > 0:
+				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
+				n += 1
+		coincidence_bins /= n
+		if verbose:
+			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
+		if math.isnan(coincidence_bins) or coincidence_bins == 0.:
+			# in these cases all the rates are just 0
+			for instruments in coincsynth.all_instrument_combos:
+				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = 0.
+		else:
+			assert coincidence_bins >= 1.
+			# convert single-instrument event rates to rates/bin
+			coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
+			# now compute the expected coincidence rates/bin,
+			# then multiply by the number of bins to get the
+			# expected coincidence rates
+			for instruments, count in coincsynth.mean_coinc_count.items():
+				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
+
+		#
+		# populate snr,chi2 binnings
+		#
+
+		for instrument in segs:
+			binarr = self.background_rates["%s_snr_chi" % instrument]
+
+			# will need to normalize results so need new
+			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
 			# Custom handle the first and last over flow bins
 			snrs = new_binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
@@ -534,17 +613,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binarr += new_binarr
 
 		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
-		self.add_foreground_prior(n = n, prefactors_range = prefactors_range, df = df, instruments = instruments, verbose = verbose)
+		self.add_foreground_snrchi_prior(self.background_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.0, 0.10), df = 40, instruments = None, verbose = False):
+	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for param, binarr in self.injection_rates.items():
+		for instrument in instruments:
+			binarr = target_dict["%s_snr_chi" % instrument]
+
+			# will need to normalize results so need new
+			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			# save some computation if we only requested certain instruments
-			if instruments is not None and instrument not in instruments:
-				continue
+
 			if verbose:
 				print >> sys.stderr, "synthesizing background/injections for %s" % param
 			# Custom handle the first and last over flow bins
@@ -554,8 +633,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
-				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
+			for snr in snrs:
+				for chi2_over_snr2 in chi2_over_snr2s:
 					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
 					dist = 0
 					for pf in pfs:
@@ -570,6 +649,47 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
+
+	def add_foreground_prior(self, segs, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
+		#
+		# populate instrument combination binning
+		#
+
+		assert len(segs) > 1
+		assert set(self.horizon_distances) <= set(segs)
+
+		# probability that a signal is detectable by each of the
+		# instrument combinations
+		P = P_instruments_given_signal(self.horizon_distances, snr_threshold = self.snr_min)
+		# multiply by probability that enough instruments are on to
+		# form each of those combinations
+		P_live = snglcoinc.CoincSynthesizer(segmentlists = segs).P_live
+		for instruments in P:
+			P[instruments] *= sum(sorted(p for on_instruments, p in P_live.items() if on_instruments >= instruments))
+		# renormalize
+		total = sum(sorted(P.values()))
+		for instruments in P:
+			P[instruments] /= total
+		# populate binning from probabilities
+		for instruments, p in P.items():
+			self.injection_rates["instruments"][self.instrument_categories.category(instruments),] += n * p
+
+		#
+		# populate snr,chi2 binnings
+		#
+
+		self.add_foreground_snrchi_prior(self.injection_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
+
+	def _rebuild_interpolators(self):
+		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
+
+		#
+		# the instrument combination "interpolators" are pass-throughs
+		#
+
+		self.background_pdf_interp["instruments"] = lambda x: self.background_pdf["instruments"][x,]
+		self.injection_pdf_interp["instruments"] = lambda x: self.injection_pdf["instruments"][x,]
+		self.zero_lag_pdf_interp["instruments"] = lambda x: self.zero_lag_pdf["instruments"][x,]
 
 	def finish(self, *args, **kwargs):
 		super(ThincaCoincParamsDistributions, self).finish(*args, **kwargs)
@@ -589,8 +709,21 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for i in xrange(pdf.array.shape[0]):
 				nonzero = pdf.array[i] != 0
 				pdf.array[i] /= numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
-			# rebuild the interpolator
-			self.injection_pdf_interp[name] = rate.InterpBinnedArray(pdf)
+
+		# instrument combos are probabilities, not densities.  be
+		# sure the single-instrument categories are zeroed.
+		self.background_pdf["instruments"] = self.background_rates["instruments"].copy()
+		self.injection_pdf["instruments"] = self.injection_rates["instruments"].copy()
+		self.zero_lag_pdf["instruments"] = self.zero_lag_rates["instruments"].copy()
+		for category in self.instrument_categories.values():
+			self.background_pdf["instruments"][category,] = 0
+			self.injection_pdf["instruments"][category,] = 0
+			self.zero_lag_pdf["instruments"][category,] = 0
+		self.background_pdf["instruments"].array /= self.background_pdf["instruments"].array.sum()
+		self.injection_pdf["instruments"].array /= self.injection_pdf["instruments"].array.sum()
+		self.zero_lag_pdf["instruments"].array /= self.zero_lag_pdf["instruments"].array.sum()
+
+		self._rebuild_interpolators()
 
 	@classmethod
 	def from_xml(cls, xml, name):
@@ -617,6 +750,26 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key))))
 		return xml
 
+
+	@property
+	def Pinstrument_noise(self):
+		P = {}
+		for category, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
+			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
+			if len(instruments) < 2 or not p:
+				continue
+			P[instruments] = p
+		return P
+
+	@property
+	def Pinstrument_signal(self):
+		P = {}
+		for category, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
+			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
+			if len(instruments) < 2 or not p:
+				continue
+			P[instruments] = p
+		return P
 
 #
 # Joint probability density for measured SNRs

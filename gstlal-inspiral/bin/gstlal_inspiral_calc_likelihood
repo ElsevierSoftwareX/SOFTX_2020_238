@@ -39,6 +39,7 @@ from glue.lal import CacheEntry
 from glue.ligolw.utils import segments as ligolwsegments
 from glue.ligolw import dbtables
 from glue.ligolw import utils
+from glue import segments
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal import snglcoinc
@@ -143,13 +144,21 @@ options, filenames = parse_command_line()
 Far = far.LocalRankingData.from_filenames(options.likelihood_filenames, verbose = options.verbose)
 coincparamsdistributions, likelihood_seglists = Far.distributions, Far.livetime_seg
 
+# FIXME:  need segment lists and horizon distances
+seglists = segments.segmentlistdict.fromkeys(Far.trials_table.get_sngl_ifos(), segments.segmentlist([segments.segment(0., 1.)]))
+coincparamsdistributions.horizon_distances = {
+	"H1": 120.0,
+	"L1": 120.0,
+	"V1": 45.0
+}
+
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "computing event densities ..."
@@ -200,7 +209,7 @@ for n, filename in enumerate(filenames):
 	if options.vetoes_name is not None:
 		vetoseglists = ligolwsegments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
 	else:
-		vetoseglists = ligolwsegments.segments.segmentlistdict()
+		vetoseglists = segments.segmentlistdict()
 
 	#
 	# Run likelihood ratio calculation.

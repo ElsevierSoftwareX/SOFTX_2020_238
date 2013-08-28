@@ -61,6 +61,9 @@ def parse_command_line():
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
+	if not options.instrument or len(options.instrument < 2):
+		raise ValueError("must specify at least two --instrument's")
+
 	return options, filenames
 
 
@@ -89,9 +92,17 @@ options, filenames = parse_command_line()
 
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
+# FIXME:  need segment lists and horizon distances
+seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(0., 1.)]))
+coincparamsdistributions.horizon_distances = {
+	"H1": 120.0,
+	"L1": 120.0,
+	"V1": 45.0
+}
+
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(options.background_prior, instruments = options.instrument, verbose = options.verbose)
-coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count, instruments = options.instrument)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
+coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, verbose = options.verbose)
 
 
 #
