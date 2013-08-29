@@ -26,7 +26,9 @@ AC_CONFIG_FILES([ \
 	gst/python/Makefile \
 	bin/Makefile \
 	share/Makefile \
-	tests/Makefile
+	tests/Makefile \
+	doc/Doxyfile \
+	doc/Makefile
 ])
 
 
@@ -82,6 +84,8 @@ case `cat /etc/redhat-release 2> /dev/null` in
 esac
 LT_INIT
 PKG_PROG_PKG_CONFIG()
+AC_PATH_PROG(DOXYGEN, doxygen)
+AM_CONDITIONAL([COND_DOXYGEN], [test -n "${DOXYGEN}"])
 
 
 #

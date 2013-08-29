@@ -4,3 +4,6 @@ lib/gstlal/gstlaltypes.gir
 lib/gstlal/gstlaltypes.typelib
 tests/*.pyc
 tests/*.dump
+doc/Doxyfile
+doc/html/
+doc/latex/
