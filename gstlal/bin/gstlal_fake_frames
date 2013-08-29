@@ -127,7 +127,7 @@ if options.output_channel_name is None:
 # don't do injections in mkbasicsrc(), we will do them later
 #
 
-injections, gw_data_source.injections = options.injections, None
+injections, gw_data_source.injection_filename = options.injections, None
 
 #
 # Setup the pipeline
