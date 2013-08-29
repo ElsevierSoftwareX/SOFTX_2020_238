@@ -286,7 +286,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""
 
 	if gw_data_source_info.data_source == "white":
-		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
+		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0)
 	elif gw_data_source_info.data_source == "silence":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
 	elif gw_data_source_info.data_source == "LIGO":
