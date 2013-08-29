@@ -28,7 +28,8 @@ AC_CONFIG_FILES([ \
 	share/Makefile \
 	tests/Makefile \
 	doc/Doxyfile \
-	doc/Makefile
+	doc/Makefile \
+	doc/gobject/Makefile
 ])
 
 
@@ -86,6 +87,7 @@ LT_INIT
 PKG_PROG_PKG_CONFIG()
 AC_PATH_PROG(DOXYGEN, doxygen)
 AM_CONDITIONAL([COND_DOXYGEN], [test -n "${DOXYGEN}"])
+GTK_DOC_CHECK([1.14], [--flavour no-tmpl])
 
 
 #

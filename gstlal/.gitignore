@@ -7,3 +7,13 @@ tests/*.dump
 doc/Doxyfile
 doc/html/
 doc/latex/
+doc/gobject/*.args
+doc/gobject/*.hierarchy
+doc/gobject/*.interfaces
+doc/gobject/*.prerequisites
+doc/gobject/*.signals
+doc/gobject/*.stamp
+doc/gobject/*.txt
+doc/gobject/html/
+doc/gobject/tmpl/
+doc/gobject/xml/

@@ -1,3 +1,5 @@
+SUBDIRS = gobject
+
 if COND_DOXYGEN
 all-local : html latex
 endif
