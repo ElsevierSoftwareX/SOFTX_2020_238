@@ -24,7 +24,6 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
-* move headers into a gstlal/ sub-directory in the source tree so the same #include's work in and out of the source tree (e.g., simplifies moving elements between packages)
 * Incorporate bank veto
 * add to the gstlal summary page
   * population statement plot
@@ -66,8 +65,10 @@ code that'll do a good brute-force job of this).
 validation tests for applications.
 * incorporate rate estimation code into pipeline (have student working
 on this)
-* merge fake data generation programs into one
 
 Completed tasks
+
+* move headers into a gstlal/ sub-directory in the source tree so the same #include's work in and out of the source tree (e.g., simplifies moving elements between packages)
+* merge fake data generation programs into one
 * sub-sample interpolation of triggers (done 2013-06-06)
 * have offline dag split output across multiple directories (done 2013-06-06)
