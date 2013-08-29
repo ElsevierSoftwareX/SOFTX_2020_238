@@ -24,6 +24,11 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* We have a request to provide bottle routes for the snr history of the individual detectors in addition to the coinc snr.
+* Putting the lvalert listening scripts into the dag
+* Remove the registry files and get url cron jobs and provide direct access to the running jobs from the outside
+ * Note this involves firewall changes at CIT
+ * Note we will need to make sure and cache results for at least ~5 minutes to prevent DOS
 * Incorporate bank veto
 * add to the gstlal summary page
   * population statement plot
