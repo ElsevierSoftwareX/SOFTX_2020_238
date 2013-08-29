@@ -55,8 +55,6 @@ Immediate development tasks in no particular order
 * framecpp demuxer and muxer cannot decode/encode FrHistory objects.  figure out how and fix.  (will be required for calibration work, not required for inspiral search)
 * fix service discovery to allow more than one job to be running on the same computer and remove need for URL dump files to be exchanged via filesystem.
 * complete port to swig bindings (long term, divest ourselves of pylal).
-* separate likelihood code from burst pipelines.
-* fix the numerator in the likelihood ratio ranking statistic to account for inter-instrument correlations in signal parameters (my student's work on implementing the rate estimation code might have turned up some code that'll do a good brute-force job of this).
 * review readiness:  remove dead code, create tests for elements, create validation tests for applications.
 * incorporate rate estimation code into pipeline (have student working on this)
 
@@ -73,3 +71,8 @@ Completed tasks
   * gstlal_inspiral --svd-bank option:
     * why use commas instead of providing the option multiple times? : provided multiple times now
 * switch online code to framexmitsrc (after framexmitsrc is made to not jam up when data stops flowing) (done 2014-01-15)
+* separate likelihood code from burst pipelines (done 2013-08-29)
+* fix the numerator in the likelihood ratio ranking statistic to account
+  for inter-instrument correlations in signal parameters (my student's work
+  on implementing the rate estimation code might have turned up some code
+  that'll do a good brute-force job of this) (done 2013-08-29)
