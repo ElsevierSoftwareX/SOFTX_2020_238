@@ -127,7 +127,7 @@ if options.output_channel_name is None:
 # don't do injections in mkbasicsrc(), we will do them later
 #
 
-injections, options.injections = options.injections, None
+injections, gw_data_source.injections = options.injections, None
 
 #
 # Setup the pipeline
@@ -198,8 +198,6 @@ head = pipeparts.mktaginject(pipeline, head, tagstr)
 #
 # Do injections into the final fake data
 #
-
-print injections
 
 if injections is not None:
 	head = pipeparts.mkinjections(pipeline, head, injections)
