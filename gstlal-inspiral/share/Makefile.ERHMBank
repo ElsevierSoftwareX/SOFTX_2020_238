@@ -50,7 +50,6 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		--number-of-segments 15 \
 		--minimal-match $(MM) \
 		--candle-snr 8 \
-		--debug-level 33 \
 		--high-pass-attenuation 0.1 \
 		--min-high-freq-cutoff ERD \
 		--segment-length 1048576 \
