@@ -16,4 +16,11 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python multirate $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS)
+if COND_CUDA
+CUDA_SUBDIRS = cuda
+else
+CUDA_SUBDIRS =
+endif
+
+
+SUBDIRS = lal python multirate $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS) $(CUDA_SUBDIRS)

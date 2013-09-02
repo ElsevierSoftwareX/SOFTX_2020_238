@@ -28,6 +28,7 @@ AC_CONFIG_FILES([ \
 	gst/framecpp/Makefile \
 	gst/gds/Makefile \
 	gst/multirate/Makefile \
+	gst/cuda/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -419,6 +420,9 @@ AS_IF([test "x$with_cuda" != "xno"], [
 	])
 	AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
 	AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
+	PKG_CHECK_MODULES([GLIB], [glib-2.0])
+	AC_SUBST([NVCC_GSTLAL_CFLAGS], [$GLIB_CFLAGS])
+	AC_SUBST([NVCC_gstreamer_CFLAGS], ["$($PKG_CONFIG --cflags-only-I gstreamer-0.10)"])
 	AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
 	HAVE_CUDA="yes"
 ], [
