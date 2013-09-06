@@ -24,6 +24,7 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* Upload segment lists with events; this might mean keeping track of "old" segments in the online jobs (for the previous 4 hours to cover boundary effects)
 * We have a request to provide bottle routes for the snr history of the individual detectors in addition to the coinc snr.
 * Putting the lvalert listening scripts into the dag
 * Remove the registry files and get url cron jobs and provide direct access to the running jobs from the outside
