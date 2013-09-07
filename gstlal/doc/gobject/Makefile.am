@@ -4,16 +4,16 @@
 AUTOMAKE_OPTIONS = 1.6
 
 
-clean-local : clean-html clean-tmpl clean-xml
-
-clean-html :
-	-rm -rvf html
-
-clean-tmpl :
-	-rm -rvf tmpl
-
-clean-xml :
-	-rm -rvf xml
+# gtk-doc.make overrides clean-local so we can't put any commands in the
+# target, we need to add another target to its dependency list and put our
+# commands there.
+clean-local : clean-local-local
+clean-local-local :
+	-rm -rvf html/
+	-rm -rvf tmpl/
+	-rm -rvf xml/
+	-rm -vf *.sgml
+	-rm -vf *.txt
 
 
 # This is a blank Makefile.am for using gtk-doc.
@@ -25,7 +25,7 @@ clean-xml :
 DOC_MODULE=$(PACKAGE_NAME)
 
 # Uncomment for versioned docs and specify the version of the module, e.g. '2'.
-DOC_MODULE_VERSION=$(VERSION)
+DOC_MODULE_VERSION=$(PACKAGE_VERSION)
 
 
 # The top-level SGML file. You can change this if you want to.
@@ -35,7 +35,7 @@ DOC_MAIN_SGML_FILE=$(DOC_MODULE)-docs.sgml
 # gtk-doc will search all .c and .h files beneath these paths
 # for inline comments documenting functions and macros.
 # e.g. DOC_SOURCE_DIR=$(top_srcdir)/gtk $(top_srcdir)/gdk
-DOC_SOURCE_DIR=
+DOC_SOURCE_DIR=$(top_srcdir)/lib/gstlal $(top_srcdir)/gst/lal
 
 # Extra options to pass to gtkdoc-scangobj. Not normally needed.
 SCANGOBJ_OPTIONS=
@@ -91,11 +91,12 @@ expand_content_files=
 # signals and properties.
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
-GTKDOC_CFLAGS=
-GTKDOC_LIBS=
+GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+GTKDOC_LIBS = $(AM_LDFLAGS) $(top_builddir)/gst/lal/libgstlal.la $(top_builddir)/gst/lal/libgstlaladder.la $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltypes.la $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
-include $(top_srcdir)/gnuscripts/gtk-doc.make
+include $(top_srcdir)/doc/gobject/gtk-doc.make
 
 # Other files to distribute
 # e.g. EXTRA_DIST += version.xml.in

@@ -11,6 +11,7 @@ doc/gobject/*.args
 doc/gobject/*.hierarchy
 doc/gobject/*.interfaces
 doc/gobject/*.prerequisites
+doc/gobject/*.sgml
 doc/gobject/*.signals
 doc/gobject/*.stamp
 doc/gobject/*.txt

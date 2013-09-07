@@ -1,0 +1,13 @@
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_autocorrelation_chi2.h>
+#include <gstlal/gstlal_cdf_weighted_chisq_P.h>
+#include <gstlal/gstlalcollectpads.h>
+#include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_gps_clock.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_marshal.h>
+#include <gstlal/gstlal_peakfinder.h>
+#include <gstlal/gstlal_segments.h>
+#include <gstlal/gstlal_tags.h>
+
+gst_audioadapter_get_type
