@@ -1,7 +1,7 @@
 /*
  * A simple segment list for gstlal
  *
- * Copyright (C) 2011  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2011,2013  Kipp Cannon, Chad Hanna
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -29,29 +29,50 @@
 G_BEGIN_DECLS
 
 
+/**
+ * struct gstlal_segment:
+ * @start: the start of the segment
+ * @stop: the stop of the segment
+ *
+ * An interval (e.g., of time).  The segment spans [stop, stop).
+ */
+
+
+struct gstlal_segment {
+	/*< public >*/
+	guint64 start;
+	guint64 stop;
+};
+
+
+/**
+ * struct gstlal_segment_list:
+ *
+ * The opaque gstlal_segment_list structure.
+ */
+
+
 struct gstlal_segment_list {
-	struct gstlal_segment {
-		guint64 start;
-		guint64 stop;
-	} *segments;
+	/*< private >*/
+	struct gstlal_segment *segments;
 	gint length;
 };
 
 
-struct gstlal_segment *gstlal_segment_new(guint64, guint64);
-void gstlal_segment_free(struct gstlal_segment *);
+struct gstlal_segment *gstlal_segment_new(guint64 start, guint64 stop);
+void gstlal_segment_free(struct gstlal_segment *segment);
 struct gstlal_segment_list *gstlal_segment_list_new(void);
-void gstlal_segment_list_free(struct gstlal_segment_list *);
-gint gstlal_segment_list_length(const struct gstlal_segment_list *);
-struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_list *, struct gstlal_segment *);
-gint gstlal_segment_list_index(const struct gstlal_segment_list *, guint64);
-struct gstlal_segment *gstlal_segment_list_get(struct gstlal_segment_list *, gint);
-struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_segment_list *, guint64, guint64);
+void gstlal_segment_list_free(struct gstlal_segment_list *segmentlist);
+gint gstlal_segment_list_length(const struct gstlal_segment_list *segmentlist);
+struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_list *segmentlist, struct gstlal_segment *segment);
+gint gstlal_segment_list_index(const struct gstlal_segment_list *segmentlist, guint64 t);
+struct gstlal_segment *gstlal_segment_list_get(struct gstlal_segment_list *segmentlist, gint index);
+struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_segment_list *segmentlist, guint64 start, guint64 stop);
 
-struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *);
-struct gstlal_segment *gstlal_segment_from_g_value_array(GValueArray *);
-GValueArray * g_value_array_from_gstlal_segment(struct gstlal_segment);
-GValueArray * g_value_array_from_gstlal_segment_list(struct gstlal_segment_list *);
+struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *va);
+struct gstlal_segment *gstlal_segment_from_g_value_array(GValueArray *va);
+GValueArray * g_value_array_from_gstlal_segment(struct gstlal_segment seg);
+GValueArray * g_value_array_from_gstlal_segment_list(struct gstlal_segment_list *seglist);
 
 G_END_DECLS
 
