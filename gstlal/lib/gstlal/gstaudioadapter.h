@@ -1,7 +1,7 @@
 /*
  * GstAudioAdapter
  *
- * Copyright (C) 2011  Kipp Cannon
+ * Copyright (C) 2011--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -101,19 +101,19 @@ struct _GstAudioAdapter {
 GType gst_audioadapter_get_type(void);
 
 
-gboolean gst_audioadapter_is_empty(GstAudioAdapter *);
-GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *);
-guint64 gst_audioadapter_expected_offset(GstAudioAdapter *);
-void gst_audioadapter_clear(GstAudioAdapter *);
-void gst_audioadapter_push(GstAudioAdapter *, GstBuffer *);
-gboolean gst_audioadapter_is_gap(GstAudioAdapter *);
-guint gst_audioadapter_head_gap_length(GstAudioAdapter *);
-guint gst_audioadapter_tail_gap_length(GstAudioAdapter *);
-guint gst_audioadapter_head_nongap_length(GstAudioAdapter *);
-guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *);
-void gst_audioadapter_copy_samples(GstAudioAdapter *, void *, guint, gboolean *, gboolean *);
-GList *gst_audioadapter_get_list_samples(GstAudioAdapter *, guint);
-void gst_audioadapter_flush_samples(GstAudioAdapter *, guint);
+gboolean gst_audioadapter_is_empty(GstAudioAdapter *adapter);
+GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter);
+guint64 gst_audioadapter_expected_offset(GstAudioAdapter *adapter);
+void gst_audioadapter_clear(GstAudioAdapter *adapter);
+void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf);
+gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter);
+guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter);
+guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter);
+guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter);
+guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter);
+void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint samples, gboolean *copied_gap, gboolean *copied_nongap);
+GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples);
+void gst_audioadapter_flush_samples(GstAudioAdapter *adapter, guint samples);
 
 
 G_END_DECLS

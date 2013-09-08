@@ -1,7 +1,7 @@
 /*
  * GstLALGPSSystemClock
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012,2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,15 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/**
+ * SECTION:gstlal_gps_clock
+ * @short_description:  #GstSystemClock sub-class that reports GPS time.
+ *
+ * The #GstLALGPSSystemClock class is a sub-class of #GstSystemClock that
+ * converts the times reported from Unix time to GPS seconds.
  */
 
 
@@ -92,7 +101,7 @@ static void gstlal_gps_system_clock_class_init(GstLALGPSSystemClockClass *klass)
 static void gstlal_gps_system_clock_init(GstLALGPSSystemClock *object, GstLALGPSSystemClockClass *klass)
 {
 	/*
-	 * KC:  I have empirically determined that "REALTIME" means Unix
+	 * Kipp:  I have empirically determined that "REALTIME" means Unix
 	 * time
 	 */
 

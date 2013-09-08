@@ -1,7 +1,7 @@
 /*
  * GstAudioAdapter
  *
- * Copyright (C) 2011,2012  Kipp Cannon
+ * Copyright (C) 2011--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,24 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/**
+ * SECTION:gstaudioadapter
+ * @short_description:  #GstAdapter-like class that understands audio
+ * stream formats.
+ *
+ * #GstAudioAdapter provides a queue to accumulate time series data and
+ * facilitate its ingestion by code that requires or prefers to process
+ * data in blocks of some size.  GStreamer provides #GstAdapter, which is a
+ * similar class but is not specifically tailored to time series data.
+ *
+ * After a #GstAudioAdapter is created, and one or more #GstBuffer objects
+ * inserted into it with gst_audioadapter_push(), its size (in samples) can
+ * be checked by checking the #GstAudioAdapter:size property, buffers
+ * retrieved with gst_audioadapter_get_list_samples(), and then data
+ * flushed from it with gst_audioadapter_flush_samples().
  */
 
 
@@ -93,10 +111,35 @@ static guint64 expected_offset(GstAudioAdapter *adapter)
  */
 
 
+/**
+ * gst_audioadapter_is_empty:
+ * @adapter: a #GstAudioAdapter
+ *
+ * %TRUE if the #GstAudioAdapter is empty, %FALSE otherwise.
+ *
+ * Returns: #gboolean
+ */
+
+
 gboolean gst_audioadapter_is_empty(GstAudioAdapter *adapter)
 {
 	return g_queue_is_empty(adapter->queue);
 }
+
+
+/**
+ * gst_audioadapter_expected_timestamp:
+ * @adapter: a #GstAudioAdapter
+ *
+ * If the #GstAudioAdapter is not empty, returns the #GstClockTime of the
+ * next buffer that should be pushed into the adapter if the next buffer is
+ * to be contiguous with the data in the #GstAudioAdapter.  Returns
+ * #GST_CLOCK_TIME_NONE if the #GstAudioAdapter is empty.
+ *
+ * See also:  gst_audioadapter_expected_offset()
+ *
+ * Returns:  #GstClockTime
+ */
 
 
 GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
@@ -105,10 +148,34 @@ GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
 }
 
 
+/**
+ * gst_audioadapter_expected_offset:
+ * @adapter: a #GstAudioAdapter
+ *
+ * If the #GstAudioAdapter is not empty, returns the offset of the next
+ * #GstBuffer that should be pushed into the adapter if the next #GstBuffer
+ * is to be contiguous with the data in the #GstAudioAdapter.  Returns
+ * #GST_BUFFER_OFFSET_NONE if the #GstAudioAdapter is empty.
+ *
+ * See also:  gst_audioadapter_expected_timestamp()
+ *
+ * Returns:  #guint64
+ */
+
+
 guint64 gst_audioadapter_expected_offset(GstAudioAdapter *adapter)
 {
 	return g_queue_is_empty(adapter->queue) ? GST_BUFFER_OFFSET_NONE : expected_offset(adapter);
 }
+
+
+/**
+ * gst_audioadapter_clear:
+ * @adapter: a #GstAudioAdapter
+ *
+ * Empty the #GstAudioAdapter.  All buffers are unref'ed and the
+ * #GstAudioAdapter:size is set to 0.
+ */
 
 
 void gst_audioadapter_clear(GstAudioAdapter *adapter)
@@ -120,6 +187,20 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
 	adapter->skip = 0;
 	g_object_notify(G_OBJECT(adapter), "size");
 }
+
+
+/**
+ * gst_audioadapter_push:
+ * @adapter: a #GstAudioAdapter
+ * @buf: the #GstBuffer to push into (append to) the #GstAudioAdapter
+ *
+ * The #GstBuffer is pushed into the #GstAudioAdapter's tail and the
+ * #GstAudioAdapter:size is updated.  The #GstAudioAdapter takes ownership
+ * of the #GstBuffer.  If the calling code wishes to continue to access the
+ * #GstBuffer's contents it must gst_buffer_ref() it before calling this
+ * function.  The #GstBuffer's timestamp, duration, offset and offset end
+ * must all be valid.
+ */
 
 
 void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
@@ -134,6 +215,18 @@ void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 }
 
 
+/**
+ * gst_audioadapter_is_gap:
+ * @adapter: a #GstAudioAdapter
+ *
+ * %TRUE if all #GstBuffers in the adapter are gaps or are zero length.
+ * %FALSE if the #GstAudioAdapter contains a non-zero length of non-gap
+ * #GstBuffers.
+ *
+ * Returns:  #gboolean
+ */
+
+
 gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
 {
 	GList *head;
@@ -146,6 +239,17 @@ gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
 
 	return TRUE;
 }
+
+
+/**
+ * gst_audioadapter_head_gap_length:
+ * @adapter: a #GstAudioAdapter
+ *
+ * Return the total number of gap samples at the head (samples to be pulled
+ * out first) of the #GstAudioAdapter.
+ *
+ * Returns:  #guint
+ */
 
 
 guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
@@ -165,6 +269,17 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 }
 
 
+/**
+ * gst_audioadapter_tail_gap_length:
+ * @adapter: a #GstAudioAdapter
+ *
+ * Return the total number of gap samples at the tail (samples to be pulled
+ * out last) of the #GstAudioAdapter.
+ *
+ * Returns:  #guint
+ */
+
+
 guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter)
 {
 	guint length = 0;
@@ -175,6 +290,17 @@ guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter)
 
 	return MIN(length, adapter->size);
 }
+
+
+/**
+ * gst_audioadapter_head_nongap_length:
+ * @adapter: a #GstAudioAdapter
+ *
+ * Return the total number of non-gap samples at the head (samples to be
+ * pulled out first) of the #GstAudioAdapter.
+ *
+ * Returns:  #guint
+ */
 
 
 guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
@@ -194,6 +320,17 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
 }
 
 
+/**
+ * gst_audioadapter_tail_nongap_length:
+ * @adapter: a #GstAudioAdapter
+ *
+ * Return the total number of non-gap samples at the tail (samples to be
+ * pulled out last) of the #GstAudioAdapter.
+ *
+ * Returns:  #guint
+ */
+
+
 guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
 {
 	guint length = 0;
@@ -204,6 +341,26 @@ guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
 
 	return MIN(length, adapter->size);
 }
+
+
+/**
+ * gst_audioadapter_copy_samples:
+ * @adapter: a #GstAudioAdapter
+ * @dst: start of the memory region to which to copy the samples, it must
+ * be large enough to accomodate them
+ * @samples: the number of samples to copy
+ * @copied_gap: if not NULL, the address of a #gboolean that will be set to
+ * %TRUE if any gap samples were among the samples copied or %FALSE
+ * if all samples were not gap samples.
+ * @copied_nongap: if not NULL, the address of a #gboolean that will be set
+ * to %TRUE if any non-gap samples were among the samples copied or %FALSE
+ * if all samples were gaps.
+ *
+ * Copies @samples from the #GstAudioAdapter's head to a contiguous region
+ * of memory.  Instead of copying them verbatim, samples taken from
+ * #GstBuffers that have their %GST_BUFFER_FLAG_GAP set to %TRUE are set to
+ * 0 in the target buffer.
+ */
 
 
 void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint samples, gboolean *copied_gap, gboolean *copied_nongap)
@@ -254,6 +411,25 @@ done:
 		*copied_nongap = _copied_nongap;
 	return;
 }
+
+
+/**
+ * gst_audioadapter_get_list_samples:
+ * @adapter: a #GstAudioAdapter
+ * @samples: the number of samples to copy
+ *
+ * Construct and return a #GList of #GstBuffer objects containing the first
+ * @samples from #GstAudioAdapter's head.  The list contains references to
+ * the #GstBuffer objects in the #GstAudioAdapter (or sub-buffers thereof
+ * depending on how the number of samples requested aligns with #GstBuffer
+ * boundaries).
+ *
+ * All metadata from the original #GstBuffer objects is preserved,
+ * including #GstCaps, the #GstBufferFlags, etc..
+ *
+ * Returns: #GList of #GstBuffers.  Calling code owns a reference to each
+ * #GstBuffer in the list;  call gst_buffer_unref() on each when done.
+ */
 
 
 GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples)
@@ -322,6 +498,16 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 done:
 	return result;
 }
+
+
+/**
+ * gst_audioadapter_flush_samples:
+ * @adapter: a #GstAudioAdapter
+ * @samples: the number of samples to flush
+ *
+ * Flush @samples from the head of the #GstAudioAdapter, and update the
+ * #GstAudioAdapter:size.
+ */
 
 
 void gst_audioadapter_flush_samples(GstAudioAdapter *adapter, guint samples)
@@ -438,6 +624,12 @@ static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 	gobject_class->dispose = dispose;
 	gobject_class->finalize = finalize;
 
+	/**
+	 * GstAudioAdapter:unit-size:
+	 *
+	 * The size, in bytes, of one "frame" (one sample from all channels).
+	 */
+
 	g_object_class_install_property(
 		gobject_class,
 		PROP_UNITSIZE,
@@ -449,6 +641,13 @@ static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+
+	/**
+	 * GstAudioAdapter:size:
+	 *
+	 * The number of frames in the adapter.
+	 */
+
 	g_object_class_install_property(
 		gobject_class,
 		PROP_SIZE,

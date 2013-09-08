@@ -11,3 +11,4 @@
 #include <gstlal/gstlal_tags.h>
 
 gst_audioadapter_get_type
+gstlal_gps_system_clock_get_type
