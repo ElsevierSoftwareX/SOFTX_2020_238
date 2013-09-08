@@ -23,7 +23,33 @@
  */
 
 
+/**
+ * SECTION:gstlal_tags
+ * @title: Tags
+ * @short_description:  Extra tags to help describe gravitational-wave data
+ * streams.
+ */
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Preamble
+ *
+ * ============================================================================
+ */
+
+
 #include "gstlal_tags.h"
+
+
+/*
+ * ============================================================================
+ *
+ *                               Internal Code
+ *
+ * ============================================================================
+ */
 
 
 static gpointer register_tags(gpointer unused)
@@ -33,6 +59,24 @@ static gpointer register_tags(gpointer unused)
 	gst_tag_register(GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"strain\".", NULL);
 	return NULL;
 }
+
+
+/*
+ * ============================================================================
+ *
+ *                                Exported API
+ *
+ * ============================================================================
+ */
+
+
+/**
+ * gstlal_register_tags:
+ *
+ * Register the tags with the GStreamer tags system.  This function must be
+ * invoked at least once before the tags can be used.  It is OK to call
+ * this function more than once.
+ */
 
 
 void gstlal_register_tags(void)

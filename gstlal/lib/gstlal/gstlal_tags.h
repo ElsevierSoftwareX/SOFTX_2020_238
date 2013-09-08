@@ -28,13 +28,36 @@
 G_BEGIN_DECLS
 
 
-/*
- * Custom tags
+/**
+ * GSTLAL_TAG_INSTRUMENT:
+ *
+ * The name ("prefix" in the jargon of the frame file spec) of the
+ * instrument from which this data stream has been collected.  E.g., "H1",
+ * "L1", etc..
  */
 
 
 #define GSTLAL_TAG_INSTRUMENT "instrument"
+
+
+/**
+ * GSTLAL_TAG_CHANNEL_NAME:
+ *
+ * The channel name.
+ */
+
+
 #define GSTLAL_TAG_CHANNEL_NAME "channel-name"
+
+
+/**
+ * GSTLAL_TAG_UNITS:
+ *
+ * The units for this channel, encoded using the function
+ * XLALUnitAsString().
+ */
+
+
 #define GSTLAL_TAG_UNITS "units"
 
 
