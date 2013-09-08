@@ -1,7 +1,7 @@
 /*
  * Various bits of LAL wrapped in gstreamer elements.
  *
- * Copyright (C) 2000,2001,2008  Kipp C. Cannon
+ * Copyright (C) 2000,2001,2008--2013  Kipp C. Cannon
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -57,40 +57,40 @@ void gstlal_load_fftw_wisdom(void);
 
 
 /* int type */
-GValueArray *gstlal_g_value_array_from_ints(const gint *, gint);
-gint *gstlal_ints_from_g_value_array(GValueArray *, gint *, gint *);
-gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *);
-gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *);
+GValueArray *gstlal_g_value_array_from_ints(const gint *src, gint n);
+gint *gstlal_ints_from_g_value_array(GValueArray *va, gint *dest, gint *n);
+gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *vector);
+gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *matrix);
 
 /* long unsigned int type FIXME add vector support */
-guint64 *gstlal_uint64s_from_g_value_array(GValueArray *, guint64 *, gint *);
-gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *);
-GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *, gint);
+guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint *n);
+gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix);
+GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n);
 
 
 /* double type */
-GValueArray *gstlal_g_value_array_from_doubles(const gdouble *, gint);
-gdouble *gstlal_doubles_from_g_value_array(GValueArray *, gdouble *, gint *);
-gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *);
-gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *);
+GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n);
+gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint *n);
+gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *vector);
+gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix);
 
 /* complex type */
-gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_vector_complex(const gsl_vector_complex *);
-gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *);
-GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_complex *);
+gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_vector_complex(const gsl_vector_complex *vector);
+gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_complex *matrix);
 
 
-char *gstlal_build_full_channel_name(const char *, const char *);
-REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *, const char *, const char *, const char *);
+char *gstlal_build_full_channel_name(const char *instrument, const char *channel_name);
+REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *instrument, const char *channel_name, const char *units);
 LALUnit gstlal_lalStrainPerADCCount(void);
-LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit);
-GstDateTime *gstlal_datetime_new_from_gps(GstClockTime);
+LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit);
+GstDateTime *gstlal_datetime_new_from_gps(GstClockTime gps);
 
 
 G_END_DECLS

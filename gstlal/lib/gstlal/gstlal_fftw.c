@@ -82,6 +82,18 @@
 static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
 
 
+/**
+ * gstlal_fftw_lock:
+ *
+ * Aquire the lock to protect the global shared state in the FFTW wisdom.
+ * This function also aquires LAL's FFTW wisdom lock if that lock is
+ * available.  In the future, GstLAL will loose its mutex and rely
+ * exclusively on LAL's lock when LAL has one unconditionally.
+ *
+ * See also:  gstlal_fftw_unlock()
+ */
+
+
 void gstlal_fftw_lock(void)
 {
 #ifdef LAL_FFTW_PTHREAD_MUTEX_LOCK
@@ -89,6 +101,18 @@ void gstlal_fftw_lock(void)
 #endif
 	g_static_mutex_lock(&gstlal_fftw_lock_mutex);
 }
+
+
+/**
+ * gstlal_fftw_unlock:
+ *
+ * Release the lock to protect the global shared state in the FFTW wisdom.
+ * This function also releases LAL's FFTW wisdom lock if that lock is
+ * available.  In the future, GstLAL will loose its mutex and rely
+ * exclusively on LAL's lock when LAL has one unconditionally.
+ *
+ * See also:  gstlal_fftw_lock()
+ */
 
 
 void gstlal_fftw_unlock(void)
@@ -106,6 +130,17 @@ void gstlal_fftw_unlock(void)
  *                             FFTW Wisdom Import
  *
  * ============================================================================
+ */
+
+
+/**
+ * gstlal_load_fftw_wisdom:
+ *
+ * Attempt to load double-precision and single-precision FFTW wisdom files.
+ * The names for these files are taken from the environment variables
+ * GSTLAL_FFTW_WISDOM and GSTLAL_FFTWF_WISDOM, respectively, or if one or
+ * the other isn't set then the respective FFTW default is used.  This
+ * function acquires and releases the GstLAL FFTW locks and is thread-safe.
  */
 
 
