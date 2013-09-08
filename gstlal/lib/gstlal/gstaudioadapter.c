@@ -21,7 +21,7 @@
 
 /**
  * SECTION:gstaudioadapter
- * @short_description:  #GstAdapter-like class that understands audio
+ * @short_description:  GstAdapter-like class that understands audio
  * stream formats.
  *
  * #GstAudioAdapter provides a queue to accumulate time series data and
@@ -349,10 +349,10 @@ guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
  * @dst: start of the memory region to which to copy the samples, it must
  * be large enough to accomodate them
  * @samples: the number of samples to copy
- * @copied_gap: if not NULL, the address of a #gboolean that will be set to
+ * @copied_gap: if not %NULL, the address of a #gboolean that will be set to
  * %TRUE if any gap samples were among the samples copied or %FALSE
  * if all samples were not gap samples.
- * @copied_nongap: if not NULL, the address of a #gboolean that will be set
+ * @copied_nongap: if not %NULL, the address of a #gboolean that will be set
  * to %TRUE if any non-gap samples were among the samples copied or %FALSE
  * if all samples were gaps.
  *
