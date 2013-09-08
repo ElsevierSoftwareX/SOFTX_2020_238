@@ -21,7 +21,7 @@
 
 /**
  * SECTION:gstlal_gps_clock
- * @short_description:  #GstSystemClock sub-class that reports GPS time.
+ * @short_description:  GstSystemClock sub-class that reports GPS time.
  *
  * The #GstLALGPSSystemClock class is a sub-class of #GstSystemClock that
  * converts the times reported from Unix time to GPS seconds.
