@@ -23,6 +23,13 @@
 #define __GSTLAL_DEBUG_H__
 
 
+/**
+ * SECTION:gstlal_debug
+ * @title: Debugging
+ * @short_description:  Debugging macros.
+ */
+
+
 #include <glib.h>
 #include <gst/gst.h>
 
@@ -30,9 +37,27 @@
 G_BEGIN_DECLS
 
 
+/**
+ * GST_TIME_SECONDS_FORMAT:
+ *
+ * printf() style format specifier for displaying a #GstClockTime in
+ * seconds.
+ *
+ * See also:  GST_TIME_SECONDS_ARGS
+ */
+
+
+/**
+ * GST_TIME_SECONDS_ARGS:
+ * @t: #GstClockTime
+ *
+ * Macro to prepare printf() style parameters from a #GstClockTime.
+ */
+
+
 /*
- * Debugging helpers.  There is a patch in gnats to add these to gstreamer
- * proper, delete when that happens.  (hence the #ifdef protection)
+ * FIXME:  there is a patch in gnats to add these to gstreamer proper,
+ * delete when that happens.  (hence the #ifdef protection)
  */
 
 
