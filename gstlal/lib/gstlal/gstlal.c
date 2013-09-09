@@ -93,12 +93,19 @@
 
 /**
  * gstlal_ints_from_g_value_array:
+ * @va: the #GValueArray from which to copy the elements
+ * @dest:  address of memory large enough to hold elements, or %NULL
+ * @n:  address of integer that will be set to the number of elements, or
+ * %NULL
  *
- * Convert a #GValueArray of ints to an array of ints.  If dest is %NULL
+ * Convert a #GValueArray of ints to an array of ints.  If @dest is %NULL
  * then new memory will be allocated otherwise the ints are copied into the
- * memory pointed to by dest, which must be large enough to hold them.  The
- * return value is dest or the newly allocated address on success or %NULL
- * on failure.
+ * memory pointed to by @dest, which must be large enough to hold them.  If
+ * memory is allocated by this function, free with g_free().  If @n is not
+ * %NULL it is set to the number of elements in the array.
+ *
+ * Returns: @dest or the address of the newly-allocated memory on success,
+ * or %NULL on failure.
  */
 
 
@@ -121,9 +128,12 @@ gint *gstlal_ints_from_g_value_array(GValueArray *va, gint *dest, gint *n)
 
 /**
  * gstlal_g_value_array_from_ints:
+ * @src:  start of array
+ * @n: number of elements in array
  *
- * Convert an array of ints to a #GValueArray.  The return value is the
- * newly allocated #GValueArray object.
+ * Build a #GValueArray from an array of ints.
+ *
+ * Returns : newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -149,12 +159,19 @@ GValueArray *gstlal_g_value_array_from_ints(const gint *src, gint n)
 
 /**
  * gstlal_uint64s_from_g_value_array:
+ * @va: the #GValueArray from which to copy the elements
+ * @dest:  address of memory large enough to hold elements, or %NULL
+ * @n:  address of integer that will be set to the number of elements, or
+ * %NULL
  *
- * Convert a #GValueArray of #guint64 to an array of #guint64.  If dest is
+ * Convert a #GValueArray of #guint64 to an array of #guint64.  If @dest is
  * %NULL then new memory will be allocated otherwise the doubles are copied
- * into the memory pointed to by dest, which must be large enough to hold
- * them.  The return value is dest or the newly allocated address on
- * success or %NULL on failure.
+ * into the memory pointed to by @dest, which must be large enough to hold
+ * them.  If memory is allocated by this function, free with g_free().  If
+ * @n is not %NULL it is set to the number of elements in the array.
+ *
+ * Returns: @dest or the address of the newly-allocated memory on success,
+ * or %NULL on failure.
  */
 
 
@@ -178,9 +195,12 @@ guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint 
 
 /**
  * gstlal_g_value_array_from_uint64s:
+ * @src:  start of array
+ * @n: number of elements in array
  *
- * Convert an array of #guint64 to a #GValueArray.  The return value is the
- * newly allocated #GValueArray object.
+ * Build a #GValueArray from an array of #guint64.
+ *
+ * Returns : newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -206,12 +226,19 @@ GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n)
 
 /**
  * gstlal_doubles_from_g_value_array:
+ * @va: the #GValueArray from which to copy the elements
+ * @dest:  address of memory large enough to hold elements, or %NULL
+ * @n:  address of integer that will be set to the number of elements, or
+ * %NULL
  *
- * Convert a #GValueArray of doubles to an array of doubles.  If dest is
+ * Convert a #GValueArray of doubles to an array of doubles.  If @dest is
  * %NULL then new memory will be allocated otherwise the doubles are copied
- * into the memory pointed to by dest, which must be large enough to hold
- * them.  The return value is dest or the newly allocated address on
- * success or %NULL on failure.
+ * into the memory pointed to by @dest, which must be large enough to hold
+ * them.  If memory is allocated by this function, free with g_free().  If
+ * @n is not %NULL it is set to the number of elements in the array.
+ *
+ * Returns: @dest or the address of the newly-allocated memory on success,
+ * or %NULL on failure.
  */
 
 
@@ -235,9 +262,12 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
 
 /**
  * gstlal_g_value_array_from_doubles:
+ * @src:  start of array
+ * @n: number of elements in array
  *
- * Convert an array of doubles to a #GValueArray.  The return value is the
- * newly allocated #GValueArray object.
+ * Build a #GValueArray from an array of doubles.
+ *
+ * Returns : newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -263,9 +293,11 @@ GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
 
 /**
  * gstlal_gsl_vector_int_from_g_value_array:
+ * @va:  #GValueArray of ints
  *
- * Convert a #GValueArray of ints to a GSL vector.  The return value is the
- * newly allocated vector on success or %NULL on failure.
+ * Build a #gsl_vector_int from a #GValueArray of ints.
+ *
+ * Returns:  the newly-allocated #gsl_vector_int or %NULL on failure.
  */
 
 
@@ -284,9 +316,11 @@ gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *va)
 
 /**
  * gstlal_g_value_array_from_gsl_vector_int:
+ * @vector:  #gsl_vector_int
  *
- * Convert a GSL vector of ints to a #GValueArray.  The return value is the
- * newly allocated #GValueArray object.
+ * Build a #GValueArray of ints from a #gsl_vector_int.
+ *
+ * Returns:  the newly-allocated #GValueArray of ints or %NULL on failure.
  */
 
 
@@ -298,9 +332,11 @@ GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *vect
 
 /**
  * gstlal_gsl_vector_from_g_value_array:
+ * @va:  #GValueArray of doubles
  *
- * Convert a #GValueArray of doubles to a GSL vector.  The return value is
- * the newly allocated vector on success or %NULL on failure.
+ * Build a #gsl_vector from a #GValueArray of doubles.
+ *
+ * Returns:  the newly-allocated #gsl_vector or %NULL on failure.
  */
 
 
@@ -319,9 +355,12 @@ gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *va)
 
 /**
  * gstlal_g_value_array_from_gsl_vector:
+ * @vector:  #gsl_vector
  *
- * Convert a GSL vector of doubles to a #GValueArray.  The return value is
- * the newly allocated #GValueArray object.
+ * Build a #GValueArray of doubles from a #gsl_vector.
+ *
+ * Returns:  the newly-allocated #GValueArray of doubles or %NULL on
+ * failure.
  */
 
 
@@ -333,12 +372,12 @@ GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *vector)
 
 /**
  * gstlal_gsl_vector_complex_from_g_value_array:
+ * @va:  #GValueArray of doubles (two elements per complex number)
  *
- * Convert a #GValueArray of complex doubles to a GSL vector.  The return
- * value is the newly allocated vector on success or %NULL on failure.
- * Note: glib/gobject don't support complex floats, so the data are assumed
- * to be stored as a #GValueArray of doubles packed as
+ * Build a #gsl_vector_complex from a #GValueArray of doubles packed as
  * real,imag,real,imag,...
+ *
+ * Returns:  the newly-allocated #gsl_vector_complex or %NULL on failure.
  */
 
 
@@ -358,11 +397,13 @@ gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *va
 
 /**
  * gstlal_g_value_array_from_gsl_vector_complex:
+ * @vector:  #gsl_vector_complex
  *
- * Convert a GSL vector of complex doubles to a #GValueArray.  The return
- * value is the newly allocated GValueArray object.  Note:  glib/gobject
- * don't support complex floats, so the data are assumed to be stored as a
- * #GValueArray of doubles packed as real,imag,real,imag,...
+ * Build a #GValueArray of doubles from a #gsl_vector_complex.  The
+ * complex numbers are packed into the result as real,imag,real,imag,...
+ *
+ * Returns:  the newly-allocated #GValueArray of doubles or %NULL on
+ * failure.
  */
 
 
@@ -375,10 +416,11 @@ GValueArray *gstlal_g_value_array_from_gsl_vector_complex(const gsl_vector_compl
 
 /**
  * gstlal_gsl_matrix_int_from_g_value_array:
+ * @va:  #GValueArray of #GValueArrays of ints
  *
- * Convert a #GValueArray of #GValueArrays of ints to a GSL matrix.  The
- * return value is the newly allocated matrix on success or %NULL on
- * failure.
+ * Build a #gsl_matrix_int from a #GValueArray of #GValueArrays of ints.
+ *
+ * Returns:  the newly-allocated #gsl_matrix_int or %NULL on failure.
  */
 
 
@@ -427,9 +469,12 @@ gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *va)
 
 /**
  * gstlal_g_value_array_from_gsl_matrix_int:
+ * @matrix:  a #gsl_matrix_int
  *
- * Convert a GSL matrix of ints to a #GValueArray of #GValueArrays.  The
- * return value is the newly allocated #GValueArray object.
+ * Build a #GValueArray of #GValueArrays of ints from a #gsl_matrix_int.
+ *
+ * Returns:  the newl-allocated #GValueArray of newly-allocated
+ * #GValueArrays of ints or %NULL on failure.
  */
 
 
@@ -453,10 +498,12 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *matr
 
 /**
  * gstlal_gsl_matrix_ulong_from_g_value_array:
+ * @va:  #GValueArray of #GValueArrays of #guint64
  *
- * Convert a #GValueArray of #GValueArrays of #guint64 to a GSL matrix.
- * The return value is the newly allocated matrix on success or %NULL on
- * failure.
+ * Build a #gsl_matrix_ulong from a #GValueArray of #GValueArrays of
+ * #guint64.
+ *
+ * Returns:  the newly-allocated #gsl_matrix_ulong or %NULL on failure.
  */
 
 
@@ -504,10 +551,11 @@ gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va)
 
 /**
  * gstlal_gsl_matrix_from_g_value_array:
+ * @va:  #GValueArray of #GValueArrays of double
  *
- * Convert a #GValueArray of #GValueArrays of doubles to a GSL matrix.  The
- * return value is the newly allocated matrix on success or %NULL on
- * failure.
+ * Build a #gsl_matrix from a #GValueArray of #GValueArrays of doubles.
+ *
+ * Returns:  the newly-allocated #gsl_matrix or %NULL on failure.
  */
 
 
@@ -556,9 +604,13 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 
 /**
  * gstlal_g_value_array_from_gsl_matrix_ulong:
+ * @matrix: a #gsl_matrix_ulong
  *
- * Convert a GSL matrix of ulong to a #GValueArray of #GValueArrays.  The
- * return value is the newly allocated #GValueArray object.
+ * Build a #GValueArray of #GValueArrays of #guin64 from a
+ * #gsl_matrix_ulong.
+ *
+ * Returns:  the newly-allocated #GValueArray of newly-allocated
+ * #GValueArrays of #guint64s or %NULL on failure.
  */
 
 
@@ -582,9 +634,12 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *
 
 /**
  * gstlal_g_value_array_from_gsl_matrix:
+ * @matrix: a #gsl_matrix
  *
- * Convert a GSL matrix of doubles to a #GValueArray of #GValueArrays.  The
- * return value is the newly allocated #GValueArray object.
+ * Build a #GValueArray of #GValueArrays of doubles from a #gsl_matrix.
+ *
+ * Returns:  the newly-allocated #GValueArray of newly-allocated
+ * #GValueArrays of doubles or %NULL on failure.
  */
 
 
@@ -608,12 +663,13 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix)
 
 /**
  * gstlal_gsl_matrix_complex_from_g_value_array:
+ * @va:  #GValueArray of #GValueArrays of doubles
  *
- * Convert a #GValueArray of #GValueArrays of doubles to a GSL complex
- * matrix.  The return value is the newly allocated matrix on success or
- * %NULL on failure.  Note:  glib/gobject don't support complex floats, so
- * the data are assumed to be stored as rows (#GValueArrays) packed as
+ * Build a #gsl_matrix_complex from a #GValueArray of #GValueArrays of
+ * doubles.  The complex numbers are unpacked from the doubles as
  * real,imag,real,imag,...
+ *
+ * Returns:  the newly-allocated #gsl_matrix_complex or %NULL on failure.
  */
 
 
@@ -663,12 +719,14 @@ gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *va
 
 /**
  * gstlal_g_value_array_from_gsl_matrix_complex:
+ * @matrix: a #gsl_matrix_complex
  *
- * Convert a GSL matrix of complex doubles to a #GValueArray of
- * #GValueArrays.  The return value is the newly allocated #GValueArray
- * object.  Note: glib/gobject don't support complex floats, so the data
- * are assumed to be stored as rows (#GValueArrays) packed as
+ * Build a #GValueArray of #GValueArrays of doubles from a
+ * #gsl_matrix_complex.  The complex numbers are packed into the doubles as
  * real,imag,real,imag,...
+ *
+ * Returns:  the newly-allocated #GValueArray of newly-allocated
+ * #GValueArrays of doubles or %NULL on failure.
  */
 
 
@@ -702,13 +760,16 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_compl
 
 /**
  * gstlal_build_full_channel_name:
+ * @instrument:  name of instrument (e.g., "H1") or %NULL
+ * @channel_name:  name of channel (e.g., "LSC-STRAIN") or %NULL
  *
  * Prefix a channel name with the instrument name.  I.e., turn "H1" and
  * "LSC-STRAIN" into "H1:LSC-STRAIN".  If either instrument or channel_name
  * is %NULL, then the corresponding part of the result is left blank and
- * the colon is omited.  The return value is %NULL on failure or a
- * newly-allocated string.   The calling code should g_free() the string
- * when finished with it.
+ * the colon is omited.  If both are %NULL an empty string is returned.
+ *
+ * Returns:  newly-allocated string on succes, %NULL on failure.  Free with
+ * g_free().
  */
 
 
@@ -734,17 +795,25 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 
 /**
  * gstlal_REAL8TimeSeries_from_buffer:
+ * @buf:  the #GstBuffer to wrap
+ * @instrument:  name of the instrument, e.g., "H1", or %NULL
+ * @channel_name:  name of the channel, e.g., "LSC-STRAIN", or %NULL
+ * @units:  string describing the units, parsable by XLALParseUnitString()
  *
  * Wrap a #GstBuffer in a #REAL8TimeSeries.  The time series's data->data
  * pointer points to the #GstBuffer's own data, so this pointer must not be
- * free()ed.  That means it must be set to %NULL before passing the time
- * series to the XLAL destroy function.
+ * free()ed --- it must be set to %NULL before passing the time series to
+ * XLALDestroyREAL8TimeSeries().  Only #GstBuffers containing
+ * single-channel time series data are supported.  The @instrument and
+ * @channel_name are used to build the #REAL8TimeSeries' name using
+ * gstlal_build_full_channel_name().
  *
- * Example:
- *
+ * <example>
+ *   <title>Create a REAL8TimeSeries and free it</title>
+ *   <programlisting>
  * REAL8TimeSeries *series;
  *
- * series = gstlal_REAL8TimeSeries_from_buffer(buf);
+ * series = gstlal_REAL8TimeSeries_from_buffer(buf, "H1", "LSC-STRAIN", "strain");
  * if(!series)
  * 	handle_error();
  *
@@ -752,6 +821,12 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
  *
  * series->data->data = NULL;
  * XLALDestroyREAL8TimeSeries(series);
+ *   </programlisting>
+ * </example>
+ *
+ * Returns:  newly-allocated REAL8TimeSeries.  Free with
+ * XLALDestroyREAL8TimeSeries() after setting the internal data->data
+ * pointer to %NULL.
  */
 
 
@@ -863,10 +938,13 @@ LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit)
 
 /**
  * gstlal_datetime_new_from_gps:
+ * @gps:  GPS time
  *
- * Build a #GstDateTime from GPS nanoseconds
+ * Converts a #GstClockTime containing a GPS time (in integer nanoseconds)
+ * to a #GstDateTime object representing the same time.
  *
- * Returns a new reference.  Use gst_date_time_unref() to free.
+ * Returns a newly-allocated #GstDateTime.  Use gst_date_time_unref() to
+ * free.
  */
 
 
