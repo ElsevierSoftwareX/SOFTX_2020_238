@@ -60,6 +60,7 @@ parser.add_option("-e", "--gps-end", action="store", type=float, help="Plot trig
 parser.add_option("-f", "--low-frequency", action="store", type=float, default=None, help="Plot only trigggers with central frequency above this frequency. Default is 0.")
 parser.add_option("-F", "--high-frequency", action="store", type=float, default=None, help="Plot only trigggers with central frequency below this frequency.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
+parser.add_option("-p", "--plot-value", action="store", default="snr", help="What value to plot; choices are 'snr' (default), 'confidence', and 'amplitude'.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
 parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
@@ -212,6 +213,13 @@ for pid, eventlist in event_map.iteritems():
 	for e in eventlist:
 		if e.chisq_dof == float('nan'):
 			e.chisq_dof = e.duration*e.bandwidth*2
+		# FIXME: Don't do this, this is the easy way out
+		if opts.plot_value == 'confidence':
+			e.snr = e.confidence
+		elif opts.plot_value == 'amplitude':
+			e.snr = e.amplitude
+		elif opts.plot_value != 'snr':
+			raise ArgumentError("Do not understand %s as a parameter to --plot-value" % opts.plot_value)
 
 	events += eventlist
 
