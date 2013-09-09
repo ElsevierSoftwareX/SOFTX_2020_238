@@ -62,8 +62,8 @@ FIXXREF_OPTIONS=
 # Used for dependencies. The docs will be rebuilt if any of these change.
 # e.g. HFILE_GLOB=$(top_srcdir)/gtk/*.h
 # e.g. CFILE_GLOB=$(top_srcdir)/gtk/*.c
-HFILE_GLOB=
-CFILE_GLOB=
+HFILE_GLOB=$(top_srcdir)/lib/gstlal/*.h $(top_srcdir)/gst/lal/*.h
+CFILE_GLOB=$(top_srcdir)/lib/gstlal/*.c $(top_srcdir)/gst/lal/*.c
 
 # Extra header to include when scanning, which are not under DOC_SOURCE_DIR
 # e.g. EXTRA_HFILES=$(top_srcdir}/contrib/extra.h
@@ -71,7 +71,9 @@ EXTRA_HFILES=
 
 # Header files or dirs to ignore when scanning. Use base file/dir names
 # e.g. IGNORE_HFILES=gtkdebug.h gtkintl.h private_code
-IGNORE_HFILES=
+IGNORE_HFILES= \
+	gstlal_peakfinder_top.h \
+	gstlal_peakfinder_types.h
 
 # Images to copy into HTML directory.
 # e.g. HTML_IMAGES=$(top_srcdir)/gtk/stock-icons/stock_about_24.png
@@ -92,8 +94,12 @@ expand_content_files=
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
 GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-GTKDOC_LIBS = $(AM_LDFLAGS) $(top_builddir)/gst/lal/libgstlal.la $(top_builddir)/gst/lal/libgstlaladder.la $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltypes.la $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
-
+GTKDOC_LIBS = $(AM_LDFLAGS) \
+	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
+	$(top_builddir)/lib/gstlal/libgstlal.la \
+	$(top_builddir)/gst/lal/libgstlal.la \
+	$(top_builddir)/gst/lal/libgstlaladder.la \
+	$(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/doc/gobject/gtk-doc.make
