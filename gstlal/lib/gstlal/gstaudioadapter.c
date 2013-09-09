@@ -245,8 +245,8 @@ gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
  * gst_audioadapter_head_gap_length:
  * @adapter: a #GstAudioAdapter
  *
- * Return the total number of gap samples at the head (samples to be pulled
- * out first) of the #GstAudioAdapter.
+ * Return the number of contiguous gap samples at the head (samples to be
+ * pulled out first) of the #GstAudioAdapter.
  *
  * Returns:  #guint
  */
@@ -273,8 +273,8 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
  * gst_audioadapter_tail_gap_length:
  * @adapter: a #GstAudioAdapter
  *
- * Return the total number of gap samples at the tail (samples to be pulled
- * out last) of the #GstAudioAdapter.
+ * Return the number of contiguous gap samples at the tail (samples to be
+ * pulled out last) of the #GstAudioAdapter.
  *
  * Returns:  #guint
  */
@@ -296,8 +296,8 @@ guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter)
  * gst_audioadapter_head_nongap_length:
  * @adapter: a #GstAudioAdapter
  *
- * Return the total number of non-gap samples at the head (samples to be
- * pulled out first) of the #GstAudioAdapter.
+ * Return the number of contiguous non-gap samples at the head (samples to
+ * be pulled out first) of the #GstAudioAdapter.
  *
  * Returns:  #guint
  */
@@ -324,8 +324,8 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
  * gst_audioadapter_tail_nongap_length:
  * @adapter: a #GstAudioAdapter
  *
- * Return the total number of non-gap samples at the tail (samples to be
- * pulled out last) of the #GstAudioAdapter.
+ * Return the number of contiguous non-gap samples at the tail (samples to
+ * be pulled out last) of the #GstAudioAdapter.
  *
  * Returns:  #guint
  */
@@ -357,9 +357,8 @@ guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
  * if all samples were gaps.
  *
  * Copies @samples from the #GstAudioAdapter's head to a contiguous region
- * of memory.  Instead of copying them verbatim, samples taken from
- * #GstBuffers that have their %GST_BUFFER_FLAG_GAP set to %TRUE are set to
- * 0 in the target buffer.
+ * of memory.  Samples taken from #GstBuffers that have their
+ * %GST_BUFFER_FLAG_GAP set to %TRUE are set to 0 in the target buffer.
  */
 
 
