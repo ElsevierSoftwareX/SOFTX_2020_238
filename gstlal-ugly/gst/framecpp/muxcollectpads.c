@@ -653,9 +653,6 @@ gboolean framecpp_muxcollectpads_get_span(FrameCPPMuxCollectPads *collectpads, G
  * requested time and it might end prior to t_end if the queue does.  The
  * data (if any) is flushed from the queue.
  *
- * It is an error to request a timestamp t_end beyond the end of the
- * currently en-queued data.
- *
  * The calling code owns the list returned by this function.  It should be
  * freed and the buffers unref()ed when no longer needed.
  *
