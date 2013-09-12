@@ -38,7 +38,7 @@ DOC_MAIN_SGML_FILE=$(DOC_MODULE)-docs.sgml
 DOC_SOURCE_DIR=$(top_srcdir)/lib/gstlal $(top_srcdir)/gst/lal
 
 # Extra options to pass to gtkdoc-scangobj. Not normally needed.
-SCANGOBJ_OPTIONS=
+SCANGOBJ_OPTIONS=--type-init-func="gst_init(&argc, &argv)"
 
 # Extra options to supply to gtkdoc-scan.
 # e.g. SCAN_OPTIONS=--deprecated-guards="GTK_DISABLE_DEPRECATED"
@@ -94,7 +94,7 @@ expand_content_files=
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
 GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-GTKDOC_LIBS = $(AM_LDFLAGS) \
+GTKDOC_LIBS = $(AM_LDFLAGS) -static \
 	$(top_builddir)/lib/gstlal/libgstlal.la \
 	$(top_builddir)/lib/gstlal/libgstlaltags.la \
 	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
