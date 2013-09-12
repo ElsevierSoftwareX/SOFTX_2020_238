@@ -70,6 +70,7 @@
 #include <gstlal_whiten.h>
 #include <gstlal_shift.h>
 
+
 /*
  * ============================================================================
  *
@@ -97,12 +98,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_peak", GSTLAL_PEAK_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_segmentsrc", GSTLAL_SEGMENTSRC_TYPE},
+		{"lal_shift", GSTLAL_SHIFT_TYPE},
 		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
-		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_statevector", GSTLAL_STATEVECTOR_TYPE},
+		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
-		{"lal_shift", GSTLAL_SHIFT_TYPE},
 		{NULL, 0},
 	};
 
