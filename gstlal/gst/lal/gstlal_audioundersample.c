@@ -17,6 +17,27 @@
  */
 
 
+/**
+ * SECTION:gstlal_audioundersample
+ * @short_description:  Undersample an audio stream.
+ *
+ * This element implements an undersampling transform on time series data.
+ * For more information about undersampling, see <ulink
+ * url="https://en.wikipedia.org/wiki/Undersampling">https://en.wikipedia.org/wiki/Undersampling</ulink>.
+ * Note that this element only performs the undersampling itself, not the
+ * band-pass pre-filtering that is usually performed as part of the
+ * transform.  This element can only generate output streams whose sample
+ * rates are integer divisors of the input stream.  To achieve other sample
+ * rates, precede this element with an audioresample element to resample
+ * the time series to a rate that is an integer multiple of the final
+ * desired sample rate.
+ *
+ * Example (assumes 44.1 kHz source material):
+ *
+ * $ gst-launch filesrc location="song.mp3" ! decodebin ! lal_audioundersample ! audio/x-raw-int, rate=7350 ! audioresample ! autoaudiosink
+ */
+
+
 /*
  * ============================================================================
  *
