@@ -95,11 +95,12 @@ expand_content_files=
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
 GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 GTKDOC_LIBS = $(AM_LDFLAGS) \
-	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
 	$(top_builddir)/lib/gstlal/libgstlal.la \
+	$(top_builddir)/lib/gstlal/libgstlaltags.la \
+	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
 	$(top_builddir)/gst/lal/libgstlal.la \
 	$(top_builddir)/gst/lal/libgstlaladder.la \
-	$(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+	$(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/doc/gobject/gtk-doc.make
