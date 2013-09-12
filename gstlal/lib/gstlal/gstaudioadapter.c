@@ -468,10 +468,8 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		result = g_list_append(result, buf);
 	}
 	samples -= n;
-	if(!samples)
-		goto done;
 
-	for(head = g_list_next(head); head; head = g_list_next(head)) {
+	for(head = g_list_next(head); head && samples; head = g_list_next(head)) {
 		buf = GST_BUFFER(head->data);
 		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 		if(samples < n) {
@@ -487,7 +485,6 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 
 			result = g_list_append(result, newbuf);
 			samples = 0;
-			break;
 		} else {
 			gst_buffer_ref(buf);
 			result = g_list_append(result, buf);
