@@ -10,5 +10,46 @@
 #include <gstlal/gstlal_segments.h>
 #include <gstlal/gstlal_tags.h>
 
+#include <gstadder.h>
+#include <gstlal_audioundersample.h>
+#include <gstlal_autochisq.h>
+#include <gstlal_cachesrc.h>
+#include <gstlal_drop.h>
+#include <gstlal_firbank.h>
+#include <gstlal_gate.h>
+#include <gstlal_matrixmixer.h>
+#include <gstlal_nofakedisconts.h>
+#include <gstlal_nxydump.h>
+#include <gstlal_peak.h>
+#include <gstlal_reblock.h>
+#include <gstlal_segmentsrc.h>
+#include <gstlal_shift.h>
+#include <gstlal_simulation.h>
+#include <gstlal_statevector.h>
+#include <gstlal_sumsquares.h>
+#include <gstlal_togglecomplex.h>
+#include <gstlal_whiten.h>
+
+
 gst_audioadapter_get_type
 gstlal_gps_system_clock_get_type
+
+gstlal_adder_get_type
+gstlal_audioundersample_get_type
+gstlal_autochisq_get_type
+gstlal_cachesrc_get_type
+gstlal_drop_get_type
+gstlal_firbank_get_type
+gstlal_gate_get_type
+gstlal_matrixmixer_get_type
+gstlal_nofakedisconts_get_type
+gst_tsvenc_get_type
+gstlal_peak_get_type
+gstlal_reblock_get_type
+gstlal_segmentsrc_get_type
+gstlal_shift_get_type
+gstlal_simulation_get_type
+gstlal_statevector_get_type
+gstlal_sumsquares_get_type
+gstlal_togglecomplex_get_type
+gstlal_whiten_get_type
