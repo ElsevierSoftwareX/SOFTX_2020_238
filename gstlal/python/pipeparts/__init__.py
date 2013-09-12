@@ -269,7 +269,7 @@ def mkigwdparse(pipeline, src, **properties):
 
 
 def mkuridecodebin(pipeline, uri, caps = "application/x-igwd-frame,framed=true", **properties):
-	return mkgeneric(pipeline, None, uri = uri, caps = gst.Caps(caps), **properties)
+	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else gst.Caps(caps), **properties)
 
 
 def mkframecppchanneldemux(pipeline, src, **properties):
