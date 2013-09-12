@@ -66,15 +66,10 @@ typedef struct _GstAudioAdapter GstAudioAdapter;
 typedef struct _GstAudioAdapterClass GstAudioAdapterClass;
 
 
-struct _GstAudioAdapterClass {
-	GObjectClass parent_class;
-};
-
-
 /**
- * GstAudioAdapter
+ * GstAudioAdapter:
  *
- * The opaque #GstAudioAdapter data structure.
+ * The opaque #GstAudioAdapter instance structure.
  */
 
 
@@ -86,6 +81,16 @@ struct _GstAudioAdapter {
 	guint unit_size;	/* bytes */
 	guint size;		/* samples (units) */
 	guint skip;		/* samples (units) */
+};
+
+
+/**
+ * GstAudioAdapterClass:
+ */
+
+
+struct _GstAudioAdapterClass {
+	GObjectClass parent_class;
 };
 
 

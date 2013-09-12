@@ -62,22 +62,27 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_GPS_SYSTEM_CLOCK_TYPE))
 
 
-typedef struct _GstLALGPSSystemClockClass GstLALGPSSystemClockClass;
 typedef struct _GstLALGPSSystemClock GstLALGPSSystemClock;
-
-
-struct _GstLALGPSSystemClockClass {
-	GstSystemClockClass parent_class;
-};
+typedef struct _GstLALGPSSystemClockClass GstLALGPSSystemClockClass;
 
 
 /**
- * GstLALGPSSystemClock
+ * GstLALGPSSystemClock:
  */
 
 
 struct _GstLALGPSSystemClock {
 	GstSystemClock systemclock;
+};
+
+
+/**
+ * GstLALGPSSystemClockClass:
+ */
+
+
+struct _GstLALGPSSystemClockClass {
+	GstSystemClockClass parent_class;
 };
 
 
