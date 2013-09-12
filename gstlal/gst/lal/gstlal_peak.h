@@ -52,13 +52,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_PEAK_TYPE))
 
 
-typedef struct {
-	GstElementClass parent_class;
-} GSTLALPeakClass;
+typedef struct _GSTLALPeak GSTLALPeak;
+typedef struct _GSTLALPeakClass GSTLALPeakClass;
 
 
-typedef struct {
-	
+/**
+ * GSTLALPeak:
+ */
+
+
+struct _GSTLALPeak {
 	GstElement element;
 
 	GstPad *sinkpad;
@@ -73,8 +76,17 @@ typedef struct {
 	void *data;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
+};
 
-} GSTLALPeak;
+
+/**
+ * GSTLALPeakClass:
+ */
+
+
+struct _GSTLALPeakClass {
+	GstElementClass parent_class;
+};
 
 
 GType gstlal_peak_get_type(void);

@@ -43,17 +43,13 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_GATE_TYPE))
 
 
-typedef struct _GSTLALGateClass GSTLALGateClass;
 typedef struct _GSTLALGate GSTLALGate;
+typedef struct _GSTLALGateClass GSTLALGateClass;
 
 
-struct _GSTLALGateClass {
-	GstElementClass parent_class;
-
-	void (*rate_changed)(GSTLALGate *, gint, void *);
-	void (*start)(GSTLALGate *, guint64, void *);
-	void (*stop)(GSTLALGate *, guint64, void *);
-};
+/**
+ * GSTLALGate:
+ */
 
 
 struct _GSTLALGate {
@@ -84,6 +80,20 @@ struct _GSTLALGate {
 	gint unit_size;
 	gint control_rate;
 	gboolean need_discont;
+};
+
+
+/**
+ * GSTLALGateClass:
+ */
+
+
+struct _GSTLALGateClass {
+	GstElementClass parent_class;
+
+	void (*rate_changed)(GSTLALGate *, gint, void *);
+	void (*start)(GSTLALGate *, guint64, void *);
+	void (*stop)(GSTLALGate *, guint64, void *);
 };
 
 

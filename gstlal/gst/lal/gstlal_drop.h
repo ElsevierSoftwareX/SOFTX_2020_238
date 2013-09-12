@@ -42,12 +42,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_DROP_TYPE))
 
 
-typedef struct {
-	GstElementClass parent_class;
-} GSTLALDropClass;
+typedef struct _GSTLALDrop GSTLALDrop;
+typedef struct _GSTLALDropClass GSTLALDropClass;
 
 
-typedef struct _GSTLALDrop {
+/**
+ * GSTLALDrop:
+ */
+
+
+struct _GSTLALDrop {
 	GstElement element;
 
 	GstPad *sinkpad;
@@ -56,7 +60,17 @@ typedef struct _GSTLALDrop {
 	gint rate;
 	gint unit_size;
 	guint drop_samples;
-} GSTLALDrop;
+};
+
+
+/**
+ * GSTLALDropClass:
+ */
+
+
+struct _GSTLALDropClass {
+	GstElementClass parent_class;
+};
 
 
 GType gstlal_drop_get_type(void);

@@ -48,12 +48,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_STATEVECTOR_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALStateVectorClass;
+typedef struct _GSTLALStateVector GSTLALStateVector;
+typedef struct _GSTLALStateVectorClass GSTLALStateVectorClass;
 
 
-typedef struct GSTLALStateVector {
+/**
+ * GSTLALStateVector:
+ */
+
+
+struct _GSTLALStateVector {
 	GstBaseTransform element;
 
 	guint required_on;
@@ -64,7 +68,17 @@ typedef struct GSTLALStateVector {
 	guint64 gap_samples;
 
 	guint (*get_input)(void **);
-} GSTLALStateVector;
+};
+
+
+/**
+ * GSTLALStateVectorClass:
+ */
+
+
+struct _GSTLALStateVectorClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_statevector_get_type(void);

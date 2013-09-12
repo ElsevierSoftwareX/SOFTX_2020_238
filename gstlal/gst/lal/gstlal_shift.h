@@ -42,12 +42,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SHIFT_TYPE))
 
 
-typedef struct {
-	GstElementClass parent_class;
-} GSTLALShiftClass;
+typedef struct _GSTLALShift GSTLALShift;
+typedef struct _GSTLALShiftClass GSTLALShiftClass;
 
 
-typedef struct _GSTLALShift {
+/**
+ * GSTLALShift:
+ */
+
+
+struct _GSTLALShift {
 	GstElement element;
 
 	GstPad *sinkpad;
@@ -56,7 +60,17 @@ typedef struct _GSTLALShift {
 	gint rate;
 	gint unit_size;
 	gint64 shift;
-} GSTLALShift;
+};
+
+
+/**
+ * GSTLALShiftClass:
+ */
+
+
+struct _GSTLALShiftClass {
+	GstElementClass parent_class;
+};
 
 
 GType gstlal_shift_get_type(void);

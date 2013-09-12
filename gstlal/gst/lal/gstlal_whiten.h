@@ -71,12 +71,16 @@ GType gstlal_psdmode_get_type(void);
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_WHITEN_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALWhitenClass;
+typedef struct _GSTLALWhiten GSTLALWhiten;
+typedef struct _GSTLALWhitenClass GSTLALWhitenClass;
 
 
-typedef struct {
+/**
+ * GSTLALWhiten:
+ */
+
+
+struct _GSTLALWhiten {
 	GstBaseTransform element;
 
 	/*
@@ -138,7 +142,17 @@ typedef struct {
 
 	LALPSDRegressor *psd_regressor;
 	REAL8FrequencySeries *psd;
-} GSTLALWhiten;
+};
+
+
+/**
+ * GSTLALWhitenClass:
+ */
+
+
+struct _GSTLALWhitenClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_whiten_get_type(void);

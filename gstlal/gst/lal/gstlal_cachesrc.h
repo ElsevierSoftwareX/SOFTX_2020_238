@@ -66,17 +66,12 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_CACHESRC_TYPE))
 
 
-typedef struct _GstLALCacheSrcClass GstLALCacheSrcClass;
 typedef struct _GstLALCacheSrc GstLALCacheSrc;
-
-
-struct _GstLALCacheSrcClass {
-	GstBaseSrcClass parent_class;
-};
+typedef struct _GstLALCacheSrcClass GstLALCacheSrcClass;
 
 
 /**
- * GstLALCacheSrc
+ * GstLALCacheSrc:
  */
 
 
@@ -91,6 +86,16 @@ struct _GstLALCacheSrc {
 	LALCache *cache;
 	guint index;
 	gboolean need_discont;
+};
+
+
+/**
+ * GstLALCacheSrcClass:
+ */
+
+
+struct _GstLALCacheSrcClass {
+	GstBaseSrcClass parent_class;
 };
 
 

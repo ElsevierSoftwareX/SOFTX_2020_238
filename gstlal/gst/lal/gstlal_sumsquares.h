@@ -48,14 +48,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SUMSQUARES_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALSumSquaresClass;
+typedef struct _GSTLALSumSquares GSTLALSumSquares;
+typedef struct _GSTLALSumSquaresClass GSTLALSumSquaresClass;
 
 
-struct GSTLALSumSquares;
+/**
+ * GSTLALSumSquares:
+ */
 
-typedef struct GSTLALSumSquares {
+
+struct _GSTLALSumSquares {
 	GstBaseTransform element;
 
 	gint channels;
@@ -64,9 +66,19 @@ typedef struct GSTLALSumSquares {
 	double *weights;
 	void *weights_native;
 
-	void *(*make_weights_native_func)(struct GSTLALSumSquares *);
-	GstFlowReturn (*sumsquares_func)(struct GSTLALSumSquares *, GstBuffer *, GstBuffer *);
-} GSTLALSumSquares;
+	void *(*make_weights_native_func)(GSTLALSumSquares *);
+	GstFlowReturn (*sumsquares_func)(GSTLALSumSquares *, GstBuffer *, GstBuffer *);
+};
+
+
+/**
+ * GSTLALSumSquaresClass:
+ */
+
+
+struct _GSTLALSumSquaresClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_sumsquares_get_type(void);

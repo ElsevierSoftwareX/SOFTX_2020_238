@@ -45,12 +45,15 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SIMULATION_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALSimulationClass;
+typedef struct _GSTLALSimulation GSTLALSimulation;
+typedef struct _GSTLALSimulationClass GSTLALSimulationClass;
+
+/**
+ * GSTLALSimulation:
+ */
 
 
-typedef struct {
+struct _GSTLALSimulation {
 	GstBaseTransform parent;
 
 	char *xml_location;
@@ -69,7 +72,17 @@ typedef struct {
 	char *units;
 
 	REAL8TimeSeries *simulation_series;
-} GSTLALSimulation;
+};
+
+
+/**
+ * GSTLALSimulationClass:
+ */
+
+
+struct _GSTLALSimulationClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_simulation_get_type(void);

@@ -42,12 +42,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_REBLOCK_TYPE))
 
 
-typedef struct {
-	GstElementClass parent_class;
-} GSTLALReblockClass;
+typedef struct _GSTLALReblock GSTLALReblock;
+typedef struct _GSTLALReblockClass GSTLALReblockClass;
 
 
-typedef struct _GSTLALReblock {
+/**
+ * GSTLALReblock:
+ */
+
+
+struct _GSTLALReblock {
 	GstElement element;
 
 	GstPad *sinkpad;
@@ -56,7 +60,17 @@ typedef struct _GSTLALReblock {
 	gint rate;
 	gint unit_size;
 	GstClockTime block_duration;
-} GSTLALReblock;
+};
+
+
+/**
+ * GSTLALReblockClass:
+ */
+
+
+struct _GSTLALReblockClass {
+	GstElementClass parent_class;
+};
 
 
 GType gstlal_reblock_get_type(void);

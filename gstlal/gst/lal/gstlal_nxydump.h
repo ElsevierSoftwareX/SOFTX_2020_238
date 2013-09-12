@@ -40,13 +40,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GST_TSVENC_TYPE))
 
 
-typedef struct
-{
-  GstBaseTransformClass parent_class;
-} GstTSVEncClass;
+typedef struct _GstTSVEnc GstTSVEnc;
+typedef struct _GstTSVEncClass GstTSVEncClass;
 
 
-typedef struct
+/**
+ * GstTSVEnc:
+ */
+
+
+struct _GstTSVEnc
 {
   GstBaseTransform element;
 
@@ -57,7 +60,18 @@ typedef struct
 
   GstClockTime start_time;
   GstClockTime stop_time;
-} GstTSVEnc;
+};
+
+
+/**
+ * GstTSVEncClass:
+ */
+
+
+struct _GstTSVEncClass
+{
+  GstBaseTransformClass parent_class;
+};
 
 
 GType gst_tsvenc_get_type(void);

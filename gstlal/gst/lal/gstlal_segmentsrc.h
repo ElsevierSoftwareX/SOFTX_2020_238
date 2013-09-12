@@ -19,11 +19,14 @@ G_BEGIN_DECLS
 #define GST_IS_GSTLAL_SEGMENTSRC_CLASS(klass) \
     (G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SEGMENTSRC_TYPE))
 
-typedef struct {
-    GstBaseSrcClass     parent_class;
-} GSTLALSegmentSrcClass;
+typedef struct _GSTLALSegmentSrc GSTLALSegmentSrc;
+typedef struct _GSTLALSegmentSrcClass GSTLALSegmentSrcClass;
 
-typedef struct {
+/**
+ * GSTLALSegmentSrc:
+ */
+
+struct _GSTLALSegmentSrc {
     GstBaseSrc			element;
 
     GMutex			*segment_matrix_lock;
@@ -31,8 +34,15 @@ typedef struct {
     gboolean			invert_output;
     gint			rate;
     gint			width;
+};
 
-} GSTLALSegmentSrc;
+/**
+ * GSTLALSegmentSrcClass:
+ */
+
+struct _GSTLALSegmentSrcClass {
+    GstBaseSrcClass     parent_class;
+};
 
 GType gstlal_segmentsrc_get_type(void);
 

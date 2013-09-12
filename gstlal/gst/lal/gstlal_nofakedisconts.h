@@ -42,12 +42,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_NOFAKEDISCONTS_TYPE))
 
 
-typedef struct {
-	GstElementClass parent_class;
-} GSTLALNoFakeDiscontsClass;
+typedef struct _GSTLALNoFakeDisconts GSTLALNoFakeDisconts;
+typedef struct _GSTLALNoFakeDiscontsClass GSTLALNoFakeDiscontsClass;
 
 
-typedef struct _GSTLALNoFakeDisconts {
+/**
+ * GSTLALNoFakeDisconts:
+ */
+
+
+struct _GSTLALNoFakeDisconts {
 	GstElement element;
 
 	GstPad *sinkpad;
@@ -56,7 +60,17 @@ typedef struct _GSTLALNoFakeDisconts {
 	guint64 next_offset;
 	guint64 next_timestamp;
 	gboolean silent;
-} GSTLALNoFakeDisconts;
+};
+
+
+/**
+ * GSTLALNoFakeDiscontsClass:
+ */
+
+
+struct _GSTLALNoFakeDiscontsClass {
+	GstElementClass parent_class;
+};
 
 
 GType gstlal_nofakedisconts_get_type(void);

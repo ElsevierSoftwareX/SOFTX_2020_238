@@ -46,12 +46,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_MATRIXMIXER_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALMatrixMixerClass;
+typedef struct _GSTLALMatrixMixer GSTLALMatrixMixer;
+typedef struct _GSTLALMatrixMixerClass GSTLALMatrixMixerClass;
 
 
-typedef struct {
+/**
+ * GSTLALMatrixMixer:
+ */
+
+
+struct _GSTLALMatrixMixer {
 	GstBaseTransform element;
 
 	/*
@@ -96,7 +100,17 @@ typedef struct {
 		GSTLAL_MATRIXMIXER_COMPLEX_FLOAT,
 		GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE
 	} data_type;
-} GSTLALMatrixMixer;
+};
+
+
+/**
+ * GSTLALMatrixMixerClass:
+ */
+
+
+struct _GSTLALMatrixMixerClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_matrixmixer_get_type(void);

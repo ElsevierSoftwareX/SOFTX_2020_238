@@ -57,15 +57,13 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_FIRBANK_TYPE))
 
 
-typedef struct _GSTLALFIRBankClass GSTLALFIRBankClass;
 typedef struct _GSTLALFIRBank GSTLALFIRBank;
+typedef struct _GSTLALFIRBankClass GSTLALFIRBankClass;
 
 
-struct _GSTLALFIRBankClass {
-	GstBaseTransformClass parent_class;
-
-	void (*rate_changed)(GSTLALFIRBank *, gint, void *);
-};
+/**
+ * GSTLALFIRBank:
+ */
 
 
 struct _GSTLALFIRBank {
@@ -128,6 +126,18 @@ struct _GSTLALFIRBank {
 	gboolean need_discont;
 	GstEvent *last_new_segment;
 	gboolean need_new_segment;
+};
+
+
+/**
+ * GSTLALFIRBankClass:
+ */
+
+
+struct _GSTLALFIRBankClass {
+	GstBaseTransformClass parent_class;
+
+	void (*rate_changed)(GSTLALFIRBank *, gint, void *);
 };
 
 

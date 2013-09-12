@@ -48,14 +48,28 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TOGGLECOMPLEX_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALToggleComplexClass;
+typedef struct _GSTLALToggleComplex GSTLALToggleComplex;
+typedef struct _GSTLALToggleComplexClass GSTLALToggleComplexClass;
 
 
-typedef struct {
+/**
+ * GSTLALToggleComplex:
+ */
+
+
+struct _GSTLALToggleComplex {
 	GstBaseTransform element;
-} GSTLALToggleComplex;
+};
+
+
+/**
+ * GSTLALToggleComplexClass:
+ */
+
+
+struct _GSTLALToggleComplexClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_togglecomplex_get_type(void);

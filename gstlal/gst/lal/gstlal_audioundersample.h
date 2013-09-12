@@ -48,12 +48,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_AUDIOUNDERSAMPLE_TYPE))
 
 
-typedef struct {
-	GstBaseTransformClass parent_class;
-} GSTLALAudioUnderSampleClass;
+typedef struct _GSTLALAudioUnderSample GSTLALAudioUnderSample;
+typedef struct _GSTLALAudioUnderSampleClass GSTLALAudioUnderSampleClass;
 
 
-typedef struct GSTLALAudioUnderSample {
+/**
+ * GSTLALAudioUnderSample:
+ */
+
+
+struct _GSTLALAudioUnderSample {
 	GstBaseTransform element;
 
 	/*
@@ -79,7 +83,17 @@ typedef struct GSTLALAudioUnderSample {
 	 */
 
 	guint64 remainder;
-} GSTLALAudioUnderSample;
+};
+
+
+/**
+ * GSTLALAudioUnderSampleClass
+ */
+
+
+struct _GSTLALAudioUnderSampleClass {
+	GstBaseTransformClass parent_class;
+};
 
 
 GType gstlal_audioundersample_get_type(void);
