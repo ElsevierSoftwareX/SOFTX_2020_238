@@ -16,12 +16,12 @@ def measure_freq_response(num, den, quality, nsamples, ntrials=100):
 	pipelines = []
 	for n, freq in enumerate(freqs):
 		pipeline = gst.Pipeline()
-		elems = mkelems_fast(pipeline,
-			'audiotestsrc', {'volume':1,'wave':'sine','freq':freq},
-			'capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d'%num)},
-			'audioresample', {'quality':quality},
-			'capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d'%den)},
-			'fakesink', {'signal-handoffs':True, 'num-buffers':1})
+		elems = mkelems_in_bin(pipeline,
+			('audiotestsrc', {'volume':1,'wave':'sine','freq':freq}),
+			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d'%num)}),
+			('audioresample', {'quality':quality}),
+			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d'%den)}),
+			('fakesink', {'signal-handoffs':True, 'num-buffers':1}))
 		filtlen = elems[2].get_property('filter-length')
 		elems[0].set_property('samplesperbuffer', 2*filtlen + nsamples)
 		elems[-1].connect_after('handoff', handoff_handler, (filtlen, n))
