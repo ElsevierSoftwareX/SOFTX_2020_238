@@ -15,6 +15,7 @@ doc/gobject/*.sgml
 doc/gobject/*.signals
 doc/gobject/*.stamp
 doc/gobject/*.txt
+doc/gobject/*.txt.bak
 doc/gobject/html/
 doc/gobject/tmpl/
 doc/gobject/xml/
