@@ -21,6 +21,7 @@
 
 /**
  * SECTION:gstlal_gps_clock
+ * @include: gstlal/gstlal_gps_clock.h
  * @short_description:  GstSystemClock sub-class that reports GPS time.
  *
  * The #GstLALGPSSystemClock class is a sub-class of #GstSystemClock that

@@ -22,6 +22,7 @@
 /**
  * SECTION:gstlal_segments
  * @title: Segments
+ * @include: gstlal/gstlal_segments.h
  * @short_description: Support for passing segment lists through GObject properties.
  *
  * Here is defined a structure for storing a start/stop pair (a "segment")

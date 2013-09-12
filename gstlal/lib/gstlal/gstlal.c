@@ -20,6 +20,7 @@
 /**
  * SECTION:gstlal
  * @title: Misc
+ * @include: gstlal/gstlal.h
  * @short_description: Collection of miscellaneous utility functions.
  */
 

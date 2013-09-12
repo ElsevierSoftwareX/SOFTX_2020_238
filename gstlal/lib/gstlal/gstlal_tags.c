@@ -26,6 +26,7 @@
 /**
  * SECTION:gstlal_tags
  * @title: Tags
+ * @include: gstlal/gstlal_tags.h
  * @short_description:  Extra tags to help describe gravitational-wave data
  * streams.
  */

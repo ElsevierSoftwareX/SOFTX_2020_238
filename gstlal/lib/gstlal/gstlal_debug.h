@@ -26,6 +26,7 @@
 /**
  * SECTION:gstlal_debug
  * @title: Debugging
+ * @include: gstlal/gstlal_debug.h
  * @short_description:  Debugging macros.
  */
 
