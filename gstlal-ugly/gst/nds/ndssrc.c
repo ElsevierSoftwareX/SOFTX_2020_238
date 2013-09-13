@@ -279,7 +279,6 @@ static gboolean push_new_caps(GSTLALNDSSrc* element)
 
 	if (!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
 	{
-		gst_tag_list_free(taglist);
 		GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 		return FALSE;
 	}
