@@ -64,12 +64,12 @@ doc = """
 <head>
 	<title>GStreamer Audio Bridge - %(host)s:%(port)d</title>
 	<style type="text/css" title="currentStyle">
-		@import "%(datatables)s/media/css/demo_page.css";
-		@import "%(datatables)s/media/css/demo_table_jui.css";
-		@import "%(datatables)s/examples/examples_support/themes/smoothness/jquery-ui-1.8.4.custom.css";
+		@import "//cdnjs.cloudflare.com/ajax/libs/datatables/1.9.4/css/demo_page.min.css";
+		@import "//cdnjs.cloudflare.com/ajax/libs/datatables/1.9.4/css/demo_table_jui.min.css";
+		@import "//cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.2/css/smoothness/jquery-ui-1.10.2.custom.min.css";
 	</style>
-	<script type="text/javascript" language="javascript" src="%(datatables)s/media/js/jquery.js"></script>
-	<script type="text/javascript" language="javascript" src="%(datatables)s/media/js/jquery.dataTables.min.js"></script>
+	<script type="text/javascript" language="javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+	<script type="text/javascript" language="javascript" src="//cdnjs.cloudflare.com/ajax/libs/datatables/1.9.4/jquery.dataTables.min.js"></script>
 	<script type="text/javascript" charset="utf-8">
 		$(document).ready(function() {
 			$('#example').dataTable( {
@@ -108,8 +108,7 @@ doc = """
 </html>
 """ % {
 	'host': opts.host,
-	'port': opts.port,
-	'datatables': 'https://ldas-jobs.ligo.caltech.edu/~lsinger/DataTables-1.7.4'
+	'port': opts.port
 }
 
 
