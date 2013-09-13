@@ -41,6 +41,10 @@
 #   Copyright (c) 2009 Horst Knorr <hk_classes@knoda.org>
 #   Copyright (c) 2013 Daniel Mullner <muellner@math.stanford.edu>
 #
+#   MODIFIED 2013-09-11 by Leo Singer <leo.singer@ligo.org>: don't use
+#   LINKFORSHARED; according to <http://trac.macports.org/ticket/39223>,
+#   LINKFORSHARED is not needed for building Python extension modules.
+#
 #   This program is free software: you can redistribute it and/or modify it
 #   under the terms of the GNU General Public License as published by the
 #   Free Software Foundation, either version 3 of the License, or (at your
@@ -269,18 +273,6 @@ EOD`
 	fi
 	AC_MSG_RESULT([$PYTHON_EXTRA_LIBS])
 	AC_SUBST(PYTHON_EXTRA_LIBS)
-
-	#
-	# linking flags needed when embedding
-	#
-	AC_MSG_CHECKING(python extra linking flags)
-	if test -z "$PYTHON_EXTRA_LDFLAGS"; then
-		PYTHON_EXTRA_LDFLAGS=`$PYTHON -c "import distutils.sysconfig; \
-			conf = distutils.sysconfig.get_config_var; \
-			print (conf('LINKFORSHARED'))"`
-	fi
-	AC_MSG_RESULT([$PYTHON_EXTRA_LDFLAGS])
-	AC_SUBST(PYTHON_EXTRA_LDFLAGS)
 
 	#
 	# final check to see if everything compiles alright
