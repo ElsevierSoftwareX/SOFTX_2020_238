@@ -1,6 +1,6 @@
 SUBDIRS = pipeparts
 
-INCLUDES = -I$(top_srcdir)/lib
+AM_CPPFLAGS = -I$(top_srcdir)/lib
 
 # This is a trick taken from the gst-python automake setup.
 # All of the Python scripts will be installed under the exec dir,

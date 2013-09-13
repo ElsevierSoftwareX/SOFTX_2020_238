@@ -1,4 +1,4 @@
-INCLUDES = -I$(top_srcdir)/lib
+AM_CPPFLAGS = -I$(top_srcdir)/lib
 
 plugin_LTLIBRARIES = libgstnds.la
 

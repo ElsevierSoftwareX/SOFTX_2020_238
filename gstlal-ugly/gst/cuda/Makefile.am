@@ -1,4 +1,4 @@
-INCLUDES = -I$(top_srcdir)/lib 
+AM_CPPFLAGS = -I$(top_srcdir)/lib 
 
 plugin_LTLIBRARIES = libcuda_plugin.la
 
@@ -6,7 +6,7 @@ libcuda_plugin_la_SOURCES = \
 	cuda_plugin.c \
 	cuda_iirbank.h cuda_iirbank.cu \
 	gstlal_iirbankCuda.h gstlal_iirbankCuda.c 
-libcuda_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(INCLUDES) $(NVCC_CFLAGS)
+libcuda_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) $(NVCC_CFLAGS)
 libcuda_plugin_la_LIBADD = 
 libcuda_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS) $(NVCC_LIBS)
 .cu.lo:
