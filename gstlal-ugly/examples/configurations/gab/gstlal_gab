@@ -25,19 +25,21 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 from optparse import OptionParser, Option
 
-opts, args = OptionParser(description = __doc__, option_list = [
+parser = OptionParser(description = __doc__, option_list = [
 	Option("--host", metavar="example.com", help="hostname for NDS connection"),
 	Option("--port", metavar="INT", type=int, help="port for NDS connection (default=31200)", default=31200),
-]).parse_args()
+])
+
+opts, args = parser.parse_args()
 
 required_options = ("host", "port")
 
 for key in required_options:
 	if getattr(opts, key) is None:
-		raise ValueError("Required argument --%s not provided" % key.replace('_', '-'))
+		parser.error("Required argument --%s not provided" % key.replace('_', '-'))
 
 if len(args) > 0:
-	raise ValueError("Too many command line arguments")
+	parser.error("Too many command line arguments")
 
 
 
