@@ -1,7 +1,7 @@
 /*
  * Fix broken discontinuity flags
  *
- * Copyright (C) 2009  Kipp Cannon
+ * Copyright (C) 2009--2013  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,25 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/**
+ * SECTION:gstlal_nofakedisconts
+ * @short_description:  Fix broken GST_BUFFER_FLAG_DISCONT flags.
+ *
+ * The GStreamer base class #GstBaseTransform requires one (or more) output
+ * buffers to be produced by subclasses for every input buffer received.
+ * If the subclass fails to produce an output buffer this is remembered
+ * by #GstBaseTransform which then sets the #GST_BUFFER_FLAG_DISCONT flag
+ * on the next output buffer, regardless of whether or not the buffer is,
+ * infact, discontinuous with any previous buffer.  This is annoying, and
+ * since other elements often respond to the discontinuity by resetting
+ * themselves it creates problems.  This bug aflicts several stock elements
+ * such as the audioresampler.  To work around the problem, this element is
+ * available.  This element monitors the data stream, watching timestamps
+ * and offsets, and sets or clears the discontinuity flag on each buffer
+ * based on exactly whether it is discontinuous with the previous buffer.
  */
 
 
