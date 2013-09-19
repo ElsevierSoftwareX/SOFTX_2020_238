@@ -58,35 +58,6 @@ typedef struct _GSTLALMatrixMixerClass GSTLALMatrixMixerClass;
 struct _GSTLALMatrixMixer {
 	GstBaseTransform element;
 
-	/*
-	 * The mixer is controled using a matrix whose elements provide the
-	 * mixing coefficients and whose size sets the number of input and
-	 * output channels.  The meaning of the coefficients is shown in
-	 * the following diagram.
-	 *
-	 *                1 -->  a11  a12  a13  a14  a15
-	 *
-	 * input channel  2 -->  a21  a22  a23  a24  a25
-	 *
-	 *                3 -->  a31  a32  a33  a34  a35
-	 *
-	 *                        |    |    |    |    |
-	 *                        V    V    V    V    V
-	 *
-	 *                        1    2    3    4    5
-	 *
-	 *                           output channel
-	 *
-	 * The matrix is provided to the element via the "matrix" property
-	 * as a GValueArray of rows, each row is a GValueArray containing
-	 * double-precision floats (the rows must all be the same size).
-	 *
-	 * The coefficient ordering and the manner in which they map input
-	 * channels to output channels is chosen so that the transformation
-	 * of an input buffer into an output buffer can be performed as a
-	 * single matrix-matrix multiplication.
-	 */
-
 	GMutex *mixmatrix_lock;
 	GCond *mixmatrix_available;
 	gsl_matrix *mixmatrix_d;

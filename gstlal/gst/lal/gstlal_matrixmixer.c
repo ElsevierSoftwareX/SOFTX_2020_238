@@ -20,6 +20,32 @@
  */
 
 
+/**
+ * SECTION:gstlal_matrixmixer
+ * @short_description:  Compute linear combinations of time series.
+ *
+ * Generates one or more time series streams as linear combinations of one
+ * or more input streams.  The mixer is controlled using a matrix whose
+ * elements provide the mixing coefficients and whose size sets the number
+ * of input and output channels.  The meaning of the coefficients is shown
+ * in the following diagram.
+ *
+ * <informalequation>
+ * 	<xi:include href="../math/eqn_matrixmixer_01.mml"/>
+ * </informalequation>
+ *
+ * The matrix is provided to the element via the "matrix" property as a
+ * GValueArray of rows, each row is a GValueArray containing
+ * double-precision floats (the rows must all be the same size).
+ *
+ * The coefficient ordering and the manner in which they map input channels
+ * to output channels is chosen so that the transformation of an input
+ * buffer into an output buffer can be performed as a single matrix-matrix
+ * multiplication, to allow optimized platform-specific implementations of
+ * that operation to be employed.
+ */
+
+
 /*
  * ============================================================================
  *

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<math xmlns="http://www.w3.org/1998/Math/MathML">
+ <semantics>
+  <mrow>
+   <mtable>
+    <mtr>
+     <mtd>
+      <mrow>
+       <mtext>input channel </mtext>
+       <mtable>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mn>1</mn>
+           <mo stretchy="false">→</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mn>2</mn>
+           <mo stretchy="false">→</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mo stretchy="false">⋮</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mi>m</mi>
+           <mo stretchy="false">→</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+       </mtable>
+      </mrow>
+     </mtd>
+     <mtd>
+      <mrow>
+       <mfenced open="[" close="]">
+        <mrow>
+         <mtable>
+          <mtr>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>11</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>12</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋯</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>1n</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+          </mtr>
+          <mtr>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>21</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>22</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋯</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mn>2n</mn>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+          </mtr>
+          <mtr>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋮</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋮</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋱</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋮</mo>
+            </mrow>
+           </mtd>
+          </mtr>
+          <mtr>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mi mathvariant="italic">m1</mi>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mi mathvariant="italic">m2</mi>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <mo stretchy="false">⋯</mo>
+            </mrow>
+           </mtd>
+           <mtd>
+            <mrow>
+             <msub>
+              <mi>A</mi>
+              <mrow>
+               <mi mathvariant="italic">mn</mi>
+              </mrow>
+             </msub>
+            </mrow>
+           </mtd>
+          </mtr>
+         </mtable>
+        </mrow>
+       </mfenced>
+      </mrow>
+     </mtd>
+    </mtr>
+    <mtr>
+     <mtd>
+      <mrow>
+       <mtext>output channel</mtext>
+      </mrow>
+     </mtd>
+     <mtd>
+      <mrow>
+       <mtable>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mo stretchy="false">↓</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mn>1</mn>
+          </mrow>
+         </mtd>
+        </mtr>
+       </mtable>
+       <mi/>
+       <mtable>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mo stretchy="false">↓</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mn>2</mn>
+          </mrow>
+         </mtd>
+        </mtr>
+       </mtable>
+       <mi/>
+       <mo stretchy="false">⋯</mo>
+       <mi/>
+       <mtable>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mo stretchy="false">↓</mo>
+          </mrow>
+         </mtd>
+        </mtr>
+        <mtr>
+         <mtd>
+          <mrow>
+           <mi>n</mi>
+          </mrow>
+         </mtd>
+        </mtr>
+       </mtable>
+      </mrow>
+     </mtd>
+    </mtr>
+   </mtable>
+  </mrow>
+  <annotation encoding="StarMath 5.0">matrix{&quot;input channel &quot; stack{1 rightarrow # 2 rightarrow # dotsvert # m rightarrow} #  left [ matrix{A_{11} # A_{12} # dotsaxis # A_{1n} ## A_{21} # A_{22} # dotsaxis # A_{2n} ## dotsvert # dotsvert # dotsdown # dotsvert ## A_{m1} # A_{m2} # dotsaxis # A_{mn}} right ] ## &quot;output channel&quot; #  binom{downarrow}{1} ~~~ binom{downarrow}{2} ~~~ dotsaxis ~~~ binom{downarrow}{n} }</annotation>
+ </semantics>
+</math>
