@@ -44,7 +44,7 @@ G_BEGIN_DECLS
  * printf() style format specifier for displaying a #GstClockTime in
  * seconds.
  *
- * See also:  GST_TIME_SECONDS_ARGS
+ * See also:  #GST_TIME_SECONDS_ARGS
  */
 
 
@@ -52,7 +52,11 @@ G_BEGIN_DECLS
  * GST_TIME_SECONDS_ARGS:
  * @t: #GstClockTime
  *
- * Macro to prepare printf() style parameters from a #GstClockTime.
+ * Macro to prepare printf() style parameters from a #GstClockTime for
+ * ingestion by the format described by #GST_TIME_SECONDS_FORMAT.  NOTE:
+ * this macro evaluates its argument multiple times.
+ *
+ * See also:  #GST_TIME_SECONDS_FORMAT
  */
 
 
@@ -63,9 +67,32 @@ G_BEGIN_DECLS
 
 
 #ifndef GST_TIME_SECONDS_FORMAT
-#define GST_TIME_SECONDS_FORMAT G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " s"
-#define GST_TIME_SECONDS_ARGS(t) ((t) / GST_SECOND), ((t) % GST_SECOND)
+#define GST_TIME_SECONDS_FORMAT G_GINT64_FORMAT ".%09" G_GUINT64_FORMAT " s"
+#define GST_TIME_SECONDS_ARGS(t) (GST_CLOCK_TIME_IS_VALID(t) ? (gint64)((t) / GST_SECOND) : -1), (GST_CLOCK_TIME_IS_VALID(t) ? (t) % GST_SECOND : 0)
 #endif /* GST_TIME_SECONDS_FORMAT */
+
+
+/**
+ * GST_BUFFERS_BOUNDARIES_FORMAT:
+ *
+ * printf() style format specifier for displaying the time and offset
+ * intervals spanned by a #GstBuffer.
+ *
+ * See also:  #GST_BUFFERS_BOUNDARIES_ARGS
+ */
+
+
+/**
+ * GST_BUFFER_BOUNDARIES_ARGS:
+ * @buf:  #GstBuffer
+ *
+ * Macro to prepare the printf() style parameters from a #GstBuffer for
+ * ingestion by the format described by #GST_BUFFER_BOUNDARIES_FORMAT.
+ * NOTE:  this macro evalutes its argument multiple times.
+ *
+ * See also:  #GST_BUFFER_BOUNDARIES_FORMAT
+ */
+
 
 #ifndef GST_BUFFER_BOUNDARIES_FORMAT
 #define GST_BUFFER_BOUNDARIES_FORMAT ".d[%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") = offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")"
