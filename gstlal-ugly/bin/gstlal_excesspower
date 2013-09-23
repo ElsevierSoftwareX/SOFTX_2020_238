@@ -70,7 +70,11 @@ import gstlal.excesspower as ep
 from gstlal.epparts import EPHandler
 from gstlal import datasource
 
-from glue import GWDataFindClient
+try:
+	from glue import datafind
+except ImportError:
+	# FIXME: Remove when glue is totally updated to datafind
+	from glue import GWDataFindClient as datafind
 
 from glue.ligolw import ligolw, array, param, lsctables, table
 array.use_in(ligolw.LIGOLWContentHandler)
@@ -289,7 +293,7 @@ if options.data_source == "frames" and options.frame_cache is None:
 
 	print "Frame type is %s" % frame_type
 	connection =  \
-		GWDataFindClient.GWDataFindHTTPConnection(host=server, port=port)
+		datafind.GWDataFindHTTPConnection(host=server, port=port)
 	print "Equivalent command line is "
 	print "gw_data_find -o %s -s %d -e %d -u file -t %s" %(handler.inst[0], options.gps_start_time, options.gps_end_time, frame_type)
 	cache = connection.find_frame_urls( handler.inst[0], 
