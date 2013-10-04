@@ -532,6 +532,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# FIXME:  should this be done in .finish()?  but we'd need
 		# the segment lists
 
+		if verbose:
+			print >>sys.stderr, "synthesizing background-like instrument combination probabilities..."
 		coincsynth = snglcoinc.CoincSynthesizer(
 			eventlists = dict((instrument, self.background_rates["instruments"][self.instrument_categories.category([instrument]),]) for instrument in segs),
 			segmentlists = segs,
@@ -589,7 +591,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# populate snr,chi2 binnings
 		#
 
+		if verbose:
+			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions..."
 		for instrument in segs:
+			if verbose:
+				progressbar = progress.ProgressBar(instrument)
+			else:
+				progressbar = None
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 
 			# will need to normalize results so need new
@@ -602,11 +610,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
+			for i, snr in enumerate(snrs):
 				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
 				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
 				for chi2_over_snr2 in chi2_over_snr2s:
 					new_binarr[snr, chi2_over_snr2] += p
+				if progressbar is not None:
+					progressbar.update((i + 1.0) / len(snrs))
 			# normalize to the requested count
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
@@ -616,16 +626,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.add_foreground_snrchi_prior(self.background_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
+		if verbose:
+			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions..."
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for instrument in instruments:
+			if verbose:
+				progressbar = progress.ProgressBar(instrument)
+			else:
+				progressbar = None
 			binarr = target_dict["%s_snr_chi" % instrument]
 
 			# will need to normalize results so need new
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			if verbose:
-				print >> sys.stderr, "synthesizing background/injections for %s" % param
 			# Custom handle the first and last over flow bins
 			snrs = new_binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
@@ -633,7 +647,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
+			for i, snr in enumerate(snrs):
 				for chi2_over_snr2 in chi2_over_snr2s:
 					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
 					dist = 0
@@ -645,6 +659,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					dist *= (snr / snrs[0])**-4
 					if numpy.isfinite(dist):
 						new_binarr[snr, chi2_over_snr2] += dist
+				if progressbar is not None:
+					progressbar.update((i + 1.0) / len(snrs))
 			# normalize to the requested count
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
