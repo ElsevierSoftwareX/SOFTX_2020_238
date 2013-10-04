@@ -345,6 +345,7 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 # =============================================================================
 #
 
+
 #
 # Inspiral-specific CoincParamsDistributions sub-class
 #
