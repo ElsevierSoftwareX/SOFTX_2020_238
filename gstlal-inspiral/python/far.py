@@ -668,12 +668,12 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 		if progressbar is not None:
 			progressbar.update((i + 1.) / n_samples)
 
-	# number of bins per unit in SNR in the binnings.  For use as the 
+	# number of bins per unit in SNR in the binnings.  For use as the
 	# width parameter in the filtering.
 	bins_per_snr = nbins/(snr_max-snr_min)
 	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr] * len(inst_horiz_mapping))))
 	numpy.clip(pdf.array, 0, float("inf"), pdf.array)
-	# set the region where any SNR is lower than the input threshold to 
+	# set the region where any SNR is lower than the input threshold to
 	# zero before normalizing the pdf and returning.
 	range_all = slice(None,None)
 	range_low = slice(snr_min, snr_threshold)
@@ -1044,9 +1044,9 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	containing the usual inspiral tables.
 
 	Far = LocalRankingData class instance
-	f = filename of the databse (e.g.something.sqlite) 
+	f = filename of the databse (e.g.something.sqlite)
 	tmp_path = the local disk path to copy the database to in
-		order to avoid sqlite commands over nfs 
+		order to avoid sqlite commands over nfs
 	verbose = be verbose
 	"""
 	# FIXME this code should be moved into a method of the LocalRankingData class once other cleaning is done
