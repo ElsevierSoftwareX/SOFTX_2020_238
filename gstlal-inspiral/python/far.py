@@ -623,7 +623,6 @@ def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint 
 	return minlikelihood, maxlikelihood
 
 
-
 def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 	# start with an identity array to seed the outerproduct chain
 	ranks = numpy.array([1.0])
