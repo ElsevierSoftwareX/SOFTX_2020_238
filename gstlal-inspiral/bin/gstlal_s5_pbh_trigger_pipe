@@ -133,6 +133,32 @@ class gstlal_plot_psd_horizon_node(inspiral_pipe.InspiralNode):
 			self.add_file_arg(f)
 
 #
+# Classes to plot the background
+#
+
+class gstlal_inspiral_plot_background_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_inspiral_plot_background job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plot_background'), tag_base='gstlal_inspiral_plot_background'):
+		"""
+		gstlal_inspiral_plot_background job
+		"""
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_inspiral_plot_background_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_inspiral_plot_background node
+	"""
+	def __init__(self, job, dag, base, marginalized_file, files, p_node=[]):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("marginalized-file", marginalized_file)
+		self.add_var_opt("base", base)
+		for f in files:
+			self.add_file_arg(f)
+
+#
 # Classes for generating reference psds
 #
 
@@ -670,6 +696,7 @@ plotSensitivityJob = gstlal_inspiral_plot_sensitivity_job()
 openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
 marginalizeJob = gstlal_inspiral_marginalize_likelihood_job()
+plotbackgroundJob = gstlal_inspiral_plot_background_job()
 
 #
 # Setup analysis segments
@@ -875,6 +902,9 @@ plotnodes.append( gstlal_inspiral_plotsummary_node(plotSummaryJob, dag, name_tag
 
 # make sensitivity plots
 plotnodes.append( gstlal_inspiral_plot_sensitivity_node(plotSensitivityJob, dag, name_tag, injdbs=injdbs, zldbs=[noninjdb], p_node=[farnode]) )
+
+# make backround plots
+plotnodes.append(gstlal_inspiral_plot_background_node(plotbackgroundJob, dag, name_tag, "post_marginalized_likelihood.xml.gz", margin, p_node=[farnode]))
 
 # make a web page
 gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), open_box = False, p_node=plotnodes)
