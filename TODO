@@ -24,6 +24,7 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* Audit all import statements:  there's a lot of useless imports, especially in gstlal-inspiral/bin/
 * Upload segment lists with events; this might mean keeping track of "old" segments in the online jobs (for the previous 4 hours to cover boundary effects)
 * We have a request to provide bottle routes for the snr history of the individual detectors in addition to the coinc snr.
 * Putting the lvalert listening scripts into the dag
@@ -40,8 +41,7 @@ Immediate development tasks in no particular order
   * give jobs human-readable names
   * add data pre-staging and serial processing of banks in offline DAG
   * calc_likelihood command lines are too long:  use caches of likelihood files
-* finish turning the appropriate bits of the Data class into a pipeline
-handler, and get the input and output segments recorded correctly
+* finish turning the appropriate bits of the Data class into a pipeline handler, and get the input and output segments recorded correctly
 * complete the removal of deprecated data input and conditioning code from lloidparts.py
 * block diagonal matrix support to reduce number of threads
 * fix known gstreamer bugs:
@@ -51,26 +51,15 @@ handler, and get the input and output segments recorded correctly
 * fix known gstlal bugs:
   * compute strain in ER3 revealed bugs in something, can't remember what,
     has fallen off radar.
-* framecpp demuxer and muxer cannot decode/encode gaps using "DataValid"
-bit vector stream.  figure out how and fix.  (probably required to
-implement offline pipeline's data staging, maybe not)
-* framecpp demuxer and muxer cannot decode/encode FrHistory objects.
-figure out how and fix.  (will be required for calibration work, not
-required for inspiral search)
-* fix service discovery to allow more than one job to be running on the
-same computer and remove need for URL dump files to be exchanged via
-filesystem.
+* framecpp demuxer and muxer cannot decode/encode gaps using "DataValid" bit vector stream.  figure out how and fix.  (probably required to implement offline pipeline's data staging, maybe not)
+* framecpp demuxer and muxer cannot decode/encode FrHistory objects.  figure out how and fix.  (will be required for calibration work, not required for inspiral search)
+* fix service discovery to allow more than one job to be running on the same computer and remove need for URL dump files to be exchanged via filesystem.
 * complete port to swig bindings (long term, divest ourselves of pylal).
 * separate likelihood code from burst pipelines.
-* fix the numerator in the likelihood ratio ranking statistic to account
-for inter-instrument correlations in signal parameters (my student's
-work on implementing the rate estimation code might have turned up some
-code that'll do a good brute-force job of this).
+* fix the numerator in the likelihood ratio ranking statistic to account for inter-instrument correlations in signal parameters (my student's work on implementing the rate estimation code might have turned up some code that'll do a good brute-force job of this).
 * switch online code to framexmitsrc (after framexmitsrc is made to not jam up when data stops flowing)
-* review readiness:  remove dead code, create tests for elements, create
-validation tests for applications.
-* incorporate rate estimation code into pipeline (have student working
-on this)
+* review readiness:  remove dead code, create tests for elements, create validation tests for applications.
+* incorporate rate estimation code into pipeline (have student working on this)
 
 Completed tasks
 
