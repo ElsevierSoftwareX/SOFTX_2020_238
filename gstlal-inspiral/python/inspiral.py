@@ -78,7 +78,6 @@ from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import cbc_template_iir
 from gstlal import far
-from pylal import llwapp
 from pylal import datatypes as laltypes
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
@@ -393,7 +392,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 	node.appendChild(far.to_xml(process, name))
 
-	llwapp.set_process_end_time(process)
+	ligolw_process.set_process_end_time(process)
 	return xmldoc
 
 

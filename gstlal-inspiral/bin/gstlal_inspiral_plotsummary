@@ -70,7 +70,6 @@ from pylal import db_thinca_rings
 from pylal import git_version
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from pylal import rate
-from pylal import llwapp
 from gstlal import far
 
 dbtables.lsctables.LIGOTimeGPS = LIGOTimeGPS
