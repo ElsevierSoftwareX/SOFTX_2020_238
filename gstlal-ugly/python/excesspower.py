@@ -190,16 +190,40 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# Give the lock back
 		gstlal.fftw.unlock()
 
+	# FIXME: Move to main script
+	if b_wind % psd.deltaF != 0:
+		print >>sys.stderr, "WARNING: tile bandwidth is not a multiple of the PSD binning width. The filters (and thus tiles) will not be aligned exactly. This may lead to strange effects and imperfect event reconstruction."
+
 	filters = numpy.zeros((filter_len-1)*bands)
 	freq_filters = []
 	for band in range( bands ):
 
+		# Check that the filter start is aligned with a PSD bin start:
+		# Calculate an approximate integer ratio
+		# the half window offset is omitted since the filter frequency
+		# series is handed to CreateCOMPLEX16FrequencySeries with this
+		# f0 and so this one must match the psd binning alignment
+		freq_off = ((flow + band*b_wind) / psd.deltaF).as_integer_ratio()
+		# If it's not a whole number, e.g. not divisible by deltaF
+		if freq_off[1] != 1:
+			# Subtract off the offending fractional part of deltaF
+			freq_off = (freq_off[0] % freq_off[1])*psd.deltaF / freq_off[1] 
+			print >>sys.stderr, "Warning: Requested frequency settings would not align the filter bins with the PSD bins. Adjusting filter frequencies by %f to compensate. Note that this may not work due to floating point comparisons that are calculated internally by the filter generation. Alternatively, use a low frequency which is a multiple of the PSD bin width (%f)" % (freq_off, psd.deltaF)
+			# and make sure the offset won't take us below the
+			# lowest frequency available
+			assert freq_off < psd.deltaF
+			freq_off = -freq_off + psd.deltaF
+		else:
+			freq_off = 0
+
+		# Make sure everything is aligned now
+		assert ((flow + band*b_wind + freq_off) % psd.deltaF) == 0
 		try:
 			# Create the EP filter in the FD
 			h_wind = lalburst.XLALCreateExcessPowerFilter(
 				#channel_flow =
 				# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
-				(flow + b_wind/2.0) + band*b_wind,
+				(flow + b_wind/2.0) + band*b_wind + freq_off,
 				#channel_width =
 				b_wind,
 				#psd =
@@ -210,7 +234,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		except: # The XLAL wrapped function didn't work
 			statuserr = "Filter generation failed for band %f with %d samples.\nPossible relevant bits and pieces that went into the function call:\n" % (band*b_wind, filter_len)
 			statuserr += "PSD - deltaF: %f, f0 %f, npoints %d\n" % (psd.deltaF, psd.f0, len(psd.data))
-			statuserr += "spectrum correlation - npoints %d" % len(spec_corr)
+			statuserr += "spectrum correlation - npoints %d\n" % len(spec_corr)
+			statuserr += "Filter f0 %f (%f in sample length), bandwidth %f (%f in sample length)" % (flow + band*b_wind + freq_off, (flow + band*b_wind + freq_off)/psd.deltaF, b_wind, b_wind/psd.deltaF)
 			sys.exit( statuserr )
 
 		# save the frequency domain filters, if necessary
