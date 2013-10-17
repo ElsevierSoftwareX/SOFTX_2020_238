@@ -656,8 +656,7 @@ class AppSync(object):
 		return elem
 
 	def appsink_handler(self, elem, eos):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			# update eos status, and retrieve buffer timestamp
 			if eos:
 				self.at_eos.add(elem)
@@ -694,8 +693,6 @@ class AppSync(object):
 				# raised
 				self.appsinks[elem_with_oldest] = None
 				self.appsink_new_buffer(elem_with_oldest)
-		finally:
-			self.lock.release()
 
 
 def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
