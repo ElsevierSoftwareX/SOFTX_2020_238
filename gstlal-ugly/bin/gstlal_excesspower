@@ -533,6 +533,9 @@ handler.time_since_dump = handler.stop = handler.start
 # Resample down to the requested rate
 head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
 
+# Add reblock to break up data into smaller pieces
+head = pipeparts.mkreblock(pipeline, head, block_duration = 1*gst.SECOND)
+
 head = whitener = pipeparts.mkwhiten( pipeline, head )
 # Amount of time to do a spectrum estimate over
 whitener.set_property( "fft-length", handler.fft_length ) 
@@ -548,7 +551,7 @@ if psdfile is not None: # In other words, we have a reference PSD
 if psdfile is None:
 	head = pipeparts.mkdrop( pipeline, head, int(options.drop_time*handler.rate) )
 
-head = pipeparts.mkqueue( pipeline, head )
+head = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
 
 if verbose:
 	head = pipeparts.mkprogressreport( pipeline, head, "whitened stream" )
@@ -580,7 +583,7 @@ nlevels = int(numpy.ceil( numpy.log2( nchannels ) ))
 for res_level in range(0, min(handler.max_level, nlevels)):
 	head = postfirtee
 	# queue up data
-	head = pipeparts.mkqueue( pipeline, head )
+	head = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
 
 	# New level bandwidth
 	band = handler.base_band * 2**res_level
