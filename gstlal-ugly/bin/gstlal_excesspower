@@ -654,7 +654,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	if max_samp < 2 and res_level == 0:
 		sys.exit( "The duration for the largest tile is smaller than a two degree of freedom tile. Try increasing the requested maximum tile duration or maximum DOF requirement." )
-	if max_samp < 2 and res_level != 0:
+	elif max_samp < 2 and res_level != 0:
 		print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping remaining levels." % handler.max_duration
 		break
 	print "Can sum up to %s degress of freedom in powers of two for this resolution level." % max_samp
