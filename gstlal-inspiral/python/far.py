@@ -25,6 +25,14 @@
 
 
 import copy
+try:
+	from fpconst import NaN, NegInf, PosInf
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	NaN = float("nan")
+	NegInf = float("-inf")
+	PosInf = float("+inf")
 import itertools
 import math
 import numpy
@@ -101,10 +109,11 @@ def fap_after_trials(p, m):
 	#
 	# for sufficiently large n the denominator dominates and the terms
 	# in the series become small and the sum eventually converges to a
-	# stable value.  however, if m*p >> 1 it can take many terms before
-	# the series sum stabilizes, terms in the series initially grow
-	# large and an accurate result can only be obtained through careful
-	# cancellation of the large values.
+	# stable value (and if m is an integer the sum is exact in a finite
+	# number of terms).  however, if m*p >> 1 it can take many terms
+	# before the series sum stabilizes, terms in the series initially
+	# grow large and alternate in sign and an accurate result can only
+	# be obtained through careful cancellation of the large values.
 	#
 	# for large m*p we take a different approach to evaluating the
 	# result.  in this regime the result will be close to 1 so (1 -
@@ -121,8 +130,8 @@ def fap_after_trials(p, m):
 	# if p is close to 1, ln(1 - p) suffers a domain error
 	#
 
-	assert m >= 0	# m cannot be negative
-	assert 0 <= p <= 1	# p must be a valid probability
+	assert m >= 0, "m cannot be negative"
+	assert 0 <= p <= 1, "p must be between 0 and 1 inclusively"
 
 	if m * p < 1.0:
 		#
@@ -190,7 +199,7 @@ def trials_from_faps(p0, p1):
 		# but we still can't solve for m
 		raise ValueError("m undefined")
 	if p1 == 1:
-		return float("inf")
+		return PosInf
 
 	#
 	# find range of m that contains solution.  the false alarm
@@ -661,7 +670,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 			D = snr_times_D[axis] / snr
 			delta_D = -D / snr * delta_snr
 			snr = snr_times_D / D
-			snr = snr.clip(snr_min, numpy.inf)	# round-off safety
+			snr = snr.clip(snr_min, PosInf)	# round-off safety
 
 			pdf[tuple(snr)] += D**2 * abs(delta_D)
 
@@ -672,7 +681,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 	# width parameter in the filtering.
 	bins_per_snr = nbins/(snr_max-snr_min)
 	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr] * len(inst_horiz_mapping))))
-	numpy.clip(pdf.array, 0, float("inf"), pdf.array)
+	numpy.clip(pdf.array, 0, PosInf, pdf.array)
 	# set the region where any SNR is lower than the input threshold to
 	# zero before normalizing the pdf and returning.
 	range_all = slice(None,None)
@@ -1005,7 +1014,7 @@ class RankingData(object):
 			rank = self.minrank[ifos]
 		tdp = float(self.cdf_interpolator[ifos](rank))
 		if tdp == 0.:
-			return float('inf')
+			return PosInf
 		try:
 			trials = max(int(self.trials_table[ifos].count), 1)
 		except KeyError:
@@ -1020,7 +1029,7 @@ class RankingData(object):
 			# we don't have a livetime segment yet.  this can
 			# happen during the early start-up of an online
 			# low-latency analysis
-			return float('nan')
+			return NaN
 		return trials * -math.log(tdp) / livetime
 
 
