@@ -245,14 +245,11 @@ class Handler(simplehandler.Handler):
 		return xmldoc
 
 	def web_get_segments_xml(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			output = StringIO.StringIO()
 			utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
-		finally:
-			self.lock.release()
 		return outstr
 
 
@@ -779,11 +776,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
-	# if there is more than one trigger source, synchronize the streams
-	# with a multiqueue then use an n-to-1 adapter to combine into a
-	# single stream
+	# done
 	#
-
 
 	assert len(triggersrcs) > 0
 	return triggersrcs
@@ -877,37 +871,10 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 ## 		))
 
 	#
-	# if there is more than one trigger source, synchronize the streams
-	# with a multiqueue then use an n-to-1 adapter to combine into a
-	# single stream
-	#
-
-	assert len(triggersrcs) > 0
-## 	if len(triggersrc) > 1:
-## 		# send all streams through a multiqueue
-## 		queue = gst.element_factory_make("multiqueue")
-## 		pipeline.add(queue)
-## 		for head in triggersrc:
-## 			head.link(queue)
-## 		triggersrc = queue
-## 		# FIXME:  it has been reported that the input selector
-## 		# breaks seeks.  confirm and fix if needed
-## 		# FIXME:  input-selector in 0.10.32 no longer has the
-## 		# "select-all" feature.  need to get this re-instated
-## 		#nto1 = gst.element_factory_make("input-selector")
-## 		#nto1.set_property("select-all", True)
-## 		#pipeline.add(nto1)
-## 		#for pad in queue.src_pads():
-## 		#	pad.link(nto1)
-## 		#triggersrc = nto1
-## 	else:
-## 		# len(triggersrc) == 1
-## 		triggersrc, = triggersrc
-
-	#
 	# done
 	#
 
+	assert len(triggersrcs) > 0
 	return triggersrcs
 
 
