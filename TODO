@@ -41,6 +41,10 @@ Immediate development tasks in no particular order
   * give jobs human-readable names
   * add data pre-staging and serial processing of banks in offline DAG
   * calc_likelihood command lines are too long:  use caches of likelihood files
+  * gstlal_inspiral --svd-bank option:
+    * is there a reason the instrument needs to be identified?  is the instrument not recorded in the file, if not why not, and would it suffice if it was?
+    * why use commas instead of providing the option multiple times?
+    * could the file list be provided in a cache file?
 * finish turning the appropriate bits of the Data class into a pipeline handler, and get the input and output segments recorded correctly
 * complete the removal of deprecated data input and conditioning code from lloidparts.py
 * block diagonal matrix support to reduce number of threads
