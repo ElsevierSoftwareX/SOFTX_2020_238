@@ -608,7 +608,7 @@ class DistributionsStats(object):
 #
 
 
-def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbins, verbose = False):
+def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bins_per_decade, verbose = False):
 	"""
 	A function which returns a BinnedArray representing the joint
 	probability density of measuring a set of SNRs from a network of
@@ -628,7 +628,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 	assert snr_max > snr_threshold
 	assert snr_min > 0.0
 
-	nbins = int(round(nbins * (snr_max - snr_min) / (snr_max - snr_threshold)))
+	bins_per_decade = int(round(bins_per_decade * math.log(snr_max / snr_min) / math.log(snr_max / snr_threshold)))
 
 	# get instrument names in alphabetical order
 	names = sorted(inst_horiz_mapping)
@@ -636,7 +636,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 	DH = numpy.array([inst_horiz_mapping[inst] for inst in names])
 	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
 
-	pdf = rate.BinnedArray(rate.NDBins([rate.LinearBins(snr_min, snr_max, nbins)] * len(names)))
+	pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, snr_max, int(round(bins_per_decade * math.log10(snr_max / snr_min))))] * len(names)))
 
 	psi = gmst = 0.0
 
@@ -646,13 +646,13 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 		progressbar = None
 
 	for i in xrange(n_samples):
-		theta = math.acos(numpy.random.uniform(-1, 1))
-		phi = numpy.random.uniform(0, 2*numpy.pi)
-		cosi2 = numpy.random.uniform(-1, 1)**2
+		theta = math.acos(numpy.random.uniform(-1., 1.))
+		phi = numpy.random.uniform(0., 2. * math.pi)
+		cosi2 = numpy.random.uniform(-1., 1.)**2.
 
-		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, numpy.pi/2 - theta, psi, gmst) for resp in resps])**2
+		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
 
-		snr_times_D = 8*DH*numpy.dot(fpfc2, numpy.array([(1.0+cosi2)**2/4, cosi2]))**0.5
+		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1.0 + cosi2)**2. / 4., cosi2]))**0.5
 
 		# index of instrument whose SNR grows fastest with decreasing D
 		axis = snr_times_D.argmax()
@@ -663,24 +663,43 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, nbi
 		snr_start = snr_times_D[axis] / (snr_times_D.min() / snr_min)
 
 		# 10 steps per bin
-		delta_snr = (snr_max - snr_min) / nbins / 10.0
-		for snr in numpy.arange(snr_start, snr_max, delta_snr):
-			# from SNR in fastest growing instrument, compute
-			# SNR in all instruments and current step size in D
-			D = snr_times_D[axis] / snr
-			delta_D = -D / snr * delta_snr
-			snr = snr_times_D / D
-			snr = snr.clip(snr_min, PosInf)	# round-off safety
-
-			pdf[tuple(snr)] += D**2 * abs(delta_D)
+		step_factor = 10**(.1 / bins_per_decade) - 1.
+		for snr in 10**numpy.arange(math.log10(snr_start), math.log10(snr_max), .1 / bins_per_decade):
+			# "snr" is SNR in fastest growing instrument, from
+			# this the distance to the source is:
+			#
+			#       D = snr_times_D[axis] / snr
+			#
+			# and the SNRs in all instruments are:
+			#
+			#       snr * (snr_times_D / snr_times_D[axis])
+			#
+			# but round-off protection is required to ensure
+			# all SNRs are within the allowed range
+			#
+			# SNR step size:
+			#       d(snr) = (10**(.1 / bins_per_decade) - 1.) * snr
+			#
+			# rate of change of D with SNR:
+			#       dD/d(snr) = -snr_times_D / snr^2
+			#                 = -D / snr
+			#
+			# relationship b/w dD and d(snr):
+			#       dD = -D / snr d(snr)
+			#          = -D * (10**(.1 / bins_per_decade) - 1.)
+			#
+			# number of sources:
+			#       \propto D^2 |dD|
+			#       \propto D^3 * (10**(.1 / bins_per_decade) - 1.)
+			pdf[tuple(snr * (snr_times_D / snr_times_D[axis]).clip(1., PosInf))] += (snr_times_D[axis] / snr)**3. * step_factor
 
 		if progressbar is not None:
 			progressbar.update((i + 1.) / n_samples)
 
 	# number of bins per unit in SNR in the binnings.  For use as the
 	# width parameter in the filtering.
-	bins_per_snr = nbins/(snr_max-snr_min)
-	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr] * len(inst_horiz_mapping))))
+	bins_per_snr_at_8 = 1. / ((10**(.1 / bins_per_decade) - 1.) * 8.)
+	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
 	numpy.clip(pdf.array, 0, PosInf, pdf.array)
 	# set the region where any SNR is lower than the input threshold to
 	# zero before normalizing the pdf and returning.
