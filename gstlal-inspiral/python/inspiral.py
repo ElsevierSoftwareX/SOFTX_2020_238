@@ -628,8 +628,7 @@ class Data(object):
 		self.ram_history = deque(maxlen = 1000)
 
 	def appsink_new_buffer(self, elem):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-buffer")
 			events = sngl_inspirals_from_buffer(buf)
@@ -704,8 +703,6 @@ class Data(object):
 			if self.gracedb_far_threshold is not None:
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
-		finally:
-			self.lock.release()
 
 	def __write_likelihood_file(self):
 		# write the new distribution stats to disk
@@ -716,12 +713,8 @@ class Data(object):
 		return outstr
 
 	def web_get_likelihood_file(self):
-		self.lock.acquire()
-		try:
-			outstr = self.__write_likelihood_file()
-		finally:
-			self.lock.release()
-		return outstr
+		with self.lock:
+			return self.__write_likelihood_file()
 
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
@@ -739,11 +732,8 @@ class Data(object):
 			self.__do_gracedb_alerts()
 
 	def flush(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			self.__flush()
-		finally:
-			self.lock.release()
 
 	def __do_gracedb_alerts(self):
 		try:
@@ -853,11 +843,8 @@ class Data(object):
 						print >>sys.stderr, "gracedb upload of %s for ID %s failed: %s" % (filename, gracedb_id, resp["error"])
 
 	def do_gracedb_alerts(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			self.__do_gracedb_alerts()
-		finally:
-			self.lock.release()
 
 	def __update_eye_candy(self):
 		if self.stream_thinca.last_coincs:
@@ -880,105 +867,71 @@ class Data(object):
 				self.snr_history.append(snr_val)
 
 	def update_eye_candy(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			self.__update_eye_candy()
-		finally:
-			self.lock.release()
-
 
 	def web_get_latency_histogram(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
 				yield "%e %e\n" % (latency, number)
-		finally:
-			self.lock.release()
-
 
 	def web_get_latency_history(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			# first one in the list is sacrificed for a time stamp
 			for time, latency in self.latency_history:
 				yield "%f %e\n" % (time, latency)
-		finally:
-			self.lock.release()
-
 
 	def web_get_snr_history(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			# first one in the list is sacrificed for a time stamp
 			for time, snr in self.snr_history:
 				yield "%f %e\n" % (time, snr)
-		finally:
-			self.lock.release()
-
 
 	def web_get_ram_history(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			# first one in the list is sacrificed for a time stamp
 			for time, ram in self.ram_history:
 				yield "%f %e\n" % (time, ram)
-		finally:
-			self.lock.release()
-
 
 	def web_get_gracedb_far_threshold(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			if self.gracedb_far_threshold is not None:
 				yield "rate=%.17g\n" % self.gracedb_far_threshold
 			else:
 				yield "rate=\n"
-		finally:
-			self.lock.release()
-
 
 	def web_set_gracedb_far_threshold(self):
-		self.lock.acquire()
 		try:
-			rate = bottle.request.forms["rate"]
-			if rate:
-				self.gracedb_far_threshold = float(rate)
-				yield "OK: rate=%.17g\n" % self.gracedb_far_threshold
-			else:
-				self.gracedb_far_threshold = None
-				yield "OK: rate=\n"
+			with self.lock:
+				rate = bottle.request.forms["rate"]
+				if rate:
+					self.gracedb_far_threshold = float(rate)
+					yield "OK: rate=%.17g\n" % self.gracedb_far_threshold
+				else:
+					self.gracedb_far_threshold = None
+					yield "OK: rate=\n"
 		except:
 			yield "error\n"
-		finally:
-			self.lock.release()
-
 
 	def web_get_sngls_snr_threshold(self):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			if self.stream_thinca.sngls_snr_threshold is not None:
 				yield "snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
 			else:
 				yield "snr=\n"
-		finally:
-			self.lock.release()
-
 
 	def web_set_sngls_snr_threshold(self):
-		self.lock.acquire()
 		try:
-			snr_threshold = bottle.request.forms["snr"]
-			if snr_threshold:
-				self.stream_thinca.sngls_snr_threshold = float(rate)
-				yield "OK: snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
-			else:
-				self.stream_thinca.sngls_snr_threshold = None
-				yield "OK: snr=\n"
+			with self.lock:
+				snr_threshold = bottle.request.forms["snr"]
+				if snr_threshold:
+					self.stream_thinca.sngls_snr_threshold = float(rate)
+					yield "OK: snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
+				else:
+					self.stream_thinca.sngls_snr_threshold = None
+					yield "OK: snr=\n"
 		except:
 			yield "error\n"
-		finally:
-			self.lock.release()
-
 
 	def __write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		self.__flush()
@@ -998,21 +951,13 @@ class Data(object):
 			fname = likelihood_file
 		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
-
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			self.__write_output_file(filename = filename, likelihood_file = likelihood_file, verbose = verbose)
 			# can't be used anymore
 			del self.coincs_document
-		finally:
-			self.lock.release()
-
 
 	def snapshot_output_file(self, description, extension, verbose = False):
-		self.lock.acquire()
-		try:
+		with self.lock:
 			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
 			self.coincs_document = self.coincs_document.get_another()
-		finally:
-			self.lock.release()
