@@ -741,10 +741,6 @@ class Data(object):
 			gracedb_ids = []
 			psdmessage = None
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			# FIXME:  this should maybe not be retrieved this
-			# way.  and the .column_index() method is probably
-			# useless
-			likelihood_dict = self.stream_thinca.last_coincs.column_index(lsctables.CoincTable.tableName, "likelihood")
 
 			# FIXME:  this is hacked to only send at most the
 			# one best coinc in this set.  May not make sense
@@ -753,7 +749,7 @@ class Data(object):
 			# we should be doing coincidences every 10s which
 			# is a reasonable time to cluster over.  the slice
 			# can be edited (or removed) to change this.
-			for likelihood, coinc_event_id in sorted((likelihood, coinc_event_id) for (coinc_event_id, likelihood) in likelihood_dict.items())[-1:]:
+			for likelihood, coinc_event_id in sorted((coinc_event.likelihood, coinc_event.coinc_event_id) for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values())[-1:]:
 				#
 				# quit if the false alarm rate is not low
 				# enough, or is nan
@@ -847,7 +843,9 @@ class Data(object):
 			latency_val = None
 			snr_val = (0,0)
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+			for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items():
+				# FIXME:  update when a proper column is available
+				latency = coinc_inspiral.minimum_duration
 				self.latency_histogram[latency,] += 1
 				if latency_val is None:
 					t = float(coinc_inspiral_index[coinc_event_id].get_end())
