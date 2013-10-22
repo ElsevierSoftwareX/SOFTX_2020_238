@@ -25,11 +25,21 @@
 #
 
 
+from collections import deque
 import numpy
 import os
+import resource
 from scipy import random
+try:
+	import sqlite3
+except ImportError:
+        # pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
 import StringIO
 import subprocess
+import sys
+import threading
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -41,17 +51,6 @@ pygst.require('0.10')
 import gst
 
 try:
-	import sqlite3
-except ImportError:
-        # pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
-import sys
-import threading
-import time
-from collections import deque
-import resource
-
-try:
 	from ligo.gracedb import cli as gracedb
 except ImportError:
 	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
@@ -59,26 +58,27 @@ except ImportError:
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
+from glue.ligolw import dbtables
 from glue.ligolw import ilwd
 from glue.ligolw import lsctables
-from glue.ligolw import dbtables
 from glue.ligolw import utils
 from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from pylal import datatypes as laltypes
+from pylal import ligolw_tisi
+from pylal import rate
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
-from pylal import ligolw_tisi
-from pylal import rate
+
 from gstlal import bottle
 from gstlal import reference_psd
 from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import cbc_template_iir
 from gstlal import far
-from pylal import datatypes as laltypes
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
