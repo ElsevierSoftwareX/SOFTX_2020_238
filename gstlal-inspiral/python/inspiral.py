@@ -61,7 +61,9 @@ from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import ilwd
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
@@ -320,16 +322,9 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
-rate.array.use_in(XMLContentHandler)
-rate.param.use_in(XMLContentHandler)
+ligolw_array.use_in(XMLContentHandler)
+ligolw_param.use_in(XMLContentHandler)
 lsctables.use_in(XMLContentHandler)
-
-
-class DBContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-rate.array.use_in(DBContentHandler)
-rate.param.use_in(DBContentHandler)
-dbtables.use_in(DBContentHandler)
 
 
 #
@@ -554,7 +549,7 @@ class CoincsDocument(object):
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
-			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
 class Data(object):
@@ -672,7 +667,7 @@ class Data(object):
 					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
-					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
+					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
 					self.ranking_data.compute_joint_cdfs()
 
 					# set up the scale factor for the trials table to normalize the rate
@@ -684,7 +679,7 @@ class Data(object):
 							print >>sys.stderr, "could not set scale factor, probably because we do not have live time info yet.  seg is: %s" % str(self.ranking_data.livetime_seg)
 
 					# write the new distribution stats to disk
-					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
+					ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
 					self.ranking_data = None
 
@@ -707,7 +702,7 @@ class Data(object):
 	def __web_get_likelihood_file(self):
 		# generate a coinc parameter distribution file
 		output = StringIO.StringIO()
-		utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
+		ligolw_utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		return outstr
@@ -812,7 +807,7 @@ class Data(object):
 				if self.verbose:
 					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
-				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
+				ligolw_utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
 				# FIXME: make this optional from command line?
 				if True:
 					resp = gracedb_client.create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
@@ -949,7 +944,7 @@ class Data(object):
 				fname = os.path.join(fname[0], '%s_SNR_CHI.xml.gz' % fname[1].split('.')[0])
 		else:
 			fname = likelihood_file
-		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		with self.lock:
