@@ -704,8 +704,8 @@ class Data(object):
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
 
-	def __write_likelihood_file(self):
-		# write the new distribution stats to disk
+	def __web_get_likelihood_file(self):
+		# generate a coinc parameter distribution file
 		output = StringIO.StringIO()
 		utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
 		outstr = output.getvalue()
@@ -714,7 +714,7 @@ class Data(object):
 
 	def web_get_likelihood_file(self):
 		with self.lock:
-			return self.__write_likelihood_file()
+			return self.__web_get_likelihood_file()
 
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
