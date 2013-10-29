@@ -31,7 +31,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -336,28 +335,23 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
-static int time_to_index_compare_func(const void *_t, const void *_cache_entry)
-{
-	const GstClockTime *t = _t;
-	const LALCacheEntry *cache_entry = _cache_entry;
-
-	if(*t < (GstClockTime) (cache_entry->t0 * GST_SECOND))
-		return -1;
-	if(*t < (GstClockTime) ((cache_entry->t0 + cache_entry->dt) * GST_SECOND))
-		return 0;
-	return +1;
-}
-
-
 static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
 {
-	const LALCacheEntry *target = bsearch(&t, element->cache->list, element->cache->length, sizeof(*element->cache->list), time_to_index_compare_func);
+	guint i;
 
-	if(target)
-		return target - element->cache->list;
-	else if(!element->cache->list || t < cache_entry_start_time(element, 0))
-		return 0;
-	return element->cache->length;
+	g_assert(element->cache != NULL);
+
+	/*
+	 * the loop assumes the cache entries are in time order and
+	 * searches for the first file whose end is past the requested
+	 * time
+	 */
+
+	for(i = 0; i < element->cache->length; i++)
+		if(cache_entry_end_time(element, i) > t)
+			break;
+
+	return i;
 }
 
 
