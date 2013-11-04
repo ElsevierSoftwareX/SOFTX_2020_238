@@ -390,7 +390,7 @@ handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
 # Frequency resolution of the finest filters
 handler.base_band = cfg.getfloat( "tf_parameters", "min-bandwidth" )
 # Tile duration should not exceed this value
-handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
+handler.max_duration = cfg.getfloat( "tf_parameters", "max-duration" )
 # Number of resolutions levels. Can't be less than 1, and can't be greater than log_2((fhigh-flow)/base_band)
 handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 
