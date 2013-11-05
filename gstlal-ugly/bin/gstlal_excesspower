@@ -681,7 +681,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 		# Multi channel FIR filter -- used to add together frequency bands into 
 		# tiles
-		durtee = pipeparts.mkqueue( pipeline, head )
+		durtee = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
 		durtee = pipeparts.mkmean( pipeline, durtee )
 		durtee.set_property( "n", ndof )
 		durtee.set_property( "type", 2 )
@@ -755,7 +755,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		# Funnel the triggers for this subbranch to the appsink
 		# FIXME: Why doesn't this negotiate the caps properly?
 		#appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )
-		appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee) )
+		appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee max_size_time = 1*gst.SECOND) )
 
 		ndof <<= 1
 		if ndof > max_samp:
