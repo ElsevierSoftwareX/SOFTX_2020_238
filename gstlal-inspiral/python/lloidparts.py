@@ -319,19 +319,29 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# injections only, we ignore the bank.gate_threshold parameter
 		# and just use 1e-100
 
-		src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)), threshold = 1e-100, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 10 * block_duration)))
+		src = pipeparts.mkgate(
+			pipeline,
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 10 * block_duration),
+			threshold = 1e-100,
+			attack_length = gate_attack_length,
+			hold_length = gate_hold_length,
+			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 10 * block_duration)
+		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
+	else:
+		#
+		# buffer orthogonal SNRs / or actual SNRs if SVD is not
+		# used.  the queue upstream of the sum-of-squares gate
+		# plays this role if that feature has been enabled
+		#
+		# FIXME:  teach the collectpads object not to wait for
+		# buffers on pads whose segments have not yet been reached
+		# by the input on the other pads.  then this large queue
+		# buffer will not be required because streaming can begin
+		# through the downstream adders without waiting for input
+		# from all upstream elements.
 
-	#
-	# buffer orthogonal SNRs / or actual SNRs if SVD is not used
-	#
-	# FIXME:  teach the collectpads object not to wait for buffers on pads
-	# whose segments have not yet been reached by the input on the other
-	# pads.  then this large queue buffer will not be required because
-	# streaming can begin through the downstream adders without waiting for
-	# input from all upstream elements.
-
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration)
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration)
 
 	#
 	# reconstruct physical SNRs
