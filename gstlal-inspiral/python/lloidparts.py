@@ -46,7 +46,7 @@ from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 from gstlal import bottle
@@ -210,7 +210,7 @@ class Handler(simplehandler.Handler):
 				ext = self.seglists.extent_all()
 				instruments = set(name.split("_")[0] for name in self.seglists)
 				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(ext[0]), int(abs(ext)))
-				utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
+				ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
 
 				# Reset the segment lists
 				for name in self.seglists:
@@ -245,7 +245,7 @@ class Handler(simplehandler.Handler):
 	def web_get_segments_xml(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
