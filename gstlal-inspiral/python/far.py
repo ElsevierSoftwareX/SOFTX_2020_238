@@ -36,6 +36,7 @@ except ImportError:
 import itertools
 import math
 import numpy
+import random
 from scipy import interpolate
 from scipy import optimize
 from scipy import stats
@@ -646,9 +647,9 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bin
 		progressbar = None
 
 	for i in xrange(n_samples):
-		theta = math.acos(numpy.random.uniform(-1., 1.))
-		phi = numpy.random.uniform(0., 2. * math.pi)
-		cosi2 = numpy.random.uniform(-1., 1.)**2.
+		theta = math.acos(random.uniform(-1., 1.))
+		phi = random.uniform(0., 2. * math.pi)
+		cosi2 = random.uniform(-1., 1.)**2.
 
 		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
 
