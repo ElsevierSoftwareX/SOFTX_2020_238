@@ -93,17 +93,16 @@ sys.excepthook = excepthook
 # We allocate far more memory than we need, so this is okay
 #
 
-# set the number of processes up to hard limit
-maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
-resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+def setrlimit(res, lim):
+	hard_lim = resource.getrlimit(res)[1]
+	resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
 
-# set the total set size up to hard limit
-maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
-resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
-
-# set the stack size per thread to be smaller
-maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
-resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
