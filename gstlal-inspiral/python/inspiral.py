@@ -321,7 +321,6 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-
 ligolw_array.use_in(XMLContentHandler)
 ligolw_param.use_in(XMLContentHandler)
 lsctables.use_in(XMLContentHandler)
