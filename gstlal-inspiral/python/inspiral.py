@@ -638,7 +638,8 @@ class Data(object):
 			# document.
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
-			self.coincs_document.add_to_search_summary_outseg(segments.segment(buf_timestamp, buf_end_time))
+			buf_seg = segments.segment(buf_timestamp, buf_end_time)
+			self.coincs_document.add_to_search_summary_outseg(buf_seg)
 			if self.far.livetime_seg == segments.segment(None, None):
 				self.far.livetime_seg = self.coincs_document.search_summary_outseg
 			else:
