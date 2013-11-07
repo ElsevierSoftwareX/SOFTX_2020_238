@@ -159,7 +159,7 @@ if options.data_source != "white":
 		demux.connect("no-more-pads", write_graph)	
 
 	# Set up the raw strain and ODC state vector branches
-	rawstrain = pipeparts.mkqueue(pipeline, None)
+	rawstrain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 10000)
 	odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
 
 	# Hook up the raw strain and ODC state vector branches to appropriate channels in the demuxer
@@ -185,10 +185,12 @@ odccontrol = pipeparts.mkstatevector(pipeline, odcstatevectortee, required_on = 
 odccontroltee = pipeparts.mktee(pipeline, odccontrol)
 
 # This is the branch that gets converted to the DQ vector
-odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 100), hold_length = -32768)
+odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), hold_length = -32768)
 odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
 odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+# The below audiorate might help with the issue of gaps in the incoming stream hanging up the pipeline
+odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 
 #
@@ -196,7 +198,7 @@ odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_
 #
 
 # Use the ODC state vector to gate the raw strain channel
-rawstrain = pipeparts.mkgate(pipeline, rawstrain, threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee))
+rawstrain = pipeparts.mkgate(pipeline, rawstrain, threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 10000))
 
 # Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
 rawstrain = pipeparts.mkaudioconvert(pipeline, rawstrain)
@@ -272,8 +274,8 @@ if options.calibrate:
 	rawstrain = gst.element_factory_make("lal_adder")
 	rawstrain.set_property("sync", True)
 	pipeline.add(rawstrain)
-	pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100, max_size_buffers = 0).link(rawstrain)
-	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100, max_size_buffers = 0).link(rawstrain)
+	pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 1000, max_size_buffers = 0).link(rawstrain)
+	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 1000, max_size_buffers = 0).link(rawstrain)
 	rawstrain = pipeparts.mkprogressreport(pipeline, rawstrain, "%s_progress_hoft" % instrument)
 	
 	if options.data_source == "frames":
@@ -318,7 +320,7 @@ dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
 """
 
 # Until the above code is fixed, make the LLD-DQ_VECTOR by gating the DQ vector with the strain to check for gaps
-dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100, max_size_buffers = 0), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 100, max_size_buffers = 0), hold_length = -1)
+dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), hold_length = -1)
 dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
 dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
 dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
@@ -338,7 +340,7 @@ if options.frames_per_file is not None:
 dqvector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR" % instrument))
 
 # Link fake strain (recolored PSL) to the muxer
-pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100, max_size_buffers = 0).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
+pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
