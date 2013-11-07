@@ -130,8 +130,8 @@ def fap_after_trials(p, m):
 	# if p is close to 1, ln(1 - p) suffers a domain error
 	#
 
-	assert m >= 0, "m cannot be negative"
-	assert 0 <= p <= 1, "p must be between 0 and 1 inclusively"
+	assert m >= 0, "m = %g cannot be negative" % m
+	assert 0 <= p <= 1, "p = %g must be between 0 and 1 inclusively" % p
 
 	if m * p < 1.0:
 		#
