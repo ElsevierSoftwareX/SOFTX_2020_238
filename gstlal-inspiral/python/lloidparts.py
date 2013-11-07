@@ -194,31 +194,29 @@ class Handler(simplehandler.Handler):
 		return False
 
 	def flush_segments_to_disk(self, timestamp):
-		self.lock.acquire()
-		try:
-			# close out existing segments
-			for name, elem in [(name, self.pipeline.get_by_name(name)) for name in self.gates]:
-				if name in self.current_segment_start:
-					# By construction these gates should be
-					# in the on state.  We fake a state
-					# transition to off in order to flush
-					# the segments
-					self.gatehandler(elem, timestamp, "off")
-					# But we have to remember to put it back
-					self.gatehandler(elem, timestamp, "on")
-			xmldoc = self.gen_segments_doc()
-			# FIXME Can't use extent_all() since one list might be empty.
-			ext = self.segments.union(self.segments.keys()).extent()
-			fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(self.dataclass.instruments)), self.tag, int(ext[0]), int(abs(ext)))
-			utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
+		with self.lock:
+			try:
+				# close out existing segments
+				for name, elem in [(name, self.pipeline.get_by_name(name)) for name in self.gates]:
+					if name in self.current_segment_start:
+						# By construction these gates should be
+						# in the on state.  We fake a state
+						# transition to off in order to flush
+						# the segments
+						self.gatehandler(elem, timestamp, "off")
+						# But we have to remember to put it back
+						self.gatehandler(elem, timestamp, "on")
+				xmldoc = self.gen_segments_doc()
+				# FIXME Can't use extent_all() since one list might be empty.
+				ext = self.segments.union(self.segments.keys()).extent()
+				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(self.dataclass.instruments)), self.tag, int(ext[0]), int(abs(ext)))
+				utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
 
-			# Reset the segment lists
-			for name in self.segments:
-				self.segments[name] = segments.segmentlist([])
-		except ValueError:
-			print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
-		finally:
-			self.lock.release()
+				# Reset the segment lists
+				for name in self.segments:
+					self.segments[name] = segments.segmentlist([])
+			except ValueError:
+				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
 	def gatehandler(self, elem, timestamp, segment_type):
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
