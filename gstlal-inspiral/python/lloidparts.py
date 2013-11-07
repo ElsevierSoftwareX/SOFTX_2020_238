@@ -167,13 +167,13 @@ class Handler(simplehandler.Handler):
 		self.dataclass = dataclass
 		self.lock = threading.Lock()
 
-		self.segments = segments.segmentlistdict()
+		self.seglists = segments.segmentlistdict()
 		self.current_segment_start = {}
 		self.gates = gates
 		self.tag = tag
 		self.verbose = verbose
-		for (name,msg) in self.gates.items():
-			self.segments[name] = segments.segmentlist([])
+		for name in self.gates:
+			self.seglists[name] = segments.segmentlist()
 			elem = self.pipeline.get_by_name(name)
 			elem.set_property("emit-signals", True)
 			elem.connect("start", self.gatehandler, "on")
@@ -207,14 +207,14 @@ class Handler(simplehandler.Handler):
 						# But we have to remember to put it back
 						self.gatehandler(elem, timestamp, "on")
 				xmldoc = self.gen_segments_doc()
-				# FIXME Can't use extent_all() since one list might be empty.
-				ext = self.segments.union(self.segments.keys()).extent()
-				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(self.dataclass.instruments)), self.tag, int(ext[0]), int(abs(ext)))
+				ext = self.seglists.extent_all()
+				instruments = set(name.split("_")[0] for name in self.seglists)
+				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(ext[0]), int(abs(ext)))
 				utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
 
 				# Reset the segment lists
-				for name in self.segments:
-					self.segments[name] = segments.segmentlist([])
+				for name in self.seglists:
+					del self.seglists[name][:]
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
@@ -227,7 +227,7 @@ class Handler(simplehandler.Handler):
 
 		# If there is a current_segment_start for this then the state transition has to be off
 		if name in self.current_segment_start:
-			self.segments[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
+			self.seglists[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
 		if segment_type == "on":
 			self.current_segment_start[name] = timestamp
 		elif segment_type != "off":
@@ -238,7 +238,7 @@ class Handler(simplehandler.Handler):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-		ligolwsegments.insert_from_segmentlistdict(self.segments, name = "datasegments", version = None, comment = "LLOID snapshot")
+		ligolwsegments.insert_from_segmentlistdict(self.seglists, name = "datasegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		return xmldoc
 
