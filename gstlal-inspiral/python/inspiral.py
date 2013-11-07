@@ -937,15 +937,13 @@ class Data(object):
 
 		# write out the snr / chisq histograms
 		if likelihood_file is None:
-			fname = os.path.split(self.coincs_document.filename)
+			likelihood_file = os.path.split(self.coincs_document.filename)
 			try: # preserve LIGO-T010150-00 if possible 
-				ifo, desc, start, dur = ".".join(fname[1].split('.')[:-1]).split('-')
-				fname = os.path.join(fname[0], '%s-%s_SNR_CHI-%s-%s.xml.gz' % (ifo, desc, start, dur))
+				ifo, desc, start, dur = ".".join(likelihood_file[1].split('.')[:-1]).split('-')
+				likelihood_file = os.path.join(likelihood_file[0], '%s-%s_SNR_CHI-%s-%s.xml.gz' % (ifo, desc, start, dur))
 			except ValueError:
-				fname = os.path.join(fname[0], '%s_SNR_CHI.xml.gz' % fname[1].split('.')[0])
-		else:
-			fname = likelihood_file
-		ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+				likelihood_file = os.path.join(likelihood_file[0], '%s_SNR_CHI.xml.gz' % likelihood_file[1].split('.')[0])
+		ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		with self.lock:
