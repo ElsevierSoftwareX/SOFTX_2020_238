@@ -64,7 +64,7 @@ def parse_command_line():
 	options, urls = parser.parse_args()
 
 	if not urls and not options.ignore_missing:
-		raise ValueError, "no input documents"
+		raise ValueError("no input documents")
 
 	return options, urls
 
