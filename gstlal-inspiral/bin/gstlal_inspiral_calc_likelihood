@@ -36,15 +36,15 @@ import sys
 
 
 from glue.lal import CacheEntry
-from glue.ligolw.utils import segments as ligolwsegments
 from glue.ligolw import dbtables
+from glue.ligolw import lsctables
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal import snglcoinc
 from gstlal import far
-from gstlal import inspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -189,25 +189,29 @@ for n, filename in enumerate(filenames):
 	connection = sqlite3.connect(working_filename)
 	if options.tmp_space is not None:
 		dbtables.set_temp_store_directory(connection, options.tmp_space, verbose = options.verbose)
+	xmldoc = dbtables.get_xml(connection)
 
 	#
 	# Summarize the database.
 	#
 
-	xmldoc = dbtables.get_xml(connection)
-	sngl_inspiral_table = dbtables.table.get_table(xmldoc, dbtables.lsctables.SnglInspiralTable.tableName)
 	try:
-		coinc_def_id = dbtables.table.get_table(xmldoc, dbtables.lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		coinc_def_id = dbtables.table.get_table(xmldoc, lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	except KeyError:
+		if options.verbose:
+			print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."
 		xmldoc.unlink()
 		connection.commit()
 		connection.close()
-		dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+		dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 		continue
-	
-	offset_vectors = dbtables.table.get_table(xmldoc, dbtables.lsctables.TimeSlideTable.tableName).as_dict()
+
+	sngl_inspiral_table = dbtables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+
+	offset_vectors = dbtables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName).as_dict()
+
 	if options.vetoes_name is not None:
-		vetoseglists = ligolwsegments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
+		vetoseglists = ligolw_segments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
 	else:
 		vetoseglists = segments.segmentlistdict()
 
