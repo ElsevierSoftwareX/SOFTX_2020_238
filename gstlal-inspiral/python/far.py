@@ -1,4 +1,5 @@
 # Copyright (C) 2011--2013  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2013  Jacob Peoples
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
