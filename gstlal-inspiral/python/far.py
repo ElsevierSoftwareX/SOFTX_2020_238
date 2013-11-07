@@ -668,29 +668,29 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bin
 			# "snr" is SNR in fastest growing instrument, from
 			# this the distance to the source is:
 			#
-			#       D = snr_times_D[axis] / snr
+			#	D = snr_times_D[axis] / snr
 			#
 			# and the SNRs in all instruments are:
 			#
-			#       snr * (snr_times_D / snr_times_D[axis])
+			#	snr * (snr_times_D / snr_times_D[axis])
 			#
 			# but round-off protection is required to ensure
 			# all SNRs are within the allowed range
 			#
 			# SNR step size:
-			#       d(snr) = (10**(.1 / bins_per_decade) - 1.) * snr
+			#	d(snr) = (10**(.1 / bins_per_decade) - 1.) * snr
 			#
 			# rate of change of D with SNR:
-			#       dD/d(snr) = -snr_times_D / snr^2
-			#                 = -D / snr
+			#	dD/d(snr) = -snr_times_D / snr^2
+			#	          = -D / snr
 			#
 			# relationship b/w dD and d(snr):
-			#       dD = -D / snr d(snr)
-			#          = -D * (10**(.1 / bins_per_decade) - 1.)
+			#	dD = -D / snr d(snr)
+			#	   = -D * (10**(.1 / bins_per_decade) - 1.)
 			#
 			# number of sources:
-			#       \propto D^2 |dD|
-			#       \propto D^3 * (10**(.1 / bins_per_decade) - 1.)
+			#	\propto D^2 |dD|
+			#	\propto D^3 * (10**(.1 / bins_per_decade) - 1.)
 			pdf[tuple(snr * (snr_times_D / snr_times_D[axis]).clip(1., PosInf))] += (snr_times_D[axis] / snr)**3. * step_factor
 
 		if progressbar is not None:
@@ -709,7 +709,6 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bin
 		slices = [range_all] * len(inst_horiz_mapping)
 		slices[i] = range_low
 		pdf[tuple(slices)] = 0
-
 	pdf.to_pdf()
 	return pdf
 
