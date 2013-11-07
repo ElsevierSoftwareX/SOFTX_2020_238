@@ -403,7 +403,7 @@ handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.jo
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
 appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
-appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral")) for src in triggersrc)
+appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 

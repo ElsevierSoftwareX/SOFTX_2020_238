@@ -647,7 +647,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# construct trigger generators
 	#
 
-	triggersrcs = set()
+	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if control_branch is not None:
@@ -681,7 +681,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			head = pipeparts.mkitac(pipeline, snr, 1 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
-			triggersrcs.add(head)
+			triggersrcs[instrument].add(head)
 		else:
 			raise NotImplementedError("Currently only 'autochisq' is supported")
 		# FIXME:  find a way to use less memory without this hack
@@ -693,7 +693,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# done
 	#
 
-	assert len(triggersrcs) > 0
+	assert any(triggersrcs.values())
 	return triggersrcs
 
 #
@@ -743,7 +743,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# construct trigger generators
 	#
 
-	triggersrcs = set()
+	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
@@ -767,7 +767,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
-			triggersrcs.add(head)
+			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
@@ -777,7 +777,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# done
 	#
 
-	assert len(triggersrcs) > 0
+	assert any(triggersrcs.values())
 	return triggersrcs
 
 

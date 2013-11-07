@@ -618,6 +618,8 @@ class Data(object):
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-buffer")
 			events = sngl_inspirals_from_buffer(buf)
+			# FIXME:  ugly way to get the instrument
+			instrument = elem.get_name().split("_")[0]
 
 			# update search_summary out segment.  note that
 			# both the trigger document and the FAR object get
