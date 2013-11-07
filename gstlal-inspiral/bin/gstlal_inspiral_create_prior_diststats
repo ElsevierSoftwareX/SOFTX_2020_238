@@ -61,6 +61,9 @@ def parse_command_line():
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
+	if filenames:
+		raise ValueError("unrecognized command line options")
+
 	if not options.instrument or len(options.instrument < 2):
 		raise ValueError("must specify at least two --instrument's")
 
