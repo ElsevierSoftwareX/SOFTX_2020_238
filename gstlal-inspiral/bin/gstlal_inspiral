@@ -440,31 +440,30 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "initializing output document ..."
 	output = inspiral.Data(
-		filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+		filename = options.output or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 		process_params = process_params,
 		pipeline = pipeline,
 		instruments = set(detectors.channel_dict),
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-		injection_filename = options.injections,
-		time_slide_file = options.time_slide_file,
 		coincidence_threshold = options.coincidence_threshold,
 		FAR = FAR,
 		likelihood_file = likelihood_file,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
-		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
-		assign_likelihoods = options.data_source in ("lvshm" or "framexmit"),
+		injection_filename = options.injections,
+		time_slide_file = options.time_slide_file,
 		comment = options.comment,
 		tmp_path = options.tmp_space,
+		assign_likelihoods = options.data_source in ("lvshm" or "framexmit"),
+		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 		thinca_interval = options.thinca_interval,
 		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
-		gracedb_type = options.gracedb_type,
 		gracedb_group = options.gracedb_group,
+		gracedb_type = options.gracedb_type,
 		verbose = options.verbose
 	)
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
-
 
 	# setup the pipeline hander with dq gates if in online mode
 	if options.data_source in ("lvshm", "framexmit"):
