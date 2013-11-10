@@ -185,9 +185,10 @@ def trials_from_faps(p0, p1):
 	"""
 	Given the probabiity, p0, of an event occuring, and the
 	probability, p1, of at least one such event being observed after
-	some number of independent trials, solve the number of trials, m,
-	that relates the two probabilities.  The three quantities are
-	related by p1 = 1 - (1 - p0)^m.
+	some number of independent trials, solve for and return the number
+	of trials, m, that relates the two probabilities.  The three
+	quantities are related by p1 = 1 - (1 - p0)^m.  Generally the
+	return value is not an integer.
 
 	See also fap_after_trials().  Note that if p0 is 0 or 1 then p1
 	must be 0 or 1 respectively, and in both cases m is undefined.
@@ -421,6 +422,8 @@ class DistributionsStats(object):
 	@staticmethod
 	def likelihood_params_func(events, offsetvector):
 		instruments = set(event.ifo for event in events)
+		# don't allow both H1 and H2 to participate in the same
+		# coinc.  if both have participated favour H1
 		if "H1" in instruments:
 			instruments.discard("H2")
 		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
