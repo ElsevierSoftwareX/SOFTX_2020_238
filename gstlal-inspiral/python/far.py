@@ -510,9 +510,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@staticmethod
 	def create_emcee_lnprob_wrapper(lnprobfunc, keys):
 		keys = tuple(sorted(keys))
-		# coords[0::2] = rho
-		# coords[1::2] = chi^2/rho^2
-		return lambda coords: lnprobfunc(dict(zip(keys, zip(coords[0::2], coords[1::2]))))
+		def coinc_params_from_flat_args(coords):
+			# coords[0::2] = rho
+			# coords[1::2] = chi^2/rho^2
+			params = dict(zip(keys, zip(coords[0::2], coords[1::2])))
+			# FIXME:  add instruments when needed
+			return params
+		return lambda coords: lnprobfunc(coinc_params_from_flat_args(coords))
 
 	def add_background_prior(self, segs, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		#
