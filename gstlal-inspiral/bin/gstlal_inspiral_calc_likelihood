@@ -177,6 +177,7 @@ likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 #
 
 
+count_above_threshold = {}
 for n, filename in enumerate(filenames):
 	#
 	# Open the database file.
@@ -230,6 +231,41 @@ for n, filename in enumerate(filenames):
 		likelihood_params_func = coincparamsdistributions.coinc_params,
 		verbose = options.verbose
 	)
+
+	#
+	# Count the # of zero-lag coincs above threshold as a function of
+	# the instruments that participated
+	#
+
+	for instruments, count in connection.cursor().execute("""
+SELECT
+	coinc_inspiral.ifos,
+	COUNT(*)
+FROM
+	coinc_inspiral
+	JOIN coinc_event ON (
+		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND coinc_event.likelihood >= ?
+	AND NOT EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+GROUP BY
+	coinc_inspiral.ifos
+""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold)):
+		instruments = frozenset(lsctables.instrument_set_from_ifos(instruments))
+		try:
+			count_above_threshold[instruments] += count
+		except KeyError:
+			count_above_threshold[instruments] = count
 
 	#
 	# Clean up.
