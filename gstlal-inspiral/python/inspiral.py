@@ -656,7 +656,14 @@ class Data(object):
 			# update likelihood snapshot if needed
 			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
-				# Post a checkpoint message
+				# post a checkpoint message.  FIXME:  make
+				# sure this triggers
+				# self.snapshot_output_file() to be
+				# invoked.  lloidparts takes care of that
+				# for now, but spreading the program logic
+				# around like that isn't a good idea, this
+				# code should be responsible for it
+				# somehow, no?
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 				if self.assign_likelihoods:
 					assert self.marginalized_likelihood_file is not None

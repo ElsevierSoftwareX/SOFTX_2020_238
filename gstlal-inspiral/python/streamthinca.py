@@ -351,7 +351,8 @@ class StreamThinca(object):
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
 
 				# abuse minimum_duration column to store
-				# the latency
+				# the latency.  NOTE:  this is nonsensical
+				# unless running live
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
 
 		# Update the trials table from the independent trials calculated above
