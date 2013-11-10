@@ -361,6 +361,7 @@ class SummaryTable(object):
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
 	coinc_inspiral.mass,
@@ -400,6 +401,7 @@ LIMIT 10
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
 	coinc_inspiral.mass,
@@ -454,14 +456,14 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 
 	def write_wiki_string(self, l, f, lt):
 		f.write('''
-|| %s || %s || %s || %s || %s || %s || %s || %s || %s ||
-|| %s || %s || %s || %s || %s || %s || %s || %s || %s ||
-''' % ("Rank", "combined FAR (Hz)","FAP", "combined SNR", "GPS end time","total mass","chirp mass", "detectors", "detector time", "", "", "", "", "detector", "snr", "&chi;<sup>2</sup>/DOF", "mass 1", "mass 2"))
+|| %s || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
+|| %s || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
+''' % ("Rank", "combined FAR (Hz)","FAP", "likelihood", "combined SNR", "GPS end time","total mass","chirp mass", "detectors", "detector time", "", "", "", "", "", "detector", "snr", "&chi;<sup>2</sup>/DOF", "mass 1", "mass 2"))
 		for i, values in enumerate(l):
 			values=list(values)
-			dets =  frozenset(dbtables.lsctables.instrument_set_from_ifos(values[7]))
-			f.write('|| ' + str(i) + ' || %.2e || %.2e || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % tuple(values[:8]))
-			for ifo in values[8].split():
+			#dets =  frozenset(dbtables.lsctables.instrument_set_from_ifos(values[7]))
+			f.write('|| ' + str(i) + ' || %.2e || %.2e || %.2e || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % tuple(values[:9]))
+			for ifo in values[9].split():
 				ifo = list(ifo.split(":"))
 				for i in range(1,len(ifo)): ifo[i] = float(ifo[i])
 				f.write('|| || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo) )
@@ -470,7 +472,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		self.candidates.sort()
 		f = open(self.base+'summary_table.txt','w')
 		f.write("=== Open box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.candidates[:10], f, self.livetime)
+		self.write_wiki_string(self.candidates[:11], f, self.livetime)
 		f.close()
 
 		f = open(self.base+'num_trigs_table.txt','w')
@@ -493,7 +495,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		self.bgcandidates.sort()
 		f = open(self.base+'bgsummary_table.txt','w')
 		f.write("=== Closed box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.bgcandidates[:10], f, self.livetime)
+		self.write_wiki_string(self.bgcandidates[:11], f, self.livetime)
 		f.close()
 		yield None, None, None
 
