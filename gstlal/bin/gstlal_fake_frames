@@ -42,62 +42,93 @@ import sys
 import os
 import numpy
 
-__doc__ = """
-This program will make fake data in a variety of ways.  Its input is anything
-supported by datasource.py.  You can additionally whiten the data or apply a
-frequency domain coloring filter.  It writes its output to frame files.
+## @package gstlal_fake_frames
+#
+# This program will make fake data in a variety of ways.  Its input is anything
+# supported by datasource.py.  You can additionally whiten the data or apply a
+# frequency domain coloring filter.  It writes its output to frame files.
+#
+# ### Usage cases ###
+#
+# -# Recoloring existing frame data
+#
+#    Recoloring can be thought of as first whitening data and then applying a coloring filter.
+#
+#		gstlal_fake_frames --whiten-reference-psd V1_median_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /home/channa/rctest/T1300121_V1_EARLY_RECOLORED_V2 --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.V1.cache --channel-name=V1=h_16384Hz --verbose
+#
+# -# Producing colored Gaussian noise
+#
+#		gstlal_fake_frames --color-psd recolor_psd.xml.gz --data-source white --output-path /home/channa/rctest/V1_T1300121_V1_EARLY_GAUSSIAN --gps-start-time 966384031 --frame-type V1_T1300121_V1_EARLY_GAUSSIAN --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=GAUSSIAN
+#
+# -# Creating injections into silence
+#
+#		gstlal_fake_frames --data-source silence --output-path /home/channa/rctest/V1_INJECTIONS --gps-start-time 966384031 --frame-type V1_INJECTIONS --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=INJECTIONS --injections ../BNS-MDC1-FIXEDMASS.xml
+#
+# Other things are certainly possible.
+#
+# ### Command line options ###
+#
+#	+ `--shift` [int] (ns): Number of nanoseconds, \f$\tau\f$ to delay (negative) or advance (positive) the input time series \f$x\f$ relative to the output time series \f$y\f$. \f$ y(t) = x(t+\tau)\f$
+#	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided.  Default = 16384 Hz.
+# 	+ `--whiten-reference-psd` [file name]: Set the name of psd xml file to whiten the data with.
+#	+ `--whiten-track-psd` []: Calculate PSD from input data and track with time.
+#	+ `--color-psd` [file name]: Set the name of psd xml file to color the data with
+#	+ `--output-path` [file path]: Path to output frame files. Default = "."
+#	+ `--output-channel-name` [string]: The name of the channel in the output frames. The default is the same as the channel name.
+#	+ `--frame-type` [string]: Frame type, required.
+#	+ `--frame-duration` [int] (s): Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default is 16s.
+#	+ `--frames-per-file` [int]: Set the number of frames per file.  Default is 256.
+#	+ `--verbose` []: Be verbose.
+#
 
-Here are some typical usage cases:
+## @if PROGRAM_BODY_EXCLUDE
 
-1) recoloring existing frame data
 
-	Recoloring can be thought of as first whitening data and then applying a coloring filter.
+def parse_command_line():
 
-	gstlal_fake_frames --whiten-reference-psd V1_median_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /home/channa/rctest/T1300121_V1_EARLY_RECOLORED_V2 --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.V1.cache --channel-name=V1=h_16384Hz --verbose
+	parser = OptionParser(description = __doc__)
 
-2) Producing colored Gaussian noise
+	#
+	# Append data source options
+	#
 
-	gstlal_fake_frames --color-psd recolor_psd.xml.gz --data-source white --output-path /home/channa/rctest/V1_T1300121_V1_EARLY_GAUSSIAN --gps-start-time 966384031 --frame-type V1_T1300121_V1_EARLY_GAUSSIAN --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=GAUSSIAN
+	datasource.append_options(parser)
 
-3) Creating injections into silence
+	#
+	# Append program specific options
+	#
 
-	gstlal_fake_frames --data-source silence --output-path /home/channa/rctest/V1_INJECTIONS --gps-start-time 966384031 --frame-type V1_INJECTIONS --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=INJECTIONS --injections ../BNS-MDC1-FIXEDMASS.xml
+	parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
+	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz")
+	parser.add_option("--whiten-reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
+	parser.add_option("--whiten-track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
+	parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
+	parser.add_option("--output-path", metavar = "name", default = ".", help = "Path to output frame files (default = \".\").")
+	parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
+	parser.add_option("--frame-type", metavar = "name", help = "Frame type, required")
+	parser.add_option("--frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
+	parser.add_option("--frames-per-file", metavar = "n", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
-Other things are certainly possible.
-"""
+	#
+	# Parse options
+	#
+
+	options, filenames = parser.parse_args()
+	return options, filenames
+
 
 def digits(num):
+	""" return the number of digits in a number """
 	return int(numpy.ceil(numpy.log10(float(num))))
 
-parser = OptionParser(description = __doc__)
 
 #
-# Append data source options
+# Main
 #
 
-datasource.append_options(parser)
+options, filenames = parse_command_line()
 
-#
-# Append program specific options
-#
-
-parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
-parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz")
-parser.add_option("--whiten-reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
-parser.add_option("--whiten-track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
-parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
-parser.add_option("--output-path", metavar = "name", default = ".", help = "Path to output frame files (default = \".\").")
-parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
-parser.add_option("--frame-type", metavar = "name", help = "Frame type, required")
-parser.add_option("--frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
-parser.add_option("--frames-per-file", metavar = "n", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
-parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-
-#
-# Parse options
-#
-
-options, filenames = parser.parse_args()
 gw_data_source = datasource.GWDataSourceInfo(options)
 
 if options.frame_type is None:
@@ -228,3 +259,4 @@ if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
 
+## @endif PROGRAM_BODY_EXCLUDE
