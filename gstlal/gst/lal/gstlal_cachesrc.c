@@ -253,7 +253,7 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	do {
 		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
 		if(bytes_read < 0) {
-			GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, sys_errlist[errno]));
+			GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, strerror(errno)));
 			gst_buffer_unref(*buf);
 			*buf = NULL;
 			result = GST_FLOW_ERROR;
@@ -291,7 +291,7 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_READONLY);
 	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
 	if(!GST_BUFFER_DATA(*buf)) {
-		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, sys_errlist[errno]));
+		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));
 		gst_buffer_unref(*buf);
 		*buf = NULL;
 		result = GST_FLOW_ERROR;
@@ -477,13 +477,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	fd = open(path, O_RDONLY);
 	if(fd < 0) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s", path, sys_errlist[errno]));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s", path, strerror(errno)));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
 
 	if(fstat(fd, &statinfo)) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("fstat('%s') failed: %s", path, sys_errlist[errno]));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("fstat('%s') failed: %s", path, strerror(errno)));
 		result = GST_FLOW_ERROR;
 		close(fd);
 		goto done;
