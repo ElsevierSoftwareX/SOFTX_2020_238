@@ -5,9 +5,8 @@ all-local: doxyfile.stamp
 
 directory = $(top_srcdir)/docs/man/man3/
 
-dist_man_MANS = $(directory)/man_page_1.3 $(directory)/man_page_2.3
-$(directory)/man_page_1.3: doxyfile.stamp
-$(directory)/man_page_2.3: doxyfile.stamp
+dist_man_MANS = $(directory)/gstlal_datasource.3
+$(directory)/gstlal_datasource.3: doxyfile.stamp
 
 doxyfile.stamp:
 	$(DOXYGEN) Doxyfile
@@ -22,8 +21,8 @@ clean-man:
 	rm -rf $(top_srcdir)/docs/man
 
 clean-html :
-	-rm -rvf html/
+	-rm -rvf $(top_srcdir)/docs/html/
 
 clean-latex :
-	-rm -rvf latex/
+	-rm -rvf $(top_srcdir)/docs/latex/
 endif
