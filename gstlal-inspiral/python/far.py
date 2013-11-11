@@ -546,6 +546,7 @@ class DistributionsStats(object):
 			if verbose:
 				print >>sys.stderr, "%s," % name,
 			rate.filter_array(binnedarray.array, self.filters[name])
+			numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
 			binnedarray.array /= binnedarray.array.sum()
 		if verbose:
 			print >>sys.stderr, "done"
