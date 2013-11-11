@@ -1241,10 +1241,10 @@ def set_far(Far, f, tmp_path = None, scale = None, verbose = False):
 	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 
-def get_live_time(segments, verbose = True):
-	livetime = float(abs(vote((segs for instrument, segs in segments.items() if instrument != "H2"), 2)))
+def get_live_time(seglists, verbose = False):
+	livetime = float(abs(vote((segs for instrument, segs in seglists.items() if instrument != "H2"), 2)))
 	if verbose:
-		print >> sys.stderr, "Livetime: ", livetime
+		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime
 
 
