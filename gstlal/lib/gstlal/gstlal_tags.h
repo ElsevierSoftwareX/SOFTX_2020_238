@@ -31,9 +31,8 @@ G_BEGIN_DECLS
 /**
  * GSTLAL_TAG_INSTRUMENT:
  *
- * The name ("prefix" in the jargon of the frame file spec) of the
- * instrument from which this data stream has been collected.  E.g., "H1",
- * "L1", etc..
+ * The name (prefix in the jargon of the frame file spec) of the instrument
+ * from which this data stream has been collected.  E.g., "H1", "L1", etc..
  */
 
 
@@ -43,7 +42,7 @@ G_BEGIN_DECLS
 /**
  * GSTLAL_TAG_CHANNEL_NAME:
  *
- * The channel name.
+ * The channel name (without the prefix).  E.g., "LSC-STRAIN".
  */
 
 

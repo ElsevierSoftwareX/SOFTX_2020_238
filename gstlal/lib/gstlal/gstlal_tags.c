@@ -76,7 +76,9 @@ static gpointer register_tags(gpointer unused)
  *
  * Register the tags with the GStreamer tags system.  This function must be
  * invoked at least once before the tags can be used.  It is OK to call
- * this function more than once.
+ * this function more than once.  The gstlal plugin calls this function
+ * when loaded, so applications using GSTLAL elements need not invoke this
+ * function.
  */
 
 
