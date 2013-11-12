@@ -57,7 +57,9 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
@@ -1126,6 +1128,55 @@ class RankingData(object):
 			# low-latency analysis
 			return NaN
 		return trials * -math.log(tdp) / livetime
+
+
+#
+# =============================================================================
+#
+#                                     I/O
+#
+# =============================================================================
+#
+
+
+def gen_likelihood_control_doc(xmldoc, process, coinc_params_distributions, ranking_data, seglists, name = u"gstlal_inspiral_likelihood", comment = None):
+	node = xmldoc.childNodes[-1]
+	assert node.tagName == ligolw.LIGO_LW.tagName
+
+	if coinc_params_distributions is not None:
+		coinc_params_distributions.process_id = process.process_id
+		node.appendChild(coinc_params_distributions.to_xml(name))
+
+	if ranking_data is not None:
+		ranking_data.process_id = process.process_id
+		node.appendChild(ranking_data.to_xml(name))
+
+	llwsegments = ligolw_segments.LigolwSegments(xmldoc)
+	llwsegments.insert_from_segmentlistdict(seglists, u"%s:segments" % name, comment = comment)
+	llwsegments.finalize(process)
+
+	return xmldoc
+
+
+def parse_likelihood_control_doc(xmldoc, name = u"gstlal_inspiral_likelihood"):
+	coinc_params_distributions = ranking_data = process_id = None
+	try:
+		coinc_params_distributions = ThincaCoincParamsDistributions.from_xml(xmldoc, name)
+	except ValueError:
+		pass
+	else:
+		process_id = coinc_params_distributions.process_id
+	try:
+		ranking_data = RankingData.from_xml(xmldoc, name)
+	except ValueError:
+		pass
+	else:
+		if process_id is None:
+			process_id = ranking_data.process_id
+	if coinc_params_distributions is None and ranking_data is None:
+		raise ValueError("document does not contain likelihood ratio data")
+	seglists = ligolw_segments.segmenttable_get_by_name(xmldoc, u"%s:segments" % name).coalesce()
+	return coinc_params_distributions, ranking_data, seglists
 
 
 #
