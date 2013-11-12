@@ -1297,6 +1297,8 @@ class RankingData(object):
 		self.cdf_interpolator.clear()
 		self.ccdf_interpolator.clear()
 		for instruments, binnedarray in self.likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s likelihood ratio PDF contains NaNs" % ", ".join(sorted(instruments))
+			assert not (binnedarray.array < 0.0).any(), "%s likelihood ratio PDF contains negative values" % ", ".join(sorted(instruments))
 			ranks, = binnedarray.bins.lower()
 			weights = binnedarray.array
 			# cumulative distribution function and its
@@ -1307,12 +1309,17 @@ class RankingData(object):
 			cdf /= cdf[-1]
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
+			assert not numpy.isnan(cdf).any(), "%s likelihood ratio CDF contains NaNs" % ", ".join(sorted(instruments))
+			assert not numpy.isnan(ccdf).any(), "%s likelihood ratio CCDF contains NaNs" % ", ".join(sorted(instruments))
+			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s likelihood ratio CDF failed to be normalized" % ", ".join(sorted(instruments))
+			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s likelihood ratio CCDF failed to be normalized" % ", ".join(sorted(instruments))
 			# try making ccdf + cdf == 1.  nothing really cares
 			# if this identity doesn't exactly hold, but we
 			# might as well avoid weirdness where we can.
 			s = ccdf + cdf
 			cdf /= s
 			ccdf /= s
+			assert (abs(1. - (cdf + ccdf)) < 1e-15).all(), "% likelihood ratio CDF + CCDF != 1" % ", ".join(sorted(instruments))
 			# build interpolators
 			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
