@@ -614,7 +614,7 @@ class DistributionsStats(object):
 #
 
 
-def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bins_per_decade = 50.0, verbose = False):
+def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10000, bins_per_decade = 50.0, verbose = False):
 	"""
 	A function which returns a BinnedArray representing the joint
 	probability density of measuring a set of SNRs from a network of
@@ -666,9 +666,9 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bin
 		# instrument whose SNR grows fastest
 		snr_start = snr_times_D[axis] / (snr_times_D.min() / snr_min)
 
-		# 10 steps per bin
-		step_factor = 10**(.1 / bins_per_decade) - 1.
-		for snr in 10**numpy.arange(math.log10(snr_start), math.log10(snr_max), .1 / bins_per_decade):
+		# 3 steps per bin
+		step_factor = 10**(1. / bins_per_decade / 3) - 1.
+		for snr in 10**numpy.arange(math.log10(snr_start), math.log10(snr_max), 1. / bins_per_decade / 3):
 			# "snr" is SNR in fastest growing instrument, from
 			# this the distance to the source is:
 			#
