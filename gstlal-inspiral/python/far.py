@@ -614,7 +614,7 @@ class DistributionsStats(object):
 #
 
 
-def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bins_per_decade, verbose = False):
+def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, n_samples, snr_max, bins_per_decade = 50.0, verbose = False):
 	"""
 	A function which returns a BinnedArray representing the joint
 	probability density of measuring a set of SNRs from a network of
