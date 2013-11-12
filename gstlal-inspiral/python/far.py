@@ -1096,10 +1096,7 @@ class RankingData(object):
 
 	def fap_from_rank(self, rank, ifos):
 		ifos = frozenset(ifos)
-		if rank >= self.maxrank[ifos]:
-			rank = self.maxrank[ifos]
-		elif rank <= self.minrank[ifos]:
-			rank = self.minrank[ifos]
+		rank = max(self.minrank[ifos], min(self.maxrank[ifos], rank))
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
 			trials = max(int(self.trials_table[ifos].count), 1)
@@ -1113,11 +1110,8 @@ class RankingData(object):
 
 	def far_from_rank(self, rank, ifos, scale = False):
 		ifos = frozenset(ifos)
+		rank = max(self.minrank[ifos], min(self.maxrank[ifos], rank))
 		# true-dismissal probability = 1 - false-alarm probability
-		if rank >= self.maxrank[ifos]:
-			rank = self.maxrank[ifos]
-		elif rank <= self.minrank[ifos]:
-			rank = self.minrank[ifos]
 		tdp = float(self.cdf_interpolator[ifos](rank))
 		if tdp == 0.:
 			return PosInf
