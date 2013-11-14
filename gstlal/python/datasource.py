@@ -23,6 +23,16 @@
 # =============================================================================
 #
 
+## 
+# @file
+#
+# A file that contains the datasource module code
+#
+
+##
+# @package python.datasource
+#
+# datasource module
 
 import sys
 import optparse
@@ -46,6 +56,8 @@ from glue import segments
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
+## #### ContentHandler
+# A stub to wrap ligolw.LIGOLWContentHandler for now
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(ContentHandler)
@@ -55,23 +67,34 @@ lsctables.use_in(ContentHandler)
 # Misc useful functions
 #
 
-
+## #### A dictionary of channel names from a list
+#  _Python doc string_:
 def channel_dict_from_channel_list(channel_list):
-	"""
-	Given a list of channels like this ["H1=LSC-STRAIN",
-	H2="SOMETHING-ELSE"] produce a dictionary keyed by ifo of channel
-	names.
+	"""!
+	Given a list of channels like this
+	
+		channel_list = ["H1=LSC-STRAIN", H2="SOMETHING-ELSE"]
+
+	produce a dictionary keyed by ifo of channel names:
+
+		{"H1":"LSC-STRAIN", "H2":"SOMETHING-ELSE"}
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
 
+## #### A string of channel names from a dictionary
+#  _Python doc string_:
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
-	"""
-	Produce a string of channel name arguments suitable for a pipeline.py
-	program that doesn't technically allow multiple options. For example
-	--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN
-	"""
+	"""!
+	Creates a string of channel names options from a dictionary keyed by ifos.
+	Output looks like
 
+		--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN
+
+	- override --channel-name with a different option by setting opt.
+	- restrict the ifo keys to a subset of the channel_dict by 
+	  setting ifos
+	"""
 	outstr = ""
 	if ifos is None:
 		ifos = channel_dict.keys()
@@ -84,12 +107,30 @@ def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "ch
 	return outstr
 
 
-def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}):
-	"""
-	Produce a dictionary (keyed by detector) of on / off bit tuples from a
-	list provided on the command line.
-	"""
+## #### Default dictionary of state vector on/off bits by ifo
+# Used as the default argument to state_vector_on_off_dict_from_bit_lists()
+state_vector_on_off_dict = {
+	"H1" : [0x7, 0x160], 
+	"H2" : [0x7, 0x160],
+	"L1" : [0x7, 0x160],
+	"V1" : [0x67, 0x100]
+}
 
+
+## #### A dictionary of state vector bits from a list
+#  _Python doc string_:
+def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = state_vector_on_off_dict):
+	"""!
+	Produce a dictionary (keyed by detector) of on / off bit tuples from a
+	list provided on the command line. e.g., given:
+
+		on_bit_list = ["V1=7", "H1=7", "L1=7"]
+		off_bit_list = ["V1=256", "H1=352", "L1=352"]
+
+	produce:
+
+		state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+	"""
 	for line in on_bit_list:
 		ifo = line.split("=")[0]
 		bits = "".join(line.split("=")[1:])
@@ -109,10 +150,18 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 	return state_vector_on_off_dict
 
 
+## #### A list of state vector command line arguments from a dictionary
+#  _Python doc string_:
 def state_vector_on_off_list_from_bits_dict(bit_dict):
-	"""
+	"""!
 	Produce a commandline useful list from a dictionary of on / off state
-	vector bits keyed by detector.
+	vector bits keyed by detector. e.g., given
+
+		state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+
+	produce:
+
+		--state-vector-off-bits V1=256 --state-vector-off-bits=H1=352 --state-vector-off-bits=L1=352  --state-vector-on-bits V1=7 --state-vector-on-bits=H1=7 --state-vector-on-bits=L1=7
 	"""
 
 	onstr = ""
@@ -128,15 +177,15 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 	return onstr, offstr
 
 
-#
-# look-up table to map instrument name to framexmit multicast address and
+## #### framexmit ports in use on the LDG
+# Look-up table to map instrument name to framexmit multicast address and
 # port
 #
+# used in mkbasicsrc() 
+# 
 # FIXME:  this is only here temporarily while we test this approach to data
 # aquisition.  obviously we can't hard-code this stuff
 #
-
-
 framexmit_ports = {
 	"CIT": {
 		"H1": ("224.3.2.1", 7096),
@@ -145,24 +194,30 @@ framexmit_ports = {
 	}
 }
 
-
-#
-# Class to hold the data associated with data sources
-#
-
+## #### Main organizational data class of this module
+#  _Python doc string_:
 class GWDataSourceInfo(object):
-
+	"""!
+	Hold the data associated with data source command lines.
+	"""
+	## See python.datasource.append_options()
 	def __init__(self, options):
-		data_sources = ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		"""!
+		Initialize a GWDataSourceInfo class instance from command line options specified by append_options()
+		""" 
 
-		# Callbacks to handle the "start" and "stop" signals from the gate
-		# element. This is useful for doing things like segments
+		## A list of possible, valid data sources ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		self.data_sources = ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+
+		## Callback function to handle the "start" signals from the gate
 		self.gate_start_callback = None
+
+		## Callback function to handle the "stop" signals from the gate
 		self.gate_stop_callback = None
 
 		# Sanity check the options
-		if options.data_source not in data_sources:
-			raise ValueError("--data-source must be one of %s" % ", ".join(data_sources))
+		if options.data_source not in self.data_sources:
+			raise ValueError("--data-source must be one of %s" % ", ".join(self.data_sources))
 		if options.data_source == "frames" and options.frame_cache is None:
 			raise ValueError("--frame-cache must be specified when using --data-source=frames")
 		if (options.gps_start_time is None or options.gps_end_time is None) and options.data_source == "frames":
@@ -176,33 +231,42 @@ class GWDataSourceInfo(object):
 		if options.data_source == "nds" and (options.nds_host is None or options.nds_port is None):
 			raise ValueError("Must specify --nds-host and --nds-port when using --data-source=nds")
 
+		## A dictionary of the requested channels, e.g., {"H1":"LDAS-STRAIN", "L1":"LDAS-STRAIN"}
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
 
-		# Set up default dictionary for shared memory partition, and override
-		# if the user asks
+		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
 
+		## Seek event. Default is None, i.e., no seek
 		self.seekevent = None
+
+		## Analysis segment. Default is None
 		self.seg = None
+
 		if options.gps_start_time is not None:
+			## Segment from gps start and stop time if given
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+			## Seek event from the gps start and stop time if given
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
 
-		# Parse the frame segments if they exist
 		if options.frame_segments_file is not None:
+			## Frame segments from a user defined file
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 			if self.seg is not None:
-				# clip to seek segment
+				## Frame segments will be clipped to seek segment if it exists
 				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([self.seg])) for instrument, seglist in self.frame_segments.items())
 		else:
+			## if no frame segments provided, set them to an empty segment list dictionary
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
-		# Set up default dictionary for the DQ (state vector) channel and 
-		# override if the user asks
+		## DQ (state vector) channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
 		self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+
+		## DQ channel type, e.g., "LLD"
 		self.dq_channel_type = "LLD"
+
 		if options.dq_channel_name is not None:
 			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
 			instrument = dq_channel_dict_from_options.keys()[0]
@@ -211,25 +275,98 @@ class GWDataSourceInfo(object):
 			if "ODC_" in dq_channel.split("-")[1]:
 				self.dq_channel_type = "ODC"
 	
+		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 		
+		## frame cache file
 		self.frame_cache = options.frame_cache
+		## block size in bytes to read data from disk
 		self.block_size = options.block_size
+		## Data source, one of python.datasource.GWDataSourceInfo.data_sources
 		self.data_source = options.data_source
+		## Injection file name
 		self.injection_filename = options.injections
 
-		# Store the ndssrc specific options
 		if options.data_source == "nds":
+			## Store the ndssrc specific options: host
 			self.nds_host = options.nds_host
+			## Store the ndssrc specific options: port
 			self.nds_port = options.nds_port
+			## Store the ndssrc specific options: channel_type
 			self.nds_channel_type = options.nds_channel_type
 
-
+## #### Generic data source options used by many programs to append options to an OptionParser
+# _Python doc string_:
 def append_options(parser):
-	"""
+	"""!
 	Append generic data source options to an OptionParser object in order
 	to have consistent an unified command lines and parsing throughout the project
 	for applications that read GW data.
+	
+-	--data-source [string]
+		Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
+
+-	--block-size [int] (bytes)
+		Data block size to read in bytes. Default 16384 * 8 * 512 which is 512 seconds of double
+		precision data at 16384 Hz. This parameter is only used if --data-source is one of
+		white, silence, AdvVirgo, LIGO, AdvLIGO, nds.
+
+-	--frame-cache [filename]
+		Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).
+		This is required iff --data-sourceframes)
+
+-	--gps-start-time [int] (seconds)
+		Set the start time of the segment to analyze in GPS seconds.
+		Required unless --data-source in lvshm,framexmit
+
+-	--gps-end-time  [int] (seconds)
+		Set the end time of the segment to analyze in GPS seconds.  
+		Required unless --data-source in lvshm,framexmit
+
+-	--injections [filename]
+		Set the name of the LIGO light-weight XML file from which to load injections (optional).
+
+-	--channel-name [string]
+		Set the name of the channels to process.
+		Can be given multiple times as --channel-name=IFO=CHANNEL-NAME
+
+-	--nds-host [hostname]
+		Set the remote host or IP address that serves nds data.
+		This is required iff --data-source is nds
+
+-	--nds-port [portnumber]
+		Set the port of the remote host that serves nds data, default = 31200.
+		This is required iff --data-source is nds
+
+-	--nds-channel-type [string] type
+		FIXME please document
+
+-	--dq-channel-name [string]
+		Set the name of the data quality (or state vector) channel.
+		This channel will be used to control the flow of data via the on/off bits.
+		Can be given multiple times as --channel-nameIFOCHANNEL-NAME)
+
+-	--shared-memory-partition [string]
+		Set the name of the shared memory partition for a given instrument.
+		Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME
+
+-	--frame-segments-file [filename]
+		Set the name of the LIGO light-weight XML file from which to load frame segments.
+		Optional iff --data-source is frames
+
+-	--frame-segments-name [string]
+		Set the name of the segments to extract from the segment tables.
+		Required iff --frame-segments-file is given
+
+-	--state-vector-on-bits [hex]
+		Set the state vector on bits to process (optional).
+		The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.
+		Only currently has meaning for online (lvshm, framexmit) data
+
+-	--state-vector-off-bits [hex]
+		Set the state vector off bits to process (optional).
+		The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.
+		Only currently has meaning for online (lvshm) data.)
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
@@ -251,6 +388,7 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
+## @cond DONTDOCUMENT
 def do_seek(pipeline, seekevent):
 	# FIXME:  remove.  seek the pipeline instead
 	# DO NOT USE IN NEW CODE!!!!
@@ -259,14 +397,33 @@ def do_seek(pipeline, seekevent):
 			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
 		if not src.send_event(seekevent):
 			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
+## @endcond
 
 
+## #### Gate controlled by a segment source
 #
-# gate controlled by a segment source
+# ##### Gstreamer graph describing this function:
 #
-
-
+# @dot
+# digraph G {
+#	compound=true;
+#	node [shape=record fontsize=10 fontname="Verdana"];
+#	rankdir=LR;
+# 	lal_gate;
+#	lal_segmentsrc [URL="\ref python.pipeparts.mksegmentsrc()"];
+#	lal_gate [URL="\ref python.pipeparts.mkgate()"];
+#	in [label="?"];
+#	out [label="?"];
+#	in -> lal_gate -> out;
+#	lal_segmentsrc -> lal_gate;
+# }
+# @enddot
+# _Python doc string_:
 def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False):
+	"""!
+	Takes a segment list and produces a gate driven by it. Hook up your own input and output.
+	"""
+
 	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
 	# FIXME:  remove
 	if seekevent is not None:
@@ -274,15 +431,78 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
 
 
+## #### All-in-one data source
 #
-# all-in-one data source
+# ##### Gstreamer graph describing this function
 #
-
-
+# @dot
+# digraph mkbasicsrc {
+#      compound=true;
+#      node [shape=record fontsize=10 fontname="Verdana"];
+#      subgraph clusterfakesrc {
+#              fake_0 [label="fakesrc: white, silence, AdvVirgo, LIGO, AdvLIGO", URL="\ref python.pipeparts.mkfakesrc()"];
+#              color=black;
+#              label="Possible path #1";
+#      }
+#      subgraph clusterframes {
+#              color=black;
+#              frames_0 [label="lalcachesrc: frames", URL="\ref python.pipeparts.mklalcachesrc()"];
+#              frames_1 [label ="framecppchanneldemux", URL="\ref python.pipeparts.mkframecppchanneldemux()"];
+#              frames_2 [label ="queue", URL="\ref python.pipeparts.mkqueue()"];
+#              frames_3 [label ="gate (if user provides segments)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkgate()"];
+#              frames_4 [label ="audiorate", URL="\ref python.pipeparts.mkaudiorate()"];
+#              frames_0 -> frames_1 -> frames_2 -> frames_3 ->frames_4;
+#              label="Possible path #2";
+#      }
+#	subgraph clusteronline {
+#		color=black;
+#		online_0 [label="lvshmsrc|framexmitsrc", URL="\ref python.pipeparts.mklvshmsrc()"];
+#		online_1 [label ="framecppchanneldemux", URL="\ref python.pipeparts.mkframecppchanneldemux()"];
+#		online_2a [label ="strain queue", URL="\ref python.pipeparts.mkqueue()"];
+#		online_2b [label ="statevector queue", URL="\ref python.pipeparts.mkqueue()"];
+#		online_3 [label ="statevector", URL="\ref python.pipeparts.mkstatevector()"];
+#		online_4 [label ="gate", URL="\ref python.pipeparts.mkgate()"];
+#		online_5 [label ="audiorate", URL="\ref python.pipeparts.mkaudiorate()"];
+#		online_6 [label ="queue", URL="\ref python.pipeparts.mkqueue()"];
+#		online_0 -> online_1;
+#		online_1 -> online_2a;
+#		online_1 -> online_2b;
+#		online_2b -> online_3;
+#		online_2a -> online_4;
+#		online_3 -> online_4 -> online_5 -> online_6;
+#		label="Possible path #3";
+#	}
+#	subgraph clusternds {
+#		nds_0 [label="ndssrc", URL="\ref python.pipeparts.mkndssrc()"];
+#		color=black;
+#		label="Possible path #4";
+#	}
+#	audioconv [label="audioconvert", URL="\ref python.pipeparts.mkaudioconvert()"];
+#	progress [label="progressreport (if verbose)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkprogressreport()"];
+#	sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkinjections()"];
+#	queue [label="queue (if injections requested)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkqueue()"];
+#
+#	// The connections
+#	fake_0 -> audioconv [ltail=clusterfakesrc];
+#	frames_4 -> audioconv [ltail=clusterframes];
+#	online_6 -> audioconv [ltail=clusteronline];
+#	nds_0 -> audioconv [ltail=clusternds];
+#	audioconv -> progress -> sim -> queue -> "?"
+# }
+# @enddot
+# _Python doc string_:
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
-	"""
+	"""!
 	All the conditionals and stupid pet tricks for reading real or
 	simulated h(t) data in one place.
+
+	Consult the append_options() function and the GWDataSourceInfo class
+
+	This src in general supports only one instrument although
+	GWDataSourceInfo contains dictionaries of multi-instrument things.  By
+	specifying the instrument when calling this function you will get ony a single
+	instrument source.  A code wishing to have multiple basicsrcs will need to call
+	this function for each instrument.
 	"""
 
 	if gw_data_source_info.data_source == "white":
@@ -417,14 +637,31 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	return src
 
 
+## #### h(t) Gate: quick glitch excision trick
 #
-# quick glitch excision trick
+# ##### Gstreamer graph
 #
-
-
+# @dot
+# digraph G {
+#	compound=true;
+#	node [shape=record fontsize=10 fontname="Verdana"];
+#	rankdir=LR;
+# 	tee [URL="\ref python.pipeparts.mktee()"];
+# 	inputqueue [URL="\ref python.pipeparts.mkqueue()"];
+# 	controlqueue [URL="\ref python.pipeparts.mkqueue()"];
+#	lal_gate [URL="\ref python.pipeparts.mkgate()"];
+#	in [label="?"];
+#	out [label="?"];
+#	in -> tee -> inputqueue -> lal_gate -> out;
+#	tee -> controlqueue -> lal_gate;
+# }
+# @enddot
+# _Python doc string_:
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
-	"""
-	A convenience function to provide thersholds on input data.  This can be used to remove large spikes / glitches etc.
+	"""!
+	A convenience function to provide thresholds on input data.  This can
+	be used to remove large spikes / glitches etc.  Of course you can use it for
+	other stuff by plugging whatever you want as input and ouput
 	"""
 
 	# FIXME someday explore a good bandpass filter
