@@ -19,22 +19,41 @@
 """Build time-sliced, SVD'd filter banks for use with gstlal_inspiral"""
 
 
+#
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
 from optparse import OptionParser
 import uuid
 
 
 from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from gstlal import svd_bank
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
 from pylal import series as lalseries
+from gstlal import svd_bank
+
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
 
 
 #
-# parse command line
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
 #
 
 
@@ -43,7 +62,7 @@ parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help
 parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
-parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (required).")
+parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
 parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
@@ -64,7 +83,7 @@ required_options = ("reference_psd", "template_bank", "write_svd_bank")
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
-	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+	raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
 
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
@@ -87,10 +106,10 @@ svd_bank.write_bank(
 	options.write_svd_bank,
 	svd_bank.build_bank(
 		options.template_bank,
-		lalseries.read_psd_xmldoc(utils.load_filename(
+		lalseries.read_psd_xmldoc(ligolw_utils.load_filename(
 			options.reference_psd,
 			verbose=options.verbose,
-			contenthandler=ligolw.LIGOLWContentHandler
+			contenthandler=LIGOLWContentHandler
 		)),
 		options.flow,
 		options.ortho_gate_fap,
