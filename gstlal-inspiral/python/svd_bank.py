@@ -28,16 +28,12 @@
 import numpy
 import sys
 
-try:
-	all
-except NameError:
-	# Python < 2.5 compatibility
-	from glue.iterutils import all
+
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.ligolw import array
-from glue.ligolw import param
-from glue.ligolw import utils
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
 
@@ -50,8 +46,8 @@ from gstlal import templates
 # FIXME:  require calling code to provide the content handler
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-array.use_in(DefaultContentHandler)
-param.use_in(DefaultContentHandler)
+ligolw_array.use_in(DefaultContentHandler)
+ligolw_param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
 
 
@@ -67,20 +63,17 @@ lsctables.use_in(DefaultContentHandler)
 # Read approximant
 #
 
-def read_approximant(xmldoc):
-	programs = ("tmpltbank", "lalapps_cbc_sbank")
-	approximant = set()
+def read_approximant(xmldoc, programs = ("tmpltbank", "lalapps_cbc_sbank")):
+	process_ids = set()
 	for program in programs:
-		# FIXME:  replace with
-		# approximant |= set(ligolw_process.get_process_params(xmldoc, program, "--approximant"))
-		# when we can rely on the version of glue that allows non-unique programs
-		process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
-		approximant |= set(row.pyvalue for row in lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
-
+		process_ids |= lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
+	if not process_ids:
+		raise ValueError("document must contain process entries for at least one of the programs %s" % ", ".join(programs))
+	approximant = set(row.pyvalue for row in lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
 	if not approximant:
-		raise ValueError, "document must contain an approximant process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs)
+		raise ValueError("document must contain an 'approximant' process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs))
 	if len(approximant) > 1:
-		raise ValueError, "document must contain only one approximant"
+		raise ValueError("document must contain only one approximant")
 	approximant = approximant.pop()
 	templates.gstlal_valid_approximant(approximant)
 	return approximant
@@ -93,7 +86,7 @@ def check_ffinal_and_find_max_ffinal(xmldoc):
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	f_final=sngl_inspiral_table.getColumnByName("f_final")
 	if not all(f_final):
-		raise ValueError, "f_final column not populated"
+		raise ValueError("f_final column not populated")
 	return max(f_final)
 
 #
@@ -185,7 +178,7 @@ class Bank(object):
 
 def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = DefaultContentHandler):
 	# Open template bank file
-	bank_xmldoc = utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+	bank_xmldoc = ligolw_utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
@@ -232,7 +225,7 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = Def
 	root = ligolw.LIGO_LW()
 
 	# Open template bank file
-	bank_xmldoc = utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+	bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
@@ -252,22 +245,23 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = Def
 	root.appendChild(new_sngl_table)
 
 	# Add root-level scalar params
-	root.appendChild(param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
-	root.appendChild(param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
-	root.appendChild(param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
-	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
-	root.appendChild(param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
+	root.appendChild(ligolw_param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
+	root.appendChild(ligolw_param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
+	root.appendChild(ligolw_param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
+	root.appendChild(ligolw_param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
+	root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
+	root.appendChild(ligolw_param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
 
 	# apply clipping to autocorrelations and sigmasq
 	bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
 	bank.sigmasq = bank.sigmasq[clipleft:clipright]
 
 	# Add root-level arrays
-	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
-	root.appendChild(array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
-	root.appendChild(array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
-	root.appendChild(array.from_array('sigmasq', numpy.array(bank.sigmasq)))
+	# FIXME:  ligolw format now supports complex-valued data
+	root.appendChild(ligolw_array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
+	root.appendChild(ligolw_array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
+	root.appendChild(ligolw_array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
+	root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(bank.sigmasq)))
 
 	# Write bank fragments
 	for i, frag in enumerate(bank.bank_fragments):
@@ -280,19 +274,19 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = Def
 		frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 		# Add scalar params
-		el.appendChild(param.new_param('start', ligolw_types.FromPyType[float], frag.start))
-		el.appendChild(param.new_param('end', ligolw_types.FromPyType[float], frag.end))
-		el.appendChild(param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
+		el.appendChild(ligolw_param.new_param('start', ligolw_types.FromPyType[float], frag.start))
+		el.appendChild(ligolw_param.new_param('end', ligolw_types.FromPyType[float], frag.end))
+		el.appendChild(ligolw_param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
 
 		# Add arrays
-		el.appendChild(array.from_array('chifacs', frag.chifacs))
+		el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
 		if frag.mix_matrix is not None:
-			el.appendChild(array.from_array('mix_matrix', frag.mix_matrix))
-		el.appendChild(array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
+			el.appendChild(ligolw_array.from_array('mix_matrix', frag.mix_matrix))
+		el.appendChild(ligolw_array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
 		if frag.singular_values is not None:
-			el.appendChild(array.from_array('singular_values', frag.singular_values))
+			el.appendChild(ligolw_array.from_array('singular_values', frag.singular_values))
 		if frag.sum_of_squares_weights is not None:
-			el.appendChild(array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
+			el.appendChild(ligolw_array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
 
 		# Add bank fragment container to root container
 		root.appendChild(el)
@@ -301,14 +295,14 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = Def
 	xmldoc.appendChild(root)
 
 	# Write to file
-	utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
+	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
 def read_bank(filename, contenthandler = DefaultContentHandler, verbose = False):
 	"""Read an SVD bank from a LIGO_LW xml file."""
 
 	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 	root = xmldoc.childNodes[0]
 
 	# Create new SVD bank object
@@ -318,48 +312,43 @@ def read_bank(filename, contenthandler = DefaultContentHandler, verbose = False)
 	bank.sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 
 	# Read root-level scalar parameters
-	bank.filter_length = param.get_pyvalue(root, 'filter_length')
-	bank.gate_threshold = param.get_pyvalue(root, 'gate_threshold')
-	bank.logname = param.get_pyvalue(root, 'logname')
-	bank.snr_threshold = param.get_pyvalue(root, 'snr_threshold')
-	bank.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
-	bank.bank_id = param.get_pyvalue(root, 'bank_id')
+	bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
+	bank.gate_threshold = ligolw_param.get_pyvalue(root, 'gate_threshold')
+	bank.logname = ligolw_param.get_pyvalue(root, 'logname')
+	bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
+	bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
+	bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
 
 	# Read root-level arrays
-	autocorrelation_bank_real = array.get_array(root, 'autocorrelation_bank_real').array
-	autocorrelation_bank_imag = array.get_array(root, 'autocorrelation_bank_imag').array
-	bank.autocorrelation_bank = autocorrelation_bank_real + (0+1j) * autocorrelation_bank_imag
-	bank.autocorrelation_mask = array.get_array(root, 'autocorrelation_mask').array
-	bank.sigmasq = array.get_array(root, 'sigmasq').array
-
-	bank_fragments = []
+	bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
+	bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
+	bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
 
 	# Read bank fragments
-	for el in (node for node in root.childNodes if node.tagName == 'LIGO_LW'):
+	bank.bank_fragments = []
+	for el in (node for node in root.childNodes if node.tagName == ligolw.LIGO_LW.tagName):
 		frag = BankFragment.__new__(BankFragment)
 
 		# Read scalar params
-		frag.start = param.get_pyvalue(el, 'start')
-		frag.end = param.get_pyvalue(el, 'end')
-		frag.rate = param.get_pyvalue(el, 'rate')
+		frag.start = ligolw_param.get_pyvalue(el, 'start')
+		frag.end = ligolw_param.get_pyvalue(el, 'end')
+		frag.rate = ligolw_param.get_pyvalue(el, 'rate')
 
 		# Read arrays
-		frag.chifacs = array.get_array(el, 'chifacs').array
+		frag.chifacs = ligolw_array.get_array(el, 'chifacs').array
 		try:
-			frag.mix_matrix = array.get_array(el, 'mix_matrix').array
+			frag.mix_matrix = ligolw_array.get_array(el, 'mix_matrix').array
 		except ValueError:
 			frag.mix_matrix = None
-		frag.orthogonal_template_bank = array.get_array(el, 'orthogonal_template_bank').array
+		frag.orthogonal_template_bank = ligolw_array.get_array(el, 'orthogonal_template_bank').array
 		try:
-			frag.singular_values = array.get_array(el, 'singular_values').array
+			frag.singular_values = ligolw_array.get_array(el, 'singular_values').array
 		except ValueError:
 			frag.singular_values = None
 		try:
-			frag.sum_of_squares_weights = array.get_array(el, 'sum_of_squares_weights').array
+			frag.sum_of_squares_weights = ligolw_array.get_array(el, 'sum_of_squares_weights').array
 		except ValueError:
 			frag.sum_of_squares_weights = None
-		bank_fragments.append(frag)
-
-	bank.bank_fragments = bank_fragments
+		bank.bank_fragments.append(frag)
 
 	return bank
