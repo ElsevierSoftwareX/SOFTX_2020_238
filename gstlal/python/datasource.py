@@ -71,13 +71,15 @@ lsctables.use_in(ContentHandler)
 #  _Python doc string_:
 def channel_dict_from_channel_list(channel_list):
 	"""!
-	Given a list of channels like this
-	
-		channel_list = ["H1=LSC-STRAIN", H2="SOMETHING-ELSE"]
+	Given a list of channels, produce a dictionary keyed by ifo of channel names:
 
-	produce a dictionary keyed by ifo of channel names:
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
 
-		{"H1":"LSC-STRAIN", "H2":"SOMETHING-ELSE"}
+	Examples:
+
+		>>> channel_dict_from_channel_list(["H1=LSC-STRAIN", "H2=SOMETHING-ELSE"])
+		{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
@@ -87,13 +89,25 @@ def channel_dict_from_channel_list(channel_list):
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
 	"""!
 	Creates a string of channel names options from a dictionary keyed by ifos.
-	Output looks like
 
-		--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN
+	FIXME: This function exists to work around pipeline.py's inability to
+	give the same option more than once by producing a string to pass as an argument
+	that encodes the other instances of the option.
 
 	- override --channel-name with a different option by setting opt.
 	- restrict the ifo keys to a subset of the channel_dict by 
 	  setting ifos
+
+	Examples:
+
+		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'})
+		'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
+
+		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, ifos=["H1"])
+		'H1=LSC-STRAIN '
+
+		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, opt="test-string")
+		'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
 	"""
 	outstr = ""
 	if ifos is None:
@@ -122,26 +136,44 @@ state_vector_on_off_dict = {
 def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = state_vector_on_off_dict):
 	"""!
 	Produce a dictionary (keyed by detector) of on / off bit tuples from a
-	list provided on the command line. e.g., given:
+	list provided on the command line.
 
-		on_bit_list = ["V1=7", "H1=7", "L1=7"]
-		off_bit_list = ["V1=256", "H1=352", "L1=352"]
+	Takes default values from module level datasource.state_vector_on_off_dict
+	if state_vector_on_off_dict is not given
 
-	produce:
+	Inputs must be given as base 10 or 16 integers
 
-		state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+	Examples:
+
+		>>> on_bit_list = ["V1=7", "H1=7", "L1=7"]
+		>>> off_bit_list  = ["V1=256", "H1=352", "L1=352"]
+		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list)
+		{'H2': [7, 352], 'V1': [7, 256], 'H1': [7, 352], 'L1': [7, 352]}
+
+		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list,{})
+		{'V1': [7, 256], 'H1': [7, 352], 'L1': [7, 352]}
+
+		>>> on_bit_list = ["V1=0x7", "H1=0x7", "L1=0x7"]
+		>>> off_bit_list = ["V1=0x256", "H1=0x352", "L1=0x352"]
+		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list,{})
+		{'V1': [7, 598], 'H1': [7, 850], 'L1': [7, 850]}
 	"""
 	for line in on_bit_list:
 		ifo = line.split("=")[0]
 		bits = "".join(line.split("=")[1:])
 		try:
-			state_vector_on_off_dict[ifo][0] = int(bits)
-		except ValueError: # must be hex
-			state_vector_on_off_dict[ifo][0] = int(bits, 16)
+			val = int(bits)
+		except ValueError: # could be hex, that is all we support other than int
+			val = int(bits, 16)
+		try:
+			state_vector_on_off_dict[ifo][0] = val
+		except KeyError:
+			state_vector_on_off_dict[ifo] = [val, 0]
 	
 	for line in off_bit_list:
 		ifo = line.split("=")[0]
 		bits = "".join(line.split("=")[1:])
+		# shouldn't have to worry about key errors at this point
 		try:
 			state_vector_on_off_dict[ifo][1] = int(bits)
 		except ValueError: # must be hex
@@ -154,14 +186,18 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 #  _Python doc string_:
 def state_vector_on_off_list_from_bits_dict(bit_dict):
 	"""!
-	Produce a commandline useful list from a dictionary of on / off state
-	vector bits keyed by detector. e.g., given
+	Produce a tuple of useful command lines from a dictionary of on / off state
+	vector bits keyed by detector
+	
+	FIXME: This function exists to work around pipeline.py's inability to
+	give the same option more than once by producing a string to pass as an argument
+	that encodes the other instances of the option.
 
-		state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+	Examples:
 
-	produce:
-
-		--state-vector-off-bits V1=256 --state-vector-off-bits=H1=352 --state-vector-off-bits=L1=352  --state-vector-on-bits V1=7 --state-vector-on-bits=H1=7 --state-vector-on-bits=L1=7
+		>>> state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+		>>> state_vector_on_off_list_from_bits_dict(state_vector_on_off_dict)
+		('H2=7 --state-vector-on-bits=V1=103 --state-vector-on-bits=H1=7 --state-vector-on-bits=L1=7 ', 'H2=352 --state-vector-off-bits=V1=256 --state-vector-off-bits=H1=352 --state-vector-off-bits=L1=352 ')
 	"""
 
 	onstr = ""
@@ -674,3 +710,8 @@ def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -12
 		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True, name = name)
 	else:
 		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
+
+# Unit tests
+if __name__ == "__main__":
+	import doctest
+	doctest.testmod()
