@@ -14,7 +14,6 @@ dist_bin_SCRIPTS = \
 	gstlal_injections_by_local_rate_plot \
 	gstlal_segments_trim \
 	gstlal_glitch_population \
-	gstlal_omega \
 	gstlal_excesspower \
 	gstlal_excesspower_trigvis \
 	gstlal_vetoes_from_burst_inj \
