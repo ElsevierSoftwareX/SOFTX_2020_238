@@ -253,38 +253,6 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 
-#
-# data source
-#
-
-
-def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}, verbose = False):
-
-	#
-	# FIXME this is deprecated, call datasource.mkbasicsrc directly.  THIS WILL BE DELETED!
-	#
-
-	warnings.warn("mkLLOIDbasicsrc() is obsolete.  Please modify your code to call datasource.mkbasicsrc as this function will be deleted in a future release", DeprecationWarning)
-
-	class gwinfo(object):
-		def __init__(self, seekevent, instrument, detector, data_source, injection_filename, frame_segments, state_vector_on_off_dict):
-			self.channel_dict = {instrument: detector.channel}
-			self.frame_segments = frame_segments or dict([(instrument, None) for instrument in self.channel_dict])
-			self.seekevent = seekevent
-			self.state_vector_on_off_bits = state_vector_on_off_dict
-			self.data_source = data_source
-			self.frame_cache = detector.frame_cache
-			self.block_size = detector.block_size
-			self.injection_filename = injection_filename
-			self.gate_start_callback = None
-			self.gate_stop_callback = None
-			self.dq_channel_type = "LLD"
-			self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
-			self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-
-	return datasource.mkbasicsrc(pipeline, gwinfo(seekevent, instrument, detector, data_source, injection_filename, frame_segments, state_vector_on_off_dict), instrument, verbose)
-
-
 def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, zero_pad = 0):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
