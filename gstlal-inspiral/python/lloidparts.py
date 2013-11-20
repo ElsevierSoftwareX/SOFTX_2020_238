@@ -611,33 +611,6 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 	return pipeparts.mkqueue(pipeline, chisq, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
 
 
-def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
-	"""Build pipeline fragment that computes the AutoChisq from single detector SNR."""
-	#
-	# parameters
-	#
-
-	autocorrelation_length = bank.autocorrelation_bank.shape[1]
-	autocorrelation_latency = -(autocorrelation_length - 1) / 2
-
-	# FIXME something like this could be tried.
-	#mask_matrix = numpy.ones(bank.autocorrelation_bank.shape, numpy.int)
-	#stix = autocorrelation_latency - 10
-	#mask_matrix[:,stix:] = 0
-
-	#
-	# \chi^{2}
-	#
-
-	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = None, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
-	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_after_chisq" % bank.logname)
-
-	#chisq = pipeparts.mktee(pipeline, chisq)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
-
-	return chisq
-
-
 def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydump_segment = None, logname = ""):
 	"""Build pipeline fragment that converts single detector SNR and Chisq into triggers."""
 	#
@@ -748,28 +721,15 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
-		# FIXME you get a different trigger generator depending on the chisq calculation :/
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
-			# peak finding window (n) in samples is four seconds at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, 1 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			# peak finding window (n) in samples is 1 second at max rate, ie max(rates)
+			head = pipeparts.mkitac(pipeline, snr, 1 * max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs.add(head)
-			# old way
-			# snr = pipeparts.mktee(pipeline, snr)
-			# chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
 		else:
-			chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank, block_duration)
-			triggersrcs.add(mkLLOIDSnrChisqToTriggers(
-				pipeline,
-				pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
-				chisq,
-				bank,
-				verbose = verbose,
-				nxydump_segment = nxydump_segment,
-				logname = suffix
-			))
+			raise NotImplementedError("Currently only 'autochisq' is supported")
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
@@ -850,12 +810,10 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs.add(head)
-			# old way
-			# chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
