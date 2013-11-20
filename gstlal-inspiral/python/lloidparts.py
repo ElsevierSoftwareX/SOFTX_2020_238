@@ -253,18 +253,6 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 
-def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, zero_pad = 0):
-	"""Build pipeline stage to whiten and downsample h(t)."""
-
-	#
-	# FIXME this function is deprecated, should be deleted
-	#
-
-	warnings.warn("mkLLOIDsrc() is deprecated.  Call multirate_datasource.mkwhitened_multirate_src() instead", DeprecationWarning)
-
-	return multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd, psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = zero_pad, width = 32)
-
-
 #
 # one instrument, one template bank
 #
