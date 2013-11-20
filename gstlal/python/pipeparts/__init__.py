@@ -740,7 +740,7 @@ def mkpeak(pipeline, src, n):
 	return mkgeneric(pipeline, src, "lal_peak", n = n)
 
 
-def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0, sigmasq = None):
+def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
 	properties = {
 		"n": n,
 		"bank_filename": bank,
@@ -748,6 +748,8 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0
 	}
 	if autocorrelation_matrix is not None:
 		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)
+	if mask_matrix is not None:
+		properties["autocorrelation_mask"] = mask_matrix
 	if sigmasq is not None:
 		properties["sigmasq"] = sigmasq
 	return mkgeneric(pipeline, src, "lal_itac", **properties)
