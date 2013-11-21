@@ -578,7 +578,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME make wait_time adjustable through web interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
 		elif gw_data_source_info.data_source == "framexmit":
-			src = pipeparts.mkframexmitsrc(pipeline, multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1])
+			src = pipeparts.mkframexmitsrc(pipeline, multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1], wait_time = 120)
 		else:
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
