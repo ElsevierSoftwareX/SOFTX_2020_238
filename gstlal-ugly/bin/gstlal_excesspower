@@ -177,8 +177,8 @@ datasource.append_options(parser)
 
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Required.", default=None)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
-parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
+parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
 parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
 parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
@@ -186,6 +186,7 @@ parser.add_option("-C", "--clustering", dest="clustering", action="store_true", 
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
 parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
+parser.add_option("-o", "--frequency-overlap", type=float, default=0.0, dest="frequency_overlap", help="Overlap frequency bands by this percentage. Default is 0." )
 parser.add_option("-d", "--drop-start-time", type=float, default=120.0, dest="drop_time", help="Drop this amount of time (in seconds) in the beginning of a run. This is to allow time for the whitener to settle to the mean PSD. Default is 120 s.")
 
 scan_sec = OptionGroup(parser, "Time-frequency scan", "Use these options to scan over a given segment of time for multiple time-frequency maps. Both must be specified to scan a segment of time. If the segment of time begins in the whitening segment, it will be clipped to be outside of it.")
@@ -318,6 +319,10 @@ handler.max_duration = cfg.getfloat( "tf_parameters", "max-duration" )
 # Number of resolutions levels. Can't be less than 1, and can't be greater than log_2((fhigh-flow)/base_band)
 max_bandwidth = cfg.getfloat( "tf_parameters", "max-bandwidth" )
 handler.max_level = int(round(math.log(max_bandwidth / handler.base_band, 2)))
+# Frequency band overlap -- in our case, handler uses 1 - frequency overlap
+if options.frequency_overlap > 1 or options.frequency_overlap < 0:
+	sys.exit("Frequency overlap must be between 0 and 1.")
+handler.frequency_overlap = options.frequency_overlap
 
 # DOF options -- this affects which tile types will be calculated
 max_dof, fix_dof = None, None
