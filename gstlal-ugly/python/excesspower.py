@@ -553,9 +553,7 @@ def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_over
 		# they extend to account for the overlap at the ends
 		cfreq = flow + (int(band) >> (level+1)) + band/2
 
-	# This might overestimate the number of output channels by one, but that
-	# shoudn't be a problem since the last channel would simply never be used.
-	while cfreq <= fhigh:
+	while cfreq + band <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration * ndof
