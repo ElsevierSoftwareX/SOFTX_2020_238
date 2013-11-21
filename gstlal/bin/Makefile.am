@@ -3,8 +3,7 @@ dist_bin_SCRIPTS = \
 	gstlal_fake_frames_pipe \
 	gstlal_launch \
 	gstlal_ligo_data_find_check \
-	gstlal_play_frames \
-	gstlal_play_injections \
+	gstlal_play \
 	gstlal_plot_psd \
 	gstlal_psd_xml_from_asd_txt \
 	gstlal_reference_psd \
