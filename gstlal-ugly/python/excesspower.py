@@ -333,7 +333,7 @@ def build_filter_from_xml(sb_table, psd, corr=None):
 	for i, row in enumerate(sb_table):
 		# cfreq + band since the filters are actually 2*band wide
 		if row.central_freq + row.bandwidth > rate/2:
-			raise ValueError("Filter high frequency (%f) requested is higher than Nyquist (%f), adjusting to match." % (row.central_freq + row.bandwidth, rate/2.0))
+			raise ValueError("Filter high frequency (%f) requested is higher than Nyquist (%f)." % (row.central_freq + row.bandwidth, rate/2.0))
 			continue
 
 		if row.central_freq + row.bandwidth == rate/2:
