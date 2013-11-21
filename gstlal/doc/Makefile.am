@@ -7,16 +7,22 @@ doxyfile.stamp:
 	$(DOXYGEN) Doxyfile
 	echo Timestamp > doxyfile.stamp
 
+html/*.* html/search/*.* : doxyfile.stamp
+
+# FIXME this doesn't feel right
+# Will uninstall work??
+nobase_pkgdoc_DATA = html/*.* html/search/*.*
+
 CLEANFILES = doxyfile.stamp
 
-clean-local : clean-html clean-latex clean-man
+clean-local : clean-local-html clean-local-latex clean-local-man
 
-clean-man: 
-	rm -rf $(top_srcdir)/docs/man
+clean-local-man: 
+	rm -rf man
 
-clean-html :
-	-rm -rvf $(top_srcdir)/docs/html/
+clean-local-html :
+	-rm -rf html
 
-clean-latex :
-	-rm -rvf $(top_srcdir)/docs/latex/
+clean-local-latex :
+	-rm -rf latex
 endif
