@@ -50,6 +50,18 @@ __version__ = "FIXME"
 __date__ = "FIXME"
 
 
+## 
+# @file
+#
+# A file that contains the pipeparts module code
+#
+
+##
+# @package python.pipeparts
+#
+# pipeparts module
+
+
 #
 # =============================================================================
 #
@@ -246,12 +258,14 @@ def mkhistogram(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_histogramplot")
 
 
+## Adds a <a href="@gstlaldoc/GSTLALSegmentSrc.html">lal_segmentsrc</a> element to a pipeline with useful default properties
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output = False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
 	return mkgeneric(pipeline, None, "lal_segmentsrc", blocksize = blocksize, segment_list = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list), invert_output = invert_output)
 
 
+## Adds a <a href="@gstlaldoc/GstLALCacheSrc.html">lal_cachesrc</a> element to a pipeline with useful default properties
 def mklalcachesrc(pipeline, location, **properties):
 	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, **properties)
 
@@ -268,6 +282,7 @@ def mkigwdparse(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_igwdparse", **properties)
 
 
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-uridecodebin.html">uridecodebin</a> element to a pipeline with useful default properties
 def mkuridecodebin(pipeline, uri, caps = "application/x-igwd-frame,framed=true", **properties):
 	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else gst.Caps(caps), **properties)
 
@@ -300,6 +315,7 @@ def mkframecppfilesink(pipeline, src, message_forward = True, **properties):
 	return elem
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-multifilesink.html">multifilesink</a> element to a pipeline with useful default properties
 def mkmultifilesink(pipeline, src, next_file = 0, sync = False, async = False, **properties):
 	return mkgeneric(pipeline, src, "multifilesink", next_file = next_file, sync = sync, async = async, **properties)
 
@@ -310,43 +326,52 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 	return mkgeneric(pipeline, None, "ndssrc", blocksize = blocksize, port = port, host = host, channel_name = "%s:%s" % (instrument, channel_name), channel_type = channel_type)
 
 
+## Adds a <a href="@gstdoc/gstreamer-plugins-capsfilter.html">capsfilter</a> element to a pipeline with useful default properties
 def mkcapsfilter(pipeline, src, caps):
 	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-capssetter.html">capssetter</a> element to a pipeline with useful default properties
 def mkcapssetter(pipeline, src, caps, **properties):
 	return mkgeneric(pipeline, src, "capssetter", caps = gst.Caps(caps), **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALStateVector.html">lal_statevector</a> element to a pipeline with useful default properties
 def mkstatevector(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_statevector", **properties)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-taginject.html">taginject</a> element to a pipeline with useful default properties
 def mktaginject(pipeline, src, tags):
 	return mkgeneric(pipeline, src, "taginject", tags = tags)
 
 
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-audiotestsrc.html">audiotestsrc</a> element to a pipeline with useful default properties
 def mkaudiotestsrc(pipeline, **properties):
 	return mkgeneric(pipeline, None, "audiotestsrc", **properties)
 
 
+## see documentation for mktaginject() mkcapsfilter() and mkaudiotestsrc()
 def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
 	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=%d" % rate), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiofirfilter.html">audiofirfilter</a> element to a pipeline with useful default properties
 def mkfirfilter(pipeline, src, kernel, latency, **properties):
 	properties.update((name, val) for name, val in (("kernel", kernel), ("latency", latency)) if val is not None)
 	return mkgeneric(pipeline, src, "audiofirfilter", **properties)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audioiirfilter.html">audioiirfilter</a> element to a pipeline with useful default properties
 def mkiirfilter(pipeline, src, a, b):
 	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
 	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
 	return mkgeneric(pipeline, src, "audioiirfilter", a = a, b = b)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALShift.html">lal_shift</a> element to a pipeline with useful default properties
 def mkshift(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_shift", **properties)
 
@@ -372,58 +397,67 @@ def mkfakeadvvirgosrc(pipeline, location = None, instrument = None, channel_name
 	return mkgeneric(pipeline, None, "lal_fakeadvvirgosrc", **properties)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-progressreport.html">progress_report</a> element to a pipeline with useful default properties
 def mkprogressreport(pipeline, src, name):
 	return mkgeneric(pipeline, src, "progressreport", do_query = False, name = name)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALSimulation.html">lal_simulation</a> element to a pipeline with useful default properties
 def mkinjections(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "lal_simulation", xml_location = filename)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiochebband.html">audiochebband</a> element to a pipeline with useful default properties
 def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
 	return mkgeneric(pipeline, src, "audiochebband", lower_frequency = lower_frequency, upper_frequency = upper_frequency, poles = poles)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiocheblimit.html">audiocheblimit</a> element to a pipeline with useful default properties
 def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
 	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audioamplify.html">audioamplify</a> element to a pipeline with useful default properties
 def mkaudioamplify(pipeline, src, amplification):
 	return mkgeneric(pipeline, src, "audioamplify", clipping_method = 3, amplification = amplification)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALAudioUnderSample.html">lal_audioundersample</a> element to a pipeline with useful default properties
 def mkaudioundersample(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_audioundersample")
 
 
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-audioresample.html">audioresample</a> element to a pipeline with useful default properties
 def mkresample(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audioresample", **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
 def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **properties):
 	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **properties)
 
 
+## Adds a <a href="@gstdoc/gstreamer-plugins-tee.html">tee</a> element to a pipeline with useful default properties
 def mktee(pipeline, src):
 	return mkgeneric(pipeline, src, "tee")
 
 
+## Adds a <a href="@gstdoc/gstreamer-plugins-queue.html">queue</a> element to a pipeline with useful default properties
 def mkqueue(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "queue", **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
 def mkdrop(pipeline, src, drop_samples = 0):
 	return mkgeneric(pipeline, src, "lal_drop", drop_samples = drop_samples)
 
 
-def mkdelay(pipeline, src, delay = 0):
-	return mkgeneric(pipeline, src, "lal_delay", delay = delay)
-
-
+## Adds a <a href="@gstlaldoc/GSTLALNoFakeDisconts.html">lal_nofakedisconts</a> element to a pipeline with useful default properties
 def mknofakedisconts(pipeline, src, silent = True):
 	return mkgeneric(pipeline, src, "lal_nofakedisconts", silent = silent)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALFIRBank.html">lal_firbank</a> element to a pipeline with useful default properties
 def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_firbank", **properties)
@@ -457,10 +491,12 @@ def mkpow(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "pow", **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALReblock.html">lal_reblock</a> element to a pipeline with useful default properties
 def mkreblock(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_reblock", **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALSumSquares.html">lal_sumsquares</a> element to a pipeline with useful default properties
 def mksumsquares(pipeline, src, weights = None):
 	if weights is not None:
 		return mkgeneric(pipeline, src, "lal_sumsquares", weights = weights)
@@ -468,6 +504,7 @@ def mksumsquares(pipeline, src, weights = None):
 		return mkgeneric(pipeline, src, "lal_sumsquares")
 
 
+## Adds a <a href="@gstlaldoc/GSTLALGate.html">lal_gate</a> element to a pipeline with useful default properties
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
 	if threshold is not None:
 		elem = mkgeneric(pipeline, None, "lal_gate", threshold = threshold, **properties)
@@ -485,6 +522,7 @@ def mkbitvectorgen(pipeline, src, bit_vector, **properties):
 	return mkgeneric(pipeline, src, "lal_bitvectorgen", bit_vector = bit_vector, **properties)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALMatrixMixer.html">lal_matrixmixer</a> element to a pipeline with useful default properties
 def mkmatrixmixer(pipeline, src, matrix = None):
 	if matrix is not None:
 		return mkgeneric(pipeline, src, "lal_matrixmixer", matrix = matrix)
@@ -492,10 +530,12 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 		return mkgeneric(pipeline, src, "lal_matrixmixer")
 
 
+## Adds a <a href="@gstlaldoc/GSTLALToggleComplex.html">lal_togglecomplex</a> element to a pipeline with useful default properties
 def mktogglecomplex(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_togglecomplex")
 
 
+## Adds a <a href="@gstlaldoc/GSTLALAutoChiSq.html">lal_autochisq</a> element to a pipeline with useful default properties
 def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None, latency = 0, snr_thresh=0):
 	properties = {}
 	if autocorrelation_matrix is not None:
@@ -509,10 +549,12 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None
 	return mkgeneric(pipeline, src, "lal_autochisq", **properties)
 
 
+## Adds a <a href="@gstdoc/gstreamer-plugins-fakesink.html">fakesink</a> element to a pipeline with useful default properties
 def mkfakesink(pipeline, src):
 	return mkgeneric(pipeline, src, "fakesink", sync = False, async = False)
 
 
+## Adds a <a href="@gstdoc/gstreamer-plugins-filesink.html">filesink</a> element to a pipeline with useful default properties
 def mkfilesink(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
 
@@ -575,6 +617,7 @@ def mkavimux(pipeline, src):
 	return mkgeneric(pipeline, src, "avimux")
 
 
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-audioconvert.html">audioconvert</a> element to a pipeline with useful default properties
 def mkaudioconvert(pipeline, src, caps_string = None):
 	elem = mkgeneric(pipeline, src, "audioconvert")
 	if caps_string is not None:
@@ -582,6 +625,7 @@ def mkaudioconvert(pipeline, src, caps_string = None):
 	return elem
 
 
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-audiorate.html">audiorate</a> element to a pipeline with useful default properties
 def mkaudiorate(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audiorate", **properties)
 
@@ -621,7 +665,9 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	pipeline.add(*elems)
 	gst.element_link_many(src, *elems)
 
-
+# FIXME no specific alias for this url since this library only has one element.
+# DO NOT DOCUMENT OTHER CODES THIS WAY! Use @gstdoc @gstpluginsbasedoc etc.
+## Adds a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gstreamer-app.html">appsink</a> element to a pipeline with useful default properties
 def mkappsink(pipeline, src, max_buffers = 1, drop = False, **properties):
 	return mkgeneric(pipeline, src, "appsink", sync = False, async = False, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
 
@@ -736,6 +782,7 @@ def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz 
 	return mkgeneric(pipeline, src, "lal_checktimestamps", name = name, silent = silent, timestamp_fuzz = timestamp_fuzz)
 
 
+## Adds a <a href="@gstlaldoc/GSTLALPeak.html">lal_peak</a> element to a pipeline with useful default properties
 def mkpeak(pipeline, src, n):
 	return mkgeneric(pipeline, src, "lal_peak", n = n)
 
