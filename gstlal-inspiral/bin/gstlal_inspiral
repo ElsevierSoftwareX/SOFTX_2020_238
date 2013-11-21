@@ -464,9 +464,6 @@ else:
 
 	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
 	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
-	# FIXME get rid of this someday: Repair the shared memory just in case before starting
-	for partition in ("LHO_Data", "LLO_Data", "VIRGO_Data"):
-		subprocess.call(["smrepair", partition])
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
