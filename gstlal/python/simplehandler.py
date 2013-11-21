@@ -34,6 +34,7 @@ gobject.threads_init()
 import pygst
 pygst.require('0.10')
 import gst
+import signal
 
 
 #
@@ -89,3 +90,29 @@ class Handler(object):
 			#self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+
+class OneTimeSignalHandler(object):
+	def __init__(self, pipeline, signals = [signal.SIGINT, signal.SIGTERM]):
+		self.pipeline = pipeline
+		self.count = 0
+		for sig in signals:
+			signal.signal(sig, self)
+
+	def do_on_call(self, signum, frame):
+		# over ride this for your subclass
+		pass
+
+	def __call__(self, signum, frame):
+		self.count += 1
+		if self.count == 1:
+			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			try:
+				self.do_on_call(signum, frame)
+				if not self.pipeline.send_event(gst.event_new_eos()):
+					raise Exception("pipeline.send_event(EOS) returned failure")
+			except Exception, e:
+				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+				os._exit(1)
+		else:
+				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
