@@ -333,17 +333,17 @@ class EPHandler( Handler ):
 		"""
 		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.filter_bank, self.freq_filter_bank = ep.build_filter( 
-			fhigh = self.fhigh, 
-			flow = self.flow, 
-			rate = self.rate, 
-			psd = self.psd, 
-			corr = self.spec_corr, 
-			b_wind = self.base_band 
+		if not self.filter_xml.has_key((0,1)):
+			self.build_filter_xml( res_level = 0, ndof = 1 )
+
+		self.filter_bank, self.freq_filter_bank = ep.build_filter_from_xml( 
+			self.filter_xml[(0,1)],
+			self.psd,
+			self.spec_corr
 		)
 		return self.filter_bank
 
-	def build_filter_xml( self, res_level, ndof=1, frequency_overlap=0, loc="", verbose=False ):
+	def build_filter_xml( self, res_level, ndof=1, loc="", verbose=False ):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
@@ -354,13 +354,24 @@ class EPHandler( Handler ):
 			1.0 / (2*self.base_band*2**res_level), # resolution level starts from 0
 			res_level,
 			ndof,
-			frequency_overlap,
+			self.frequency_overlap,
 			self.inst
 		)
+
+		# Store the filter name so we can destroy it later
 		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
 		self.filter_xml[output] = self.filter_xml[(res_level, ndof)]
-		utils.write_filename( self.filter_xml[output], output, verbose = verbose,
-		       gz = (output or "stdout").endswith(".gz") )
+
+		# Write it
+		self.lock.acquire()
+		utils.write_filename( self.filter_xml[output], 
+			output, 
+			verbose = verbose,
+		    gz = (output or "stdout").endswith(".gz") )
+		self.lock.release()
+
+		# Just get the table we want
+		self.filter_xml[(res_level, ndof)] = table.get_table(self.filter_xml[(res_level, ndof)], lsctables.SnglBurstTable.tableName )
 		return output
 
 	def destroy_filter_xml( self, loc="" ):
@@ -400,6 +411,7 @@ class EPHandler( Handler ):
 		#self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
+		print >>sys.stderr, "...done."
 
 	def make_process_tables( self, options=None, xmldoc=None ):
 		"""
