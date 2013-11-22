@@ -37,6 +37,12 @@ import gst
 import signal
 
 
+## @file
+# The simplehander module
+
+## @package python.simplehandler
+# The simplehander module
+
 #
 # =============================================================================
 #
@@ -47,7 +53,7 @@ import signal
 
 
 class Handler(object):
-	"""
+	"""!
 	A simple handler that prints pipeline error messages to stderr, and
 	stops the pipeline and terminates the mainloop at EOS.  Complex
 	applications will need to write their own pipeline handler, but for
@@ -63,7 +69,7 @@ class Handler(object):
 		bus.connect("message", self.on_message)
 
 	def do_on_message(self, bus, message):
-		"""
+		"""!
 		Add extra message handling by overriding this in your
 		subclass.  If this method returns True, no further message
 		handling is performed.  If this method returns False,
@@ -93,6 +99,11 @@ class Handler(object):
 
 
 class OneTimeSignalHandler(object):
+	"""!
+	A helper class for application signal handling.  Use this to help your
+	application to cleanly shutdown gstreamer pipelines when responding to e.g.,
+	ctrl+c.
+	"""
 	def __init__(self, pipeline, signals = [signal.SIGINT, signal.SIGTERM]):
 		self.pipeline = pipeline
 		self.count = 0
@@ -100,7 +111,9 @@ class OneTimeSignalHandler(object):
 			signal.signal(sig, self)
 
 	def do_on_call(self, signum, frame):
-		# over ride this for your subclass
+		"""!
+		Over ride this for your subclass
+		"""
 		pass
 
 	def __call__(self, signum, frame):
