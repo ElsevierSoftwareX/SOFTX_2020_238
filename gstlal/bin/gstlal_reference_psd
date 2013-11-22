@@ -17,6 +17,35 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """Estimate power spectra from LIGO frames or simulated h(t)."""
 
+## @file gstlal_reference_psd
+# This program will measure a power spectral density from data; See gstlal_reference_psd for help and usage.
+
+## @package gstlal_reference_psd
+#
+# This program will measure the PSD of data  Its input is anything
+# supported by datasource.py.
+#
+# #### Graph of the gsreamer pipeline
+#
+# Please see reference_psd.measure_psd()
+#
+# ### Usage cases
+#
+# -# Measuring the PSD of low-latency data (e.g. on CIT cluster)
+#
+#		gstlal_reference_psd --data-source framexmit --channel-name=L1=FAKE-STRAIN  --write-psd psd.xml.gz
+#
+# -# Other things are certainly possible, please add them!
+#
+# ### Command line options
+#
+# See datasource.append_options() for common command line options shared among different programs
+#
+#	+ `--write-psd` [filename]: Write measured noise spectrum to this LIGO light-weight XML file (required)
+#	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the PSD, default 16384 Hz
+#	+ `--psd-fft-length` [int] (s): FFT length, default 8 seconds
+#	+ `--verbose`: Be verbose
+#
 
 #
 # parse command line
