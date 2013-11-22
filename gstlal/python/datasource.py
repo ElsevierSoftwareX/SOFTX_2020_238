@@ -236,7 +236,7 @@ class GWDataSourceInfo(object):
 	"""!
 	Hold the data associated with data source command lines.
 	"""
-	## See python.datasource.append_options()
+	## See datasource.append_options()
 	def __init__(self, options):
 		"""!
 		Initialize a GWDataSourceInfo class instance from command line options specified by append_options()
@@ -446,8 +446,8 @@ def do_seek(pipeline, seekevent):
 #	node [shape=record fontsize=10 fontname="Verdana"];
 #	rankdir=LR;
 # 	lal_gate;
-#	lal_segmentsrc [URL="\ref python.pipeparts.mksegmentsrc()"];
-#	lal_gate [URL="\ref python.pipeparts.mkgate()"];
+#	lal_segmentsrc [URL="\ref pipeparts.mksegmentsrc()"];
+#	lal_gate [URL="\ref pipeparts.mkgate()"];
 #	in [label="?"];
 #	out [label="?"];
 #	in -> lal_gate -> out;
@@ -476,30 +476,30 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #      compound=true;
 #      node [shape=record fontsize=10 fontname="Verdana"];
 #      subgraph clusterfakesrc {
-#              fake_0 [label="fakesrc: white, silence, AdvVirgo, LIGO, AdvLIGO", URL="\ref python.pipeparts.mkfakesrc()"];
+#              fake_0 [label="fakesrc: white, silence, AdvVirgo, LIGO, AdvLIGO", URL="\ref pipeparts.mkfakesrc()"];
 #              color=black;
 #              label="Possible path #1";
 #      }
 #      subgraph clusterframes {
 #              color=black;
-#              frames_0 [label="lalcachesrc: frames", URL="\ref python.pipeparts.mklalcachesrc()"];
-#              frames_1 [label ="framecppchanneldemux", URL="\ref python.pipeparts.mkframecppchanneldemux()"];
-#              frames_2 [label ="queue", URL="\ref python.pipeparts.mkqueue()"];
-#              frames_3 [label ="gate (if user provides segments)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkgate()"];
-#              frames_4 [label ="audiorate", URL="\ref python.pipeparts.mkaudiorate()"];
+#              frames_0 [label="lalcachesrc: frames", URL="\ref pipeparts.mklalcachesrc()"];
+#              frames_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
+#              frames_2 [label ="queue", URL="\ref pipeparts.mkqueue()"];
+#              frames_3 [label ="gate (if user provides segments)", style=filled, color=lightgrey, URL="\ref pipeparts.mkgate()"];
+#              frames_4 [label ="audiorate", URL="\ref pipeparts.mkaudiorate()"];
 #              frames_0 -> frames_1 -> frames_2 -> frames_3 ->frames_4;
 #              label="Possible path #2";
 #      }
 #	subgraph clusteronline {
 #		color=black;
-#		online_0 [label="lvshmsrc|framexmitsrc", URL="\ref python.pipeparts.mklvshmsrc()"];
-#		online_1 [label ="framecppchanneldemux", URL="\ref python.pipeparts.mkframecppchanneldemux()"];
-#		online_2a [label ="strain queue", URL="\ref python.pipeparts.mkqueue()"];
-#		online_2b [label ="statevector queue", URL="\ref python.pipeparts.mkqueue()"];
-#		online_3 [label ="statevector", URL="\ref python.pipeparts.mkstatevector()"];
-#		online_4 [label ="gate", URL="\ref python.pipeparts.mkgate()"];
-#		online_5 [label ="audiorate", URL="\ref python.pipeparts.mkaudiorate()"];
-#		online_6 [label ="queue", URL="\ref python.pipeparts.mkqueue()"];
+#		online_0 [label="lvshmsrc|framexmitsrc", URL="\ref pipeparts.mklvshmsrc()"];
+#		online_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
+#		online_2a [label ="strain queue", URL="\ref pipeparts.mkqueue()"];
+#		online_2b [label ="statevector queue", URL="\ref pipeparts.mkqueue()"];
+#		online_3 [label ="statevector", URL="\ref pipeparts.mkstatevector()"];
+#		online_4 [label ="gate", URL="\ref pipeparts.mkgate()"];
+#		online_5 [label ="audiorate", URL="\ref pipeparts.mkaudiorate()"];
+#		online_6 [label ="queue", URL="\ref pipeparts.mkqueue()"];
 #		online_0 -> online_1;
 #		online_1 -> online_2a;
 #		online_1 -> online_2b;
@@ -509,14 +509,14 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #		label="Possible path #3";
 #	}
 #	subgraph clusternds {
-#		nds_0 [label="ndssrc", URL="\ref python.pipeparts.mkndssrc()"];
+#		nds_0 [label="ndssrc", URL="\ref pipeparts.mkndssrc()"];
 #		color=black;
 #		label="Possible path #4";
 #	}
-#	audioconv [label="audioconvert", URL="\ref python.pipeparts.mkaudioconvert()"];
-#	progress [label="progressreport (if verbose)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkprogressreport()"];
-#	sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkinjections()"];
-#	queue [label="queue (if injections requested)", style=filled, color=lightgrey, URL="\ref python.pipeparts.mkqueue()"];
+#	audioconv [label="audioconvert", URL="\ref pipeparts.mkaudioconvert()"];
+#	progress [label="progressreport (if verbose)", style=filled, color=lightgrey, URL="\ref pipeparts.mkprogressreport()"];
+#	sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey, URL="\ref pipeparts.mkinjections()"];
+#	queue [label="queue (if injections requested)", style=filled, color=lightgrey, URL="\ref pipeparts.mkqueue()"];
 #
 #	// The connections
 #	fake_0 -> audioconv [ltail=clusterfakesrc];
@@ -682,10 +682,10 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 #	compound=true;
 #	node [shape=record fontsize=10 fontname="Verdana"];
 #	rankdir=LR;
-# 	tee [URL="\ref python.pipeparts.mktee()"];
-# 	inputqueue [URL="\ref python.pipeparts.mkqueue()"];
-# 	controlqueue [URL="\ref python.pipeparts.mkqueue()"];
-#	lal_gate [URL="\ref python.pipeparts.mkgate()"];
+# 	tee [URL="\ref pipeparts.mktee()"];
+# 	inputqueue [URL="\ref pipeparts.mkqueue()"];
+# 	controlqueue [URL="\ref pipeparts.mkqueue()"];
+#	lal_gate [URL="\ref pipeparts.mkgate()"];
 #	in [label="?"];
 #	out [label="?"];
 #	in -> tee -> inputqueue -> lal_gate -> out;
