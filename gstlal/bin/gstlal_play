@@ -76,14 +76,14 @@ from pylal import series as lalseries
 #	"mkcapsfilter()" [URL="\ref python.datasource.mkcapsfilter()", style=filled, color=lightgrey];
 #	"mkaudiochebband()" [URL="\ref python.datasource.mkaudiochebband()", style=filled, color=lightgrey];
 #	"mkaudiocheblimit()" [URL="\ref python.datasource.mkaudiocheblimit()", style=filled, color=lightgrey];
-#	"mkaudioconvert()" [URL="\ref python.datasource.mkaudioconvert)"];
+#	"mkaudioconvert()" [URL="\ref python.datasource.mkaudioconvert()"];
 #	"mkaudioamplify()" [URL="\ref python.datasource.mkaudioamplify()"];
-#	"mkautoaudiosink()" [URL="\ref python.datasource.mkautoaudiosink()"];
-#	"mkwavenc()" [URL="\ref python.datasource.mkwavenc()"];
-#	"mkflacenc()" [URL="\ref python.datasource.mkflacenc()"];
-#	"mkvorbisenc()" [URL="\ref python.datasource.mkvorbisenc()"];
-#	"mkfilesink()" [URL="\ref python.datasource.mkfilesink()"];
-#	"mknxydumpsink()" [URL="\ref python.datasource.mknxydumpsink()"];
+#	"mkautoaudiosink()" [URL="\ref python.datasource.mkautoaudiosink()", style=filled, color=lightgrey];
+#	"mkwavenc()" [URL="\ref python.datasource.mkwavenc()", style=filled, color=lightgrey];
+#	"mkflacenc()" [URL="\ref python.datasource.mkflacenc()", style=filled, color=lightgrey];
+#	"mkvorbisenc()" [URL="\ref python.datasource.mkvorbisenc()", style=filled, color=lightgrey];
+#	"mkfilesink()" [URL="\ref python.datasource.mkfilesink()", style=filled, color=lightgrey];
+#	"mknxydumpsink()" [URL="\ref python.datasource.mknxydumpsink()", style=filled, color=lightgrey];
 #
 #	// connections
 #
@@ -131,13 +131,14 @@ from pylal import series as lalseries
 #
 #			gstlal_play --data-source silence --gps-start-time 966383960 --gps-end-time 966384960 --channel-name=L1=FAKE-STRAIN  --injections=BNS-MDC1-FIXEDMASS.xml --output test.txt
 #
+# -# Other things are certainly possible.  Please add some!
 #
 # ### Command line options ###
 #
 # See datasource.append_options() for common command line options shared among different programs
 #
 #	+ `--output` [filename]: Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr
-#	+ `--rate` [int] (Hz): Downsample input to this sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.
+#	+ `--rate` [int] (Hz): Downsample input to this sample rate. Default = 4096 Hz.  Must be @f$ \leq @f$ input sample rate or else you will get a caps negotiation error.
 #	+ `--whiten`: Whiten the time series (default = do not whiten.
 #	+ `--reference-psd` [filename]: When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.
 #	+ `--low-pass-filter` [float] (Hz): Low pass filter frequency (default = no low-pass filter).  Low-pass filter is applied after whitening.
@@ -232,14 +233,13 @@ else:
 head = pipeparts.mkaudioconvert(pipeline, pipeparts.mkaudioamplify(pipeline, head, options.amplification))
 
 if options.output is None:
-	# FIXME never use mkgeneric directly
-	pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, head), "autoaudiosink")
+	pipeparts.mkautoaudiosink(pipeline, head)
 elif options.output.endswith(".wav"):
 	pipeparts.mkfilesink(pipeline, pipeparts.mkwavenc(pipeline, head), options.output)
 elif options.output.endswith(".flac"):
 	pipeparts.mkfilesink(pipeline, pipeparts.mkflacenc(pipeline, head), options.output)
 elif options.output.endswith(".ogg"):
-	head = pipeparts.mkoggmux(pipeline, pipeparts.mkgeneric(pipeline, head, "vorbisenc"))
+	head = pipeparts.mkoggmux(pipeline, pipeparts.mkvorbisenc(pipeline, head))
 	pipeparts.mkfilesink(pipeline, head, options.output)
 elif options.output.endswith(".txt") or options.output in ("/dev/stdout", "/dev/stderr"):
 	pipeparts.mknxydumpsink(pipeline, head, options.output)
