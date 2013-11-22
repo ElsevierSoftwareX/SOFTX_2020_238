@@ -116,6 +116,8 @@ from pylal import series as lalseries
 #
 # ### Usage cases
 #
+# See datasource.append_options() for additional usage cases for datasource specific command line options
+#
 # -# Viewing low latency data in stdout (e.g. on CIT cluster)
 #	- Note ctrl+c kills this
 #
