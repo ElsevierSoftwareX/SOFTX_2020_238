@@ -70,20 +70,20 @@ from pylal import series as lalseries
 #
 #	// nodes
 #
-#	"mkbasicsrc()" [URL="\ref python.datasource.mkbasicsrc()"];
-#	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref python.multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
-#	"mkresample()" [URL="\ref python.datasource.mkresample()", style=filled, color=lightgrey];
-#	"mkcapsfilter()" [URL="\ref python.datasource.mkcapsfilter()", style=filled, color=lightgrey];
-#	"mkaudiochebband()" [URL="\ref python.datasource.mkaudiochebband()", style=filled, color=lightgrey];
-#	"mkaudiocheblimit()" [URL="\ref python.datasource.mkaudiocheblimit()", style=filled, color=lightgrey];
-#	"mkaudioconvert()" [URL="\ref python.datasource.mkaudioconvert()"];
-#	"mkaudioamplify()" [URL="\ref python.datasource.mkaudioamplify()"];
-#	"mkautoaudiosink()" [URL="\ref python.datasource.mkautoaudiosink()", style=filled, color=lightgrey];
-#	"mkwavenc()" [URL="\ref python.datasource.mkwavenc()", style=filled, color=lightgrey];
-#	"mkflacenc()" [URL="\ref python.datasource.mkflacenc()", style=filled, color=lightgrey];
-#	"mkvorbisenc()" [URL="\ref python.datasource.mkvorbisenc()", style=filled, color=lightgrey];
-#	"mkfilesink()" [URL="\ref python.datasource.mkfilesink()", style=filled, color=lightgrey];
-#	"mknxydumpsink()" [URL="\ref python.datasource.mknxydumpsink()", style=filled, color=lightgrey];
+#	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
+#	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
+#	"mkresample()" [URL="\ref pipeparts.mkresample()", style=filled, color=lightgrey];
+#	"mkcapsfilter()" [URL="\ref pipeparts.mkcapsfilter()", style=filled, color=lightgrey];
+#	"mkaudiochebband()" [URL="\ref pipeparts.mkaudiochebband()", style=filled, color=lightgrey];
+#	"mkaudiocheblimit()" [URL="\ref pipeparts.mkaudiocheblimit()", style=filled, color=lightgrey];
+#	"mkaudioconvert()" [URL="\ref pipeparts.mkaudioconvert()"];
+#	"mkaudioamplify()" [URL="\ref pipeparts.mkaudioamplify()"];
+#	"mkautoaudiosink()" [URL="\ref pipeparts.mkautoaudiosink()", style=filled, color=lightgrey];
+#	"mkwavenc()" [URL="\ref pipeparts.mkwavenc()", style=filled, color=lightgrey];
+#	"mkflacenc()" [URL="\ref pipeparts.mkflacenc()", style=filled, color=lightgrey];
+#	"mkvorbisenc()" [URL="\ref pipeparts.mkvorbisenc()", style=filled, color=lightgrey];
+#	"mkfilesink()" [URL="\ref pipeparts.mkfilesink()", style=filled, color=lightgrey];
+#	"mknxydumpsink()" [URL="\ref pipeparts.mknxydumpsink()", style=filled, color=lightgrey];
 #
 #	// connections
 #
