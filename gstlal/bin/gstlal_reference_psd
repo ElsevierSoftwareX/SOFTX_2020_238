@@ -31,6 +31,8 @@
 #
 # ### Usage cases
 #
+# See datasource.append_options() for additional usage cases for datasource specific command line options
+#
 # -# Measuring the PSD of low-latency data (e.g. on CIT cluster)
 #
 #		gstlal_reference_psd --data-source framexmit --channel-name=L1=FAKE-STRAIN  --write-psd psd.xml.gz
@@ -45,6 +47,11 @@
 #	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the PSD, default 16384 Hz
 #	+ `--psd-fft-length` [int] (s): FFT length, default 8 seconds
 #	+ `--verbose`: Be verbose
+#
+# ### Related programs
+#
+# - \ref gstlal_plot_psd
+# - \ref gstlal_plot_psd_horizon
 #
 
 #
