@@ -92,6 +92,8 @@ import numpy
 #
 # ### Usage cases ###
 #
+# See datasource.append_options() for additional usage cases for datasource specific command line options
+#
 # -# Recoloring existing frame data
 #
 #    Recoloring can be thought of as first whitening data and then applying a coloring filter.
