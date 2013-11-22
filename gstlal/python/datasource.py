@@ -403,6 +403,22 @@ def append_options(parser):
 		Set the state vector off bits to process (optional).
 		The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.
 		Only currently has meaning for online (lvshm) data.)
+
+	#### Typical usage case examples
+
+	-# Reading data from frames
+
+		--data-source=frames --gps-start-time=999999000 --gps-end-time=999999999 --channel-name=H1=LDAS-STRAIN --frame-segments-file=segs.xml --frame-segments-name=datasegments
+
+	-# Reading data from a fake LIGO source
+		
+		--data-source=LIGO --gps-start-time=999999000 --gps-end-time=999999999 --channel-name=H1=FAIKE-STRAIN
+
+	-# Reading online data via framexmit
+
+		--data-source=framexmit --channel-name=H1=FAIKE-STRAIN
+
+	-# Many other combinations possible, please add some!
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
