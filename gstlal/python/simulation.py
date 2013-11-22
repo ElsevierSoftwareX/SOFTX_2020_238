@@ -25,6 +25,13 @@ from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 
 
+## @file
+# the simulation module
+
+
+## @package python.simulation
+# The simulation module code
+
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(ContentHandler)
@@ -34,7 +41,15 @@ lsctables.use_in(ContentHandler)
 # open ligolw_xml file containing sim_inspiral and create a segment list
 #
 
+## Turn a file containing a sim inspiral into a segment list
 def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
+	"""!
+	Given an xml file create a segment list that marks the time of an
+	injection with padding
+
+	- fname: the xml file name
+	- pad: duration in seconds to pad the coalescence time when producint a segment, e.g., [tc-pad, tc+pad)
+	"""
 
 	# initialization
 
