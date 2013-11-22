@@ -61,23 +61,31 @@ import numpy
 #	rankdir=LR;
 #	compound=true;
 #	node [shape=record fontsize=10 fontname="Verdana"];	
+#	edge [fontsize=8 fontname="Verdana"];
 #
 #	// nodes
 #
 #	"mkbasicsrc()" [URL="\ref python.datasource.mkbasicsrc()"];
-#	"whitened_multirate_src()" [label="whitened_multirate_src | capsfilter+resample", URL="\ref python.multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
-#	lal_shift[style=filled, color=lightgrey, URL="\ref python.pipeparts.mkshift()"];
-#	progressreport1 [URL="\ref python.pipeparts.mkprogressreport()"];
-#	progressreport2 [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkprogressreport()"];
-#	lal_firbank [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkfirbank()"];
-#	taginject [style=filled, color=lightgrey, URL="\ref python.pipeparts.mktaginject()"];
-#	lal_simulation [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkinjections()"];
+#	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref python.multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
+#	capsfilter [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkcapsfilter()"];
+#	resample [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkresample()"];
+#	lal_shift[style=filled, color=lightgrey, URL="\ref python.pipeparts.mkshift()", label="lal_shift \n [iff --shift provided]"];
+#	progressreport1 [URL="\ref python.pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
+#	progressreport2 [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
+#	lal_firbank [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkfirbank()", label="lal_firbank \n [iff --color-psd provided]"];
+#	taginject [URL="\ref python.pipeparts.mktaginject()"];
+#	lal_simulation [style=filled, color=lightgrey, URL="\ref python.pipeparts.mkinjections()", label="lal_simulation \n [iff --injections provided]"];
 #	framecppchannelmux [URL="\ref python.pipeparts.mkframecppchannelmux()"];
 #	framecppfilesink [URL="\ref python.pipeparts.mkframecppfilesink()"];
 #
 #	// connect it up
 #
-#	"mkbasicsrc()" -> progressreport1 -> lal_shift  -> progressreport2 -> "whitened_multirate_src()" -> lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
+#	"mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2; 
+#	progressreport2 -> "whitened_multirate_src()" [label="if --whiten given"];
+#	"whitened_multirate_src()" -> lal_firbank;
+#	progressreport2 -> capsfilter [label="if --whiten not given"];
+#	capsfilter -> resample -> lal_firbank;
+#	lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
 # }
 # @enddot
 #
