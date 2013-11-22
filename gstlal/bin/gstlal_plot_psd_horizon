@@ -30,6 +30,22 @@ from glue.ligolw import utils
 from gstlal import reference_psd
 from pylal import series as lalseries
 
+## @file
+# A program to plot the horizon distance as a function of time from various psd estimates; See gstlal_plot_psd_horizon for usage.
+
+## @package gstlal_plot_psd_horizon
+#
+# Plot the horizon distance as a function of time from PSDs computed from gstlal_reference_psd
+#
+# ### Usage:
+#
+# 		gstlal_plot_psd OUTPUT-NAME PSD1 PSD2 ... 
+#
+# e.g.,
+#
+#		gstlal_plot_psd horizon.png psd1.xml.gz psd2.xml.gz
+#
+
 if len(sys.argv) < 3:
 	print "USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ..."
 	sys.exit()
