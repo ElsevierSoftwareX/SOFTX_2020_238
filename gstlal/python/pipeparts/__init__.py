@@ -559,6 +559,7 @@ def mkfilesink(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
 
 
+## Adds a <a href="@gstlaldoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
 def mknxydumpsink(pipeline, src, filename, segment = None):
 	if segment is not None:
 		elem = mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
@@ -593,8 +594,14 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "lal_triggerxmlwriter", sync = False, async = False, location = filename)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-wavenc.html">wavenc</a> element to a pipeline with useful default properties
 def mkwavenc(pipeline, src):
 	return mkgeneric(pipeline, src, "wavenc")
+
+
+## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-vorbisenc.html">vorbisenc</a> element to a pipeline with useful default properties
+def mkvorbisenc(pipeline, src):
+	return mkgeneric(pipeline, src, "vorbisenc")
 
 
 def mkcolorspace(pipeline, src):
@@ -630,6 +637,7 @@ def mkaudiorate(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audiorate", **properties)
 
 
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-flacenc.html">flacenc</a> element to a pipeline with useful default properties
 def mkflacenc(pipeline, src, quality = 0, **properties):
 	return mkgeneric(pipeline, src, "flacenc", quality = quality, **properties)
 
@@ -648,6 +656,11 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 
 def mkvideosink(pipeline, src):
 	return mkgeneric(pipeline, mkcolorspace(pipeline, src), "autovideosink")
+
+
+## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-autoaudiosink.html">autoaudiosink</a> element to a pipeline with useful default properties
+def mkautoaudiosink(pipeline, src):
+	return mkgeneric(pipeline, mkqueue(pipeline, src), "autoaudiosink")
 
 
 def mkplaybacksink(pipeline, src, amplification = 0.1):
