@@ -40,55 +40,11 @@ import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import datasource
+from gstlal import dagparts
 
 class ContentHandler(ligolw.LIGOLWContentHandler):
         pass
 lsctables.use_in(ContentHandler)
-
-def which(prog):
-	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
-	out = which.stdout.read().strip()
-	if not out: 
-		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
-		raise ValueError 
-	return out
-
-def log_path():
-	host = socket.getfqdn()
-	#FIXME add more hosts as you need them
-	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
-	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
-	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
-	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
-
-
-class DAG(pipeline.CondorDAG):
-
-	def __init__(self, name, logpath = log_path()):
-		self.basename = name
-		tempfile.tempdir = logpath
-		tempfile.template = self.basename + '.dag.log.'
-		logfile = tempfile.mktemp()
-		fh = open( logfile, "w" )
-		fh.close()
-		pipeline.CondorDAG.__init__(self,logfile)
-		self.set_dag_file(self.basename)
-		self.jobsDict = {}
-		self.node_id = 0
-		self.output_cache = []
-
-	def add_node(self, node):
-		node.set_retry(3)
-		self.node_id += 1
-		node.add_macro("macroid", self.node_id)
-		pipeline.CondorDAG.add_node(self, node)
-
-	def write_cache(self):
-		out = self.basename + ".cache"
-		f = open(out,"w")
-		for c in self.output_cache:
-			f.write(str(c)+"\n")
-		f.close()
 
 #
 # Classes for generating reference psds
@@ -98,7 +54,7 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_reference_psd job
 	"""
-	def __init__(self, executable=which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
+	def __init__(self, executable=dagparts.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_reference_psd'
@@ -118,7 +74,7 @@ class gstlal_median_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_median_psd job
 	"""
-	def __init__(self, executable=which('gstlal_ninja_median_of_psds'), tag_base='gstlal_ninja_median_of_psds'):
+	def __init__(self, executable=dagparts.which('gstlal_ninja_median_of_psds'), tag_base='gstlal_ninja_median_of_psds'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_ninja_median_of_psds'
@@ -137,7 +93,7 @@ class gstlal_ninja_smooth_reference_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_ninja_smooth_reference_psd job
 	"""
-	def __init__(self, executable=which('gstlal_ninja_smooth_reference_psd'), tag_base='gstlal_ninja_smooth_reference_psd'):
+	def __init__(self, executable=dagparts.which('gstlal_ninja_smooth_reference_psd'), tag_base='gstlal_ninja_smooth_reference_psd'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_ninja_smooth_reference_psd'
@@ -218,7 +174,7 @@ class gstlal_fake_frames_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_fake_frames job
 	"""
-	def __init__(self, executable=which('gstlal_fake_frames'), tag_base='gstlal_fake_frames'):
+	def __init__(self, executable=dagparts.which('gstlal_fake_frames'), tag_base='gstlal_fake_frames'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_fake_frames'
@@ -266,7 +222,7 @@ class gstlal_fake_frames_node(pipeline.CondorDAGNode):
 		dag.add_node(self)
 
 
-def breakupsegs(seglists, min_segment_length):
+def choosesegs(seglists, min_segment_length):
 	for instrument, seglist in seglists.iteritems():
 		newseglist = segments.segmentlist()
 		for seg in seglist:
@@ -323,10 +279,10 @@ try:
 except:
 	pass
 
-dag = DAG("gstlal_fake_frames_pipe")
+dag = dagparts.CondorDAG("gstlal_fake_frames_pipe")
 
 seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
-breakupsegs(seglists, options.min_segment_length)
+choosesegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()
 smoothJob = gstlal_ninja_smooth_reference_psd_job()
@@ -376,6 +332,3 @@ dag.write_sub_files()
 dag.write_dag()
 dag.write_script()
 dag.write_cache()
-
-
-
