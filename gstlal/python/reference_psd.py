@@ -59,6 +59,12 @@ from gstlal import pipeio
 from gstlal import simplehandler
 
 
+## @file
+# module for reference psds
+
+## @package python.reference_psd
+# the reference_psd module
+
 #
 # =============================================================================
 #
@@ -89,7 +95,30 @@ class PSDHandler(simplehandler.Handler):
 # measure_psd()
 #
 
-
+## A pipeline to measure a PSD
+#
+# @dot
+# digraph G {
+#	// graph properties
+#
+#	rankdir=LR;
+#	compound=true;
+#	node [shape=record fontsize=10 fontname="Verdana"];
+#	edge [fontsize=8 fontname="Verdana"];
+#
+#	// nodes
+#
+#	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
+#	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
+#	resample [URL="\ref pipeparts.mkresample()"];
+#	capsfilter2  [URL="\ref pipeparts.mkcapsfilter()"];
+#	queue [URL="\ref pipeparts.mkqueue()"];
+#	whiten [URL="\ref pipeparts.mkwhiten()"];
+#	fakesink [URL="\ref pipeparts.mkfakesink()"];
+#
+#	"mkbasicsrc()" -> capsfilter1 -> resample -> capsfilter2 -> queue -> whiten -> fakesink;
+# } 
+# @enddot
 def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbose = False):
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
