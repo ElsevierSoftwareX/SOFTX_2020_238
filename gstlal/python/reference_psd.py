@@ -97,7 +97,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	# code requires a minimum of 1)
 	#
 
-	if float(abs(gw_data_source_info.seg)) < 8 * psd_fft_length:
+	if gw_data_source_info.seg is not None and float(abs(gw_data_source_info.seg)) < 8 * psd_fft_length:
 		raise ValueError("segment %s too short" % str(gw_data_source_info.seg))
 
 	#
@@ -116,33 +116,20 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
-	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = psd_fft_length, average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2) - 1)), median_samples = 7)
+	if gw_data_source_info.seg is not None:
+		average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2) - 1))
+	else:
+		#FIXME maybe let the user specify this
+		average_samples = 64
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = psd_fft_length, average_samples = average_samples, median_samples = 7)
 	pipeparts.mkfakesink(pipeline, head)
 
 	#
-	# setup signal handler to shutdown pipeline
+	# setup signal handler to shutdown pipeline for live data
 	#
 
-	class OneTimeSignalHandler(object):
-		def __init__(self, pipeline):
-			self.pipeline = pipeline
-			self.count = 0
-
-		def __call__(self, signum, frame):
-			self.count += 1
-			if self.count == 1:
-				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
-				try:
-					if not self.pipeline.send_event(gst.event_new_eos()):
-						raise Exception("pipeline.send_event(EOS) returned failure")
-				except Exception, e:
-					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
-					os._exit(1)
-			else:
-				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
-
-	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
-	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+	if gw_data_source_info.data_source in ("lvshm", "framexmit"):# FIXME what about nds online?
+		simplehandler.OneTimeSignalHandler(pipeline)
 
 	#
 	# process segment
