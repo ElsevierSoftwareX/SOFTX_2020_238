@@ -111,8 +111,8 @@ class CondorDAG(pipeline.CondorDAG):
 		self.node_id = 0
 		self.output_cache = []
 
-	def add_node(self, node):
-		node.set_retry(3)
+	def add_node(self, node, retry = 0):
+		node.set_retry(retry)
 		self.node_id += 1
 		node.add_macro("macroid", self.node_id)
 		node.add_macro("macronodename", node.get_name())
