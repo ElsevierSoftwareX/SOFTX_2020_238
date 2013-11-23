@@ -197,7 +197,7 @@ TAB_SIZE               = 4
 # will result in a user-defined paragraph with heading "Side Effects:".
 # You can put \n's in the value part of an alias to insert newlines.
 
-ALIASES                = gstlaldoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/
+ALIASES                = gstlaldoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/
 
 # This tag can be used to specify a number of word-keyword mappings (TCL only).
 # A mapping has the form "name=value". For example adding
@@ -672,7 +672,7 @@ INPUT_ENCODING         = UTF-8
 # *.hxx *.hpp *.h++ *.idl *.odl *.cs *.php *.php3 *.inc *.m *.mm *.dox *.py
 # *.f90 *.f *.for *.vhd *.vhdl
 
-FILE_PATTERNS          = */bin/* *.py */pages/* 
+FILE_PATTERNS          = */bin/* *.py */pages/* */share/*
 
 # The RECURSIVE tag can be used to turn specify whether or not subdirectories
 # should be searched for input files as well. Possible values are YES and NO.
@@ -700,7 +700,7 @@ EXCLUDE_SYMLINKS       = NO
 # against the file with absolute path, so to exclude all test directories
 # for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */share/* */tests/* */gst/* */bin/Makefile* */python/bottle.py
+EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */tests/* */gst/* */bin/Makefile* */python/bottle.py */share/Makefile */share/Makefile.in */share/Makefile.am
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
