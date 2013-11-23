@@ -2,24 +2,32 @@
 
 ### Getting started
 
-## Making fake data
-	- gstlal_fake_frames
-	- gstlal_fake_frames_pipe
+### Making fake data
 
-## Measuring PSDs
-	- gstlal_reference_psd
-	- gstlal_plot_psd
-	- gstlal_plot_psd_horizon
+- \ref fakedataoverviewpage "Fake data overview"
+- Relevant programs
+  - gstlal_fake_frames
+  - gstlal_fake_frames_pipe
 
-## Data interaction
-	- gstlal_spectrum_movie
-	- gstlal_play
+### Measuring PSDs
 
-## Searches for Compact Binary Coalescence
+- Overview
+- Relevant programs
+  - gstlal_reference_psd
+  - gstlal_plot_psd
+  - gstlal_plot_psd_horizon
 
-### Low-latency, online searches
+### Data interaction
 
-### Offline searches
+- Overview
+- Relevant programs
+  - gstlal_spectrum_movie
+  - gstlal_play
+
+### Searches for Compact Binary Coalescence
+
+- Low-latency, online searches
+- Offline searches
 
 ### References
 
