@@ -1,3 +1,7 @@
+## @file Makefile.2015recolored
+# Makefile for recoloring data to the 2015 noise curves
+
+## General info
 MIN_SEG_LENGTH = 1000
 START = 966384015
 STOP =  971568015
