@@ -202,7 +202,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 		for n, filename in enumerate(files):
 			# FIXME over ride the file name stored in the bank file with
 			# this file name this bank I/O code needs to be fixed
-			bank = svd_bank.read_bank(filename, contenthandler = XMLContentHandler, verbose = verbose)
+			bank = svd_bank.read_bank(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)
 			bank.template_bank_filename = filename
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
@@ -223,7 +223,7 @@ def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
 		for n, filename in enumerate(files):
 			# FIXME over ride the file name stored in the bank file with
 			# this file name this bank I/O code needs to be fixed
-			bank = cbc_template_iir.load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, verbose = verbose)
+			bank = cbc_template_iir.load_iirbank(filename, snr_threshold, contenthandler = LIGOLWContentHandler, verbose = verbose)
 			bank.template_bank_filename = filename
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
@@ -320,11 +320,11 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 #
 
 
-class XMLContentHandler(ligolw.LIGOLWContentHandler):
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-ligolw_array.use_in(XMLContentHandler)
-ligolw_param.use_in(XMLContentHandler)
-lsctables.use_in(XMLContentHandler)
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
 
 
 #
@@ -426,7 +426,7 @@ class CoincsDocument(object):
 		#
 
 		if injection_filename is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], contenthandler = XMLContentHandler, verbose = verbose)
+			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], contenthandler = LIGOLWContentHandler, verbose = verbose)
 
 		#
 		# optionally insert a time slide table document.  if we
@@ -436,7 +436,7 @@ class CoincsDocument(object):
 
 		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
 		if time_slide_file is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = XMLContentHandler, verbose = verbose)
+			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = LIGOLWContentHandler, verbose = verbose)
 		else:
 			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), time_slide_table.get_next_id(), self.process):
 				time_slide_table.append(row)
@@ -666,7 +666,7 @@ class Data(object):
 					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
-					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
+					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = LIGOLWContentHandler))
 					self.ranking_data.compute_joint_cdfs()
 
 					# set up the scale factor for the trials table to normalize the rate
