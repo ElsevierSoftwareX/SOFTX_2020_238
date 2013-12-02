@@ -29,7 +29,6 @@ import sys
 import numpy
 import warnings
 import StringIO
-import threading
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -165,7 +164,6 @@ class Handler(simplehandler.Handler):
 		super(Handler, self).__init__(mainloop, pipeline)
 
 		self.dataclass = dataclass
-		self.lock = threading.Lock()
 
 		self.seglists = segments.segmentlistdict()
 		self.current_segment_start = {}
@@ -195,7 +193,7 @@ class Handler(simplehandler.Handler):
 		return False
 
 	def flush_segments_to_disk(self, timestamp):
-		with self.lock:
+		with self.dataclass.lock:
 			try:
 				# close out existing segments
 				for name, elem in [(name, self.pipeline.get_by_name(name)) for name in self.gates]:
@@ -244,7 +242,7 @@ class Handler(simplehandler.Handler):
 		return xmldoc
 
 	def web_get_segments_xml(self):
-		with self.lock:
+		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
 			outstr = output.getvalue()
