@@ -434,7 +434,7 @@ class CoincsDocument(object):
 		# duplicate offset vectors when done
 		#
 
-		time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
+		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
 		if time_slide_file is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = XMLContentHandler, verbose = verbose)
 		else:
@@ -452,18 +452,9 @@ class CoincsDocument(object):
 		#
 
 		if filename is not None and filename.endswith('.sqlite'):
-			# FIXME:  remove the ID remap stuff when we can
-			# rely on having glue 1.44
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread = False)
-			dbtables.idmap_create(self.connection)
-			dbtables.idmap_sync(self.connection)
-			__orig_append, dbtables.DBTable.append = dbtables.DBTable.append, dbtables.DBTable._remapping_append
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
-			dbtables.DBTable.append = __orig_append
-			del __orig_append
-			dbtables.idmap_reset(self.connection)
-			dbtables.idmap_sync(self.connection)
 
 			#
 			# convert self.xmldoc into wrapper interface to
