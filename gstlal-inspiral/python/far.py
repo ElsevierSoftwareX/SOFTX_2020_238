@@ -131,6 +131,9 @@ def fap_after_trials(p, m):
 	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
 	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
 	#
+	# as an alternative, the standard library provides log1p(),
+	# which evalutes ln(1 + p) accurately for small p.
+	#
 	# if p is close to 1, ln(1 - p) suffers a domain error
 	#
 
@@ -153,6 +156,12 @@ def fap_after_trials(p, m):
 	if p < .125:
 		#
 		# compute result from Taylor expansion of ln(1 - p)
+		#
+
+		return 1.0 - math.exp(m * math.log1p(-p))
+
+		#
+		# original implementation in case log1p() gives us problems
 		#
 
 		s = p_powers = 1.0
