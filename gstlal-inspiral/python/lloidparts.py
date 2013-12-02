@@ -51,6 +51,7 @@ from glue.ligolw.utils import process as ligolw_process
 from gstlal import bottle
 from gstlal import datasource
 from gstlal import multirate_datasource
+from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
 from gstlal import simulation
@@ -181,7 +182,20 @@ class Handler(simplehandler.Handler):
 			bottle.route("/segments.xml")(self.web_get_segments_xml)
 
 	def do_on_message(self, bus, message):
-		if message.type == gst.MESSAGE_APPLICATION:
+		if message.type == gst.MESSAGE_ELEMENT:
+			if message.structure.get_name() == "spectrum":
+				# get the instrument, psd, and timestamp.
+				# NOTE:  epoch is the middle of the
+				# interval used to obtain this PSD
+				instrument = message.src.get_name().split("_")[-1]
+				psd = pipeio.parse_spectrum_message(message)
+				timestamp = psd.epoch
+				# FIXME:  probably need to compute these
+				# for a bunch of masses.  which ones?
+				with self.dataclass.lock:
+					self.dataclass.coincs_document.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
+				return True
+		elif message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
 				self.flush_segments_to_disk(message.structure["timestamp"])
