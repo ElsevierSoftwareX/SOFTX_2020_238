@@ -259,86 +259,6 @@ def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
 	return banks
 
 
-
-#
-# add metadata to an xml document in the style of lalapps_inspiral
-#
-
-
-def add_cbc_metadata(xmldoc, process, seg_in):
-	"""
-	A convenience function to add metadata to a cbc output document
-	"""
-	
-	#
-	# add entry to search_summary table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	search_summary = tbl.RowType()
-	search_summary.process_id = process.process_id
-	search_summary.shared_object = None # FIXME
-	search_summary.lalwrapper_cvs_tag = None # FIXME
-	search_summary.lal_cvs_tag = None # FIXME
-	search_summary.comment = process.comment
-	search_summary.set_ifos(process.get_ifos())
-	search_summary.set_in(seg_in)
-	search_summary.set_out(segments.segment(None, None))
-	search_summary.nevents = None # FIXME
-	search_summary.nnodes = 1
-	tbl.append(search_summary)
-
-	#
-	# add entry to filter table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.FilterTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.FilterTable))
-	tbl.sync_next_id()
-	row = tbl.RowType()
-	row.process_id = process.process_id
-	row.program = process.program
-	row.start_time = int(seg_in[0])
-	row.filter_name = None # FIXME
-	row.filter_id = tbl.get_next_id()
-	row.param_set = None # FIXME
-	row.comment = process.comment
-	tbl.append(row)
-
-	#
-	# add entries to search_summvars table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummVarsTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummVarsTable))
-	tbl.sync_next_id()
-	# FIXME
-
-	#
-	# add entries to summ_value table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SummValueTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
-	tbl.sync_next_id()
-	# FIXME
-
-	#
-	# done
-	#
-
-	return search_summary
-
-
 #
 # =============================================================================
 #
@@ -438,7 +358,12 @@ class CoincsDocument(object):
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral", process_params, comment = comment, ifos = instruments)
-		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg)
+		self.search_summary = ligolw_search_summary.append_search_summary(self.xmldoc, self.process,
+			lalwrapper_cvs_tag = None,	# FIXME
+			lal_cvs_tag = None,	# FIXME
+			inseg = seg
+		)
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
 		# FIXME:  argh, ugly
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
@@ -506,7 +431,8 @@ class CoincsDocument(object):
 		# know if they are database-backed or XML objects
 		#
 
-		self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
+		self.summ_value_table = lsctables.SummValueTable.get_table(self.xmldoc)
 
 
 	def commit(self):
@@ -536,6 +462,40 @@ class CoincsDocument(object):
 
 	def get_next_sngl_id(self):
 		return self.sngl_inspiral_table.get_next_id()
+
+
+	@staticmethod
+	def summ_value_name_encode(m1, m2, snr_threshold):
+		return u"Dh:%g+%g@%g" % (m1, m2, snr_threshold)
+
+
+	@staticmethod
+	def summ_value_name_decode(s):
+		assert s[:3] == u"Dh:"
+		masses, snr_threshold = s[3:].split(u"@")
+		m1, m2 = map(float, masses.split(u"+"))
+		return m1, m2, float(snr_threshold)
+
+
+	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
+		# NOTE:  the encoding used here is not compatible with
+		# ihope, but I can't find ihope's format documented
+		row = self.summ_value_table.RowType()
+		row.summ_value_id = self.summ_value_table.get_next_id()
+		row.program = self.process.program
+		row.process_id = self.process_id
+		row.frameset_group = None
+		row.segment_def_id = None
+		# claim the PSD to be valid for a point in time
+		row.segment = timestamp, timestamp
+		row.instruments = (instrument,)
+		row.name = self.summ_value_name_encode(m1, m2, snr_threshold)
+		row.value = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0)
+		row.error = None
+		row.intvalue = None
+		row.comment = u"horizon distance (Mpc)"
+		self.summ_value_table.append(row)
+		return row
 
 
 	def T050017_filename(self, description, extension):
