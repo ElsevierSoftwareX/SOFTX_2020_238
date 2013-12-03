@@ -228,7 +228,7 @@ else:
 
 if options.whiten_reference_psd or options.whiten_track_psd:
 	## 5) Set the pipeline head to a whitened data stream if requested using a multirate_datasource.mkwhitened_multirate_src()
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd)[options.sample_rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd, unit_normalize = False)[options.sample_rate]
 else:
 	## 6) Otherwise simply add a pipeparts.mkcapsfilter()
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % options.sample_rate)
@@ -242,7 +242,9 @@ if options.color_psd:
 	## Calculate the maximum sample rate
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1
 
-	# truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
+	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
+	# Renormalize psd to account for filter length change
+	rpsd.data = rpsd.data / (float(max_sample) / len(rpsd.data))
 	rpsd.data = rpsd.data[:max_sample]
 	
 	# create the coloring FIR kernel from reference_psd.psd_to_fir_kernel()
