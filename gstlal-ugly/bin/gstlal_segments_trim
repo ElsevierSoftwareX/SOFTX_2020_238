@@ -23,6 +23,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from optparse import OptionParser
 
@@ -45,42 +46,23 @@ trim = options.trim
 xmldoc = utils.load_filename(fname, verbose = True)
 
 segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce()
-# make it safe to contract by elimating segments that are smaller than 2 * trim value
 for k in segs:
-	segs[k] = segments.segmentlist([seg for seg in segs[k] if abs(seg) > 2 * trim])
+	# Make it safe to contract by elimating segments that are smaller than
+	# 2 * trim value.  Remove segments that don't satisfy the minimum length
+	segs[k] = segments.segmentlist([seg for seg in segs[k] if (abs(seg) > 2 * trim) and (abs(seg) > options.min_length)])
+	
 segs.contract(trim)
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-seg_def = lsctables.New(lsctables.SegmentDefTable, ligolw_segments.LigolwSegmentList.segment_def_columns)
-xmldoc.childNodes[0].appendChild(seg_def)
-segtab = lsctables.New(lsctables.SegmentTable, ligolw_segments.LigolwSegmentList.segment_columns)
-xmldoc.childNodes[0].appendChild(segtab)
 
-# populate the segment definer table
-ifo_ids = {}
-for ifo in segs.keys():
-	row = seg_def.RowType()
-	id = seg_def.get_next_id()
-	row.set_ifos([ifo])
-	row.segment_def_id = id
-	row.process_id = None
-	row.name = options.segment_name
-	row.version = None
-	row.comment = None
-	row.insertion_time = None
-	ifo_ids[ifo] = id
-	seg_def.append(row)
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], options.__dict__)
+ligolw_process.set_process_end_time(process)
 
-for ifo, segl in segs.items():
-	for seg in segl:
-		row = segtab.RowType()
-		row.segment_def_id = ifo_ids[ifo]
-		row.segment_id = segtab.get_next_id()
-		row.process_id = None
-		row.set(seg)
-		if abs(seg) > options.min_length:
-			segtab.append(row)
+lwseglists = ligolw_segments.LigolwSegments(xmldoc)
+lwseglists.insert_from_segmentlistdict(segs, options.segment_name)
+lwseglists.optimize()
+lwseglists.finalize(process)
 
-utils.write_filename(xmldoc, options.output, verbose = True)
+utils.write_filename(xmldoc, options.output, gz = options.output.endswith('.gz'), verbose = True)
 
