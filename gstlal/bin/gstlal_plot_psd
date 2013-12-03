@@ -55,7 +55,8 @@ outname = sys.argv[1]
 for fname in sys.argv[2:]:
 	psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
 	for k,v in psds.items():
-		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, 4096)
+		# compute horizon up to 90% of nyquist to avoid roll off
+		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, len(v.data) * v.deltaF * 0.90)
 		if len(sys.argv[2:]) > 1:
 			flabel = fname
 		else:
