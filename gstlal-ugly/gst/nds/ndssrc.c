@@ -132,6 +132,140 @@ static const enum nds_version DEFAULT_VERSION = nds_try;
 /*
  * ========================================================================
  *
+ *                                                            GstURIHandler
+ *
+ * ========================================================================
+ */
+
+
+#define URI_SCHEME "nds"
+
+
+static GstURIType uri_get_type(GType type)
+{
+	return GST_URI_SRC;
+}
+
+
+/* 1.0:  this becomes static const gchar *const * */
+static gchar **uri_get_protocols(GType type)
+{
+	/* 1.0:  this becomes
+	static const gchar *protocols[] = {
+		URI_SCHEME,
+		URI_SCHEME "1",
+		URI_SCHEME "2",
+		NULL
+	};
+	*/
+	static gchar *protocols[] = {
+		(gchar *) URI_SCHEME,
+		(gchar *) URI_SCHEME "1",
+		(gchar *) URI_SCHEME "2",
+		NULL
+	};
+
+	return protocols;
+}
+
+
+/* 1.0:  this becomes static gchar * */
+static const gchar *uri_get_uri(GstURIHandler *handler)
+{
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(handler);
+	GString *uri = g_string_new(URI_SCHEME);
+
+	if(element->version != nds_try)
+		g_string_append_printf(uri, "%d", element->version);
+	if(element->port != DEFAULT_PORT)
+		g_string_append_printf(uri, "://%s:%d/", element->host, element->port);
+	else
+		g_string_append_printf(uri, "://%s/", element->host);
+	g_string_append_uri_escaped(uri, element->channelName, NULL, FALSE);
+	if(element->channelType != cUnknown)
+		g_string_append_printf(uri, ",%s", g_enum_get_value(g_type_class_peek_static(GSTLAL_TYPE_NDSSRC_CHANTYPE), element->channelType)->value_nick);
+
+	/* 1.0:  this won't be a memory leak */
+	return g_string_free(uri, FALSE);
+}
+
+
+/* 1.0:  this gets a GError ** argument */
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+{
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(handler);
+	gchar *scheme = g_uri_parse_scheme(uri);
+	gint version;
+	gchar *host = NULL;
+	gint port;
+	gchar *channel = NULL;
+	enum chantype ctype;
+	gboolean success = TRUE;
+
+	success = !strncmp(scheme, URI_SCHEME, strlen(URI_SCHEME));
+	if(success) {
+		GMatchInfo *match_info = NULL;
+		success &= g_regex_match(GSTLAL_NDSSRC_GET_CLASS(element)->regex, uri, 0, &match_info);
+		if(success) {
+			gchar *tmp;
+			tmp = g_match_info_fetch(match_info, 1);
+			if(tmp && tmp[0])
+				version = atoi(tmp);
+			else
+				version = nds_try;
+			g_free(tmp);
+			host = g_match_info_fetch(match_info, 2);
+			success &= host != NULL;
+			tmp = g_match_info_fetch(match_info, 3);
+			if(tmp && tmp[0])
+				port = atoi(tmp);
+			else
+				port = DEFAULT_PORT;
+			g_free(tmp);
+			channel = g_match_info_fetch(match_info, 4);
+			success &= channel != NULL;
+			tmp = g_match_info_fetch(match_info, 5);
+			if(tmp && tmp[0]) {
+				GEnumValue *val = g_enum_get_value_by_nick(g_type_class_peek_static(GSTLAL_TYPE_NDSSRC_CHANTYPE), tmp);
+				if(val)
+					ctype = val->value;
+				else
+					success = FALSE;
+			} else
+				ctype = cUnknown;
+			g_free(tmp);
+		}
+		g_match_info_free(match_info);
+	}
+	if(success) {
+		GST_INFO_OBJECT(element, "setting properties from URI:  nds-version=%d, host=\"%s\", port=%d, channel-name=\"%s\", channel-type=%d", version, host, port, channel, ctype);
+		g_object_set(G_OBJECT(element), "nds-version", version, "host", host, "port", port, "channel-name", channel, "channel-type", ctype, NULL);
+	} else
+		GST_ERROR_OBJECT(element, "failed to parse URI \"%s\"", uri);
+
+	g_free(scheme);
+	g_free(host);
+	g_free(channel);
+	return success;
+}
+
+
+static void uri_handler_init(gpointer g_iface, gpointer iface_data)
+{
+	GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
+
+	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
+	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
+	/* 1.0:  this is ->get_type */
+	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
+	/* 1.0:  this is ->get_protocols */
+	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+}
+
+
+/*
+ * ========================================================================
+ *
  *							 Utility Functions
  *
  * ========================================================================
@@ -804,6 +938,7 @@ static void class_init(gpointer class, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
+	GSTLALNDSSrcClass *gstlal_ndssrc_class = GSTLAL_NDSSRC_CLASS(class);
 
 	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
 
@@ -893,6 +1028,16 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 
+	/*
+	 * matches patterns like
+	 *
+	 * nds://nds.ligo.caltech.edu/L1:LSC-STRAIN
+	 * nds1://nds.ligo.caltech.edu:31200/L1:LSC-STRAIN,reduced
+	 * ...
+	 */
+
+	gstlal_ndssrc_class->regex = g_regex_new("^" URI_SCHEME "(\\d?)://([^:/]+)(?::(\\d+)|)/([^,]+)(?:,([\\w-]+)|)$", 0, 0, NULL);
+
 	// Start up NDS
 	GST_INFO_OBJECT(gobject_class, "daq_startup");
 	daq_startup();
@@ -945,7 +1090,13 @@ GType gstlal_ndssrc_get_type(void)
 			.instance_size = sizeof(GSTLALNDSSrc),
 			.instance_init = instance_init,
 		};
+		static const GInterfaceInfo uri_handler_info = {
+			uri_handler_init,
+			NULL,
+			NULL
+		};
 		type = g_type_register_static(GST_TYPE_BASE_SRC, "GSTLALNDSSrc", &info, 0);
+		g_type_add_interface_static(type, GST_TYPE_URI_HANDLER, &uri_handler_info);
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "ndssrc", 0, "ndssrc element");
 	}
 

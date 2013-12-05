@@ -39,6 +39,8 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_NDSSRC_TYPE, GSTLALNDSSrc))
 #define GSTLAL_NDSSRC_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_NDSSRC_TYPE, GSTLALNDSSrcClass))
+#define GSTLAL_NDSSRC_GET_CLASS(obj) \
+	(G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_NDSSRC_TYPE, GSTLALNDSSrcClass))
 #define GST_IS_GSTLAL_NDSSRC(obj) \
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_NDSSRC_TYPE))
 #define GST_IS_GSTLAL_NDSSRC_CLASS(klass) \
@@ -47,6 +49,12 @@ G_BEGIN_DECLS
 
 typedef struct {
 	GstBaseSrcClass parent_class;
+
+	/**
+	 * regex for parsing URIs
+	 */
+
+	GRegex *regex;
 } GSTLALNDSSrcClass;
 
 
