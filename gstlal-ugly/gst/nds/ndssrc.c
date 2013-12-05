@@ -88,9 +88,9 @@ gstlal_ndssrc_chantype_get_type (void)
 		{cOnline, "Online", "online"},
 		{cRaw, "Raw", "raw"},
 		{cRDS, "Reduced", "reduced"},
-		{cSTrend, "Second trend", "second-trend"},
-		{cMTrend, "Minute trend", "minute-trend"},
-		{cTestPoint, "Test point", "test-point"},
+		{cSTrend, "Second trend", "s-trend"},
+		{cMTrend, "Minute trend", "m-trend"},
+		{cTestPoint, "Test point", "test-pt"},
 		{0, NULL, NULL},
 	};
 
