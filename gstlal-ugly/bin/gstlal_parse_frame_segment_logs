@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013 Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import re
+import gzip
+from glue import segments
+from glue.lal import LIGOTimeGPS
+from glue.ligolw import ligolw
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
+from optparse import OptionParser
+
+def parse_command_line():
+	parser = OptionParser(usage = "gstlal_parse_frame_segment_logs --function-name <func> < <infile> > <outfile>")
+	parser.add_option("--input", metavar = "name", help = "Set the input log file name - Required")
+	parser.add_option("--output", metavar = "name", help = "Set the output xml ile name - Required")
+	parser.add_option("--function-name", metavar = "name", default = "datasegments", help = "Set the name of the function to look for in the logs, e.g. frvect_to_buffer_and_push - Required")
+	options, filenames = parser.parse_args()
+	return options, filenames
+
+opts, files = parse_command_line()
+
+# start a new output xml document
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], opts.__dict__)
+
+# regular expressions to look for
+# FIXME I don't know if these regular expressions will work for all elements, but it seems like a good guess.
+tagre = re.compile("<(.*)>")
+segre = re.compile("spanning \[(.*)s\)")
+
+# not a segmentlistdict object, yet
+segdict = {}
+
+# check for compression
+try:
+	f = gzip.open(opts.input).readline()
+	f = gzip.open(opts.input)
+except IOError:
+	f = open(opts.input)
+
+# parse the file
+for l in f:
+	if opts.function_name in l:
+		tag = tagre.search(l)
+		# e.g. framecppchanneldemux0:H1:PSL-ODC_CHANNEL_OUT_DQ
+		element, ifo, channel = tag.group(1).split(':')
+		s,e = segre.search(l).group(1).split('s,')
+		seg = segments.segment(LIGOTimeGPS(float(s)), LIGOTimeGPS(float(e)))
+		segdict.setdefault((channel, element), segments.segmentlistdict()).setdefault(ifo, segments.segmentlist()).append(seg)
+
+# coalesce
+for v in segdict.values():
+	v.coalesce()
+
+# insert the segments
+lwseglists = ligolw_segments.LigolwSegments(xmldoc)
+for k, v in segdict.items():
+	lwseglists.insert_from_segmentlistdict(v, k[0], comment = k[1])
+
+# all finished
+lwseglists.optimize()
+ligolw_process.set_process_end_time(process)
+lwseglists.finalize(process)
+utils.write_filename(xmldoc, opts.output, gz = opts.output.endswith('.gz'))
