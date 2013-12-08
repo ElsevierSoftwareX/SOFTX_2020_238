@@ -608,3 +608,41 @@ def interpolate_psd(psd, deltaF):
 		sampleUnits = psd.sampleUnits,
 		data = psd_data
 	)
+
+
+def movingmedian(psd, window_size):
+	data = numpy.copy(psd.data)
+	for i in range(window_size, len(data)-window_size):
+		data[i] = numpy.median(data[i-window_size:i+window_size])
+	return laltypes.REAL8FrequencySeries(
+		name = psd.name,
+		epoch = psd.epoch,
+		f0 = psd.f0,
+		deltaF = psd.deltaF,
+		sampleUnits = psd.sampleUnits,
+		data = data
+	)
+
+
+def polyfit(psd, minsample, maxsample, order, verbose = False):
+	# f / f_min between f_min and f_max, i.e. f[0] here is 1
+	f = numpy.arange(maxsample - minsample) * psd.deltaF + 1
+	data = psd.data[minsample:maxsample]
+
+	logf = numpy.linspace(numpy.log(f[0]), numpy.log(f[-1]), 100000)
+	interp = interpolate.interp1d(numpy.log(f), numpy.log(data))
+	data = interp(logf)
+	p = numpy.poly1d(numpy.polyfit(logf, data, order))
+	if verbose:
+		print >> sys.stderr, "\nFit polynomial is: \n\nlog(PSD) = \n", p, "\n\nwhere x = f / f_min\n"
+	data = numpy.exp(p(numpy.log(f)))
+	olddata = psd.data
+	olddata[minsample:maxsample] = data
+	return laltypes.REAL8FrequencySeries(
+		name = psd.name,
+		epoch = psd.epoch,
+		f0 = psd.f0,
+		deltaF = psd.deltaF,
+		sampleUnits = psd.sampleUnits,
+		data = olddata
+	)
