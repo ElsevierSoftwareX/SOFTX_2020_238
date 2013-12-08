@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013  Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import numpy
+import scipy
+import sys
+from gstlal import reference_psd
+from pylal.xlal import datatypes
+from pylal.xlal.datatypes import lalunit
+from optparse import OptionParser
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from pylal import series as lalseries
+from pylal import datatypes as laltypes
+
+## @file
+# gstlal_psd_polyfit
+
+## @package gstlal_psd_polyfit
+#
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--median-window", type = int, default = 8, help="Median window in sample points to apply running median for removing sharp features. Default 8.  Setting it to 1 effectively disables this filter.")
+parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
+parser.add_option("--poly-order", type = int, default = 10, help = "Set the order of the fitting polynomial. default 10")
+parser.add_option("--low-fit-freq", type = int, default = 30, help = "Set the low frequency at which to begin fitting in Hz. default 30")
+parser.add_option("--high-fit-freq", type = int, default = 6500, help = "Set the high frequency at which to stop fitting in Hz. default 6500")
+
+options, filenames = parser.parse_args()
+
+psds = lalseries.read_psd_xmldoc(utils.load_filename(filenames[0], verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+
+# FIXME Don't assume all psds have same resolution
+psd = psds.values()[0]
+minsample = int(options.low_fit_freq / psd.deltaF)
+maxsample = int(options.high_fit_freq / psd.deltaF)
+
+
+for ifo, psd in psds.items():
+	psd = reference_psd.movingmedian(psd, options.median_window)
+	psd = reference_psd.polyfit(psd, minsample, maxsample, options.poly_order, True)
+	psds[ifo] = psd
+
+reference_psd.write_psd(options.output, psds)
