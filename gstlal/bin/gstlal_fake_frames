@@ -69,6 +69,7 @@ import numpy
 #	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
 #	capsfilter [style=filled, color=lightgrey, URL="\ref pipeparts.mkcapsfilter()"];
 #	resample [style=filled, color=lightgrey, URL="\ref pipeparts.mkresample()"];
+#	audioamplify [style=filled, color=lightgrey, URL="\ref pipeparts.mkaudioamplify()", label="audioamplify \n if --data-source=white \n in order to have unit variance \n after resampling"];
 #	lal_shift[style=filled, color=lightgrey, URL="\ref pipeparts.mkshift()", label="lal_shift \n [iff --shift provided]"];
 #	progressreport1 [URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
 #	progressreport2 [style=filled, color=lightgrey, URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
@@ -80,11 +81,13 @@ import numpy
 #
 #	// connect it up
 #
-#	"mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2; 
+#	"mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2;
 #	progressreport2 -> "whitened_multirate_src()" [label="if --whiten given"];
 #	"whitened_multirate_src()" -> lal_firbank;
 #	progressreport2 -> capsfilter [label="if --whiten not given"];
-#	capsfilter -> resample -> lal_firbank;
+#	capsfilter -> resample;
+#	resample -> audioamplify
+#	audioamplify -> lal_firbank;
 #	lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
 # }
 # @enddot
@@ -115,7 +118,7 @@ import numpy
 # See datasource.append_options() for common command line options shared among different programs
 #
 #	+ `--shift` [int] (ns): Number of nanoseconds, \f$\tau\f$ to delay (negative) or advance (positive) the input time series \f$x\f$ relative to the output time series \f$y\f$. \f$ y(t) = x(t+\tau)\f$
-#	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided.  Default = 16384 Hz.
+#	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided.  Default = 16384 Hz, max 16384 Hz.
 # 	+ `--whiten-reference-psd` [file name]: Set the name of psd xml file to whiten the data with.
 #	+ `--whiten-track-psd` []: Calculate PSD from input data and track with time.
 #	+ `--color-psd` [file name]: Set the name of psd xml file to color the data with
@@ -152,7 +155,7 @@ def parse_command_line():
 	#
 
 	parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
-	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz")
+	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz, max 16384 Hz")
 	parser.add_option("--whiten-reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 	parser.add_option("--whiten-track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 	parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
@@ -166,6 +169,9 @@ def parse_command_line():
 	#
 	# Parse options
 	#
+
+	if options.sample_rate > 16384:
+		raise ValueError("--sample-rate must be <= 16384")
 
 	options, filenames = parser.parse_args()
 	return options, filenames
@@ -228,10 +234,15 @@ else:
 
 if options.whiten_reference_psd or options.whiten_track_psd:
 	## 5) Set the pipeline head to a whitened data stream if requested using a multirate_datasource.mkwhitened_multirate_src()
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd, unit_normalize = False)[options.sample_rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd)[options.sample_rate]
 else:
-	## 6) Otherwise simply add a pipeparts.mkcapsfilter()
+	## 6) Otherwise simply add a pipeparts.mkcapsfilter() and pipeparts.mkresample()
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % options.sample_rate)
+	# FIXME this is a bit hacky, should datasource.mkbasicsrc be patched to change the sample rate?
+	# FIXME don't hardcode sample rate (though this is what datasource generates for all fake data, period 
+	# Renormalize if datasource is "white"
+	if options.data_source == "white":
+		head = pipeparts.mkaudioamplify(pipeline, head, 1/math.sqrt(pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate)))
 
 # Apply a coloring filter
 if options.color_psd:
@@ -243,8 +254,6 @@ if options.color_psd:
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1
 
 	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
-	# Renormalize psd to account for filter length change
-	rpsd.data = rpsd.data / (float(max_sample) / len(rpsd.data))
 	rpsd.data = rpsd.data[:max_sample]
 	
 	# create the coloring FIR kernel from reference_psd.psd_to_fir_kernel()
