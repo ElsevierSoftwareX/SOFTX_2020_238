@@ -170,10 +170,11 @@ def parse_command_line():
 	# Parse options
 	#
 
+	options, filenames = parser.parse_args()
+
 	if options.sample_rate > 16384:
 		raise ValueError("--sample-rate must be <= 16384")
 
-	options, filenames = parser.parse_args()
 	return options, filenames
 
 
@@ -242,7 +243,8 @@ else:
 	# FIXME don't hardcode sample rate (though this is what datasource generates for all fake data, period 
 	# Renormalize if datasource is "white"
 	if options.data_source == "white":
-		head = pipeparts.mkaudioamplify(pipeline, head, 1/math.sqrt(pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate)))
+		print "amplify", 1.0 / (pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate))**.5
+		head = pipeparts.mkaudioamplify(pipeline, head, 1.0 / (pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate))**.5)
 
 # Apply a coloring filter
 if options.color_psd:
