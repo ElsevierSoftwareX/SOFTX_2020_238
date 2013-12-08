@@ -5,6 +5,8 @@ from glue import segments
 from glue.ligolw import lsctables
 from glue.ligolw import ligolw
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
 
 def to_segmentlistdict(l):
 	s = segments.segmentlistdict()
@@ -20,50 +22,12 @@ for seg in [to_segmentlistdict(lal.CacheEntry(l)) for l in open(sys.argv[1]).rea
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
+ligolw_process.set_process_end_time(process)
 
-#
-# make tables
-#
+lwseglists = ligolw_segments.LigolwSegments(xmldoc)
+lwseglists.insert_from_segmentlistdict(segs, "datasegments")
+lwseglists.optimize()
+lwseglists.finalize(process)
 
-seg_def = lsctables.New(lsctables.SegmentDefTable)
-xmldoc.childNodes[0].appendChild(seg_def)
-segtab = lsctables.New(lsctables.SegmentTable)
-xmldoc.childNodes[0].appendChild(segtab)
-
-# populate the segment definer table
-ifo_ids = {}
-for ifo in segs.keys():
-	row = seg_def.RowType()
-	id = seg_def.get_next_id()
-	row.ifos = ifo
-	row.segment_def_id = id
-	row.creator_db = None
-	row.process_id = None
-	row.name = "datasegments"
-	row.version = None
-	row.comment = None
-	row.insertion_time = None
-	ifo_ids[ifo] = id
-	seg_def.append(row)
-
-# populate the segment table
-for ifo, segl in segs.items():
-	for seg in segl:
-		print seg
-		row = segtab.RowType()
-		row.segment_def_id = ifo_ids[ifo]
-		row.segment_id = segtab.get_next_id()
-		row.creator_db = None
-		row.process_id = None
-		row.segment_def_cdb = None
-		row.set(seg)
-		segtab.append(row)
-
-outname = sys.argv[2]
-verbose = True
-
-utils.write_filename(xmldoc, outname, verbose = verbose, gz = (outname or "stdout").endswith(".gz"))
-
-			
-		
-
+utils.write_filename(xmldoc, sys.argv[2], verbose = True, gz = sys.argv[2].endswith(".gz"))
