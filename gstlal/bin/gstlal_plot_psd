@@ -63,7 +63,7 @@ for fname in sys.argv[2:]:
 			flabel = ""
 		pyplot.loglog(v.deltaF * numpy.arange(len(v.data)), v.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
 		pyplot.xlabel('Frequency (Hz)')
-		pyplot.ylabel('Strain/Hz')
+		pyplot.ylabel('Strain^2/Hz')
 pyplot.legend()
 pyplot.grid()
 pyplot.savefig(outname)
