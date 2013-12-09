@@ -150,6 +150,7 @@ GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, 
 
 	/* Copy the events into the buffer */
 	SnglBurst *output = (SnglBurst *) GST_BUFFER_DATA(srcbuf);
+    SnglBurst *head = input;
 	while (input) {
 		*output = *input;
 		/* Make the array look like a linked list */
@@ -158,7 +159,7 @@ GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, 
 		input = input->next;
 	}
 	/* Forget about this set of events, it's the buffer's now. */
-	XLALDestroySnglBurstTable(input);
+	XLALDestroySnglBurstTable(head);
 
 	if (size == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
