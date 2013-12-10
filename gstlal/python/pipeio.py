@@ -143,7 +143,7 @@ def parse_spectrum_message(message):
 	"""
 	return laltypes.REAL8FrequencySeries(
 		name = "PSD",
-		epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
+		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = message.structure["delta-f"],
 		sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),

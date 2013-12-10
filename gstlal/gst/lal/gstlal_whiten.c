@@ -538,15 +538,17 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 	char units[50];
 	GstStructure *s = gst_structure_new(
 		"spectrum",
-		"timestamp", G_TYPE_UINT64, (guint64) XLALGPSToINT8NS(&psd->epoch),
 		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
 		"sample-units", G_TYPE_STRING, XLALUnitAsString(units, sizeof(units), &psd->sampleUnits),
 		"magnitude", G_TYPE_VALUE_ARRAY, va,
 		NULL
 	);
+	GstMessage *m = gst_message_new_element(GST_OBJECT(element), s);
 	g_value_array_free(va);
 
-	return gst_message_new_element(GST_OBJECT(element), s);
+	GST_MESSAGE_TIMESTAMP(m) = XLALGPSToINT8NS(&psd->epoch);
+
+	return m;
 }
 
 
