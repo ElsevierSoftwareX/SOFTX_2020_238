@@ -845,18 +845,17 @@ static void class_init(gpointer class, gpointer class_data)
 		ARG_AUTOCORRELATION_MASK,
 		g_param_spec_value_array(
 			"autocorrelation-mask",
-			"Autocorrelation Mask",
+			"Autocorrelation Mask Matrix",
 			"Array of integer autocorrelation mask vectors.  Number of vectors (rows) in mask sets number of channels.  All vectors must have the same length. The mask values are either 0 or 1 and indicate whether to use the corresponding matrix entry in computing the autocorrelation chi-sq statistic.",
 			g_param_spec_value_array(
-				"autocorrelation",
-				"Autocorrelation",
+				"autocorrelation-mask",
+				"Autocorrelation-mask",
 				"Array of autocorrelation mask values.",
-				/* FIXME:  should be complex */
-				g_param_spec_double(
+				g_param_spec_int(
 					"sample",
 					"Sample",
 					"Autocorrelation mask value",
-					0, 1, 0.0,
+					0, 1, 0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
