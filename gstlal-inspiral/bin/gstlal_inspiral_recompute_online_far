@@ -36,8 +36,6 @@ from glue import iterutils
 from pylal import rate
 from optparse import OptionParser
 from gstlal import far
-from gstlal.svd_bank import read_bank
-from gstlal import far
 
 try:
 	import sqlite3
