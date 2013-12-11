@@ -1120,6 +1120,18 @@ WHERE
 	def finish(self):
 		livetime = far.get_live_time(self.farsegs)
 
+		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
+		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		axes.legend(loc = "upper left")
+		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
+		yield fig, "lr_vs_snr", False
+		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
+		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		axes.semilogx(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
+		axes.legend(loc = "upper left")
+		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
+		yield fig, "lr_vs_snr", True
+
 		for ln_likelihood_ratio, ifars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_ifar, True), (self.background_ln_likelihood_ratio, self.background_ifar, False)]:
 			fig, axes = create_farplot(ifars, livetime, is_open_box)
 			if fig is not None:
