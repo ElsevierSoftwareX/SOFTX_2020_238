@@ -35,8 +35,6 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from pylal import rate
 from optparse import OptionParser
 from gstlal import far
-from gstlal.svd_bank import read_bank
-from gstlal import far
 
 try:
 	import sqlite3
