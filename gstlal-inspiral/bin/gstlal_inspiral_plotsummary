@@ -1057,8 +1057,12 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 
 class RateVsThreshold(object):
 	def __init__(self):
+		self.background_ln_likelihood_ratio = []
+		self.zerolag_ln_likelihood_ratio = []
 		self.background_ifar = []
 		self.zerolag_ifar = []
+		self.background_fap = []
+		self.zerolag_fap = []
 		self.background_snr = []
 		self.zerolag_snr = []
 		self.farsegs = segments.segmentlistdict()
@@ -1070,10 +1074,11 @@ class RateVsThreshold(object):
 
 		self.farsegs |= contents.farsegs
 
-		for on_instruments, ifar, snr, is_background in connection.cursor().execute("""
+		for likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
 SELECT
-	coinc_event.instruments,
-	CASE coinc_inspiral.combined_far WHEN 0 THEN "inf" ELSE 1.0 / coinc_inspiral.combined_far END,
+	coinc_event.likelihood,
+	coinc_inspiral.combined_far,
+	coinc_inspiral.false_alarm_rate,
 	coinc_inspiral.snr,
 	EXISTS (
 		SELECT
@@ -1092,34 +1097,46 @@ FROM
 WHERE
 	coinc_inspiral.combined_far is not NULL
 		"""):
-			on_instruments = frozenset(dbtables.lsctables.instrument_set_from_ifos(on_instruments))
-			# to convert the string "inf" to float infinity
-			ifar = float(ifar)
+			try:
+				ifar = 1. / far
+			except ZeroDivisionError:
+				ifar = float("+inf")
+			try:
+				ln_lr = math.log(likelihood_ratio)
+			except ValueError:
+				ln_lr = float("-inf")
 			if is_background:
+				self.background_ln_likelihood_ratio.append(ln_lr)
 				self.background_ifar.append(ifar)
+				self.background_fap.append(fap)
 				self.background_snr.append(snr)
 			else:
+				self.zerolag_ln_likelihood_ratio.append(ln_lr)
 				self.zerolag_ifar.append(ifar)
+				self.zerolag_fap.append(fap)
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
-		
-		# Work out the live time from all of the databases
-		self.farsegs = self.farsegs.union(self.farsegs.keys())
-		self.farlivetime = float(abs(self.farsegs))
+		livetime = far.get_live_time(self.farsegs)
 
-		for snrs, ifars, is_open_box in [(self.zerolag_snr, self.zerolag_ifar, True), (self.background_snr, self.background_ifar, False)]:
-			fig, axes = create_farplot(ifars, self.farlivetime, is_open_box)
+		for ln_likelihood_ratio, ifars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_ifar, True), (self.background_ln_likelihood_ratio, self.background_ifar, False)]:
+			fig, axes = create_farplot(ifars, livetime, is_open_box)
 			if fig is not None:
-				axes.set_title((not is_open_box and "Closed Box" or ""))
+				if is_open_box:
+					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
+				else:
+					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold (Closed Box)")
 				axes.set_xlabel(r"Inverse False-Alarm Rate (s)")
 				yield fig, "count_vs_ifar", is_open_box
 
-			fig, axes = create_farplot(snrs, self.farlivetime, is_open_box)
+			fig, axes = create_farplot(ln_likelihood_ratio, livetime, is_open_box)
 			if fig is not None:
-				axes.set_title((not is_open_box and "Closed Box" or ""))
-				axes.set_xlabel(r"$\rho_{\mathrm{eff}}$")
-				yield fig, "count_vs_snr", is_open_box
+				if is_open_box:
+					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold")
+				else:
+					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold (Closed Box)")
+				axes.set_xlabel(r"$\ln \Lambda$")
+				yield fig, "count_vs_lr", is_open_box
 
 
 #
