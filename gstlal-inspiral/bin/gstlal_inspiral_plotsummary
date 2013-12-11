@@ -112,7 +112,7 @@ Generate the given plot group.  Can be given multiple times (default = make all 
  5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
  6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
-	parser.add_option("--far-thresh", metavar = "threshold", default = 3.e-7, help = "Set the FAR threshold for found injections: default 3e-7 Hz.")
+	parser.add_option("--far-thresh", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -138,7 +138,7 @@ Generate the given plot group.  Can be given multiple times (default = make all 
 
 
 class CoincDatabase(object):
-	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, wiki = None, base = None, program_name = "gstlal_inspiral", far_thresh = None):
+	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, wiki = None, base = None, program_name = "gstlal_inspiral"):
 		"""
 		Compute and record some summary information about the
 		database.
@@ -147,7 +147,6 @@ class CoincDatabase(object):
 		self.base = base
 		self.connection = connection
 		xmldoc = dbtables.get_xml(connection)
-		self.far_thresh = far_thresh
 
 		cursor = connection.cursor()
 
@@ -554,8 +553,9 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments):
+		def __init__(self, on_instruments, far_thresh):
 			self.on_instruments = on_instruments
+			self.far_thresh = far_thresh
 			self.found_in = {}
 
 		def add_contents(self, contents):
@@ -578,7 +578,7 @@ SELECT
 	)
 FROM
 	sim_inspiral
-			""", (contents.far_thresh,)):# ~ 1 / month 
+			""", (self.far_thresh,)):
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
@@ -617,7 +617,8 @@ FROM
 				axes.set_title(title)
 				yield fig, filename_fragment, False
 
-	def __init__(self):
+	def __init__(self, far_thresh):
+		self.far_thresh = far_thresh
 		self.plots = {}
 
 	def add_contents(self, contents):
@@ -627,7 +628,7 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments)
+				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
@@ -1167,7 +1168,7 @@ max_plot_groups = None
 def new_plots(plots = None):
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(),
+		MissedFoundPlots(far_thresh = options.far_thresh),
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
@@ -1197,7 +1198,7 @@ for n, filename in enumerate(filenames):
 	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki=wiki, base=options.base, far_thresh = options.far_thresh)
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki=wiki, base=options.base)
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
