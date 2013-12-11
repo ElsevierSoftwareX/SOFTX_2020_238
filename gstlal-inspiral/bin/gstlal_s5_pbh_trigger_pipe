@@ -39,7 +39,6 @@ from glue.ligolw import param
 import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
-from gstlal.svd_bank import read_bank
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 import numpy
