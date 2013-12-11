@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2009-2012  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2009-2013  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -357,11 +357,12 @@ class SummaryTable(object):
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
+		contents.connection.create_function("log", 1, lambda x: math.log(x) if x > 0 else float("-inf"))
 		self.candidates += contents.connection.cursor().execute("""
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	coinc_event.likelihood,
+	log(coinc_event.likelihood),
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
 	coinc_inspiral.mass,
@@ -396,12 +397,12 @@ ORDER BY
 	combined_far
 LIMIT 10
 		""").fetchall()
-		
+
 		self.bgcandidates += contents.connection.cursor().execute("""
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	coinc_event.likelihood,
+	log(coinc_event.likelihood),
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
 	coinc_inspiral.mass,
@@ -455,18 +456,15 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 			self.livetime[on_instruments] += livetime
 
 	def write_wiki_string(self, l, f, lt):
-		f.write('''
-|| %s || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
-|| %s || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
-''' % ("Rank", "combined FAR (Hz)","FAP", "likelihood", "combined SNR", "GPS end time","total mass","chirp mass", "detectors", "detector time", "", "", "", "", "", "detector", "snr", "&chi;<sup>2</sup>/DOF", "mass 1", "mass 2"))
-		for i, values in enumerate(l):
-			values=list(values)
-			#dets =  frozenset(dbtables.lsctables.instrument_set_from_ifos(values[7]))
-			f.write('|| ' + str(i) + ' || %.2e || %.2e || %.2e || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % tuple(values[:9]))
-			for ifo in values[9].split():
-				ifo = list(ifo.split(":"))
-				for i in range(1,len(ifo)): ifo[i] = float(ifo[i])
-				f.write('|| || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo) )
+		f.write("|| Rank || FAR (Hz) || FAP || ln &Lambda; || Combined SNR || GPS End Time || <i>M</i><sub>total</sub> / M<sub>&#x2299;</sub> || <i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub> || Participating Instruments                   || On Instruments                              ||\n")
+		f.write("||      ||          ||     ||             ||              || Instrument   || SNR                                             || &chi;<sup>2</sup>/DOF                           || <i>m</i><sub>1</sub> / M<sub>&#x2299;</sub> || <i>m</i><sub>2</sub> / M<sub>&#x2299;</sub> ||\n")
+		for rank, values in enumerate(l, 1):
+			values = tuple(values)
+			f.write('|| %d || %.2e || %.3g || %.3g || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % ((rank,) + values[:9]))
+			for ifo_row in values[9].split():
+				ifo_row = ifo_row.split(":")
+				ifo_row[1:] = map(float, ifo_row[1:])
+				f.write('|| || || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo_row) )
 
 	def finish(self):
 		self.candidates.sort()
