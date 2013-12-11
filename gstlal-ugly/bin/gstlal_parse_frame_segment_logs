@@ -45,7 +45,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], opts.__dict__)
 # regular expressions to look for
 # FIXME I don't know if these regular expressions will work for all elements, but it seems like a good guess.
 tagre = re.compile("<(.*)>")
-segre = re.compile("spanning \[(.*)s\)")
+segre = re.compile(" \[(.*)s\)")
 
 # not a segmentlistdict object, yet
 segdict = {}
@@ -62,8 +62,17 @@ for l in f:
 	if opts.function_name in l:
 		tag = tagre.search(l)
 		# e.g. framecppchanneldemux0:H1:PSL-ODC_CHANNEL_OUT_DQ
-		element, ifo, channel = tag.group(1).split(':')
-		s,e = segre.search(l).group(1).split('s,')
+		try:
+			element, ifo, channel = tag.group(1).split(':')
+		except ValueError:
+			# does not conform to element:ifo:channel, oh well.
+			continue
+		try:
+			s,e = segre.search(l).group(1).split('s,')
+		except AttributeError:
+			# the only known legitimate case where this shouldn't work
+			if "new caps" in l:
+				continue
 		seg = segments.segment(LIGOTimeGPS(float(s)), LIGOTimeGPS(float(e)))
 		segdict.setdefault((channel, element), segments.segmentlistdict()).setdefault(ifo, segments.segmentlist()).append(seg)
 
