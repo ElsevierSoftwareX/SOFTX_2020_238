@@ -54,6 +54,11 @@
 
 #define DEFAULT_SNR_THRESH 5.5
 
+
+#define GST_CAT_DEFAULT gstlal_itac_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 static unsigned autocorrelation_channels(const GSTLALItac *element)
 {
 	return gstlal_autocorrelation_chi2_autocorrelation_channels(element->autocorrelation_matrix);
@@ -133,7 +138,7 @@ static GstFlowReturn process(GSTLALItac *element);
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALItac *element = GSTLAL_ITAC(GST_PAD_PARENT(pad));
-	gboolean success;
+	gboolean success = FALSE;
 	GstFlowReturn result;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -265,7 +270,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	}
 
 	case ARG_AUTOCORRELATION_MASK: {
-		unsigned channels;
 		g_mutex_lock(element->bank_lock);
 
 		if(element->autocorrelation_mask)
@@ -721,6 +725,8 @@ static void base_init(gpointer class)
 		"Find inspiral triggers in snr streams",
 		"Chad Hanna <chad.hanna@ligo.org>"
 	);
+
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_itac", 0, "lal_itac debug category");
 
 	gst_element_class_add_pad_template(
 		element_class,
