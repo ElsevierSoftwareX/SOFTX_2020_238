@@ -131,8 +131,8 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg):
 				continue
 			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
-			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(2048) #FIXME don't hard code
-			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 2048) #FIXME don't hardcode
+			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(1024) #FIXME don't hard code
+			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 1024) #FIXME don't hardcode
 			if not segsdict[frozenset(ifo_combos)]:
 				del segsdict[frozenset(ifo_combos)]
 	return segsdict
@@ -200,6 +200,17 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 			)
 	return svd_nodes
 
+def create_svd_bank_strings(svd_nodes):
+	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
+	outstrings = []
+	for i in range(len(svd_nodes.values()[0])):
+		svd_bank_string = ""
+		for ifo in svd_nodes:
+			svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i].output_files["write-svd"])
+		svd_bank_string = svd_bank_string.strip(",")
+		outstrings.append(svd_bank_string)
+	return outstrings
+
 def inspiral_node_gen(gstlalInspiralJob, dag, svd_nodes, segsdict, options, channel_dict):
 
 	inspiral_nodes = {}
@@ -215,33 +226,22 @@ def inspiral_node_gen(gstlalInspiralJob, dag, svd_nodes, segsdict, options, chan
 			# only use a channel dict with the relevant channels
 			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 
-			# setup svd bank input string
-			# FIXME, if we have a lot of sub banks we might have to arrange to have multiple inspiral jobs
-			svd_bank_string = ""
-			numbanks = None
-			for ifo in ifos:
-				svd_bank_string += ",".join(["%s:%s" % (ifo, node.output_files["write-svd"]) for node in svd_nodes[ifo]])
-				svd_bank_string += ","
-				if numbanks is None:
-					numbanks = len(svd_nodes[ifo])
-				else:
-					# check that we have the same number of banks from each detector
-					assert numbanks == len(svd_nodes[ifo])
-			svd_bank_string = svd_bank_string.strip(",")
+			# get the svd bank strings
+			svd_bank_strings = create_svd_bank_strings(svd_nodes)
 
 			# setup output names
-			output_names = [T050017_filename(ifos, '%d_LLOID' % (i,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i in range(numbanks)] # assume all ifos have same number of banks, assertion would have failed by now
-			dist_stat_names = [T050017_filename(ifos, '%d_DIST_STATS' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i in range(numbanks)] # assume all ifos have same number of banks, assertion would have failed by now
+			output_names = [T050017_filename(ifos, '%d_LLOID' % (i,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+			dist_stat_names = [T050017_filename(ifos, '%d_DIST_STATS' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
 
 			# non injection node
 			noninjnode = generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
 					opts = {"psd-fft-length":options.psd_fft_length,
 						"ht-gate-threshold":options.ht_gate_threshold,
 						"frame-segments-name":options.frame_segments_name,
-						"gps-start-time":options.gps_start_time,
-						"gps-end-time":options.gps_end_time,
+						"gps-start-time":seg[0].seconds,
+						"gps-end-time":seg[1].seconds,
 						"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-						"svd-bank":svd_bank_string, #FIXME the parsing of this should be fixed in gstlal inspiral so that these can be input files
+						"svd-bank":svd_bank_strings,
 						"tmp-space":inspiral_pipe.log_path(),
 						"track-psd":"",
 						"control-peak-time":options.control_peak_time,
@@ -269,18 +269,18 @@ def inspiral_node_gen(gstlalInspiralJob, dag, svd_nodes, segsdict, options, chan
 			
 				# setup output names	
 				sim_name = sim_tag_from_inj_file(injections)
-				output_names = [T050017_filename(ifos, '%d_LLOID_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i in range(numbanks)] # assume all ifos have same number of banks, they better!
-				dist_stat_names = [T050017_filename(ifos, '%d_DIST_STATS_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i in range(numbanks)] # assume all ifos have same number of banks, they better!
+				output_names = [T050017_filename(ifos, '%d_LLOID_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				dist_stat_names = [T050017_filename(ifos, '%d_DIST_STATS_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
 
 				# setup injection node
 				injnode = generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
 						opts = {"psd-fft-length":options.psd_fft_length,
 							"ht-gate-threshold":options.ht_gate_threshold,
 							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":options.gps_start_time,
-							"gps-end-time":options.gps_end_time,
+							"gps-start-time":seg[0].seconds,
+							"gps-end-time":seg[1].seconds,
 							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"svd-bank":svd_bank_string, #FIXME the parsing of this should be fixed in gstlal inspiral so that these can be input files
+							"svd-bank":svd_bank_strings,
 							"tmp-space":inspiral_pipe.log_path(),
 							"track-psd":"",
 							"control-peak-time":options.control_peak_time,
@@ -529,7 +529,7 @@ def parse_command_line():
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
+	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 10000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 10000 seconds.")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
