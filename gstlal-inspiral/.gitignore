@@ -1,2 +1,8 @@
+doc/Doxyfile
+doc/doxyfile.stamp
+doc/gstlalinspiraldoxy.tag
+doc/html/
+doc/latex/
+doc/man/
 gstlal-inspiral.spec
 lib/gstlal-inspiral.pc

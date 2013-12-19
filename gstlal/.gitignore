@@ -7,6 +7,9 @@ tests/*.dump
 doc/Doxyfile
 doc/html/
 doc/latex/
+doc/man/
+doc/doxyfile.stamp
+doc/gstlaldoxy.tag
 doc/gobject/*.args
 doc/gobject/*.hierarchy
 doc/gobject/*.interfaces
@@ -17,5 +20,6 @@ doc/gobject/*.stamp
 doc/gobject/*.txt
 doc/gobject/*.txt.bak
 doc/gobject/html/
+doc/gobject/latex/
 doc/gobject/tmpl/
 doc/gobject/xml/
