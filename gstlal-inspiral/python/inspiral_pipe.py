@@ -15,6 +15,9 @@ def which(prog):
 		raise ValueError
 	return out
 
+def condor_scratch_space():
+	return "$ENV(_CONDOR_SCRATCH_DIR)"
+
 def log_path():
 	host = socket.getfqdn()
 	try:
@@ -112,6 +115,8 @@ class InspiralNode(pipeline.CondorDAGNode):
 		pipeline.CondorDAGNode.__init__(self, job)
 		for p in p_node:
 			self.add_parent(p)
+		self.set_name("%s_%04X" % (job.tag_base, job.number))
+		job.number += 1
 		dag.add_node(self)
 
 
