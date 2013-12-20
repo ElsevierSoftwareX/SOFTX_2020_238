@@ -1210,6 +1210,7 @@ speex_resampler_process_native (SpeexResamplerState * st,
   return RESAMPLER_ERR_SUCCESS;
 }
 
+<<<<<<< HEAD
 #ifdef UPSAMPLE2x
 static int
 speex_resampler_process_native_2x (SpeexResamplerState * st,

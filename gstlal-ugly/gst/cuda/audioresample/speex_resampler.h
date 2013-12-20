@@ -53,6 +53,7 @@
 
 #define CAT_PREFIX2(a,b) a ## b
 #define CAT_PREFIX(a,b) CAT_PREFIX2(a, b)
+<<<<<<< HEAD
 
 #ifdef UPSAMPLE2x
 #define speex_resampler_init_2x CAT_PREFIX(RANDOM_PREFIX,_resampler_init_2x)
