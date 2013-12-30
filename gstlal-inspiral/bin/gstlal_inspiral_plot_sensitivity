@@ -133,8 +133,7 @@ class upper_limit(object):
             if float(connection.cursor().execute("SELECT max(offset) FROM time_slide WHERE time_slide_id == ?;",(tsid,)).fetchone()[0]) == 0:
                 zero_lag_ids.append(tsid)
 
-        for zlid in zero_lag_ids:
-            instruments_query = """ SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id == ?; """
+        instruments_query = """ SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id == ?; """
 
         for inst in connection.cursor().execute(instruments_query, (sngl_sngl_id, zlid) ):
             inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
