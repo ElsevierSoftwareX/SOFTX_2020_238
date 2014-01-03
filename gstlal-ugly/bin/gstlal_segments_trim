@@ -31,6 +31,8 @@ def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--segment-name", metavar = "name", default = "datasegments", help = "Set the name of segments default datasegments")
 	parser.add_option("--trim", metavar = "int", type = "int", default = 0, help = "Set the trim factor default 0")
+	parser.add_option("--gps-start-time", metavar = "int", type = "int", default = None, help = "GPS start time to which segments are trimmed, default = None")
+	parser.add_option("--gps-end-time", metavar = "int", type = "int", default = None, help = "GPS end time to which segments are trimmed, default = None")
 	parser.add_option("--min-length", metavar = "int", type = "int", default = 0, help = "Set the min segment length, default 0")
 	parser.add_option("--output", metavar = "file", default = ".", help = "Set the name of the output file")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
@@ -52,6 +54,14 @@ for k in segs:
 	segs[k] = segments.segmentlist([seg for seg in segs[k] if (abs(seg) > 2 * trim) and (abs(seg) > options.min_length)])
 	
 segs.contract(trim)
+
+# trim the segment list to certain GPS times if start and end GPS times are given
+if options.gps_start_time is not None or options.gps_end_time is not None:
+	start = LIGOTimeGPS(options.gps_start_time) if options.gps_start_time is not None else segments.NegInfinity
+	stop = LIGOTimeGPS(options.gps_end_time) if options.gps_end_time is not None else segments.PosInfinity
+	boundaries = segments.segmentlist([segments.segment(start, stop)])
+	for seglist in segs.values():
+		seglist &= boundaries
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
