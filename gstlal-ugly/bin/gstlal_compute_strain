@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010, 2011  Jordi Burguet-Castell
+# Copyright (C) 2010-2014  Jordi Burguet-Castell, Madeline Wade
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -167,7 +167,7 @@ if options.data_source != "white":
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
 
 rawstrain = pipeparts.mkreblock(pipeline, rawstrain, block_duration = gst.SECOND)
-odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND * 10)
+odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
 
 # When reading from disk, clip raw strain stream to segment list
 if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
@@ -177,32 +177,15 @@ if options.data_source == "frames" and gw_data_source.frame_segments[instrument]
 # ODC STATE VECTOR BRANCH
 #
 
-#odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x3)
-odcstatevector = pipeparts.mkodctodqv(pipeline, odcstatevector, required_on = options.required_on, status_out = 0x7)
-odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
-
-odccontrol = pipeparts.mkstatevector(pipeline, odcstatevectortee, required_on = 0x3)
-odccontroltee = pipeparts.mktee(pipeline, odccontrol)
-
-# This is the branch that gets converted to the DQ vector
-odcstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), hold_length = -32768)
-odcstatevector = pipeparts.mkaudioundersample(pipeline, odcstatevector)
+odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_logical_undersampler", required_on = options.required_on, status_out = 0x3)
 odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
-odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
-# The below audiorate might help with the issue of gaps in the incoming stream hanging up the pipeline
-odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 
 #
 # RECOLORING OR CALIBRATION BRANCH
 #
 
-# Use the ODC state vector to gate the raw strain channel
-rawstrain = pipeparts.mkgate(pipeline, rawstrain, threshold = 1, default_state = False, control = pipeparts.mkqueue(pipeline, odccontroltee, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 10000))
-
-# Provide an audioconvert to allow Virgo data (which is single-precision) to be adapted into the pipeline
 rawstrain = pipeparts.mkaudioconvert(pipeline, rawstrain)
-
 rawstrain = pipeparts.mkprogressreport(pipeline, rawstrain, "progress_src_%s" % instrument)
 rawstrain = pipeparts.mkresample(pipeline, rawstrain, quality = 9)
 rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=64, rate=%d" % sr)
@@ -290,18 +273,17 @@ rawstraintee = pipeparts.mktee(pipeline, rawstrain)
 straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
 strain = pipeparts.mktaginject(pipeline, rawstraintee, straintagstr)
 
-# FIXME: The code below causes the adder to get stuck after 6 seconds.  Find out why and fix it, so that the LLD-DQ_VECTOR bits can be set independently
-
-"""
 #
 # H(t)-OK BIT BRANCH
 #
 
-htdqbit = pipeparts.mkchecktimestamps(pipeline, psltee)
+htdqbit = pipeparts.mkchecktimestamps(pipeline, rawstraintee)
 htdqbit = pipeparts.mkbitvectorgen(pipeline, htdqbit, bit_vector = 0x4, nongap_is_control = True)
-htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, width=32")
-htdqbit = pipeparts.mkaudioundersample(pipeline, htdqbit)
-htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=1")
+htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, width=32, signed=false, depth=32, channels=1, rate=%d, endianness=1234" % sr)
+htdqbit = pipeparts.mkaudiorate(pipeline, htdqbit, skip_to_first = True, silent = False) # This audiorate fixes issues with zero-sized buffers that are not marked as gaps being passed between the two surrounding elements.  I'm not sure why this is happening, so more work needs to be done to investigate the root of the problem.
+htdqbit = pipeparts.mkgeneric(pipeline, htdqbit, "lal_logical_undersampler", required_on = 0x4, status_out = 0x4)
+#htdqbit = pipeparts.mkaudioundersample(pipeline, htdqbit)
+htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=1, width=32, depth=32, signed=false, channels=1, endianness=1234")
 htdqbit = pipeparts.mkchecktimestamps(pipeline, htdqbit)
 
 #
@@ -313,14 +295,8 @@ dqvector.set_property("sync", True)
 pipeline.add(dqvector)
 pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100).link(dqvector)
 pipeparts.mkqueue(pipeline, htdqbit, max_size_time = gst.SECOND * 100).link(dqvector)
-dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
-dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
-dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)
-#pipeparts.mknxydumpsink(pipeline, dqvector, "dqvector.dump")
-"""
 
-# Until the above code is fixed, make the LLD-DQ_VECTOR by gating the DQ vector with the strain to check for gaps
-dqvector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), threshold = 1e-300, default_state = False, control = pipeparts.mkqueue(pipeline, rawstraintee, max_size_time = gst.SECOND * 10000, max_size_buffers = 0, max_size_bytes = 0), hold_length = -1)
+dqvector = pipeparts.mkprogressreport(pipeline, dqvector, "progress_llddq_%s" % instrument)
 dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
 dqvector = pipeparts.mktaginject(pipeline, dqvector, dqtagstr)
 dqvector = pipeparts.mkchecktimestamps(pipeline, dqvector)

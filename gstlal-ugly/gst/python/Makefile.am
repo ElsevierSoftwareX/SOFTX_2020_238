@@ -7,4 +7,5 @@ pkgpython_PYTHON = \
 	lal_fixodc.py \
 	lal_hveto.py \
 	lal_numpy_functiongenerator.py \
-	lal_timeseriesplotter.py
+	lal_timeseriesplotter.py \
+	lal_logical_undersampler.py
