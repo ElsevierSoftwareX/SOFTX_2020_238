@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 #include <stdio.h>
-#include <cuda_iirbank.h>
+#include <iirfilter/cuda_iirbank.h>
 
 #ifdef __cplusplus
 }
