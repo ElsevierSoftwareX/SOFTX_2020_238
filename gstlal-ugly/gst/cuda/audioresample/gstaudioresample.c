@@ -50,6 +50,7 @@
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
+#define DISABLE_ORC
 #ifndef DISABLE_ORC
 #include <orc/orc.h>
 #include <orc-test/orctest.h>
@@ -1566,7 +1567,7 @@ error:
   return FALSE;
 }
 #endif /* defined(AUDIORESAMPLE_FORMAT_AUTO) && !defined(DISABLE_ORC) */
-
+#if 0
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
@@ -1598,3 +1599,4 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     "audioresample",
     "Resamples audio", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME,
     GST_PACKAGE_ORIGIN);
+#endif
