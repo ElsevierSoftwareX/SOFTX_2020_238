@@ -26,7 +26,7 @@
  */
 
 
-#include <gstlal_iirbankCuda.h>
+#include <iirfilter/gstlal_iirbankCuda.h>
 #define BANK_INIT_SUCCESS 1
 #define BANK_INIT_FAILED -1
 #define BANK_FREE_SUCCESS 1
