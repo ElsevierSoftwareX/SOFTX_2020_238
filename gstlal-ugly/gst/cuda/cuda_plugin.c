@@ -42,7 +42,8 @@
  */
 
 
-#include <gstlal_iirbankCuda.h>
+#include <iirfilter/gstlal_iirbankCuda.h>
+#include <audioresample/gstaudioresample.h>
 
 
 /*
@@ -61,6 +62,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"cuda_iirbank", CUDA_IIRBANK_TYPE},
+		{"cuda_audioresample", GST_TYPE_AUDIO_RESAMPLE},
 		{NULL, 0},
 	};
 
