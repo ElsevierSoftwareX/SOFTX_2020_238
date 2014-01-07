@@ -1,3 +1,10 @@
+gstlal-ugly (0.5.4-1) unstable; urgency=low
+
+  * include /usr/share/... in package
+  * fix build against new framecpp headers
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Tue, 7 Jan 2014 14:35:40 -0500
+
 gstlal-ugly (0.5.2-1) unstable; urgency=low
 
   * New version 0.5.2
