@@ -29,7 +29,7 @@ from optparse import OptionParser
 
 def parse_command_line():
 	parser = OptionParser(usage = "gstlal_parse_frame_segment_logs --function-name <func> < <infile> > <outfile>")
-	parser.add_option("--input", metavar = "name", help = "Set the input log file name - Required")
+	parser.add_option("--input", metavar = "name", default = "stdin", help = "Set the input log file name - Default is stdin")
 	parser.add_option("--output", metavar = "name", help = "Set the output xml ile name - Required")
 	parser.add_option("--function-name", metavar = "name", default = "datasegments", help = "Set the name of the function to look for in the logs, e.g. frvect_to_buffer_and_push - Required")
 	options, filenames = parser.parse_args()
@@ -51,11 +51,14 @@ segre = re.compile(" \[(.*)s\)")
 segdict = {}
 
 # check for compression
-try:
-	f = gzip.open(opts.input).readline()
-	f = gzip.open(opts.input)
-except IOError:
-	f = open(opts.input)
+if opts.input != "stdin":
+	try:
+		f = gzip.open(opts.input).readline()
+		f = gzip.open(opts.input)
+	except IOError:
+		f = open(opts.input)
+else:
+	f = sys.stdin
 
 # parse the file
 for l in f:
