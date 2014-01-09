@@ -24,7 +24,7 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy
+import sys, os, copy, stat
 import shutil
 
 ##############################################################################
@@ -122,6 +122,81 @@ class gstlal_inspiral_marginalize_likelihoods_online_node(pipeline.CondorDAGNode
 		self.add_var_arg("%s %s" % (os.getcwd(), output))
 		dag.add_node(self)
 
+class lvalert_listen_job(pipeline.CondorDAGJob):
+	"""
+	A lvalert_listen_job
+	"""
+	def __init__(self, executable=dagparts.which('lvalert_listen'), tag_base='lvalert_listen', gracedb_group = "CBC", gracedb_type = "LowMass", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb")):
+		"""
+		"""
+		self.__prog__ = 'lvalert_listen'
+		self.__executable = executable
+		self.__universe = 'local'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		# these jobs gracefully shutdown with SIGINT
+		self.add_condor_cmd("want_graceful_removal", "True")
+		self.add_condor_cmd("kill_sig", "15")
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+
+		# produce the lvalert processor
+
+		f = open("lvalert.sh", "w")
+		f.write("#!/bin/bash \n")
+		f.write('cat <&0 | tee ')
+		for prog in progs:
+			f.write(">(%s) " % dagparts.which(prog))
+		f.close()
+		os.chmod('lvalert.sh', os.stat('lvalert.sh').st_mode | stat.S_IEXEC)
+
+		f = open("lvalert.ini", "w")
+		#FIXME gracedb server code sets up nodes based on this convention
+		f.write("[%s_%s]\n" % (gracedb_group.lower(), gracedb_type.lower()))
+		f.write("executable=./lvalert.sh")
+		f.close()
+
+
+class lvalert_listen_node(pipeline.CondorDAGNode):
+	"""
+	lvalert_listen node
+	"""
+	def __init__(self, job, dag):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("username", raw_input("lvalert username: "))
+		self.add_var_opt("password", raw_input("lvalert password: "))
+		self.add_var_opt("config-file", "lvalert.ini")
+		dag.add_node(self)
+
+
+class gstlal_ll_inspiral_get_urls_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_ll_inspiral_get_urls job
+	"""
+	def __init__(self, executable=dagparts.which('gstlal_ll_inspiral_get_urls'), tag_base='gstlal_ll_inspiral_get_urls'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_ll_inspiral_get_urls'
+		self.__executable = executable
+		self.__universe = 'local'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		# these jobs gracefully shutdown with SIGINT
+		self.add_condor_cmd("want_graceful_removal", "True")
+		self.add_condor_cmd("kill_sig", "15")
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+
+
+class gstlal_ll_inspiral_get_urls_node(pipeline.CondorDAGNode):
+	def __init__(self, job, dag, numjobs):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_arg(". 0001,%04d 25" % numjobs)
+		dag.add_node(self)
 
 class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	"""
@@ -174,6 +249,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 			self.add_var_opt("state-vector-on-bits", on)
 			self.add_var_opt("state-vector-off-bits", off)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
+		self.set_name("gstlal_inspiral_%04d" % job.number)
 		job.number += 1
 		for p in p_node:
 			self.add_parent(p)
@@ -209,6 +285,7 @@ def parse_command_line():
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
 	parser.add_option("--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
+	parser.add_option("--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
 	
 	options, filenames = parser.parse_args()
 	options.num_banks = [int(v) for v in options.num_banks.split(",")]
@@ -254,13 +331,21 @@ else:
 margJob = gstlal_inspiral_marginalize_likelihoods_online_job()
 margNode = gstlal_inspiral_marginalize_likelihoods_online_node(margJob, dag, options.marginalized_likelihood_file) 
 
+# an lvalert_listen job
+listenJob = lvalert_listen_job(gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, progs = options.lvalert_listener_program)
+listenNode = lvalert_listen_node(listenJob, dag)
+
+# 
+urlsJob = gstlal_ll_inspiral_get_urls_job()
+
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
-for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
+for num_insp_nodes, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs)):
 	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, data_source = options.data_source, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name, state_vector_on_off_dict = options.state_vector_on_off_dict)
 
+gstlal_ll_inspiral_get_urls_node(urlsJob, dag, num_insp_nodes+1)
 
 dag.write_sub_files()
 # we probably want these jobs to retry indefinitely on dedicated nodes. A user
@@ -271,3 +356,10 @@ dag.write_sub_files()
 dag.write_dag()
 dag.write_script()
 dag.write_cache()
+
+# set up the webpage
+# FIXME don't hardcode this stuff
+shutil.copy2(dagparts.which('gstlal_llcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
+shutil.copy2(dagparts.which('gstlal_llcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
+
+print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=0001,%04d&dir=%s \n\n" % (os.environ['USER'], num_insp_nodes+1, os.getcwd())
