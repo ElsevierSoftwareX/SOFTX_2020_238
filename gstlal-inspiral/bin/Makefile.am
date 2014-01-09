@@ -13,6 +13,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_condition_data \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_iir_bank_pipe \
+	gstlal_inspiral_followups_from_gracedb \
 	gstlal_inspiral_lvalert_psd_plotter \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
