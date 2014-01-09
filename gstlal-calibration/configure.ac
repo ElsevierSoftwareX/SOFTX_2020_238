@@ -13,9 +13,12 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
-	gstlal-ugly.spec \
+	gstlal-calibration.spec \
+	bin/Makefile \
 	debian/control \
-	debian/Makefile
+	debian/Makefile \
+	gst/Makefile \
+	python/Makefile \
 ])
 
 
