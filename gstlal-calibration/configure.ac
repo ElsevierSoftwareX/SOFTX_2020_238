@@ -18,7 +18,9 @@ AC_CONFIG_FILES([ \
 	debian/control \
 	debian/Makefile \
 	gst/Makefile \
+	gst/python/Makefile \
 	python/Makefile \
+	tests/Makefile \
 ])
 
 

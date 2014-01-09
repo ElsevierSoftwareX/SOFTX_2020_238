@@ -58,7 +58,6 @@
 #include <gstlal_trim.h>
 #include <gstlal_burst_triggergen.h>
 #include <gstlal_bitvectorgen.h>
-#include <gstlal_odc_to_dqv.h>
 
 
 /*
@@ -84,7 +83,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_bursttriggergen", GSTLAL_BURST_TRIGGERGEN_TYPE},
 		{"lal_trim", GST_TYPE_LALTRIM},
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
-		{"lal_odc_to_dqv", GSTLAL_ODC_TO_DQV_TYPE},
 		{NULL, 0},
 	};
 
