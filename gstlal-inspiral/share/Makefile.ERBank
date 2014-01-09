@@ -4,24 +4,24 @@ START = 871147516
 STOP =  871149564
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 24.0
-MIN_TOTAL_MASS = 2.0
-MAX_TOTAL_MASS = 25.0
-LOW_FREQUENCY_CUTOFF = 15.0
-HIGH_PASS_FREQ = 10
+MIN_MASS = 0.98
+MAX_MASS = 2.05
+MIN_TOTAL_MASS = 1.96
+MAX_TOTAL_MASS = 4.1
+LOW_FREQUENCY_CUTOFF = 40.0
+HIGH_PASS_FREQ = 30
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 200
-OVERLAP = 50
-MM = 0.97
+OVERLAP = 40
+MM = 0.975
 
 all : dag
 
 
 frame.cache :
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --channel-name H1=FAKE-STRAIN --verbose --data-source AdvLIGO --frame-type FAKE
-	ls H1/H-H1_FAKE-8711/*.gwf | lalapps_path2cache > frame.cache
+	gstlal_fake_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --channel-name H1=FAKE-STRAIN --verbose --data-source AdvLIGO --frame-type FAKE --output-path FAKE
+	ls FAKE/H-FAKE-871/*.gwf | lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \
@@ -37,10 +37,7 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		--max-total-mass $(MAX_TOTAL_MASS) \
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \
-		--standard-candle \
 		--calibrated-data real_8 \
-		--candle-mass1 1 \
-		--candle-mass2 1 \
 		--channel-name H1:FAKE-STRAIN \
 		--space Tau0Tau3 \
 		--number-of-segments 15 \
