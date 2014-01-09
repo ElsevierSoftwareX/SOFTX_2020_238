@@ -203,9 +203,10 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, data_source = "lvshm", copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=dagparts.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, data_source = "lvshm", copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, state_vector_on_off_dict = None, psd_fft_length = 16, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("psd-fft-length", psd_fft_length)
 		# FIXME add as an argument rather than hard code
 		self.add_var_opt("likelihood-snapshot-interval", 14400)
 		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -263,6 +264,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--channel", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
@@ -343,7 +345,7 @@ urlsJob = gstlal_ll_inspiral_get_urls_job()
 ###############################################################################
 
 for num_insp_nodes, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs)):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, data_source = options.data_source, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name, state_vector_on_off_dict = options.state_vector_on_off_dict)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, data_source = options.data_source, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name, state_vector_on_off_dict = options.state_vector_on_off_dict, psd_fft_length = options.psd_fft_length)
 
 gstlal_ll_inspiral_get_urls_node(urlsJob, dag, num_insp_nodes+1)
 
