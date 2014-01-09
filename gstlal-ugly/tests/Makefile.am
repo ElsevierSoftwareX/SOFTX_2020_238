@@ -1,6 +1,6 @@
 EXTRA_DIST = \
 	plots_test_01.py \
-	plot_test \
+	plot_test
 
 TESTS =
 

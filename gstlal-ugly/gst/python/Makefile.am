@@ -6,4 +6,4 @@ pkgpyexecdir = $(pkgpythondir)
 pkgpython_PYTHON = \
 	lal_hveto.py \
 	lal_numpy_functiongenerator.py \
-	lal_timeseriesplotter.py \
+	lal_timeseriesplotter.py
