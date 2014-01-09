@@ -85,6 +85,9 @@ def geturl(idnodeurls):
 
 
 if __name__ == "__main__":
-	reg = read_registry(directory, "_registry.txt", idrange)
-	pool = Pool(poolnum)
-	pool.map(geturl, reg.items())
+
+	while True:
+		reg = read_registry(directory, "_registry.txt", idrange)
+		pool = Pool(poolnum)
+		pool.map(geturl, reg.items())
+		time.sleep(300)
