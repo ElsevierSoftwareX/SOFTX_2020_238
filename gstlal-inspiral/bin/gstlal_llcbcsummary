@@ -24,16 +24,22 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
 import numpy
-# FIXME don't import this when it is "real"
-from numpy import random
 import matplotlib.pyplot as plt
 import time
+import StringIO
+import base64
 cgitb.enable()
 form = cgi.FieldStorage()
 
 def now():
 	#FIXME use pylal when available
 	return time.time() - 315964785
+
+def to_png_image():
+	f = StringIO.StringIO()
+	plt.savefig(f, format="png")
+	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	f.close()
 
 def read_registry(dir, dataurl, ids):
 	nodedict = {}
@@ -76,15 +82,17 @@ def setup_plot():
 	return fig, h
 
 def finish_plot(ids, registry, ylim, title=''):
+	plt.grid(color=(0.1,0.4,0.5), linewidth=2)	
 	ticks = ["%s : %s " % (id, registry[id]) for id in ids]
 	plt.xticks(numpy.arange(len(ids))+.3, ticks, rotation=90, fontsize = 10)
 	plt.xlim([0, len(ids)])
 	plt.ylim(ylim)
 	tickpoints = numpy.linspace(ylim[0], ylim[1], 8)
 	ticks = ["%.1e" % (10.**t,) for t in tickpoints]
-	plt.yticks(tickpoints, ticks, fontsize = 20)
-	plt.title(title, fontsize = 30)
-	plt.savefig(sys.stdout, format = "svg")
+	plt.yticks(tickpoints, ticks, fontsize = 14)
+	plt.title(title, fontsize = 18)
+	to_png_image()
+	#plt.savefig(sys.stdout, format = "svg")
 
 def plot_latency(found, missed, ids, registry):
 	fig, h = setup_plot()
@@ -182,6 +190,38 @@ def plot_single_col(found, missed, ids, registry, col = 0, title = ''):
 	h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
 	finish_plot(ids, registry, [0.9 * min_y, max_y], title)
 
+def plot_state(form):
+	files = form.getlist("statefile")
+	lookback = 3600
+	lookahead = 0
+	bgcol = (224/255.,224/255.,224/255.)
+	for file in files:
+		gps = now()
+		segs = numpy.loadtxt(file)
+		times = segs[-int(lookback):,0]
+		states = numpy.array(segs[-int(lookback):,1], dtype = numpy.int64)
+		print "<div>"
+		fig = plt.figure(figsize=(20,6), facecolor = 'g')
+		fig.patch.set_alpha(0.0)
+		h = fig.add_subplot(111, axisbg = bgcol)
+		plt.subplots_adjust(bottom = 0.2, top = 0.85)
+		bit_array = numpy.empty((12, len(states)))
+		bits = numpy.arange(bit_array.shape[0])
+		for bit in bits:
+			bit_array[bit,:] =  numpy.bitwise_and(states, 2**(bit)) // 2**bit
+	
+		t = numpy.array(times) - gps
+		plt.gray()
+		plt.pcolormesh(t, numpy.array(list(bits) + [len(bits)]), bit_array)
+		plt.yticks(numpy.arange(12) + 0.5, ('Sci', 'Lock', 'h(t)', '(reserved)', 'CBC Inj', 'CBC CAT1', 'CBC CAT2', 'CBC CAT3', 'Burst Inj', 'Burst CAT1', 'Burst CAT2', 'Burst CAT3'))
+		plt.xlim([-float(lookback), float(lookahead)])
+		plt.ylabel('state')
+		plt.xlabel('time from ' + str(gps))
+		plt.title(file)
+		plt.grid(color=(0.1,0.4,0.5), linewidth=2)
+		to_png_image()
+		print "</div>"
+
 def get_ids(form):
 	idrange = [int(n) for n in form.getvalue("id").split(",")]
 	#FIXME relies on 4 digit ids
@@ -210,8 +250,16 @@ print """
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
 <meta http-equiv="refresh" content="300">
+  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
+  <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+  <script type="text/javascript"> $(function() {
+    $("#accordion").accordion({
+    });
+
+  });</script>
 </head>
-<body bgcolor=#E0E0E0 face="Arial">
+<body>
 """
 
 # title
@@ -219,80 +267,86 @@ print """
 <font size=10><img src="../lcbo.jpg"> Low-latency Compact Binary Online </font><font size=6 color=#707070><b><right>%s: %d - %s </right></b><br></font><hr><br>
 """ % ("".join(sorted(ifos)), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()))
 
-# start a table
-print "<table>"
+print '<div id="accordion">'
 
 
 #
 # latency history
 #
-
-print "<tr><td><div id='canvaslatency'>"
+print "<h1>Latency</h1>"
+print "<div id='canvaslatency'>"
 found, missed = load_data(directory, ids, "latency_history")
 plot_latency(found, missed, ids, reg)
-print "</div></td></tr>"
+print "</div>"
 
 #
 # snr history
 #
 
-print "<tr><td><div id='canvassnr'>"
+print "<h1>SNR</h1>"
+print "<div id='canvassnr'>"
 found, missed = load_data(directory, ids, "snr_history")
 plot_snr(found, missed, ids, reg)
-print "</div></td></tr>"
+print "</div>"
+
+#
+# state history
+#
+
+#print "<h1>State</h1>"
+#print "<div id='canvasstate'>"
+#plot_state(form)
+#print "</div>"
 	
 #
 # live time by ifo
 #
 
 for ifo in ifos:
-	print "<tr><td><div id='%scanvastime'>" % (ifo,)
+	print "<h1>Livetime for %s</h1>" % ifo
+	print "<div id='%scanvastime'>" % (ifo,)
 	found, missed = load_data(directory, ids, "%sstate_vector_on_off_gap" % (ifo,))
 	plot_livetime(found, missed, ids, reg, ifo)
-	print "</div></td></tr>"
+	print "</div>"
 
 #
 # Template Duration
 #
 
-print "<tr><td><div id='canvasdur'>"
+print "<h1>Template Duration</h1>"
+print "<div id='canvasdur'>"
 found, missed = load_data(directory, ids, "bank")
 plot_single_col(found, missed, ids, reg, 1, "Template Duration (s)")
-print "</div></td></tr>"
+print "</div>"
 
 #
 # Chirp Mass
 #
 
-print "<tr><td><div id='canvasmchirp'>"
+print "<h1>Chirp Mass</h1>"
+print "<div id='canvasmchirp'>"
 found, missed = load_data(directory, ids, "bank")
 plot_single_col(found, missed, ids, reg, 2, "Chirp Mass")
-print "</div></td></tr>"
+print "</div>"
 
 #
 # RAM
 #
 
-print "<tr><td><div id='canvasram'>"
+
+print "<h1>RAM</h1>"
+print "<div id='canvasram'>"
 found, missed = load_data(directory, ids, "ram_history")
 plot_ram(found, missed, ids, reg)
-print "</div></td></tr>"
+print "</div>"
 
-#
-# end a table
-#
-
-print "</table>"
+print "</div>"
 
 # links at bottom
 print "<h3>Node summary info:</h3><hr>"
 for id in ids:
-	print '<font size=5><a href="gstlal_llcbcnode?dir=%s&id=%s"> %s </a></font>' % (form.getvalue("dir"), id, id)
-
-# likelihood links at bottom
-print "<h3>Node likelihood info:</h3><hr>"
-for id in ids:
 	url = os.path.join(form.getvalue("dir"), "%s_likelihood.xml" % (id,))
-	print '<font size=5><a href="gstlal_inspiral_plot_likelihoods?url=%s"> %s </a></font>' % (url, id)
+	print '<font size=5><a target="_blank" href="gstlal_llcbcnode?dir=%s&id=%s&url=%s"> %s </a></font>' % (form.getvalue("dir"), id, url, id)
+
 print "</body>"
 
