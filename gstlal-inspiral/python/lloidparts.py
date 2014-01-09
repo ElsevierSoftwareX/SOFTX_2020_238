@@ -240,7 +240,7 @@ class Handler(simplehandler.Handler):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-		ligolwsegments.insert_from_segmentlistdict(self.segments, name = "datasegments", version = None, insertion_time = None, comment = "LLOID snapshot")
+		ligolwsegments.insert_from_segmentlistdict(self.segments, name = "datasegments", version = None, comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		return xmldoc
 
