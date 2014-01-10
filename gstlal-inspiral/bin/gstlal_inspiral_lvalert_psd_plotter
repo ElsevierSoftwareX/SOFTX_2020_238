@@ -163,7 +163,7 @@ def upload_fig(fig, gracedb_client, graceid, filename = "psd.png"):
 	plotfile = StringIO.StringIO()
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
-	response = gracedb_client.writeLog(graceid, "strain spectral densities", filename = filename, filecontents = plotfile.getvalue(), tag = "psd")
+	response = gracedb_client.writeLog(graceid, "strain spectral densities", filename = filename, filecontents = plotfile.getvalue(), tagname = "psd")
 	if response.status != httplib.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
