@@ -31,6 +31,104 @@ import base64
 cgitb.enable()
 form = cgi.FieldStorage()
 
+## @file gstlal_llcbcsummary
+# This program will monitor the output of a gstlal inspiral low latency
+# analysis; See gstlal_llcbcsummary for help and usage.
+
+## @package gstlal_llcbcsummary
+#
+# This program is designed to be placed in the cgi-bin directory of the user's
+# public_html directory on the cluster that is running the gstlal inspiral low
+# latency analysis
+#
+# ## USAGE:
+# This program is never meant to be executed by a user, but rather on a
+# webserver via a url such as:
+# 
+#	 	https://hostname.domain/path/to/cgi-bin/gstlal_llcbcsummary?id=<start>,<stop>&dir=/path/to/analysis/directory
+#
+# e.g.,
+#
+# 		https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0010&dir=/home/gstlalcbc/engineering/5/bns_trigs_40Hz
+#
+# <start> and <stop> are the 4 digit id numbers corresponding to the first and
+# last job, respectively.  
+# 
+# ## Interpretation of the output page
+#
+# General remarks.  Red bars indicate that no data is available for the job in
+# question.  If you are sure the url is correct, this could mean that a job has
+# failed.  Each bar contains the node and job number.
+# 
+# ### Header information
+#
+# \image html gstlal_llcbcsummary01.png
+#
+# This displays the current ifos involved ("H1L1V1") as well as the current GPS
+# time and local time
+#
+# ### Latency
+#
+# \image html gstlal_llcbcsummary02.png
+#
+# This plot indicates the time since the last event (gray) as well as the
+# latency of the last event (white).  If things are behaving well the latency
+# should be ~60 seconds and the time since last event should be no more than
+# ~300 seconds. 
+#
+# #### Reasons that this might not be the case:
+#  
+# -# At least two detectors are not functioning
+# -# The gstlal inspiral jobs are in a period "update" mode where they pause to
+# update background statistics.  This should only last for a few minutes every
+# 4 hours and should not cause more than a few hundred seconds of delay
+# -# Something more serious is wrong, e.g. the jobs are not able to keep up with the data.
+#
+# ### SNR
+#
+# \image html gstlal_llcbcsummary03.png
+#
+# This plot indicates the coincident SNR (root-sum-squares) of the last 1000
+# events.  The median SNR is white and the maximum SNR is gray.  The median SNR
+# should typically be small (< 8), however the maximum SNR might be large due
+# to the presence of a glitch or a signal.
+#
+# 
+# ### Livetime plots
+# 
+# \image html gstlal_llcbcsummary04.png
+#
+# These IFO specific plots can be used to infer the ammount of up-time,
+# down-time and periods of lost data for a given job.  This is *only* since the
+# job has been running.  Thus it is an indicator of how long the job has been
+# running without crashing.  Ideally jobs would only be restarted during
+# maintenance periods.  If the livetime is low for one or more jobs it could
+# indicate instability that is causing crashes
+# 
+# ### Template Parameters
+#
+# \image html gstlal_llcbcsummary05.png
+# 
+# \image html gstlal_llcbcsummary06.png
+#
+# These plots give the chirp mass and template duration bins of the given job.
+# 
+# ### RAM usage
+#
+# \image html gstlal_llcbcsummary07.png
+#
+# This plot gives the maximum RAM usage seen over the duration of the job. If
+# it is near the limit of the resource it might indicate that the jobs are
+# "swapping" and could be related to problems such as falling behind.
+# 
+# ### Links to more information about a given job
+# 
+# \image html gstlal_llcbcsummary08.png
+#
+# To drill down into specific information of a job click on the links at the
+# bottom of the screen.  These will bring up pages created by gstlal_llcbcnode.
+# Please see gstlal_llcbcnode for more information
+
 def now():
 	#FIXME use pylal when available
 	return time.time() - 315964785
@@ -250,9 +348,9 @@ print """
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
 <meta http-equiv="refresh" content="300">
-  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
-  <script src="http://code.jquery.com/jquery-1.8.3.js"></script>
-  <script src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.10.0/themes/base/jquery-ui.css" />
+  <script src="//code.jquery.com/jquery-1.8.3.js"></script>
+  <script src="//code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
   <script type="text/javascript"> $(function() {
     $("#accordion").accordion({
     });
@@ -264,7 +362,7 @@ print """
 
 # title
 print """
-<font size=10><img src="../lcbo.jpg"> Low-latency Compact Binary Online </font><font size=6 color=#707070><b><right>%s: %d - %s </right></b><br></font><hr><br>
+<font size=10><img src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png">gstlal_inspiral online </font><font size=6 color=#707070><b><right>%s: %d - %s </right></b><br></font><hr><br>
 """ % ("".join(sorted(ifos)), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()))
 
 print '<div id="accordion">'
