@@ -128,10 +128,18 @@ the triggers directory with
 
 		$ gstlal_ll_inspiral_gracedb_threshold --gracedb-far-threshold <FAR THRESH> *registry.txt
 
+\subsection Resources Resources used
+
+- gstlal_ll_trigger_pipe
+- gstlal_inspiral_reset_likelihood
+- gstlal_ll_inspiral_gracedb_threshold
+- gstlal_inspiral_create_prior_diststats
+- gstlal_inspiral_marginalize_likelihood
+
 		
 \section monitor Monitoring the output
 
 As mentioned above you can monitor the output.  Please see the
 gstlal_llcbcsummary for more information. 
 
-
+Events are uploaded to https://gracedb.ligo.org
