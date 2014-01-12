@@ -38,6 +38,63 @@ from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
 
+## @file gstlal_ll_trigger_pipe
+# This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
+
+## @package gstlal_ll_trigger_pipe
+#
+# ### Graph of the HTCondor DAG
+#
+# - gray boxes are optional and depend on the command line given
+#
+# @dot
+# digraph G {
+#       // graph properties
+#
+#       rankdir=LR;
+#       compound=true;
+#       node [shape=record fontsize=10 fontname="Verdana"];     
+#       edge [fontsize=8 fontname="Verdana"];
+#	gstlal_inspiral [URL="\ref gstlal_inspiral"];
+#	gstlal_llcbcsummary [URL="\ref gstlal_llcbcsummary"];
+#	gstlal_llcbcnode [URL="\ref gstlal_llcbcnode"];
+#	gstlal_inspiral_marginalize_likelihoods_online [URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
+#	lvalert_listen [style=filled, color=lightgrey, URL="https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lvalert-howto.html"];
+# }
+# @enddot
+#
+# ### Usage cases
+#
+# - Typical usage case
+#
+# ### Command line options
+#
+#	+ `--psd-fft-length` [int] (s): FFT length, default 16s
+#	+ `--reference-psd` [filename]: Set the reference psd file
+#	+ `--bank-cache` [filenames]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc
+#	+ `--channel` [IFO=CHANNEL-NAME]: Set the name of the channel to process (optional).  The default is "LSC-STRAIN" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times
+#	+ `--ht-gate-threshold` [float]: Set the h(t) gate threshold to reject glitches
+#	+ `--do-iir-pipeline`: Run the iir pipeline instead of lloid")
+#	+ `--num-banks` [str]: The number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each
+#	+ `--max-jobs` [num]: Stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool
+#	+ `--likelihood-file` [filename]: Set the likelihood file, required if --copy-likelihoods is used
+#	+ `--marginalized-likelihood-file` [filename]: Set the marginalized likelihood file, required
+#	+ `--control-peak-time` [int] (s): Set the control peak time, default 4
+#	+ `--fir-stride` [int] (s): Set the fir bank stride, default 4
+#	+ `--thinca-interval` [int] (s): Set the thinca interval, default 10
+#	+ `--gracedb-far-threshold` [float] (Hz): False alarm rate threshold for gracedb (Hz). Set to -1 to disable uploads
+#	+ `--gracedb-type` [str]: Set the gracedb type, default LowMass
+#	+ `--gracedb-group` [str]: Set the gracedb group, default Test
+#	+ `--data-source` [lvshm|framexmit]: Where to get the data from. Default lvshm
+#	+ `--copy-likelihoods`: Copy the likelihood files from a seed, must give --likelihood-file: WARNING overwrites existing files
+#	+ `--injections` [filename]: Set the name of the LIGO light-weight XML file from which to load injections (optional)
+#	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional)
+#	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list. Default is "vetoes"
+#	+ `--state-vector-on-bits` [IFO=bits]: Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times
+#	+ `--state-vector-off-bits` [IFO=bits]: Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times
+#	+ `--lvalert-listener-program` [program]: Set the programs to respond to lvalerts from this analysis, can be given multiple times
+#
+
 #
 # gstlal_inspiral
 #
@@ -271,17 +328,17 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
-	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs")
+	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
 	parser.add_option("--likelihood-file", help = "set the likelihood file, required if --copy-likelihoods is used")	
 	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
-	parser.add_option("--control-peak-time", default = 5, metavar = "secs", help = "set the control peak time, default 5")
-	parser.add_option("--fir-stride", default = 5, metavar = "secs", help = "set the fir bank stride, default 5")
+	parser.add_option("--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
+	parser.add_option("--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
 	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
 	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
-	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file")
+	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file: : WARNING overwrites existing files")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
