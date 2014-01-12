@@ -35,27 +35,61 @@ from glue import lal
 from glue.ligolw import lsctables
 from glue import segments
 from optparse import OptionParser
+from gstlal import dagparts
 
-def which(prog):
-	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
-	out = which.stdout.read().strip()
-	if not out:
-		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
-		raise ValueError
-	return out
+## @file gstlal_inspiral_svd_bank_pipe
+# This program will make a HTCondor DAG to automate the creation of svd bank files; see gstlal_inspiral_svd_bank_pipe for more information
 
-def log_path():
-	host = socket.getfqdn()
-	#FIXME add more hosts as you need them
-	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
-	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
-	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
-	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
-
+## @package gstlal_inspiral_svd_bank_pipe
+#
+# ### Graph of the condor DAG
+#
+# @dot
+# digraph G {
+#	// graph properties
+#
+#	rankdir=LR;
+#	compound=true;
+#	node [shape=record fontsize=10 fontname="Verdana"];     
+#	edge [fontsize=8 fontname="Verdana"];
+#
+#	// nodes
+#
+#	"gstlal_svd_bank" [URL="\ref gstlal_svd_bank"];
+# }
+# @enddot
+#
+# This DAG implements only a single job type; gstlal_svd_bank
+#
+# ### Usage cases
+#
+# - Typical usage case for H1
+#
+#		$ gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --overlap 10 --flow 15 --output-name H1_bank
+#
+# - Please add more!
+#
+# ### Command line options
+# 
+#	+ `--instrument` [ifo]: set the name of the instrument, required
+#	+ `--reference-psd` [file]: Set the name of the reference psd file, required
+#	+ `--bank-cache` [file]: Set the name of the bank cache, required
+#	+ `--overlap` [int]: Set the factor that describes the overlap of the sub banks, must be even!
+#	+ `--identity-transform`: Turn off the SVD and use the identity reconstruction matrix
+#	+ `--autocorrelation-length` [int]: The number of samples to use for auto-chisquared, default 201 should be odd
+#	+ `--samples-min` [int]: The minimum number of samples to use for time slices default 1024
+#	+ `--samples-max-256` [int]: The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024
+#	+ `--samples-max-64` [int]: The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048
+#	+ `--samples-max` [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
+#	+ `--stagger`: A hacky way to stagger the number of samples used in the SVD if you have a broad mass range and the cache is organized by chirp mass from small to big.  The first half gets 1024 the second gets 2048. This helps balance the number of slices with the number of principle components when the template duration varies wildly through the cache.  Using this option disables the samples-* options.  FIXME this will be removed once we know how to automate this in a better way.")
+#	+ `--tolerance` [float]: Set the SVD tolerance, default 0.9995
+#	+ `--flow` [float]: Set the low frequency cutoff, default 40 (Hz)
+#	+ `--output-name` [file]: Set the base name of the output, required
+#	+ `--verbose`: Be verbose.
 
 class bank_DAG(pipeline.CondorDAG):
 
-	def __init__(self, name, logpath = log_path()):
+	def __init__(self, name, logpath = dagparts.log_path()):
 		self.basename = name
 		tempfile.tempdir = logpath
 		tempfile.template = self.basename + '.dag.log.'
@@ -85,7 +119,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_svd_bank job
 	"""
-	def __init__(self, executable=which('gstlal_svd_bank'), tag_base='gstlal_svd_bank'):
+	def __init__(self, executable=dagparts.which('gstlal_svd_bank'), tag_base='gstlal_svd_bank'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_svd_bank'
@@ -140,7 +174,7 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache, required")
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--identity-transform", default = False, action = "store_true", help = "turn off the SVD and use the identity reconstruction matrix")
-	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
+	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The number of samples to use for auto-chisquared, default 201 should be odd")
 	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
