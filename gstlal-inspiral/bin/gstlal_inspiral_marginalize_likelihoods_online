@@ -16,6 +16,31 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file gstlal_inspiral_marginalize_likelihoods_online
+#
+# This program runs gstlal_inspiral_marginalize_likelihood in a while True
+# loop; See gstlal_inspiral_marginalize_likelihoods_online for more details
+
+## @package gstlal_inspiral_marginalize_likelihoods_online
+#
+# This program is not meant to be executed standalone by a user. It should be
+# part of a DAG managing a running gstlal_inspiral online analysis.
+#
+# This program takes two arguments;
+#
+# - The path to the registry txt files that it will use to figure out the nodes
+#   of the running jobs
+# - The output file name
+#
+# This program queries each running gstlal_inspiral job via the URL recorded in
+# its registry file and computes the marginalized likelihood distribution used
+# for computing the false-alarm-probability.
+#
+# It continues to do that in a while True loop (with a 10 minute break).  Files
+# are not overwritten directly, but rather via a temporary file and mv
+# operation to ensure that no files are corrupted in a POSIX file environment.
+# 
+
 REGPATH=$1
 OUTPUT=$2
 
