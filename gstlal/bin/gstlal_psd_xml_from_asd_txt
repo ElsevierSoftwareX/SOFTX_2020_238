@@ -31,8 +31,8 @@ from optparse import OptionParser
 #
 # A program to turn an ASCII PSD or ASD into an xml file suitable for consumption by various gstlal programs; see gstlal_psd_xml_from_asd_txt for details
 #
-# Note that the columns are expected to be frequency and 
-# Usage examples
+# 
+# ### Usage
 #
 # -# an H1 input ASD
 #
@@ -40,12 +40,12 @@ from optparse import OptionParser
 #
 # -# other things possible, please add some!
 #
-# Command line options
+# ### Command line options
 #
-# 	`--instrument` [string]: Instrument, e.g. H1
-#	`--output` [filename]: Set the name of the LIGO light-weight XML file to output
-#	`--df` [float] (Hz): Set the frequency resolution to interpolate to, default = 0.25
-#	`--type` [ASD|PSD]: Input is ASD or PSD, default ASD
+# 	+ `--instrument` [string]: Instrument, e.g. H1
+#	+ `--output` [filename]: Set the name of the LIGO light-weight XML file to output
+#	+ `--df` [float] (Hz): Set the frequency resolution to interpolate to, default = 0.25
+#	+ `--type` [ASD|PSD]: Input is ASD or PSD, default ASD
 #
 # specify the ASD or PSD text file as a file argument at the end
 #
