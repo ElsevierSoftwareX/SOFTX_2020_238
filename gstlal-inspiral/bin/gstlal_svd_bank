@@ -40,6 +40,39 @@ from glue.ligolw import utils as ligolw_utils
 from pylal import series as lalseries
 from gstlal import svd_bank
 
+## @file gstlal_svd_bank
+# This program will create svd bank files; see gstlal_svd_bank for more information
+
+## @package gstlal_svd_bank
+#
+# ### Usage examples
+# 
+# - Typical use
+#
+# 		$ gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 --bank-id 0 --snr-threshold 4.0 --ortho-gate-fap 0.5 --flow 40.0 --template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --svd-tolerance 0.9995 --write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
+#
+# - Please add more!
+#
+# ### Command line options
+#	+ `--flow` [float] (Hz): Set the template low-frequency cut-off (default = 40.0).
+#	+ `--identity-transform`: Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.
+#	+ `--padding` [pad factor] (float): Fractional amount to pad time slices. Default 1.5
+#	+ `--svd-tolerance` [match]: Set the SVD reconstruction tolerance (default = 0.9995).
+#	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
+#	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
+#	+ `--ortho-gate-fap` [probability]: Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).
+#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 5.5).
+#	+ `--write-svd-bank` [filename]: Set the filename in which to save the template bank (required).
+#	+ `--verbose`: Be verbose (optional).
+#	+ `--clipleft` [int]: Remove poorly reconstructable templates from the left edge of each sub-bank.
+#	+ `--clipright` [int]: Remove poorly reconstructable templates from the right edge of each sub-bank.
+#	+ `--autocorrelation-length` [int]: The minimum number of samples to use for auto-chisquared, default 201 should be odd
+#	+ `--samples-min` [int]: The minimum number of samples to use for time slices default 1024
+#	+ `--samples-max-256` [int]: The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024
+#	+ `--samples-max-64` [int]: The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048
+#	+ `--samples-max` [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
+#	+ `--bank-id` [id] (string): Set a string to be used as the globally unique ID for this bank (default = generate a UUID)
+#
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -73,7 +106,7 @@ parser.add_option("--clipright", type = "int", default = 0, help = "Remove poorl
 parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
 parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
-parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
+parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 parser.add_option("--bank-id", metavar = "id", help = "Set a string to be used as the globally unique ID for this bank (default = generate a UUID).")
 
