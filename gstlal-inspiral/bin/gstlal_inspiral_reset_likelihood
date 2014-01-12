@@ -46,6 +46,13 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from gstlal import far
 from gstlal.inspiral import gen_likelihood_control_doc
 
+## @file gstlal_inspiral_reset_likelihood
+# This program resets the trials table and segments from files containing the distribution statistics for gstlal_inspiral jobs; see gstlal_inspiral_reset_likelihood for help and usage
+
+## @package gstlal_inspiral_reset_likelihood
+# 
+
+
 #
 # =============================================================================
 #
