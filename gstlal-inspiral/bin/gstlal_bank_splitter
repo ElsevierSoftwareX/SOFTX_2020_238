@@ -2,7 +2,7 @@
 #
 # Copyright (C) 2012 Stephen Privitera
 # Copyright (C) 2011 Chad Hanna
-# Copyright (C) 2010 Meliisa Frei
+# Copyright (C) 2010 Melissa Frei
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -30,6 +30,33 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
+
+## @file gstlal_bank_splitter
+#
+# This program splits template banks into sub banks suitable for singular value decomposition; see gstlal_bank_splitter for more information
+
+## @package gstlal_bank_splitter
+# 
+# ### Usage examples
+#
+# - split up bank file for H1; sort by mchirp; add final frequency and specify a maximum frequency
+#
+#		$ gstlal_bank_splitter --overlap 10 --instrument H1 --n 100 --sort-by mchirp --add-f-final --max-f-final 2048 H1-TMPLTBANK-871147516-2048.xml
+#
+# - Please add more!
+#
+# ### Command line interface
+#
+#	+ `--output-path` [path]: Set the path to the directory where output files will be written.  Default is "."
+#	+ `--n` [count] (int): Set the number of templates per output file (required).
+#	+ `--overlap` [count] (int): Overlap the templates in each file by this amount, must be even.
+#	+ `--sort-by` [mchirp|mtotal|ffinal|chirptime]: Select the template sort order (required).
+#	+ `--add-f-final`: Select whether to add f_final to the bank.
+#	+ `--max-f-final` [max final freq] (float): Max f_final to populate table with; if f_final > max, use max.
+#	+ `--instrument` [ifo]: Override the instrument, required
+#	+ `--bank-program` [name]: Select name of the program used to generate the template bank (default: tmpltbank).
+#	+ `--verbose`: Be verbose.
+#
 
 
 def group_templates(templates, n, overlap = 0):
