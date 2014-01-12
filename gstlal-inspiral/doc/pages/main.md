@@ -6,7 +6,6 @@
 
 - \ref low_latency_search_doc
 - Offline searches
-- gstlal_reference_psd
 
 ### References
 
