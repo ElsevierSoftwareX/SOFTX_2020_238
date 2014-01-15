@@ -334,7 +334,7 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 	 * get detector information
 	 */
 
-	detector = XLALInstrumentNameToLALDetector(h->name);
+	detector = XLALDetectorPrefixToLALDetector(h->name);
 	if(!detector)
 		XLAL_ERROR(XLAL_EFUNC);
 
