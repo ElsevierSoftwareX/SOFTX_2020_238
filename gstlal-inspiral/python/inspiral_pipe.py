@@ -199,12 +199,3 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 		outstrs.append(c)
 	total_banks = sum(outcounts)
 	return [(s, total_banks / outcounts[i]) for i, s in enumerate(outstrs)]
-
-
-def parse_banks(bank_string):
-	out = {}
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
-
