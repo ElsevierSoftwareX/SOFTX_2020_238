@@ -299,6 +299,9 @@ class lal_logical_undersampler(gst.BaseTransform):
 			gst.Buffer.flag_unset(buf, gst.BUFFER_FLAG_GAP)
 		
 	def do_transform(self, inbuf, outbuf):
+		# FIXME: I'm not sure this is the right fix for hearbeat buffers, so I need to check this!
+		if len(inbuf) == 0:
+			gst.Buffer.flag_set(inbuf, gst.BUFFER_FLAG_GAP)
 		if gst.Buffer.flag_is_set(inbuf, gst.BUFFER_FLAG_DISCONT) or inbuf.offset != self.next_in_offset or self.t0 == gst.CLOCK_TIME_NONE:
 			self.t0 = inbuf.timestamp
 			self.offset0 = self.next_out_offset = gst.util_uint64_scale_int_ceil(inbuf.offset, self.rate_out, self.rate_in)

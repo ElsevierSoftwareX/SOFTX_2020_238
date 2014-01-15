@@ -158,7 +158,8 @@ if options.data_source != "white":
 	channel_list = gw_data_source.channel_dict.items()
 	dq_channel_list = (instrument, gw_data_source.dq_channel_dict[instrument])
 	channel_list.append(dq_channel_list)
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	#demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
 	# Write the pipeline graph after pads have been hooked up to the demuxer
 	if options.write_pipeline is not None:
 		demux.connect("no-more-pads", write_graph)	
