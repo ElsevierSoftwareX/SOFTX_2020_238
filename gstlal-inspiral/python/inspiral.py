@@ -40,6 +40,7 @@ import subprocess
 import sys
 import threading
 import time
+import httplib
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -51,9 +52,9 @@ pygst.require('0.10')
 import gst
 
 try:
-	from ligo.gracedb import cli as gracedb
+	from ligo import gracedb
 except ImportError:
-	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
+	print >>sys.stderr, "warning: gracedb import failed, program will crash if gracedb uploads are attempted"
 
 from glue import iterutils
 from glue import segments
@@ -737,11 +738,6 @@ class Data(object):
 			self.__flush()
 
 	def __do_gracedb_alerts(self):
-		try:
-			gracedb
-		except NameError:
-			# gracedb import failed, disable event uploads
-			return
 		if self.stream_thinca.last_coincs:
 			gracedb_client = gracedb.Client()
 			gracedb_ids = []
@@ -812,15 +808,14 @@ class Data(object):
 				ligolw_utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
 				# FIXME: make this optional from command line?
 				if True:
-					resp = gracedb_client.create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
-					if "error" in resp:
-						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+					resp_json = resp.json()
+					if resp.status != httplib.CREATED:
+						print >>sys.stderr, "gracedb upload of %s failed" % filename
 					else:
 						if self.verbose:
-							if "warning" in resp:
-								print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
-							print >>sys.stderr, "event assigned grace ID %s" % resp["graceid"]
-						gracedb_ids.append(resp["graceid"])
+							print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+						gracedb_ids.append(resp_json["graceid"])
 				else:
 					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
 					proc.stdin.write(message.getvalue())
@@ -835,9 +830,10 @@ class Data(object):
 			if psdmessage is not None:
 				filename = "psd.xml.gz"
 				for gracedb_id in gracedb_ids:
-					resp = gracedb_client.upload(gracedb_id, filename, psdmessage.getvalue(), comment = "strain spectral densities", alert = True)
-					if "error" in resp:
-						print >>sys.stderr, "gracedb upload of %s for ID %s failed: %s" % (filename, gracedb_id, resp["error"])
+					resp = gracedb_client.writeLog(gracedb_id, "strain spectral densities", filename = filename, filecontents = psdmessage.getvalue(), tagname = "psd")
+					resp_json = resp.json()
+					if resp.status != httplib.CREATED:
+						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
 
 	def do_gracedb_alerts(self):
 		with self.lock:
