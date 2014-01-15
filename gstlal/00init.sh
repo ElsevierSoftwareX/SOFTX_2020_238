@@ -7,7 +7,7 @@ read -p "Press CTRL-C to abort, or RETURN to continue... " INPUT
 # Get it done
 {
 	{ echo "running aclocal (please ignore \"underquoted\" warnings)..." ; aclocal -I gnuscripts ; } &&
-	{ echo "running libtoolize..." ; libtoolize -c -f || glibtoolize -c -f ; } &&
+	{ echo "running libtoolize..." ; libtoolize -i -c -f || glibtoolize $LIBTOOLIZE_FLAGS ; } &&
 	#{ echo "running gtkdocize..." ; gtkdocize --copy --docdir doc/gobject/ ; } &&
 	#{ echo "running autoheader..." ; autoheader ; } &&
 	{ echo "running automake..." ; automake -a -c ; } &&
