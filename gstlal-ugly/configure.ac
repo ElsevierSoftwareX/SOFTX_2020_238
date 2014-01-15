@@ -274,7 +274,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.25])
+AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.36])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -302,8 +302,13 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [1.19.25], [
 		AC_DEFINE([HAVE_FRAMECPP_FrameLibraryName], [1], [Defined if framecpp supplies FrameLibraryName() function])
 	])
+	# FIXME:  the "-std=c++0x" option is here as a temporary hack until
+	# we can find a way to get the autoconf macros to configure the
+	# cxxflags for us
+	framecpp_CXXFLAGS="${framecpp_CFLAGS} -std=c++0x -D__STDC_CONSTANT_MACROS"
 ])
 AC_SUBST([framecpp_CFLAGS])
+AC_SUBST([framecpp_CXXFLAGS])
 AC_SUBST([framecpp_LIBS])
 AC_SUBST([framecpp_VERSION])
 
