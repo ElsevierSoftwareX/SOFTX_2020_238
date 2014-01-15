@@ -32,7 +32,9 @@ import subprocess, socket, tempfile
 from glue import iterutils
 from glue import pipeline
 from glue import lal
+from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue import segments
 from glue.ligolw import array
 from glue.ligolw import param
@@ -41,6 +43,7 @@ import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
+from pylal import series as lalseries
 import numpy
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
@@ -117,12 +120,26 @@ def sim_tag_from_inj_file(injections):
 		return None
 	return injections.replace('.xml', '').replace('.gz', '')
 
+def get_max_length(bank_cache, verbose = False):
+	max_time = 0
+	cache = lal.Cache.fromfilenames([bank_cache.values()[0]])
+	for f in cache.pfnlist():
+		xmldoc = utils.load_filename(f, verbose = verbose, contenthandler = ligolw.LIGOLWContentHandler)
+		sngls = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		max_time = max(max_time, max(sngls.get_column('template_duration')))
+
+	return max_time
+
 #
 # get a dictionary of all the disjoint 2+ detector combination segments
 #
 
-def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg):
+def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length):
 	segsdict = segments.segmentlistdict()
+	# 256 seconds for the whitener to settle + the maximum template_length
+	start_pad = 256 + max_template_length
+	# Chosen so that the overlap is only a ~10% hit in run time for long segments...
+	segment_length = int(10 * start_pad)
 	for n in range(2, 1 + len(analyzable_instruments_set)):
 		for ifo_combos in iterutils.choices(list(analyzable_instruments_set), n):
 			# never analyze H1H2 or H2L1 times
@@ -131,8 +148,8 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg):
 				continue
 			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
-			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(1024) #FIXME don't hard code
-			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], options.max_segment_length, 1024) #FIXME don't hardcode
+			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad) #FIXME don't hard code
+			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad) #FIXME don't hardcode
 			if not segsdict[frozenset(ifo_combos)]:
 				del segsdict[frozenset(ifo_combos)]
 	return segsdict
@@ -200,12 +217,14 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 			)
 	return svd_nodes
 
-def create_svd_bank_strings(svd_nodes):
+def create_svd_bank_strings(svd_nodes, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
 	outstrings = []
 	for i in range(len(svd_nodes.values()[0])):
 		svd_bank_string = ""
 		for ifo in svd_nodes:
+			if instruments is not None and ifo not in instruments:
+				continue
 			svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i].output_files["write-svd"])
 		svd_bank_string = svd_bank_string.strip(",")
 		outstrings.append(svd_bank_string)
@@ -227,7 +246,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 
 			# get the svd bank strings
-			svd_bank_strings = create_svd_bank_strings(svd_nodes)
+			svd_bank_strings = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
 
 			# setup output names
 			output_names = [T050017_filename(ifos, '%d_LLOID' % (i,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
@@ -328,7 +347,7 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, calcLikelihoodJob, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg):
+def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg):
 
 	likelihood_nodes = {}
 	outnodes = {}
@@ -348,11 +367,11 @@ def rank_and_merge(dag, calcLikelihoodJob, lalappsRunSqliteJob, toSqliteJob, ins
 		for inj in options.injections:
 			for n, (inputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
 				likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
-					generic_node(calcLikelihoodJob, dag,
+					generic_node(calcLikelihoodJobInj, dag,
 						parent_nodes = sum(inspiral_nodes[(ifos, None)].values(),[]) + sum(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))].values(),[]),
 						opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 						input_files = {"likelihood-file":diststats, "":inputs},
-						output_files = {"write-likelihood":T050017_filename(ifos, '%d_CALC_LIKELIHOOD_%s' % (n,sim_tag_from_inj_file(inj)), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
+						output_files = {"write-likelihood":T050017_filename(ifos, '%d_CALC_LIKELIHOOD_%s' % (n,sim_tag_from_inj_file(inj)), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJobInj.output_path)}
 					)
 				)	
 
@@ -511,6 +530,9 @@ def parse_command_line():
 	# generic data source options
 	datasource.append_options(parser)
 	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+
+	# reference_psd
+	parser.add_option("--reference-psd", help = "Don't measure PSDs, use this one instead")
 	
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
@@ -531,7 +553,6 @@ def parse_command_line():
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 10000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 10000 seconds.")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
@@ -561,6 +582,7 @@ def parse_command_line():
 	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
 
 	return options, filenames
+
 
 #
 # Useful variables
@@ -593,6 +615,7 @@ if options.max_inspiral_jobs is not None:
 #
 
 refPSDJob = generic_job('gstlal_reference_psd')
+refPSDJob = generic_job('gstlal_reference_psd', condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_cpus":"2", "+RequiresMultipleCores":"True"})
 medianPSDJob = generic_job('gstlal_median_of_psds')
 svdJob = generic_job('gstlal_svd_bank')
 horizonJob = generic_job("gstlal_plot_psd_horizon")
@@ -616,41 +639,50 @@ plotbackgroundJob = generic_job("gstlal_inspiral_plot_background")
 # Get the analysis segments
 #
 
-segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg)
+segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, get_max_length(bank_cache))
 
-#
-# Compute the PSDs for each segment
-#
+if options.reference_psd is None:
+
+	#
+	# Compute the PSDs for each segment
+	#
 
 
-psd_nodes = psd_node_gen(refPSDJob, dag, [], segsdict, channel_dict, options)
+	psd_nodes = psd_node_gen(refPSDJob, dag, [], segsdict, channel_dict, options)
 
-#
-# plot the horizon distance
-#
+	#
+	# plot the horizon distance
+	#
 
-generic_node(horizonJob, dag,
-	parent_nodes = psd_nodes.values(),
-	input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-	output_files = {"":name_tag + "horizon.png"}
-)
-
-#
-# compute the median PSD
-#
-
-median_psd_node = \
-	generic_node(medianPSDJob, dag,
+	generic_node(horizonJob, dag,
 		parent_nodes = psd_nodes.values(),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-		output_files = {"output-name": T050017_filename(instruments, "REFERENCE_PSD", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = medianPSDJob.output_path)}
+		output_files = {"":name_tag + "horizon.png"}
 	)
+
+	#
+	# compute the median PSD
+	#
+
+	median_psd_node = \
+		generic_node(medianPSDJob, dag,
+			parent_nodes = psd_nodes.values(),
+			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+			output_files = {"output-name": T050017_filename(instruments, "REFERENCE_PSD", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = medianPSDJob.output_path)}
+		)
+
+	ref_psd = median_psd_node.output_files["output-name"]
+	ref_psd_parent_nodes = [median_psd_node]
+
+else:
+	ref_psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)) 
+	ref_psd_parent_nodes = []
 
 #
 # Compute SVD banks
 #
 
-svd_nodes = svd_node_gen(svdJob, dag, [median_psd_node], median_psd_node.output_files["output-name"], inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg)
+svd_nodes = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg)
 
 
 #	
@@ -669,7 +701,7 @@ lloid_output, lloid_diststats = adapt_gstlal_inpiral_output(inspiral_nodes, opti
 # Setup likelihood jobs, clustering and merging
 #
 
-likelihood_nodes, outnodes = rank_and_merge(dag, calcLikelihoodJob, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg)
+likelihood_nodes, outnodes = rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
