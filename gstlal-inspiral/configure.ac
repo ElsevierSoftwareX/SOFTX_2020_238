@@ -11,6 +11,7 @@ AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
 AC_CONFIG_AUX_DIR([gnuscripts])
 AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
+AUTOMAKE_OPTIONS="${AUTOMAKE_OPTIONS} --add-missing --copy"
 AC_CONFIG_FILES([ \
 	Makefile \
 	gstlal-inspiral.spec \
