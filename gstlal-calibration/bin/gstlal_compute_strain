@@ -71,6 +71,9 @@ parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd
 parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
+parser.add_option("--dq-sample-rate", metavar = "Hz", default = 32768, type = "int", help = "Sample rate for the data quality vector being used, default = 32768 Hz")
+parser.add_option("--lldq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for outgoing LLD-DQ_VECTOR, default = 1")
+parser.add_option("--odc-float", action = "store_true", help = "Set this if the data quality vector (ODC) is broadcasted as a float.")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -95,6 +98,8 @@ if options.output_channel_name is None:
 	options.output_channel_name = options.channel_name
 
 sr = options.sample_rate
+dqsr = options.dq_sample_rate
+lldqsr = options.lldq_sample_rate
 
 gw_data_source = datasource.GWDataSourceInfo(options)
 
@@ -139,11 +144,11 @@ if options.data_source == "lvshm":
 elif options.data_source == "frames":
 	src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source.frame_cache, cache_dsc_regex = instrument)
 elif options.data_source == "white":
-	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=16384, blocksize = 16384 * 4 * 1)
-	rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=32, rate=16384")	
+	rawstrain = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=sr, blocksize = sr * 4 * 1)
+	rawstrain = pipeparts.mkcapsfilter(pipeline, rawstrain, "audio/x-raw-float, width=32, rate=%d" % sr)	
 
-	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=16384, blocksize = 16384 * 4 * 1)
-	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=16384")
+	odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=dqsr, blocksize = dqsr * 4 * 1)
+	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=%d" % dqsr)
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 	odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
 else:
@@ -160,14 +165,21 @@ if options.data_source != "white":
 
 	# Set up the raw strain and ODC state vector branches
 	rawstrain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 10000)
-	odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
+	if options.odc_float:
+		odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
+	else:
+		odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
 
 	# Hook up the raw strain and ODC state vector branches to appropriate channels in the demuxer
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), rawstrain.get_pad("sink"))
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
 
 rawstrain = pipeparts.mkreblock(pipeline, rawstrain, block_duration = gst.SECOND)
-odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+if options.odc_float:
+	odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+else:
+	odcstatevector = pipeparts.mkaudioconvert(pipeline, odcstatevector)
+	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=%d, width=32, signed=false" % dqsr)
 
 # When reading from disk, clip raw strain stream to segment list
 if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
@@ -178,7 +190,7 @@ if options.data_source == "frames" and gw_data_source.frame_segments[instrument]
 #
 
 odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_logical_undersampler", required_on = options.required_on, status_out = 0x3)
-odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=1")
+odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=%d" % lldqsr)
 odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 
 #
@@ -282,8 +294,7 @@ htdqbit = pipeparts.mkbitvectorgen(pipeline, htdqbit, bit_vector = 0x4, nongap_i
 htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, width=32, signed=false, depth=32, channels=1, rate=%d, endianness=1234" % sr)
 htdqbit = pipeparts.mkaudiorate(pipeline, htdqbit, skip_to_first = True, silent = False) # This audiorate fixes issues with zero-sized buffers that are not marked as gaps being passed between the two surrounding elements.  I'm not sure why this is happening, so more work needs to be done to investigate the root of the problem.
 htdqbit = pipeparts.mkgeneric(pipeline, htdqbit, "lal_logical_undersampler", required_on = 0x4, status_out = 0x4)
-#htdqbit = pipeparts.mkaudioundersample(pipeline, htdqbit)
-htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=1, width=32, depth=32, signed=false, channels=1, endianness=1234")
+htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % lldqsr)
 htdqbit = pipeparts.mkchecktimestamps(pipeline, htdqbit)
 
 #
