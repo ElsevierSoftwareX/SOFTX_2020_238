@@ -31,7 +31,8 @@ def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--output", metavar = "file", default = ".", help = "Set the name of the output file")
 	parser.add_option("--input", metavar = "file", default = ".", help = "Set the name of the input file")
-	parser.add_option("--chi", action="append", help="values of chi to populate, give multiple times")
+	parser.add_option("--spin1z", action="append", help="values of spin1z to populate, give multiple times")
+	parser.add_option("--spin2z", action="append", help="values of spin2z to populate, give multiple times")
 	parser.add_option("--approximant", help = "override approximant with this value")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -54,10 +55,12 @@ if options.approximant is not None:
 	
 new_rows = []
 for row in sngl_inspiral_table:
-	for chi in options.chi:
+	for spin1z in options.spin1z:
+		for spin2z in options.spin2z:
 		#FIXME populate the ending frequency
-		row.chi=float(chi)
-		new_rows.append(copy.deepcopy(row))
+			row.spin1z=float(spin1z)
+			row.spin2z=float(spin2z)
+			new_rows.append(copy.deepcopy(row))
 
 sngl_inspiral_table[:] = new_rows
 
