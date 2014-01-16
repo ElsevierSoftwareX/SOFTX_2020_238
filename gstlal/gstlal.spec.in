@@ -10,7 +10,7 @@ Requires: python >= 2.6 glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VE
 BuildRequires: python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel orc >= @MIN_ORC_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
-Packager: Xavier Amador <xavier.amador@gravity.phys.uwm.edu>
+Packager: Kipp Cannon <kipp.cannon@ligo.org>
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 %description
 This package provides a variety of gstreamer elements for
