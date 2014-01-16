@@ -305,7 +305,8 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	])
 	# FIXME:  the "-std=c++0x" option is here as a temporary hack until
 	# we can find a way to get the autoconf macros to configure the
-	# cxxflags for us
+	# cxxflags for us.  note that in later versions of g++ the flag
+	# should be -std=c++11 (c++0x is deprecated)
 	framecpp_CXXFLAGS="${framecpp_CFLAGS} -std=c++0x -D__STDC_CONSTANT_MACROS"
 ])
 AC_SUBST([framecpp_CFLAGS])
