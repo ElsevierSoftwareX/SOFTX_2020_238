@@ -34,6 +34,19 @@ AC_CONFIG_FILES([ \
 
 
 #
+# Split package version
+#
+
+
+VERSION=${PACKAGE_VERSION}
+AX_SPLIT_VERSION
+AC_SUBST([PACKAGE_VERSION_MAJOR], [${AX_MAJOR_VERSION}])
+AC_SUBST([PACKAGE_VERSION_MINOR], [${AX_MINOR_VERSION}])
+AC_SUBST([PACKAGE_VERSION_POINT], [${AX_POINT_VERSION}])
+VERSION=
+
+
+#
 # Move headers into a versioned sub-directory to allow more than one set of
 # headers to be installed system-wide.  (commented out until this is
 # needed)
