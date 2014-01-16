@@ -219,6 +219,15 @@ AC_SUBST([pygobject_LIBS])
 GOBJECT_INTROSPECTION_CHECK([1.30.0])
 AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
 AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+	$typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
 
 
 #
