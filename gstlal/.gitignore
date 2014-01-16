@@ -1,7 +1,7 @@
 gstlal.spec
 lib/gstlal/gstlal.pc
-lib/gstlal/gstlaltypes.gir
-lib/gstlal/gstlaltypes.typelib
+lib/gstlal/*.gir
+lib/gstlal/*.typelib
 tests/*.pyc
 tests/*.dump
 doc/Doxyfile
