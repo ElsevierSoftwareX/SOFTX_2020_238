@@ -55,24 +55,25 @@ CLEANFILES += gstlal_peakfinder.h gstlal_peakfinder_types.h
 
 -include $(INTROSPECTION_MAKEFILE)
 INTROSPECTION_GIRS =
-INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir) --identifier-prefix GstLAL
+INTROSPECTION_SCANNER_ARGS = --warn-all --add-include-path=$(srcdir) --identifier-prefix GstLAL
 INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
 
 if HAVE_INTROSPECTION
-gstlaltypes.gir : libgstlaltypes.la Makefile
-gstlaltypes_gir_INCLUDES = Gst-0.10
-gstlaltypes_gir_CFLAGS = $(INCLUDES)
-gstlaltypes_gir_LIBS = libgstlaltypes.la
-gstlaltypes_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c
-gstlaltypes_gir_NAMESPACE = gstlaltypes
-gstlaltypes_gir_VERSION = $(VERSION)
-INTROSPECTION_GIRS += gstlaltypes.gir
+INTROSPECTION_GIRS += GstLAL-$(GIR_VERSION).gir
+GstLAL-$(GIR_VERSION).gir : libgstlaltypes.la Makefile
+# automake won't let me use variables on the LHS of the following for some
+# reason, so I've resorted to using autoconf substitution macros.  ugly.
+GstLAL_@GIR_VERSION_@_gir_INCLUDES = Gst-0.10
+GstLAL_@GIR_VERSION_@_gir_CFLAGS = $(INCLUDES)
+GstLAL_@GIR_VERSION_@_gir_LIBS = libgstlaltypes.la
+GstLAL_@GIR_VERSION_@_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c
+GstLAL_@GIR_VERSION_@_gir_NAMESPACE = GstLAL
+GstLAL_@GIR_VERSION_@_gir_VERSION = $(GIR_VERSION)
 
 girdir = $(datadir)/gir-1.0
-gir_DATA = $(INTROSPECTION_GIRS)
-
 typelibdir = $(libdir)/girepository-1.0
+dist_gir_DATA = $(INTROSPECTION_GIRS)
 typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
 
-CLEANFILES += $(gir_DATA) $(typelib_DATA)
+CLEANFILES += $(dist_gir_DATA) $(typelib_DATA)
 endif
