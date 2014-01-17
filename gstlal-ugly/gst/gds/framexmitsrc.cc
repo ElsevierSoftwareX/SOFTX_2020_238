@@ -471,7 +471,7 @@ try_again:
 			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
 			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
-			if(GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
 				GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
 				gst_buffer_unref(*buffer);
 				*buffer = NULL;
