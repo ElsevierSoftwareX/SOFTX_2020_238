@@ -245,8 +245,6 @@ static void *receive_thread(void *arg)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	element->recv_status = GST_FLOW_OK;
-
 	/* FIXME:  this will leak memory if killed at the wrong spot */
 	while(TRUE) {
 		GstBuffer *buffer;
@@ -318,6 +316,7 @@ static gboolean start(GstBaseSrc *object)
 		goto done;
 	}
 
+	element->recv_status = GST_FLOW_OK;
 	retval = pthread_create(&element->recv_thread, NULL, receive_thread, element);
 	success = retval == 0;
 	if(!success) {
