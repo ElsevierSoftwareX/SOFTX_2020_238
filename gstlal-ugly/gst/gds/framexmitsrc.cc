@@ -274,8 +274,10 @@ static void *receive_thread(void *arg)
 		GST_BUFFER_OFFSET_END(buffer) = sequence + 1;
 
 		g_mutex_lock(element->buffer_lock);
-		if(element->buffer)
+		if(element->buffer) {
+			GST_WARNING_OBJECT(element, "receive thread overrun, dropping %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(element->buffer));
 			gst_buffer_unref(element->buffer);
+		}
 		element->buffer = buffer;
 		g_cond_signal(element->received_buffer);
 		g_mutex_unlock(element->buffer_lock);
