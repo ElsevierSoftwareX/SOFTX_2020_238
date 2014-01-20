@@ -438,11 +438,14 @@ try_again:
 	 */
 
 	if(!*buffer) {
+		GST_DEBUG_OBJECT(element, "no data available");
+
 		/*
 		 * failure in receive thread?
 		 */
 
 		if(element->recv_status != GST_FLOW_OK) {
+			GST_ERROR_OBJECT(element, "reason: error in receive thread");
 			result = element->recv_status;
 			goto done;
 		}
@@ -452,7 +455,7 @@ try_again:
 		 */
 
 		else if(element->unblocked) {
-			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
+			GST_DEBUG_OBJECT(element, "reason: application invoked unlock()");
 			result = GST_FLOW_UNEXPECTED;
 			goto done;
 		}
@@ -465,7 +468,7 @@ try_again:
 		 */
 
 		else if(timeout) {
-			GST_WARNING_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
+			GST_WARNING_OBJECT(element, "reason: timeout");
 			g_assert(GST_CLOCK_TIME_IS_VALID(t_before));
 
 			*buffer = gst_buffer_new();
@@ -473,16 +476,17 @@ try_again:
 			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
 			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+			GST_BUFFER_DURATION(*buffer) = 0;
+			GST_BUFFER_OFFSET(*buffer) = GST_BUFFER_OFFSET_NONE;
+			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+
+			GST_DEBUG_OBJECT(element, "created 0-length heartbeat buffer with timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
 			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
-				GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
+				GST_LOG_OBJECT(element, "timestamp reversal.  trying again to wait for data.");
 				gst_buffer_unref(*buffer);
 				*buffer = NULL;
 				goto try_again;
 			}
-			GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
-			GST_BUFFER_DURATION(*buffer) = 0;
-			GST_BUFFER_OFFSET(*buffer) = GST_BUFFER_OFFSET_NONE;
-			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 		}
 
 		/*
