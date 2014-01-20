@@ -427,6 +427,7 @@ try_again:
 		g_get_current_time(&timeout_time);
 		g_time_val_add(&timeout_time, element->wait_time * G_USEC_PER_SEC);
 		t_before = GPSNow();
+		GST_DEBUG_OBJECT(element, "waiting for data at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(t_before));
 		timeout = !g_cond_timed_wait(element->received_buffer, element->buffer_lock, element->wait_time < 0 ? NULL : &timeout_time);
 	}
 	*buffer = element->buffer;
@@ -495,7 +496,12 @@ try_again:
 
 		else
 			g_assert_not_reached();
-	}
+	} else
+		/*
+		 * check for logical impossibility
+		 */
+
+		g_assert(!timeout);
 
 	/*
 	 * check for disconts
@@ -511,8 +517,10 @@ try_again:
 	 * update latency
 	 */
 
-	element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(*buffer), GPSNow());
-	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+	if(!timeout) {
+		element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(*buffer), GPSNow());
+		element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+	}
 	GST_DEBUG_OBJECT(element, "latency = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->min_latency), GST_TIME_SECONDS_ARGS(element->max_latency));
 
 	/*
