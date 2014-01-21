@@ -15,7 +15,7 @@
 
 ### References
 
-- \ref gstlalmainpage
+- <a href=@gstlaldoc> gstlal documentation</a>
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
 - \ref gstlalmeetings
 - SVD for CBC: http://arxiv.org/abs/1005.0012
