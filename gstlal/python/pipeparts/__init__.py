@@ -258,14 +258,14 @@ def mkhistogram(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_histogramplot")
 
 
-## Adds a <a href="@gstlaldoc/GSTLALSegmentSrc.html">lal_segmentsrc</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALSegmentSrc.html">lal_segmentsrc</a> element to a pipeline with useful default properties
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output = False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
 	return mkgeneric(pipeline, None, "lal_segmentsrc", blocksize = blocksize, segment_list = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list), invert_output = invert_output)
 
 
-## Adds a <a href="@gstlaldoc/GstLALCacheSrc.html">lal_cachesrc</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GstLALCacheSrc.html">lal_cachesrc</a> element to a pipeline with useful default properties
 def mklalcachesrc(pipeline, location, **properties):
 	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, **properties)
 
@@ -336,7 +336,7 @@ def mkcapssetter(pipeline, src, caps, **properties):
 	return mkgeneric(pipeline, src, "capssetter", caps = gst.Caps(caps), **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALStateVector.html">lal_statevector</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALStateVector.html">lal_statevector</a> element to a pipeline with useful default properties
 def mkstatevector(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_statevector", **properties)
 
@@ -371,7 +371,7 @@ def mkiirfilter(pipeline, src, a, b):
 	return mkgeneric(pipeline, src, "audioiirfilter", a = a, b = b)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALShift.html">lal_shift</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALShift.html">lal_shift</a> element to a pipeline with useful default properties
 def mkshift(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_shift", **properties)
 
@@ -402,7 +402,7 @@ def mkprogressreport(pipeline, src, name):
 	return mkgeneric(pipeline, src, "progressreport", do_query = False, name = name)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALSimulation.html">lal_simulation</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALSimulation.html">lal_simulation</a> element to a pipeline with useful default properties
 def mkinjections(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "lal_simulation", xml_location = filename)
 
@@ -422,7 +422,7 @@ def mkaudioamplify(pipeline, src, amplification):
 	return mkgeneric(pipeline, src, "audioamplify", clipping_method = 3, amplification = amplification)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALAudioUnderSample.html">lal_audioundersample</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALAudioUnderSample.html">lal_audioundersample</a> element to a pipeline with useful default properties
 def mkaudioundersample(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_audioundersample")
 
@@ -432,7 +432,7 @@ def mkresample(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audioresample", **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
 def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **properties):
 	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **properties)
 
@@ -447,17 +447,17 @@ def mkqueue(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "queue", **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
 def mkdrop(pipeline, src, drop_samples = 0):
 	return mkgeneric(pipeline, src, "lal_drop", drop_samples = drop_samples)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALNoFakeDisconts.html">lal_nofakedisconts</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALNoFakeDisconts.html">lal_nofakedisconts</a> element to a pipeline with useful default properties
 def mknofakedisconts(pipeline, src, silent = True):
 	return mkgeneric(pipeline, src, "lal_nofakedisconts", silent = silent)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALFIRBank.html">lal_firbank</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALFIRBank.html">lal_firbank</a> element to a pipeline with useful default properties
 def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_firbank", **properties)
@@ -491,12 +491,12 @@ def mkpow(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "pow", **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALReblock.html">lal_reblock</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALReblock.html">lal_reblock</a> element to a pipeline with useful default properties
 def mkreblock(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_reblock", **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALSumSquares.html">lal_sumsquares</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALSumSquares.html">lal_sumsquares</a> element to a pipeline with useful default properties
 def mksumsquares(pipeline, src, weights = None):
 	if weights is not None:
 		return mkgeneric(pipeline, src, "lal_sumsquares", weights = weights)
@@ -504,7 +504,7 @@ def mksumsquares(pipeline, src, weights = None):
 		return mkgeneric(pipeline, src, "lal_sumsquares")
 
 
-## Adds a <a href="@gstlaldoc/GSTLALGate.html">lal_gate</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALGate.html">lal_gate</a> element to a pipeline with useful default properties
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
 	if threshold is not None:
 		elem = mkgeneric(pipeline, None, "lal_gate", threshold = threshold, **properties)
@@ -522,7 +522,7 @@ def mkbitvectorgen(pipeline, src, bit_vector, **properties):
 	return mkgeneric(pipeline, src, "lal_bitvectorgen", bit_vector = bit_vector, **properties)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALMatrixMixer.html">lal_matrixmixer</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALMatrixMixer.html">lal_matrixmixer</a> element to a pipeline with useful default properties
 def mkmatrixmixer(pipeline, src, matrix = None):
 	if matrix is not None:
 		return mkgeneric(pipeline, src, "lal_matrixmixer", matrix = matrix)
@@ -530,12 +530,12 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 		return mkgeneric(pipeline, src, "lal_matrixmixer")
 
 
-## Adds a <a href="@gstlaldoc/GSTLALToggleComplex.html">lal_togglecomplex</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALToggleComplex.html">lal_togglecomplex</a> element to a pipeline with useful default properties
 def mktogglecomplex(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_togglecomplex")
 
 
-## Adds a <a href="@gstlaldoc/GSTLALAutoChiSq.html">lal_autochisq</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALAutoChiSq.html">lal_autochisq</a> element to a pipeline with useful default properties
 def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None, latency = 0, snr_thresh=0):
 	properties = {}
 	if autocorrelation_matrix is not None:
@@ -559,7 +559,7 @@ def mkfilesink(pipeline, src, filename):
 	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
 
 
-## Adds a <a href="@gstlaldoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
 def mknxydumpsink(pipeline, src, filename, segment = None):
 	if segment is not None:
 		elem = mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
@@ -795,7 +795,7 @@ def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz 
 	return mkgeneric(pipeline, src, "lal_checktimestamps", name = name, silent = silent, timestamp_fuzz = timestamp_fuzz)
 
 
-## Adds a <a href="@gstlaldoc/GSTLALPeak.html">lal_peak</a> element to a pipeline with useful default properties
+## Adds a <a href="@gstlalgtkdoc/GSTLALPeak.html">lal_peak</a> element to a pipeline with useful default properties
 def mkpeak(pipeline, src, n):
 	return mkgeneric(pipeline, src, "lal_peak", n = n)
 
