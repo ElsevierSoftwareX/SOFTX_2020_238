@@ -32,6 +32,5 @@
   - gstlal_play
 
 ### References
-- \ref gstlalinspiralmainpage
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
 - \ref gstlalmeetingspage
