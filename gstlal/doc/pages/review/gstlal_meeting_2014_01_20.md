@@ -8,7 +8,6 @@
 
 - Introductions, etc.  
 - gstlal documentation:
- - gstlalmainpagegettingstarted
 
 \section minutes Minutes
 
