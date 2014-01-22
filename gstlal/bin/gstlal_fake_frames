@@ -84,9 +84,9 @@ import numpy
 #	"mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2;
 #	progressreport2 -> "whitened_multirate_src()" [label="if --whiten given"];
 #	"whitened_multirate_src()" -> lal_firbank;
-#	progressreport2 -> capsfilter [label="if --whiten not given"];
-#	capsfilter -> resample;
-#	resample -> audioamplify
+#	progressreport2 -> resample [label="if --whiten not given"];
+#	resample -> capsfilter;
+#	capsfilter -> audioamplify
 #	audioamplify -> lal_firbank;
 #	lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
 # }
@@ -128,6 +128,23 @@ import numpy
 #	+ `--frame-duration` [int] (s): Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default is 16s.
 #	+ `--frames-per-file` [int]: Set the number of frames per file.  Default is 256.
 #	+ `--verbose` []: Be verbose.
+#
+# ### Review
+#
+# It is possible to check the pipeline graph by interupting the running process
+# with ctrl+c if you have the GST_DEBUG_DUMP_DOT_DIR evironment set.  A dot
+# graph will be written to gstlal_fake_frames.  Here is an example:
+#
+#		$ GST_DEBUG_DUMP_DOT_DIR="." gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
+#
+# After Ctrl+c you should see:
+# 
+#		^C*** SIG 2 attempting graceful shutdown (this might take several minutes) ... ***
+#		Wrote pipeline to ./gstlal_fake_frames.dot
+#
+# You can then turn the pipeline graph into an image with dot, e.g.,
+#
+#		dot -Tpng gstlal_fake_frames.dot > test.png
 #
 # @cond
 
@@ -205,13 +222,20 @@ if options.output_channel_name is None:
 injections, gw_data_source.injection_filename = options.injections, None
 
 ## Setup the pipeline
-pipeline = gst.Pipeline(sys.argv[0])
+pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
 
 ## Main loop 
 mainloop = gobject.MainLoop()
 
 ## An instance of the python.simplehandler.Handler class
 handler = simplehandler.Handler(mainloop, pipeline)
+
+## Setup a signal handler to intercept SIGINT in order to write the pipeline graph at ctrl+C before cleanly shutting down
+class SigHandler(simplehandler.OneTimeSignalHandler):
+	def do_on_call(self, signum, frame):
+		pipeparts.write_dump_dot(pipeline, pipeline.get_name(), verbose = True)
+
+sighandler = SigHandler(pipeline)
 
 ## 1) Set the pipeline head to basic input from datasource.mkbasicsrc()
 head = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
@@ -243,7 +267,6 @@ else:
 	# FIXME don't hardcode sample rate (though this is what datasource generates for all fake data, period 
 	# Renormalize if datasource is "white"
 	if options.data_source == "white":
-		print "amplify", 1.0 / (pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate))**.5
 		head = pipeparts.mkaudioamplify(pipeline, head, 1.0 / (pipeparts.audioresample_variance_gain(9, 16384, options.sample_rate))**.5)
 
 # Apply a coloring filter
