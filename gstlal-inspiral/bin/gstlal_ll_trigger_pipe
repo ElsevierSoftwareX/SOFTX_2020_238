@@ -115,8 +115,8 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		# these jobs gracefully shutdown with SIGINT
 		self.add_condor_cmd("want_graceful_removal", "True")
 		self.add_condor_cmd("kill_sig", "15")
-		self.add_condor_cmd('+Online_CBC_GSTLAL', 'True')
-		self.add_condor_cmd('Requirements', '(TARGET.Online_CBC_GSTLAL =?= True)')
+		self.add_condor_cmd('+Online_CBC_SVD', 'True')
+		self.add_condor_cmd('Requirements', '(TARGET.Online_CBC_SVD =?= True)')
 		self.tag_base = tag_base
 		self.set_sub_file(tag_base+'.sub')
 		self.set_stdout_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).out')
