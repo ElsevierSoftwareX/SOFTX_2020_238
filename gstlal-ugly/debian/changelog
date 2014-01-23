@@ -1,3 +1,9 @@
+gstlal-ugly (0.6.0-1) unstable; urgency=low
+
+  * new version 0.6.0
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 16 Jan 2014 15:05:13 -0500
+
 gstlal-ugly (0.5.4-1) unstable; urgency=low
 
   * include /usr/share/... in package
