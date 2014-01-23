@@ -177,6 +177,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 #
 
 
+AC_SUBST([MIN_NDS_VERSION], [0.10.4])
 AC_ARG_WITH(
 	[nds],
 	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
@@ -186,7 +187,7 @@ AC_ARG_WITH(
 AS_IF([test "x$with_nds" != "xno"], [
 	PKG_CHECK_MODULES(
 		[NDS],
-		[nds2-client >= 0.9.0c],
+		[nds2-client >= ${MIN_NDS_VERSION}],
 		[AC_DEFINE([HAVE_NDS], [1], [Define if you have nds2-client])
 		HAVE_NDS="yes"],
 		[HAVE_NDS="no"
