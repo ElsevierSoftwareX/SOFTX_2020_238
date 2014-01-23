@@ -137,6 +137,10 @@ import numpy
 #
 #		$ GST_DEBUG_DUMP_DOT_DIR="." gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
 #
+# You should see:
+#
+#		Wrote pipeline to ./gstlal_fake_frames_PLAYING.dot
+#
 # After Ctrl+c you should see:
 # 
 #		^C*** SIG 2 attempting graceful shutdown (this might take several minutes) ... ***
@@ -144,7 +148,7 @@ import numpy
 #
 # You can then turn the pipeline graph into an image with dot, e.g.,
 #
-#		dot -Tpng gstlal_fake_frames.dot > test.png
+#		dot -Tpng gstlal_fake_frames_PLAYING.dot > test.png
 #
 # @cond
 
@@ -230,13 +234,6 @@ mainloop = gobject.MainLoop()
 ## An instance of the python.simplehandler.Handler class
 handler = simplehandler.Handler(mainloop, pipeline)
 
-## Setup a signal handler to intercept SIGINT in order to write the pipeline graph at ctrl+C before cleanly shutting down
-class SigHandler(simplehandler.OneTimeSignalHandler):
-	def do_on_call(self, signum, frame):
-		pipeparts.write_dump_dot(pipeline, pipeline.get_name(), verbose = True)
-
-sighandler = SigHandler(pipeline)
-
 ## 1) Set the pipeline head to basic input from datasource.mkbasicsrc()
 head = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
 
@@ -320,6 +317,18 @@ head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler,
 # Run it
 if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
+
+## Debugging output
+if "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+	pipeparts.write_dump_dot(pipeline, "%s_PLAYING" % pipeline.get_name(), verbose = True)
+
+	## Setup a signal handler to intercept SIGINT in order to write the pipeline graph at ctrl+C before cleanly shutting down
+	class SigHandler(simplehandler.OneTimeSignalHandler):
+		def do_on_call(self, signum, frame):
+			pipeparts.write_dump_dot(pipeline, "%s_SIGINT" % pipeline.get_name(), verbose = True)
+
+	sighandler = SigHandler(pipeline)
+
 mainloop.run()
 
 ## @endcond
