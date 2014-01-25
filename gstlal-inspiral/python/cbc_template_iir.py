@@ -77,9 +77,9 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
         T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
         tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
         t = numpy.arange(tc-T, tc, deltaT)
-        #T = numpy.floor(-spawaveform.chirptime(m1, m2 , 4, fLow)*sampleRate+0.5)*deltaT
-        #tc = numpy.ceil(-spawaveform.chirptime(m1, m2 , 4, fhigh)*sampleRate+0.5)*deltaT
-        #t = numpy.arange(T, tc, deltaT)
+	# avoid the numerical bug when calculating frequency f
+	if t[-1] < 1e-5:
+		t = t[:-2]
         Mtot = m1 + m2
         eta = m1 * m2 / Mtot**2
         f = freq(eta, Mtot, t)
@@ -162,6 +162,16 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 
         return M, autocorrelation_bank
 
+def compute_autocorrelation_mask( autocorrelation ):
+	'''
+	Given an autocorrelation time series, estimate the optimal
+	autocorrelation length to use and return a matrix which masks
+	out the unwanted elements. FIXME TODO for now just returns
+	ones
+	'''
+	return numpy.ones( autocorrelation.shape, dtype="int" )
+
+
 def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=201, downsample=False, verbose=False):
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
@@ -177,10 +187,16 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
         snrvec = []
 
 
+	# Check parity of autocorrelation length
+	if autocorrelation_length is not None:
+		if not (autocorrelation_length % 2):
+			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+		autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
+		autocorrelation_mask = compute_autocorrelation_mask( autocorrelation_bank )
+	else:
+		autocorrelation_bank = None
+		autocorrelation_mask = None
 
-        if not (autocorrelation_length % 2):
-                raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
-        autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
 
         for tmp, row in enumerate(sngl_inspiral_table):
 
@@ -330,7 +346,8 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		root.appendChild(param.new_param('epsilon', types.FromPyType[float], epsilon))
 		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
 		root.appendChild(array.from_array('autocorrelation_bank_imag', -autocorrelation_bank.imag))
-
+		root.appendChild(array.from_array('autocorrelation_mask', autocorrelation_mask))
+	
         return A, B, D, snrvec
 
 def crosscorr(a, b, autocorrelation_length = 201):
@@ -380,11 +397,12 @@ def get_matrices_from_xml(xmldoc):
 	autocorrelation_bank_real = array.get_array(root, 'autocorrelation_bank_real').array
 	autocorrelation_bank_imag = array.get_array(root, 'autocorrelation_bank_imag').array
 	autocorrelation_bank = autocorrelation_bank_real + (0+1j) * autocorrelation_bank_imag
+	autocorrelation_mask = array.get_array(root, 'autocorrelation_mask').array
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	sigmasq  = sngl_inspiral_table.getColumnByName("sigmasq").asarray()
 
-        return A, B, D, autocorrelation_bank, sigmasq
+        return A, B, D, autocorrelation_bank, autocorrelation_mask, sigmasq
 
 class Bank(object):
 	def __init__(self, bank_xmldoc, snr_threshold, logname = None, verbose = False):
@@ -392,7 +410,7 @@ class Bank(object):
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		self.A, self.B, self.D, self.autocorrelation_bank, self.sigmasq = get_matrices_from_xml(bank_xmldoc)
+		self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(bank_xmldoc)
 		#self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
 
 	def get_rates(self, verbose = False):
