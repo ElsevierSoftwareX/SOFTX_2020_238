@@ -1,4 +1,5 @@
 EXTRA_DIST = \
+	cmp_nxydumps.py \
 	firbank_test_01.py \
 	framesrc_test_01.py \
 	lal_reblock_test_01.sh \
@@ -13,4 +14,4 @@ TESTS = firbank_test_01.py lal_reblock_test_01.sh matrixmixer_test_01.py resampl
 clean-local :
 	rm -vf *.dump
 	rm -vf *.avi
-	rm -vf test_common.pyc
+	rm -vf *.pyc
