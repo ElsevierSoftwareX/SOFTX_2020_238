@@ -1,5 +1,4 @@
 EXTRA_DIST = \
-	frame.cache \
 	L-L1_TEST_FRAME-10-10.gwf \
 	lal_logical_undersampler_test_01.py \
 	test_common.py
