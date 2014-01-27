@@ -1,5 +1,5 @@
 Source: gstlal-calibration
-Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
+Maintainer: Madeline Wade <madeline.wade@gravity.phys.uwm.edu>
 Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
@@ -34,4 +34,4 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
 Conflicts:
  gstlal-ugly < 0.6.0
 Description: GStreamer for GW data analysis (calibration parts)
- This package contains the plugins and shared libraries required to ...
+ This package contains the plugins and shared libraries required to run the gstlal calibraiton software.

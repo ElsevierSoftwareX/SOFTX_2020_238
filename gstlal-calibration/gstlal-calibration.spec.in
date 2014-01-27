@@ -11,10 +11,10 @@ BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-dev
 Conflicts: gstlal-ugly < 0.6.0
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
-Packager: Xavier Amador <xavier.amador@gravity.phys.uwm.edu>
+Packager: Madeline Wade <madeline.wade@gravity.phys.uwm.edu>
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 %description
-This package contains the plugins and shared libraries required to ...
+This package contains the plugins and shared libraries required to run the gstlal calibration software.
 
 
 %prep

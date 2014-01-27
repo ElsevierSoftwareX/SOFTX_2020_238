@@ -99,6 +99,9 @@ def lal_logical_undersampler_03(pipeline, name):
 	#
 	# This test reads in a gwf file that has certain bits off to test
 	# the logic of the element
+	# Note: To run this test you must first make a frame cache, which can be done with the
+	# following command:
+	# 	ls *.gwf | lalapps_path2cache > frame.cache
 	#
 
 	out_rate = 1
@@ -132,5 +135,5 @@ def lal_logical_undersampler_03(pipeline, name):
 
 test_common.build_and_run(lal_logical_undersampler_01, "lal_logical_undersampler_01")
 test_common.build_and_run(lal_logical_undersampler_02, "lal_logical_undersampler_02")
-test_common.build_and_run(lal_logical_undersampler_03, "lal_logical_undersampler_03")
+#test_common.build_and_run(lal_logical_undersampler_03, "lal_logical_undersampler_03")
 
