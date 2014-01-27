@@ -1,7 +1,7 @@
 if COND_DOXYGEN
-all-local: doxyfile.stamp
+all-local : doxyfile.stamp
 
-doxyfile.stamp:
+doxyfile.stamp :
 	$(DOXYGEN) Doxyfile
 	echo Timestamp > doxyfile.stamp
 
@@ -11,11 +11,11 @@ html/% html/search/% : doxyfile.stamp
 # Will uninstall work??
 nobase_pkgdoc_DATA = $(wildcard html/*.*) $(wildcard html/search/*.*)
 
-CLEANFILES = doxyfile.stamp
+CLEANFILES = doxyfile.stamp gstlalinspiraldoxy.tag
 
 clean-local : clean-local-html clean-local-latex clean-local-man
 
-clean-local-man: 
+clean-local-man :
 	rm -rf man
 
 clean-local-html :
