@@ -12,7 +12,7 @@
 \section minutes Minutes
 
 Actions
-- update links in project page (springboard)
+- update links in project page (springboard): done.
 - make an example page to show reviewers how edit documentation, etc.: Email sent
 
 Chads Actions
