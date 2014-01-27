@@ -5,11 +5,11 @@ doxyfile.stamp:
 	$(DOXYGEN) Doxyfile
 	echo Timestamp > doxyfile.stamp
 
-html/*.* html/search/*.* : doxyfile.stamp
+html/% html/search/% : doxyfile.stamp
 
 # FIXME this doesn't feel right
 # Will uninstall work??
-nobase_pkgdoc_DATA = html/*.* html/search/*.*
+nobase_pkgdoc_DATA = $(wildcard html/*.*) $(wildcard html/search/*.*)
 
 CLEANFILES = doxyfile.stamp
 
