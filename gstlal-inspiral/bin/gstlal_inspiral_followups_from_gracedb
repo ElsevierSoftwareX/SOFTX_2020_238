@@ -89,7 +89,7 @@ pylab.ylim([min(snr), max(snr)])
 pylab.xlim([min(t), max(t)])
 pylab.grid()
 pylab.savefig(fname)
-gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname).read())
+gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname).read(), tagname = "background")
 
 #
 # SNR / Chisq plots
@@ -132,7 +132,7 @@ for i, ifo in enumerate(['H1', 'L1', 'V1']):
 		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
 		fname = '%s/%s_%s_snrchi.png' % (gid, gid, ifo)
 		pylab.savefig(fname)
-		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read())
+		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = "background")
 
 
 #
@@ -172,6 +172,6 @@ for r in sngl_inspiral_table:
 
 # upload some plots to gracedb
 for f in glob.glob("%s/*_spectrogram_autoscaled.png" % gid):
-	gracedb.writeLog(gid, "DMT omega scan", filename = f, filecontents = open(f).read())
+	gracedb.writeLog(gid, "DMT omega scan", filename = f, filecontents = open(f).read(), tagname = "background")
 	
 sys.exit()
