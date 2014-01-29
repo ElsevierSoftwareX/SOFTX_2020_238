@@ -28,6 +28,7 @@ import numpy
 import sys
 from gstlal import pipeparts
 from gstlal.pipeparts import gst
+import cmp_nxydumps
 import test_common
 
 
@@ -138,3 +139,4 @@ def whiten_test_01b(pipeline, name):
 test_common.build_and_run(whiten_test_01a, "whiten_test_01a")
 test_common.build_and_run(whiten_test_01b, "whiten_test_01b")
 
+cmp_nxydumps.compare("whiten_test_01a_in.dump", "whiten_test_01a_out.dump", transients = (2.0, 2.0), sample_fuzz = 1e-2)
