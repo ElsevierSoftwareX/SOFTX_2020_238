@@ -4,4 +4,5 @@ usr/lib/gstreamer-*/*.so*
 usr/lib/gstreamer-*/python*/*
 usr/lib/python*/*/gstlal
 usr/share/gstlal
+usr/share/gtk-doc/html/gstlal-*
 usr/share/doc/gstlal-*
