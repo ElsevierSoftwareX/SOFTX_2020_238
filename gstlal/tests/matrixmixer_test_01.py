@@ -91,7 +91,7 @@ test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01b", width = 6
 test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01c", width = 32, channels = 1)
 test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01d", width = 32, channels = 2)
 
-cmp_nxydumps.compare("matrixmixer_test_01a_in.dump", "matrixmixer_test_01a_out.dump")
-cmp_nxydumps.compare("matrixmixer_test_01b_in.dump", "matrixmixer_test_01b_out.dump")
-cmp_nxydumps.compare("matrixmixer_test_01c_in.dump", "matrixmixer_test_01c_out.dump")
-cmp_nxydumps.compare("matrixmixer_test_01d_in.dump", "matrixmixer_test_01d_out.dump")
+cmp_nxydumps.compare("matrixmixer_test_01a_in.dump", "matrixmixer_test_01a_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+cmp_nxydumps.compare("matrixmixer_test_01b_in.dump", "matrixmixer_test_01b_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+cmp_nxydumps.compare("matrixmixer_test_01c_in.dump", "matrixmixer_test_01c_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS, sample_fuzz = 1e-6)
+cmp_nxydumps.compare("matrixmixer_test_01d_in.dump", "matrixmixer_test_01d_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS, sample_fuzz = 1e-6)

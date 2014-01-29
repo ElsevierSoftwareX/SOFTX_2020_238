@@ -27,6 +27,7 @@
 import numpy
 import sys
 from gstlal import pipeparts
+import cmp_nxydumps
 import test_common
 
 
@@ -94,3 +95,9 @@ test_common.build_and_run(firbank_test_01, "firbank_test_01b", width = 64, time_
 test_common.build_and_run(firbank_test_01, "firbank_test_01c", width = 32, time_domain = True)
 test_common.build_and_run(firbank_test_01, "firbank_test_01d", width = 32, time_domain = False)
 
+flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS | cmp_nxydumps.COMPARE_FLAGS_ZERO_IS_GAP | cmp_nxydumps.COMPARE_FLAGS_ALLOW_STARTSTOP_MISALIGN
+
+cmp_nxydumps.compare("firbank_test_01a_in.dump", "firbank_test_01a_out.dump", flags = flags)
+cmp_nxydumps.compare("firbank_test_01b_in.dump", "firbank_test_01b_out.dump", flags = flags)
+cmp_nxydumps.compare("firbank_test_01c_in.dump", "firbank_test_01c_out.dump", flags = flags, sample_fuzz = 1e-6)
+cmp_nxydumps.compare("firbank_test_01d_in.dump", "firbank_test_01d_out.dump", flags = flags, sample_fuzz = 1e-6)
