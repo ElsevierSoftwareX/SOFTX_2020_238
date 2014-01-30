@@ -1,3 +1,9 @@
+gstlal-calibration (0.1.1-1) unstable; urgency=low
+
+  * initial release
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 30 Jan 2014 14:02:06 -0500
+
 gstlal-calibration (0.1.0-1) unstable; urgency=low
 
   * initial release
