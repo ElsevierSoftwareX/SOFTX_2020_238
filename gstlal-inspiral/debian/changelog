@@ -1,3 +1,9 @@
+gstlal-inspiral (0.3.1-1) unstable; urgency=low
+
+  * New version 0.3.1
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 30 Jan 2014 14:29:23 -0500
+
 gstlal-inspiral (0.3.0-1) unstable; urgency=low
 
   * New version 0.3.0
