@@ -56,7 +56,7 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
 from glue.segmentsUtils import vote
@@ -907,9 +907,9 @@ class LocalRankingData(object):
 
 	@classmethod
 	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", contenthandler = DefaultContentHandler, verbose = False):
-		self, process_id = LocalRankingData.from_xml(utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
+		self, process_id = LocalRankingData.from_xml(ligolw_utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
 		for f in filenames[1:]:
-			s, p = LocalRankingData.from_xml(utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
+			s, p = LocalRankingData.from_xml(ligolw_utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
 			self += s
 		return self
 		
