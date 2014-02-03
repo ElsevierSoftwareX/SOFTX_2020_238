@@ -1,0 +1,290 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013  Kipp Cannon, Chad Hanna, Jacob Peoples
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import math
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 8.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 600,
+	"savefig.dpi": 600,
+	"text.usetex": True
+})
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from optparse import OptionParser
+import sqlite3
+import sys
+
+
+from glue.lal import CacheEntry
+from glue.ligolw import dbtables
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from pylal import ligolw_thinca
+from pylal import progress
+
+
+from gstlal import far
+
+
+golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".95,.999999\", clear to disable).")
+	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Load ranking statistic PDFs from this file.  Can be given multiple times.")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	options.confidence_intervals = map(float, options.confidence_intervals.split(","))
+
+	options.likelihood_filenames = []
+	if options.likelihood_cache is not None:
+		options.likelihood_filenames += [CacheEntry(line).path for line in open(options.likelihood_cache)]
+	if options.likelihood_file is not None:
+		options.likelihood_filenames += options.likelihod_file
+	if not options.likelihood_filenames:
+		raise ValueError("must provide --likelihood-cache and/or one or more --likelihood-file options")
+
+	if options.input_cache:
+		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                              Support Functions
+#
+# =============================================================================
+#
+
+
+def load_ranking_data(filenames, verbose = False):
+	if not filenames:
+		raise ValueError("no likelihood files!")
+	ranking_data = None
+	for n, filename in enumerate(filenames, start = 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+		xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose)
+		ignored, ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
+		xmldoc.unlink()
+		if ranking_data is None:
+			raise ValueError("'%s' does not contain ranking statistic PDFs" % filename)
+		if ranking_data is None:
+			ranking_data = ranking_data
+		else:
+			ranking_data += ranking_data
+	ranking_data.finish(verbose = verbose)
+	return ranking_data
+
+
+def load_search_results(filenames, likelihood_ratio_threshold, tmp_path = None, verbose = False):
+	background_likelihood_ratios = []
+	zerolag_likelihood_ratios = []
+
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+		working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, verbose = verbose)
+		connection = sqlite3.connect(working_filename)
+
+		xmldoc = dbtables.get_xml(connection)
+		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+
+		for likelihood_ratio, is_background in connection.cursor().execute("""
+SELECT
+	coinc_event.likelihood,
+	EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+FROM
+	coinc_event
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND coinc_event.likelihood >= ?
+		""", (definer_id, likelihood_ratio_threshold)):
+			if is_background:
+				background_likelihood_ratios.append(likelihood_ratio)
+			else:
+				zerolag_likelihood_ratios.append(likelihood_ratio)
+
+		connection.close()
+		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
+
+	return background_likelihood_ratios, zerolag_likelihood_ratios
+
+
+def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
+	fig.suptitle("Rate Posterior")
+	if noise_rate is None:
+		signal_axes = fig.gca()
+	else:
+		signal_axes = fig.add_subplot(2, 1, 2)
+
+	x = signal_rate.bins[0].centres()
+	y = signal_rate.array
+	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
+	lo, hi = signal_axes.get_xlim()
+	signal_axes.set_xlim((lo, hi))
+	signal_axes.set_xlabel("Count")
+	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
+
+	if confidence_intervals is not None:
+		table = signal_axes.table(cellText = [[r"$P(\mathrm{signal\ count} \in [%g, %g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.8], loc = "upper right")
+		for cell in table.get_celld().values():
+			cell.set_edgecolor("w")
+
+	if noise_rate is not None:
+		background_axes = fig.add_subplot(2, 1, 1)
+		x = noise_rate.bins[0].centres()
+		y = noise_rate.array
+		line2, = background_axes.plot(x, y, color = "r", linestyle = "-", label = "Background")
+		background_axes.set_ylabel(r"$P(\mathrm{background\ count})$")
+
+	if noise_rate is not None:
+		fig.legend((line1, line2), (line1.get_label(), line2.get_label()), loc = "upper right")
+
+	try:
+		fig.tight_layout()
+	except AttributeError:
+		# old matplotlib. auto-layout not available
+		pass
+	return fig
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load ranking statistic PDFs
+#
+
+
+ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+
+
+#
+# load search results
+#
+
+
+background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(filenames, ranking_data.likelihood_ratio_threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+
+
+#
+# calculate rate posteriors
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_likelihood_ratios)
+	progressbar = progress.ProgressBar()
+else:
+	progressbar = None
+signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, progressbar = progressbar)
+del progressbar
+
+
+#
+# find confidence intervals
+#
+
+
+if options.confidence_intervals:
+	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)[1:]) for conf in (0.95, 0.999999))
+else:
+	confidence_intervals = None
+if options.verbose and confidence_intervals is not None:
+	for conf, (lo, hi) in sorted(confidence_intervals.items()):
+		print >>sys.stderr, "%g%% confidence interval = [%g, %g] signal events" % (conf * 100., lo, hi)
+
+
+#
+# save results
+#
+
+
+filename = "rate_posteriors.png"
+if options.verbose:
+	print >>sys.stderr, "writing %s ..." % filename
+plot_rates(signal_rate_pdf, noise_rate = noise_rate_pdf if options.with_background else None, confidence_intervals = confidence_intervals).savefig(filename)
+
+if options.verbose:
+	print >>sys.stderr, "done"
