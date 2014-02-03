@@ -718,6 +718,78 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 	return pdf
 
 
+def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 500000):
+	# FIXME:  this function does not yet incorporate the effect of
+	# noise-induced SNR fluctuations in its calculations
+
+	# get instrument names
+	names = tuple(inst_horiz_mapping)
+	# get horizon distances and responses in that same order
+	DH = numpy.array([inst_horiz_mapping[inst] for inst in names])
+	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
+
+	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(inst_horiz_mapping) + 1) for instruments in iterutils.choices(tuple(inst_horiz_mapping), n)), 0.0)
+
+	psi = gmst = 0.0
+	for i in xrange(n_samples):
+		theta = math.acos(random.uniform(-1., 1.))
+		phi = random.uniform(0., 2. * math.pi)
+		cosi2 = random.uniform(-1., 1.)**2.
+
+		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
+
+		# ratio of inverse SNR to distance for each instrument
+		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1. + cosi2)**2. / 4., cosi2]))**0.5
+
+		# the volume visible to each instrument given the
+		# requirement that a source be above the SNR threshold
+		# (omitting factor of 4/3 pi)
+		V_at_snr_threshold = (snr_times_D / snr_threshold)**3.
+
+		# order[0] is index of instrument that can see sources the
+		# farthest, etc.
+		order = sorted(range(len(V_at_snr_threshold)), key = V_at_snr_threshold.__getitem__, reverse = True)
+
+		# instrument combination and volume of space visible to
+		# that combination given the requirement that a source be
+		# above the SNR threshold in that combination (omitting
+		# factor or 4/3 pi).  sequence of instrument combinations
+		# is left as a generator expression for lazy evaluation
+		instruments = (frozenset(names[i] for i in order[:n]) for n in xrange(2, len(order) + 1))
+		V = tuple(V_at_snr_threshold[i] for i in order[1:])
+
+		# for each instrument combination, probability that a
+		# source visible to at least two instruments is visible to
+		# that combination
+		P = [x / V[0] for x in V]
+
+		# for each instrument combination, probability that a
+		# source visible to at least two instruments is visible to
+		# that combination and no other instruments
+		P = [P[i] - P[i + 1] for i in xrange(len(P) - 1)] + [P[-1]]
+
+		# accumulate result
+		for key, p in zip(instruments, P):
+			result[key] += p
+	for key in result:
+		result[key] /= n_samples
+
+	#
+	# make sure it's normalized
+	#
+
+	total = sum(sorted(result.values()))
+	assert abs(total - 1.) < 1e-13
+	for key in result:
+		result[key] /= total
+
+	#
+	# done
+	#
+
+	return result
+
+
 #
 # =============================================================================
 #
