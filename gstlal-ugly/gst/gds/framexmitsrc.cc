@@ -316,7 +316,8 @@ static gboolean start(GstBaseSrc *object)
 		FRAMERCV(element)->close();
 		element->frameRecv = NULL;
 		goto done;
-	}
+	} else
+		GST_DEBUG_OBJECT(element, "framexmit::frameRecv.open(group = \"%s\", iface = \"%s\", port = %d) succeeded", element->group, element->iface, element->port);
 
 	element->recv_status = GST_FLOW_OK;
 	retval = pthread_create(&element->recv_thread, NULL, receive_thread, element);
@@ -358,6 +359,7 @@ static gboolean stop(GstBaseSrc *object)
 	FRAMERCV(element)->close();
 	delete FRAMERCV(element);
 	element->frameRecv = NULL;
+	GST_DEBUG_OBJECT(element, "framexmit::frameRecv.close()");
 
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 

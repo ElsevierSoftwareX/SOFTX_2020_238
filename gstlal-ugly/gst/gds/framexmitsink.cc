@@ -227,7 +227,8 @@ static gboolean start(GstBaseSink *object)
 		FRAMESEND(element)->close();
 		element->frameSend = NULL;
 		goto done;
-	}
+	} else
+		GST_DEBUG_OBJECT(element, "framexmit::frameSend.open(group = \"%s\", iface = \"%s\", port = %d) succeeded", element->group, element->iface, element->port);
 
 done:
 	return success;
@@ -246,6 +247,7 @@ static gboolean stop(GstBaseSink *object)
 	FRAMESEND(element)->close();
 	delete FRAMESEND(element);
 	element->frameSend = NULL;
+	GST_DEBUG_OBJECT(element, "framexmit::frameSend.close()");
 
 	return TRUE;
 }
@@ -265,6 +267,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 	 * retrieve data
 	 */
 
+	GST_DEBUG_OBJECT(element, "sending %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	if(!FRAMESEND(element)->send((char *) GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer), NULL, TRUE, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND, GST_BUFFER_DURATION(buffer) / GST_SECOND)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameSend.send() failed"));
 		result = GST_FLOW_ERROR;
