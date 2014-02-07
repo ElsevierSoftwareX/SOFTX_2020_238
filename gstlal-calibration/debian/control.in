@@ -32,6 +32,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
  gstlal (>= @MIN_GSTLAL_VERSION@)
 Conflicts:
- gstlal-ugly < 0.6.0
+ gstlal-ugly (<< 0.6.0)
 Description: GStreamer for GW data analysis (calibration parts)
  This package contains the plugins and shared libraries required to run the gstlal calibraiton software.
