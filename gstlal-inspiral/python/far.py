@@ -545,7 +545,16 @@ class DistributionsStats(object):
 		for name, binnedarray in itertools.chain(self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
 			if verbose:
 				print >>sys.stderr, "%s," % name,
-			rate.filter_array(binnedarray.array, self.filters[name])
+			result = numpy.zeros_like(binnedarray.array)
+			while binnedarray.array.any():
+				workspace = numpy.copy(binnedarray.array)
+				cutoff = abs(workspace[abs(workspace) > 0]).min() * 1e4
+				binnedarray.array[abs(binnedarray.array) <= cutoff] = 0.
+				workspace[abs(workspace) > cutoff] = 0.
+				rate.filter_array(workspace, self.filters[name])
+				workspace[abs(workspace) < abs(workspace).max() * 1e-14] = 0.
+				result += workspace
+			binnedarray.array = result
 			numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
 			binnedarray.array /= binnedarray.array.sum()
 		if verbose:
