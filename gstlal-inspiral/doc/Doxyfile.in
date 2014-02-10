@@ -1636,7 +1636,7 @@ SKIP_FUNCTION_MACROS   = YES
 # NOT include the path). If a tag file is not located in the directory in which
 # doxygen is run, you must also specify the path to the tagfile here.
 
-TAGFILES               = ../../gstlal/doc/gstlaldoxy.tag=../../gstlal-0.6.2/html
+TAGFILES               = ../../gstlal/doc/gstlaldoxy.tag=../../gstlal-@GSTLAL_VERSION@/html
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.
