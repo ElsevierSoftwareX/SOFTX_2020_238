@@ -124,21 +124,10 @@ class upper_limit(object):
         '''
         Retrieve the sets of instruments which were on during the search.
         '''
-        # get instruments with sngl-sngl coincidences in zero lag
-        sngl_sngl_id, = connection.cursor().execute("SELECT coinc_def_id FROM coinc_definer WHERE search == 'inspiral' AND description == 'sngl_inspiral<-->sngl_inspiral coincidences';").fetchone()
-        time_slide_ids = [row[0] for row in connection.cursor().execute("SELECT distinct(time_slide_id) FROM time_slide;")]
-
-        zero_lag_ids = []
-        for tsid in time_slide_ids:
-            if float(connection.cursor().execute("SELECT max(offset) FROM time_slide WHERE time_slide_id == ?;",(tsid,)).fetchone()[0]) == 0:
-                zero_lag_ids.append(tsid)
-
-        instruments_query = """ SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id == ?; """
-
-        for inst in connection.cursor().execute(instruments_query, (sngl_sngl_id, zlid) ):
-            inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
-            if not inst in self.instruments:
-                self.instruments.append(inst)
+	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM search_summary"""):
+        	inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
+        	if not inst in self.instruments:
+         		self.instruments.append(inst)
 
         return self.instruments
 
