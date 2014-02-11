@@ -159,6 +159,7 @@ class EPHandler( Handler ):
 		self.output_cache = Cache()
 		self.output_cache_name = None
 		self.snr_thresh = 5.5
+		self.event_number = 0
 		self.fap = None
 		self.dump_frequency = 600 # s
 		self.max_events = 1e6

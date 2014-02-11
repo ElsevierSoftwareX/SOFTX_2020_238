@@ -77,7 +77,7 @@ except ImportError:
 	# FIXME: Remove when glue is totally updated to datafind
 	from glue import GWDataFindClient as datafind
 
-from glue.ligolw import ligolw, array, param, lsctables, table
+from glue.ligolw import ligolw, array, param, lsctables, table, ilwd
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
@@ -201,6 +201,10 @@ def get_triggers(elem, handler):
 		# This is done here so that the current PSD is used rather than
 		# what might be there when the triggers are actually output
 		ep.compute_amplitude( row, handler.psd )
+
+		# Reassign IDs since they won't be unique
+		row.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % handler.event_number)
+		handler.event_number += 1
 
 		trigs.append( row )
 	
