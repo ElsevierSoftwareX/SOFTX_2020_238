@@ -791,6 +791,41 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			P[instruments] = p
 		return P
 
+	@staticmethod
+	def randindex(lo, hi, n = 0.):
+		n = 1. / (n + 1.)
+		beta = lo**(1./n) / (hi**(1./n) - lo**(1./n))
+		alpha = hi / (1. + beta)**n
+		while 1:
+			yield int(math.floor(alpha * (random.random() + beta)**n))
+
+	def random_params(self, instruments):
+		"""
+		Generator that yields an endless sequence of randomly
+		generated parameter dictionaries for the given keys.  NOTE:
+		the parameters will be within the domain of the repsective
+		binnings but are not drawn from their PDF.  The return value is
+		a tuple, the first element of which is the parameter dictionary
+		and the second is the natural logarithm (up to an arbitrary
+		constant) of the PDF from which the parameters have been drawn.
+		"""
+		snr_slope = -0.5
+
+		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
+		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
+		x = dict((key, self.binnings[key].centres()) for key in keys)
+		ln_dxes = dict((key, tuple(numpy.log(u - l) for u, l in zip(self.binnings[key].upper(), self.binnings[key].lower()))) for key in keys)
+		indexgen = tuple((key, (self.randindex(0, len(centres_a), snr_slope).next, self.randindex(0, len(centres_b)).next)) for key, (centres_a, centres_b) in x.items())
+		while 1:
+			indexes = tuple((key, (indexgen_a(), indexgen_b())) for key, (indexgen_a, indexgen_b) in indexgen)
+			ln_volume = sum(sum(ln_dx[i] for ln_dx, i in zip(ln_dxes[key], value)) for key, value in indexes)
+			if not (math.isinf(ln_volume) or math.isnan(ln_volume)):
+				ln_P_bin = sum(math.log((index_snr + 1)**(snr_slope + 1.) - index_snr**(snr_slope + 1.))  for key, (index_snr, index_chisq) in indexes)
+				params = dict((key, tuple(centres[i] for centres, i in zip(x[key], value))) for key, value in indexes)
+				params.update(base_params)
+				yield params, ln_P_bin - ln_volume
+
+
 #
 # Joint probability density for measured SNRs
 #
