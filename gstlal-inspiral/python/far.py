@@ -1301,6 +1301,10 @@ class RankingData(object):
 			assert not (binnedarray.array < 0.0).any(), "%s likelihood ratio PDF contains negative values" % ", ".join(sorted(instruments))
 			ranks, = binnedarray.bins.lower()
 			weights = binnedarray.array
+			instruments_name = ", ".join(sorted(instruments)) if instruments is not None else "combined"
+			assert not numpy.isnan(binnedarray.array).any(), "%s likelihood ratio PDF contains NaNs" % instruments_name
+			assert not (binnedarray.array < 0.0).any(), "%s likelihood ratio PDF contains negative values" % instruments_name
+
 			# cumulative distribution function and its
 			# complement.  it's numerically better to recompute
 			# the ccdf by reversing the array of weights than
@@ -1309,17 +1313,17 @@ class RankingData(object):
 			cdf /= cdf[-1]
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
-			assert not numpy.isnan(cdf).any(), "%s likelihood ratio CDF contains NaNs" % ", ".join(sorted(instruments))
-			assert not numpy.isnan(ccdf).any(), "%s likelihood ratio CCDF contains NaNs" % ", ".join(sorted(instruments))
-			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s likelihood ratio CDF failed to be normalized" % ", ".join(sorted(instruments))
-			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s likelihood ratio CCDF failed to be normalized" % ", ".join(sorted(instruments))
-			# try making ccdf + cdf == 1.  nothing really cares
+			assert not numpy.isnan(cdf).any(), "%s likelihood ratio CDF contains NaNs" % instruments_name
+			assert not numpy.isnan(ccdf).any(), "%s likelihood ratio CCDF contains NaNs" % instruments_name
+			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s likelihood ratio CDF failed to be normalized" % instruments_name
+			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s likelihood ratio CCDF failed to be normalized" % instruments_name
 			# if this identity doesn't exactly hold, but we
 			# might as well avoid weirdness where we can.
 			s = ccdf + cdf
 			cdf /= s
 			ccdf /= s
-			assert (abs(1. - (cdf + ccdf)) < 1e-15).all(), "% likelihood ratio CDF + CCDF != 1" % ", ".join(sorted(instruments))
+			# one last check that normalization is OK
+			assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
 			# build interpolators
 			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
