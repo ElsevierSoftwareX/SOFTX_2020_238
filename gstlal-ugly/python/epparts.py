@@ -236,6 +236,9 @@ class EPHandler( Handler ):
 			return
 
 		# TODO: Move this to PSD difference checker
+		# FIXME: This code no longer works since the timestamp doesn't
+		# appear in the structure anymore -- don't know why
+		"""
 		if message.structure.get_name() == "spectrum":
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
@@ -245,6 +248,7 @@ class EPHandler( Handler ):
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
 				self.dump_psd( ts, self.cache_psd_dir )
 				self.last_psd_cache = ts
+		"""
 
 	def dump_psd( self, timestamp, psddir="./" ):
 		"""
