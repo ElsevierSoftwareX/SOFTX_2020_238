@@ -667,7 +667,8 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 
 		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
 
-		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1.0 + cosi2)**2. / 4., cosi2]))**0.5
+		# ratio of inverse SNR to distance for each instrument
+		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1. + cosi2)**2. / 4., cosi2]))**0.5
 
 		# index of instrument whose SNR grows fastest with decreasing D
 		axis = snr_times_D.argmax()
@@ -678,8 +679,8 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 		snr_start = snr_times_D[axis] / (snr_times_D.min() / snr_min)
 
 		# 3 steps per bin
-		step_factor = 10**(1. / bins_per_decade / 3) - 1.
-		for snr in 10**numpy.arange(math.log10(snr_start), math.log10(snr_max), 1. / bins_per_decade / 3):
+		step_factor = 10.**(1. / bins_per_decade / 3.) - 1.
+		for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(snr_max), 1. / bins_per_decade / 3.):
 			# "snr" is SNR in fastest growing instrument, from
 			# this the distance to the source is:
 			#
@@ -714,8 +715,8 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 
 	# number of bins per unit in SNR in the binnings.  For use as the
 	# width parameter in the filtering.
-	bins_per_snr_at_8 = 1. / ((10**(1. / bins_per_decade) - 1.) * 8.)
-	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
+	bins_per_snr_at_8 = 1. / ((10.**(1. / bins_per_decade) - 1.) * 8.)
+	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
 	numpy.clip(pdf.array, 0, PosInf, pdf.array)
 	# set the region where any SNR is lower than the input threshold to
 	# zero before normalizing the pdf and returning.
