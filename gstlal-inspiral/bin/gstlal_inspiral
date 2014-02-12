@@ -160,6 +160,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
 
 	options, filenames = parser.parse_args()
 
@@ -452,6 +453,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		comment = options.comment,
 		tmp_path = options.tmp_space,
 		thinca_interval = options.thinca_interval,
+		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
 		gracedb_type = options.gracedb_type,
 		gracedb_group = options.gracedb_group,
