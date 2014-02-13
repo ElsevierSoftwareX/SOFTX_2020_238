@@ -548,7 +548,6 @@ class Data(object):
 
 		self.lock = threading.Lock()
 		self.pipeline = pipeline
-		self.instruments = instruments
 		self.verbose = verbose
 		# True to enable likelihood assignment
 		self.assign_likelihoods = assign_likelihoods
@@ -590,6 +589,12 @@ class Data(object):
 		)
 
 		#
+		# setup likelihood ratio book-keeping
+		#
+
+		self.seglists = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+
+		#
 		# Fun output stuff
 		#
 		
@@ -606,22 +611,12 @@ class Data(object):
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_")[0]
 
-			# update search_summary out segment.  note that
-			# both the trigger document and the FAR object get
-			# their own copies of the segment.  the segment in
-			# self.search_summary is what gets recorded in the
-			# trigger document, the segment in the FAR object
-			# gets used for online FAR/FAP assignment and is
-			# what gets recorded in the likelihood data
-			# document.
+			# update search_summary out segment and our
+			# livetime
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
-			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
-			buf_seg = segments.segment(buf_timestamp, buf_end_time)
+			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
-			if self.far.livetime_seg == segments.segment(None, None):
-				self.far.livetime_seg = self.coincs_document.search_summary_outseg
-			else:
-				self.far.livetime_seg = segments.segmentlist([self.coincs_document.search_summary_outseg, self.far.livetime_seg]).extent()
+			self.seglists[instrument] |= segments.segmentlist((buf_seg,))
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
@@ -634,7 +629,7 @@ class Data(object):
 				event.event_id = self.coincs_document.get_next_sngl_id()
 
 			# update likelihood snapshot if needed
-			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
+			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 				# post a checkpoint message.  FIXME:  make
 				# sure this triggers
@@ -665,7 +660,7 @@ class Data(object):
 							print >>sys.stderr, "could not set scale factor, probably because we do not have live time info yet.  seg is: %s" % str(self.ranking_data.livetime_seg)
 
 					# write the new distribution stats to disk
-					ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
+					ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.seglists.keys()), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
 					self.ranking_data = None
 
@@ -688,7 +683,7 @@ class Data(object):
 	def __web_get_likelihood_file(self):
 		# generate a coinc parameter distribution file
 		output = StringIO.StringIO()
-		ligolw_utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
+		ligolw_utils.write_fileobj(gen_likelihood_control_doc(self.far, self.seglists.keys()), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		return outstr
@@ -747,7 +742,7 @@ class Data(object):
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
-					for instrument in self.instruments:
+					for instrument in self.seglists:
 						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
@@ -764,8 +759,8 @@ class Data(object):
 				# fake a filename for end-user convenience
 				#
 
-				observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
-				instruments = "".join(sorted(self.instruments))
+				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglists)))
+				instruments = "".join(sorted(self.seglists))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
@@ -921,7 +916,7 @@ class Data(object):
 				likelihood_file = os.path.join(likelihood_file[0], '%s-%s_SNR_CHI-%s-%s.xml.gz' % (ifo, desc, start, dur))
 			except ValueError:
 				likelihood_file = os.path.join(likelihood_file[0], '%s_SNR_CHI.xml.gz' % likelihood_file[1].split('.')[0])
-		ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		ligolw_utils.write_filename(gen_likelihood_control_doc(self.far, self.seglists.keys()), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		with self.lock:
