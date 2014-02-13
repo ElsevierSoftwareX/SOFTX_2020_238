@@ -64,9 +64,9 @@ class Handler(object):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
 
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
+		self.bus = pipeline.get_bus()
+		self.bus.add_signal_watch()
+		self.bus.connect("message", self.on_message)
 
 	def do_on_message(self, bus, message):
 		"""!
@@ -96,6 +96,9 @@ class Handler(object):
 			#self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+	def __del__(self):
+		self.bus.remove_signal_watch()
 
 
 class OneTimeSignalHandler(object):
