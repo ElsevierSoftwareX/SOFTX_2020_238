@@ -41,6 +41,7 @@ import sys
 import threading
 import time
 import httplib
+import tempfile
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -173,7 +174,7 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 	return onstr, offstr
 
 
-def parse_banks(bank_string):
+def parse_svdbank_string(bank_string):
 	"""
 	parses strings of form 
 	
@@ -186,7 +187,9 @@ def parse_banks(bank_string):
 		return out
 	for b in bank_string.split(','):
 		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
+		if ifo in out:
+			raise ValueError("Only one svd bank per instrument should be given")
+		out[ifo] = bank
 	return out
 
 
@@ -198,16 +201,24 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 	banks = {}
 
-	for instrument, files in svd_banks.items():
-		for n, filename in enumerate(files):
+	for instrument, filename in svd_banks.items():
+		for n, bank in enumerate(svd_bank.read_banks(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)):
 			# FIXME over ride the file name stored in the bank file with
-			# this file name this bank I/O code needs to be fixed
-			bank = svd_bank.read_bank(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)
-			bank.template_bank_filename = filename
+			# Write out sngl inspiral table to temp file for trigger generator
+			# FIXME teach the trigger generator to get this information a better way
+			# FIXME use named temporary file and store a reference
+			# to close later without a ulimit problem
+			xmldoc = ligolw.Document()
+			root = xmldoc.appendChild(ligolw.LIGO_LW())
+			fobj, fname = tempfile.mkstemp(suffix=".gz")
+			root.appendChild(bank.sngl_inspiral_table)
+			ligolw_utils.write_filename(xmldoc, fname, gz = True, verbose = verbose)
+			bank.template_bank_filename = fname
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
+			os.close(fobj) #close the temporary file or else you will have ulimit issues
 
 	return banks
 
