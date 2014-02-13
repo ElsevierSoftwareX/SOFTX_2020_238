@@ -217,138 +217,147 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, bank, clipleft = 0, clipright = 0, contenthandler = DefaultContentHandler, verbose = False):
-	"""Write an SVD bank to a LIGO_LW xml file."""
+def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthandler = DefaultContentHandler, verbose = False):
+	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
 	xmldoc = ligolw.Document()
-	root = ligolw.LIGO_LW()
+	lw = ligolw.LIGO_LW()
 
-	# Open template bank file
-	bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+	for bank, clipleft, clipright in zip(banks, cliplefts, cliprights):
+		# set up root for this sub bank
+		root = ligolw.LIGO_LW()
+		lw.appendChild(root)
+		
+		# Open template bank file
+		bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
-	# Get sngl inspiral table
-	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+		# Get sngl inspiral table
+		sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
 
-	# set the right clipping index
-	clipright = len(sngl_inspiral_table) - clipright
-	
-	# Apply clipping option to sngl inspiral table
-	sngl_inspiral_table = sngl_inspiral_table[clipleft:clipright]
+		# set the right clipping index
+		clipright = len(sngl_inspiral_table) - clipright
+		
+		# Apply clipping option to sngl inspiral table
+		sngl_inspiral_table = sngl_inspiral_table[clipleft:clipright]
 
-	# put the bank table into the output document
-	new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
-	for row in sngl_inspiral_table:
-		new_sngl_table.append(row)
+		# put the bank table into the output document
+		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
+		for row in sngl_inspiral_table:
+			new_sngl_table.append(row)
 
-	# put the possibly clipped table into the file
-	root.appendChild(new_sngl_table)
+		# put the possibly clipped table into the file
+		root.appendChild(new_sngl_table)
 
-	# Add root-level scalar params
-	root.appendChild(ligolw_param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
-	root.appendChild(ligolw_param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
-	root.appendChild(ligolw_param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
-	root.appendChild(ligolw_param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-	root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
-	root.appendChild(ligolw_param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
+		# Add root-level scalar params
+		root.appendChild(ligolw_param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
+		root.appendChild(ligolw_param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
+		root.appendChild(ligolw_param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
+		root.appendChild(ligolw_param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
+		root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
+		root.appendChild(ligolw_param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
 
-	# apply clipping to autocorrelations and sigmasq
-	bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
-	bank.sigmasq = bank.sigmasq[clipleft:clipright]
+		# apply clipping to autocorrelations and sigmasq
+		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
+		bank.sigmasq = bank.sigmasq[clipleft:clipright]
 
-	# Add root-level arrays
-	# FIXME:  ligolw format now supports complex-valued data
-	root.appendChild(ligolw_array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
-	root.appendChild(ligolw_array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
-	root.appendChild(ligolw_array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
-	root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(bank.sigmasq)))
+		# Add root-level arrays
+		# FIXME:  ligolw format now supports complex-valued data
+		root.appendChild(ligolw_array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
+		root.appendChild(ligolw_array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
+		root.appendChild(ligolw_array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
+		root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(bank.sigmasq)))
 
-	# Write bank fragments
-	for i, frag in enumerate(bank.bank_fragments):
-		# Start new container
-		el = ligolw.LIGO_LW()
+		# Write bank fragments
+		for i, frag in enumerate(bank.bank_fragments):
+			# Start new container
+			el = ligolw.LIGO_LW()
 
-		# Apply clipping option
-		if frag.mix_matrix is not None:
-			frag.mix_matrix = frag.mix_matrix[:,clipleft*2:clipright*2]
-		frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
+			# Apply clipping option
+			if frag.mix_matrix is not None:
+				frag.mix_matrix = frag.mix_matrix[:,clipleft*2:clipright*2]
+			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
-		# Add scalar params
-		el.appendChild(ligolw_param.new_param('start', ligolw_types.FromPyType[float], frag.start))
-		el.appendChild(ligolw_param.new_param('end', ligolw_types.FromPyType[float], frag.end))
-		el.appendChild(ligolw_param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
+			# Add scalar params
+			el.appendChild(ligolw_param.new_param('start', ligolw_types.FromPyType[float], frag.start))
+			el.appendChild(ligolw_param.new_param('end', ligolw_types.FromPyType[float], frag.end))
+			el.appendChild(ligolw_param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
 
-		# Add arrays
-		el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
-		if frag.mix_matrix is not None:
-			el.appendChild(ligolw_array.from_array('mix_matrix', frag.mix_matrix))
-		el.appendChild(ligolw_array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
-		if frag.singular_values is not None:
-			el.appendChild(ligolw_array.from_array('singular_values', frag.singular_values))
-		if frag.sum_of_squares_weights is not None:
-			el.appendChild(ligolw_array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
+			# Add arrays
+			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
+			if frag.mix_matrix is not None:
+				el.appendChild(ligolw_array.from_array('mix_matrix', frag.mix_matrix))
+			el.appendChild(ligolw_array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
+			if frag.singular_values is not None:
+				el.appendChild(ligolw_array.from_array('singular_values', frag.singular_values))
+			if frag.sum_of_squares_weights is not None:
+				el.appendChild(ligolw_array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
 
-		# Add bank fragment container to root container
-		root.appendChild(el)
+			# Add bank fragment container to root container
+			root.appendChild(el)
 
-	# Add root container to document
-	xmldoc.appendChild(root)
+	# add top level LIGO_LW to document
+	xmldoc.appendChild(lw)
 
 	# Write to file
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-def read_bank(filename, contenthandler = DefaultContentHandler, verbose = False):
-	"""Read an SVD bank from a LIGO_LW xml file."""
+def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False):
+	"""Read SVD banks from a LIGO_LW xml file."""
 
 	# Load document
 	xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-	root = xmldoc.childNodes[0]
 
-	# Create new SVD bank object
-	bank = Bank.__new__(Bank)
+	banks = []
 
-	# Read sngl inspiral table
-	bank.sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	for root in xmldoc.childNodes[0].childNodes:
 
-	# Read root-level scalar parameters
-	bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
-	bank.gate_threshold = ligolw_param.get_pyvalue(root, 'gate_threshold')
-	bank.logname = ligolw_param.get_pyvalue(root, 'logname')
-	bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
-	bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
-	bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
+		# Create new SVD bank object
+		bank = Bank.__new__(Bank)
 
-	# Read root-level arrays
-	bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
-	bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
-	bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
+		# Read sngl inspiral table
+		bank.sngl_inspiral_table = lsctables.table.get_table(root, lsctables.SnglInspiralTable.tableName)
 
-	# Read bank fragments
-	bank.bank_fragments = []
-	for el in (node for node in root.childNodes if node.tagName == ligolw.LIGO_LW.tagName):
-		frag = BankFragment.__new__(BankFragment)
+		# Read root-level scalar parameters
+		bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
+		bank.gate_threshold = ligolw_param.get_pyvalue(root, 'gate_threshold')
+		bank.logname = ligolw_param.get_pyvalue(root, 'logname')
+		bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
+		bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
+		bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
 
-		# Read scalar params
-		frag.start = ligolw_param.get_pyvalue(el, 'start')
-		frag.end = ligolw_param.get_pyvalue(el, 'end')
-		frag.rate = ligolw_param.get_pyvalue(el, 'rate')
+		# Read root-level arrays
+		bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
+		bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
+		bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
 
-		# Read arrays
-		frag.chifacs = ligolw_array.get_array(el, 'chifacs').array
-		try:
-			frag.mix_matrix = ligolw_array.get_array(el, 'mix_matrix').array
-		except ValueError:
-			frag.mix_matrix = None
-		frag.orthogonal_template_bank = ligolw_array.get_array(el, 'orthogonal_template_bank').array
-		try:
-			frag.singular_values = ligolw_array.get_array(el, 'singular_values').array
-		except ValueError:
-			frag.singular_values = None
-		try:
-			frag.sum_of_squares_weights = ligolw_array.get_array(el, 'sum_of_squares_weights').array
-		except ValueError:
-			frag.sum_of_squares_weights = None
-		bank.bank_fragments.append(frag)
+		# Read bank fragments
+		bank.bank_fragments = []
+		for el in (node for node in root.childNodes if node.tagName == ligolw.LIGO_LW.tagName):
+			frag = BankFragment.__new__(BankFragment)
 
-	return bank
+			# Read scalar params
+			frag.start = ligolw_param.get_pyvalue(el, 'start')
+			frag.end = ligolw_param.get_pyvalue(el, 'end')
+			frag.rate = ligolw_param.get_pyvalue(el, 'rate')
+
+			# Read arrays
+			frag.chifacs = ligolw_array.get_array(el, 'chifacs').array
+			try:
+				frag.mix_matrix = ligolw_array.get_array(el, 'mix_matrix').array
+			except ValueError:
+				frag.mix_matrix = None
+			frag.orthogonal_template_bank = ligolw_array.get_array(el, 'orthogonal_template_bank').array
+			try:
+				frag.singular_values = ligolw_array.get_array(el, 'singular_values').array
+			except ValueError:
+				frag.singular_values = None
+			try:
+				frag.sum_of_squares_weights = ligolw_array.get_array(el, 'sum_of_squares_weights').array
+			except ValueError:
+				frag.sum_of_squares_weights = None
+			bank.bank_fragments.append(frag)
+
+		banks.append(bank)
+	return banks
