@@ -25,6 +25,7 @@
 
 
 import numpy
+import math
 
 import sys
 from pylal import datatypes as laltypes
@@ -175,6 +176,17 @@ def normalized_autocorrelation(fseries, revplan):
 	data = tseries.data
 	tseries.data = data / data[0]
 	return tseries
+	
+
+# Round a number up to the nearest power of 2
+def ceil_pow_2( number ):
+	x = int(math.ceil(x))
+	x -= 1
+	n = 1
+	while n and (x & (x + 1)):
+		x |= x >> n
+		n *= 2
+	return x + 1
 
 
 def time_slices(
@@ -197,10 +209,6 @@ def time_slices(
 	during which the given rate is guaranteed to be appropriate (no
 	template exceeds a frequency of Nyquist/padding during these times).
 	"""
-	# Round a number up to the nearest power of 2
-	# FIXME: change to integer arithmetic
-	def ceil_pow_2( number ):
-		return 2**(numpy.ceil(numpy.log2( number )))
 
 	#
 	# DETERMINE A SET OF ALLOWED SAMPLE RATES
