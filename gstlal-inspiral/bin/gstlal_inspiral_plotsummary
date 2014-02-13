@@ -200,16 +200,16 @@ class CoincDatabase(object):
 		if verbose:
 			print >>sys.stderr, "calculating background livetimes: ",
 		self.offset_vectors = db_thinca_rings.get_background_offset_vectors(connection)
-		#self.background_livetime = db_thinca_rings.get_thinca_livetimes(db_thinca_rings.get_thinca_rings_by_available_instruments(connection, program_name = live_time_program), self.veto_segments, self.offset_vectors, verbose = verbose)
 
 		if verbose:
 			print >>sys.stderr
 		self.zerolag_livetime = {}
 		self.background_livetime = {}
 		for on_instruments in self.on_instruments_combos:
-			# FIXME:  background livetime hard-coded to be same
-			# as zero-lag livetime.  figure out what to do
-			self.zerolag_livetime[on_instruments] = self.background_livetime[on_instruments] = float(abs(self.seglists.intersection(on_instruments) - self.seglists.union(self.instruments - on_instruments)))
+			self.zerolag_livetime[on_instruments] = float(abs(self.seglists.intersection(on_instruments) - self.seglists.union(self.instruments - on_instruments)))
+		# FIXME:  background livetime hard-coded to be same
+		# as zero-lag livetime.  figure out what to do
+		self.background_livetime.update(self.zerolag_livetime)
 
 		# verbosity
 		if verbose:
@@ -491,6 +491,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 #
 # =============================================================================
 #
+
 
 class InjectionParameterDistributionPlots(object):
 	def __init__(self):
