@@ -25,7 +25,7 @@ pygtk.require('2.0')
 import pygst
 pygst.require('0.10')
 
-from gstlal.svd_bank import read_bank
+from gstlal.svd_bank import read_banks
 import numpy
 import cgi
 import cgitb
@@ -35,6 +35,8 @@ form = cgi.FieldStorage()
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
+
+from glue.ligolw import lsctables
 
 print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
 print >>sys.stdout, 'Content-type: text/html\r\n'
@@ -54,39 +56,43 @@ print """
 <font size=10>SVD BANK</font><br>
 """
 
-bank = path = read_bank(form.getlist("url")[0])
 
-# get the template number
-tmps = bank.bank_fragments[0].mix_matrix.shape[1] / 2
+for bank in read_banks(form.getlist("url")[0]):
 
-for n in range(tmps):
-	pyplot.figure(figsize=(18,6))
-	pyplot.subplot(211)
-	print "<div>"
-	maxrate = 0
-	mint = 0
-	for frag in bank.bank_fragments:
-		m = frag.mix_matrix
-		s = frag.singular_values
-		u = frag.orthogonal_template_bank
-		h = numpy.dot(m.T, u)
-		t = numpy.linspace(-frag.end, -frag.start, h.shape[1])
-		pyplot.plot(t, h[2 * n,:] * frag.rate**.5)
-		pyplot.plot(t, h[2 * n + 1,:] * frag.rate**.5)
-		maxrate = max(maxrate, frag.rate)
-		mint = min(t[0], mint)
-	pyplot.xlabel('time (s)')
-	#pyplot.xlim([-.5, 0])
+	# get the template number
+	tmps = bank.bank_fragments[0].mix_matrix.shape[1] / 2
+	row = bank.sngl_inspiral_table
 
-	pyplot.subplot(212)
-	pyplot.xlabel('samples')
-	l = len(bank.autocorrelation_bank[n,:])
-	ts = l / float(maxrate)
-	t = numpy.linspace(-ts, 0, l)
-	pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
-	pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
-	pyplot.savefig(sys.stdout, format="svg")
-	print "</div>"
+	for n in range(tmps):
+		mc, s1z, s2z = row[n].mchirp, row[n].spin1z, row[n].spin2z
+
+		pyplot.figure(figsize=(18,6))
+		pyplot.subplot(211)
+		print "<div>"
+		maxrate = 0
+		mint = 0
+		for frag in bank.bank_fragments:
+			m = frag.mix_matrix
+			s = frag.singular_values
+			u = frag.orthogonal_template_bank
+			h = numpy.dot(m.T, u)
+			t = numpy.linspace(-frag.end, -frag.start, h.shape[1])
+			pyplot.plot(t, h[2 * n,:] * frag.rate**.5)
+			pyplot.plot(t, h[2 * n + 1,:] * frag.rate**.5)
+			maxrate = max(maxrate, frag.rate)
+			mint = min(t[0], mint)
+		pyplot.xlabel('time (s) mc:%.2f s1z:%.2f s2z:%.2f' % (mc, s1z, s2z))
+		pyplot.xlim([-.25, 0])
+
+		pyplot.subplot(212)
+		pyplot.xlabel('samples')
+		l = len(bank.autocorrelation_bank[n,:])
+		ts = l / float(maxrate)
+		t = numpy.linspace(-ts, 0, l)
+		pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
+		pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
+		pyplot.savefig(sys.stdout, format="svg")
+		print "</div>"
 
 
 print "</body></html>"
