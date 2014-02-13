@@ -112,7 +112,7 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 #
 
 
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None, control_peak_samples = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, seekevent = None, control_peak_samples = None):
 	#
 	# start with an adder and caps filter to select a sample rate
 	#
@@ -134,8 +134,8 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# injections
 	#
 
-	if inj_seg_list is not None:
-		src = datasource.mksegmentsrcgate(pipeline, src, inj_seg_list, seekevent = seekevent, invert_output = False)
+	if reconstruction_segment_list is not None:
+		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, seekevent = seekevent, invert_output = False)
 
 	#
 	# verbosity and a tee
@@ -179,7 +179,8 @@ class Handler(simplehandler.Handler):
 			elem.connect("start", self.gatehandler, "on")
 			elem.connect("stop", self.gatehandler, "off")
 
-		bottle.route("/segments.xml")(self.web_get_segments_xml)
+		if gates:
+			bottle.route("/segments.xml")(self.web_get_segments_xml)
 
 	def do_on_message(self, bus, message):
 		if message.type == gst.MESSAGE_APPLICATION:
@@ -589,7 +590,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, blind_injections = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, reconstruction_segment_list = None):
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
@@ -598,22 +599,6 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		raise ValueError("chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % chisq_type)
 	if any(tuple(iterutils.nonuniq(bank.bank_id for bank in banklist)) for banklist in banks.values()):
 		raise ValueError("bank IDs are not unique: %s" % "; ".join("for %s: %s" % (instrument, iterutils.nonuniq(bank.bank_id for bank in banklist)) for instrument, banklist in banks.items()))
-
-	#
-	# extract segments from the injection file for selected reconstruction
-	#
-
-	if detectors.injection_filename is not None:
-		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
-	else:
-		inj_seg_list = None
-		#
-		# Check to see if we are specifying blind injections now that we know
-		# we don't want real injections. Setting this
-		# detectors.injection_filename will ensure that injections are added
-		# but won't only reconstruct injection segments.
-		#
-		detectors.injection_filename = blind_injections
 
 	#
 	# construct dictionaries of whitened, conditioned, down-sampled
@@ -633,12 +618,12 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# build gate control branches
 	#
 
-	if control_peak_time > 0 or inj_seg_list is not None:
+	if control_peak_time > 0 or reconstruction_segment_list is not None:
 		control_branch = {}
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	else:
