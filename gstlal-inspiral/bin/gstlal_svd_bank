@@ -96,33 +96,37 @@ parser.add_option("--identity-transform", action = "store_true", default = False
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
-parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
-parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
-parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
+parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
+parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0).")
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-parser.add_option("--clipleft", type = "int", default = 0, help = "Remove poorly reconstructable templates from the left edge of each sub-bank.")
-parser.add_option("--clipright", type = "int", default = 0, help = "Remove poorly reconstructable templates from the right edge of each sub-bank.")
+parser.add_option("--clipleft", type = "int", metavar = "N", action = "append", help = "Remove N poorly reconstructable templates from the left edge of each sub-bank. Required")
+parser.add_option("--clipright", type = "int", metavar = "N", action = "append", help = "Remove N poorly reconstructable templates from the right edge of each sub-bank. Required")
 parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
 parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
-parser.add_option("--bank-id", metavar = "id", help = "Set a string to be used as the globally unique ID for this bank (default = generate a UUID).")
+parser.add_option("--bank-id", metavar = "id", action = "append", help = "Set a string to be used as the globally unique ID for each bank (default = generate a UUID).")
 
 options, filenames = parser.parse_args()
 
-required_options = ("reference_psd", "template_bank", "write_svd_bank")
+required_options = ("reference_psd", "template_bank", "write_svd_bank", "clipleft", "clipright")
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
 
+if options.bank_id is None:
+	options.bank_id = [str(uuid.uuid4()) for t in options.template_bank]
+
+if not (len(options.template_bank) == len(options.clipleft) == len(options.clipright) == len(options.bank_id)):
+	raise ValueError("must give --template-bank, --clipright and --clipleft options in equal amounts")
+
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
 
-if options.bank_id is None:
-	options.bank_id = str(uuid.uuid4())
 
 
 #
@@ -134,16 +138,13 @@ if options.bank_id is None:
 # =============================================================================
 #
 
+psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=LIGOLWContentHandler))
 
 svd_bank.write_bank(
 	options.write_svd_bank,
-	svd_bank.build_bank(
-		options.template_bank,
-		lalseries.read_psd_xmldoc(ligolw_utils.load_filename(
-			options.reference_psd,
-			verbose=options.verbose,
-			contenthandler=LIGOLWContentHandler
-		)),
+	[svd_bank.build_bank(
+		template_bank,
+		psd,
 		options.flow,
 		options.ortho_gate_fap,
 		options.snr_threshold,
@@ -156,8 +157,8 @@ svd_bank.write_bank(
 		samples_max_256 = options.samples_max_256,
 		samples_max_64 = options.samples_max_64, 
 		samples_max = options.samples_max,
-		bank_id = options.bank_id
-	),
+		bank_id = bank_id
+	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
 	options.clipleft,
 	options.clipright
 )
