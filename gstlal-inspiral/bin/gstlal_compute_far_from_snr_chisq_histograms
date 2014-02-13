@@ -51,7 +51,7 @@ def parse_command_line():
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
-	parser.add_option("--injection-db", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
+	parser.add_option("--injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from an injection run.  Can be given multiple times.  Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
 	options, filenames = parser.parse_args()
 	return options, filenames
 
