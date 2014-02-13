@@ -54,10 +54,10 @@ import urlparse
 
 
 from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from gstlal.reference_psd import horizon_distance
 try:
 	from ligo.gracedb import cli as gracedb
@@ -70,11 +70,11 @@ from pylal import series as lal_series
 golden_ratio = (1 + math.sqrt(5)) / 2
 
 
-class ContentHandler(ligolw.LIGOLWContentHandler):
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-array.use_in(ContentHandler)
-param.use_in(ContentHandler)
-lsctables.use_in(ContentHandler)
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
 
 
 #
@@ -104,20 +104,20 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 	response = get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
 	if response is None:
 		return None
-	return lal_series.read_psd_xmldoc(utils.load_fileobj(response, ContentHandler)[0])
+	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, LIGOLWContentHandler)[0])
 
 
 def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
-	return utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), ContentHandler)[0]
+	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), LIGOLWContentHandler)[0]
 
 
 def plot_psds(psds, coinc_xmldoc, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
-	coinc_event, = lsctables.table.get_table(coinc_xmldoc, lsctables.CoincTable.tableName)
-	coinc_inspiral, = lsctables.table.get_table(coinc_xmldoc, lsctables.CoincInspiralTable.tableName)
-	offset_vector = lsctables.table.get_table(coinc_xmldoc, lsctables.TimeSlideTable.tableName).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
+	coinc_event, = lsctables.CoincTable.get_table(coinc_xmldoc)
+	coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+	offset_vector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
 	# FIXME:  MBTA uploads are missing process table
-	#process, = lsctables.table.get_table(coinc_xmldoc, lsctables.ProcessTable.tableName)
-	sngl_inspirals = dict((row.ifo, row) for row in lsctables.table.get_table(coinc_xmldoc, lsctables.SnglInspiralTable.tableName))
+	#process, = lsctables.ProcessTable.get_table(coinc_xmldoc)
+	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 
 	mass1 = sngl_inspirals.values()[0].mass1
 	mass2 = sngl_inspirals.values()[0].mass2
