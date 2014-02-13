@@ -128,40 +128,46 @@ class Handler(simplehandler.Handler):
 #
 
 
-def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 2048, verbose = False):
+def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 16384, verbose = False):
 	#
 	# get instrument and channel name (requires exactly one
 	# instrument+channel)
 	#
 
-	(instrument, channel_name), = data_source_info.channel_dict.items()
+	channelmux_input_dict = {}
 
-	#
-	# retrieve h(t)
-	#
+	for instrument, channel_name in data_source_info.channel_dict.items():
 
-	src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = verbose)
+		#
+		# retrieve h(t)
+		#
 
-	#
-	# optionally resample
-	#
+		src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = verbose)
 
-	if sample_rate is not None:
-		# make sure we're *down*sampling
-		src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % sample_rate)
-		src = pipeparts.mkresample(pipeline, src, quality = 9)
-		src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % sample_rate)
+		#
+		# optionally resample
+		#
 
-	#
-	# pack into frame files for output
-	#
+		if sample_rate is not None:
+			# make sure we're *down*sampling
+			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % sample_rate)
+			src = pipeparts.mkresample(pipeline, src, quality = 9)
+			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % sample_rate)
+			# put in a thread boundary to speed things up
+			src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
 
-	src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
+		#
+		# pack into frame files for output
+		#
+
+		channelmux_input_dict["%s:%s" % (instrument, channel_name)] = src
+
+	src = pipeparts.mkframecppchannelmux(pipeline, channelmux_input_dict, frame_duration = frame_duration, frames_per_file = frames_per_file)
 	for pad in src.sink_pads():
 		if channel_comment is not None:
 			pad.set_property("comment", channel_comment)
 		pad.set_property("pad-type", "FrProcData")
-	pipeparts.mkframecppfilesink(pipeline, src, frame_type = description, path = output_path)
+	pipeparts.mkframecppfilesink(pipeline, src, frame_type = "%s_%s" % ("".join(sorted(data_source_info.channel_dict.keys())), description), path = output_path)
 
 
 #
