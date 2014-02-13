@@ -157,7 +157,7 @@ srcs = []
 if options.bns_local_rate > 0.0:
 	srcs.append(source(options.bns_waveform, (options.ns_min_mass, options.ns_max_mass), (options.ns_min_mass, options.ns_max_mass), (options.ns_min_spin, options.ns_max_spin), (options.ns_min_spin, options.ns_max_spin), options.bns_local_rate, options.bns_max_distance, start, stop))
 if options.nsbh_local_rate > 0.0:
-	srcs.append(source(options.nsbh_waveform, (options.ns_min_mass,options.ns_max_mass), (options.bh_min_mass, options.bh_max_mass), (0,0), (options.bh_min_spin, options.bh_max_spin), options.nsbh_local_rate, options.nsbh_max_distance, start, stop))
+	srcs.append(source(options.nsbh_waveform, (options.ns_min_mass,options.ns_max_mass), (options.bh_min_mass, options.bh_max_mass), (options.ns_min_spin, options.ns_max_spin), (options.bh_min_spin, options.bh_max_spin), options.nsbh_local_rate, options.nsbh_max_distance, start, stop))
 if options.bbh_local_rate > 0.0:
 	srcs.append(source(options.bbh_waveform, (options.bh_min_mass,options.bh_max_mass), (options.bh_min_mass, options.bh_max_mass), (options.bh_min_spin, options.bh_max_spin), (options.bh_min_spin, options.bh_max_spin), options.bbh_local_rate, options.bbh_max_distance, start, stop))
 
