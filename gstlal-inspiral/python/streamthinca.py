@@ -164,14 +164,15 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, trials_table = None, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, trials_table = None, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval
-		self.set_likelihood_data(coinc_params_distributions)
 		self.last_coincs = {}
 		self.trials_table = trials_table
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
+		self.likelihood_func = None
+		self.likelihood_params_func = None
 
 		# when using the normal coincidence function from
 		# ligolw_thinca this is the e-thinca parameter.  when using
@@ -187,13 +188,13 @@ class StreamThinca(object):
 		self.ids = set()
 
 
-	def set_likelihood_data(self, coinc_params_distributions):
-		if coinc_params_distributions is None:
-			self.likelihood_func = None
-			self.likelihood_params_func = None
-		else:
-			self.likelihood_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
-			self.likelihood_params_func = coinc_params_distributions.coinc_params
+	def set_coinc_params_distributions(self, coinc_params_distributions):
+		self.likelihood_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
+		self.likelihood_params_func = coinc_params_distributions.coinc_params
+	def del_coinc_params_distributions(self):
+		self.likelihood_func = None
+		self.likelihood_params_func = None
+	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
 
 
 	def add_events(self, xmldoc, process_id, events, boundary, FAP = None):

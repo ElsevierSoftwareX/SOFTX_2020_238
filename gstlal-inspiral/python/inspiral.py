@@ -644,8 +644,9 @@ class Data(object):
 					assert self.marginalized_likelihood_file is not None
 					# smooth the distributions
 					self.far.smooth_distribution_stats(verbose = self.verbose)
-					# update stream thinca's likelihood data
-					self.stream_thinca.set_likelihood_data(self.far.distributions)
+					# update streamthinca's likelihood
+					# ratio assignment data
+					self.stream_thinca.coinc_params_distributions = self.far.distributions
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = LIGOLWContentHandler))
