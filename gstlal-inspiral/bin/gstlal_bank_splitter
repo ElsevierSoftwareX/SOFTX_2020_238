@@ -30,6 +30,8 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
+from gstlal import templates
+
 
 ## @file gstlal_bank_splitter
 #
@@ -59,6 +61,7 @@ from pylal.datatypes import LIGOTimeGPS
 #
 
 
+#FIXME FIXME FIXME distribute templates evenly so the last chunk doesn't end up too small
 def group_templates(templates, n, overlap = 0):
 	"""
 	break up the template table into sub tables of length n with overlap
@@ -78,90 +81,95 @@ def group_templates(templates, n, overlap = 0):
 
 
 def parse_command_line():
-        parser = OptionParser()
-        parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
-        parser.add_option("-n", "--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required).")
-        parser.add_option("-O", "--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
-        parser.add_option("-s", "--sort-by", metavar = "{mchirp|mtotal|ffinal|chirptime}", help = "Select the template sort order (required).")
+	parser = OptionParser()
+	parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
+	parser.add_option("-n", "--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required).")
+	parser.add_option("-O", "--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
+	parser.add_option("-s", "--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
 	parser.add_option("-F", "--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
 	parser.add_option("-M", "--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
 	parser.add_option("-i", "--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("--bank-program", metavar = "name", default = "tmpltbank", type="string", help = "Select name of the program used to generate the template bank (default: tmpltbank).")
-        parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-        options, filenames = parser.parse_args()
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
 
-        required_options = ("n", "sort_by", "instrument")
-        missing_options = [option for option in required_options if getattr(options, option) is None]
-        if missing_options:
-                raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
+	required_options = ("n", "instrument", "sort_by")
+	missing_options = [option for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
 
-        if options.sort_by not in ("mchirp", "ffinal", "chirptime", "mtotal"):
-                raise ValueError, "unrecognized --sort-by \"%s\"" % options.sort_by
-
-        if len(filenames) != 1:
-                raise ValueError, "must provide exactly one filename"
-	
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
 
-        return options, filenames[0]
+	return options, filenames
 
-options, filename = parse_command_line()
-# FIXME use all the options
-options_params=[("--filename","string",filename),("--output_path","string", options.output_path), ("--n","int",options.n),("--sort-by","string",options.sort_by),("--add-f-final","string",options.add_f_final),("--max-f-final","float",options.max_f_final)]
+options, filenames = parse_command_line()
+
+for filename in filenames:
+
+	# FIXME use all the options
+	options_params=[("--filename","string",filename),("--output_path","string", options.output_path), ("--n","int",options.n),("--add-f-final","string",options.add_f_final),("--max-f-final","float",options.max_f_final)]
 
 
-xmldoc=utils.load_filename(filename, verbose = options.verbose)
-sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
-tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(options.bank_program)
+	xmldoc=utils.load_filename(filename, verbose = options.verbose)
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+	tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(options.bank_program)
 
-if options.add_f_final:
-	for row in process_params_table:
-		if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
-			approximant=row.value
-		#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
-		if row.param in ("--low-frequency-cutoff", "--flow"):
-			flow = float(row.value)
+	if options.add_f_final:
+		for row in process_params_table:
+			if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
+				approximant=row.value
+			#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
+			if row.param in ("--low-frequency-cutoff", "--flow"):
+				flow = float(row.value)
+		for row in sngl_inspiral_table:
+			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
+			if approximant in ['IMRPhenomB', 'EOBNRv2']:
+				row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
+				if options.max_f_final and row.f_final>options.max_f_final:
+					row.f_final=options.max_f_final
+				row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,chi) + 100 * (row.mass1 + row.mass2) * 5e-6 # 100 M in seconds for plenty of ringdown padding
+			else:
+				row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'bkl_isco')
+				if options.max_f_final and (row.f_final > options.max_f_final):
+					row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,chi)))
+					row.f_final=options.max_f_final
+				# FIXME I use options.max_f_final as a reference if it exists
+				row.template_duration = spawaveform.chirptime(row.mass1, row.mass2, 7, flow, row.f_final, chi)
+
+
 	for row in sngl_inspiral_table:
-		chi = (row.mass1*row.spin1z + row.mass2*row.spin2z)/(row.mass1+row.mass2)
-		if approximant in ['IMRPhenomB', 'EOBNRv2']:
-			row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
-			if options.max_f_final and row.f_final>options.max_f_final:
-				row.f_final=options.max_f_final
-			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,chi) + 100 * (row.mass1 + row.mass2) * 5e-6 # 100 M in seconds for plenty of ringdown padding
-		else:
-			row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'bkl_isco')
-			if options.max_f_final and (row.f_final > options.max_f_final):
-				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,chi)))
-				row.f_final=options.max_f_final
-			row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,chi)
+		row.ifo = options.instrument
 
-for row in sngl_inspiral_table:
-	row.ifo = options.instrument
+	# just to make sure it is set
+	for row in sngl_inspiral_table:
+		row.mtotal = row.mass1 + row.mass2
 
-# just to make sure it is set
-for row in sngl_inspiral_table:
-	row.mtotal = row.mass1 + row.mass2
 
-if options.sort_by=='mchirp':
-	sngl_inspiral_table.sort(lambda a, b: cmp(a.mchirp, b.mchirp))
-if options.sort_by=='ffinal':
-       	sngl_inspiral_table.sort(lambda a, b: cmp(a.f_final, b.f_final))
-if options.sort_by=='chirptime':
-       	sngl_inspiral_table.sort(lambda a, b: cmp(a.template_duration, b.template_duration))
-if options.sort_by=='mtotal':
-       	sngl_inspiral_table.sort(lambda a, b: cmp(a.mtotal, b.mtotal))
+	sample_rates = {}
+	# group by power of two sample rate
+	for row in sngl_inspiral_table:
+		sample_rates.setdefault(templates.ceil_pow_2(row.f_final), []).append(row)
 
-# prepare the replacement sngl inspiral table
-sngl_inspiral_table_split = lsctables.table.new_from_template(sngl_inspiral_table)
-sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_split, sngl_inspiral_table)
+	# prepare the replacement sngl inspiral table
+	sngl_inspiral_table_split = lsctables.table.new_from_template(sngl_inspiral_table)
+	sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_split, sngl_inspiral_table)
 
-# store the process params
-process = ligolw_process.append_process(xmldoc, program = "bank_splitter", comment = "split bank into smaller banks after sorting", ifos = None)
-ligolw_process.append_process_params(xmldoc, process, options_params)	
+	# store the process params
+	process = ligolw_process.append_process(xmldoc, program = "bank_splitter", comment = "split bank into smaller banks after sorting", ifos = None)
+	ligolw_process.append_process_params(xmldoc, process, options_params)	
 
-for i, rows in enumerate(group_templates(sngl_inspiral_table, options.n, options.overlap)):
-	sngl_inspiral_table_split[:] = rows
-	output = os.path.join(options.output_path, "%04d-%s_split_bank-%s" % (i, options.instrument, os.path.basename(filename)))
-	utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
+	count = 0
+	
+	def sort_func(row, column = options.sort_by):
+		return getattr(row, column)
+
+	for r in sample_rates:
+		sample_rates[r].sort(key=sort_func)
+
+		for rows in group_templates(sample_rates[r], options.n, options.overlap):
+			sngl_inspiral_table_split[:] = rows
+			output = os.path.join(options.output_path, "%04d-%s_split_bank-%s" % (count, options.instrument, os.path.basename(filename)))
+			utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
+			count += 1
