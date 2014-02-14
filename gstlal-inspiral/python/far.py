@@ -476,9 +476,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# coinc.  if both have participated favour H1
 		if "H2_snr_chi" in params and "H1_snr_chi" in params:
 			del params["H2_snr_chi"]
-		# FIXME:  currently this is not used to form part of the
-		# ranking statistic's parameters.  it *is* used to track
-		# non-coincident singles rates and zero-lag coinc rates
 		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
 		return params
 
@@ -487,14 +484,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			return None
 		P = 1.0
 		for name, value in params.items():
-			if name.endswith("_snr_chi"):
-				P *= self.background_pdf_interp[name](*value)
+			P *= self.background_pdf_interp[name](*value)
 		return P
 
 	def P_signal(self, params):
 		if params is None:
 			return None
-
 		# (instrument, snr) pairs sorted alphabetically by instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
@@ -503,8 +498,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
 		for name, value in params.items():
-			if name.endswith("_snr_chi"):
-				P *= self.injection_pdf_interp[name](*value)
+			P *= self.injection_pdf_interp[name](*value)
 		return P
 
 	@staticmethod
