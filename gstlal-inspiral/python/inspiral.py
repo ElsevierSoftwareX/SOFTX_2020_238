@@ -666,7 +666,7 @@ class Data(object):
 					self.ranking_data = None
 
 			# run stream thinca
-			noncoinc_sngls = self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, FAP = self.ranking_data)
+			noncoinc_sngls = self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.ranking_data)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
@@ -700,7 +700,7 @@ class Data(object):
 			FAP = self.ranking_data
 		else:
 			FAP = None
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, FAP = FAP):
+		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = FAP):
 			self.far.distributions.add_background(self.far.distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 

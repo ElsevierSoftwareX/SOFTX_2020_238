@@ -197,7 +197,7 @@ class StreamThinca(object):
 	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
 
 
-	def add_events(self, xmldoc, process_id, events, boundary, FAP = None):
+	def add_events(self, xmldoc, process_id, events, boundary, fapfar = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
 		self.last_coincs = {}
@@ -226,10 +226,10 @@ class StreamThinca(object):
 		# no new events
 		if not events:
 			return []
-		return self.run_coincidence(xmldoc, process_id, boundary, FAP = FAP)
+		return self.run_coincidence(xmldoc, process_id, boundary, fapfar = fapfar)
 
 
-	def run_coincidence(self, xmldoc, process_id, boundary, FAP = None):
+	def run_coincidence(self, xmldoc, process_id, boundary, fapfar = None):
 		# safety check
 		assert xmldoc is self._xmldoc
 
@@ -316,7 +316,7 @@ class StreamThinca(object):
 			trials_dict.setdefault(ifo_set, set()).add(int(float(coinc_inspiral_row.get_end()) * 200))
 
 			# Assign the FAP if requested
-			if FAP is not None:
+			if fapfar is not None:
 				# note FAP should have a reference to the
 				# global trials table read in by in the
 				# marginalized_likelihood file.  This is not
@@ -327,7 +327,7 @@ class StreamThinca(object):
 
 				# compute the false-alarm rate without
 				# using the trials-factor rescaling
-				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set)
+				coinc_inspiral_row.combined_far = fapfar.far_from_rank(coinc_event_row.likelihood, ifo_set)
 
 				# now that we know this event's un-adjusted
 				# false-alarm rate, adjust the
@@ -343,12 +343,12 @@ class StreamThinca(object):
 
 				# now re-compute the false-alarm rate, this
 				# time using the trials-factor rescaling
-				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
+				coinc_inspiral_row.combined_far = fapfar.far_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
 
 				# compute the false-alarm probability, too,
 				# now that we know the latest the
 				# trials-factor scaling
-				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
+				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(coinc_event_row.likelihood, ifo_set)
 
 				# abuse minimum_duration column to store
 				# the latency.  NOTE:  this is nonsensical
@@ -410,7 +410,7 @@ class StreamThinca(object):
 		return noncoinc_sngls
 
 
-	def flush(self, xmldoc, process_id, FAP = None):
+	def flush(self, xmldoc, process_id, fapfar = None):
 		# invalidate the coinc extractor in case run_coincidence()
 		# is a no-op.
 		self.last_coincs = {}
@@ -418,7 +418,7 @@ class StreamThinca(object):
 		# coincidence.  don't bother unless .add_events() has been
 		# called since the last flush()
 		if self._xmldoc is not None:
-			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), FAP = FAP)
+			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), fapfar = fapfar)
 		else:
 			noncoinc_sngls = []
 
