@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2013 Chad Hanna
+# Copyright (C) 2013 Chad Hanna, Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -16,33 +16,467 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys, os
+
+import bisect
+import math
 import matplotlib
-matplotlib.use('Agg')
-import pylab
-from gstlal import far
-import copy
+matplotlib.rcParams.update({
+	"font.size": 8.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 600,
+	"savefig.dpi": 600,
+	"text.usetex": True
+})
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from optparse import OptionParser
-from glue.ligolw import ligolw
-from glue.ligolw import utils
+import sqlite3
+import sys
+import warnings
+
+
+from glue.lal import CacheEntry
+from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils as ligolw_utils
+from pylal import ligolw_thinca
+
+
+from gstlal import far
+
+golden_ratio = (1. + math.sqrt(5.)) / 2.
+
 
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
-	parser.add_option("--marginalized-file", metavar = "file", help = "Set the marginalized likelihood input file")
+	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
+	parser.add_option("-c", "--database-cache", metavar = "filename", help = "Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.")
+	parser.add_option("-m", "--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
 	return options, filenames
 
-options, files = parse_command_line()
+
+def load_distributions(filenames, verbose = False):
+	coinc_params_distributions, ranking_data, seglists = None, None, None
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+		this_coinc_params_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
+		if this_coinc_params_distributions is None and this_ranking_data is None:
+			raise ValueError("%s contains no parameter distribution data" % filename)
+		if coinc_params_distributions is None:
+			coinc_params_distributions = this_coinc_params_distributions
+		else:
+			coinc_params_distributions += this_coinc_params_distributions
+		if ranking_data is None:
+			ranking_data = this_ranking_data
+		else:
+			ranking_data += this_ranking_data
+		if seglists is None:
+			seglists = this_seglists
+		else:
+			seglists |= this_seglists
+	if coinc_params_distributions is None and ranking_data is None:
+		raise ValueError("no parameter distribution data loaded")
+	return coinc_params_distributions, ranking_data, seglists
+
+
+def load_search_results(filenames, tmp_path = None, verbose = False):
+	if not filenames:
+		return None, None
+
+	background_likelihood_ratios = {}
+	zerolag_likelihood_ratios = {}
+
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+		working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, verbose = verbose)
+		connection = sqlite3.connect(working_filename)
+
+		xmldoc = dbtables.get_xml(connection)
+		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+
+		for participating_instruments, likelihood_ratio, is_background in connection.cursor().execute("""
+SELECT
+	coinc_inspiral.ifos,
+	coinc_event.likelihood,
+	EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+FROM
+	coinc_event
+	JOIN coinc_inspiral ON (
+		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+		""", (definer_id,)):
+			participating_instruments = frozenset(lsctables.instrument_set_from_ifos(participating_instruments))
+			if is_background:
+				background_likelihood_ratios.setdefault(participating_instruments, []).append(likelihood_ratio)
+			else:
+				zerolag_likelihood_ratios.setdefault(participating_instruments, []).append(likelihood_ratio)
+
+		connection.close()
+		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
+
+	return background_likelihood_ratios, zerolag_likelihood_ratios
+
+
+def colour_from_instruments(instruments, colours = {
+	"G1": numpy.array((0.0, 1.0, 1.0)),
+	"H1": numpy.array((1.0, 0.0, 0.0)),
+	"H2": numpy.array((0.0, 0.0, 1.0)),
+	"L1": numpy.array((0.0, 0.8, 0.0)),
+	"V1": numpy.array((1.0, 0.0, 1.0)),
+}):
+	# mix colours additively
+	colour = sum(map(colours.__getitem__, instruments))
+	# desaturate
+	colour += len(instruments) - 1
+	# normalize
+	return colour / colour.max()
+
+
+def plot_snr_chi_pdf(instrument, binnedarray, tag, denom_binnedarray = None):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((4.5, 3.5))
+	axes = fig.gca()
+	x = binnedarray.bins[0].centres()[1:-1]
+	y = binnedarray.bins[1].centres()[1:-1]
+	z = binnedarray.array.T[1:-1,1:-1]
+	if denom_binnedarray is not None:
+		assert (denom_binnedarray.bins[0].centres()[1:-1] == x).all()
+		assert (denom_binnedarray.bins[1].centres()[1:-1] == y).all()
+		z /= denom_binnedarray.array.T[1:-1,1:-1]
+	if numpy.isnan(z).any():
+		warnings.warn("%s PDF contains NaNs" % key)
+		z = numpy.ma.masked_where(numpy.isnan(z), z)
+	if not z.any():
+		warnings.warn("%s PDF is 0, skipping" % key)
+		return None
+	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	axes.loglog()
+	axes.grid(which = "both")
+	axes.set_xlim((x.min(), x.max()))
+	axes.set_ylim((y.min(), y.max()))
+	fig.colorbar(mesh, ax = axes)
+	axes.set_xlabel(r"$\mathrm{SNR}$")
+	axes.set_ylabel(r"$\chi^{2} / \mathrm{SNR}^{2}$")
+	if tag.lower() in ("signal",):
+		assert denom_binnedarray is None
+		axes.set_title(r"%s %s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR})$" % (instrument, tag))
+	elif tag.lower() in ("noise", "candidates"):
+		assert denom_binnedarray is None
+		axes.set_title(r"%s %s $P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % (instrument, tag))
+	elif tag.lower() in ("lr",):
+		assert denom_binnedarray is not None
+		axes.set_title(r"%s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % instrument)
+	else:
+		raise ValueError(tag)
+	return fig
+
+def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((4., 4. / golden_ratio))
+	axes = fig.gca()
+	axes.set_position((.15, .14, .84, .76))
+	axes.loglog(pdf.bins[0].centres(), pdf.array, color = "k")
+	axes.grid(which = "both")
+	if instruments is None:
+		axes.set_title(r"%s Likelihood Ratio PDF" % tag)
+	else:
+		axes.set_title(r"%s %s Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
+	axes.set_xlabel(r"$\Lambda$")
+	axes.set_ylabel(r"$P(\Lambda | \mathrm{%s})$" % tag.lower())
+	axes.set_xlim((xlo, xhi))
+	return fig
+
+def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_likelihood_ratios, (xlo, xhi), tag):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((4., 4. / golden_ratio))
+	axes = fig.gca()
+	axes.set_position((.15, .13, .82, .77))
+	x = numpy.linspace(math.log(xlo), math.log(xhi), 10000)
+	axes.semilogy(x, ccdf(numpy.exp(x)), color = "k")
+	if zerolag_likelihood_ratios is not None:
+		x = numpy.array(sorted(zerolag_likelihood_ratios), dtype = "double")
+		y = numpy.arange(len(zerolag_likelihood_ratios), 0, -1, dtype = "double")
+		y *= (1. - 1. / math.e) / y[0]
+		y *= y[0] / y[float(bisect.bisect_left(x, xlo))]
+		axes.semilogy(numpy.log(x), y, color = "k", linestyle = "--")
+		axes.set_xlim((math.log(x[0]), math.log(x[-1]) + 2.))
+		axes.set_ylim((10**math.floor(math.log10(y[-1]) - 1.5), 1.))
+	else:
+		axes.set_xlim((math.log(xlo), math.log(xhi)))
+	axes.grid(which = "both")
+	if instruments is None:
+		axes.set_title(r"%s Likelihood Ratio CCDF" % tag)
+	else:
+		axes.set_title(r"%s %s Likelihood Ratio CCDF" % (", ".join(sorted(instruments)), tag))
+	axes.set_xlabel(r"$\ln \Lambda$")
+	axes.set_ylabel(r"$P(\geq \ln \Lambda | \mathrm{%s})$" % tag.lower())
+	return fig
+
+def plot_rates(coinc_params_distributions, ranking_data):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((6., 6.))
+	axes0 = fig.add_subplot(2, 2, 1)
+	axes1 = fig.add_subplot(2, 2, 2)
+	axes2 = fig.add_subplot(2, 2, 3)
+	axes3 = fig.add_subplot(2, 2, 4)
+
+	# singles counts
+	labels = []
+	sizes = []
+	colours = []
+	for instrument, category in sorted(coinc_params_distributions.instrument_categories.items()):
+		count = coinc_params_distributions.background_rates["instruments"][category,]
+		if not count:
+			continue
+		labels.append("%s\n(%d)" % (instrument, count))
+		sizes.append(count)
+		colours.append(colour_from_instruments((instrument,)))
+	axes0.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes0.set_title("Observed Background Event Counts")
+
+	# projected background counts
+	labels = []
+	sizes = []
+	colours = []
+	for instruments in sorted(sorted(instruments) for instruments in coinc_params_distributions.count_above_threshold if instruments is not None):
+		count = coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),]
+		if len(instruments) < 2 or not count:
+			continue
+		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		sizes.append(count)
+		colours.append(colour_from_instruments(instruments))
+	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes1.set_title("Projected Background Coincidence Counts")
+
+	# recovered signal distribution
+	if ranking_data is not None:
+		labels = []
+		sizes = []
+		colours = []
+		for instruments, fraction in sorted(coinc_params_distributions.Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
+			if len(instruments) < 2 or not fraction:
+				continue
+			labels.append(", ".join(sorted(instruments)))
+			sizes.append(fraction)
+			colours.append(colour_from_instruments(instruments))
+		axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+		axes2.set_title(r"Projected Recovered Signal Distribution")
+
+	# observed counts
+	labels = []
+	sizes = []
+	colours = []
+	for instruments, count in sorted((sorted(instruments), count) for instruments, count in coinc_params_distributions.count_above_threshold.items() if instruments is not None):
+		if len(instruments) < 2 or not count:
+			continue
+		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		sizes.append(count)
+		colours.append(colour_from_instruments(instruments))
+	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes3.set_title("Observed Coincidence Counts")
+
+	return fig
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load input
+#
+
+
+coinc_params_distributions, ranking_data, seglists = load_distributions(filenames, verbose = options.verbose)
+if coinc_params_distributions is not None:
+	coinc_params_distributions.finish(verbose = options.verbose)
+if ranking_data is not None:
+	ranking_data.finish(verbose = options.verbose)
+
+if coinc_params_distributions is not None and ranking_data is not None:
+	fapfar = far.FAPFAR(ranking_data.background_likelihood_pdfs, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+else:
+	fapfar = None
+
+if coinc_params_distributions is not None:
+	signal_ccdf = far.FAPFAR(ranking_data.signal_likelihood_pdfs, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.likelihood_ratio_threshold).ccdf_interpolator
+else:
+	signal_ccdf = None
+
+
+if options.database_cache is not None:
+	if options.database is None:
+		options.database = []
+	options.database += [CacheEntry(line).path for line in open(options.database_cache)]
+background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(options.database, tmp_path = options.tmp_space, verbose = options.verbose)
+
+
+#
+# plots
+#
+
+
+fig = plot_rates(coinc_params_distributions, ranking_data)
+plotname = "%srates.png" % options.base
+if options.verbose:
+	print >>sys.stderr, "writing %s" % plotname
+fig.savefig(plotname)
+
+
+for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint_pdf_cache.items():
+	key = dict(key)
+	instruments = sorted(key)
+	if len(instruments) > 2:
+		# FIXME:  figure out how to plot 3D PDFs
+		continue
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((5, 4))
+	axes = fig.gca()
+	x = binnedarray.bins[0].centres()[1:-1]
+	y = binnedarray.bins[1].centres()[1:-1]
+	z = binnedarray.array.T[1:-1,1:-1]
+	if numpy.isnan(z).any():
+		warnings.warn("%s PDF contains NaNs" % key)
+		z = numpy.ma.masked_where(numpy.isnan(z), z)
+	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	axes.loglog()
+	axes.grid(which = "both")
+	# FIXME:  don't hard-code minima
+	axes.set_xlim((4., x.max()))
+	axes.set_ylim((4., y.max()))
+	fig.colorbar(mesh, ax = axes)
+	# co-ordinates are in alphabetical order
+	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
+	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
+	axes.set_title(r"$P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
+	plotname = "%s%s_snr_pdf.png" % (options.base, "".join(instruments))
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for key, binnedarray in coinc_params_distributions.background_pdf.items():
+	if "_snr_chi" not in key:
+		continue
+	instrument = key.split("_")[0]
+	fig = plot_snr_chi_pdf(instrument, binnedarray, "Noise")
+	if fig is None:
+		continue
+	plotname = "%s%s_noise_snrchi2_pdf.png" % (options.base, instrument)
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for key, binnedarray in coinc_params_distributions.injection_pdf.items():
+	if "_snr_chi" not in key:
+		continue
+	instrument = key.split("_")[0]
+	fig = plot_snr_chi_pdf(instrument, binnedarray, "Signal")
+	if fig is None:
+		continue
+	plotname = "%s%s_signal_snrchi2_pdf.png" % (options.base, instrument)
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for key, binnedarray in coinc_params_distributions.injection_pdf.items():
+	if "_snr_chi" not in key:
+		continue
+	instrument = key.split("_")[0]
+	fig = plot_snr_chi_pdf(instrument, binnedarray, "LR", denom_binnedarray = coinc_params_distributions.background_pdf[key])
+	if fig is None:
+		continue
+	plotname = "%s%s_lr_snrchi2.png" % (options.base, instrument)
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items():
+	if "_snr_chi" not in key:
+		continue
+	instrument = key.split("_")[0]
+	fig = plot_snr_chi_pdf(instrument, binnedarray, "Candidates")
+	if fig is None:
+		continue
+	plotname = "%s%s_candidate_snrchi2_pdf.png" % (options.base, instrument)
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
+	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Noise")
+	plotname = "%s%snoise_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+	if zerolag_likelihood_ratios is None:
+		ranking_stats = None
+	elif instruments is None:
+		ranking_stats = sum(zerolag_likelihood_ratios.values(), [])
+	elif instruments in zerolag_likelihood_ratios:
+		ranking_stats = zerolag_likelihood_ratios[instruments]
+	else:
+		ranking_stats = None
+	fig = plot_likelihood_ratio_ccdf(instruments, fapfar.ccdf_interpolator[instruments], ranking_stats, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Noise")
+	plotname = "%s%snoise_likelihood_ratio_ccdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items():
+	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Signal")
+	plotname = "%s%ssignal_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+	fig = plot_likelihood_ratio_ccdf(instruments, signal_ccdf[instruments], None, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Signal")
+	plotname = "%s%ssignal_likelihood_ratio_ccdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+
+#
+# done
+#
+
+
+sys.exit(0)
+
 
 total_count = {'H1':0., 'L1':0., 'V1':0.}
 
@@ -80,7 +514,7 @@ for f in files:
 
 
 if options.marginalized_file:
-	marg, procid = far.RankingData.from_xml(utils.load_filename(options.marginalized_file, contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
+	marg, procid = far.RankingData.from_xml(ligolw_utils.load_filename(options.marginalized_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
 	marg.compute_joint_cdfs()
 
 	for k in marg.likelihood_pdfs:

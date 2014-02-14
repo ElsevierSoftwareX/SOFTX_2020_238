@@ -26,6 +26,8 @@
 #
 
 
+import multiprocessing
+import multiprocessing.queues	# not needed in >= 2.7
 from optparse import OptionParser
 try:
 	import sqlite3
@@ -35,16 +37,21 @@ except ImportError:
 import sys
 
 
+from glue import iterutils
 from glue.lal import CacheEntry
+from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal import snglcoinc
 from gstlal import far
+from gstlal import inspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -74,6 +81,7 @@ def parse_command_line():
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+	parser.add_option("--no-trim-database", action = "store_true", help = "Do not delete events that are found to be below the pipeline's likelihood ratio threshold (default = delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to try reranking the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
 	options.likelihood_filenames = []
@@ -82,12 +90,25 @@ def parse_command_line():
 	if options.likelihood_cache is not None:
 		options.likelihood_filenames += [CacheEntry(line).path for line in file(options.likelihood_cache)]
 	if not options.likelihood_filenames:
-		raise ValueError, "no likelihood files specified"
+		raise ValueError("no likelihood files specified")
 
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in file(options.input_cache)]
 
 	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                    Generate Ranking Statistic Histograms
+#
+# =============================================================================
+#
+
+
+def generate_ranking_data(queue, coincparamsdistributions, seglists, verbose = False):
+	queue.put(far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, verbose = verbose))
 
 
 #
@@ -137,20 +158,86 @@ options, filenames = parse_command_line()
 
 
 #
-# load likelihood data
+# retrieve horizon distance data
 #
 
 
-Far = far.LocalRankingData.from_filenames(options.likelihood_filenames, verbose = options.verbose)
-coincparamsdistributions, likelihood_seglists = Far.distributions, Far.livetime_seg
+if options.verbose:
+	print >>sys.stderr, "retrieving horizon distances ..."
 
-# FIXME:  need segment lists and horizon distances
-seglists = segments.segmentlistdict.fromkeys(Far.trials_table.get_sngl_ifos(), segments.segmentlist([segments.segment(0., 1.)]))
-coincparamsdistributions.horizon_distances = {
-	"H1": 120.0,
-	"L1": 120.0,
-	"V1": 45.0
-}
+horizon_distances = {}
+for n, filename in enumerate(filenames, 1):
+	#
+	# open the database file, do the query in-place
+	#
+
+	if options.verbose:
+		print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+
+	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+
+	#
+	# retrieve horizon distances
+	#
+
+	for instruments, start_time, start_time_ns, name, dist in connection.cursor().execute("""
+SELECT
+	summ_value.ifo,
+	summ_value.start_time,
+	summ_value.start_time_ns,
+	summ_value.name,
+	summ_value.value
+FROM
+	summ_value
+WHERE
+	program == "gstlal_inspiral"
+	AND name LIKE "Dh:%";
+	"""):
+		# FIXME:  check that these are what we expect?
+		m1, m2, snr_threshold = inspiral.CoincsDocument.summ_value_name_decode(name)
+		for instrument in lsctables.instrument_set_from_ifos(instruments):
+			horizon_distances.setdefault(instrument, []).append((lsctables.LIGOTimeGPS(start_time, start_time_ns), dist))
+
+	connection.close()
+	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
+
+#
+# put horizon distances for each instrument in time order
+#
+
+for dists in horizon_distances.values():
+	dists.sort()
+
+# FIXME:  for now we just take the average of the distances recorded for
+# each instrument.  this needs to be worked out properly so that events are
+# ranked with the appropriate distance
+horizon_distances = dict((instrument, sum(dist for t, dist in dists) / len(dists)) for instrument, dists in horizon_distances.items())
+
+if options.verbose:
+	print >>sys.stderr, "done retrieving horizon distances"
+	for instrument, dist in sorted(horizon_distances.items()):
+		print >>sys.stderr, "\t%s:  %g Mpc" % (instrument, dist)
+
+
+#
+# load parameter distribution data
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "1/%d:" % len(options.likelihood_filenames),
+coincparamsdistributions, ignored, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
+for n, likelihood_filename in enumerate(options.likelihood_filenames[1:], start = 2):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_filenames)),
+	xmldoc = ligolw_utils.load_filename(likelihood_filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
+	xmldoc.unlink()
+	coincparamsdistributions += this_coincparamsdistributions
+	seglists |= this_seglists
+
+coincparamsdistributions.horizon_distances = horizon_distances
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
@@ -160,16 +247,40 @@ if options.synthesize_injections != 0:
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
 
-if options.verbose:
-	print >>sys.stderr, "computing event densities ..."
+
+#
+# rebuild event parameter PDFs (+= method has not constructed these
+# correctly, and we might have added additional priors to the histograms),
+# then initialize likeihood ratio evaluator
+#
+
+
 coincparamsdistributions.finish(verbose = options.verbose)
 
-if options.write_likelihood is not None:
-	Far.compute_likelihood_pdfs(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = Far.trials_table.get_sngl_ifos(), verbose = options.verbose)	
-	xmldoc = inspiral.gen_likelihood_control_doc(Far, ("H1", "H2", "L1", "V1"))
-	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
 
 likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
+
+
+#
+# dump combined distribution data file if requested.  we generate
+# likelihood ratio histograms at this time, as well, even though we don't
+# need them here because this helps parallelize that step in a full-scale
+# analysis.  the program that reads these data files will need those
+# histograms, and would take ages to build them itself, serially, as a
+# single job.  We're about to spend a few hours processing database files
+# and can generate those histograms in the background while we do
+#
+
+
+threads = []
+if options.write_likelihood is not None:
+	# take a moment to make sure we have SNR PDFs for all instrument combinations
+	for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
+		coincparamsdistributions.get_snr_joint_pdf(dict((instrument, coincparamsdistributions.horizon_distances[instrument]) for instrument in instruments))
+	q = multiprocessing.queues.SimpleQueue()
+	p = multiprocessing.Process(target = generate_ranking_data, args = (q, coincparamsdistributions, seglists), kwargs = {"verbose": options.verbose})
+	p.start()
+	threads.append((p, q, options.write_likelihood))
 
 
 #
@@ -177,14 +288,18 @@ likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 #
 
 
-count_above_threshold = {}
-for n, filename in enumerate(filenames):
+for n, filename in enumerate(filenames, 1):
 	#
 	# Open the database file.
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
+		print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+
+	if sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_inspiral_calc_likelihood",)).fetchone()[0]:
+		if options.verbose:
+			print >>sys.stderr, "already processed, skipping"
+		continue
 
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
@@ -193,11 +308,11 @@ for n, filename in enumerate(filenames):
 	xmldoc = dbtables.get_xml(connection)
 
 	#
-	# Summarize the database.
+	# Summarize the database, and record our passage.
 	#
 
 	try:
-		coinc_def_id = dbtables.table.get_table(xmldoc, lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	except KeyError:
 		if options.verbose:
 			print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."
@@ -207,9 +322,12 @@ for n, filename in enumerate(filenames):
 		dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 		continue
 
-	sngl_inspiral_table = dbtables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_likelihood", {})
+	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 
-	offset_vectors = dbtables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName).as_dict()
+	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+	offset_vectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
 
 	if options.vetoes_name is not None:
 		vetoseglists = ligolw_segments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
@@ -233,39 +351,23 @@ for n, filename in enumerate(filenames):
 	)
 
 	#
-	# Count the # of zero-lag coincs above threshold as a function of
-	# the instruments that participated
+	# Delete low significance events to reduce database size
 	#
 
-	for instruments, count in connection.cursor().execute("""
-SELECT
-	coinc_inspiral.ifos,
-	COUNT(*)
-FROM
-	coinc_inspiral
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-WHERE
-	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?
-	AND NOT EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
-GROUP BY
-	coinc_inspiral.ifos
-""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold)):
-		instruments = frozenset(lsctables.instrument_set_from_ifos(instruments))
-		try:
-			count_above_threshold[instruments] += count
-		except KeyError:
-			count_above_threshold[instruments] = count
+	if not options.no_trim_database:
+		connection.cursor().execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
+		connection.cursor().execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		connection.cursor().execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		# FIXME:  don't hard-code program and parameter names
+		connection.cursor().execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT MAX(value) FROM process_params WHERE program == "gstlal_inspiral" AND param == "--singles-threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
+		connection.cursor().execute("""VACUUM;""")
+
+	#
+	# Close out process metadata
+	#
+
+	ligolw_process.set_process_end_time(process)
+	connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
 
 	#
 	# Clean up.
@@ -275,3 +377,25 @@ GROUP BY
 	connection.commit()
 	connection.close()
 	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+
+
+#
+# Collect the PDF writing thread if one was created and write the parameter
+# and ranking statistic distribution data to a file
+#
+
+
+while threads:
+	p, q, filename = threads.pop(0)
+	ranking_data = q.get()
+	p.join()
+	if p.exitcode:
+		raise Exception("far.RankingData() thread failed")
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(ligolw.LIGO_LW())
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_likelihood", paramdict = {})
+	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+	far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
+	ligolw_process.set_process_end_time(process)
+	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
+	assert not threads

@@ -16,34 +16,21 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
-import numpy
-from scipy import interpolate, random
-from scipy.stats import poisson
-from glue import segments
-from glue.ligolw import ligolw
-from glue.ligolw import utils
-from glue.ligolw import lsctables
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.segmentsUtils import vote
-from glue import iterutils
-from pylal import rate
-from optparse import OptionParser
-from gstlal import far
 
+from optparse import OptionParser
+import sys
 try:
 	import sqlite3
 except ImportError:
 	# pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-
 sqlite3.enable_callback_tracebacks(True)
+
+
+from glue.ligolw import dbtables
+from glue.ligolw import utils as ligolw_utils
+from glue.segmentsUtils import vote
+from gstlal import far
 
 
 def parse_command_line():
@@ -63,12 +50,12 @@ options, filenames = parse_command_line()
 
 #
 # Pull out background and injections distribution and set up the FAR class
+# FIXME:  this needs to be updated.  FIXME:  this program might now be
+# identical to gstlal_compute_far_fr... so delete
 #
 
-global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
 
-# late import for DB manipulations
-from glue.ligolw import dbtables
+global_ranking, procid = far.RankingData.from_xml(ligolw_utils.load_filename(options.background_bins_file[0], contenthandler = far.ThincaCoincParams.LIGOLWContentHandler, verbose = options.verbose))
 
 global_ranking.compute_joint_cdfs()
 
@@ -81,6 +68,25 @@ for ifos in global_ranking.trials_table:
 #
 
 
-for bkdb in options.non_injection_db:
-	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
-	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
+for filename in options.non_injection_db:
+	#
+	# get working copy of database
+	#
+
+	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+
+	#
+	# assign FAPs and FARs
+	#
+
+	far.assign_faps(connection)
+	far.assign_fars(connection)
+
+	#
+	# done, restore file to original location
+	#
+
+	connection.commit()
+	connection.close()
+	dbtables.put_connection_filename(filename, working_filename, verbose = verbose)

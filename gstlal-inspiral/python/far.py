@@ -36,6 +36,8 @@ except ImportError:
 	PosInf = float("+inf")
 import itertools
 import math
+import multiprocessing
+import multiprocessing.queues
 import numpy
 import random
 from scipy import interpolate
@@ -52,27 +54,18 @@ import sys
 
 from glue import iterutils
 from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
-from glue import segments
 from glue.segmentsUtils import vote
 from gstlal import emcee
 from pylal import inject
 from pylal import progress
 from pylal import rate
 from pylal import snglcoinc
-
-
-class DefaultContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(DefaultContentHandler)
-ligolw_param.use_in(DefaultContentHandler)
-lsctables.use_in(DefaultContentHandler)
 
 
 #
@@ -234,140 +227,51 @@ def trials_from_faps(p0, p1):
 #
 # =============================================================================
 #
-#                             Trials Table Object
-#
-# =============================================================================
-#
-
-
-#
-# Trials table
-#
-
-
-class Trials(object):
-	def __init__(self, count = 0, count_below_thresh = 0, thresh = None):
-		self.count = count
-		self.count_below_thresh = count_below_thresh
-		self.thresh = thresh
-
-	def __add__(self, other):
-		out = type(self)(self.count, self.count_below_thresh, self.thresh)
-		out.count +=  other.count
-		out.count_below_thresh += other.count_below_thresh
-		assert(out.thresh == other.thresh)
-		return out
-
-
-class TrialsTable(dict):
-	"""
-	A class to store the trials table from a coincident inspiral search
-	with the intention of computing the false alarm probabiliy of an event after N
-	trials.  This is a subclass of dict.  The trials table is keyed by the
-	detectors that partcipated in the coincidence.
-	"""
-	class TrialsTableTable(lsctables.table.Table):
-		tableName = "gstlal_trials:table"
-		validcolumns = {
-			"ifos": "lstring",
-			"count": "int_8s",
-			"count_below_thresh": "int_8s",
-			"thresh": "real_8"
-		}
-		class RowType(object):
-			__slots__ = ("ifos", "count", "count_below_thresh", "thresh")
-
-			def get_ifos(self):
-				return lsctables.instrument_set_from_ifos(self.ifos)
-
-			def set_ifos(self, ifos):
-				self.ifos = lsctables.ifos_from_instrument_set(ifos)
-
-			@property
-			def key(self):
-				return frozenset(self.get_ifos())
-
-			@classmethod
-			def from_item(cls, (ifos, trials)):
-				self = cls()
-				self.set_ifos(ifos)
-				self.count = trials.count
-				self.count_below_thresh = trials.count_below_thresh
-				self.thresh = trials.thresh
-				return self
-
-	def initialize_from_sngl_ifos(self, ifos, count = 0, count_below_thresh = 0, thresh = None):
-		"""
-		for all possible combinations of 2 or more from ifos initialize ourself to provided values
-		"""
-		for n in range(2, len(ifos) +	1):
-			for ifo in iterutils.choices(ifos, n):
-				self[frozenset(ifo)] = Trials(count, count_below_thresh, thresh)
-
-	def get_sngl_ifos(self):
-		out = set()
-		for ifos in self:
-			for ifo in ifos:
-				out.add(ifo)
-		return tuple(out)
-
-	def __add__(self, other):
-		out = type(self)()
-		for k in self:
-			out[k] = type(self[k])(self[k].count, self[k].count_below_thresh, self[k].thresh)
-		for k in other:
-			try:
-				out[k] += other[k]
-			except KeyError:
-				out[k] = type(other[k])(other[k].count, other[k].count_below_thresh, other[k].thresh)
-		return out
-
-	def increment_count(self, n):
-		"""
-		Increment all keys by n
-		"""
-		for k in self:
-			self[k].count += n
-
-	def num_nonzero_count(self):
-		return len([k for k in self if self[k].count != 0])
-
-	def set_thresh(self, thresh = None):
-		for k in self:
-			self[k].thresh = thresh
-
-	@classmethod
-	def from_xml(cls, xml):
-		"""
-		A class method to create a new instance of a TrialsTable from
-		an xml representation of it.
-		"""
-		self = cls()
-		for row in lsctables.table.get_table(xml, self.TrialsTableTable.tableName):
-			self[row.key] = Trials(row.count, row.count_below_thresh, row.thresh)
-		return self
-
-	def to_xml(self):
-		"""
-		A method to write this instance of a trials table to an xml
-		representation.
-		"""
-		xml = lsctables.New(self.TrialsTableTable)
-		for item in self.items():
-			xml.append(xml.RowType.from_item(item))
-		return xml
-
-
-lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTable.tableName)] = TrialsTable.TrialsTableTable
-
-
-#
-# =============================================================================
-#
 #                 Parameter Distributions Book-Keeping Object
 #
 # =============================================================================
 #
+
+
+#
+# FAR normalization helper
+#
+
+
+class CountAboveThreshold(dict):
+	"""
+	Device for counting the number of zero-lag coincs above threshold
+	as a function of the instruments that participated.
+	"""
+	def update(self, connection, coinc_def_id, threshold):
+		for instruments, count in connection.cursor().execute("""
+SELECT
+	coinc_inspiral.ifos,
+	COUNT(*)
+FROM
+	coinc_inspiral
+	JOIN coinc_event ON (
+		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND coinc_event.likelihood >= ?
+	AND NOT EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+GROUP BY
+	coinc_inspiral.ifos
+""", (coinc_def_id, threshold)):
+			try:
+				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] += count
+			except KeyError:
+				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] = count
 
 
 #
@@ -764,6 +668,23 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key))))
 		return xml
 
+	@property
+	def count_above_threshold(self):
+		"""
+		Dictionary mapping instrument combination (as a frozenset)
+		to number of zero-lag coincs observed.  An additional entry
+		with key None stores the total.
+		"""
+		count_above_threshold = CountAboveThreshold((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
+		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
+		return count_above_threshold
+
+	@count_above_threshold.setter
+	def count_above_threshold(self, count_above_threshold):
+		self.zero_lag_rates["instruments"].array[:] = 0.
+		for instruments, count in count_above_threshold.items():
+			if instruments is not None:
+				self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),] = count
 
 	@property
 	def Pinstrument_noise(self):
@@ -1043,64 +964,208 @@ def binned_likelihood_rates_from_samples(samples, bins_per_decade = 250.0, min_b
 
 
 #
-# Class to handle the computation of FAPs/FARs
+# Class to compute ranking statistic PDFs for background-like and
+# signal-like populations
+#
+# FIXME:  this is really close to just being another subclass of
+# CoincParamsDistributions.  consider the wisdom of rewriting it to be such
 #
 
 
-class LocalRankingData(object):
-	def __init__(self, livetime_seg, coinc_params_distributions, trials_table = None):
-		self.distributions = coinc_params_distributions
-		self.likelihoodratio = snglcoinc.LikelihoodRatio(coinc_params_distributions)
-		if trials_table is None:
-			self.trials_table = TrialsTable()
-		else:
-			self.trials_table = trials_table
+class RankingData(object):
+	ligo_lw_name_suffix = u"gstlal_inspiral_rankingdata"
+
+	#
+	# Range of likelihood ratios to track in PDFs
+	#
+
+	likelihood_ratio_limits = (math.exp(-3.0), math.exp(230.0))
+
+	#
+	# e-fold scale on which to smooth likelihood ratio PDFs
+	#
+
+	likelihood_ratio_smoothing_scale = 1. / 8.
+
+	#
+	# Threshold at which FAP & FAR normalization will occur
+	#
+
+	likelihood_ratio_threshold = math.exp(2)
+
+
+	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
 		self.signal_likelihood_pdfs = {}
-		self.livetime_seg = livetime_seg
+		self.process_id = process_id
+
+		# bailout out used by .from_xml() class method to get an
+		# uninitialized instance
+		if coinc_params_distributions is None:
+			return
+
+		# get default instruments from whatever we have SNR PDFs for
+		if instruments is None:
+			instruments = set()
+			for key in coinc_params_distributions.snr_joint_pdf_cache:
+				instruments |= set(instrument for instrument, distance in key)
+		instruments = tuple(instruments)
+
+		# calculate all of the possible ifo combinations with at least
+		# 2 detectors in order to get the joint likelihood pdfs
+		likelihoodratio_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
+		threads = []
+		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+			if verbose:
+				print >>sys.stderr, "computing signal and noise likelihood PDFs for %s" % ", ".join(sorted(key))
+			q = multiprocessing.queues.SimpleQueue()
+			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_rates_from_samples(self.likelihoodratio_samples(coinc_params_distributions.random_params(key).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits)))
+			p.start()
+			threads.append((p, q, key))
+		while threads:
+			p, q, key = threads.pop(0)
+			self.signal_likelihood_rates[key], self.background_likelihood_rates[key] = q.get()
+			p.join()
+			if p.exitcode:
+				raise Exception("likelihood ratio sampling thread failed")
+		if verbose:
+			print >>sys.stderr, "done computing likelihood PDFs"
+
+		#
+		# propogate knowledge of the background event rates through
+		# to the ranking statistic distributions.  this information
+		# is required so that when adding ranking statistic PDFs in
+		# ._compute_combined_ratess() or our .__iadd__() method
+		# they are combined with the correct relative weights.
+		# what we're doing here is making the total event count in
+		# each background ranking statistic array equal to the
+		# expected background coincidence event count for the
+		# corresponding instrument combination.
+		#
+
+		for instruments, binnedarray in self.background_likelihood_rates.items():
+			if binnedarray.array.any():
+				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+
+		#
+		# propogate instrument combination priors through to
+		# ranking statistic histograms so that
+		# ._compute_combined_rates() and .__iadd__() combine the
+		# histograms with the correct weights.
+		#
+		# FIXME:  need to also apply a weight that reflects the
+		# probability of recovering a signal in the interval
+		# spanned by the data these histograms reflect so that when
+		# combining statistics from different intervals they are
+		# summed with the correct weights.
+		#
+
+		for instruments, binnedarray in self.signal_likelihood_rates.items():
+			if binnedarray.array.any():
+				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+
+		#
+		# compute combined rates
+		#
+
+		self._compute_combined_rates()
+
+		#
+		# populate the ranking statistic PDF arrays from the counts
+		#
+
+		self.finish()
+
+	@staticmethod
+	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func, nsamples = 8000000):
+		for i in xrange(nsamples):
+			params, lnP_params = random_params_func()
+			lamb = likelihoodratio_func(params)
+			assert not math.isnan(lamb)
+			yield lamb, lnP_signal_func(params) - lnP_params, lnP_noise_func(params) - lnP_params
+
+	def _compute_combined_rates(self):
+		#
+		# compute combined noise and signal rates
+		#
+
+		try:
+			del self.background_likelihood_rates[None]
+		except KeyError:
+			pass
+		total_rate = self.background_likelihood_rates.itervalues().next().copy()
+		total_rate.array[:] = sum(binnedarray.array for binnedarray in self.background_likelihood_rates.values())
+		self.background_likelihood_rates[None] = total_rate
+
+		try:
+			del self.signal_likelihood_rates[None]
+		except KeyError:
+			pass
+		total_rate = self.signal_likelihood_rates.itervalues().next().copy()
+		total_rate.array[:] = sum(binnedarray.array for binnedarray in self.signal_likelihood_rates.values())
+		self.signal_likelihood_rates[None] = total_rate
+
+	def finish(self, verbose = False):
+		self.background_likelihood_pdfs.clear()
+		self.signal_likelihood_pdfs.clear()
+		def build_pdf(binnedarray, likelihood_ratio_threshold, smoothing_efolds):
+			# copy counts into pdf array, 0 the overflow bins, and smooth
+			pdf = binnedarray.copy()
+			pdf.array[0] = pdf.array[-1] = 0.
+			bins_per_efold = pdf.bins[0].n / math.log(pdf.bins[0].max / pdf.bins[0].min)
+			kernel = rate.gaussian_window(bins_per_efold * smoothing_efolds)
+			# FIXME:  this algorithm should be implemented in a
+			# reusable function
+			result = numpy.zeros_like(pdf.array)
+			while pdf.array.any():
+				workspace = numpy.copy(pdf.array)
+				cutoff = abs(workspace[abs(workspace) > 0]).min() * 1e4
+				pdf.array[abs(pdf.array) <= cutoff] = 0.
+				workspace[abs(workspace) > cutoff] = 0.
+				rate.filter_array(workspace, kernel)
+				workspace[abs(workspace) < abs(workspace).max() * 1e-14] = 0.
+				result += workspace
+			pdf.array = result
+			# zero the PDF below the threshold.  need to
+			# make sure the bin @ threshold is also 0'ed
+			pdf[:likelihood_ratio_threshold,] = 0.
+			pdf[likelihood_ratio_threshold,] = 0.
+			# convert to normalized PDF
+			pdf.to_pdf()
+			return pdf
+		if verbose:
+			progressbar = progress.ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates))
+			progressbar.show()
+		else:
+			progressbar = None
+		for key, binnedarray in self.background_likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
+			if progressbar is not None:
+				progressbar.next()
+		for key, binnedarray in self.signal_likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
+			if progressbar is not None:
+				progressbar.next()
 
 	def __iadd__(self, other):
-		self.distributions += other.distributions
-		self.trials_table += other.trials_table
-		if self.livetime_seg[0] is None and other.livetime_seg[0] is not None:
-			minstart = other.livetime_seg[0]
-		elif self.livetime_seg[0] is not None and other.livetime_seg[0] is None:
-			minstart = self.livetime_seg[0]
-		# correctly handles case where both or neither are None
-		else:
-			minstart = min(self.livetime_seg[0], other.livetime_seg[0])
-		# None is always less than everything else, so this is okay
-		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
-		self.livetime_seg = segments.segment(minstart, maxend)
-
-		self.distributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
-		self.distributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
-
+		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
+		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
 		return self
 
 	@classmethod
-	def from_xml(cls, xml, name = u"gstlal_inspiral_likelihood"):
-		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
-		distributions = ThincaCoincParamsDistributions.from_xml(llw_elem, name)
-		# the code that writes these things has put the
-		# livetime_seg into the out segment in the search_summary
-		# table.  uninitialized segments got recorded as
-		# [None,None)
-		# FIXME:  move livetime info into segment tables, and
-		# instead of doing what follows attach a segment list name
-		# to this class that gets recorded as a Param and don't try
-		# to store livetime info in this class at all
-		try:
-			search_summary_table = lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName)
-		except ValueError:
-			livetime_seg = segments.segment(None, None)
-		else:
-			livetime_seg, = (row.get_out() for row in search_summary_table if row.process_id == distributions.process_id)
-		self = cls(livetime_seg, coinc_params_distributions = distributions, trials_table = TrialsTable.from_xml(llw_elem))
+	def from_xml(cls, xml, name):
+		# find the root of the XML tree containing the
+		# serialization of this object
+		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:%s" % (name, cls.ligo_lw_name_suffix)]
 
-		# pull out the joint likelihood arrays if they are present
+		# create a mostly uninitialized instance
+		self = cls(None, {}, process_id = ligolw_param.get_pyvalue(xml, u"process_id"))
+
+		# pull out the likelihood count and PDF arrays
 		def reconstruct(xml, prefix, target_dict):
 			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.getAttribute(u"Name")]:
 				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
@@ -1110,23 +1175,22 @@ class LocalRankingData(object):
 		reconstruct(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
 		reconstruct(xml, u"signal_likelihood_pdf", self.signal_likelihood_pdfs)
 
+		assert set(self.background_likelihood_rates) == set(self.background_likelihood_pdfs)
+		assert set(self.signal_likelihood_rates) == set(self.signal_likelihood_pdfs)
+		assert set(self.background_likelihood_rates) == set(self.signal_likelihood_rates)
+
+		self._compute_combined_rates()
+
 		return self
 
-	@classmethod
-	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", contenthandler = DefaultContentHandler, verbose = False):
-		self = LocalRankingData.from_xml(ligolw_utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
-		for f in filenames[1:]:
-			self += LocalRankingData.from_xml(ligolw_utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
-		return self
-
-	def to_xml(self, name = u"gstlal_inspiral_likelihood"):
-		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
-		xml.appendChild(self.trials_table.to_xml())
-		xml.appendChild(self.distributions.to_xml(name))
+	def to_xml(self, name):
+		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
+		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", self.process_id))
 		def store(xml, prefix, source_dict):
 			for key, binnedarray in source_dict.items():
-				ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-				xml.appendChild(rate.binned_array_to_xml(binnedarray, u"%s_%s" % (ifostr, prefix)))
+				if key is not None:
+					ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+					xml.appendChild(rate.binned_array_to_xml(binnedarray, u"%s_%s" % (ifostr, prefix)))
 		store(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		store(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
@@ -1134,206 +1198,42 @@ class LocalRankingData(object):
 
 		return xml
 
-	def finish(self):
-		self.background_likelihood_pdfs.clear()
-		self.signal_likelihood_pdfs.clear()
-		for key, binnedarray in self.background_likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % key
-			# copy counts
-			self.background_likelihood_pdfs[key] = binnedarray.copy()
-			# smooth on a scale ~= 1/4 unit of SNR
-			bins_per_efold = binnedarray.bins[0].n / math.log(binnedarray.bins[0].max / binnedarray.bins[0].min)
-			rate.filter_array(self.background_likelihood_pdfs[key].array, rate.gaussian_window(.25 * bins_per_efold))
-			# guard against round-off in FFT convolution
-			# yielding negative probability densities
-			numpy.clip(self.background_likelihood_pdfs[key].array, 0.0, PosInf, self.background_likelihood_pdfs[key].array)
-			# convert to normalized PDF
-			self.background_likelihood_pdfs[key].to_pdf()
-		for key, binnedarray in self.signal_likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % key
-			# copy counts
-			self.signal_likelihood_pdfs[key] = binnedarray.copy()
-			# smooth on a scale ~= 1/4 unit of SNR
-			bins_per_efold = binnedarray.bins[0].n / math.log(binnedarray.bins[0].max / binnedarray.bins[0].min)
-			rate.filter_array(self.signal_likelihood_pdfs[key].array, rate.gaussian_window(.25 * bins_per_efold))
-			# guard against round-off in FFT convolution
-			# yielding negative probability densities
-			numpy.clip(self.signal_likelihood_pdfs[key].array, 0.0, PosInf, self.signal_likelihood_pdfs[key].array)
-			# convert to normalized PDF
-			self.signal_likelihood_pdfs[key].to_pdf()
 
-	def smooth_distribution_stats(self, verbose = False):
-		if verbose:
-			print >>sys.stderr, "smoothing parameter distributions ...",
-		self.distributions.finish()
-		if verbose:
-			print >>sys.stderr, "done"
-
-	def likelihoodratio_samples(self, ln_prob, keys, ndim, nwalkers = None, nburn = 5000, nsamples = 100000):
-		keys = tuple(sorted(keys))
-		# FIXME:  don't know how to tune nwalkers.  must be even, and >
-		# 2 * ndim
-		if nwalkers is None:
-			nwalkers = 24 * ndim
-		for coords in run_mcmc(nwalkers, ndim, nsamples, ln_prob, n_burn = nburn):
-			# coords[0::2] = rho
-			# coords[1::2] = chi^2/rho^2
-			lamb = self.likelihoodratio(dict(zip(keys, zip(coords[0::2], coords[1::2]))))
-			if not math.isinf(lamb) and not math.isnan(lamb):	# FIXME:  is this needed?
-				yield lamb
-
-	def compute_likelihood_pdfs(self, remap, instruments = None, verbose = False):
-		self.background_likelihood_rates.clear()
-		self.signal_likelihood_rates.clear()
-
-		# get default instruments from whatever we have SNR PDFs for
-		if instruments is None:
-			instruments = set()
-			for key in self.distributions.snr_joint_pdf_cache:
-				instruments |= set(instrument for instrument, distance in key)
-		instruments = tuple(instruments)
-
-		# calculate all of the possible ifo combinations with at least
-		# 2 detectors in order to get the joint likelihood pdfs
-		for n in range(2, len(instruments) + 1):
-			for ifos in iterutils.choices(instruments, n):
-				ifo_set = frozenset(ifos)
-				remap_set = remap.setdefault(ifo_set, ifo_set)
-
-				if verbose:
-					print >>sys.stderr, "computing likelihood PDFs for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
-
-				# only recompute if necessary, some choices
-				# might not be if a certain remap set is
-				# provided
-				if remap_set not in self.background_likelihood_rates:
-					ndim = 2 * len(ifo_set)
-					keys = frozenset("%s_snr_chi" % inst for inst in ifo_set)
-
-					ln_prob = self.distributions.create_emcee_lnprob_wrapper(self.distributions.lnP_signal, keys)
-					self.signal_likelihood_rates[remap_set] = binned_rates_from_samples(self.likelihoodratio_samples(ln_prob, keys, ndim), limits = (1e-2, 1e+100))
-
-					ln_prob = self.distributions.create_emcee_lnprob_wrapper(self.distributions.lnP_noise, keys)
-					self.background_likelihood_rates[remap_set] = binned_rates_from_samples(self.likelihoodratio_samples(ln_prob, keys, ndim), limits = (1e-2, 1e+100))
-
-				self.background_likelihood_rates[ifo_set] = self.background_likelihood_rates[remap_set]
-				self.signal_likelihood_rates[ifo_set] = self.signal_likelihood_rates[remap_set]
-
-		self.finish()
+#
+# Class to compute false-alarm probabilities and false-alarm rates from
+# ranking statistic PDFs
+#
 
 
-class RankingData(object):
-	def __init__(self, local_ranking_data):
-		# ensure the trials tables' keys match the likelihood
-		# histograms' keys
-		assert set(local_ranking_data.background_likelihood_rates) == set(local_ranking_data.trials_table)
-
-		# copy likelihood ratio counts
-		# FIXME:  the raw bin counts haven't been smoothed.
-		# figure out how.
-		self.likelihood_rates = dict((key, value.copy()) for key, value in local_ranking_data.background_likelihood_rates.items())
-
-		# copy trials table counts
-		self.trials_table = TrialsTable()
-		self.trials_table += local_ranking_data.trials_table
-		self.scale = dict([(k, 1.) for k in self.trials_table])
-		
-		# copy livetime segment
-		self.livetime_seg = local_ranking_data.livetime_seg
+class FAPFAR(object):
+	def __init__(self, ranking_stat_pdfs, count_above_threshold, threshold, livetime = None):
+		# None is OK, but then can only compute FAPs, not FARs
+		self.livetime = livetime
+		# dictionary keyed by instrument combination
+		assert set(count_above_threshold) >= set(ranking_stat_pdfs), "incomplete count_above_threshold:  missing counts for %s" % (set(ranking_stat_pdfs) - set(count_above_threshold))
+		assert set(ranking_stat_pdfs) >= set(key for key, value in count_above_threshold.items() if value != 0), "incomplete ranking_stat_pdfs:  have count-above-thresholds for %s" % (set(key for key, value in count_above_threshold.items() if value != 0) - set(ranking_stat_pdfs))
+		# make copy as normal dictionary
+		self.count_above_threshold = dict(count_above_threshold)
 
 		self.cdf_interpolator = {}
 		self.ccdf_interpolator = {}
-		self.minrank = {}
-		self.maxrank = {}
 
-
-	@classmethod
-	def from_xml(cls, xml, name = u"gstlal_inspiral"):
-		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_ranking_data" % name]
-
-		class fake_local_ranking_data(object):
-			pass
-		fake_local_ranking_data = fake_local_ranking_data()
-		fake_local_ranking_data.trials_table = TrialsTable.from_xml(llw_elem)
-		fake_local_ranking_data.background_likelihood_rates = {}
-		for key in fake_local_ranking_data.trials_table:
-			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			fake_local_ranking_data.background_likelihood_rates[key] = rate.binned_array_from_xml(llw_elem, ifostr)
-
-		# the code that writes these things has put the
-		# livetime_seg into the out segment in the search_summary
-		# table.  uninitialized segments got recorded as
-		# [None,None).
-		process_id = ligolw_param.get_pyvalue(llw_elem, u"process_id")
-		fake_local_ranking_data.livetime_seg, = (row.get_out() for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
-
-		self = cls(fake_local_ranking_data)
-
-		return self, process_id
-
-
-	def to_xml(self, process, search_summary, name = u"gstlal_inspiral"):
-		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_ranking_data" % name})
-		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", process.process_id))
-		xml.appendChild(self.trials_table.to_xml())
-		for key, binnedarray in self.likelihood_rates.items():
-			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			xml.appendChild(rate.binned_array_to_xml(binnedarray, ifostr))
-		assert search_summary.process_id == process.process_id
-		search_summary.set_out(self.livetime_seg)
-		return xml
-
-
-	def __iadd__(self, other):
-		our_trials = self.trials_table
-		other_trials = other.trials_table
-
-		our_keys = set(self.likelihood_rates)
-		other_keys  = set(other.likelihood_rates)
-
-		# rates that only we have are unmodified
-		pass
-
-		# rates that only the new data has get copied verbatim
-		for k in other_keys - our_keys:
-			self.likelihood_rates[k] = other.likelihood_rates[k].copy()
-
-		# rates that we have and are in the new data get replaced
-		# with the weighted sum, re-binned
-		for k in our_keys & other_keys:
-			minself, maxself, nself = self.likelihood_rates[k].bins[0].min, self.likelihood_rates[k].bins[0].max, self.likelihood_rates[k].bins[0].n
-			minother, maxother, nother = other.likelihood_rates[k].bins[0].min, other.likelihood_rates[k].bins[0].max, other.likelihood_rates[k].bins[0].n
-			new_likelihood_rates =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
-
-			for x in self.likelihood_rates[k].centres()[0]:
-				new_likelihood_rates[x,] += self.likelihood_rates[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
-			for x in other.likelihood_rates[k].centres()[0]:
-				new_likelihood_rates[x,] += other.likelihood_rates[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
-
-			self.likelihood_rates[k] = new_likelihood_rates
-
-		# combined trials counts
-		self.trials_table += other.trials_table
-
-		# merge livetime segments.  let the code crash if they're disjoint
-		self.livetime_seg |= other.livetime_seg
-
-		return self
-
-	def compute_joint_cdfs(self):
-		self.minrank.clear()
-		self.maxrank.clear()
-		self.cdf_interpolator.clear()
-		self.ccdf_interpolator.clear()
-		for instruments, binnedarray in self.likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s likelihood ratio PDF contains NaNs" % ", ".join(sorted(instruments))
-			assert not (binnedarray.array < 0.0).any(), "%s likelihood ratio PDF contains negative values" % ", ".join(sorted(instruments))
-			ranks, = binnedarray.bins.lower()
-			weights = binnedarray.array
+		_ranks = None
+		for instruments, binnedarray in ranking_stat_pdfs.items():
 			instruments_name = ", ".join(sorted(instruments)) if instruments is not None else "combined"
 			assert not numpy.isnan(binnedarray.array).any(), "%s likelihood ratio PDF contains NaNs" % instruments_name
 			assert not (binnedarray.array < 0.0).any(), "%s likelihood ratio PDF contains negative values" % instruments_name
 
+			# convert PDF into probability mass per bin, being
+			# careful with bins that are infinite in size
+			ranks, = binnedarray.bins.upper()
+			drank = binnedarray.bins.volumes()
+			weights = (binnedarray.array * drank).compress(numpy.isfinite(drank))
+			ranks = ranks.compress(numpy.isfinite(drank))
+			if _ranks is None:
+				_ranks = ranks
+			elif (_ranks != ranks).any():
+				raise ValueError("incompatible binnings in ranking statistics PDFs")
 			# cumulative distribution function and its
 			# complement.  it's numerically better to recompute
 			# the ccdf by reversing the array of weights than
@@ -1346,57 +1246,88 @@ class RankingData(object):
 			assert not numpy.isnan(ccdf).any(), "%s likelihood ratio CCDF contains NaNs" % instruments_name
 			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s likelihood ratio CDF failed to be normalized" % instruments_name
 			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s likelihood ratio CCDF failed to be normalized" % instruments_name
-			# if this identity doesn't exactly hold, but we
-			# might as well avoid weirdness where we can.
-			s = ccdf + cdf
-			cdf /= s
-			ccdf /= s
+			# cdf boundary condition:  cdf = 1/e at the ranking
+			# statistic threshold so that
+			# self.far_from_rank(threshold) * livetime =
+			# observed count of events above threshold.
+			ccdf *= 1. - 1. / math.e
+			cdf *= 1. - 1. / math.e
+			cdf += 1. / math.e
+			# make cdf + ccdf == 1
+			#s = cdf[:-1] + ccdf[1:]
+			#cdf[:-1] /= s
+			#ccdf[1:] /= s
 			# one last check that normalization is OK
 			assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
 			# build interpolators
 			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
-			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-			self.minrank[instruments] = min(ranks)
-			self.maxrank[instruments] = max(ranks)
+			# make sure boundary condition survives interpolator
+			assert abs(float(self.cdf_interpolator[instruments](threshold)) - 1. / math.e) < 1e-14, "%s CDF interpolator fails at threshold (= %g)" % (instruments_name, float(self.cdf_interpolator[instruments](threshold)))
+		if _ranks is None:
+			raise ValueError("no ranking statistic PDFs")
 
-	def fap_from_rank(self, rank, ifos):
-		ifos = frozenset(ifos)
-		rank = max(self.minrank[ifos], min(self.maxrank[ifos], rank))
-		fap = float(self.ccdf_interpolator[ifos](rank))
-		try:
-			trials = max(int(self.trials_table[ifos].count), 1)
-		except KeyError:
-			trials = 1
-		# multiply by a scale factor if available, assume scale is
-		# 1 if not available.
-		if ifos in self.scale:
-			trials *= self.scale[ifos]
-		return fap_after_trials(fap, trials)
+		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
+		self.minrank = max(threshold, min(_ranks))
+		self.maxrank = max(_ranks)
 
-	def far_from_rank(self, rank, ifos, scale = False):
-		ifos = frozenset(ifos)
-		rank = max(self.minrank[ifos], min(self.maxrank[ifos], rank))
+	def fap_from_rank(self, rank):
+		rank = max(self.minrank, min(self.maxrank, rank))
+		fap = float(self.ccdf_interpolator[None](rank))
+		return fap_after_trials(fap, self.count_above_threshold[None])
+
+	def far_from_rank(self, rank):
+		assert self.livetime is not None, "cannot compute FAR without livetime"
+		rank = max(self.minrank, min(self.maxrank, rank))
 		# true-dismissal probability = 1 - false-alarm probability
-		tdp = float(self.cdf_interpolator[ifos](rank))
-		if tdp == 0.:
+		tdp = float(self.cdf_interpolator[None](rank))
+		try:
+			log_tdp = math.log(tdp)
+		except ValueError:
+			# TDP = 0 --> FAR = +inf
 			return PosInf
-		try:
-			trials = max(int(self.trials_table[ifos].count), 1)
-		except KeyError:
-			trials = 1
-		# multiply by a scale factor if provided
-		# (assume scale is 1 if disabled or not available)
-		if scale and ifos in self.scale:
-			trials *= self.scale[ifos]
-		try:
-			livetime = float(abs(self.livetime_seg))
-		except TypeError:
-			# we don't have a livetime segment yet.  this can
-			# happen during the early start-up of an online
-			# low-latency analysis
-			return NaN
-		return trials * -math.log(tdp) / livetime
+		if log_tdp >= -1e-9:
+			# rare event:  avoid underflow by using log1p(-FAP)
+			log_tdp = math.log1p(-float(self.ccdf_interpolator[None](rank)))
+		return self.count_above_threshold[None] * -log_tdp / self.livetime
+
+	def assign_faps(self, connection):
+		# assign false-alarm probabilities
+		# FIXME:  choose a function name more likely to be unique?
+		# FIXME:  abusing false_alarm_rate column, move for a
+		# false_alarm_probability column??
+		connection.create_function("fap", 1, self.fap_from_rank)
+		connection.cursor().execute("""
+UPDATE
+	coinc_inspiral
+SET
+	false_alarm_rate = (
+		SELECT
+			fap(coinc_event.likelihood)
+		FROM
+			coinc_event
+		WHERE
+			coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+""")
+
+	def assign_fars(self, connection):
+		# assign false-alarm rates
+		# FIXME:  choose a function name more likely to be unique?
+		connection.create_function("far", 1, self.far_from_rank)
+		connection.cursor().execute("""
+UPDATE
+	coinc_inspiral
+SET
+	combined_far = (
+		SELECT
+			far(coinc_event.likelihood)
+		FROM
+			coinc_event
+		WHERE
+			coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+""")
 
 
 #
@@ -1455,56 +1386,6 @@ def parse_likelihood_control_doc(xmldoc, name = u"gstlal_inspiral_likelihood"):
 #
 # =============================================================================
 #
-
-
-#
-# Function to compute the fap in a given file
-#
-
-
-def set_fap(Far, f, tmp_path = None, verbose = False):
-	"""
-	Function to set the false alarm probability for a single database
-	containing the usual inspiral tables.
-
-	Far = LocalRankingData class instance
-	f = filename of the databse (e.g.something.sqlite)
-	tmp_path = the local disk path to copy the database to in
-		order to avoid sqlite commands over nfs
-	verbose = be verbose
-	"""
-	# FIXME this code should be moved into a method of the LocalRankingData class once other cleaning is done
-	# set up working file names
-	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
-	connection = sqlite3.connect(working_filename)
-
-	# define fap function
-	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr)))
-
-	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
-	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
-
-	# all finished
-	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
-
-
-#
-# Function to compute the far in a given file
-#
-
-
-def set_far(Far, f, tmp_path = None, scale = None, verbose = False):
-	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
-	connection = sqlite3.connect(working_filename)
-
-	connection.create_function("far", 2, lambda rank, ifostr: Far.far_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), scale = scale))
-	connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)')
-	connection.commit()
-	connection.close()
-
-	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 
 def get_live_time(seglists, verbose = False):

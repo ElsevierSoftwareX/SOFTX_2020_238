@@ -368,12 +368,9 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	FAR = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
 else:
-	FAR = far.LocalRankingData(segments.segment(None, None), far.ThincaCoincParamsDistributions())
-	# initialize an empty trials table with the combinations of detectors
-	# that this job will analyze
-	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
+	coinc_params_distributions = far.ThincaCoincParamsDistributions()
 
 
 #
@@ -390,10 +387,8 @@ output = inspiral.Data(
 	instruments = set(detectors.channel_dict),
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
-	FAR = FAR,
-	likelihood_file = options.likelihood_file,
+	coinc_params_distributions = coinc_params_distributions,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
-	assign_likelihoods = options.likelihood_file is not None,
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	comment = options.comment,

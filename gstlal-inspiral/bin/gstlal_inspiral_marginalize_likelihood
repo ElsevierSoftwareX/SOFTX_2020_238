@@ -34,6 +34,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from glue import segments
 
 
 from gstlal import far
@@ -96,12 +97,16 @@ search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
 #
 
 
+distributions = None
 ranking_data = None
-for url in urls:
+seglists = segments.segmentlistdict()
+for n, url in enumerate(urls, start = 1):
 	#
 	# load input document
 	#
 
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(urls)),
 	try:
 		in_xmldoc = ligolw_utils.load_url(url, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)
 	except IOError:
@@ -109,53 +114,54 @@ for url in urls:
 		# urllib2.URLError is raised when a URL cannot be loaded,
 		# but this is subclassed from IOError so IOError will catch
 		# those, too.
-		if options.ignore_missing:
-			print >>sys.stderr, "Could not load ", url, " ...skipping as requested"
-			continue
-		raise
-
-	# first see if this file is an already marginalized file
-	try:
-		rank_data, process_id = far.RankingData.from_xml(in_xmldoc)
-		in_xmldoc.unlink()
-		if ranking_data is None:
-			ranking_data = rank_data
-		else:
-			ranking_data += rank_data
-		print >> sys.stderr, "Already marginalized data"
+		if not options.ignore_missing:
+			raise
+		if options.verbose:
+			print >>sys.stderr, "Could not load \"%s\" ... skipping as requested" % url
 		continue
-	except ValueError:
-		pass
 
-	likelihood_data = far.LocalRankingData.from_xml(in_xmldoc)
+	#
+	# compute weighted sum of ranking data PDFs
+	#
+
+	this_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(in_xmldoc)
 	in_xmldoc.unlink()
 
-	#
-	# Compute the joint likelihood backgrounds from the ranking data regardless of what is there
-	#
+	if this_distributions is None:
+		raise ValueError("\"%s\" contains no parameter PDF data" % url)
+	if this_ranking_data is None:
+		raise ValueError("\"%s\" contains no ranking statistic PDF data" % url)
 
-	# FIXME This assumes that a trials table was initialized for all jobs with the same set of instruments.  It will only compute the likelihood background for those instruments to save time.
-	likelihood_data.smooth_distribution_stats(verbose = options.verbose)
-	likelihood_data.compute_likelihood_pdfs(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = likelihood_data.trials_table.get_sngl_ifos(), verbose = options.verbose)
-
-	#
-	# merge into marginalized data
-	#
-
-	if ranking_data is None:
-		ranking_data = far.RankingData(likelihood_data)
+	if distributions is None:
+		distributions = this_distributions
 	else:
-		ranking_data += far.RankingData(likelihood_data)
+		distributions += this_distributions
+	if ranking_data is None:
+		ranking_data = this_ranking_data
+	else:
+		ranking_data += this_ranking_data
+	seglists |= this_seglists
 
 
 #
-# write output document only if we have something to write, so that a mishap
-# doesn't clobber an otherwise valid file
+# regenerate event parameter PDFs.  += method doesn't compute these
+# correctly.  also generate likelihood ratio PDFs
 #
 
 
-if ranking_data is not None:
-	search_summary.set_out(ranking_data.livetime_seg)
-	xmldoc.childNodes[-1].appendChild(ranking_data.to_xml(process, search_summary))
-	ligolw_process.set_process_end_time(process)
-	ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
+distributions.finish(verbose = options.verbose)
+ranking_data.finish(verbose = options.verbose)
+
+
+#
+# write output document
+#
+
+
+distributions.process_id = ranking_data.process_id = process.process_id
+far.gen_likelihood_control_doc(xmldoc, process, distributions, ranking_data, seglists)
+search_summary.set_ifos(seglists.keys())
+search_summary.set_in(seglists.extent_all())
+search_summary.set_out(search_summary.get_in())
+ligolw_process.set_process_end_time(process)
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

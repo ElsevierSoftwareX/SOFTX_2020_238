@@ -164,11 +164,10 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, trials_table = None, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
-		self.trials_table = trials_table
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
 		self.likelihood_func = None
@@ -294,70 +293,20 @@ class StreamThinca(object):
 		# restore .get_effective_snr() method on trigger class
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
-		# increment the trials table and possibly assign FAPs
-		# set the live time
-		coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
-		gps_time_now = XLALUTCToGPS(time.gmtime())
-		have_incremented_count_below_thresh = False
-		trials_dict = {}
-		for coinc_inspiral_row in coinc_inspiral_table:
-			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
-			# increment the trials table
-			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
-			# FIXME, don't hard code this.  Think about the mass dimension too.
-			# Add the integer truncation of the trigger time * 2
-			# to a set.  This is effectively like binning the
-			# events by end time in 500 ms bins. This is a way of
-			# extracting the effective number of independent trials
-			# for later
-			trials_dict.setdefault(ifo_set, set()).add(int(float(coinc_inspiral_row.get_end()) * 200))
-
-			# Assign the FAP if requested
-			if fapfar is not None:
-				# note FAP should have a reference to the
-				# global trials table read in by in the
-				# marginalized_likelihood file.  This is not
-				# the same as the one updated on the previous
-				# lines!  This trials table is static until the
-				# marginalized likelihood file is read in
-				# again.
-
-				# compute the false-alarm rate without
-				# using the trials-factor rescaling
-				coinc_inspiral_row.combined_far = fapfar.far_from_rank(coinc_event_row.likelihood, ifo_set)
-
-				# now that we know this event's un-adjusted
-				# false-alarm rate, adjust the
-				# trials-factor rescaling
-				# FIXME bad!! We only increment the count below
-				# thresh once in this loop as a way to
-				# "cluster" events similar to the gracedb loop
-				# later.  This needs to be tied together
-				# somehow
-				if not have_incremented_count_below_thresh and coinc_inspiral_row.combined_far < self.trials_table[ifo_set].thresh:
-					self.trials_table[ifo_set].count_below_thresh += 1
-					have_incremented_count_below_thresh = True
-
-				# now re-compute the false-alarm rate, this
-				# time using the trials-factor rescaling
-				coinc_inspiral_row.combined_far = fapfar.far_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
-
-				# compute the false-alarm probability, too,
-				# now that we know the latest the
-				# trials-factor scaling
-				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(coinc_event_row.likelihood, ifo_set)
+		# assign the FAP and FAR if provided with the data to do so
+		if fapfar is not None:
+			coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
+			gps_time_now = XLALUTCToGPS(time.gmtime())
+			for coinc_inspiral_row in coinc_inspiral_table:
+				likelihood_ratio = coinc_event_index[coinc_inspiral_row.coinc_event_id].likelihood
+				coinc_inspiral_row.combined_far = fapfar.far_from_rank(likelihood_ratio)
+				# FIXME:  add a proper column to store this in
+				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(likelihood_ratio)
 
 				# abuse minimum_duration column to store
 				# the latency.  NOTE:  this is nonsensical
 				# unless running live
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
-
-		# Update the trials table from the independent trials calculated above
-		for ifo_set, trigger_times in trials_dict.items():
-			try:
-				self.trials_table[ifo_set].count += len(trigger_times)
-			except KeyError:
-				self.trials_table[ifo_set].count = len(trigger_times)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
