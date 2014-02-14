@@ -166,7 +166,7 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 class StreamThinca(object):
 	def __init__(self, coincidence_threshold, thinca_interval = 50.0, trials_table = None, sngls_snr_threshold = None):
 		self._xmldoc = None
-		self.thinca_interval = thinca_interval
+		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
 		self.trials_table = trials_table
 		self.sngls_snr_threshold = sngls_snr_threshold
@@ -174,10 +174,7 @@ class StreamThinca(object):
 		self.likelihood_func = None
 		self.likelihood_params_func = None
 
-		# when using the normal coincidence function from
-		# ligolw_thinca this is the e-thinca parameter.  when using
-		# a \Delta t only coincidence test it's the \Delta t window
-		# not including the light travel time
+		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
 
 		# upper boundary of interval spanned by last invocation
