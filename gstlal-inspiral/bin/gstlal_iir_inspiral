@@ -50,13 +50,10 @@ from gstlal import bottle
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
@@ -68,6 +65,12 @@ from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import datasource
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -292,7 +295,7 @@ if not options.check_time_stamps:
 
 
 if options.veto_segments_file is not None:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()
+	veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
@@ -308,7 +311,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
 	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -363,7 +366,7 @@ if options.verbose:
 # Load likelihood ratio data, assume injections are present
 #
 if options.likelihood_file is not None:
-	FAR = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+	FAR = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
 	FAR = far.LocalRankingData(segments.segment(None, None), far.ThincaCoincParamsDistributions())
 	# initialize an empty trials table with the combinations of detectors
