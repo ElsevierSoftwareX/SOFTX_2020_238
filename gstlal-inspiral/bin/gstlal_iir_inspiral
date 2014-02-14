@@ -365,6 +365,8 @@ if options.verbose:
 #
 # Load likelihood ratio data, assume injections are present
 #
+
+
 if options.likelihood_file is not None:
 	FAR = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
@@ -372,6 +374,7 @@ else:
 	# initialize an empty trials table with the combinations of detectors
 	# that this job will analyze
 	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
+
 
 #
 # build output document
@@ -386,20 +389,20 @@ output = inspiral.Data(
 	pipeline = pipeline,
 	instruments = set(detectors.channel_dict),
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-	injection_filename = options.injections,
-	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
 	FAR = FAR,
 	likelihood_file = options.likelihood_file,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
-	likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 	assign_likelihoods = options.likelihood_file is not None,
+	injection_filename = options.injections,
+	time_slide_file = options.time_slide_file,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
+	likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
-	gracedb_type = options.gracedb_type,
 	gracedb_group = options.gracedb_group,
+	gracedb_type = options.gracedb_type,
 	verbose = options.verbose
 )
 if options.verbose:
