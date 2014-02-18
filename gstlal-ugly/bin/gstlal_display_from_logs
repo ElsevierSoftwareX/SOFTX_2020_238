@@ -79,12 +79,12 @@ for name in sorted(segdictdict.keys()):
 			if i == 0:
 				reliability_time.append(float(ifo_endtime - endtime)/86400)
 			else:
-				reliability_time.append(float(segments.segmentlist(segs[:i+1]).extent()[0] - endtime) / 86400)
+				reliability_time.append(float(segments.segmentlist(segs[:i+1]).extent()[0] - ifo_endtime) / 86400)
 			rel = 100 - 100 * (1.0 - float(abs(segments.segmentlist(segs[:i+1]).extent()) - abs(segments.segmentlist(segs[:i+1]))) / float(abs(segments.segmentlist(segs[:i+1]).extent())))
 			if rel == 0:
 				reliability.append(0.000001)
 			else:
-				reliability.append(100 - 100 * (1.0 - float(abs(segments.segmentlist(segs[:i+1]).extent()) - abs(segments.segmentlist(segs[:i+1]))) / float(abs(segments.segmentlist(segs[:i+1]).extent()))))
+				reliability.append(rel)
 		
 		pyplot.subplot(nifos,1, n+1)
 		y1 = numpy.zeros(len(reliability))
