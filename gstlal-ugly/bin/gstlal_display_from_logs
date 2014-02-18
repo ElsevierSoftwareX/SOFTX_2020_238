@@ -1,0 +1,102 @@
+#!/usr/bin/python
+
+import sys, os
+import StringIO, base64
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as segutils
+from glue.ligolw.utils import ligolw_add
+from glue.ligolw import lsctables, table
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot
+import numpy
+
+def to_png_figure(caption):
+	f = StringIO.StringIO()
+	pyplot.savefig(f, format="png")
+	print '<div><figure><img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img><figcaption>%s</figcaption></figure></div>' % (caption,)
+	f.close()
+
+print """
+<html>
+<head>
+<style>
+figure {
+  border: thin silver solid;
+  margin: 0.5em;
+  padding: 0.5em;
+}
+figcaption {
+  text-align: center;
+  font-style: italic;
+  font-size: larger;
+  text-indent: 0;
+}
+</style>
+</head>
+<body>"""
+
+xmldoc = ligolw.Document()
+ligolw_add.ligolw_add(xmldoc, [os.path.join(d[0], f) for d in os.walk(sys.argv[1]) for f in d[2] if "xml" in f], contenthandler = ligolw.LIGOLWContentHandler)
+
+# Add nanosecond columns
+segtable = table.get_table(xmldoc, lsctables.SegmentTable.tableName)
+for col in ("start_time_ns",  "end_time_ns"):
+	try:
+		column = segtable.appendColumn(col)
+	except ValueError:
+		continue
+	for i in range(len(segtable)):
+		column[i] = 0
+
+out = sys.stderr
+colordict = {"H1": "r", "L1": "g", "V1": "m"}
+segdictdict = {}
+
+# ASSUME we can combine everything by the name in the segment_definer table
+for r in table.get_table(xmldoc, lsctables.SegmentDefTable.tableName):
+	segdictdict.setdefault(r.name, segments.segmentlistdict())
+	segdictdict[r.name] += segutils.segmenttable_get_by_name(xmldoc, r.name).coalesce()
+
+
+
+for name in sorted(segdictdict.keys()):
+	pyplot.figure(figsize=(15,5))
+	out.write("\nprocessing %s:\n" % name)
+	segsdict = segdictdict[name]
+	endtime = segsdict.extent_all()[1]
+	nifos = len(segsdict.keys())
+	for n, ifo in enumerate(segsdict):
+		segs = sorted(segsdict[ifo], reverse = True)
+		ifo_endtime = segs[0][1]
+		startseg = segs[0]
+		reliability_time = []
+		reliability = []
+		for i, seg in enumerate(segs):
+			if i == 0:
+				reliability_time.append(float(ifo_endtime - endtime)/86400)
+			else:
+				reliability_time.append(float(segments.segmentlist(segs[:i+1]).extent()[0] - endtime) / 86400)
+			rel = 100 - 100 * (1.0 - float(abs(segments.segmentlist(segs[:i+1]).extent()) - abs(segments.segmentlist(segs[:i+1]))) / float(abs(segments.segmentlist(segs[:i+1]).extent())))
+			if rel == 0:
+				reliability.append(0.000001)
+			else:
+				reliability.append(100 - 100 * (1.0 - float(abs(segments.segmentlist(segs[:i+1]).extent()) - abs(segments.segmentlist(segs[:i+1]))) / float(abs(segments.segmentlist(segs[:i+1]).extent()))))
+		
+		pyplot.subplot(nifos,1, n+1)
+		y1 = numpy.zeros(len(reliability))
+		y1.fill(0.000001)
+		pyplot.fill_between(reliability_time, y1, reliability, facecolor = colordict[ifo], lw=2, label = ifo)
+		pyplot.gca().set_yscale('log')
+		pyplot.yticks([0.000001,0.01,0.1,1,5], ('0','0.01','0.1','1','5'))
+		pyplot.ylabel('Unsuccessful %% %s' % ifo)
+		pyplot.ylim([0.000001, 5])
+		pyplot.xlim([-3, 0])
+		pyplot.grid()
+	pyplot.xlabel('Time (d)')
+	to_png_figure("%s Fraction of time successfully processed integrated backwards from %d" % (name, endtime))
+
+print "</body></html>"
