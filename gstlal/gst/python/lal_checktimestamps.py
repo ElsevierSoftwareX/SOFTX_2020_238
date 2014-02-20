@@ -49,13 +49,34 @@ __date__ = "FIXME"
 #
 
 
+## @file lal_checktimestamps.py
+# This gstreamer element checks timestamps; see lal_checktimestamps for more information
+
+
+## @package lal_checktimestamps
+# A gstreamer element to check time stamps
+#
+# ### Review status
+# - Code walkthrough 2014/02/12 
+# - Review git hash: ecaf8840ada2877b9b2a8a144a62874c004cd3d2
+# - Folks involved J. Creighton, B.S. Sathyaprakash, K. Cannon, C. Hanna, F. Robinet
+#
+#
+
 def printable_timestamp(timestamp):
+	"""!
+	A function to nicely format a timestamp for printing
+	"""
 	if timestamp is None or timestamp == gst.CLOCK_TIME_NONE:
 		return "(none)"
 	return "%d.%09d s" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
 
 
 class lal_checktimestamps(gst.BaseTransform):
+	"""!
+	A class representing a gstreamer element that will verify that the
+	timestamps agree with incoming buffers based on tracking the buffer offsets.
+	"""
 	__gstdetails__ = (
 		"Timestamp Checker Pass-Through Element",
 		"Generic",
