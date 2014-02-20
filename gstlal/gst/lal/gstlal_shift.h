@@ -57,8 +57,6 @@ struct _GSTLALShift {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
-	gint rate;
-	gint unit_size;
 	gint64 shift;
 };
 
