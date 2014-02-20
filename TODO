@@ -27,7 +27,6 @@ Immediate development tasks in no particular order
 * Audit all import statements:  there's a lot of useless imports, especially in gstlal-inspiral/bin/
 * Upload segment lists with events; this might mean keeping track of "old" segments in the online jobs (for the previous 4 hours to cover boundary effects)
 * We have a request to provide bottle routes for the snr history of the individual detectors in addition to the coinc snr.
-* Putting the lvalert listening scripts into the dag
 * Remove the registry files and get url cron jobs and provide direct access to the running jobs from the outside
  * Note this involves firewall changes at CIT
  * Note we will need to make sure and cache results for at least ~5 minutes to prevent DOS
@@ -38,12 +37,9 @@ Immediate development tasks in no particular order
   * histograms for injection accuracy
 * inspiral DAGs:
   * try to get it to do something sane on 1 core?
-  * give jobs human-readable names
-  * add data pre-staging and serial processing of banks in offline DAG
   * calc_likelihood command lines are too long:  use caches of likelihood files
   * gstlal_inspiral --svd-bank option:
     * is there a reason the instrument needs to be identified?  is the instrument not recorded in the file, if not why not, and would it suffice if it was?
-    * why use commas instead of providing the option multiple times?
     * could the file list be provided in a cache file?
 * finish turning the appropriate bits of the Data class into a pipeline handler, and get the input and output segments recorded correctly
 * complete the removal of deprecated data input and conditioning code from lloidparts.py
@@ -61,7 +57,6 @@ Immediate development tasks in no particular order
 * complete port to swig bindings (long term, divest ourselves of pylal).
 * separate likelihood code from burst pipelines.
 * fix the numerator in the likelihood ratio ranking statistic to account for inter-instrument correlations in signal parameters (my student's work on implementing the rate estimation code might have turned up some code that'll do a good brute-force job of this).
-* switch online code to framexmitsrc (after framexmitsrc is made to not jam up when data stops flowing)
 * review readiness:  remove dead code, create tests for elements, create validation tests for applications.
 * incorporate rate estimation code into pipeline (have student working on this)
 
@@ -70,4 +65,11 @@ Completed tasks
 * move headers into a gstlal/ sub-directory in the source tree so the same #include's work in and out of the source tree (e.g., simplifies moving elements between packages)
 * merge fake data generation programs into one
 * sub-sample interpolation of triggers (done 2013-06-06)
+* Putting the lvalert listening scripts into the dag
 * have offline dag split output across multiple directories (done 2013-06-06)
+* inspiral DAGs: (Done 2014-02-15)
+  * give jobs human-readable names
+  * add data pre-staging and serial processing of banks in offline DAG
+  * gstlal_inspiral --svd-bank option:
+    * why use commas instead of providing the option multiple times? : provided multiple times now
+* switch online code to framexmitsrc (after framexmitsrc is made to not jam up when data stops flowing) (done 2014-01-15)
