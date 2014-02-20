@@ -184,7 +184,7 @@ def parse_command_line():
 
  	# Get the banks and make the detectors
 	# FIXME add error checking on length of banks per detector, etc
-	iir_banks = inspiral.parse_svdbank_string(options.iir_bank)
+	iir_banks = inspiral.parse_iirbank_string(options.iir_bank)
 	
 	# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
 	channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
