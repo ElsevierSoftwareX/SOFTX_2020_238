@@ -187,7 +187,7 @@ def parse_command_line():
 
 
 	# Get the banks and make the detectors
-	iir_banks = inspiral.parse_svdbank_string(options.iir_bank)
+	iir_banks = inspiral.parse_iirbank_string(options.iir_bank)
 	
 	# FIXME: should also check for read permissions
 	required_files = []
