@@ -178,7 +178,7 @@ def parse_svdbank_string(bank_string):
 	"""
 	parses strings of form 
 	
-	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,... 
+	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml
 	
 	into a dictionary of lists of bank files.
 	"""
@@ -190,6 +190,23 @@ def parse_svdbank_string(bank_string):
 		if ifo in out:
 			raise ValueError("Only one svd bank per instrument should be given")
 		out[ifo] = bank
+	return out
+
+
+def parse_iirbank_string(bank_string):
+	"""
+	parses strings of form 
+	
+	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,... 
+	
+	into a dictionary of lists of bank files.
+	"""
+	out = {}
+	if bank_string is None:
+		return out
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
 	return out
 
 
