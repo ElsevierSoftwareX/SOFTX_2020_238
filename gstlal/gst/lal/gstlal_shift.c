@@ -1,8 +1,9 @@
 /*
- * An element to chop up audio buffers into smaller pieces.
+ * An element to shift buffer time stamps.
  *
  * Copyright (C) 2009,2011  Kipp Cannon
- *
+ * Copyright (C) 2014 Chad Hanna
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -145,15 +146,16 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
 		gst_event_parse_new_segment(event, &update, &rate, &format, &start, &stop, &position);
+
+		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
+			start += element->shift;
+			stop += element->shift;
+			if (! GST_CLOCK_TIME_IS_VALID(start))
+				start = GST_CLOCK_TIME_NONE;
+			if (! GST_CLOCK_TIME_IS_VALID(stop))
+				stop = GST_CLOCK_TIME_NONE;
+		}
 		
-		/*
-		 * FIXME could overflow
-		 * adjust boundary
-		 */
-
-		start += element->shift;
-		stop += element->shift;
-
 		event = gst_event_new_new_segment(update, rate, format, start, stop, position);
 
 		break;
@@ -190,13 +192,14 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
 		gst_event_parse_new_segment(event, &update, &rate, &format, &start, &stop, &position);
 		
-		/*
-		 * FIXME could overflow
-		 * adjust boundary
-		 */
-
-		start += element->shift;
-		stop += element->shift;
+		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
+			start += element->shift;
+			stop += element->shift;
+			if (! GST_CLOCK_TIME_IS_VALID(start))
+				start = GST_CLOCK_TIME_NONE;
+			if (! GST_CLOCK_TIME_IS_VALID(stop))
+				stop = GST_CLOCK_TIME_NONE;
+		}
 
 		event = gst_event_new_new_segment(update, rate, format, start, stop, position);
 
@@ -237,7 +240,7 @@ static GstCaps *getcaps(GstPad * pad)
 
 	/*
 	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
+	 * caps, intersect with our own.
 	 */
 
 	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
@@ -291,42 +294,22 @@ static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALShift *element = GSTLAL_SHIFT(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
-
-	/*
-	 * parse caps
-	 */
-
-	structure = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
 
 	/*
 	 * try setting caps on downstream element
 	 */
 
-	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		element->rate = rate;
-		element->unit_size = width / 8 * channels;
-	} else
+	if (!gst_pad_set_caps(element->srcpad, caps)) {
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+		return FALSE;
+	}
 
 	/*
 	 * done
 	 */
 
 	gst_object_unref(element);
-	return success;
+	return TRUE;
 }
 
 
@@ -351,8 +334,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 
-	/* FIXME could have overflow issues if shift is negative and bigger than the timestamp */
-	GST_BUFFER_TIMESTAMP(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift );
+	/* Check for underflow */
+	if (((gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift) >= 0)
+		GST_BUFFER_TIMESTAMP(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift );
+	else
+		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %d", GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
+
 	result = gst_pad_push(element->srcpad, sinkbuf);
 	if(G_UNLIKELY(result != GST_FLOW_OK))
 		GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
@@ -523,8 +510,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = pad;
 
 	/* internal data */
-	element->rate = 0;
-	element->unit_size = 0;
 	element->shift = 0;
 }
 
