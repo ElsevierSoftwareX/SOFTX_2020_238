@@ -179,7 +179,7 @@ def normalized_autocorrelation(fseries, revplan):
 	
 
 # Round a number up to the nearest power of 2
-def ceil_pow_2( number ):
+def ceil_pow_2(x):
 	x = int(math.ceil(x))
 	x -= 1
 	n = 1
