@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2011 Chad Hanna
+# Copyright (C) 2011-2014 Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -136,8 +136,8 @@ def get_max_length(bank_cache, verbose = False):
 
 def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length):
 	segsdict = segments.segmentlistdict()
-	# 256 seconds for the whitener to settle + the maximum template_length
-	start_pad = 256 + max_template_length
+	# 512 seconds for the whitener to settle + the maximum template_length
+	start_pad = 512 + max_template_length
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
 	segment_length = int(20 * start_pad)
 	for n in range(2, 1 + len(analyzable_instruments_set)):
@@ -519,7 +519,7 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 	
 	farnode = generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = [margnode],
 		opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"background-bins-file":"marginalized_likelihood.xml.gz", "injection-dbs":injdbs, "non-injection-db":noninjdb}
+		input_files = {"background-bins-file":"marginalized_likelihood.xml.gz", "injection-db":injdbs, "non-injection-db":noninjdb}
 	)
 	
 	return farnode
