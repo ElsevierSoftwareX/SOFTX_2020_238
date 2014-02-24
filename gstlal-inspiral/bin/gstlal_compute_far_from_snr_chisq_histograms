@@ -51,7 +51,7 @@ def parse_command_line():
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
-	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
+	parser.add_option("--injection-db", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
 	options, filenames = parser.parse_args()
 	return options, filenames
 
@@ -145,13 +145,13 @@ for bkdb in options.non_injection_db:
 #
 
 global_ranking.trials_table.increment_count(1)
-for injdb in options.injection_dbs:
+for injdb in options.injection_db:
 	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
 for bkdb in options.non_injection_db:
 	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
 
-for injdb in options.injection_dbs:
+for injdb in options.injection_db:
 	far.set_far(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
 #
