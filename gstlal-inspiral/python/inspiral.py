@@ -578,15 +578,15 @@ class Data(object):
 		#
 		
 		# setup bottle routes
-		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
-		bottle.route("/latency_history.txt")(self.web_get_latency_history)
-		bottle.route("/snr_history.txt")(self.web_get_snr_history)
-		bottle.route("/ram_history.txt")(self.web_get_ram_history)
-		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
-		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
-		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
-		bottle.route("/sngls_snr_threshold.txt", method = "GET")(self.web_get_sngls_snr_threshold)
-		bottle.route("/sngls_snr_threshold.txt", method = "POST")(self.web_set_sngls_snr_threshold)
+		#bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
+		#bottle.route("/latency_history.txt")(self.web_get_latency_history)
+		#bottle.route("/snr_history.txt")(self.web_get_snr_history)
+		#bottle.route("/ram_history.txt")(self.web_get_ram_history)
+		#bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
+		#bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
+		#bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
+		#bottle.route("/sngls_snr_threshold.txt", method = "GET")(self.web_get_sngls_snr_threshold)
+		#bottle.route("/sngls_snr_threshold.txt", method = "POST")(self.web_set_sngls_snr_threshold)
 
 		self.lock = threading.Lock()
 		self.pipeline = pipeline
