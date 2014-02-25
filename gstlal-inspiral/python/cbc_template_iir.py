@@ -76,10 +76,12 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
         deltaT = 1.0 / sampleRate
         T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
         tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
-        t = numpy.arange(tc-T, tc, deltaT)
-	# avoid the numerical bug when calculating frequency f
-	if t[-1] < 1e-5:
-		t = t[:-2]
+	# the last sampling point of any waveform is always set 
+	# at abs(t) >= delta. this is to avoid ill-condition of 
+	# frequency when abs(t) < 1e-5
+	n_start = math.floor((tc-T) / deltaT + 0.5)
+	n_end = min(math.floor(tc/deltaT), -1)
+        t = numpy.arange(n_start, n_end+1, 1) * deltaT
         Mtot = m1 + m2
         eta = m1 * m2 / Mtot**2
         f = freq(eta, Mtot, t)
