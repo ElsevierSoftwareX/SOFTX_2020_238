@@ -950,8 +950,8 @@ update_filter_2x (SpeexResamplerState * st)
 
 
   old_length = st->filt_len;
-//  buffer_size_2x = st->in_rate;
-  st->buffer_size_2x = 160;
+  st->buffer_size_2x = st->in_rate;
+//  st->buffer_size_2x = 160;
   st->oversample = quality_map[st->quality].oversample;
   st->filt_len = quality_map[st->quality].base_length;
 
