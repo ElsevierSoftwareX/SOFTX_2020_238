@@ -19,7 +19,7 @@
  */
 
 
-#ifndef __AUDIO_RESAMPLE_H__
+#ifndef __AUDIO_RESAMPLECUDA_H__
 #define __AUDIO_RESAMPLE_H__
 
 #include <gst/gst.h>
@@ -30,26 +30,26 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_AUDIO_RESAMPLE \
-  (gst_audio_resample_get_type())
-#define GST_AUDIO_RESAMPLE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_AUDIO_RESAMPLE,GstAudioResample))
-#define GST_AUDIO_RESAMPLE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_AUDIO_RESAMPLE,GstAudioResampleClass))
-#define GST_IS_AUDIO_RESAMPLE(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_AUDIO_RESAMPLE))
-#define GST_IS_AUDIO_RESAMPLE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_AUDIO_RESAMPLE))
+#define CUDA_AUDIO_RESAMPLE_TYPE \
+  (cuda_audio_resample_get_type())
+#define CUDA_AUDIO_RESAMPLE(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),CUDA_AUDIO_RESAMPLE_TYPE,GstAudioResampleCuda))
+#define CUDA_AUDIO_RESAMPLE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),CUDA_AUDIO_RESAMPLE_TYPE,GstAudioResampleCudaClass))
+#define GST_IS_CUDA_AUDIO_RESAMPLE(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),CUDA_AUDIO_RESAMPLE_TYPE))
+#define GST_IS_CUDA_AUDIO_RESAMPLE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_AUDIO_RESAMPLE_TYPE))
 
-typedef struct _GstAudioResample GstAudioResample;
-typedef struct _GstAudioResampleClass GstAudioResampleClass;
+typedef struct _GstAudioResampleCuda GstAudioResampleCuda;
+typedef struct _GstAudioResampleCudaClass GstAudioResampleCudaClass;
 
 /**
  * GstAudioResample:
  *
  * Opaque data structure.
  */
-struct _GstAudioResample {
+struct _GstAudioResampleCuda {
   GstBaseTransform element;
 
   /* <private> */
@@ -84,11 +84,11 @@ struct _GstAudioResample {
   const SpeexResampleFuncs *funcs;
 };
 
-struct _GstAudioResampleClass {
+struct _GstAudioResampleCudaClass {
   GstBaseTransformClass parent_class;
 };
 
-GType gst_audio_resample_get_type(void);
+GType cuda_audio_resample_get_type(void);
 
 G_END_DECLS
 

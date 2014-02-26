@@ -42,8 +42,8 @@
  */
 
 
-#include <iirfilter/gstlal_iirbankCuda.h>
-#include <audioresample/gstaudioresample.h>
+#include <iirfilter/cuda_gstlal_iirbank.h>
+#include <audioresample/cuda_gstaudioresample.h>
 
 
 /*
@@ -62,7 +62,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"cuda_iirbank", CUDA_IIRBANK_TYPE},
-		{"cuda_audioresample", GST_TYPE_AUDIO_RESAMPLE},
+		{"cuda_audioresample", CUDA_AUDIO_RESAMPLE_TYPE},
 		{NULL, 0},
 	};
 
@@ -74,6 +74,8 @@ static gboolean plugin_init(GstPlugin *plugin)
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
+
+
 
 	/*
 	 * Done.

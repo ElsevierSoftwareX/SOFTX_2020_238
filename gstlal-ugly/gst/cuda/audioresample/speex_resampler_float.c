@@ -20,5 +20,6 @@
 #define FLOATING_POINT
 #define OUTSIDE_SPEEX
 #define RANDOM_PREFIX resample_float
+#define UPSAMPLE2x
 
 #include "resample.c"
