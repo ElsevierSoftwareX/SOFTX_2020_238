@@ -4,7 +4,7 @@
 
 - You can get a development copy of the gstlal software suite from git via:
 
-		$ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/
+		$ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal
 
 - Release tar balls and some binary packages are available <a href=https://www.lsc-group.phys.uwm.edu/daswg/download/repositories.html>here</a>.
 
