@@ -95,6 +95,33 @@ static const SpeexResampleFuncs float_funcs =
   32
 };
 
+SpeexResamplerState *resample_float_resampler_init_2x (guint32 nb_channels,
+    guint32 in_rate, guint32 out_rate, gint quality, gint * err);
+void resample_float_resampler_destroy_2x (SpeexResamplerState * st);
+int resample_float_resampler_process_interleaved_float_2x (SpeexResamplerState *
+    st, const guint8 * in, guint32 * in_len, guint8 * out, guint32 * out_len);
+int resample_float_resampler_set_rate_2x (SpeexResamplerState * st,
+    guint32 in_rate, guint32 out_rate);
+int resample_float_resampler_set_quality_2x (SpeexResamplerState * st, gint quality);
+int resample_float_resampler_reset_mem_2x (SpeexResamplerState * st);
+
+static const SpeexResampleFuncs float_funcs_2x =
+{
+  resample_float_resampler_init_2x,
+  resample_float_resampler_destroy_2x,
+  resample_float_resampler_process_interleaved_float_2x,
+  resample_float_resampler_set_rate_2x,
+  resample_float_resampler_get_rate,
+  resample_float_resampler_get_ratio,
+  resample_float_resampler_get_input_latency,
+  resample_float_resampler_get_filt_len,
+  resample_float_resampler_set_quality_2x,
+  resample_float_resampler_reset_mem_2x,
+  resample_float_resampler_skip_zeros,
+  resample_float_resampler_strerror,
+  32
+};
+
 SpeexResamplerState *resample_double_resampler_init (guint32 nb_channels,
     guint32 in_rate, guint32 out_rate, gint quality, gint * err);
 void resample_double_resampler_destroy (SpeexResamplerState * st);

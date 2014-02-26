@@ -45,7 +45,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "gstaudioresample.h"
+#include "cuda_gstaudioresample.h"
 #include <gst/gstutils.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
@@ -57,8 +57,13 @@
 #include <orc-test/orcprofile.h>
 #endif
 
-GST_DEBUG_CATEGORY (audio_resample_debug);
-#define GST_CAT_DEFAULT audio_resample_debug
+#define GST_CAT_DEFAULT cuda_audio_resample_debug
+GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
+
+static void additional_initializations(GType type)
+{
+  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_audioresample", 0, "cuda_audioresample element");
+}
 
 enum
 {
@@ -103,75 +108,74 @@ GST_STATIC_CAPS ( \
       "depth = (int) 8, " \
       "signed = (boolean) true" \
 )
-
-/* If TRUE integer arithmetic resampling is faster and will be used if appropiate */
+/* If TRUE integer arithmetic resampling is faster and will be used if appropriate */
 #if defined AUDIORESAMPLE_FORMAT_INT
-static gboolean gst_audio_resample_use_int = TRUE;
+static gboolean cuda_audio_resample_use_int = TRUE;
 #elif defined AUDIORESAMPLE_FORMAT_FLOAT
-static gboolean gst_audio_resample_use_int = FALSE;
+static gboolean cuda_audio_resample_use_int = FALSE;
 #else
-static gboolean gst_audio_resample_use_int = FALSE;
+static gboolean cuda_audio_resample_use_int = FALSE;
 #endif
 
-static GstStaticPadTemplate gst_audio_resample_sink_template =
+static GstStaticPadTemplate cuda_audio_resample_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK, GST_PAD_ALWAYS, SUPPORTED_CAPS);
 
-static GstStaticPadTemplate gst_audio_resample_src_template =
+static GstStaticPadTemplate cuda_audio_resample_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC, GST_PAD_ALWAYS, SUPPORTED_CAPS);
 
-static void gst_audio_resample_set_property (GObject * object,
+static void cuda_audio_resample_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
-static void gst_audio_resample_get_property (GObject * object,
+static void cuda_audio_resample_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
 /* vmethods */
-static gboolean gst_audio_resample_get_unit_size (GstBaseTransform * base,
+static gboolean cuda_audio_resample_get_unit_size (GstBaseTransform * base,
     GstCaps * caps, guint * size);
-static GstCaps *gst_audio_resample_transform_caps (GstBaseTransform * base,
+static GstCaps *cuda_audio_resample_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps);
-static void gst_audio_resample_fixate_caps (GstBaseTransform * base,
+static void cuda_audio_resample_fixate_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, GstCaps * othercaps);
-static gboolean gst_audio_resample_transform_size (GstBaseTransform * trans,
+static gboolean cuda_audio_resample_transform_size (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * incaps, guint insize,
     GstCaps * outcaps, guint * outsize);
-static gboolean gst_audio_resample_set_caps (GstBaseTransform * base,
+static gboolean cuda_audio_resample_set_caps (GstBaseTransform * base,
     GstCaps * incaps, GstCaps * outcaps);
-static GstFlowReturn gst_audio_resample_transform (GstBaseTransform * base,
+static GstFlowReturn cuda_audio_resample_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
-static gboolean gst_audio_resample_event (GstBaseTransform * base,
+static gboolean cuda_audio_resample_event (GstBaseTransform * base,
     GstEvent * event);
-static gboolean gst_audio_resample_start (GstBaseTransform * base);
-static gboolean gst_audio_resample_stop (GstBaseTransform * base);
-static gboolean gst_audio_resample_query (GstPad * pad, GstQuery * query);
-static const GstQueryType *gst_audio_resample_query_type (GstPad * pad);
+static gboolean cuda_audio_resample_start (GstBaseTransform * base);
+static gboolean cuda_audio_resample_stop (GstBaseTransform * base);
+static gboolean cuda_audio_resample_query (GstPad * pad, GstQuery * query);
+static const GstQueryType *cuda_audio_resample_query_type (GstPad * pad);
 
-GST_BOILERPLATE (GstAudioResample, gst_audio_resample, GstBaseTransform,
-    GST_TYPE_BASE_TRANSFORM);
+GST_BOILERPLATE_FULL (GstAudioResampleCuda, cuda_audio_resample, GstBaseTransform,
+    GST_TYPE_BASE_TRANSFORM, additional_initializations);
 
 static void
-gst_audio_resample_base_init (gpointer g_class)
+cuda_audio_resample_base_init (gpointer g_class)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_audio_resample_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_audio_resample_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &cuda_audio_resample_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &cuda_audio_resample_sink_template);
 
-  gst_element_class_set_details_simple (gstelement_class, "Audio resampler",
-      "Filter/Converter/Audio", "Resamples audio",
-      "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
+   gst_element_class_set_details_simple (gstelement_class, "Cuda Mode Audio resampler",
+      "only upsample to 2x rates", "Resamples audio",
+      "qi.chu <qi.chu@ligo.org>");
 }
 
 static void
-gst_audio_resample_class_init (GstAudioResampleClass * klass)
+cuda_audio_resample_class_init (GstAudioResampleCudaClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
 
-  gobject_class->set_property = gst_audio_resample_set_property;
-  gobject_class->get_property = gst_audio_resample_get_property;
+  gobject_class->set_property = cuda_audio_resample_set_property;
+  gobject_class->get_property = cuda_audio_resample_get_property;
 
   g_object_class_install_property (gobject_class, PROP_QUALITY,
       g_param_spec_int ("quality", "Quality", "Resample quality with 0 being "
@@ -184,11 +188,11 @@ gst_audio_resample_class_init (GstAudioResampleClass * klass)
    * with old audioresample
    */
   /**
-   * GstAudioResample:filter-length:
+   * GstAudioResampleCuda:filter-length:
    *
    * Length of the resample filter
    *
-   * Deprectated: Use #GstAudioResample:quality property instead
+   * Deprecated: Use #GstAudioResampleCuda:quality property instead
    */
   g_object_class_install_property (gobject_class, PROP_FILTER_LENGTH,
       g_param_spec_int ("filter-length", "Filter length",
@@ -196,46 +200,46 @@ gst_audio_resample_class_init (GstAudioResampleClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   GST_BASE_TRANSFORM_CLASS (klass)->start =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_start);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_start);
   GST_BASE_TRANSFORM_CLASS (klass)->stop =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_stop);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_stop);
   GST_BASE_TRANSFORM_CLASS (klass)->transform_size =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_transform_size);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_transform_size);
   GST_BASE_TRANSFORM_CLASS (klass)->get_unit_size =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_get_unit_size);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_get_unit_size);
   GST_BASE_TRANSFORM_CLASS (klass)->transform_caps =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_transform_caps);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_transform_caps);
   GST_BASE_TRANSFORM_CLASS (klass)->fixate_caps =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_fixate_caps);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_fixate_caps);
   GST_BASE_TRANSFORM_CLASS (klass)->set_caps =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_set_caps);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_set_caps);
   GST_BASE_TRANSFORM_CLASS (klass)->transform =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_transform);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_transform);
   GST_BASE_TRANSFORM_CLASS (klass)->event =
-      GST_DEBUG_FUNCPTR (gst_audio_resample_event);
+      GST_DEBUG_FUNCPTR (cuda_audio_resample_event);
 
   GST_BASE_TRANSFORM_CLASS (klass)->passthrough_on_same_caps = TRUE;
 }
 
 static void
-gst_audio_resample_init (GstAudioResample * resample,
-    GstAudioResampleClass * klass)
+cuda_audio_resample_init (GstAudioResampleCuda * resample,
+    GstAudioResampleCudaClass * klass)
 {
   GstBaseTransform *trans = GST_BASE_TRANSFORM (resample);
 
   resample->quality = SPEEX_RESAMPLER_QUALITY_DEFAULT;
 
   gst_base_transform_set_gap_aware (trans, TRUE);
-  gst_pad_set_query_function (trans->srcpad, gst_audio_resample_query);
+  gst_pad_set_query_function (trans->srcpad, cuda_audio_resample_query);
   gst_pad_set_query_type_function (trans->srcpad,
-      gst_audio_resample_query_type);
+      cuda_audio_resample_query_type);
 }
 
 /* vmethods */
 static gboolean
-gst_audio_resample_start (GstBaseTransform * base)
+cuda_audio_resample_start (GstBaseTransform * base)
 {
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (base);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (base);
 
   resample->need_discont = TRUE;
 
@@ -256,9 +260,9 @@ gst_audio_resample_start (GstBaseTransform * base)
 }
 
 static gboolean
-gst_audio_resample_stop (GstBaseTransform * base)
+cuda_audio_resample_stop (GstBaseTransform * base)
 {
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (base);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (base);
 
   if (resample->state) {
     resample->funcs->destroy (resample->state);
@@ -282,7 +286,7 @@ gst_audio_resample_stop (GstBaseTransform * base)
 }
 
 static gboolean
-gst_audio_resample_get_unit_size (GstBaseTransform * base, GstCaps * caps,
+cuda_audio_resample_get_unit_size (GstBaseTransform * base, GstCaps * caps,
     guint * size)
 {
   gint width, channels;
@@ -305,7 +309,7 @@ gst_audio_resample_get_unit_size (GstBaseTransform * base, GstCaps * caps,
 }
 
 static GstCaps *
-gst_audio_resample_transform_caps (GstBaseTransform * base,
+cuda_audio_resample_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps)
 {
   const GValue *val;
@@ -342,7 +346,7 @@ gst_audio_resample_transform_caps (GstBaseTransform * base,
 
 /* Fixate rate to the allowed rate that has the smallest difference */
 static void
-gst_audio_resample_fixate_caps (GstBaseTransform * base,
+cuda_audio_resample_fixate_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, GstCaps * othercaps)
 {
   GstStructure *s;
@@ -357,15 +361,19 @@ gst_audio_resample_fixate_caps (GstBaseTransform * base,
 }
 
 static const SpeexResampleFuncs *
-gst_audio_resample_get_funcs (gint width, gboolean fp)
+cuda_audio_resample_get_funcs (gint width, gboolean fp, gint inrate, gint outrate )
 {
   const SpeexResampleFuncs *funcs = NULL;
 
-  if (gst_audio_resample_use_int && (width == 8 || width == 16) && !fp)
+  if (cuda_audio_resample_use_int && (width == 8 || width == 16) && !fp)
     funcs = &int_funcs;
-  else if ((!gst_audio_resample_use_int && (width == 8 || width == 16) && !fp)
+  else if ((!cuda_audio_resample_use_int && (width == 8 || width == 16) && !fp)
       || (width == 32 && fp))
-    funcs = &float_funcs;
+	  // NOTE:call specific 2x functions 
+          if (abs(outrate/inrate - 2) < 1e-5)
+            funcs = &float_funcs_2x;
+          else
+            funcs = &float_funcs;
   else if ((width == 64 && fp) || ((width == 32 || width == 24) && !fp))
     funcs = &double_funcs;
   else
@@ -375,12 +383,12 @@ gst_audio_resample_get_funcs (gint width, gboolean fp)
 }
 
 static SpeexResamplerState *
-gst_audio_resample_init_state (GstAudioResample * resample, gint width,
+cuda_audio_resample_init_state (GstAudioResampleCuda * resample, gint width,
     gint channels, gint inrate, gint outrate, gint quality, gboolean fp)
 {
   SpeexResamplerState *ret = NULL;
   gint err = RESAMPLER_ERR_SUCCESS;
-  const SpeexResampleFuncs *funcs = gst_audio_resample_get_funcs (width, fp);
+  const SpeexResampleFuncs *funcs = cuda_audio_resample_get_funcs (width, fp, inrate, outrate);
 
   ret = funcs->init (channels, inrate, outrate, quality, &err);
 
@@ -396,7 +404,7 @@ gst_audio_resample_init_state (GstAudioResample * resample, gint width,
 }
 
 static gboolean
-gst_audio_resample_update_state (GstAudioResample * resample, gint width,
+cuda_audio_resample_update_state (GstAudioResampleCuda * resample, gint width,
     gint channels, gint inrate, gint outrate, gint quality, gboolean fp)
 {
   gboolean ret = TRUE;
@@ -411,10 +419,10 @@ gst_audio_resample_update_state (GstAudioResample * resample, gint width,
       || width != resample->width) {
     resample->funcs->destroy (resample->state);
     resample->state =
-        gst_audio_resample_init_state (resample, width, channels, inrate,
+        cuda_audio_resample_init_state (resample, width, channels, inrate,
         outrate, quality, fp);
 
-    resample->funcs = gst_audio_resample_get_funcs (width, fp);
+    resample->funcs = cuda_audio_resample_get_funcs (width, fp, inrate, outrate);
     ret = (resample->state != NULL);
   } else if (resample->inrate != inrate || resample->outrate != outrate) {
     gint err = RESAMPLER_ERR_SUCCESS;
@@ -453,14 +461,14 @@ gst_audio_resample_update_state (GstAudioResample * resample, gint width,
 }
 
 static void
-gst_audio_resample_reset_state (GstAudioResample * resample)
+cuda_audio_resample_reset_state (GstAudioResampleCuda * resample)
 {
   if (resample->state)
     resample->funcs->reset_mem (resample->state);
 }
 
 static gboolean
-gst_audio_resample_parse_caps (GstCaps * incaps,
+cuda_audio_resample_parse_caps (GstCaps * incaps,
     GstCaps * outcaps, gint * width, gint * channels, gint * inrate,
     gint * outrate, gboolean * fp)
 {
@@ -474,7 +482,7 @@ gst_audio_resample_parse_caps (GstCaps * incaps,
 
   structure = gst_caps_get_structure (incaps, 0);
 
-  if (g_str_equal (gst_structure_get_name (structure), "audio/x-raw-float"))
+  if (gst_structure_has_name (structure, "audio/x-raw-float"))
     myfp = TRUE;
   else
     myfp = FALSE;
@@ -530,7 +538,7 @@ _gcd (gint a, gint b)
 }
 
 static gboolean
-gst_audio_resample_transform_size (GstBaseTransform * base,
+cuda_audio_resample_transform_size (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
     guint * othersize)
 {
@@ -544,7 +552,7 @@ gst_audio_resample_transform_size (GstBaseTransform * base,
 
   /* Get sample width -> bytes_per_samp, channels, inrate, outrate */
   ret =
-      gst_audio_resample_parse_caps (caps, othercaps, &bytes_per_samp,
+      cuda_audio_resample_parse_caps (caps, othercaps, &bytes_per_samp,
       &channels, &inrate, &outrate, NULL);
   if (G_UNLIKELY (!ret)) {
     GST_ERROR_OBJECT (base, "Wrong caps");
@@ -578,25 +586,25 @@ gst_audio_resample_transform_size (GstBaseTransform * base,
 }
 
 static gboolean
-gst_audio_resample_set_caps (GstBaseTransform * base, GstCaps * incaps,
+cuda_audio_resample_set_caps (GstBaseTransform * base, GstCaps * incaps,
     GstCaps * outcaps)
 {
   gboolean ret;
   gint width = 0, inrate = 0, outrate = 0, channels = 0;
   gboolean fp;
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (base);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (base);
 
   GST_LOG ("incaps %" GST_PTR_FORMAT ", outcaps %"
       GST_PTR_FORMAT, incaps, outcaps);
 
-  ret = gst_audio_resample_parse_caps (incaps, outcaps,
+  ret = cuda_audio_resample_parse_caps (incaps, outcaps,
       &width, &channels, &inrate, &outrate, &fp);
 
   if (G_UNLIKELY (!ret))
     return FALSE;
 
   ret =
-      gst_audio_resample_update_state (resample, width, channels, inrate,
+      cuda_audio_resample_update_state (resample, width, channels, inrate,
       outrate, resample->quality, fp);
 
   if (G_UNLIKELY (!ret))
@@ -622,13 +630,13 @@ gst_audio_resample_set_caps (GstBaseTransform * base, GstCaps * incaps,
 #endif
 
 static void
-gst_audio_resample_convert_buffer (GstAudioResample * resample,
+cuda_audio_resample_convert_buffer (GstAudioResampleCuda * resample,
     const guint8 * in, guint8 * out, guint len, gboolean inverse)
 {
   len *= resample->channels;
 
   if (inverse) {
-    if (gst_audio_resample_use_int && resample->width == 8 && !resample->fp) {
+    if (cuda_audio_resample_use_int && resample->width == 8 && !resample->fp) {
       gint8 *o = (gint8 *) out;
       gint16 *i = (gint16 *) in;
       gint32 tmp;
@@ -640,7 +648,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
         i++;
         len--;
       }
-    } else if (!gst_audio_resample_use_int && resample->width == 8
+    } else if (!cuda_audio_resample_use_int && resample->width == 8
         && !resample->fp) {
       gint8 *o = (gint8 *) out;
       gfloat *i = (gfloat *) in;
@@ -653,7 +661,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
         i++;
         len--;
       }
-    } else if (!gst_audio_resample_use_int && resample->width == 16
+    } else if (!cuda_audio_resample_use_int && resample->width == 16
         && !resample->fp) {
       gint16 *o = (gint16 *) out;
       gfloat *i = (gfloat *) in;
@@ -695,7 +703,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
       g_assert_not_reached ();
     }
   } else {
-    if (gst_audio_resample_use_int && resample->width == 8 && !resample->fp) {
+    if (cuda_audio_resample_use_int && resample->width == 8 && !resample->fp) {
       gint8 *i = (gint8 *) in;
       gint16 *o = (gint16 *) out;
       gint32 tmp;
@@ -707,7 +715,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
         i++;
         len--;
       }
-    } else if (!gst_audio_resample_use_int && resample->width == 8
+    } else if (!cuda_audio_resample_use_int && resample->width == 8
         && !resample->fp) {
       gint8 *i = (gint8 *) in;
       gfloat *o = (gfloat *) out;
@@ -720,7 +728,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
         i++;
         len--;
       }
-    } else if (!gst_audio_resample_use_int && resample->width == 16
+    } else if (!cuda_audio_resample_use_int && resample->width == 16
         && !resample->fp) {
       gint16 *i = (gint16 *) in;
       gfloat *o = (gfloat *) out;
@@ -768,7 +776,7 @@ gst_audio_resample_convert_buffer (GstAudioResample * resample,
 }
 
 static guint8 *
-gst_audio_resample_workspace_realloc (guint8 ** workspace, guint * size,
+cuda_audio_resample_workspace_realloc (guint8 ** workspace, guint * size,
     guint new_size)
 {
   guint8 *new;
@@ -787,7 +795,7 @@ gst_audio_resample_workspace_realloc (guint8 ** workspace, guint * size,
 
 /* Push history_len zeros into the filter, but discard the output. */
 static void
-gst_audio_resample_dump_drain (GstAudioResample * resample, guint history_len)
+cuda_audio_resample_dump_drain (GstAudioResampleCuda * resample, guint history_len)
 {
   gint outsize;
   guint in_len, in_processed;
@@ -816,7 +824,7 @@ gst_audio_resample_dump_drain (GstAudioResample * resample, guint history_len)
 }
 
 static void
-gst_audio_resample_push_drain (GstAudioResample * resample, guint history_len)
+cuda_audio_resample_push_drain (GstAudioResampleCuda * resample, guint history_len)
 {
   GstBuffer *outbuf;
   GstFlowReturn res;
@@ -854,7 +862,7 @@ gst_audio_resample_push_drain (GstAudioResample * resample, guint history_len)
 
   if (resample->funcs->width != resample->width) {
     /* need to convert data format;  allocate workspace */
-    if (!gst_audio_resample_workspace_realloc (&resample->tmp_out,
+    if (!cuda_audio_resample_workspace_realloc (&resample->tmp_out,
             &resample->tmp_out_size, (resample->funcs->width / 8) * out_len *
             resample->channels)) {
       GST_ERROR_OBJECT (resample, "failed to allocate workspace");
@@ -866,7 +874,7 @@ gst_audio_resample_push_drain (GstAudioResample * resample, guint history_len)
         resample->tmp_out, &out_processed);
 
     /* convert output format */
-    gst_audio_resample_convert_buffer (resample, resample->tmp_out,
+    cuda_audio_resample_convert_buffer (resample, resample->tmp_out,
         GST_BUFFER_DATA (outbuf), out_processed, TRUE);
   } else {
     /* don't need to convert data format;  process */
@@ -936,13 +944,13 @@ gst_audio_resample_push_drain (GstAudioResample * resample, guint history_len)
 }
 
 static gboolean
-gst_audio_resample_event (GstBaseTransform * base, GstEvent * event)
+cuda_audio_resample_event (GstBaseTransform * base, GstEvent * event)
 {
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (base);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (base);
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_FLUSH_STOP:
-      gst_audio_resample_reset_state (resample);
+      cuda_audio_resample_reset_state (resample);
       if (resample->state)
         resample->funcs->skip_zeros (resample->state);
       resample->num_gap_samples = 0;
@@ -957,9 +965,9 @@ gst_audio_resample_event (GstBaseTransform * base, GstEvent * event)
     case GST_EVENT_NEWSEGMENT:
       if (resample->state) {
         guint latency = resample->funcs->get_input_latency (resample->state);
-        gst_audio_resample_push_drain (resample, latency);
+        cuda_audio_resample_push_drain (resample, latency);
       }
-      gst_audio_resample_reset_state (resample);
+      cuda_audio_resample_reset_state (resample);
       if (resample->state)
         resample->funcs->skip_zeros (resample->state);
       resample->num_gap_samples = 0;
@@ -974,9 +982,9 @@ gst_audio_resample_event (GstBaseTransform * base, GstEvent * event)
     case GST_EVENT_EOS:
       if (resample->state) {
         guint latency = resample->funcs->get_input_latency (resample->state);
-        gst_audio_resample_push_drain (resample, latency);
+        cuda_audio_resample_push_drain (resample, latency);
       }
-      gst_audio_resample_reset_state (resample);
+      cuda_audio_resample_reset_state (resample);
       break;
     default:
       break;
@@ -986,7 +994,7 @@ gst_audio_resample_event (GstBaseTransform * base, GstEvent * event)
 }
 
 static gboolean
-gst_audio_resample_check_discont (GstAudioResample * resample, GstBuffer * buf)
+cuda_audio_resample_check_discont (GstAudioResampleCuda * resample, GstBuffer * buf)
 {
   guint64 offset;
   guint64 delta;
@@ -1023,7 +1031,7 @@ gst_audio_resample_check_discont (GstAudioResample * resample, GstBuffer * buf)
 }
 
 static GstFlowReturn
-gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
+cuda_audio_resample_process (GstAudioResampleCuda * resample, GstBuffer * inbuf,
     GstBuffer * outbuf)
 {
   guint32 in_len, in_processed;
@@ -1048,7 +1056,7 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
       else
         zeros_to_push = in_len;
 
-      gst_audio_resample_push_drain (resample, zeros_to_push);
+      cuda_audio_resample_push_drain (resample, zeros_to_push);
       in_len -= zeros_to_push;
       resample->num_gap_samples += zeros_to_push;
     }
@@ -1076,7 +1084,7 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
       /* push in enough zeros to restore the filter to the right offset */
       guint num, den;
       resample->funcs->get_ratio (resample->state, &num, &den);
-      gst_audio_resample_dump_drain (resample,
+      cuda_audio_resample_dump_drain (resample,
           (resample->num_gap_samples - filt_len) % num);
     }
     resample->num_gap_samples = 0;
@@ -1089,10 +1097,10 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
     if (resample->funcs->width != resample->width) {
       /* need to convert data format for processing;  ensure we have enough
        * workspace available */
-      if (!gst_audio_resample_workspace_realloc (&resample->tmp_in,
+      if (!cuda_audio_resample_workspace_realloc (&resample->tmp_in,
               &resample->tmp_in_size, in_len * resample->channels *
               (resample->funcs->width / 8)) ||
-          !gst_audio_resample_workspace_realloc (&resample->tmp_out,
+          !cuda_audio_resample_workspace_realloc (&resample->tmp_out,
               &resample->tmp_out_size, out_len * resample->channels *
               (resample->funcs->width / 8))) {
         GST_ERROR_OBJECT (resample, "failed to allocate workspace");
@@ -1100,7 +1108,7 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
       }
 
       /* convert input */
-      gst_audio_resample_convert_buffer (resample, GST_BUFFER_DATA (inbuf),
+      cuda_audio_resample_convert_buffer (resample, GST_BUFFER_DATA (inbuf),
           resample->tmp_in, in_len, FALSE);
 
       /* process */
@@ -1108,7 +1116,7 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
           resample->tmp_in, &in_processed, resample->tmp_out, &out_processed);
 
       /* convert output */
-      gst_audio_resample_convert_buffer (resample, resample->tmp_out,
+      cuda_audio_resample_convert_buffer (resample, resample->tmp_out,
           GST_BUFFER_DATA (outbuf), out_processed, TRUE);
     } else {
       /* no format conversion required;  process */
@@ -1169,30 +1177,26 @@ gst_audio_resample_process (GstAudioResample * resample, GstBuffer * inbuf,
       GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
       GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
 
-  if (out_processed == 0) {
-    GST_DEBUG_OBJECT (resample, "buffer dropped");
-    return GST_BASE_TRANSFORM_FLOW_DROPPED;
-  }
   return GST_FLOW_OK;
 }
 
 static GstFlowReturn
-gst_audio_resample_transform (GstBaseTransform * base, GstBuffer * inbuf,
+cuda_audio_resample_transform (GstBaseTransform * base, GstBuffer * inbuf,
     GstBuffer * outbuf)
 {
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (base);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (base);
   gulong size;
   GstFlowReturn ret;
 
   if (resample->state == NULL) {
     if (G_UNLIKELY (!(resample->state =
-                gst_audio_resample_init_state (resample, resample->width,
+                cuda_audio_resample_init_state (resample, resample->width,
                     resample->channels, resample->inrate, resample->outrate,
                     resample->quality, resample->fp))))
       return GST_FLOW_ERROR;
 
     resample->funcs =
-        gst_audio_resample_get_funcs (resample->width, resample->fp);
+        cuda_audio_resample_get_funcs (resample->width, resample->fp, resample->inrate, resample->outrate);
   }
 
   size = GST_BUFFER_SIZE (inbuf);
@@ -1207,8 +1211,8 @@ gst_audio_resample_transform (GstBaseTransform * base, GstBuffer * inbuf,
   /* check for timestamp discontinuities;  flush/reset if needed, and set
    * flag to resync timestamp and offset counters and send event
    * downstream */
-  if (G_UNLIKELY (gst_audio_resample_check_discont (resample, inbuf))) {
-    gst_audio_resample_reset_state (resample);
+  if (G_UNLIKELY (cuda_audio_resample_check_discont (resample, inbuf))) {
+    cuda_audio_resample_reset_state (resample);
     resample->need_discont = TRUE;
   }
 
@@ -1244,7 +1248,7 @@ gst_audio_resample_transform (GstBaseTransform * base, GstBuffer * inbuf,
     resample->need_discont = FALSE;
   }
 
-  ret = gst_audio_resample_process (resample, inbuf, outbuf);
+  ret = cuda_audio_resample_process (resample, inbuf, outbuf);
   if (G_UNLIKELY (ret != GST_FLOW_OK))
     return ret;
 
@@ -1262,11 +1266,15 @@ gst_audio_resample_transform (GstBaseTransform * base, GstBuffer * inbuf,
 }
 
 static gboolean
-gst_audio_resample_query (GstPad * pad, GstQuery * query)
+cuda_audio_resample_query (GstPad * pad, GstQuery * query)
 {
-  GstAudioResample *resample = GST_AUDIO_RESAMPLE (gst_pad_get_parent (pad));
-  GstBaseTransform *trans = GST_BASE_TRANSFORM (resample);
+  GstAudioResampleCuda *resample = CUDA_AUDIO_RESAMPLE (gst_pad_get_parent (pad));
+  GstBaseTransform *trans;
   gboolean res = TRUE;
+  if (G_UNLIKELY (resample == NULL))
+    return FALSE;
+
+  trans = GST_BASE_TRANSFORM (resample);
 
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_LATENCY:
@@ -1328,7 +1336,7 @@ gst_audio_resample_query (GstPad * pad, GstQuery * query)
 }
 
 static const GstQueryType *
-gst_audio_resample_query_type (GstPad * pad)
+cuda_audio_resample_query_type (GstPad * pad)
 {
   static const GstQueryType types[] = {
     GST_QUERY_LATENCY,
@@ -1339,12 +1347,12 @@ gst_audio_resample_query_type (GstPad * pad)
 }
 
 static void
-gst_audio_resample_set_property (GObject * object, guint prop_id,
+cuda_audio_resample_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstAudioResample *resample;
+  GstAudioResampleCuda *resample;
 
-  resample = GST_AUDIO_RESAMPLE (object);
+  resample = CUDA_AUDIO_RESAMPLE (object);
 
   switch (prop_id) {
     case PROP_QUALITY:
@@ -1352,7 +1360,7 @@ gst_audio_resample_set_property (GObject * object, guint prop_id,
       resample->quality = g_value_get_int (value);
       GST_DEBUG_OBJECT (resample, "new quality %d", resample->quality);
 
-      gst_audio_resample_update_state (resample, resample->width,
+      cuda_audio_resample_update_state (resample, resample->width,
           resample->channels, resample->inrate, resample->outrate,
           resample->quality, resample->fp);
       GST_BASE_TRANSFORM_UNLOCK (resample);
@@ -1386,7 +1394,7 @@ gst_audio_resample_set_property (GObject * object, guint prop_id,
 
       GST_DEBUG_OBJECT (resample, "new quality %d", resample->quality);
 
-      gst_audio_resample_update_state (resample, resample->width,
+      cuda_audio_resample_update_state (resample, resample->width,
           resample->channels, resample->inrate, resample->outrate,
           resample->quality, resample->fp);
       GST_BASE_TRANSFORM_UNLOCK (resample);
@@ -1399,12 +1407,12 @@ gst_audio_resample_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_audio_resample_get_property (GObject * object, guint prop_id,
+cuda_audio_resample_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstAudioResample *resample;
+  GstAudioResampleCuda *resample;
 
-  resample = GST_AUDIO_RESAMPLE (object);
+  resample = CUDA_AUDIO_RESAMPLE (object);
 
   switch (prop_id) {
     case PROP_QUALITY:
@@ -1454,119 +1462,7 @@ gst_audio_resample_get_property (GObject * object, guint prop_id,
 }
 
 /* FIXME: should have a benchmark fallback for the case where orc is disabled */
-#if defined(AUDIORESAMPLE_FORMAT_AUTO) && !defined(DISABLE_ORC)
 
-#define BENCHMARK_SIZE 512
-
-static gboolean
-_benchmark_int_float (SpeexResamplerState * st)
-{
-  gint16 in[BENCHMARK_SIZE] = { 0, }, out[BENCHMARK_SIZE / 2];
-  gfloat in_tmp[BENCHMARK_SIZE], out_tmp[BENCHMARK_SIZE / 2];
-  gint i;
-  guint32 inlen = BENCHMARK_SIZE, outlen = BENCHMARK_SIZE / 2;
-
-  for (i = 0; i < BENCHMARK_SIZE; i++) {
-    gfloat tmp = in[i];
-    in_tmp[i] = tmp / G_MAXINT16;
-  }
-
-  resample_float_resampler_process_interleaved_float (st,
-      (const guint8 *) in_tmp, &inlen, (guint8 *) out_tmp, &outlen);
-
-  if (outlen == 0) {
-    GST_ERROR ("Failed to use float resampler");
-    return FALSE;
-  }
-
-  for (i = 0; i < outlen; i++) {
-    gfloat tmp = out_tmp[i];
-    out[i] = CLAMP (tmp * G_MAXINT16 + 0.5, G_MININT16, G_MAXINT16);
-  }
-
-  return TRUE;
-}
-
-static gboolean
-_benchmark_int_int (SpeexResamplerState * st)
-{
-  gint16 in[BENCHMARK_SIZE] = { 0, }, out[BENCHMARK_SIZE / 2];
-  guint32 inlen = BENCHMARK_SIZE, outlen = BENCHMARK_SIZE / 2;
-
-  resample_int_resampler_process_interleaved_int (st, (const guint8 *) in,
-      &inlen, (guint8 *) out, &outlen);
-
-  if (outlen == 0) {
-    GST_ERROR ("Failed to use int resampler");
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-static gboolean
-_benchmark_integer_resampling (void)
-{
-  OrcProfile a, b;
-  gdouble av, bv;
-  SpeexResamplerState *sta, *stb;
-  int i;
-
-  orc_profile_init (&a);
-  orc_profile_init (&b);
-
-  sta = resample_float_resampler_init (1, 48000, 24000, 4, NULL);
-  if (sta == NULL) {
-    GST_ERROR ("Failed to create float resampler state");
-    return FALSE;
-  }
-
-  stb = resample_int_resampler_init (1, 48000, 24000, 4, NULL);
-  if (stb == NULL) {
-    resample_float_resampler_destroy (sta);
-    GST_ERROR ("Failed to create int resampler state");
-    return FALSE;
-  }
-
-  /* Benchmark */
-  for (i = 0; i < 10; i++) {
-    orc_profile_start (&a);
-    if (!_benchmark_int_float (sta))
-      goto error;
-    orc_profile_stop (&a);
-  }
-
-  /* Benchmark */
-  for (i = 0; i < 10; i++) {
-    orc_profile_start (&b);
-    if (!_benchmark_int_int (stb))
-      goto error;
-    orc_profile_stop (&b);
-  }
-
-  /* Handle results */
-  orc_profile_get_ave_std (&a, &av, NULL);
-  orc_profile_get_ave_std (&b, &bv, NULL);
-
-  /* Remember benchmark result in global variable */
-  gst_audio_resample_use_int = (av > bv);
-  resample_float_resampler_destroy (sta);
-  resample_int_resampler_destroy (stb);
-
-  if (av > bv)
-    GST_INFO ("Using integer resampler if appropiate: %lf < %lf", bv, av);
-  else
-    GST_INFO ("Using float resampler for everything: %lf <= %lf", av, bv);
-
-  return TRUE;
-
-error:
-  resample_float_resampler_destroy (sta);
-  resample_int_resampler_destroy (stb);
-
-  return FALSE;
-}
-#endif /* defined(AUDIORESAMPLE_FORMAT_AUTO) && !defined(DISABLE_ORC) */
 #if 0
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -1600,3 +1496,5 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     "Resamples audio", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME,
     GST_PACKAGE_ORIGIN);
 #endif
+
+// delete all ORC-related functions

@@ -45,7 +45,7 @@
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstlal.h>
-#include <iirfilter/gstlal_iirbankCuda.h>
+#include <iirfilter/cuda_gstlal_iirbank.h>
 
 /*
  * stuff from FFTW and GSL
@@ -61,7 +61,7 @@
  * functions from cuda file
  */
 
-#include <iirfilter/cuda_iirbank.h>
+#include <iirfilter/iirfilter_kernel.h>
 
 /*
  * ============================================================================
