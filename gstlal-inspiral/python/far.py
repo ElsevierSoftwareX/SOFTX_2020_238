@@ -1050,7 +1050,7 @@ class RankingData(object):
 		# propogate knowledge of the background event rates through
 		# to the ranking statistic distributions.  this information
 		# is required so that when adding ranking statistic PDFs in
-		# ._compute_combined_ratess() or our .__iadd__() method
+		# ._compute_combined_rates() or our .__iadd__() method
 		# they are combined with the correct relative weights.
 		# what we're doing here is making the total event count in
 		# each background ranking statistic array equal to the
