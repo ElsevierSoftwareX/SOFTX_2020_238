@@ -496,11 +496,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if verbose:
 			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions..."
 		for instrument in segs:
+			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
-				progressbar = progress.ProgressBar(instrument)
+				progressbar = progress.ProgressBar(instrument, max = len(binarr.bins[0]))
 			else:
 				progressbar = None
-			binarr = self.background_rates["%s_snr_chi" % instrument]
 
 			# will need to normalize results so need new
 			# storage
@@ -512,13 +512,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
+			for snr in snrs:
 				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
 				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
 				for chi2_over_snr2 in chi2_over_snr2s:
 					new_binarr[snr, chi2_over_snr2] += p
 				if progressbar is not None:
-					progressbar.update((i + 1.0) / len(snrs))
+					progressbar.increment()
 			# normalize to the requested count
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
@@ -532,11 +532,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions..."
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for instrument in instruments:
+			binarr = target_dict["%s_snr_chi" % instrument]
 			if verbose:
-				progressbar = progress.ProgressBar(instrument)
+				progressbar = progress.ProgressBar(instrument, max = len(binarr.bins[0]))
 			else:
 				progressbar = None
-			binarr = target_dict["%s_snr_chi" % instrument]
 
 			# will need to normalize results so need new
 			# storage
@@ -549,7 +549,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chi2_over_snr2s = new_binarr.bins[1].centres()
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
+			for snr in snrs:
 				for chi2_over_snr2 in chi2_over_snr2s:
 					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
 					dist = 0
@@ -562,7 +562,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					if numpy.isfinite(dist):
 						new_binarr[snr, chi2_over_snr2] += dist
 				if progressbar is not None:
-					progressbar.update((i + 1.0) / len(snrs))
+					progressbar.increment()
 			# normalize to the requested count
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
@@ -781,7 +781,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 	psi = gmst = 0.0
 
 	if verbose:
-		progressbar = progress.ProgressBar("%s SNR joint PDF" % ", ".join(names))
+		progressbar = progress.ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
 	else:
 		progressbar = None
 
@@ -835,7 +835,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 			pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
 
 		if progressbar is not None:
-			progressbar.update((i + 1.) / n_samples)
+			progressbar.increment()
 
 	# number of bins per unit in SNR in the binnings.  For use as the
 	# width parameter in the filtering.
@@ -1144,12 +1144,12 @@ class RankingData(object):
 			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
 			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
 			if progressbar is not None:
-				progressbar.next()
+				progressbar.increment()
 		for key, binnedarray in self.signal_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
 			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
 			if progressbar is not None:
-				progressbar.next()
+				progressbar.increment()
 
 	def __iadd__(self, other):
 		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
@@ -1475,7 +1475,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 
 	pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
 	if progressbar is not None:
-		progressbar.next(delta = n_burn)
+		progressbar.increment(delta = n_burn)
 	if sampler.acceptance_fraction.min() < 0.4:
 		print >>sys.stderr, "\nwarning:  low burn-in acceptance fraction (min = %g)" % sampler.acceptance_fraction.min()
 
@@ -1489,7 +1489,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		for coords in coordslist:
 			yield coords
 		if progressbar is not None:
-			progressbar.next()
+			progressbar.increment()
 	if sampler.acceptance_fraction.min() < 0.5:
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
 
@@ -1581,7 +1581,7 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, progressbar = Non
 	else:
 		import pickle
 		samples = pickle.load(open("rate_posterior_samples.pickle"))
-		progressbar.next(delta = progressbar.max)
+		progressbar.increment(delta = progressbar.max)
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
