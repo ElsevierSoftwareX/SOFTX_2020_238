@@ -343,6 +343,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# FIXME:  is the default distance tolerance appropriate?
 		#
+		# FIXME:  if horizon distance discrepancy is too large,
+		# consider a fast-path that just returns an all-0 array
+		#
 
 		horizon_distance_norm = max(instrument_horizon_distance_mapping.values())
 		key = frozenset((instrument, math.exp(math.floor(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance)) for instrument, horizon_distance in instrument_horizon_distance_mapping.items())
@@ -375,6 +378,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@staticmethod
 	def coinc_params(events, offsetvector):
+		# FIXME:  extract horizon distances from sngl_inspiral
+		# triggers and add an instrument-->horizon distance mapping
+		# to the params dictionary
 		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		# don't allow both H1 and H2 to participate in the same
 		# coinc.  if both have participated favour H1
@@ -397,10 +403,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# (instrument, snr) pairs sorted alphabetically by instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
+		# FIXME:  get instrument-->horizon distance mapping from
+		# params
 		snr_pdf = self.get_snr_joint_pdf(dict((instrument, self.horizon_distances[instrument]) for instrument, rho in snrs))
 		# evaluate it (snrs are alphabetical by instrument)
 		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
+		# FIXME:  P(instruments | signal) needs to depend on
+		# horizon distances.  here we're assuming whatever
+		# add_foreground_prior() has set the probabilities to is
+		# OK.  we probably need to cache these and save them in the
+		# XML file, too, like P(snrs | signal, instruments)
 		for name, value in params.items():
 			P *= self.injection_pdf_interp[name](*value)
 		return P
