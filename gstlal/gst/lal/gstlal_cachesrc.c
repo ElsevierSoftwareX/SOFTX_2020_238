@@ -811,7 +811,6 @@ static void finalize(GObject *object)
 
 static void gstlal_cachesrc_base_init(gpointer klass)
 {
-	/* no-op */
 }
 
 

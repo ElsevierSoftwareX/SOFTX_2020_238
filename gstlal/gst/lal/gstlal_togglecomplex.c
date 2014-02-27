@@ -303,8 +303,18 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 
 static void gstlal_togglecomplex_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
+{
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -320,16 +330,6 @@ static void gstlal_togglecomplex_base_init(gpointer gclass)
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-}
-
-
-/*
- * class_init()
- */
-
-
-static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
-{
 }
 
 

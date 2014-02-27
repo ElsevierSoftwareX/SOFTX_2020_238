@@ -654,25 +654,6 @@ static void get_property(GObject * object, enum property id, GValue * value,
 
 static void gst_tsvenc_base_init(gpointer klass)
 {
-  GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
-  GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
-
-  gst_element_class_set_details_simple(element_class,
-      "tab-separated values encoder",
-      "Codec/Encoder/Audio",
-      "Converts audio time-series to tab-separated ascii text, a format compatible with most plotting utilities.",
-      "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>");
-
-  gst_element_class_add_pad_template(element_class,
-      gst_static_pad_template_get(&src_factory));
-  gst_element_class_add_pad_template(element_class,
-      gst_static_pad_template_get(&sink_factory));
-
-  transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-  transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-  transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-  transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-  transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 }
 
 
@@ -683,10 +664,23 @@ static void gst_tsvenc_base_init(gpointer klass)
 
 static void gst_tsvenc_class_init(GstTSVEncClass * klass)
 {
+  GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+  GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+
+  gst_element_class_set_details_simple(element_class,
+      "tab-separated values encoder",
+      "Codec/Encoder/Audio",
+      "Converts audio time-series to tab-separated ascii text, a format compatible with most plotting utilities.",
+      "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>");
 
   gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
   gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+
+  gst_element_class_add_pad_template(element_class,
+      gst_static_pad_template_get(&src_factory));
+  gst_element_class_add_pad_template(element_class,
+      gst_static_pad_template_get(&sink_factory));
 
   g_object_class_install_property(gobject_class,
       ARG_START_TIME,
@@ -704,6 +698,12 @@ static void gst_tsvenc_class_init(GstTSVEncClass * klass)
           0, G_MAXUINT64, DEFAULT_STOP_TIME,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
       );
+
+  transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+  transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+  transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+  transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+  transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 }
 
 

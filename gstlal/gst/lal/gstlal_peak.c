@@ -407,7 +407,18 @@ static void finalize(GObject *object)
 
 static void base_init(gpointer class)
 {
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void class_init(gpointer class, gpointer class_data)
+{
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -416,6 +427,12 @@ static void base_init(gpointer class)
 		"Find peaks in a time series every n samples",
 		"Chad Hanna <chad.hanna@ligo.org>"
 	);
+
+	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -435,25 +452,6 @@ static void base_init(gpointer class)
 			gst_caps_from_string(CAPS)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer class, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,

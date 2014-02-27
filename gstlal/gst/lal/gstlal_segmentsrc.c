@@ -587,10 +587,6 @@ static gboolean set_caps(GstBaseSrc *src, GstCaps *caps)
 
 static void gstlal_segmentsrc_base_init(gpointer gclass)
 {
-    GstElementClass     *element_class = GST_ELEMENT_CLASS(gclass);
-
-    gst_element_class_set_details_simple(element_class, "List of on times and off times", "Source/Audio", "The output is a buffer of boolean values specifying when a list of segments are on and off.", "Collin Capano <collin.capano@ligo.org>");
-    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 }
 
 
@@ -600,11 +596,17 @@ static void gstlal_segmentsrc_base_init(gpointer gclass)
 
 static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 {
-    GObjectClass        *gobject_class = G_OBJECT_CLASS(klass);
     GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
+    GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+    GObjectClass    *gobject_class = G_OBJECT_CLASS(klass);
+
+    gst_element_class_set_details_simple(element_class, "List of on times and off times", "Source/Audio", "The output is a buffer of boolean values specifying when a list of segments are on and off.", "Collin Capano <collin.capano@ligo.org>");
+
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
     gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+    gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 
     g_object_class_install_property(
         gobject_class,

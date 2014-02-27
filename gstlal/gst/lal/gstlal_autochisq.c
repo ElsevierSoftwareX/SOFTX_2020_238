@@ -1010,28 +1010,6 @@ static void finalize(GObject *object)
 
 static void gstlal_autochisq_base_init(gpointer gclass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
-
-	gst_element_class_set_details_simple(
-		element_class,
-		"Autocorrelation \\chi^{2}",
-		"Filter/Audio",
-		"Computes the chisquared time series from a filter's autocorrelation",
-		"Kipp Cannon <kipp.cannon@ligo.org>, Mireia Crispin Ortuzar <mcrispin@caltech.edu>, Chad Hanna <chad.hanna@ligo.org>"
-	);
-
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
-	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
-
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
-	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
 }
 
 
@@ -1042,14 +1020,22 @@ static void gstlal_autochisq_base_init(gpointer gclass)
 
 static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 {
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+
+	gst_element_class_set_details_simple(
+		element_class,
+		"Autocorrelation \\chi^{2}",
+		"Filter/Audio",
+		"Computes the chisquared time series from a filter's autocorrelation",
+		"Kipp Cannon <kipp.cannon@ligo.org>, Mireia Crispin Ortuzar <mcrispin@caltech.edu>, Chad Hanna <chad.hanna@ligo.org>"
+	);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1136,6 +1122,20 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 		1,
 		G_TYPE_INT
 	);
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
+	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
+
+	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 }
 
 

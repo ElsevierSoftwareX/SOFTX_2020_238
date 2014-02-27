@@ -278,15 +278,24 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * base_init()
  */
 
 
 static void base_init(gpointer class)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void class_init(gpointer klass, gpointer class_data)
+{
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -295,6 +304,12 @@ static void base_init(gpointer class)
 		"Fix incorrectly-set discontinuity flags",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
+
+	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -318,25 +333,6 @@ static void base_init(gpointer class)
 			)
 		)
 	);
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer klass, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
