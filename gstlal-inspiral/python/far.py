@@ -389,14 +389,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
 		return params
 
-	def P_noise(self, params):
-		if params is None:
-			return None
-		P = 1.0
-		for name, value in params.items():
-			P *= self.background_pdf_interp[name](*value)
-		return P
-
 	def P_signal(self, params):
 		if params is None:
 			return None
