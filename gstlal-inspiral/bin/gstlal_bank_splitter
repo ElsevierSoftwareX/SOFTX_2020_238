@@ -27,10 +27,14 @@ from optparse import OptionParser
 from pylal import spawaveform
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import templates
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
 
 
 ## @file gstlal_bank_splitter
@@ -111,10 +115,10 @@ for filename in filenames:
 	options_params=[("--filename","string",filename),("--output_path","string", options.output_path), ("--n","int",options.n),("--add-f-final","string",options.add_f_final),("--max-f-final","float",options.max_f_final)]
 
 
-	xmldoc=utils.load_filename(filename, verbose = options.verbose)
-	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
-	tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(options.bank_program)
+	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
+	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+	process_params_table = lsctables.ProcessParamsTable.get_table(xmldoc)
+	tmpltbank_process_ids = lsctables.ProcessTable.get_table(xmldoc).get_ids_by_program(options.bank_program)
 
 	if options.add_f_final:
 		for row in process_params_table:
@@ -171,5 +175,5 @@ for filename in filenames:
 		for rows in group_templates(sample_rates[r], options.n, options.overlap):
 			sngl_inspiral_table_split[:] = rows
 			output = os.path.join(options.output_path, "%04d-%s_split_bank-%s" % (count, options.instrument, os.path.basename(filename)))
-			utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
+			ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 			count += 1
