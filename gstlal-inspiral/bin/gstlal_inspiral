@@ -437,7 +437,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "initializing output document ..."
 	output = inspiral.Data(
-		filename = options.output or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+		filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 		process_params = process_params,
 		pipeline = pipeline,
 		instruments = set(detectors.channel_dict),
