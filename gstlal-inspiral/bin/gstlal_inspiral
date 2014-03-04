@@ -378,9 +378,9 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	# don't make this function have a reference to bank
 	if options.data_source in ("lvshm", "framexmit"):
 		@bottle.route("/bank.txt")
-		def get_filter_length_and_chirpmass(banks = banks):
-			bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
-			yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
+		def get_filter_length_and_chirpmass(filter_length = banks.values()[0][0].filter_length, mchirp = banks.values()[0][0].sngl_inspiral_table[0].mchirp):
+			#FIXME maybe shouldn't just take the first ones
+			yield '%.14g %.4g %.4g' % (float(now()), filter_length, mchirp)
 
 
 	#
@@ -538,6 +538,16 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
 
 
+	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError, "pipeline could not be set to NULL"
+
+	# prevent memory leaks in this loop
+	del handler.pipeline
+	del handler.mainloop
+	del handler.dataclass
+	del handler
+
+
 	#
 	# Cleanup template bank temp files
 	#
@@ -549,9 +559,6 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 				print >> sys.stderr, "removing file: ", bank.template_bank_filename
 			os.remove(bank.template_bank_filename)
 
-	del handler
-	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline could not be set to NULL"
 
 #
 # Cleanup local caches
