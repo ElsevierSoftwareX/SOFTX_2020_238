@@ -99,6 +99,7 @@ class Handler(object):
 
 	def __del__(self):
 		self.bus.remove_signal_watch()
+		del self.bus
 
 
 class OneTimeSignalHandler(object):
