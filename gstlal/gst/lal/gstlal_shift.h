@@ -58,6 +58,7 @@ struct _GSTLALShift {
 	GstPad *srcpad;
 
 	gint64 shift;
+	gboolean have_discont;
 };
 
 

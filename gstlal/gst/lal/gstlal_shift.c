@@ -79,12 +79,17 @@ enum property {
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALShift *element = GSTLAL_SHIFT(object);
+	gint64 newshift = 0;
 
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_SHIFT:
-		element->shift = g_value_get_int64(value);
+		newshift = g_value_get_int64(value);
+		if (newshift != element->shift) {
+			element->shift = newshift;
+			element->have_discont = TRUE;
+		}
 		break;
 
 	default:
@@ -340,6 +345,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	else
 		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %d", GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
 
+	/* Finally apply the discont flag if a new shift was detected */
+	if (element->have_discont) {
+		GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		element->have_discont = FALSE;
+	}
+
 	result = gst_pad_push(element->srcpad, sinkbuf);
 	if(G_UNLIKELY(result != GST_FLOW_OK))
 		GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
@@ -511,6 +522,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->shift = 0;
+	element->have_discont = FALSE;
 }
 
 
