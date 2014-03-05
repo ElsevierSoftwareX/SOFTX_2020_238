@@ -90,7 +90,7 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 		control = pipeparts.mknxydumpsinktee(pipeline, pipeparts.mkqueue(pipeline, control), control_dump_filename)
 		control = pipeparts.mkqueue(pipeline, control)
 	return pipeparts.mktogglecomplex(pipeline, pipeparts.mkgate(pipeline, pipeparts.mktogglecomplex(pipeline, src), control = control, threshold = gap_threshold))
-	
+
 
 #
 # =============================================================================
