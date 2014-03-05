@@ -192,8 +192,6 @@ class lvalert_listen_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		# these jobs gracefully shutdown with SIGINT
-		self.add_condor_cmd("want_graceful_removal", "True")
-		self.add_condor_cmd("kill_sig", "15")
 		self.tag_base = tag_base
 		self.set_sub_file(tag_base+'.sub')
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
