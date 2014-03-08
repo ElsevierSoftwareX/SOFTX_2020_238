@@ -4,6 +4,7 @@ plugin_LTLIBRARIES = libgstlalugly.la
 
 libgstlalugly_la_SOURCES = \
 	gstlalugly.c \
+	audioratefaker.h audioratefaker.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	gstlal_mean.h gstlal_mean.c \
 	gstlal_multiplier.h gstlal_multiplier.c \
