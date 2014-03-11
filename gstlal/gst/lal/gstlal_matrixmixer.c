@@ -220,8 +220,11 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	 */
 
 	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-	if(!length)
+	if(!length) {
+		g_assert_cmpuint(GST_BUFFER_SIZE(inbuf), ==, 0);
 		return GST_FLOW_OK;
+	}
+	g_assert_cmpuint(GST_BUFFER_SIZE(inbuf) % length, ==, 0);
 
 	/*
 	 * Wrap the input and output buffers in GSL matrix views, then mix
