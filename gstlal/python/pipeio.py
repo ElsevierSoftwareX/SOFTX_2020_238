@@ -25,6 +25,16 @@
 
 
 import numpy
+import sys
+
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 
 from pylal import datatypes as laltypes
@@ -114,6 +124,45 @@ def numpy_dtype_from_caps(caps):
 	raise ValueError(name)
 
 
+def caps_from_numpy_dtype(dtype):
+	if dtype.char == 'f':
+		caps = gst.Caps("audio/x-raw-float, width=32")
+	elif dtype.char == 'd':
+		caps = gst.Caps("audio/x-raw-float, width=64")
+	elif dtype.char == 'b':
+		caps = gst.Caps("audio/x-raw-int, width=8, signed=true")
+	elif dtype.char == 'B':
+		caps = gst.Caps("audio/x-raw-int, width=8, signed=false")
+	elif dtype.char == 'h':
+		caps = gst.Caps("audio/x-raw-int, width=16, signed=true")
+	elif dtype.char == 'H':
+		caps = gst.Caps("audio/x-raw-int, width=16, signed=false")
+	elif dtype.char == 'i':
+		caps = gst.Caps("audio/x-raw-int, width=32, signed=true")
+	elif dtype.char == 'I':
+		caps = gst.Caps("audio/x-raw-int, width=32, signed=false")
+	elif dtype.char == 'l':
+		caps = gst.Caps("audio/x-raw-int, width=64, signed=true")
+	elif dtype.char == 'L':
+		caps = gst.Caps("audio/x-raw-int, width=64, signed=false")
+	else:
+		raise ValueError(dtype)
+	caps[0]["endianness"] = {
+		"=": 1234 if sys.byteorder == "little" else 4321,
+		"<": 1234,
+		">": 4321
+	}[dtype.byteorder]
+	return caps
+
+
+def caps_from_array(arr, rate = None):
+	caps = caps_from_numpy_dtype(arr.dtype)
+	if rate is not None:
+		caps[0]["rate"] = rate
+	caps[0]["channels"] = arr.shape[1]
+	return caps
+
+
 def array_from_audio_buffer(buf):
 	channels = buf.caps[0]["channels"]
 	# FIXME:  conditional is work-around for broken handling of
@@ -125,6 +174,16 @@ def array_from_audio_buffer(buf):
 		a = numpy.array((), dtype = numpy_dtype_from_caps(buf.caps))
 	a.shape = (len(a) // channels, channels)
 	return a
+
+
+def audio_buffer_from_array(arr, timestamp, offset, rate):
+	buf = gst.Buffer(arr.data)
+	buf.caps = caps_from_array(arr, rate = rate)
+	buf.timestamp = timestamp
+	buf.duration = gst.SECOND * arr.shape[0]
+	buf.offset = offset
+	buf.offset_end = offset + arr.shape[0]
+	return buf
 
 
 #
