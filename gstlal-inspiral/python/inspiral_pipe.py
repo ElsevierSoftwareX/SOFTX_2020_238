@@ -16,7 +16,7 @@ def which(prog):
 	return out
 
 def condor_scratch_space():
-	return "$ENV(_CONDOR_SCRATCH_DIR)"
+	return "_CONDOR_SCRATCH_DIR"
 
 def log_path():
 	host = socket.getfqdn()
