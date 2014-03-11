@@ -282,6 +282,10 @@ def parse_command_line():
 		# that request a higher rate an assertion would fail later
 		# anyway.  Replace with a function to get max sample rate from
 		# provided svd banks.
+		# FIXME shouldn't use tempfile.gettempdir() directly, use
+		# _CONDOR_SCRATCH_DIR like glue??
+		# FIXME, note that at least for now condor sets TMPDIR to the
+		# run scratch space so this *will* work properly
 		detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), sample_rate = 4096, verbose = options.verbose)
 		for cacheentry in detectors.local_cache_list:
 			print >>f, str(cacheentry)
