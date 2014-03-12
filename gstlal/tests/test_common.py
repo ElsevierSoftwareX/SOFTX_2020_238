@@ -36,6 +36,7 @@ import gst
 
 
 from gstlal import pipeparts
+from gstlal import pipeio
 from gstlal import simplehandler
 
 
@@ -104,8 +105,8 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = gobject.MainLoop()
-	pipeline = gst.Pipeline(name)
-	handler = simplehandler.Handler(mainloop, pipelinefunc(pipeline, name, **pipelinefunc_kwargs))
+	pipeline = pipelinefunc(gst.Pipeline(name), name, **pipelinefunc_kwargs)
+	handler = simplehandler.Handler(mainloop, pipeline)
 	if segment is not None:
 		if pipeline.set_state(gst.STATE_PAUSED) == gst.STATE_CHANGE_FAILURE:
 			raise RuntimeError("pipeline failed to enter PLAYING state")
@@ -113,3 +114,38 @@ def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	mainloop.run()
+
+
+#
+# =============================================================================
+#
+#                        Push Arrays Through an Element
+#
+# =============================================================================
+#
+
+
+def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
+	input_arrays = list(input_arrays)	# so we can modify it
+	output_arrays = []
+
+	pipeline = gst.Pipeline(name)
+
+	head = pipeparts.mkgeneric(pipeline, None, "appsrc", caps = pipeio.caps_from_array(input_arrays[0], rate = rate))
+	def need_data(elem, arg, (input_arrays, rate)):
+		if input_arrays:
+			elem.emit("push-buffer", pipeio.audio_buffer_from_array(input_arrays.pop(0), 0, 0, rate))
+		else:
+			elem.emit("end-of-stream")
+	head.connect("need-data", need_data, (input_arrays, rate))
+
+	head = elemfunc(pipeline, head, **elemfunc_kwargs)
+
+	head = pipeparts.mkappsink(pipeline, head)
+	def appsink_get_array(elem, output_arrays):
+		output_arrays.append(pipeio.array_from_audio_buffer(elem.get_last_buffer()))
+	head.connect("new-buffer", appsink_get_array, output_arrays)
+
+	build_and_run((lambda *args, **kwargs: pipeline), name)
+
+	return output_arrays
