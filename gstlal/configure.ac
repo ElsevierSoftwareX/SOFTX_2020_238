@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	python/Makefile \
 	python/pipeparts/Makefile \
 	gst/Makefile \
+	gst/debug/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
