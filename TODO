@@ -57,6 +57,7 @@ Immediate development tasks in no particular order
 * complete port to swig bindings (long term, divest ourselves of pylal).
 * review readiness:  remove dead code, create tests for elements, create validation tests for applications.
 * incorporate rate estimation code into pipeline (have student working on this)
+* show Jolien how to add an element to the gstlaldebug plugin
 
 Completed tasks
 
@@ -76,3 +77,7 @@ Completed tasks
   for inter-instrument correlations in signal parameters (my student's work
   on implementing the rate estimation code might have turned up some code
   that'll do a good brute-force job of this) (done 2013-08-29)
+* create a gstlal debug plugin
+* create matrix mixer unit test with non-identity mix matrix
+* send a pipeline to reviewers demoing the use of the whitener with music or other streams
+* explain to Florent how to implement a whitener test using a different spectrum
