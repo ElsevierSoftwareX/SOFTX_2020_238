@@ -78,6 +78,25 @@ def matrixmixer_test_01(pipeline, name, width, channels):
 
 
 #
+# test the transformation of a specific buffer with a specific matrix
+#
+
+
+def matrixmixer_test_02(name, dtype, samples, channels_in, channels_out):
+	input_array = numpy.random.random((samples, channels_in)).astype(dtype)
+	# element always ingests mix matrix as double-precision floats
+	mix = numpy.random.random((channels_in, channels_out)).astype("float64")
+	# element will cast mix matrix to the appropriate type internally
+	# for the matrix-matrix multiply
+	output_reference = numpy.mat(input_array) * mix.astype(dtype)
+
+	output_array, = test_common.transform_arrays([input_array], pipeparts.mkmatrixmixer, name, matrix = mix)
+
+	if (output_array != output_reference).any():
+		raise ValueError("incorrect output:  expected %s, got %s" % (output_reference, output_array))
+
+
+#
 # =============================================================================
 #
 #                                     Main
@@ -87,11 +106,14 @@ def matrixmixer_test_01(pipeline, name, width, channels):
 
 
 test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01a", width = 64, channels = 1)
-test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01b", width = 64, channels = 2)
-test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01c", width = 32, channels = 1)
-test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01d", width = 32, channels = 2)
-
 cmp_nxydumps.compare("matrixmixer_test_01a_in.dump", "matrixmixer_test_01a_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01b", width = 64, channels = 2)
 cmp_nxydumps.compare("matrixmixer_test_01b_in.dump", "matrixmixer_test_01b_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01c", width = 32, channels = 1)
 cmp_nxydumps.compare("matrixmixer_test_01c_in.dump", "matrixmixer_test_01c_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+test_common.build_and_run(matrixmixer_test_01, "matrixmixer_test_01d", width = 32, channels = 2)
 cmp_nxydumps.compare("matrixmixer_test_01d_in.dump", "matrixmixer_test_01d_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
+
+
+matrixmixer_test_02("matrixmixer_test_02a", "float64", samples = 6, channels_in = 4, channels_out = 3)
+matrixmixer_test_02("matrixmixer_test_02b", "float32", samples = 6, channels_in = 4, channels_out = 3)
