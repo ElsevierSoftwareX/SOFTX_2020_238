@@ -713,6 +713,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@staticmethod
 	def randindex(lo, hi, n = 1.):
+		if n == 1.:
+			# special case for uniform distribution
+			hi -= 1
+			rnd = random.randint
+			while 1:
+				yield rnd(lo, hi)
 		beta = lo**n / (hi**n - lo**n)
 		n = 1. / n
 		alpha = hi / (1. + beta)**n
