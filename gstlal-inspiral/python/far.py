@@ -712,9 +712,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return P
 
 	@staticmethod
-	def randindex(lo, hi, n = 0.):
-		n = 1. / (n + 1.)
-		beta = lo**(1./n) / (hi**(1./n) - lo**(1./n))
+	def randindex(lo, hi, n = 1.):
+		beta = lo**n / (hi**n - lo**n)
+		n = 1. / n
 		alpha = hi / (1. + beta)**n
 		flr = math.floor
 		rnd = random.random
@@ -731,7 +731,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		and the second is the natural logarithm (up to an arbitrary
 		constant) of the PDF from which the parameters have been drawn.
 		"""
-		snr_slope = -0.5
+		snr_slope = 0.5
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
@@ -745,7 +745,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			indexes = tuple((key, (indexgen_a(), indexgen_b())) for key, (indexgen_a, indexgen_b) in indexgen)
 			ln_volume = sum(sum(ln_dx[i] for ln_dx, i in zip(ln_dxes[key], value)) for key, value in indexes)
 			if not (isinf(ln_volume) or isnan(ln_volume)):
-				ln_P_bin = sum(log((index_snr + 1)**(snr_slope + 1.) - index_snr**(snr_slope + 1.)) for key, (index_snr, index_chisq) in indexes)
+				ln_P_bin = sum(log((index_snr + 1)**snr_slope - index_snr**snr_slope) for key, (index_snr, index_chisq) in indexes)
 				params = dict((key, tuple(centres[i] for centres, i in zip(x[key], value))) for key, value in indexes)
 				params.update(base_params)
 				yield params, ln_P_bin - ln_volume
