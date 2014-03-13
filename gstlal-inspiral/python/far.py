@@ -718,13 +718,22 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		is a two-element tuple.  The first element is the random
 		integer, the second is the natural logarithm of the
 		probability with which that integer will be chosen.
+
+		The parameter n sets the slope of the CDF (1 = uniform
+		distribution).
 		"""
 		# NOTE:  nothing requires the probabilities returned by
 		# this generator to be properly normalized, but it turns
 		# out to be trivial to achieve so we do it anyway, just in
 		# case it turns out to be helpful later.
 
-		if n == 1.:
+		if n < 0.:
+			raise ValueError("n < 0: %g" % n)
+		elif n == 0.:
+			# special case for degenerate PDF
+			while 1:
+				yield lo, 0.
+		elif n == 1.:
 			# special case for uniform distribution
 			lnP = math.log(1. / (hi - lo))
 			hi -= 1
@@ -746,6 +755,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		rnd = random.random
 		while 1:
 			index = int(flr(alpha * (rnd() + beta)**n))
+			# the tuple look-up also provides the range safety
+			# check on index
 			yield index, lnP[index - lo]
 
 	def random_params(self, instruments):
