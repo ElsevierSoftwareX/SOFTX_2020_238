@@ -713,19 +713,40 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@staticmethod
 	def randindex(lo, hi, n = 1.):
+		"""
+		Yields integers in the range [lo, hi).  Each return value
+		is a two-element tuple.  The first element is the random
+		integer, the second is the natural logarithm of the
+		probability with which that integer will be chosen.
+		"""
+		# NOTE:  nothing requires the probabilities returned by
+		# this generator to be properly normalized, but it turns
+		# out to be trivial to achieve so we do it anyway, just in
+		# case it turns out to be helpful later.
+
 		if n == 1.:
 			# special case for uniform distribution
+			lnP = math.log(1. / (hi - lo))
 			hi -= 1
 			rnd = random.randint
 			while 1:
-				yield rnd(lo, hi)
+				yield rnd(lo, hi), lnP
+
+		# CDF evaluated at index boundaries
+		lnP = numpy.arange(lo, hi + 1, dtype = "double")**n
+		lnP -= lnP[0]
+		lnP /= lnP[-1]
+		# differences give probabilities
+		lnP = tuple(numpy.log(lnP[1:] - lnP[:-1]))
+
 		beta = lo**n / (hi**n - lo**n)
 		n = 1. / n
 		alpha = hi / (1. + beta)**n
 		flr = math.floor
 		rnd = random.random
 		while 1:
-			yield int(flr(alpha * (rnd() + beta)**n))
+			index = int(flr(alpha * (rnd() + beta)**n))
+			yield index, lnP[index - lo]
 
 	def random_params(self, instruments):
 		"""
@@ -746,15 +767,19 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		indexgen = tuple((key, (self.randindex(0, len(centres_a), snr_slope).next, self.randindex(0, len(centres_b)).next)) for key, (centres_a, centres_b) in x.items())
 		isinf = math.isinf
 		isnan = math.isnan
-		log = math.log
 		while 1:
 			indexes = tuple((key, (indexgen_a(), indexgen_b())) for key, (indexgen_a, indexgen_b) in indexgen)
-			ln_volume = sum(sum(ln_dx[i] for ln_dx, i in zip(ln_dxes[key], value)) for key, value in indexes)
-			if not (isinf(ln_volume) or isnan(ln_volume)):
-				ln_P_bin = sum(log((index_snr + 1)**snr_slope - index_snr**snr_slope) for key, (index_snr, index_chisq) in indexes)
-				params = dict((key, tuple(centres[i] for centres, i in zip(x[key], value))) for key, value in indexes)
+			# P(index) / (size of bin) = probability density
+			#
+			# NOTE:  I think the result of this sum is, in
+			# fact, correctly normalized, but nothing requires
+			# it to be and I've not checked that it is so the
+			# documentation doesn't promise that it is.
+			ln_P = sum(sum(ln_P_i - ln_dx[i] for ln_dx, (i, ln_P_i) in zip(ln_dxes[key], value)) for key, value in indexes)
+			if not (isinf(ln_P) or isnan(ln_P)):
+				params = dict((key, tuple(centres[i] for centres, (i, ln_P_i) in zip(x[key], value))) for key, value in indexes)
 				params.update(base_params)
-				yield params, ln_P_bin - ln_volume
+				yield params, ln_P
 
 
 #
