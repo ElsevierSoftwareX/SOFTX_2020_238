@@ -714,19 +714,27 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@staticmethod
 	def randindex(lo, hi, n = 1.):
 		"""
-		Yields integers in the range [lo, hi).  Each return value
-		is a two-element tuple.  The first element is the random
-		integer, the second is the natural logarithm of the
-		probability with which that integer will be chosen.
+		Yields integers in the range [lo, hi) where both lo and hi
+		are not negative.  Each return value is a two-element
+		tuple.  The first element is the random integer, the second
+		is the natural logarithm of the probability with which that
+		integer will be chosen.
 
-		The parameter n sets the slope of the CDF (1 = uniform
-		distribution).
+		The CDF for the distribution from which the integers are
+		drawn goes as [integer]^{n}.  Specifically, it's
+
+			CDF(x) = (x^{n} - lo^{n}) / (hi^{n} - lo^{n})
+
+		n = 1 yields a uniform distribution;  n > 1 favours
+		larger integers, n < 1 favours smaller integers.
 		"""
 		# NOTE:  nothing requires the probabilities returned by
 		# this generator to be properly normalized, but it turns
 		# out to be trivial to achieve so we do it anyway, just in
 		# case it turns out to be helpful later.
 
+		if not 0 <= lo < hi:
+			raise ValueError("require 0 <= lo < hi: lo = %d, hi = %d" % (lo, hi))
 		if n < 0.:
 			raise ValueError("n < 0: %g" % n)
 		elif n == 0.:
