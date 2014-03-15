@@ -222,42 +222,11 @@ def parse_command_line():
 	# Online specific initialization
 	# FIXME someday support other online sources
 	if options.data_source in ("lvshm", "framexmit"):
-
 		# make an "infinite" extent segment
 		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 
 		# this gets set so that if you log into a node you can find out what the job id is easily
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
-
-		#
-		# Set up a registry of the resources that this job provides
-		#
-
-		host = socket.gethostname()
-
-		# FIXME
-		# update this as bottle routes are added, can we do this automatically?
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
-		f = open(fname, "w")
-
-		@bottle.route("/registry.txt")
-		def register(fname = None):
-
-			yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks[0].keys())))
-
-			# First do urls that do not depend on instruments
-			for request in ("registry.txt", "gracedb_far_threshold.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt", "segments.xml"):
-				# FIXME don't hardcode port number
-				yield "http://%s:16953/%s\n" % (host, request)
-
-			# Then do instrument dependent urls
-			for ifo in set(svd_banks[0].keys()):
-				for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt", "psd.txt"):
-					# FIXME don't hardcode port number
-					yield "http://%s:16953/%s/%s\n" % (host, ifo, request)
-
-		[f.write(l) for l in register(fname)]
-		f.close()
 	else:
 		bad_options = []
 		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
@@ -377,16 +346,42 @@ class OneTimeSignalHandler(object):
 
 
 for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output, options.likelihood_file):
+	#
+	# create a new, empty, Bottle application and make it the current
+	# default
+	#
+
+
+	bottle.default_app.push()
+
+
+	#
+	# Set up a registry of the resources that this job provides
+	#
+
+
+	@bottle.route("/")
+	@bottle.route("/registry.txt")
+	def register(job_tag = options.job_tag, host = socket.gethostname(), instruments = set(svd_bank.keys())):
+		yield "# %s %s %s\n" % (job_tag, host, " ".join(instruments))
+		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+			if route.rule in ("/", "/registry.txt"):
+				# don't create links back to this page
+				continue
+			yield "http://%s:16953/%s\n" % (host, route.rule)
+
+
+	#
+	# parse SVD template bank and expose bank metadata
+	#
+
 
 	banks = inspiral.parse_bank_files(svd_bank, verbose = options.verbose)
 
-	# FIXME If we set up this route in the loop there is a memory leak,
-	# don't make this function have a reference to bank
-	if options.data_source in ("lvshm", "framexmit"):
-		@bottle.route("/bank.txt")
-		def get_filter_length_and_chirpmass(banks = banks):
-			bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
-			yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
+	@bottle.route("/bank.txt")
+	def get_filter_length_and_chirpmass(banks = banks):
+		bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+		yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
 
 
 	#
@@ -503,11 +498,12 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		httpservers = None
 	else:
 		#
-		# start http interface
+		# start http interface and dump URL list
 		#
 
 		# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
 		httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
+		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").writelines(register())
 
 		#
 		# setup sigint handler to shutdown pipeline.  this is how the program stops
@@ -551,7 +547,23 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 				print >> sys.stderr, "removing file: ", bank.template_bank_filename
 			os.remove(bank.template_bank_filename)
 
+
+	#
+	# Shutdown the web interface servers and garbage collect the Bottle
+	# app.  This should release the references the Bottle app's routes
+	# hold to the pipeline's data (like template banks and so on).
+	#
+
+
 	del httpservers
+	bottle.default_app.pop()
+
+
+	#
+	# Set pipeline state to NULL and garbage collect the handler
+	#
+
+
 	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
 		raise RuntimeError, "pipeline could not be set to NULL"
 	del handler
