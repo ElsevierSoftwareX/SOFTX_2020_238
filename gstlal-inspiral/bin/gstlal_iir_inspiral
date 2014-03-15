@@ -438,13 +438,14 @@ if options.data_source not in ("lvshm", "framexmit"):
 		print >>sys.stderr, "setting pipeline state to paused ..."
 	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
 		raise RuntimeError, "pipeline did not enter paused state"
+	httpservers = None
 else:
 	#
 	# start http interface
 	#
 
 	# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
-	httpinterface.start_servers(16953, verbose = options.verbose)
+	httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
 	#
 	# setup sigint handler to shutdown pipeline.  this is how the program stops
 	# gracefully, it is the only way to stop it.  Otherwise it runs forever
@@ -503,6 +504,7 @@ output.write_output_file(filename = options.output or output.coincs_document.T05
 # done
 #
 
+del httpservers
 if options.data_source in ("lvshm", "framexmit"):
 	sys.exit(1) # online pipeline always ends with an error code
 

@@ -414,7 +414,7 @@ if options.write_pipeline is not None:
 #
 
 # FIXME: don't hard-code port
-httpinterface.start_servers(16953, verbose = options.verbose)
+httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
 
 
 #
@@ -477,5 +477,6 @@ output.write_output_file(filename = options.output or output.coincs_document.T05
 # repair the shared memory just in case before exiting
 smrepair()
 
+del httpservers
 # always end with an error so condor won't mark it as done
 sys.exit(1)
