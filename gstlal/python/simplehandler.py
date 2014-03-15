@@ -64,9 +64,21 @@ class Handler(object):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
 
-		self.bus = pipeline.get_bus()
-		self.bus.add_signal_watch()
-		self.bus.connect("message", self.on_message)
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		self.on_message_handler_id = bus.connect("message", self.on_message)
+
+	def quit(self, bus):
+		"""
+		Decouple this object from the Bus object to allow the Bus'
+		reference count to drop to 0, and .quit() the mainloop
+		object.  This method is invoked by the default EOS and
+		ERROR message handlers.
+		"""
+		bus.disconnect(self.on_message_handler_id)
+		del self.on_message_handler_id
+		bus.remove_signal_watch()
+		self.mainloop.quit()
 
 	def do_on_message(self, bus, message):
 		"""!
@@ -83,7 +95,7 @@ class Handler(object):
 			pass
 		elif message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
+			self.quit(bus)
 		elif message.type == gst.MESSAGE_INFO:
 			gerr, dbgmsg = message.parse_info()
 			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
@@ -94,11 +106,8 @@ class Handler(object):
 			gerr, dbgmsg = message.parse_error()
 			# FIXME:  this deadlocks.  shouldn't we be doing this?
 			#self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
+			self.quit(bus)
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-
-	def __del__(self):
-		self.bus.remove_signal_watch()
 
 
 class OneTimeSignalHandler(object):
