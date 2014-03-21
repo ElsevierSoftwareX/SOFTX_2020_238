@@ -50,7 +50,7 @@ import time
 #
 
 
-allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1")))
+allowed_instrument_combos = frozenset([frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1"))])
 
 
 #
