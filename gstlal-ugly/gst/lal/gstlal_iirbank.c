@@ -546,7 +546,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 		*othersize = size / unit_size + get_available_samples(element);
 
-		if((gint) *othersize > dmax - dmin && get_available_samples > 0 )
+		if((gint) *othersize > dmax - dmin && get_available_samples(element) > 0 )
 		        *othersize = (*othersize - (dmax-dmin)) * other_unit_size;
 		else
 			*othersize *= other_unit_size;
