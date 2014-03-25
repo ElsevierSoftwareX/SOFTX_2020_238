@@ -456,8 +456,8 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		# Setup the final output names, etc.
 		injdb = T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
 		injdbs.append(injdb)
-		injxml = injdb+".xml.gz"
-		
+		injxml = os.path.splitext(injdb)[0] + ".xml.gz"
+
 		# extract only the ndoes that were used for injections
 		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
 
