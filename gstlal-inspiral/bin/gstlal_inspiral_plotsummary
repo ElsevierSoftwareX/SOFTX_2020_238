@@ -85,13 +85,12 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % git_version.verbose_msg
 	)
-	parser.add_option("","--input-cache", help="input cache containing only the databases you want to run on (you can also list them as arguments, but you should use a cache if you are afraid that the command line will be too long.)")
+	parser.add_option("","--input-cache", help = "Also get the list of databases to process from this LAL cache.")
 	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
 	parser.add_option("--segments-name", metavar = "name", default = "datasegments", help = "Set the name of the segments that were analyzed (default = \"datasegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
-	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """
-Generate the given plot group.  Can be given multiple times (default = make all plot groups)
+	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """Generate the given plot group.  Can be given multiple times (default = make all plot groups)
  0. Summary Table (top 10 loudest events globally across all zero lag triggers read in)
  1. Missed Found (Scatter plots of missed and found injections on several axes)
  2. Injection Parameter Accuracy Plots
@@ -110,8 +109,10 @@ Generate the given plot group.  Can be given multiple times (default = make all 
 	if not options.format:
 		options.format = ["png"]
 
-	if not filenames: filenames = []
-	if options.input_cache: filenames.extend([lal.CacheEntry(l).path for l in open(options.input_cache).readlines()])
+	if not filenames:
+		filenames = []
+	if options.input_cache:
+		filenames.extend([lal.CacheEntry(l).path for l in open(options.input_cache).readlines()])
 
 	return options, (filenames or [])
 
@@ -274,7 +275,8 @@ def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m"
 
 
 def create_plot(x_label = None, y_label = None, width = 165.0, aspect = None):
-	if not aspect: aspect = (1 + math.sqrt(5)) / 2
+	if aspect is None:
+		aspect = (1 + math.sqrt(5)) / 2
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches(width / 25.4, width / 25.4 / aspect)
@@ -290,7 +292,19 @@ def create_plot(x_label = None, y_label = None, width = 165.0, aspect = None):
 def create_sim_coinc_view(connection):
 	"""
 	Construct a sim_inspiral --> best matching coinc_event mapping.
+	Only injections that match at least one coinc get an entry in this
+	table.
 	"""
+	#
+	# the likelihood ratio stored in the likelihood column of the
+	# coinc_event table is the ranking statistic.  the "best match" is
+	# the coinc with the highest value in this column.  although it has
+	# not been true in the past, there is now a one-to-one relationship
+	# between the value of this ranking statistic and false-alarm rate,
+	# therefore it is OK to order by likelihood ratio and then, later,
+	# impose a "detection" threshold based on false-alarm rate.
+	#
+
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
 	sim_coinc_map
@@ -299,21 +313,21 @@ AS
 		sim_inspiral.simulation_id AS simulation_id,
 		(
 			SELECT
-				coinc_inspiral.coinc_event_id
+				coinc_event.coinc_event_id
 			FROM
 				coinc_event_map AS a
 				JOIN coinc_event_map AS b ON (
 					b.coinc_event_id == a.coinc_event_id
 				)
-				JOIN coinc_inspiral ON (
+				JOIN coinc_event ON (
 					b.table_name == 'coinc_event'
-					AND b.event_id == coinc_inspiral.coinc_event_id
+					AND b.event_id == coinc_event.coinc_event_id
 				)
 			WHERE
 				a.table_name == 'sim_inspiral'
 				AND a.event_id == sim_inspiral.simulation_id
 			ORDER BY
-				coinc_inspiral.false_alarm_rate
+				coinc_event.likelihood DESC
 			LIMIT 1
 		) AS coinc_event_id
 	FROM
@@ -351,7 +365,7 @@ SELECT
 	coinc_inspiral.false_alarm_rate,
 	log(coinc_event.likelihood),
 	coinc_inspiral.snr,
-	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
+	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
 	coinc_inspiral.mchirp,
 	coinc_inspiral.ifos,
@@ -391,7 +405,7 @@ SELECT
 	coinc_inspiral.false_alarm_rate,
 	log(coinc_event.likelihood),
 	coinc_inspiral.snr,
-	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1.0e-9,
+	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
 	coinc_inspiral.mchirp,
 	coinc_inspiral.ifos,
@@ -785,7 +799,7 @@ SELECT
 	sngl_inspiral.chisq,
 	sngl_inspiral.rsqveto_duration,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
-	sngl_inspiral.end_time
+	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9
 FROM
 	sim_coinc_map
 	JOIN coinc_event_map ON (
@@ -1003,7 +1017,7 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 
 	N = numpy.logspace(-2, numpy.log10(len(zerolag_stats)), 1000)
 	x = farlivetime / N
-	line1, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k--', linewidth=1)
+	line1, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k--', linewidth = 1)
 
 	#
 	# error bands
@@ -1012,9 +1026,9 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 	x = x.repeat(2)[1:]
 	x = numpy.concatenate((x, x[::-1]))
 	N = N.repeat(2)[:-1]
-	line2, = axes.fill(x, sigma_region(N, 3.0).clip(minN, maxN), alpha=0.25, facecolor=[0.75, 0.75, 0.75])
-	line3, = axes.fill(x, sigma_region(N, 2.0).clip(minN, maxN), alpha=0.25, facecolor=[0.5, 0.5, 0.5])
-	line4, = axes.fill(x, sigma_region(N, 1.0).clip(minN, maxN), alpha=0.25, facecolor=[0.25, 0.25, 0.25])
+	line2, = axes.fill(x, sigma_region(N, 3.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
+	line3, = axes.fill(x, sigma_region(N, 2.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
+	line4, = axes.fill(x, sigma_region(N, 1.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
 
 	#
 	# zero-lag
@@ -1022,16 +1036,16 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 
 	N = numpy.arange(len(zerolag_stats), dtype = "double") + 1.0
 	x = numpy.array(zerolag_stats, dtype = "double")
-	line5, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth=2)
+	line5, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
 		
 	#
 	# done
 	#
 
 	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc="upper right")
+		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
 	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc="upper right")
+		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
 
 	maxN = min(maxN, 100)
 	minX = float(farlivetime / maxN)
@@ -1199,7 +1213,7 @@ for n, filename in enumerate(filenames):
 	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki=wiki, base=options.base)
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = options.base)
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
