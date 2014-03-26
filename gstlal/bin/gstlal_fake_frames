@@ -50,7 +50,7 @@ import numpy
 # supported by datasource.py.  You can additionally whiten the data or apply a
 # frequency domain coloring filter.  It writes its output to frame files.
 #
-# #### Graph of the gsreamer pipeline ####
+# #### Overview graph of the pipeline ####
 #
 # - gray boxes are optional and depend on the command line given
 #
@@ -95,21 +95,44 @@ import numpy
 #
 # ### Usage cases ###
 #
-# See datasource.append_options() for additional usage cases for datasource specific command line options
+#
+# -# Making initial LIGO colored noise, Advanced LIGO noise, etc for different
+# instruments.   See datasource.append_options() for other choices
+#
+#		$ gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
+#
+#		$ gstlal_fake_frames --data-source=AdvLIGO --channel-name=L1=FAKE-STRAIN --frame-type=L1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
+#
+#
+# -# Custom colored noise.
+#
+#	Obviously it is not practical to code up every possible noise curve to
+#	simulate as a custom data source.  However, it is possible to provide your
+#	own custom noise curve as an ASCII file with frequency in one column and
+#	strain/Hz in the second. e.g., early advanced ligo noise curve found <a
+#	href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/v1_early_asd.txt>here</a>.
+#	You will need to convert ASD text files to PSD xml files using
+#	gstlal_psd_xml_from_asd_txt first.
+#
+#		$ gstlal_fake_frames --data-source=white --color-psd v1psd.xml.gz --channel-name=V1=FAKE-STRAIN --frame-type=V1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
+#
 #
 # -# Recoloring existing frame data
 #
-#    Recoloring can be thought of as first whitening data and then applying a coloring filter.
+#	This procedure is very similar to the above except that instead of
+#	using white noise to drive the fake frame generation, we start with
+#	real frame data and whiten it.  Recoloring can be thought of as first
+#	whitening data and then applying a coloring filter.  You must first
+#	make a reference PSD of the data with e.g. gstlal_reference_psd.  You
+#	will need to make a frame cache of the frames to recolor.
 #
-#		gstlal_fake_frames --whiten-reference-psd V1_median_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /home/channa/rctest/T1300121_V1_EARLY_RECOLORED_V2 --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.V1.cache --channel-name=V1=h_16384Hz --verbose
+#		gstlal_fake_frames --whiten-reference-psd reference_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /path/to/output --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.cache --channel-name=V1=h_16384Hz --verbose
 #
-# -# Producing colored Gaussian noise
 #
-#		gstlal_fake_frames --color-psd recolor_psd.xml.gz --data-source white --output-path /home/channa/rctest/V1_T1300121_V1_EARLY_GAUSSIAN --gps-start-time 966384031 --frame-type V1_T1300121_V1_EARLY_GAUSSIAN --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=GAUSSIAN
+# -# Creating injections into silence (assumes you have an injection xml file from e.g. lalapps_inspinj)
 #
-# -# Creating injections into silence
+#		gstlal_fake_frames --data-source silence --output-path /path/to/output --gps-start-time 966384031 --frame-type V1_INJECTIONS --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=INJECTIONS --injections injections.xml
 #
-#		gstlal_fake_frames --data-source silence --output-path /home/channa/rctest/V1_INJECTIONS --gps-start-time 966384031 --frame-type V1_INJECTIONS --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=INJECTIONS --injections ../BNS-MDC1-FIXEDMASS.xml
 #
 # -# Other things are certainly possible, please add some!
 #
@@ -129,7 +152,7 @@ import numpy
 #	+ `--frames-per-file` [int]: Set the number of frames per file.  Default is 256.
 #	+ `--verbose` []: Be verbose.
 #
-# ### Review
+# ### Debug
 #
 # It is possible to check the pipeline graph by interupting the running process
 # with ctrl+c if you have the GST_DEBUG_DUMP_DOT_DIR evironment set.  A dot
@@ -150,6 +173,9 @@ import numpy
 #
 #		dot -Tpng gstlal_fake_frames_PLAYING.dot > test.png
 #
+# ### Review
+# 
+# 
 # @cond
 
 ##
