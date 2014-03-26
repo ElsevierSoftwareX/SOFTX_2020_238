@@ -15,9 +15,9 @@
 
 		# These are environment variables that do get exported
 		PATH=${INSTALLPATH}/bin:$PATH
-		PKG_CONFIG_PATH=${INSTALLPATH}/lib/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
-		PYTHONPATH=${INSTALLPATH}/lib/python2.6/site-packages:${INSTALLPATH}/lib/python2.6/site-packages:$PYTHONPATH
-		GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${GST_PLUGIN_PATH}
+		PKG_CONFIG_PATH=${INSTALLPATH}/lib64/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
+		PYTHONPATH=${INSTALLPATH}/lib64/python2.6/site-packages:${INSTALLPATH}/lib/python2.6/site-packages:$PYTHONPATH
+		GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:/opt/lscsoft/gst/lib64/gstreamer-0.10
 
 		export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
 
