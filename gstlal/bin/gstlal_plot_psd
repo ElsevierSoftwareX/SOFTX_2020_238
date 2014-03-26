@@ -43,7 +43,7 @@ from gstlal import reference_psd
 #
 # e.g.,
 #
-#		gstlal_plot_psd test.png psd.xml.gz
+#		gstlal_plot_psd psd.png psd.xml.gz
 #
 
 if len(sys.argv) < 3:
