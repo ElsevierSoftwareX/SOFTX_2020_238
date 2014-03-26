@@ -76,7 +76,7 @@ class HTTPServers(object):
 		service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_STYPE)
 		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = bottle.WSGIRefServer(host = host, port = port)
-			httpd_thread = threading.Thread(target = lambda: httpd.run(bottle_app))
+			httpd_thread = threading.Thread(target = httpd.run, args = (bottle_app,))
 			httpd_thread.daemon = True
 			httpd_thread.start()
 			self.servers_and_threads.append((httpd, httpd_thread))
