@@ -30,15 +30,15 @@
 
 ### Measuring PSDs
 
-- Overview
 - Relevant programs
   - gstlal_reference_psd
   - gstlal_plot_psd
   - gstlal_plot_psd_horizon
+  - gstlal_psd_polyfit
+  - gstlal_psd_xml_from_asd_txt
 
 ### Data interaction
 
-- Overview
 - Relevant programs
   - gstlal_spectrum_movie
   - gstlal_play
