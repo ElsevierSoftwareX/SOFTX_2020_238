@@ -37,13 +37,32 @@ from pylal import datatypes as laltypes
 
 ## @package gstlal_psd_polyfit
 #
+#
+# ### Usage cases
+#
+# -# Fit a PSD to a polynomial with default settings (consider using gstlal_plot_psd to compare the results)
+#
+#		$ gstlal_psd_polyfit --output smooth.xml.gz H1refpsd.xml.gz
+#
+#
+# -# Please add more
+#
+#
+# ### Command line options
+#
+# - `--median-window` [int]: Median window in sample points to apply running median for removing sharp features. Default 8.  Setting it to 1 effectively disables this filter.
+# - `--output` [filename]: Set the name of the LIGO light-weight XML file to output
+# - `--poly-order` [int]: Set the order of the fitting polynomial. default 10
+# - `--low-fit-freq` [float]: Set the low frequency at which to begin fitting in Hz. default 30
+# - `--high-fit-freq` [float]: Set the high frequency at which to stop fitting in Hz. default 6500
+# 
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--median-window", type = int, default = 8, help="Median window in sample points to apply running median for removing sharp features. Default 8.  Setting it to 1 effectively disables this filter.")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
 parser.add_option("--poly-order", type = int, default = 10, help = "Set the order of the fitting polynomial. default 10")
-parser.add_option("--low-fit-freq", type = int, default = 30, help = "Set the low frequency at which to begin fitting in Hz. default 30")
-parser.add_option("--high-fit-freq", type = int, default = 6500, help = "Set the high frequency at which to stop fitting in Hz. default 6500")
+parser.add_option("--low-fit-freq", type = float, default = 30, help = "Set the low frequency at which to begin fitting in Hz. default 30")
+parser.add_option("--high-fit-freq", type = float, default = 6500, help = "Set the high frequency at which to stop fitting in Hz. default 6500")
 
 options, filenames = parser.parse_args()
 
