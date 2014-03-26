@@ -33,6 +33,10 @@
 #
 # See datasource.append_options() for additional usage cases for datasource specific command line options
 #
+# -# Measure the PSD of frame data found in a file called frame.cache (hint you can make frame cache with lalapps_path2cache, e.g., `$ ls testframes/*/* | lalapps_path2cache > frame.cache`) See gstlal_plot_psd to plot the result
+#
+#		gstlal_reference_psd --data-source frames --frame-cache frame.cache --gps-start-time=900000000 --gps-end-time=900005000 --channel-name=H1=FAKE-STRAIN --channel-name=L1=FAKE-STRAIN --write-psd psd.xml.gz --verbose
+#
 # -# Measuring the PSD of low-latency data (e.g. on CIT cluster)
 #
 #		gstlal_reference_psd --data-source framexmit --channel-name=L1=FAKE-STRAIN  --write-psd psd.xml.gz
