@@ -34,9 +34,10 @@ from optparse import OptionParser
 # 
 # ### Usage
 #
-# -# an H1 input ASD
+# -# an early V1 input ASD from <a href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/v1_early_asd.txt>here</a>.
 #
-#		gstlal_psd_xml_from_asd_txt --instrument H1 --output psd.xml.gz 
+#		$ gstlal_psd_xml_from_asd_txt --instrument=V1 --output v1psd.xml.gz v1_early_asd.txt
+#
 #
 # -# other things possible, please add some!
 #
