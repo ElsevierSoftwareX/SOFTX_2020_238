@@ -514,14 +514,15 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		# start http interface and dump URL list
 		#
 
-		# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+		# FIXME: don't hard-code port, don't use in this program
+		# right now since more than one job runs per machine
 		httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
 		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").writelines(register())
 
 		#
-		# setup sigint handler to shutdown pipeline.  this is how the program stops
-		# gracefully, it is the only way to stop it.  Otherwise it runs forever
-		# man.
+		# setup sigint handler to shutdown pipeline.  this is how
+		# the program stops gracefully, it is the only way to stop
+		# it.  Otherwise it runs forever man.
 		#
 
 		signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
@@ -593,8 +594,11 @@ if options.local_frame_caching:
 		del detectors.local_cache_list
 
 #
-# done
+# done.  online pipeline always ends with an error code so that dagman does
+# not mark the job "done" and the job will be restarted when the dag is
+# restarted.
 #
 
+
 if options.data_source in ("lvshm", "framexmit"):
-	sys.exit(1) # online pipeline always ends with an error code
+	sys.exit(1)
