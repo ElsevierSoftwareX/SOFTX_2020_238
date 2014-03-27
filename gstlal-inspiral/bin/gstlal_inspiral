@@ -424,6 +424,8 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 	if options.data_source in ("lvshm", "framexmit"):
 		coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+		if coinc_params_distributions is None:
+			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
 	else:
 		coinc_params_distributions = far.ThincaCoincParamsDistributions()
 
