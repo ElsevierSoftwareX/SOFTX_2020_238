@@ -111,6 +111,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 def now():
 	return XLALUTCToGPS(time.gmtime())
 
+
 #
 # =============================================================================
 #
@@ -276,6 +277,36 @@ def parse_command_line():
 #
 # =============================================================================
 #
+#                                Signal Handler
+#
+# =============================================================================
+#
+
+
+class OneTimeSignalHandler(object):
+	def __init__(self, pipeline):
+		self.pipeline = pipeline
+		self.count = 0
+
+	def __call__(self, signum, frame):
+		self.count += 1
+		if self.count == 1:
+			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			try:
+				#FIXME how do I choose a timestamp?
+				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+				if not self.pipeline.send_event(gst.event_new_eos()):
+					raise Exception("pipeline.send_event(EOS) returned failure")
+			except Exception as e:
+				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+				os._exit(1)
+		else:
+			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+
+#
+# =============================================================================
+#
 #                                     Main
 #
 # =============================================================================
@@ -323,26 +354,6 @@ else:
 #
 # Process svd banks in serial
 #
-
-class OneTimeSignalHandler(object):
-	def __init__(self, pipeline):
-		self.pipeline = pipeline
-		self.count = 0
-
-	def __call__(self, signum, frame):
-		self.count += 1
-		if self.count == 1:
-			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
-			try:
-				#FIXME how do I choose a timestamp?
-				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-				if not self.pipeline.send_event(gst.event_new_eos()):
-					raise Exception("pipeline.send_event(EOS) returned failure")
-			except Exception, e:
-				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
-				os._exit(1)
-		else:
-			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
 
 
 for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output, options.likelihood_file):
