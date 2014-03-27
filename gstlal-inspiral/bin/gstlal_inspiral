@@ -587,11 +587,13 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 # Cleanup local caches
 #
 
+
 if options.local_frame_caching:
 	if options.verbose:
-		print >> sys.stderr, "deleting temporary cache file ", detectors.frame_cache
-		os.remove(detectors.frame_cache)
-		del detectors.local_cache_list
+		print >>sys.stderr, "deleting temporary cache file ", detectors.frame_cache
+	os.remove(detectors.frame_cache)
+	del detectors.local_cache_list
+
 
 #
 # done.  online pipeline always ends with an error code so that dagman does
