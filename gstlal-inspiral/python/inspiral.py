@@ -227,15 +227,15 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			# to close later without a ulimit problem
 			xmldoc = ligolw.Document()
 			root = xmldoc.appendChild(ligolw.LIGO_LW())
-			fobj, fname = tempfile.mkstemp(suffix=".gz")
+			fname = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			root.appendChild(bank.sngl_inspiral_table)
 			ligolw_utils.write_filename(xmldoc, fname, gz = True, verbose = verbose)
+			xmldoc.unlink()	# help garbage collector
 			bank.template_bank_filename = fname
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
-			os.close(fobj) #close the temporary file or else you will have ulimit issues
 
 	return banks
 
