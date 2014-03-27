@@ -209,10 +209,10 @@ def parse_command_line():
 		required_files += [options.veto_segments_file]
 	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
 	if missing_files:
-		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
+		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
 
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-		raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
+		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 
 	# do this before converting option types
 	process_params = options.__dict__.copy()
@@ -494,7 +494,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		if options.verbose:
 			print >>sys.stderr, "setting pipeline state to paused ..."
 		if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError, "pipeline did not enter paused state"
+			raise RuntimeError("pipeline did not enter paused state")
 		httpservers = None
 	else:
 		#
@@ -518,7 +518,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
 	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline did not enter playing state"
+		raise RuntimeError("pipeline did not enter playing state")
 
 	if options.write_pipeline is not None:
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
@@ -565,8 +565,9 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline could not be set to NULL"
+		raise RuntimeError("pipeline could not be set to NULL")
 	del handler
+
 
 #
 # Cleanup local caches
