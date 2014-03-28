@@ -49,7 +49,6 @@ from gstlal.simplehandler import Handler
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
-from gstlal.inspiral import add_cbc_metadata
 
 from glue.ligolw import ligolw
 from glue.ligolw import array
@@ -66,6 +65,7 @@ lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue import segmentsUtils
@@ -184,7 +184,6 @@ class EPHandler( Handler ):
 		self.clustering = False
 		self.channel_monitoring = False
 		self.stats = ep.SBStats()
-		self.filter_rebuild_times = []
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -243,7 +242,6 @@ class EPHandler( Handler ):
 		if message.structure.get_name() == "spectrum":
 			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
-			self.filter_rebuild_times.append( ("spectrum_message", ts) )
 			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( ts, self.cache_psd_dir )
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
@@ -568,10 +566,8 @@ class EPHandler( Handler ):
 		output.childNodes[0].appendChild( outtable )
 		self.triggers = remainder
 
-		add_cbc_metadata( output, process, requested_segment )
+		ligolw_search_summary.append_search_summary( output, process, lalwrapper_cvs_tag=None, lal_cvs_tag=None, inseg=requested_segment )
 		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
-		search_sum[0].comment = ",".join( [ "%s:%10.9f" % (m[0], m[1]) for m in self.filter_rebuild_times ] )
-		self.filter_rebuild_times = []
 		# TODO: This shouldn't set every one of them in case we reuse XML 
 		# documents later
 		for row in search_sum:
