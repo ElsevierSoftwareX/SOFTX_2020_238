@@ -160,14 +160,12 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 		# pack into frame files for output
 		#
 
-		channelmux_input_dict["%s:%s" % (instrument, channel_name)] = src
-
-	src = pipeparts.mkframecppchannelmux(pipeline, channelmux_input_dict, frame_duration = frame_duration, frames_per_file = frames_per_file)
-	for pad in src.sink_pads():
-		if channel_comment is not None:
-			pad.set_property("comment", channel_comment)
-		pad.set_property("pad-type", "FrProcData")
-	pipeparts.mkframecppfilesink(pipeline, src, frame_type = "%s_%s" % ("".join(sorted(data_source_info.channel_dict.keys())), description), path = output_path)
+		src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" %(instrument, channel_name):src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
+		for pad in src.sink_pads():
+			if channel_comment is not None:
+				pad.set_property("comment", channel_comment)
+			pad.set_property("pad-type", "FrProcData")
+		pipeparts.mkframecppfilesink(pipeline, src, frame_type = "%s_%s" % (instrument, description), path = output_path)
 
 
 #
