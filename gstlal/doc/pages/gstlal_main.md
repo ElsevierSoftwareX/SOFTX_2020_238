@@ -21,6 +21,10 @@
 
 		export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
 
+### Documentation for gstlal elements
+
+- <a href="@gstlalgtkdoc/">See here for more details</a>
+
 ### Making fake data
 
 - \ref gstlalfakedataoverviewpage
