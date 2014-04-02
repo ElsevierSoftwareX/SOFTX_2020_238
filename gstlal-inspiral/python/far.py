@@ -918,6 +918,9 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 	# FIXME:  this function does not yet incorporate the effect of
 	# noise-induced SNR fluctuations in its calculations
 
+	if not inst_horiz_mapping:
+		raise ValueError("inst_horiz_mapping is empty")
+
 	# get instrument names
 	names = tuple(inst_horiz_mapping)
 	# get horizon distances and responses in that same order
