@@ -75,37 +75,52 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
 {
 	gboolean success = TRUE;
 
+    fprintf(stderr, "do_new_segment called\n");
 	if(element->last_segment) {
 		GstSegment *segment;
 
-        /* 1.0 code gst_event_copy_segment doesn't exist, will g_memdup do?
+        /* 1.0 code gst_event_copy_segment doesn't exist
 		gst_event_copy_segment(element->last_segment, &segment);
 		*/
-		segment = g_memdup(element->last_segment, sizeof(element->last_segment));
+        segment = gst_segment_copy(element->last_segment);
+        gboolean update;
+        gdouble rate;
+        GstFormat format;
+        gint64 start, stop, position;
+        gst_event_parse_new_segment(element->last_segment, &update, &rate, &format, &start, &stop, &position);
 
+        /* 1.0 code
 		if(segment->format == GST_FORMAT_TIME) {
+            fprintf(stderr, "updating last segment\n");
 			if(GST_CLOCK_TIME_IS_VALID(segment->start))
 				segment->start = gst_util_uint64_scale_int_round(segment->start, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
 			if(GST_CLOCK_TIME_IS_VALID(segment->stop))
 				segment->stop = gst_util_uint64_scale_int_round(segment->stop, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
-            /* 1.0 code
 			if(GST_CLOCK_TIME_IS_VALID(segment.position))
 				segment.position = gst_util_uint64_scale_int_round(segment.position, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
-		    */
 
-            /* 1.0 code
 			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), gst_event_new_segment(segment));
-            */
-	        // FIXME: First field is "update", but I don't know how to retrieve
-	        // this information -- assuming this is always an update
-	        // FIXME: Last field is "position", but I don't know how to retrieve
-	        // this information
-			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), gst_event_new_new_segment(TRUE, segment->rate, segment->format, segment->start, segment->stop, 0));
+        */
+		if(format == GST_FORMAT_TIME) {
+            fprintf(stderr, "updating last segment\n");
+			if(GST_CLOCK_TIME_IS_VALID(start))
+				start = gst_util_uint64_scale_int_round(start, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
+			if(GST_CLOCK_TIME_IS_VALID(stop))
+				stop = gst_util_uint64_scale_int_round(stop, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
+			if(GST_CLOCK_TIME_IS_VALID(position))
+				position = gst_util_uint64_scale_int_round(position, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
+
+			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), gst_event_new_new_segment(update, rate, format, start, stop, position));
 		} else {
+            fprintf(stderr, "using last segment\n");
 			gst_event_ref(element->last_segment);
 			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), element->last_segment);
 		}
+        /* 1.0 Code
+        * copy_segment requires free_segment
         g_free(segment);
+        */
+        gst_segment_free(segment);
 
 		element->need_new_segment = FALSE;
 	}
@@ -273,9 +288,10 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 
 	default:
         /* 1.0 code -- GstBaseTransform has no sink_event function
-         * FIXME: Not sure if just deleting this is a good idea
+         * sink_event replaces event in 1.0
 		success = GST_BASE_TRANSFORM_CLASS(gst_audio_rate_faker_parent_class)->sink_event(trans, event);
         */
+		success = GST_BASE_TRANSFORM_CLASS(gst_audio_rate_faker_parent_class)->event(trans, event);
 		break;
 	}
 
@@ -413,10 +429,10 @@ static void gst_audio_rate_faker_class_init(GstAudioRateFakerClass *klass)
 	transform_class->fixate_caps = GST_DEBUG_FUNCPTR(fixate_caps);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
     /* 1.0 code: class has no sink_event member 
-     * FIXME: not sure if this the correct way to deal with this, see, for 
-     * example gst_pad_set_event_function 
+     * sink_event replaced event in 1.0
 	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
     */
+	transform_class->event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 	transform_class->passthrough_on_same_caps = TRUE;
 
