@@ -225,17 +225,23 @@ if options.verbose:
 #
 
 
-if options.verbose:
-	print >>sys.stderr, "1/%d:" % len(options.likelihood_filenames),
-coincparamsdistributions, ignored, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
-for n, likelihood_filename in enumerate(options.likelihood_filenames[1:], start = 2):
+coincparamsdistributions = None
+seglists = segments.segmentlistdict()
+for n, likelihood_filename in enumerate(options.likelihood_filenames, start = 1):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_filenames)),
 	xmldoc = ligolw_utils.load_filename(likelihood_filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
 	xmldoc.unlink()
-	coincparamsdistributions += this_coincparamsdistributions
+	if this_coincparamsdistributions is None:
+		raise ValueError("%s does not contain parameter distribution data" % likelihood_filename)
+	if coincparamsdistributions is None:
+		coincparamsdistributions = this_coincparamsdistributions
+	else:
+		coincparamsdistributions += this_coincparamsdistributions
 	seglists |= this_seglists
+if options.verbose:
+	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
 coincparamsdistributions.horizon_distances = horizon_distances
 
