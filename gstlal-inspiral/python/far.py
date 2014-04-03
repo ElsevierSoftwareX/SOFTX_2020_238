@@ -653,7 +653,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
 		xml = self.get_xml_root(xml, name)
 		prefix = u"cached_snr_joint_pdf"
-		for elem in [elem for elem in xml.childNodes if elem.getAttribute(u"Name").startswith(u"%s:" % prefix)]:
+		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
 			key = frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in ligolw_param.get_pyvalue(elem, u"key").strip().split(u",")))
 			binnedarray = rate.binned_array_from_xml(elem, prefix)
 			if self.snr_joint_pdf_cache:
@@ -1223,16 +1223,16 @@ class RankingData(object):
 	def from_xml(cls, xml, name):
 		# find the root of the XML tree containing the
 		# serialization of this object
-		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:%s" % (name, cls.ligo_lw_name_suffix)]
+		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:%s" % (name, cls.ligo_lw_name_suffix)]
 
 		# create a mostly uninitialized instance
 		self = cls(None, {}, process_id = ligolw_param.get_pyvalue(xml, u"process_id"))
 
 		# pull out the likelihood count and PDF arrays
 		def reconstruct(xml, prefix, target_dict):
-			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.getAttribute(u"Name")]:
-				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
-				target_dict[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.getAttribute(u"Name").split(":")[0])
+			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.Name]:
+				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.Name.split("_")[0]))
+				target_dict[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.Name.split(":")[0])
 		reconstruct(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		reconstruct(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
