@@ -389,7 +389,8 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	#
 	# this turns this function into a no-op:  the output "basis
 	# vectors" are exactly the input templates and the reconstruction
-	# matrix is the identity matrix
+	# matrix is absent (triggers pipeline construction code to omit
+	# matrixmixer element)
 	#
 
 	if identity:
