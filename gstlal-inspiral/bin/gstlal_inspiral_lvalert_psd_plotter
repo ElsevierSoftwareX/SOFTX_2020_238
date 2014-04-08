@@ -104,11 +104,11 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 	response = get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
 	if response is None:
 		return None
-	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, LIGOLWContentHandler)[0])
+	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = LIGOLWContentHandler)[0])
 
 
 def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
-	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), LIGOLWContentHandler)[0]
+	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), contenthandler = LIGOLWContentHandler)[0]
 
 
 def plot_psds(psds, coinc_xmldoc, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):

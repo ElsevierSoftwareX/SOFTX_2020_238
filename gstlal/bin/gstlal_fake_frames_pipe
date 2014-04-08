@@ -281,7 +281,7 @@ except:
 
 dag = dagparts.CondorDAG("gstlal_fake_frames_pipe")
 
-seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
+seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose, contenthandler = ContentHandler), options.frame_segments_name).coalesce()
 choosesegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()

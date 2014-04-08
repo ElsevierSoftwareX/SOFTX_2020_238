@@ -23,14 +23,19 @@ lalapps_tmpltbank often places the same template more than once.
 
 __prog__ = "gstlal_prune_duplicate_mass_pairs"
 
+from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 import sys
 
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
 filename, out_filename = sys.argv[1:3]
 
-bank_xmldoc = utils.load_filename(filename, gz=filename.endswith(".gz"))
+bank_xmldoc = ligolw_utils.load_filename(filename, contenthandler = LIGOLWContentHandler)
 process = ligolw_process.append_process(bank_xmldoc, __prog__, cvs_repository="gstlal")
 ligolw_process.append_process_params(bank_xmldoc, process, ((filename, u"string", ""),(out_filename, u"string", "")))
 bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
@@ -43,4 +48,4 @@ for i, child in enumerate(bank_sngl_table):
 	mass_pairs.add(mass_pair)
 
 ligolw_process.set_process_end_time(process)
-utils.write_filename(bank_xmldoc, out_filename, gz=out_filename.endswith(".gz"))
+ligolw_utils.write_filename(bank_xmldoc, out_filename, gz=out_filename.endswith(".gz"))

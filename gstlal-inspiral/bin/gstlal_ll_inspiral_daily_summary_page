@@ -118,7 +118,7 @@ ifars = iterutils.Highest(max = 100)
 for c in glob_trigger_files(path, analysis_segment):
 
 	try:
-		xmldoc = utils.load_filename(c.path, gz = c.path.endswith('.gz'), verbose = True, contenthandler = ContentHandler)
+		xmldoc = utils.load_filename(c.path, verbose = True, contenthandler = ContentHandler)
 	except IOError as e:
 		print >> out, "Could not load %s: %s" % (c.path, e)
 	for n, event in enumerate(cluster(table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName))):
