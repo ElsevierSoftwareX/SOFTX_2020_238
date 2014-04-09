@@ -37,7 +37,7 @@ def FAP_from_ranks(ranks):
 def FAR_from_FAP(faps, t):
 	return 0. - numpy.log(1.-faps) / t
 
-xmldoc = utils.load_filename(sys.argv[1], gz=sys.argv[1].endswith('gz'), verbose=True).childNodes[0]
+xmldoc = utils.load_filename(sys.argv[1], verbose=True).childNodes[0]
 
 H1nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "H1"))))
 H2nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "H2"))))
