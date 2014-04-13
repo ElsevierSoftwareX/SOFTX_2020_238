@@ -6,16 +6,20 @@
 
 \section agenda Agenda
 
-- Discuss gstlal_fake_frames runs by Fabien and Duncan
+- Code review goals: Now that we have some experience with gstlal codes we took stock of what is that we need to review. Everyone on the call agreed that the most important critical aspect for the review is the gstlal pipeline that produces tiggers that are sent to Grace-DB which are in turn sent for EM follow-up but, more importantly, our first source of detection candidates. The team should focus in reviewing codes that are used to produce Grace-DB triggers (see below for actions).
 
-\section homework Homework
+- Discuss gstlal_fake_frames runs by Florent and Duncan (only got through Florent; run by Duncan next week).
+
 
 Actions
- - Sathya: Usage case 1 (accomplished Usages 1-3 but not tested the output yet)
- - Jolien: Usage case 2
- - Duncan: Usage case 3
- - Florent: Usage case 4 (successfully ran several examples; see additional questions below)
-
+ - Chad: Please provide instructions on how to make the review pages appear online. At the moment the pages dont seem to appear even after several days and no one knows how to do this apart from Chad.
+ - Kipp: Prepare a simple flow-chart of the pipeline for the gstlal-inspiral analysis that produces GRACE-DB triggers. Identify the codes that are used in different boxes of the flow-chart and give us an idea of what those codes contain so we can together estimate the effort required to get the review done before aLIGO analysis.
+ - Forent: Please run the injections using a sampling frequency > 16384 Hz and make sure it works.
+ - Kipp: The code allows injections with start times that are greater than end times. The code should not allow this to happen. Kipp to write a "if" statement check for start and end times and to fix this bug.
+ - Florent: The code does not say much about what is happening in the verbose mode: Run the code by using GST_DEBUG=lal_simulation:5, etc. to see if there is enough of debugging information.
+ - Kipp: Explore why the codes runs slower with smaller sampling rates (e.g. 10 Hz as opposed to 1 kHz takes longer).
+ - Kipp: Explore why overlapping signal injections produced only one injection. 
+ 
 \section questions Questions
 
 1/ Timing? I checked the time of the injections taking into account the time propagation to the detectors. --> OK
