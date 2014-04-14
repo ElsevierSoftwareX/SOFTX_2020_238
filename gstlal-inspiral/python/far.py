@@ -928,7 +928,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for instruments, count in coincsynth.mean_coinc_count.items():
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
-
 	def add_foreground_snrchi_prior(self, instruments, n, prefactors_range, df, verbose = False):
 		if verbose:
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
