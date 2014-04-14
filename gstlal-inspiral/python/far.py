@@ -477,10 +477,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if predicted_count > 0 and observed_count > 0:
 				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
 				n += 1
-		coincidence_bins /= n
+		if n != 0:
+			coincidence_bins /= n
 		if verbose:
 			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
-		if math.isnan(coincidence_bins) or coincidence_bins == 0.:
+		if n == 0 or math.isnan(coincidence_bins) or coincidence_bins == 0.:
 			# in these cases all the rates are just 0
 			for instruments in coincsynth.all_instrument_combos:
 				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = 0.
