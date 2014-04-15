@@ -17,8 +17,10 @@ Actions
  - Forent: Please run the injections using a sampling frequency > 16384 Hz and make sure it works.
  - Kipp: The code allows injections with start times that are greater than end times. The code should not allow this to happen. Kipp to write a "if" statement check for start and end times and to fix this bug.
  - Florent: The code does not say much about what is happening in the verbose mode: Run the code by using GST_DEBUG=lal_simulation:5, etc. to see if there is enough of debugging information.
- - Kipp: Explore why the codes runs slower with smaller sampling rates (e.g. 10 Hz as opposed to 1 kHz takes longer).
+ - Florent:  Send Kipp instructions for reproducing the "only one injection when doing two on top of each other" demo
  - Kipp: Explore why overlapping signal injections produced only one injection. 
+ - Florent:  Send Kipp instructions for reproducing the "really slow and really really low sampling rate" demo
+ - Kipp: Explore why the codes runs slower with smaller sampling rates (e.g. 10 Hz as opposed to 1 kHz takes longer).
  
 \section questions Questions
 
