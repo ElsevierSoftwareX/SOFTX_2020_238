@@ -222,6 +222,9 @@ def parse_command_line():
 	if options.sample_rate > 16384:
 		raise ValueError("--sample-rate must be <= 16384")
 
+	if options.frame_type is None:
+		raise ValueError("--frame-type is required")
+
 	return options, filenames
 
 
@@ -233,9 +236,6 @@ options, filenames = parse_command_line()
 
 ## Parse the command line options into a python.datasource.GWDataSourceInfo class instance
 gw_data_source = datasource.GWDataSourceInfo(options)
-
-if options.frame_type is None:
-	raise ValueError("--frame-type is required")
 
 ## Assume instrument is the first and only key of the python.datasource.GWDataSourceInfo.channel_dict
 instrument = gw_data_source.channel_dict.keys()[0]
