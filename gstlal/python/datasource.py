@@ -256,7 +256,7 @@ class GWDataSourceInfo(object):
 			raise ValueError("--data-source must be one of %s" % ", ".join(self.data_sources))
 		if options.data_source == "frames" and options.frame_cache is None:
 			raise ValueError("--frame-cache must be specified when using --data-source=frames")
-		if len(options.channel_name) == 0:
+		if not options.channel_name:
 			raise ValueError("must specify at least one channel in the form --channel-name=IFO=CHANNEL-NAME")
 		if options.frame_segments_file is not None and options.data_source != "frames":
 			raise ValueError("can only give --frame-segments-file if --data-source=frames")
