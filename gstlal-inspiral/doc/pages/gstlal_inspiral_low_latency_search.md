@@ -3,7 +3,63 @@
 [TOC]
 
 \section Introduction Introduction
- 
+
+@dot
+digraph llpipe {
+	graph [fontname="Roman", fontsize=11];
+	edge [ fontname="Roman", fontsize=10 ];
+	node [fontname="Roman", shape=box, fontsize=11];
+
+	H1 [label="H1 Observatory:\nO(10)s h(t) generation\nlatency", color=red1, style=filled];
+	L1 [label="L1 Observatory:\nO(10)s h(t) generation\nlatency", color=green1, style=filled];
+	V1 [label="V1 Observatory:\nO(10)s h(t) generation\nlatency", color=magenta1, style=filled];
+	//CIT [label="CIT HTCondor Pool", style=filled, color=grey];
+	HeadNode [label="CIT Head Node:\n- Monitoring\n- Background Estimation: gstlal_inspiral_marginalize_likelihoods_online\n- Analysis control", style=filled, color=grey, URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
+	WebServer [label="CIT Webserver\nRemote monitoring", style=filled, color=grey];
+	gracedb [label="GW Candidate Database\nO(1)s processing time", shape=oval, color=tomato3, style=filled];
+
+	H1 -> HeadNode [label="TCP link", color=red4];
+	L1 -> HeadNode [label="TCP link", color=green4];
+	V1 -> HeadNode [label="TCP link", color=magenta4];
+
+	subgraph clusterCIT { 
+
+		label="CIT HTCondor Pool";
+		fontsize = 14;
+		style=rounded;
+		labeljust="l";
+
+		Node1 [label="Node 1\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
+		Node2 [label="Node 2\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
+		NodeN [label="Node N\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
+
+		HeadNode -> Node1 [color=red4];
+		HeadNode -> Node1 [color=green4];
+		HeadNode -> Node1 [color=magenta4, label="UDP multicast"];
+
+		HeadNode -> Node2 [color=red4];
+		HeadNode -> Node2 [color=green4];
+		HeadNode -> Node2 [color=magenta4, label="UDP multicast"];
+
+		HeadNode -> NodeN [color=red4];
+		HeadNode -> NodeN [color=green4];
+		HeadNode -> NodeN [color=magenta4, label="UDP multicast"];
+
+		Node1 -> HeadNode [dir=both, label="http"];
+		Node2 -> HeadNode [dir=both, label="http"];
+		NodeN -> HeadNode [dir=both, label="http"];
+		HeadNode -> WebServer [label="nfs"];
+
+	}
+
+	Node1 -> gracedb [label="https"];
+	Node2 -> gracedb [label="https"];
+	NodeN -> gracedb [label="https"];
+}
+@enddot
+
+\section Preliminaries Preliminaries
+
 - start by making a directory where you will run the analysis:
 
 		$ mkdir /home/gstlalcbc/engineering/5
@@ -56,7 +112,7 @@ example</a>
 - gstlal_inspiral_svd_bank_pipe
 
 
-\section Analysis Setting up the analyis dag
+\section Analysis Setting up and running the analyis dag
 
 - begin by making a directory for the analysis dag to run, e.g.,
 
