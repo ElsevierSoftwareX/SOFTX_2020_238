@@ -61,9 +61,9 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
+from glue.text_progress_bar import ProgressBar
 from gstlal import emcee
 from pylal import inject
-from pylal import progress
 from pylal import rate
 from pylal import snglcoinc
 
@@ -503,7 +503,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for instrument in segs:
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
-				progressbar = progress.ProgressBar(instrument, max = len(binarr.bins[0]))
+				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
 			else:
 				progressbar = None
 
@@ -539,7 +539,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for instrument in instruments:
 			binarr = target_dict["%s_snr_chi" % instrument]
 			if verbose:
-				progressbar = progress.ProgressBar(instrument, max = len(binarr.bins[0]))
+				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
 			else:
 				progressbar = None
 
@@ -841,7 +841,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 	psi = gmst = 0.0
 
 	if verbose:
-		progressbar = progress.ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
+		progressbar = ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
 	else:
 		progressbar = None
 
@@ -1199,7 +1199,7 @@ class RankingData(object):
 			pdf.to_pdf()
 			return pdf
 		if verbose:
-			progressbar = progress.ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates))
+			progressbar = ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates))
 			progressbar.show()
 		else:
 			progressbar = None

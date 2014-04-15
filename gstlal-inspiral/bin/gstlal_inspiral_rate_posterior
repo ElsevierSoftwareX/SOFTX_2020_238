@@ -50,8 +50,8 @@ from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
 from pylal import ligolw_thinca
-from pylal import progress
 
 
 from gstlal import far
@@ -255,7 +255,7 @@ background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(fi
 
 if options.verbose:
 	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_likelihood_ratios)
-	progressbar = progress.ProgressBar()
+	progressbar = ProgressBar()
 else:
 	progressbar = None
 signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, progressbar = progressbar)
