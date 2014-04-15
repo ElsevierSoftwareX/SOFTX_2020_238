@@ -861,7 +861,7 @@ def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10
 		# furthest an event can be and still be above snr_min in
 		# all instruments, and the SNR that corresponds to in the
 		# instrument whose SNR grows fastest
-		snr_start = snr_times_D[axis] / (snr_times_D.min() / snr_min)
+		snr_start = snr_times_D[axis] * (snr_min / snr_times_D.min())
 
 		# 3 steps per bin
 		for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(snr_max), decades_per_step):
