@@ -256,6 +256,11 @@ def parse_command_line():
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
+	# in the process_params table to determine the threshold below
+	# which it can delete uninteresting singles after the coincs are
+	# ranked.  if the name of this option is changed, be sure to update
+	# gstlal_inspiral_calc_likelihood
 	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
 
 	options, filenames = parser.parse_args()
