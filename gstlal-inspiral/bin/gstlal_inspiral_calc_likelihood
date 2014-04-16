@@ -361,12 +361,14 @@ for n, filename in enumerate(filenames, 1):
 	#
 
 	if not options.no_trim_database:
-		connection.cursor().execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
-		connection.cursor().execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		connection.cursor().execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		# FIXME:  don't hard-code program and parameter names
-		connection.cursor().execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT MAX(value) FROM process_params WHERE program == "gstlal_inspiral" AND param == "--singles-threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
-		connection.cursor().execute("""VACUUM;""")
+		cursor = connection.cursor()
+		cursor.execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
+		cursor.execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		cursor.execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		# FIXME:  don't hard-code parameter name
+		cursor.execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT value FROM process_params WHERE process_params.process_id == sngl_inspiral.process_id AND param == "--singles_threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
+		cursor.execute("""VACUUM;""")
+		cursor.close()
 
 	#
 	# Close out process metadata
