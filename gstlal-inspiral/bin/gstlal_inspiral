@@ -26,6 +26,99 @@
 # =============================================================================
 #
 
+## @file gstlal_inspiral
+#
+
+## @package gstlal_inspiral
+#
+# @dot
+# digraph llpipe {
+# 	labeljust = "r";
+# 	label="gstlal_inspiral"
+# 	rankdir=LR;
+# 	graph [fontname="Roman", fontsize=24];
+# 	edge [ fontname="Roman", fontsize=10 ];
+# 	node [fontname="Roman", shape=box, fontsize=11];
+# 
+# 	gracedb [label="GW\nCandidate\nDatabase", shape=oval, color=tomato3, style=filled];
+# 
+# 
+# 	subgraph clusterNodeN {
+# 
+# 		style=rounded;
+# 		label="gstreamer pipeline";
+# 		labeljust = "r";
+# 		fontsize = 14;
+# 
+# 		H1src [label="H1 data source:\n mkbasicsrc()", color=red4, URL="\ref pipeparts.mkbasicsrc()"];
+# 		L1src [label="L1 data source:\n mkbasicsrc()", color=green4, URL="\ref pipeparts.mkbasicsrc()"];
+# 		V1src [label="V1 data source:\n mkbasicsrc()", color=magenta4];
+# 		
+# 		H1multirate [label="H1 whitening and downsampling:\nmkwhitened_multirate_src()", color=red4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		L1multirate [label="L1 whitening and downsampling:\nmkwhitened_multirate_src()", color=green4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		V1multirate [label="V1 whitening and downsampling:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		
+# 		H1LLOID [label="H1 LLOID filtering engine:\nmkLLOIDmulti()", color=red4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		L1LLOID [label="L1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=green4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		V1LLOID [label="V1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 
+# 		H1Trig1 [label="H1 Triggering:\nsub bank 1", color=red4];
+# 		L1Trig1 [label="L1 Triggering:\nsub bank 1", color=green4];
+# 		V1Trig1 [label="V1 Triggering:\nsub bank 1", color=magenta4];
+# 		H1Trig2 [label="H1 Triggering:\nsub bank 2", color=red4];
+# 		L1Trig2 [label="L1 Triggering:\nsub bank 2", color=green4];
+# 		V1Trig2 [label="V1 Triggering:\nsub bank 2", color=magenta4];
+# 		H1TrigN [label="H1 Triggering:\nsub bank N", color=red4];
+# 		L1TrigN [label="L1 Triggering:\nsub bank N", color=green4];
+# 		V1TrigN [label="V1 Triggering:\nsub bank N", color=magenta4];
+# 		
+# 		H1src -> H1multirate;
+# 		L1src -> L1multirate;
+# 		V1src -> V1multirate;
+# 
+# 		H1multirate -> H1LLOID [label="h(t) 4096Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) 4096Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) 4096Hz"];
+# 		H1multirate -> H1LLOID [label="h(t) 2048Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) 2048Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) 2048Hz"];
+# 		H1multirate -> H1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 	
+# 		H1LLOID -> H1Trig1 [label="SNRs sub bank 1"];
+# 		L1LLOID -> L1Trig1 [label="SNRs sub bank 1"];
+# 		V1LLOID -> V1Trig1 [label="SNRs sub bank 1"];
+# 		H1LLOID -> H1Trig2 [label="SNRs sub bank 2"];
+# 		L1LLOID -> L1Trig2 [label="SNRs sub bank 2"];
+# 		V1LLOID -> V1Trig2 [label="SNRs sub bank 2"];
+# 		H1LLOID -> H1TrigN [label="SNRs sub bank N"];
+# 		L1LLOID -> L1TrigN [label="SNRs sub bank N"];
+# 		V1LLOID -> V1TrigN [label="SNRs sub bank N"];
+# 	}
+# 
+# 
+# 	Coincidence [label="Coincidence\nO(1)s latency"];
+# 	SigEst [label="Significance\nEstimation\nO(1)s latency"];
+# 	Thresh [label="Thresholding\nO(1)s latency"];
+# 	EventGen [label="Event\nGeneration\nO(1)s latency"];
+# 		
+# 	H1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	L1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	V1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	H1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	L1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	V1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	H1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	L1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	V1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	
+# 	Coincidence -> SigEst -> Thresh -> EventGen;
+# 
+# 	EventGen -> gracedb;
+# 	
+# }
+# @enddot
 
 import os
 import resource
