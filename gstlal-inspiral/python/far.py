@@ -367,7 +367,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			else:
 				age = 0
 			# FIXME:  turn off verbose
-			binnedarray = joint_pdf_of_snrs(dict(key), snr_threshold = self.snr_min, snr_max = self.snr_max, verbose = True)
+			binnedarray = self.joint_pdf_of_snrs(dict(key), verbose = True)
 			pdf = rate.InterpBinnedArray(binnedarray)
 			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
 			# if the cache is full, delete the entry with the
@@ -800,118 +800,113 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				params.update(base_params)
 				yield params, ln_P
 
+	@classmethod
+	def joint_pdf_of_snrs(cls, inst_horiz_mapping, n_samples = 10000, decades_per_bin = 1.0 / 50.0, verbose = False):
+		"""
+		Return a BinnedArray representing the joint probability
+		density of measuring a set of SNRs from a network of
+		instruments.  The inst_horiz_mapping is a dictionary
+		mapping instrument name (e.g., "H1") to horizon distance
+		(arbitrary units).  n_samples is the number of lines over
+		which to calculate the density in the SNR space.  The axes
+		of the PDF correspond to the instruments in alphabetical
+		order.
+		"""
+		assert type(cls.snr_min) is float
+		assert type(cls.snr_max) is float
+		assert cls.snr_max > cls.snr_min
 
-#
-# Joint probability density for measured SNRs
-#
+		# An effective threshold used in the calculations in order to simulate
+		# noise effects
+		snr_min = cls.snr_min - 3.0
+		assert snr_min > 0.0
 
+		# get instrument names in alphabetical order
+		names = sorted(inst_horiz_mapping)
+		# get horizon distances and responses in that same order
+		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in names])
+		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names)
 
-def joint_pdf_of_snrs(inst_horiz_mapping, snr_threshold, snr_max, n_samples = 10000, decades_per_bin = 1.0 / 50.0, verbose = False):
-	"""
-	A function which returns a BinnedArray representing the joint
-	probability density of measuring a set of SNRs from a network of
-	instruments.  The inst_horiz_mapping is a dictionary mapping
-	instrument name (e.g., "H1") to horizon distance (arbitrary units).
-	snr_threshold is the lowest accepted SNR (must be > 3), and
-	n_samples is the number of lines over which to calculate the
-	density in the SNR space.  The axes of the PDF correspond to the
-	instruments in alphabetical order.
-	"""
-	snr_threshold = float(snr_threshold)	# just to be sure
-	snr_max = float(snr_max)	# just to be sure
+		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log10(cls.snr_max / snr_min) / decades_per_bin)))] * len(names)))
 
-	# An effective threshold used in the calculations in order to simulate
-	# noise effects
-	snr_min = snr_threshold - 3.0
-	assert snr_max > snr_threshold
-	assert snr_min > 0.0
+		steps_per_bin = 3.
+		decades_per_step = decades_per_bin / steps_per_bin
+		_per_step = 10.**decades_per_step - 1.
 
-	# get instrument names in alphabetical order
-	names = sorted(inst_horiz_mapping)
-	# get horizon distances and responses in that same order
-	DH = numpy.array([inst_horiz_mapping[inst] for inst in names])
-	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
+		psi = gmst = 0.0
 
-	pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, snr_max, int(round(math.log10(snr_max / snr_min) / decades_per_bin)))] * len(names)))
+		if verbose:
+			progressbar = ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
+		else:
+			progressbar = None
 
-	steps_per_bin = 3.
-	decades_per_step = decades_per_bin / steps_per_bin
-	_per_step = 10.**decades_per_step - 1.
+		for i in xrange(n_samples):
+			theta = math.acos(random.uniform(-1., 1.))
+			phi = random.uniform(0., 2. * math.pi)
+			cosi2 = random.uniform(-1., 1.)**2.
 
-	psi = gmst = 0.0
+			fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
 
-	if verbose:
-		progressbar = ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
-	else:
-		progressbar = None
+			# ratio of inverse SNR to distance for each instrument
+			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
 
-	for i in xrange(n_samples):
-		theta = math.acos(random.uniform(-1., 1.))
-		phi = random.uniform(0., 2. * math.pi)
-		cosi2 = random.uniform(-1., 1.)**2.
+			# index of instrument whose SNR grows fastest with decreasing D
+			axis = snr_times_D.argmax()
 
-		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
+			# furthest an event can be and still be above snr_min in
+			# all instruments, and the SNR that corresponds to in the
+			# instrument whose SNR grows fastest
+			snr_start = snr_times_D[axis] * (snr_min / snr_times_D.min())
 
-		# ratio of inverse SNR to distance for each instrument
-		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1. + cosi2)**2. / 4., cosi2]))**0.5
+			# 3 steps per bin
+			for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(cls.snr_max), decades_per_step):
+				# "snr" is SNR in fastest growing instrument, from
+				# this the distance to the source is:
+				#
+				#	D = snr_times_D[axis] / snr
+				#
+				# and the SNRs in all instruments are:
+				#
+				#	snr_times_D / D
+				#
+				# but round-off protection is required to ensure
+				# all SNRs are within the allowed range
+				#
+				# SNR step size:
+				#	d(snr) = (10**decades_per_step - 1.) * snr
+				#
+				# rate of change of D with SNR:
+				#	dD/d(snr) = -snr_times_D / snr^2
+				#	          = -D / snr
+				#
+				# relationship b/w dD and d(snr):
+				#	dD = -D / snr d(snr)
+				#	   = -D * (10**decades_per_step - 1.)
+				#
+				# number of sources:
+				#	\propto D^2 |dD|
+				#	\propto D^3 * (10**decades_per_step - 1.)
+				D = snr_times_D[axis] / snr
+				pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
 
-		# index of instrument whose SNR grows fastest with decreasing D
-		axis = snr_times_D.argmax()
+			if progressbar is not None:
+				progressbar.increment()
 
-		# furthest an event can be and still be above snr_min in
-		# all instruments, and the SNR that corresponds to in the
-		# instrument whose SNR grows fastest
-		snr_start = snr_times_D[axis] * (snr_min / snr_times_D.min())
-
-		# 3 steps per bin
-		for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(snr_max), decades_per_step):
-			# "snr" is SNR in fastest growing instrument, from
-			# this the distance to the source is:
-			#
-			#	D = snr_times_D[axis] / snr
-			#
-			# and the SNRs in all instruments are:
-			#
-			#	snr_times_D / D
-			#
-			# but round-off protection is required to ensure
-			# all SNRs are within the allowed range
-			#
-			# SNR step size:
-			#	d(snr) = (10**decades_per_step - 1.) * snr
-			#
-			# rate of change of D with SNR:
-			#	dD/d(snr) = -snr_times_D / snr^2
-			#	          = -D / snr
-			#
-			# relationship b/w dD and d(snr):
-			#	dD = -D / snr d(snr)
-			#	   = -D * (10**decades_per_step - 1.)
-			#
-			# number of sources:
-			#	\propto D^2 |dD|
-			#	\propto D^3 * (10**decades_per_step - 1.)
-			D = snr_times_D[axis] / snr
-			pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
-
-		if progressbar is not None:
-			progressbar.increment()
-
-	# number of bins per unit in SNR in the binnings.  For use as the
-	# width parameter in the filtering.
-	bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
-	rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
-	numpy.clip(pdf.array, 0, PosInf, pdf.array)
-	# set the region where any SNR is lower than the input threshold to
-	# zero before normalizing the pdf and returning.
-	range_all = slice(None,None)
-	range_low = slice(snr_min, snr_threshold)
-	for i in xrange(len(inst_horiz_mapping)):
-		slices = [range_all] * len(inst_horiz_mapping)
-		slices[i] = range_low
-		pdf[tuple(slices)] = 0
-	pdf.to_pdf()
-	return pdf
+		# number of bins per unit in SNR in the binnings.  For use as the
+		# width parameter in the filtering.
+		bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
+		rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
+		numpy.clip(pdf.array, 0, PosInf, pdf.array)
+		# set the region where any SNR is lower than the input threshold to
+		# zero before normalizing the pdf and returning.
+		range_all = slice(None,None)
+		range_low = slice(snr_min, cls.snr_min)
+		for i in xrange(len(inst_horiz_mapping)):
+			slices = [range_all] * len(inst_horiz_mapping)
+			slices[i] = range_low
+			pdf[tuple(slices)] = 0
+		pdf.to_pdf()
+		return pdf
 
 
 def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 500000):
@@ -924,7 +919,7 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 	# get instrument names
 	names = tuple(inst_horiz_mapping)
 	# get horizon distances and responses in that same order
-	DH = numpy.array([inst_horiz_mapping[inst] for inst in names])
+	DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in names])
 	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
 
 	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(inst_horiz_mapping) + 1) for instruments in iterutils.choices(tuple(inst_horiz_mapping), n)), 0.0)
@@ -938,7 +933,7 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
 
 		# ratio of inverse SNR to distance for each instrument
-		snr_times_D = 8. * DH * numpy.dot(fpfc2, numpy.array([(1. + cosi2)**2. / 4., cosi2]))**0.5
+		snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
 
 		# the volume visible to each instrument given the
 		# requirement that a source be above the SNR threshold
@@ -960,7 +955,7 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 		# for each instrument combination, probability that a
 		# source visible to at least two instruments is visible to
 		# that combination
-		P = [x / V[0] for x in V]
+		P = tuple(x / V[0] for x in V)
 
 		# for each instrument combination, probability that a
 		# source visible to at least two instruments is visible to
