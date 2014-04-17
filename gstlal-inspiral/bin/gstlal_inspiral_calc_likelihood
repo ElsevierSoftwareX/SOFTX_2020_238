@@ -81,7 +81,7 @@ def parse_command_line():
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
-	parser.add_option("--no-trim-database", action = "store_true", help = "Do not delete events that are found to be below the pipeline's likelihood ratio threshold (default = delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to try reranking the events later with a different ranking statistic.")
+	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
 	options.likelihood_filenames = []
@@ -360,7 +360,7 @@ for n, filename in enumerate(filenames, 1):
 	# Delete low significance events to reduce database size
 	#
 
-	if not options.no_trim_database:
+	if options.trim_database:
 		cursor = connection.cursor()
 		cursor.execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
 		cursor.execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
