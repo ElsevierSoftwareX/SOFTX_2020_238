@@ -189,7 +189,7 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None):
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
 	lo, hi = signal_axes.get_xlim()
 	signal_axes.set_xlim((lo, hi))
-	signal_axes.set_xlabel("Count")
+	signal_axes.set_xlabel("$\mathrm{Signals} / \mathrm{Experiment}$")
 	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
 
 	if confidence_intervals is not None:
