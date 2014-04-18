@@ -1639,7 +1639,8 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, progressbar = Non
 	else:
 		import pickle
 		samples = pickle.load(open("rate_posterior_samples.pickle"))
-		progressbar.increment(delta = progressbar.max)
+		if progressbar is not None:
+			progressbar.update(progressbar.max)
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
