@@ -1141,7 +1141,8 @@ class RankingData(object):
 		for i in xrange(nsamples):
 			params, lnP_params = random_params_func()
 			lamb = likelihoodratio_func(params)
-			assert not math.isnan(lamb)
+			if math.isnan(lamb):
+				raise ValueError("encountered NaN likelihood ratio at %s" % repr(params))
 			yield lamb, lnP_signal_func(params) - lnP_params, lnP_noise_func(params) - lnP_params
 
 	def _compute_combined_rates(self):
