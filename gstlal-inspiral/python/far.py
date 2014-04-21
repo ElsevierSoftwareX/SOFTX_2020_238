@@ -839,21 +839,22 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# ratio of inverse SNR to distance for each instrument
 			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
 
-			# index of instrument whose SNR grows fastest with decreasing D
-			axis = snr_times_D.argmax()
+			# snr * D in instrument whose SNR grows fastest
+			# with decreasing D
+			max_snr_times_D = snr_times_D.max()
 
 			# furthest an event can be and still be above
 			# snr_min in all instruments, and the SNR that
 			# corresponds to in the instrument whose SNR grows
 			# fastest
-			snr_start = snr_times_D[axis] * (snr_min / snr_times_D.min())
+			snr_start = max_snr_times_D * (snr_min / snr_times_D.min())
 
 			# 3 steps per bin
 			for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(cls.snr_max), decades_per_step):
 				# "snr" is SNR in fastest growing instrument, from
 				# this the distance to the source is:
 				#
-				#	D = snr_times_D[axis] / snr
+				#	D = max_snr_times_D / snr
 				#
 				# and the SNRs in all instruments are:
 				#
@@ -876,7 +877,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				# number of sources:
 				#	\propto D^2 |dD|
 				#	\propto D^3 * (10**decades_per_step - 1.)
-				D = snr_times_D[axis] / snr
+				D = max_snr_times_D / snr
 				pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
 
 			if progressbar is not None:
