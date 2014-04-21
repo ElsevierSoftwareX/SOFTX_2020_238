@@ -611,25 +611,20 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	#
 
 
-	if options.data_source not in ("lvshm", "framexmit"):
-		# FIXME:  why do we do this this?  why in a conditional?
-		if options.verbose:
-			print >>sys.stderr, "setting pipeline state to paused ..."
-		if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("pipeline did not enter paused state")
-	else:
+	if options.data_source in ("lvshm", "framexmit"):
 		#
 		# setup sigint handler to shutdown pipeline.  this is how
 		# the program stops gracefully, it is the only way to stop
 		# it.  Otherwise it runs forever man.
 		#
+		# this is only done in the online case because we want
+		# offline jobs to just die and not write partial databases
+		#
 
-		# FIXME:  why is this being done in a conditional?  isn't
-		# this a good idea for offline as well?
 		signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
 		signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
 
-	
+
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
 	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
