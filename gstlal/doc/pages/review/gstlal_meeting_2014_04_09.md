@@ -13,7 +13,9 @@
 
 Actions
  - Chad: Please provide instructions on how to make the review pages appear online. At the moment the pages dont seem to appear even after several days and no one knows how to do this apart from Chad.
+  - The pages show up after the gstlalcbc account pulls and builds the doc.  This will be automatic once we move the doc to UWM nightly build
  - Kipp: Prepare a simple flow-chart of the pipeline for the gstlal-inspiral analysis that produces GRACE-DB triggers. Identify the codes that are used in different boxes of the flow-chart and give us an idea of what those codes contain so we can together estimate the effort required to get the review done before aLIGO analysis.
+  - We have started to put some flow charts here for the low-latency analysis: \ref gstlalinspirallowlatencysearchpage 
  - Forent: Please run the injections using a sampling frequency > 16384 Hz and make sure it works.
  - Kipp: The code allows injections with start times that are greater than end times. The code should not allow this to happen. Kipp to write a "if" statement check for start and end times and to fix this bug. (FIXED:  see 82db43aabc51ae5af1847771db60fb5438e8e546).
  - Florent: The code does not say much about what is happening in the verbose mode: Run the code by using GST_DEBUG=lal_simulation:5, etc. to see if there is enough of debugging information.
