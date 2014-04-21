@@ -457,11 +457,17 @@ else:
 for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output, options.likelihood_file):
 	#
 	# create a new, empty, Bottle application and make it the current
-	# default
+	# default, then start http server(s) to serve it up
 	#
 
 
 	bottle.default_app.push()
+	if options.data_source in ("lvshm", "framexmit"):
+		# FIXME: choose random port so that will work for offline
+		# jobs as well, then don't hide in conditional
+		httpservers = httpinterface.HTTPServers(16953, bottle_app = bottle.default_app(), verbose = options.verbose)
+	else:
+		httpservers = None
 
 
 	#
@@ -470,14 +476,17 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	@bottle.route("/")
-	@bottle.route("/registry.txt")
+	@bottle.route("/index.html")
 	def register(job_tag = options.job_tag, host = socket.gethostname(), instruments = set(svd_bank.keys())):
-		yield "# %s %s %s\n" % (job_tag, host, " ".join(instruments))
+		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
-			if route.rule in ("/", "/registry.txt"):
+			if route.rule in ("/", "/index.html"):
 				# don't create links back to this page
 				continue
-			yield "http://%s:16953/%s\n" % (host, route.rule)
+			yield "<a href=\"http://%s:16953/%s\">%s</a>\n" % (host, route.rule, route.rule)
+		yield "</p>\n</body></html>"
+	if httpservers is not None:
+		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").write("http://%s:16953/" % socket.gethostname())
 
 
 	#
@@ -602,27 +611,20 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	if options.data_source not in ("lvshm", "framexmit"):
+		# FIXME:  why do we do this this?  why in a conditional?
 		if options.verbose:
 			print >>sys.stderr, "setting pipeline state to paused ..."
 		if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
 			raise RuntimeError("pipeline did not enter paused state")
-		httpservers = None
 	else:
-		#
-		# start http interface and dump URL list
-		#
-
-		# FIXME: don't hard-code port, don't use in this program
-		# right now since more than one job runs per machine
-		httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
-		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").writelines(register())
-
 		#
 		# setup sigint handler to shutdown pipeline.  this is how
 		# the program stops gracefully, it is the only way to stop
 		# it.  Otherwise it runs forever man.
 		#
 
+		# FIXME:  why is this being done in a conditional?  isn't
+		# this a good idea for offline as well?
 		signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
 		signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
 
