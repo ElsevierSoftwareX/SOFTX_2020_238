@@ -474,17 +474,17 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	@bottle.route("/index.html")
 	def index(job_tag = options.job_tag, instruments = set(svd_bank.keys())):
 		host = socket.gethostname()
-		server_address = "http://%s" % host
-		server_address += ":%d" % httpservers[0][0].port
+		server_address = "http://%s:%d" % (host, httpservers[0][0].port)
 		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
 			if route.rule in ("/", "/index.html"):
 				# don't create links back to this page
 				continue
-			yield "<a href=\"%s/%s\">%s</a>\n" % (server_address, route.rule, route.rule)
+			yield "<a href=\"%s%s\">%s</a>\n" % (server_address, route.rule, route.rule)
 		yield "</p>\n</body></html>"
 	# FIXME:  get service-discovery working, then don't do this
-	open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").write("%s/" % server_address)
+	if "GSTLAL_LL_JOB" in os.environ:
+		open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
 
 	#
