@@ -1487,7 +1487,8 @@ def RatesLnPDF((Rf, Rb), f_over_b, lnpriorfunc = lambda Rf, Rb: -0.5 * math.log(
 
 def maximum_likelihood_rates(f_over_b):
 	from scipy.optimize import fmin
-	return fmin((lambda x: -RatesLnPDF(x, f_over_b)), (1.0, float(len(f_over_b))), disp = True)
+	# the upper bound is chosen to include N + \sqrt{N}
+	return fmin((lambda x: -RatesLnPDF(x, f_over_b)), (1.0, len(f_over_b) + len(f_over_b)**.5), disp = True)
 
 
 def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, args = (), n_burn = 100, progressbar = None):
