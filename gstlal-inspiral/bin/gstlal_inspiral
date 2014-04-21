@@ -477,16 +477,21 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 	@bottle.route("/")
 	@bottle.route("/index.html")
-	def register(job_tag = options.job_tag, host = socket.gethostname(), instruments = set(svd_bank.keys())):
+	def index(job_tag = options.job_tag, instruments = set(svd_bank.keys())):
+		host = socket.gethostname()
+		server_address = "http://%s" % host
+		if httpservers is not None:
+			# FIXME:  really only works if a single server gets started
+			server_address += ":%d" % httpservers[0][0].port
 		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
 			if route.rule in ("/", "/index.html"):
 				# don't create links back to this page
 				continue
-			yield "<a href=\"http://%s:16953/%s\">%s</a>\n" % (host, route.rule, route.rule)
+			yield "<a href=\"%s/%s\">%s</a>\n" % (server_address, route.rule, route.rule)
 		yield "</p>\n</body></html>"
 	if httpservers is not None:
-		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").write("http://%s:16953/" % socket.gethostname())
+		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").write("%s/" % server_address)
 
 
 	#
