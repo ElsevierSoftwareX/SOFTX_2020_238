@@ -480,7 +480,10 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 			if route.rule in ("/", "/index.html"):
 				# don't create links back to this page
 				continue
-			yield "<a href=\"%s%s\">%s</a>\n" % (server_address, route.rule, route.rule)
+			if route.method != "GET":
+				# only create links for GET methods
+				continue
+			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
 		yield "</p>\n</body></html>"
 	# FIXME:  get service-discovery working, then don't do this
 	if "GSTLAL_LL_JOB" in os.environ:
