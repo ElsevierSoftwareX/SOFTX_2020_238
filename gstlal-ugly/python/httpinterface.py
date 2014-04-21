@@ -47,7 +47,7 @@ from gstlal import servicediscovery
 #
 
 
-class HTTPServers(object):
+class HTTPServers(list):
 	"""
 	Utility to start, advertise, track and shutdown http servers on all
 	interfaces.  De-advertise and shutdown the servers by deleting this
@@ -71,7 +71,6 @@ class HTTPServers(object):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
-		self.servers_and_threads = []
 		self.service_publisher = servicediscovery.Publisher()
 		service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_STYPE)
 		for (ignored, ignored, ignored, ignored, (_host, _port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
@@ -79,7 +78,7 @@ class HTTPServers(object):
 			httpd_thread = threading.Thread(target = httpd.run, args = (bottle_app,))
 			httpd_thread.daemon = True
 			httpd_thread.start()
-			self.servers_and_threads.append((httpd, httpd_thread))
+			self.append((httpd, httpd_thread))
 			if verbose:
 				print >>sys.stderr, "started http server on http://%s:%d" % (_host, _port)
 			self.service_publisher.addservice(servicediscovery.ServiceInfo(
@@ -90,12 +89,12 @@ class HTTPServers(object):
 			))
 			if verbose:
 				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (_host, _port, service_name)
-		if not self.servers_and_threads:
+		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port is not None else ""))
 
 	def __del__(self):
-		while self.servers_and_threads:
-			httpd, httpd_thread = self.servers_and_threads.pop()
+		while self:
+			httpd, httpd_thread = self.pop()
 			if self.verbose:
 				print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.srv.server_address,
 			try:
