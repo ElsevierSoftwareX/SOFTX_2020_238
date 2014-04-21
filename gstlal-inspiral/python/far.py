@@ -842,9 +842,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# index of instrument whose SNR grows fastest with decreasing D
 			axis = snr_times_D.argmax()
 
-			# furthest an event can be and still be above snr_min in
-			# all instruments, and the SNR that corresponds to in the
-			# instrument whose SNR grows fastest
+			# furthest an event can be and still be above
+			# snr_min in all instruments, and the SNR that
+			# corresponds to in the instrument whose SNR grows
+			# fastest
 			snr_start = snr_times_D[axis] * (snr_min / snr_times_D.min())
 
 			# 3 steps per bin
@@ -881,13 +882,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if progressbar is not None:
 				progressbar.increment()
 
-		# number of bins per unit in SNR in the binnings.  For use as the
-		# width parameter in the filtering.
+		# number of bins per unit in SNR in the binnings.  For use
+		# as the width parameter in the filtering.
 		bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
 		rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
 		numpy.clip(pdf.array, 0, PosInf, pdf.array)
-		# set the region where any SNR is lower than the input threshold to
-		# zero before normalizing the pdf and returning.
+		# set the region where any SNR is lower than the input
+		# threshold to zero before normalizing the pdf and
+		# returning.
 		range_all = slice(None,None)
 		range_low = slice(snr_min, cls.snr_min)
 		for i in xrange(len(inst_horiz_mapping)):
