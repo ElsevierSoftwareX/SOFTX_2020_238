@@ -2764,6 +2764,8 @@ class WSGIRefServer(ServerAdapter):
                     address_family = socket.AF_INET6
 
         srv = make_server(self.host, self.port, app, server_cls, handler_cls)
+        # in case a port was assigned randomly
+        self.port = srv.server_port
         srv.serve_forever()
 
 
