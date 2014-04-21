@@ -1570,7 +1570,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, likelihood_ratios, progressbar = None):
+def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instruments = None, progressbar = None):
 	"""
 	FIXME:  document this
 	"""
@@ -1598,7 +1598,7 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, progressbar = Non
 
 	order = range(len(likelihood_ratios))
 	order.sort(key = likelihood_ratios.__getitem__)
-	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[None][likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[None][likelihood_ratios[index],] for index in order])
+	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][likelihood_ratios[index],] for index in order])
 
 	# remove NaNs.  these occur because the ranking statistic PDFs have
 	# been zeroed at the cut-off and some events get pulled out of the
