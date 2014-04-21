@@ -74,24 +74,24 @@ class HTTPServers(object):
 		self.servers_and_threads = []
 		self.service_publisher = servicediscovery.Publisher()
 		service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_STYPE)
-		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
-			httpd = bottle.WSGIRefServer(host = host, port = port)
+		for (ignored, ignored, ignored, ignored, (_host, _port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
+			httpd = bottle.WSGIRefServer(host = _host, port = _port)
 			httpd_thread = threading.Thread(target = httpd.run, args = (bottle_app,))
 			httpd_thread.daemon = True
 			httpd_thread.start()
 			self.servers_and_threads.append((httpd, httpd_thread))
 			if verbose:
-				print >>sys.stderr, "started http server on http://%s:%d" % (host, port)
+				print >>sys.stderr, "started http server on http://%s:%d" % (_host, _port)
 			self.service_publisher.addservice(servicediscovery.ServiceInfo(
 				servicediscovery.DEFAULT_STYPE,
 				service_name,
-				address = socket.inet_aton(host),
-				port = port
+				address = socket.inet_aton(_host),
+				port = _port
 			))
 			if verbose:
-				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (host, port, service_name)
+				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (_host, _port, service_name)
 		if not self.servers_and_threads:
-			raise ValueError("unable to start servers on port %d" % port)
+			raise ValueError("unable to start servers%s" % (" on port %d" % port if port is not None else ""))
 
 	def __del__(self):
 		while self.servers_and_threads:
