@@ -80,17 +80,17 @@ class HTTPServers(list):
 			httpd_thread.start()
 			self.append((httpd, httpd_thread))
 			if verbose:
-				print >>sys.stderr, "started http server on http://%s:%d" % (_host, _port)
+				print >>sys.stderr, "started http server on http://%s:%d" % (httpd.host, httpd.port)
 			self.service_publisher.addservice(servicediscovery.ServiceInfo(
 				servicediscovery.DEFAULT_STYPE,
 				service_name,
-				address = socket.inet_aton(_host),
-				port = _port
+				address = socket.inet_aton(httpd.host),
+				port = httpd.port
 			))
 			if verbose:
-				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (_host, _port, service_name)
+				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (httpd.host, httpd.port, service_name)
 		if not self:
-			raise ValueError("unable to start servers%s" % (" on port %d" % port if port is not None else ""))
+			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
 
 	def __del__(self):
 		while self:
