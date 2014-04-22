@@ -135,6 +135,8 @@ class HTTPServers(list):
 				else:
 					if verbose:
 						print >>sys.stderr, "done"
+			elif verbose:
+				print >>sys.stderr, "service discovery not available, http server not advertised"
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
 
