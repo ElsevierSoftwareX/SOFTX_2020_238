@@ -1,4 +1,4 @@
-# Copyright (C) 2012  Kipp Cannon
+# Copyright (C) 2012--2014  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -24,10 +24,9 @@
 #
 
 
+import avahi
+import dbus
 import socket
-
-
-from gstlal.pyzeroconf import Zeroconf
 
 
 __all__ = ["DEFAULT_PROTO", "DEFAULT_DOMAIN", "ServiceInfo", "Publisher", "Listener", "ServiceBrowser"]
@@ -51,9 +50,6 @@ DEFAULT_PROTO = "_http._tcp."
 DEFAULT_DOMAIN = "local."
 
 
-from gstlal.pyzeroconf.Zeroconf import ServiceInfo
-
-
 #
 # =============================================================================
 #
@@ -63,68 +59,31 @@ from gstlal.pyzeroconf.Zeroconf import ServiceInfo
 #
 
 
-try:
-	#
-	# avahi is the preferred way to do this.  as a system-level service
-	# it allows multiple applications to advertise services without
-	# contention (there can be only one responder per host), and the
-	# daemon can cache service announcements even when the application
-	# that cares about them has not yet started
-	#
+class Publisher(object):
+	def __init__(self):
+		bus = dbus.SystemBus()
+		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+		self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
 
-	import avahi
-	import dbus
+	def addservice(self, serviceinfo):
+		self.group.AddService(
+			avahi.IF_UNSPEC,	# interface
+			avahi.PROTO_UNSPEC,	# protocol
+			dbus.UInt32(0),		# flags
+			serviceinfo.getName().rstrip(".local."),	# service name
+			serviceinfo.getType().rstrip(".local."),	# service type
+			"local",	# FIXME	# domain
+			"", # FIXME socket.inet_ntoa(serviceinfo.getAddress()),	# host/address
+			dbus.UInt16(serviceinfo.getPort()),	# port
+			serviceinfo.getText()	# text/description
+		)
+		self.group.Commit()
 
-	_zc = None
+	def unpublish(self):
+		self.group.Reset()
 
-	class Publisher(object):
-		def __init__(self):
-			bus = dbus.SystemBus()
-			server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-			self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
-
-		def addservice(self, serviceinfo):
-			self.group.AddService(
-				avahi.IF_UNSPEC,	# interface
-				avahi.PROTO_UNSPEC,	# protocol
-				dbus.UInt32(0),		# flags
-				serviceinfo.getName().rstrip(".local."),	# service name
-				serviceinfo.getType().rstrip(".local."),	# service type
-				"local",	# FIXME	# domain
-				"", # FIXME socket.inet_ntoa(serviceinfo.getAddress()),	# host/address
-				dbus.UInt16(serviceinfo.getPort()),	# port
-				serviceinfo.getText()	# text/description
-			)
-			self.group.Commit()
-
-		def unpublish(self):
-			self.group.Reset()
-
-		def __del__(self):
-			self.unpublish()
-
-except ImportError:
-	#
-	# the Zeroconf module provides a pure python responder
-	# implementation that we can fall back on if avahi isn't available
-	#
-
-	_zc = Zeroconf.Zeroconf(bindaddress = "0.0.0.0")
-
-	class Publisher(object):
-		def __init__(self):
-			self.group = set()
-
-		def addservice(self, serviceinfo):
-			_zc.registerService(serviceinfo)
-			self.group.add(serviceinfo)
-
-		def unpublish(self):
-			while self.group:
-				_zc.unregisterService(self.group.pop())
-
-		def __del__(self):
-			self.unpublish()
+	def __del__(self):
+		self.unpublish()
 
 
 #
@@ -144,42 +103,28 @@ class Listener(object):
 		pass
 
 
-if _zc is None:
+class ServiceBrowser(object):
+	def __init__(self, listener, stype = DEFAULT_PROTO + DEFAULT_DOMAIN):
+		self.listener = listener
+		bus = dbus.SystemBus()
+		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+		browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.ServiceBrowserNew(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, stype, "local", dbus.UInt32(0))), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
+		browser.connect_to_signal("ItemNew", self.__itemnew_handler)
 
-	class ServiceBrowser(object):
-		def __init__(self, listener, stype = DEFAULT_PROTO + DEFAULT_DOMAIN):
-			self.listener = listener
-			bus = dbus.SystemBus()
-			server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-			browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.ServiceBrowserNew(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, stype, "local", dbus.UInt32(0))), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-			browser.connect_to_signal("ItemNew", self.__itemnew_handler)
+	def __itemnew_handler(self, interface, protocol, name, stype, domain, flags):
+		if flags & avahi.LOOKUP_RESULT_LOCAL:
+			# local service
+			pass
+		self.listener.addService(stype, name, None, interface, None, None)
 
-		def __itemnew_handler(self, interface, protocol, name, stype, domain, flags):
-			if flags & avahi.LOOKUP_RESULT_LOCAL:
-				# local service
-				pass
-			self.listener.addService(stype, name, interface, None, None)
 
-else:
-
-	class ServiceBrowser(Zeroconf.ServiceBrowser):
-		def __init__(self, listener, stype = DEFAULT_PROTO + DEFAULT_DOMAIN):
-			self._listener = listener
-			super(ServiceBrowser, self).__init__(_zc, stype, self)
-
-		def addService(self, zc, stype, name):
-			info = zc.getServiceInfo(stype, name)
-			if info is not None:
-				self._listener.addService(stype, name, info.getServer(), info.getAddress(), info.getPort(), info.getProperties())
-			else:
-				self._listener.addService(stype, name, None, None, None, None)
-
-		def removeService(self, zc, stype, name):
-			info = zc.getServiceInfo(stype, name)
-			if info is not None:
-				self._listener.removeService(stype, name, info.getServer(), info.getAddress(), info.getPort(), info.getProperties())
-			else:
-				self._listener.removeService(stype, name, None, None, None, None)
+#
+# =============================================================================
+#
+#                                     Demo
+#
+# =============================================================================
+#
 
 
 if __name__ == "__main__":

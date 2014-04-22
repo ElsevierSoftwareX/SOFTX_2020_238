@@ -37,7 +37,11 @@ import threading
 
 
 from gstlal import bottle
-from gstlal import servicediscovery
+try:
+	from gstlal import servicediscovery
+except ImportError:
+	# disable
+	servicediscovery = None
 
 
 #
@@ -98,8 +102,11 @@ class HTTPServers(list):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
-		self.service_publisher = servicediscovery.Publisher()
-		service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN)
+		if servicediscovery is not None:
+			self.service_publisher = servicediscovery.Publisher()
+			service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN)
+		else:
+			self.service_publisher = None
 		for (ignored, ignored, ignored, ignored, (_host, _port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = bottle.WSGIRefServer(host = _host, port = _port)
 			httpd_thread = threading.Thread(target = httpd.run, args = (bottle_app,))
@@ -111,36 +118,38 @@ class HTTPServers(list):
 			host = httpd.host if httpd.host != "0.0.0.0" else socket.gethostname()
 			if verbose:
 				print >>sys.stderr, "started http server on http://%s:%d" % (host, httpd.port)
-			if verbose:
-				print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
-			try:
-				self.service_publisher.addservice(servicediscovery.ServiceInfo(
-					servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN,
-					name = service_name,
-					server = host,
-					port = httpd.port,
-					properties = service_properties
-				))
-			except Exception as e:
+			if self.service_publisher is not None:
 				if verbose:
-					print >>sys.stderr, "failed: %s" % str(e)
-			else:
-				if verbose:
-					print >>sys.stderr, "done"
+					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
+				try:
+					self.service_publisher.addservice(servicediscovery.ServiceInfo(
+						servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN,
+						name = service_name,
+						server = host,
+						port = httpd.port,
+						properties = service_properties
+					))
+				except Exception as e:
+					if verbose:
+						print >>sys.stderr, "failed: %s" % str(e)
+				else:
+					if verbose:
+						print >>sys.stderr, "done"
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
 
 	def __del__(self):
-		if self.verbose:
-			print >>sys.stderr, "de-advertising http server(s) ...",
-		try:
-			self.service_publisher.unpublish()
-		except Exception as e:
+		if self.service_publisher is not None:
 			if self.verbose:
-				print >>sys.stderr, "failed: %s" % str(e)
-		else:
-			if self.verbose:
-				print >>sys.stderr, "done"
+				print >>sys.stderr, "de-advertising http server(s) ...",
+			try:
+				self.service_publisher.unpublish()
+			except Exception as e:
+				if self.verbose:
+					print >>sys.stderr, "failed: %s" % str(e)
+			else:
+				if self.verbose:
+					print >>sys.stderr, "done"
 		while self:
 			httpd, httpd_thread = self.pop()
 			if self.verbose:

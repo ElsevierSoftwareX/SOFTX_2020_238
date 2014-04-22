@@ -1,5 +1,3 @@
-SUBDIRS = pyzeroconf
-
 AM_CPPFLAGS = -I$(top_srcdir)/gst/framecpp
 
 # This is a trick taken from the gst-python automake setup.
