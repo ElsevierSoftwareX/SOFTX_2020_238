@@ -98,14 +98,18 @@ class HTTPServers(list):
 		while self:
 			httpd, httpd_thread = self.pop()
 			if self.verbose:
-				print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.srv.server_address,
+				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host, httpd.port),
 			try:
-				httpd.srv.shutdown()
+				httpd.shutdown()
 			except Exception as e:
 				result = "failed: %s" % str(e)
 			else:
 				result = "done"
-			httpd_thread.join()
-			if verbose:
+			if self.verbose:
 				print >>sys.stderr, result
+				print >>sys.stderr, "killing http server thread ...",
+			# wait 10 seconds, then give up
+			httpd_thread.join(10.0)
+			if self.verbose:
+				print >>sys.stderr, "timeout" if httpd_thread.is_alive() else "done"
 		self.service_publisher.unpublish()
