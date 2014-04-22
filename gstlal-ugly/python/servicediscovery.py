@@ -30,6 +30,9 @@ import socket
 from gstlal.pyzeroconf import Zeroconf
 
 
+__all__ = ["DEFAULT_PROTO", "DEFAULT_DOMAIN", "ServiceInfo", "Publisher", "Listener", "ServiceBrowser"]
+
+
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
@@ -44,7 +47,8 @@ __date__ = "FIXME"
 #
 
 
-DEFAULT_STYPE = "_http._tcp.local."
+DEFAULT_PROTO = "_http._tcp."
+DEFAULT_DOMAIN = "local."
 
 
 from gstlal.pyzeroconf.Zeroconf import ServiceInfo
@@ -133,17 +137,17 @@ except ImportError:
 
 
 class Listener(object):
-	def addService(self, stype, name, address, port, properties):
+	def addService(self, stype, name, server, address, port, properties):
 		pass
 
-	def removeService(self, stype, name, address, port, properties):
+	def removeService(self, stype, name, server, address, port, properties):
 		pass
 
 
 if _zc is None:
 
 	class ServiceBrowser(object):
-		def __init__(self, listener, stype = DEFAULT_STYPE):
+		def __init__(self, listener, stype = DEFAULT_PROTO + DEFAULT_DOMAIN):
 			self.listener = listener
 			bus = dbus.SystemBus()
 			server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
@@ -159,23 +163,23 @@ if _zc is None:
 else:
 
 	class ServiceBrowser(Zeroconf.ServiceBrowser):
-		def __init__(self, listener, stype = DEFAULT_STYPE):
+		def __init__(self, listener, stype = DEFAULT_PROTO + DEFAULT_DOMAIN):
 			self._listener = listener
-			super(type(self), self).__init__(_zc, stype, self)
+			super(ServiceBrowser, self).__init__(_zc, stype, self)
 
 		def addService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
 			if info is not None:
-				self._listener.addService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
+				self._listener.addService(stype, name, info.getServer(), info.getAddress(), info.getPort(), info.getProperties())
 			else:
-				self._listener.addService(stype, name, None, None, None)
+				self._listener.addService(stype, name, None, None, None, None)
 
 		def removeService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
 			if info is not None:
-				self._listener.removeService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
+				self._listener.removeService(stype, name, info.getServer(), info.getAddress(), info.getPort(), info.getProperties())
 			else:
-				self._listener.removeService(stype, name, None, None, None)
+				self._listener.removeService(stype, name, None, None, None, None)
 
 
 if __name__ == "__main__":
@@ -198,10 +202,11 @@ if __name__ == "__main__":
 
 		publisher = Publisher()
 		publisher.addservice(ServiceInfo(
-			DEFAULT_STYPE,
-			"%s.%s" % ("My Test Service", DEFAULT_STYPE),
+			DEFAULT_PROTO + DEFAULT_DOMAIN,
+			"%s.%s" % ("My Test Service", DEFAULT_PROTO + DEFAULT_DOMAIN),
 			address = socket.inet_aton("127.0.0.1"),
 			port = 3000,
+			server = socket.gethostname(),
 			properties = {
 				"version": "0.10",
 				"a": "test value",
@@ -216,12 +221,17 @@ if __name__ == "__main__":
 		#
 
 		class MyListener(Listener):
-			def addService(self, stype, name, address, port, properties):
-				print >>sys.stderr, "Service \"%s\" added" % name
+			def print_msg(self, action, stype, name, server, address, port, properties):
+				print >>sys.stderr, "Service \"%s\" %s" % (name, action)
 				print >>sys.stderr, "\tType is \"%s\"" % stype
+				print >>sys.stderr, "\tServer is %s" % server
 				print >>sys.stderr, "\tAddress is %s" % (address and socket.inet_ntoa(address))
 				print >>sys.stderr, "\tPort is %s" % port
 				print >>sys.stderr, "\tProperties are %s" % properties
 				print >>sys.stderr, "Browsing for services.  Press return quit."
+			def addService(self, stype, name, server, address, port, properties):
+				self.print_msg("added", stype, name, server, address, port, properties)
+			def removeService(self, stype, name, server, address, port, properties):
+				self.print_msg("removed", stype, name, server, address, port, properties)
 		browser = ServiceBrowser(MyListener())
 		raw_input("Browsing for services.  Press return quit.\n")
