@@ -248,7 +248,7 @@ def parse_command_line():
 
 	# Online options
 
-	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (required).")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
