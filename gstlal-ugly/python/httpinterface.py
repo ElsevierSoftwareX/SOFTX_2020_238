@@ -79,6 +79,8 @@ class HTTPServers(list):
 			httpd_thread.daemon = True
 			httpd_thread.start()
 			self.append((httpd, httpd_thread))
+			while httpd.port == 0:
+				pass
 			if verbose:
 				print >>sys.stderr, "started http server on http://%s:%d" % (httpd.host, httpd.port)
 			self.service_publisher.addservice(servicediscovery.ServiceInfo(
