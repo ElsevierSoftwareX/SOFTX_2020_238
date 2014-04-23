@@ -94,47 +94,59 @@ https://wiki.ligo.org/AuthProject/LIGOCARobotCertificate
 
 \section Banks Preparing the template banks
 
-The following graph shows the sequence of events to make the online template banks. These steps are mostly automated by a Makefile and a condor dag.
+\subsection banks_description Description of the workflow
+
+The following graph shows the sequence of events to make the online template
+banks. These steps are mostly automated by a Makefile and a condor dag.
 
 Steps in the Makefile
 
 @dot
 digraph banks {
+	// graph attributes
+	graph [fontname="Roman", fontsize=11];
+	edge [ fontname="Roman", fontsize=10 ];
+	node [fontname="Roman", shape=box, fontsize=11, style=filled];
+
 	gstlal_fake_frames [URL="\ref gstlal_fake_frames"];
 	lalapps_tmpltbank;
-	gstlal_bank_splitter_H1 [URL="\ref gstlal_bank_splitter"];
-	gstlal_bank_splitter_L1 [URL="\ref gstlal_bank_splitter"];
-	gstlal_bank_splitter_V1 [URL="\ref gstlal_bank_splitter"];
+	"H1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=red1];
+	"L1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=green1];
+	"V1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=magenta1];
 
 	gstlal_fake_frames -> lalapps_tmpltbank;
-	lalapps_tmpltbank -> gstlal_bank_splitter_H1;
-	lalapps_tmpltbank -> gstlal_bank_splitter_L1;
-	lalapps_tmpltbank -> gstlal_bank_splitter_V1;
+	lalapps_tmpltbank -> "H1 gstlal_bank_splitter";
+	lalapps_tmpltbank -> "L1 gstlal_bank_splitter";
+	lalapps_tmpltbank -> "V1 gstlal_bank_splitter";
 
-	gstlal_psd_xml_from_asd_txt_H1 [URL="\ref gstlal_psd_xml_from_asd_txt"]
-	gstlal_psd_xml_from_asd_txt_L1 [URL="\ref gstlal_psd_xml_from_asd_txt"]
-	gstlal_psd_xml_from_asd_txt_V1 [URL="\ref gstlal_psd_xml_from_asd_txt"]
+	"H1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=red1]
+	"L1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=green1]
+	"V1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=magenta1]
 	ligolw_add;
 
-	gstlal_psd_xml_from_asd_txt_H1 -> ligolw_add;
-	gstlal_psd_xml_from_asd_txt_L1 -> ligolw_add;
-	gstlal_psd_xml_from_asd_txt_V1 -> ligolw_add;
+	"H1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
+	"L1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
+	"V1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
 
-	gstlal_inspiral_svd_bank_pipe_H1;
-	gstlal_inspiral_svd_bank_pipe_L1;
-	gstlal_inspiral_svd_bank_pipe_V1;
-	
-	gstlal_bank_splitter_H1 -> gstlal_inspiral_svd_bank_pipe_H1;
-	gstlal_bank_splitter_L1 -> gstlal_inspiral_svd_bank_pipe_L1;
-	gstlal_bank_splitter_V1 -> gstlal_inspiral_svd_bank_pipe_V1;
-	ligolw_add -> gstlal_inspiral_svd_bank_pipe_H1;
+	"H1 gstlal_inspiral_svd_bank_pipe" [color=red1];
+	"L1 gstlal_inspiral_svd_bank_pipe" [color=green1];
+	"V1 gstlal_inspiral_svd_bank_pipe" [color=magenta1];
 
-	gstlal_inspiral_svd_bank_pipe_H1 -> bank_dag;
-	gstlal_inspiral_svd_bank_pipe_L1 -> bank_dag;
-	gstlal_inspiral_svd_bank_pipe_V1 -> bank_dag;
+	"H1 gstlal_bank_splitter" -> "H1 gstlal_inspiral_svd_bank_pipe";
+	"L1 gstlal_bank_splitter" -> "L1 gstlal_inspiral_svd_bank_pipe";
+	"V1 gstlal_bank_splitter" -> "V1 gstlal_inspiral_svd_bank_pipe";
+	ligolw_add -> "H1 gstlal_inspiral_svd_bank_pipe";
+
+	"bank dag" [shape=doubleoctagon];
+
+	"H1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
+	"L1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
+	"V1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
 }
 @enddot
 
+
+\subsection Instructions
 
 - First make a directory for the template banks, e.g.,
 
@@ -154,24 +166,11 @@ example</a>
 		$ make -f Makefile.ERBank
 
 - After several minutes this will result in a dag file that can be submited by
-  doing
-
 		$ condor_submit_dag bank.dag
 
 - You can track the progress of the dag by doing:
 
 		$ tail -f bank.dag.dagman.out
-
-\subsection Resources Resources used 
-
-- gstlal_fake_frames
-- lalapps_tmpltbank
-- gstlal_bank_splitter
-- gstlal_psd_xml_from_asd_txt
-- ligolw_add
-- lalapps_path2cache
-- gstlal_inspiral_svd_bank_pipe
-
 
 \section Analysis Setting up the analysis dag
 
@@ -181,7 +180,15 @@ set up in the previous section.
 
 @dot
 digraph analysis {
-	gstlal_inspiral_create_prior_diststats -> gstlal_inspiral_marginalize_likelihood -> gstlal_ll_trigger_pipe
+	// graph attributes
+	graph [fontname="Roman", fontsize=11];
+	edge [ fontname="Roman", fontsize=10 ];
+	node [fontname="Roman", shape=box, fontsize=11, style=filled];
+	
+	"bank dag" [shape=doubleoctagon];
+	"analysis dag" [shape=doubleoctagon];
+	
+	"bank dag" -> gstlal_inspiral_create_prior_diststats -> gstlal_inspiral_marginalize_likelihood -> gstlal_ll_trigger_pipe -> "analysis dag"
 }
 @enddot
 
@@ -258,8 +265,22 @@ digraph llpipe {
 	H1 [label="H1 Observatory:\nO(10)s h(t) generation\nlatency", color=red1, style=filled];
 	L1 [label="L1 Observatory:\nO(10)s h(t) generation\nlatency", color=green1, style=filled];
 	V1 [label="V1 Observatory:\nO(10)s h(t) generation\nlatency", color=magenta1, style=filled];
-	//CIT [label="CIT HTCondor Pool", style=filled, color=grey];
-	HeadNode [label="CIT Head Node:\n- Monitoring\n- Background Estimation: gstlal_inspiral_marginalize_likelihoods_online\n- Analysis control", style=filled, color=grey, URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
+	//HeadNode [label="CIT Head Node:\n- Monitoring\n- Background Estimation: gstlal_inspiral_marginalize_likelihoods_online\n- Analysis control", style=filled, color=grey, URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
+
+
+        HeadNode [
+                style=filled, color=grey,
+                label = <<TABLE>
+                        <TR><TD colspan="3"><B>CIT Head Node</B></TD></TR>
+                        <TR>
+                                <TD href="\ref gstlal_inspiral_marginalize_likelihoods_online">gstlal_inspiral_marginalize_likelihoods_online | </TD>
+                                <TD>HTCondor dagman | </TD>
+                                <TD>lvalert_listen</TD>
+                        </TR>
+                        </TABLE>>
+                ];
+
+
 	WebServer [label="CIT Webserver\nRemote monitoring", style=filled, color=grey];
 	gracedb [label="GW Candidate Database\nO(1)s processing time", shape=oval, color=tomato3, style=filled];
 
@@ -329,3 +350,66 @@ As mentioned above you can monitor the output.  Please see the
 gstlal_llcbcsummary for more information. 
 
 Events are uploaded to https://gracedb.ligo.org
+
+\section Review Review status
+
+*Review table*
+
+Redundant entries are ommitted
+
+<table>
+<tr><th> Program				</th><th> Sub programs or modules	</th><th> Line count	</th><th> Review status	</th><th> Comments	</th></tr>
+<tr><td> gstlal_fake_frames			</td><td>				</td><td> 360		</td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td>					</td><td> pipeparts.py			</td><td> 965		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> reference_psd.py		</td><td> 648		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> simplehandler.py		</td><td> 143		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> datasource.py			</td><td> 749		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> multirate_datasource.py	</td><td> 291		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> glue.segments			</td><td> NA		</td><td> \reviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> glue.ligolw*			</td><td> NA		</td><td> \reviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> pylal.datatypes		</td><td> ?		</td><td> ?		</td><td>               </td></tr>
+<tr><td>					</td><td> pylal.series			</td><td> ?		</td><td> ?		</td><td>               </td></tr>
+<tr><td> lalapps_tmpltbank			</td><td>                               </td><td> NA		</td><td> \reviewed	</td><td>               </td></tr>
+<tr><td> gstlal_bank_splitter			</td><td>                               </td><td> 187		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> pylal.spawaveform		</td><td> 1244		</td><td> \notreviewed	</td><td>switch to swig	</td></tr>
+<tr><td>					</td><td> glue.lal			</td><td> NA		</td><td> \reviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> templates.py			</td><td> 299		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> inspiral_pipe.py		</td><td> 279		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td> gstlal_psd_xml_from_asd_txt		</td><td>                               </td><td> 81		</td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td>					</td><td> pylal.xlal*			</td><td> ?		</td><td> ?		</td><td>		</td></tr>
+<tr><td> ligolw_add				</td><td>                               </td><td> NA		</td><td> \reviewed	</td><td>		</td></tr>
+<tr><td> gstlal_inspiral_svd_bank_pipe		</td><td>                               </td><td> 201		</td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> 					</td><td> glue.iterutils                </td><td> NA		</td><td> \reviewed	</td><td>		</td></tr>
+<tr><td> 					</td><td> glue.pipeliene                </td><td> NA		</td><td> \reviewed	</td><td>		</td></tr>
+<tr><td> gstlal_svd_bank			</td><td>                               </td><td> 164		</td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td>					</td><td> svd_bank.py			</td><td> 363		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td>					</td><td> cbc_template_fir.py		</td><td> 443		</td><td> \notreviewed	</td><td>               </td></tr>
+<tr><td> gstlal_inspiral_create_prior_diststats	</td><td>                               </td><td> 125		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td>					</td><td> far.py			</td><td> 1714		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td>					</td><td> pylal.inject			</td><td> NA		</td><td> \reviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> pylal.rate			</td><td> NA		</td><td> \reviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> pylal.sgnlcoinc		</td><td> ?		</td><td> ?		</td><td>                    </td></tr>
+<tr><td> gstlal_inspiral_marginalize_likelihood	</td><td>                               </td><td> 167		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td> gstlal_ll_trigger_pipe			</td><td>                               </td><td> -		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td> gstlal_inspiral			</td><td>                               </td><td> 707		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td>					</td><td> lloidparts.py			</td><td> 826		</td><td> \notreviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> pipeio.py			</td><td> 239		</td><td> \notreviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> simulation.py			</td><td> 72		</td><td> \notreviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> inspiral.py			</td><td> 949		</td><td> \notreviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> streamthinca.py		</td><td> 387		</td><td> \notreviewed	</td><td>                    </td></tr>
+<tr><td>					</td><td> pylal.ligolw_thinca		</td><td> ?		</td><td> ?		</td><td>                    </td></tr>
+<tr><td>					</td><td> httpinterface.py		</td><td> 110		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td>					</td><td> hoftcache.py			</td><td> 110		</td><td> \notreviewed	</td><td>offline only        </td></tr>
+<tr><td> gstlal_llcbcsummary			</td><td>                               </td><td> 450		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> gstlal_llcbcnode			</td><td>                               </td><td> 318		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> gstlal_inspiral_lvalert_psd_plotter	</td><td>                               </td><td> 240		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> gstlal_ll_inspiral_get_urls		</td><td>                               </td><td> 93		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> gstlal_inspiral_followups_from_gracedb	</td><td>                               </td><td> 177		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> gstlal_inspiral_recompute_online_far_from_gracedb </td><td>                    </td><td> 18		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td> gstlal_inspiral_recompute_online_far   </td><td>                    		</td><td> 92		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td> gstlal_inspiral_calc_likelihood   	</td><td>                    		</td><td> 409		</td><td> \notreviewed	</td><td>undergoing revision </td></tr>
+<tr><td>					</td><td> pylal.burca2			</td><td> ?		</td><td> ?		</td><td>                    </td></tr>
+<tr><td> gstlal_ll_inspiral_gracedb_threshold	</td><td>                               </td><td> 106		</td><td> \notreviewed	</td><td>		     </td></tr>
+<tr><td> lvalert_listen				</td><td>                               </td><td> ?		</td><td> ?		</td><td>		     </td></tr>
+</table>
+
