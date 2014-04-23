@@ -5,4 +5,5 @@ pkgpyexecdir = $(pkgpythondir)
 
 pkgpython_PYTHON = \
 	lal_fixodc.py \
-	lal_logical_undersampler.py
+	lal_logical_undersampler.py \
+	lal_compute_gamma.py
