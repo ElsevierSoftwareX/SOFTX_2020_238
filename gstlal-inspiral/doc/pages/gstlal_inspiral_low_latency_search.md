@@ -256,74 +256,7 @@ This is a necessary step, otherwise data will be lost.**
 
 The running dag topology looks like this:
 
-@dot
-digraph llpipe {
-	graph [fontname="Roman", fontsize=11];
-	edge [ fontname="Roman", fontsize=10 ];
-	node [fontname="Roman", shape=box, fontsize=11];
-
-	H1 [label="H1 Observatory:\nO(10)s h(t) generation\nlatency", color=red1, style=filled];
-	L1 [label="L1 Observatory:\nO(10)s h(t) generation\nlatency", color=green1, style=filled];
-	V1 [label="V1 Observatory:\nO(10)s h(t) generation\nlatency", color=magenta1, style=filled];
-	//HeadNode [label="CIT Head Node:\n- Monitoring\n- Background Estimation: gstlal_inspiral_marginalize_likelihoods_online\n- Analysis control", style=filled, color=grey, URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
-
-
-        HeadNode [
-                style=filled, color=grey,
-                label = <<TABLE>
-                        <TR><TD colspan="3"><B>CIT Head Node</B></TD></TR>
-                        <TR>
-                                <TD href="\ref gstlal_inspiral_marginalize_likelihoods_online">gstlal_inspiral_marginalize_likelihoods_online | </TD>
-                                <TD>HTCondor dagman | </TD>
-                                <TD>lvalert_listen</TD>
-                        </TR>
-                        </TABLE>>
-                ];
-
-
-	WebServer [label="CIT Webserver\nRemote monitoring", style=filled, color=grey];
-	gracedb [label="GW Candidate Database\nO(1)s processing time", shape=oval, color=tomato3, style=filled];
-
-	H1 -> HeadNode [label="TCP link", color=red4];
-	L1 -> HeadNode [label="TCP link", color=green4];
-	V1 -> HeadNode [label="TCP link", color=magenta4];
-
-	subgraph clusterCIT { 
-
-		label="CIT HTCondor Pool";
-		fontsize = 14;
-		style=rounded;
-		labeljust="l";
-
-		Node1 [label="Node 1\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
-		Node2 [label="Node 2\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
-		NodeN [label="Node N\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
-
-		HeadNode -> Node1 [color=red4];
-		HeadNode -> Node1 [color=green4];
-		HeadNode -> Node1 [color=magenta4, label="UDP multicast"];
-
-		HeadNode -> Node2 [color=red4];
-		HeadNode -> Node2 [color=green4];
-		HeadNode -> Node2 [color=magenta4, label="UDP multicast"];
-
-		HeadNode -> NodeN [color=red4];
-		HeadNode -> NodeN [color=green4];
-		HeadNode -> NodeN [color=magenta4, label="UDP multicast"];
-
-		Node1 -> HeadNode [dir=both, label="http"];
-		Node2 -> HeadNode [dir=both, label="http"];
-		NodeN -> HeadNode [dir=both, label="http"];
-		HeadNode -> WebServer [label="nfs"];
-
-	}
-
-	Node1 -> gracedb [label="https"];
-	Node2 -> gracedb [label="https"];
-	NodeN -> gracedb [label="https"];
-}
-@enddot
-
+@dotfile llpipe.dot
 
 \subsection far_thresh Adjusting the gracedb FAR threshold
 
