@@ -26,6 +26,7 @@
 
 
 from collections import deque
+import copy
 import numpy
 import os
 import resource
@@ -487,6 +488,21 @@ class CoincsDocument(object):
 	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, int(start), int(end - start), extension)
+
+
+	def horizon_history_xml(self):
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", {})
+		# can't use .copy() method, need to make new one, because
+		# it might be in a database
+		summ_value_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
+		for row in self.summ_value_table:	
+			summ_value_table.append(copy.copy(row))
+			summ_value_table[-1].process_id = process.process_id
+		summ_value_table._end_of_rows()
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
 
 
 	def write_output_file(self, verbose = False):
