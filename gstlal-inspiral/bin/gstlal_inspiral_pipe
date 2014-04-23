@@ -296,7 +296,7 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 			inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes=sum([sum(inspiral_nodes[(ifos, None)].values(),[]) for ifos in segsdict], []), #FIXME flatten input a better way
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
-				input_files = {"likelihood-file":diststats, "":inputs},
+				input_files = {"likelihood-url":diststats, "":inputs},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
 			)
 		)	
@@ -308,7 +308,7 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 				inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = sum([sum(inspiral_nodes[(ifos, None)].values(),[]) for ifos in segsdict], []) + sum([sum(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))].values(),[]) for ifos in segsdict], []), #FIXME flatten input a better way
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
-					input_files = {"likelihood-file":diststats, "":inputs},
+					input_files = {"likelihood-url":diststats, "":inputs},
 					output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD_%s' % (n,sim_tag_from_inj_file(inj)), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJobInj.output_path)}
 				)
 			)	
