@@ -41,6 +41,8 @@ try:
 	from gstlal import servicediscovery
 except ImportError:
 	# disable
+	import warnings
+	warnings.warn("import gstlal.servicediscovery failed:  http service discovery disabled")
 	servicediscovery = None
 
 
