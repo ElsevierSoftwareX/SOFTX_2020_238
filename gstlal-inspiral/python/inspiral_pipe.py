@@ -72,7 +72,7 @@ class DAG(pipeline.CondorDAG):
 	Also includes some standard setup, e.g., log file paths etc.
 	"""
 	def __init__(self, name, logpath = log_path()):
-		self.basename = name
+		self.basename = name.replace(".dag","")
 		tempfile.tempdir = logpath
 		tempfile.template = self.basename + '.dag.log.'
 		logfile = tempfile.mktemp()
