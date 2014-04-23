@@ -826,6 +826,14 @@ def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse
 			peer.link_pads(None, elem, padname)
 	return elem
 
+def mkcomputegamma(pipeline, dctrl, exc, cos, sin, **properties):
+	elem = mkgeneric(pipeline, None, "lal_compute_gamma", **properties)
+	for peer, padname in ((dctrl, "dctrl_sink"), (exc, "exc_sink"), (cos, "cos"), (sin, "sin")):
+		if isinstance(peer, gst.Pad):
+			peer.get_parent_element().link_pads(peer, elem, padname)
+		elif peer is not None:
+			peer.link_pads(None, elem, padname)
+	return elem
 
 def mkbursttriggergen(pipeline, src, n, bank):
 	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
