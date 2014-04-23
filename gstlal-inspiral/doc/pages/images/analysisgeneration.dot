@@ -1,0 +1,14 @@
+digraph analysis { 
+        // graph attributes 
+        graph [fontname="Roman", fontsize=11]; 
+        edge [ fontname="Roman", fontsize=10 ]; 
+        node [fontname="Roman", shape=box, fontsize=11, style=filled]; 
+         
+        "bank dag" [shape=doubleoctagon]; 
+        "analysis dag" [shape=doubleoctagon];
+	gstlal_inspiral_create_prior_diststats [label="\ref gstlal_inspiral_create_prior_diststats"];
+        gstlal_inspiral_marginalize_likelihood [label="\ref gstlal_inspiral_marginalize_likelihood"];
+	gstlal_ll_trigger_pipe [label="\ref gstlal_ll_trigger_pipe"];
+ 
+        "bank dag" -> gstlal_inspiral_create_prior_diststats -> gstlal_inspiral_marginalize_likelihood -> gstlal_ll_trigger_pipe -> "analysis dag" 
+}

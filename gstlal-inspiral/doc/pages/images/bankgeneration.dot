@@ -1,0 +1,44 @@
+digraph banks {
+	// graph attributes
+	graph [fontname="Roman", fontsize=11];
+	edge [ fontname="Roman", fontsize=10 ];
+	node [fontname="Roman", shape=box, fontsize=11, style=filled];
+
+	gstlal_fake_frames [URL="\ref gstlal_fake_frames"];
+	lalapps_tmpltbank;
+	"H1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=red1];
+	"L1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=green1];
+	"V1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=magenta1];
+
+	gstlal_fake_frames -> lalapps_tmpltbank;
+	lalapps_tmpltbank -> "H1 gstlal_bank_splitter";
+	lalapps_tmpltbank -> "L1 gstlal_bank_splitter";
+	lalapps_tmpltbank -> "V1 gstlal_bank_splitter";
+
+	"H1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=red1]
+	"L1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=green1]
+	"V1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=magenta1]
+	ligolw_add;
+
+	"H1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
+	"L1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
+	"V1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
+
+	"H1 gstlal_inspiral_svd_bank_pipe" [color=red1];
+	"L1 gstlal_inspiral_svd_bank_pipe" [color=green1];
+	"V1 gstlal_inspiral_svd_bank_pipe" [color=magenta1];
+
+	"H1 gstlal_bank_splitter" -> "H1 gstlal_inspiral_svd_bank_pipe";
+	"L1 gstlal_bank_splitter" -> "L1 gstlal_inspiral_svd_bank_pipe";
+	"V1 gstlal_bank_splitter" -> "V1 gstlal_inspiral_svd_bank_pipe";
+	ligolw_add -> "H1 gstlal_inspiral_svd_bank_pipe";
+	ligolw_add -> "L1 gstlal_inspiral_svd_bank_pipe";
+	ligolw_add -> "V1 gstlal_inspiral_svd_bank_pipe";
+
+	"bank dag" [shape=doubleoctagon];
+
+	"H1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
+	"L1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
+	"V1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
+}
+
