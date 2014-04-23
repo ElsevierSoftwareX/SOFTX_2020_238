@@ -88,6 +88,7 @@ struct _GSTLALWhiten {
 	 */
 
 	LALUnit sample_units;
+	gchar *instrument;
 	gint sample_rate;
 
 	GstAudioAdapter *input_queue;

@@ -546,6 +546,9 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 	GstMessage *m = gst_message_new_element(GST_OBJECT(element), s);
 	g_value_array_free(va);
 
+	if(element->instrument)
+		gst_structure_set(s, "instrument", G_TYPE_STRING, element->instrument, NULL);
+
 	GST_MESSAGE_TIMESTAMP(m) = XLALGPSToINT8NS(&psd->epoch);
 
 	return m;
@@ -1022,9 +1025,19 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_TAG: {
 		GstTagList *taglist;
+		gchar *instrument;
 		gchar *units;
 
 		gst_event_parse_tag(event, &taglist);
+
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument)) {
+			/*
+			 * tag list contains an instrument name
+			 */
+			g_free(element->instrument);
+			element->instrument = instrument;
+		}
+
 		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
 			/*
 			 * tag list contains a units tag;  replace with
@@ -1499,6 +1512,8 @@ static void finalize(GObject * object)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
+	g_free(element->instrument);
+	element->instrument = NULL;
 	if(element->mean_psd_pad) {
 		gst_object_unref(element->mean_psd_pad);
 		element->mean_psd_pad = NULL;
@@ -1768,6 +1783,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
+	element->instrument = NULL;
 	element->input_queue = NULL;
 
 	element->hann_window = NULL;
