@@ -815,7 +815,7 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_value_array(
 			"sigmasq",
 			"\\sigma^{2} factors",
-			"Vector of \\sigma^{2} factors.",
+			"Vector of \\sigma^{2} factors.  The effective distance of a trigger is \\sqrt{sigma^{2}} / SNR.",
 			g_param_spec_double(
 				"sigmasq",
 				"\\sigma^{2}",
