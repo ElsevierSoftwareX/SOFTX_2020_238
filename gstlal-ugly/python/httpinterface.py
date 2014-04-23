@@ -104,7 +104,6 @@ class HTTPServers(list):
 		self.verbose = verbose
 		if servicediscovery is not None:
 			self.service_publisher = servicediscovery.Publisher()
-			service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN)
 		else:
 			self.service_publisher = None
 		for (ignored, ignored, ignored, ignored, (_host, _port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
@@ -115,20 +114,20 @@ class HTTPServers(list):
 			self.append((httpd, httpd_thread))
 			while httpd.port == 0:
 				pass
-			host = httpd.host if httpd.host != "0.0.0.0" else socket.gethostname()
+			host = httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn()
 			if verbose:
 				print >>sys.stderr, "started http server on http://%s:%d" % (host, httpd.port)
 			if self.service_publisher is not None:
 				if verbose:
 					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
 				try:
-					self.service_publisher.addservice(servicediscovery.ServiceInfo(
-						servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN,
+					self.service_publisher.addservice(
+						stype = servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN,
 						name = service_name,
-						server = host,
+						host = host,
 						port = httpd.port,
 						properties = service_properties
-					))
+					)
 				except Exception as e:
 					if verbose:
 						print >>sys.stderr, "failed: %s" % str(e)
@@ -155,7 +154,7 @@ class HTTPServers(list):
 		while self:
 			httpd, httpd_thread = self.pop()
 			if self.verbose:
-				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host if httpd.host != "0.0.0.0" else socket.gethostname(), httpd.port),
+				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn(), httpd.port),
 			try:
 				httpd.shutdown()
 			except Exception as e:
