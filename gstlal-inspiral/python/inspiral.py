@@ -464,7 +464,7 @@ class CoincsDocument(object):
 		return m1, m2, float(snr_threshold)
 
 
-	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
+	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold):
 		# NOTE:  the encoding used here is not compatible with
 		# ihope
 		row = self.summ_value_table.RowType()
@@ -694,6 +694,10 @@ class Data(object):
 			if self.gracedb_far_threshold is not None:
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
+
+	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
+		with self.lock:
+			self.coincs_document.record_horizon_distance(instrument = instrument, timestamp = timestamp, psd = psd, m1 = m1, m2 = m2, snr_threshold = snr_threshold)
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:

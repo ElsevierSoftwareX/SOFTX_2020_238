@@ -193,8 +193,7 @@ class Handler(simplehandler.Handler):
 				timestamp = psd.epoch
 				# FIXME:  probably need to compute these
 				# for a bunch of masses.  which ones?
-				with self.dataclass.lock:
-					self.dataclass.coincs_document.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
+				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
 		elif message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
