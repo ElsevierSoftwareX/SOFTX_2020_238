@@ -178,6 +178,7 @@ class Handler(simplehandler.Handler):
 			elem.connect("start", self.gatehandler, "on")
 			elem.connect("stop", self.gatehandler, "off")
 
+		bottle.route("/horizon_history.xml")(self.web_get_horizon_history_xml)
 		if gates:
 			bottle.route("/segments.xml")(self.web_get_segments_xml)
 
@@ -260,6 +261,14 @@ class Handler(simplehandler.Handler):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+		return outstr
+
+	def web_get_horizon_history_xml(self):
+		with self.dataclass.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.dataclass.coincs_document.horizon_history_xml(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
