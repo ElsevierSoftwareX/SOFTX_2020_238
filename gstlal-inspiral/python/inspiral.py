@@ -27,6 +27,7 @@
 
 from collections import deque
 import copy
+import math
 import numpy
 import os
 import resource
@@ -586,6 +587,7 @@ class Data(object):
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
+		self.horizon_distances = {}
 		self.seglists = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
 		self.fapfar = None
 
@@ -630,6 +632,16 @@ class Data(object):
 				# smooth the distributions.  re-populates
 				# PDF arrays from raw counts
 				self.coinc_params_distributions.finish(verbose = self.verbose)
+
+				# set horizon distances.  SNR joint PDF
+				# regeneration is deferred until coincs are
+				# encountered that require them
+				#
+				# FIXME:  the likelihood ratio code should
+				# be getting the horizon distances directly
+				# from the triggers in each coinc.  when
+				# that's working remove this
+				self.coinc_params_distributions.horizon_distances = self.horizon_distances.copy()
 
 				# post a checkpoint message.  FIXME:  make
 				# sure this triggers
@@ -697,7 +709,41 @@ class Data(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		with self.lock:
-			self.coincs_document.record_horizon_distance(instrument = instrument, timestamp = timestamp, psd = psd, m1 = m1, m2 = m2, snr_threshold = snr_threshold)
+			horizon_distance = self.coincs_document.record_horizon_distance(instrument = instrument, timestamp = timestamp, psd = psd, m1 = m1, m2 = m2, snr_threshold = snr_threshold).value
+			# use a running geometric mean.  value will take
+			# effect on next likelihood snapsot interval.
+			#
+			# FIXME:  there are two different problems being
+			# solved with one hammer here.  on the one hand we
+			# need to get the horizon distances into
+			# coinc_params_distribution so that it can assign
+			# likelihood ratios when in online mode.  *that*
+			# should be done by fixing the trigger generator's
+			# effective distance calculation and getting the
+			# coinc_params() method to extract the horizon
+			# distances directly from the triggers.  that's
+			# tricky, though, because one needs to know the
+			# horizon distances of the other instruments not in
+			# the coinc so even when the trigger generator is
+			# fixed we'll still need to think about how to do
+			# that.  on the other hand, we also need a record
+			# of the horizon distance as a function of time so
+			# that we can marginalize over ranking statistic
+			# PDFs properly when computing the FAP and FAR
+			# functions.  that's relatively straight-forward to
+			# solve, we just need to teach ThincaCoincParams
+			# how to store a history of distances for each
+			# instrument.  hopefully that history record will
+			# also provide the solution to the problem of
+			# getting horizon distances for instruments that
+			# don't participate in a coinc.  when those
+			# problems are both fixed, this code here will
+			# get deleted (and possibly replaced with something
+			# else).
+			if instrument in self.horizon_distances and self.horizon_distances[instrument] > 0.:
+				self.horizon_distances[instrument] = math.exp((9. * math.log(self.horizon_distances[instrument]) + math.log(horizon_distance)) / 10.)
+			else:
+				self.horizon_distances[instrument] = horizon_distance
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
