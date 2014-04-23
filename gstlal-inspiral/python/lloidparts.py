@@ -253,6 +253,7 @@ class Handler(simplehandler.Handler):
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		ligolwsegments.insert_from_segmentlistdict(self.seglists, name = "datasegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
+		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
 	def web_get_segments_xml(self):
