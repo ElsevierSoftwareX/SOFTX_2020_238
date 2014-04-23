@@ -121,9 +121,10 @@ class HTTPServers(list):
 				if verbose:
 					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
 				try:
-					self.service_publisher.addservice(
-						stype = servicediscovery.DEFAULT_PROTO + servicediscovery.DEFAULT_DOMAIN,
-						name = service_name,
+					self.service_publisher.add_service(
+						sname = service_name,
+						stype = servicediscovery.DEFAULT_PROTO,
+						sdomain = servicediscovery.DEFAULT_DOMAIN,
 						host = host,
 						port = httpd.port,
 						properties = service_properties
