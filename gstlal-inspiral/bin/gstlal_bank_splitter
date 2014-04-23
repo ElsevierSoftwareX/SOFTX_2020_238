@@ -29,8 +29,10 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
+from glue import lal
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import templates
+from gstlal import inspiral_pipe
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -86,18 +88,19 @@ def group_templates(templates, n, overlap = 0):
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
-	parser.add_option("-n", "--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required).")
-	parser.add_option("-O", "--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
-	parser.add_option("-s", "--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
-	parser.add_option("-F", "--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
-	parser.add_option("-M", "--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
-	parser.add_option("-i", "--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
+	parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
+	parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
+	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required).")
+	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
+	parser.add_option("--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
+	parser.add_option("--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
+	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
+	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("--bank-program", metavar = "name", default = "tmpltbank", type="string", help = "Select name of the program used to generate the template bank (default: tmpltbank).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
-	required_options = ("n", "instrument", "sort_by")
+	required_options = ("n", "instrument", "sort_by", "output_cache")
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
@@ -108,6 +111,8 @@ def parse_command_line():
 	return options, filenames
 
 options, filenames = parse_command_line()
+output_cache_file = open(options.output_cache, "w")
+bank_count = 0
 
 for filename in filenames:
 
@@ -162,9 +167,8 @@ for filename in filenames:
 
 	# store the process params
 	process = ligolw_process.append_process(xmldoc, program = "bank_splitter", comment = "split bank into smaller banks after sorting", ifos = None)
-	ligolw_process.append_process_params(xmldoc, process, options_params)	
+	ligolw_process.append_process_params(xmldoc, process, options_params)
 
-	count = 0
 	
 	def sort_func(row, column = options.sort_by):
 		return getattr(row, column)
@@ -174,6 +178,10 @@ for filename in filenames:
 
 		for rows in group_templates(sample_rates[r], options.n, options.overlap):
 			sngl_inspiral_table_split[:] = rows
-			output = os.path.join(options.output_path, "%04d-%s_split_bank-%s" % (count, options.instrument, os.path.basename(filename)))
+			output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
+			cache_entry = lal.CacheEntry.from_T050017("file://localhost/%s/%s" % (os.getcwd(), output))
+			output_cache_file.write("%s\n" % cache_entry)
 			ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
-			count += 1
+			bank_count += 1
+
+output_cache_file.close()
