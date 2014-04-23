@@ -28,6 +28,7 @@
 #include <gstlal/gstaudioadapter.h>
 
 
+#include <lal/FrequencySeries.h>
 #include <lal/LALDatatypes.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/Units.h>
@@ -157,6 +158,19 @@ struct _GSTLALWhitenClass {
 
 
 GType gstlal_whiten_get_type(void);
+
+
+/*
+ * ============================================================================
+ *
+ *                                Exported API
+ *
+ * ============================================================================
+ */
+
+
+GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const REAL8FrequencySeries *psd);
+REAL8FrequencySeries *gstlal_whiten_message_psd_parse(GstMessage *m);
 
 
 G_END_DECLS

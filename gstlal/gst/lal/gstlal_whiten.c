@@ -532,7 +532,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
  */
 
 
-static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *psd)
+GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const REAL8FrequencySeries *psd)
 {
 	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
 	char units[50];
@@ -552,6 +552,40 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 	GST_MESSAGE_TIMESTAMP(m) = XLALGPSToINT8NS(&psd->epoch);
 
 	return m;
+}
+
+
+REAL8FrequencySeries *gstlal_whiten_message_psd_parse(GstMessage *m)
+{
+	const GstStructure *s = gst_message_get_structure(m);
+	LIGOTimeGPS epoch;
+	LALUnit sample_units;
+	double delta_f;
+	gint length;
+	REAL8FrequencySeries *psd;
+
+	if(!(gst_structure_has_name(s, "spectrum") && gst_structure_get_double(s, "delta-f", &delta_f) && gst_structure_has_field(s, "sample-units") && gst_structure_has_field(s, "magnitude"))) {
+		GST_ERROR("invalid spectrum message: %" GST_PTR_FORMAT, m);
+		return NULL;
+	}
+
+	XLALINT8NSToGPS(&epoch, GST_MESSAGE_TIMESTAMP(m));
+	if(!XLALParseUnitString(&sample_units, gst_structure_get_string(s, "sample-units"))) {
+		GST_ERROR("XLALParseUnitString() failed on sample-units: %" GST_PTR_FORMAT, m);
+		return NULL;
+	}
+
+	psd = XLALCreateREAL8FrequencySeries(gst_structure_get_string(s, "instrument"), &epoch, 0.0, delta_f, &sample_units, 0);
+	if(!psd) {
+		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+		return NULL;
+	}
+
+	XLALFree(psd->data->data);
+	psd->data->data = gstlal_doubles_from_g_value_array(g_value_get_boxed(gst_structure_get_value(s, "magnitude")), NULL, &length);
+	psd->data->length = length;
+
+	return psd;
 }
 
 
@@ -717,7 +751,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				 */
 
 				g_object_notify(G_OBJECT(element), "mean-psd");
-				gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
+				gst_element_post_message(GST_ELEMENT(element), gstlal_whiten_message_psd_new(element, element->psd));
 				if(element->mean_psd_pad) {
 					/* fft_length is sure to be even */
 					GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd, fft_length(element) / 2 - zero_pad_length(element), element->sample_rate);
