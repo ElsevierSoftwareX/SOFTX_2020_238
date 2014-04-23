@@ -34,8 +34,16 @@ Stuff to help add an http control and query interface to a program.
 import socket
 import sys
 import threading
+
+
 from gstlal import bottle
-from gstlal import servicediscovery
+try:
+	from gstlal import servicediscovery
+except ImportError:
+	# disable
+	import warnings
+	warnings.warn("import gstlal.servicediscovery failed:  http service discovery disabled")
+	servicediscovery = None
 
 
 #
@@ -47,7 +55,32 @@ from gstlal import servicediscovery
 #
 
 
-class HTTPServers(object):
+def my_ipv4_address():
+	#
+	# this is sort of ridiculous.  we open a udp socket to google's dns
+	# server and check the ip address through which the connection was
+	# made.  this only works if we have a functioning connection to the
+	# public internet.  it also only works if the interface through
+	# which outbound connections go is the one you want, e.g.,
+	# on cluster head nodes this will not be the ip address facing the
+	# private network, which is probably the one you really want.
+	#
+
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	try:
+		s.connect(("8.8.8.8", 53))
+	except socket.error:
+		# didn't work.  hope the machine name is in a name server
+		# that knows the right answer (otherwise we'll get whatever
+		# is in /etc/hosts)
+		return socket.gethostbyname(socket.getfqdn())
+	else:
+		return s.getsockname()[0]
+	finally:
+		s.close()
+
+
+class HTTPServers(list):
 	"""
 	Utility to start, advertise, track and shutdown http servers on all
 	interfaces.  De-advertise and shutdown the servers by deleting this
@@ -67,44 +100,74 @@ class HTTPServers(object):
 	bottle_app should be a Bottle instance.  If bottle_app is None (the
 	default) then the current default Bottle application is used.
 	"""
-	def __init__(self, port, bottle_app = None, service_name = "gstlal", verbose = False):
+	def __init__(self, port, bottle_app = None, service_name = "gstlal", service_properties = None, verbose = False):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
-		self.servers_and_threads = []
-		self.service_publisher = servicediscovery.Publisher()
-		service_name = "%s.%s" % (service_name, servicediscovery.DEFAULT_STYPE)
-		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
-			httpd = bottle.WSGIRefServer(host = host, port = port)
+		if servicediscovery is not None:
+			self.service_publisher = servicediscovery.Publisher()
+		else:
+			self.service_publisher = None
+		for (ignored, ignored, ignored, ignored, (_host, _port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
+			httpd = bottle.WSGIRefServer(host = _host, port = _port)
 			httpd_thread = threading.Thread(target = httpd.run, args = (bottle_app,))
 			httpd_thread.daemon = True
 			httpd_thread.start()
-			self.servers_and_threads.append((httpd, httpd_thread))
+			self.append((httpd, httpd_thread))
+			while httpd.port == 0:
+				pass
+			host = httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn()
 			if verbose:
-				print >>sys.stderr, "started http server on http://%s:%d" % (host, port)
-			self.service_publisher.addservice(servicediscovery.ServiceInfo(
-				servicediscovery.DEFAULT_STYPE,
-				service_name,
-				address = socket.inet_aton(host),
-				port = port
-			))
-			if verbose:
-				print >>sys.stderr, "advertised http server on http://%s:%d as service \"%s\"" % (host, port, service_name)
-		if not self.servers_and_threads:
-			raise ValueError("unable to start servers on port %d" % port)
+				print >>sys.stderr, "started http server on http://%s:%d" % (host, httpd.port)
+			if self.service_publisher is not None:
+				if verbose:
+					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
+				try:
+					self.service_publisher.add_service(
+						sname = service_name,
+						stype = servicediscovery.DEFAULT_PROTO,
+						sdomain = servicediscovery.DEFAULT_DOMAIN,
+						host = host,
+						port = httpd.port,
+						properties = service_properties
+					)
+				except Exception as e:
+					if verbose:
+						print >>sys.stderr, "failed: %s" % str(e)
+				else:
+					if verbose:
+						print >>sys.stderr, "done"
+			elif verbose:
+				print >>sys.stderr, "service discovery not available, http server not advertised"
+		if not self:
+			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
 
 	def __del__(self):
-		while self.servers_and_threads:
-			httpd, httpd_thread = self.servers_and_threads.pop()
+		if self.service_publisher is not None:
 			if self.verbose:
-				print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.srv.server_address,
+				print >>sys.stderr, "de-advertising http server(s) ...",
 			try:
-				httpd.srv.shutdown()
+				self.service_publisher.unpublish()
+			except Exception as e:
+				if self.verbose:
+					print >>sys.stderr, "failed: %s" % str(e)
+			else:
+				if self.verbose:
+					print >>sys.stderr, "done"
+		while self:
+			httpd, httpd_thread = self.pop()
+			if self.verbose:
+				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn(), httpd.port),
+			try:
+				httpd.shutdown()
 			except Exception as e:
 				result = "failed: %s" % str(e)
 			else:
 				result = "done"
-			httpd_thread.join()
-			if verbose:
+			if self.verbose:
 				print >>sys.stderr, result
-		self.service_publisher.unpublish()
+				print >>sys.stderr, "killing http server thread ...",
+			# wait 10 seconds, then give up
+			httpd_thread.join(10.0)
+			if self.verbose:
+				print >>sys.stderr, "timeout" if httpd_thread.is_alive() else "done"

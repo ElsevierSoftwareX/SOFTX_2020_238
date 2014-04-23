@@ -256,16 +256,14 @@ class GWDataSourceInfo(object):
 			raise ValueError("--data-source must be one of %s" % ", ".join(self.data_sources))
 		if options.data_source == "frames" and options.frame_cache is None:
 			raise ValueError("--frame-cache must be specified when using --data-source=frames")
-		if (options.gps_start_time is None or options.gps_end_time is None) and options.data_source == "frames":
-			raise ValueError("--gps-start-time and --gps-end-time must be specified unless --data-source=lvshm")
-		if len(options.channel_name) == 0:
+		if not options.channel_name:
 			raise ValueError("must specify at least one channel in the form --channel-name=IFO=CHANNEL-NAME")
 		if options.frame_segments_file is not None and options.data_source != "frames":
-			raise ValueError("Can only give --frame-segments-file if --data-source=frames")
+			raise ValueError("can only give --frame-segments-file if --data-source=frames")
 		if options.frame_segments_name is not None and options.frame_segments_file is None:
-			raise ValueError("Can only specify --frame-segments-name if --frame-segments-file is given")
+			raise ValueError("can only specify --frame-segments-name if --frame-segments-file is given")
 		if options.data_source == "nds" and (options.nds_host is None or options.nds_port is None):
-			raise ValueError("Must specify --nds-host and --nds-port when using --data-source=nds")
+			raise ValueError("must specify --nds-host and --nds-port when using --data-source=nds")
 
 		## A dictionary of the requested channels, e.g., {"H1":"LDAS-STRAIN", "L1":"LDAS-STRAIN"}
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
@@ -282,10 +280,28 @@ class GWDataSourceInfo(object):
 		self.seg = None
 
 		if options.gps_start_time is not None:
+			if options.gps_end_time is None:
+				raise ValueError("must provide both --gps-start-time and --gps-end-time")
+			if options.data_source == "lvshm":
+				raise ValueError("cannot set --gps-start-time or --gps-end-time with --data-source=lvshm")
+			try:
+				start = LIGOTimeGPS(options.gps_start_time)
+			except ValueError:
+				raise ValueError("invalid --gps-start-time '%s'" % options.gps_start_time)
+			try:
+				end = LIGOTimeGPS(options.gps_end_time)
+			except ValueError:
+				raise ValueError("invalid --gps-end-time '%s'" % options.gps_end_time)
+			if start >= end:
+				raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
 			## Segment from gps start and stop time if given
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			## Seek event from the gps start and stop time if given
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
+		elif options.gps_end_time is not None:
+			raise ValueError("must provide both --gps-start-time and --gps-end-time")
+		elif options.data_source != "lvshm":
+			raise ValueError("--gps-start-time and --gps-end-time must be specified when --data-source is not lvshm")
 
 		if options.frame_segments_file is not None:
 			## Frame segments from a user defined file

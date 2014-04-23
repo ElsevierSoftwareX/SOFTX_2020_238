@@ -26,6 +26,99 @@
 # =============================================================================
 #
 
+## @file gstlal_inspiral
+#
+
+## @package gstlal_inspiral
+#
+# @dot
+# digraph llpipe {
+# 	labeljust = "r";
+# 	label="gstlal_inspiral"
+# 	rankdir=LR;
+# 	graph [fontname="Roman", fontsize=24];
+# 	edge [ fontname="Roman", fontsize=10 ];
+# 	node [fontname="Roman", shape=box, fontsize=11];
+# 
+# 	gracedb [label="GW\nCandidate\nDatabase", shape=oval, color=tomato3, style=filled];
+# 
+# 
+# 	subgraph clusterNodeN {
+# 
+# 		style=rounded;
+# 		label="gstreamer pipeline";
+# 		labeljust = "r";
+# 		fontsize = 14;
+# 
+# 		H1src [label="H1 data source:\n mkbasicsrc()", color=red4, URL="\ref pipeparts.mkbasicsrc()"];
+# 		L1src [label="L1 data source:\n mkbasicsrc()", color=green4, URL="\ref pipeparts.mkbasicsrc()"];
+# 		V1src [label="V1 data source:\n mkbasicsrc()", color=magenta4];
+# 		
+# 		H1multirate [label="H1 whitening and downsampling:\nmkwhitened_multirate_src()", color=red4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		L1multirate [label="L1 whitening and downsampling:\nmkwhitened_multirate_src()", color=green4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		V1multirate [label="V1 whitening and downsampling:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
+# 		
+# 		H1LLOID [label="H1 LLOID filtering engine:\nmkLLOIDmulti()", color=red4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		L1LLOID [label="L1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=green4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		V1LLOID [label="V1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 
+# 		H1Trig1 [label="H1 Triggering:\nsub bank 1", color=red4];
+# 		L1Trig1 [label="L1 Triggering:\nsub bank 1", color=green4];
+# 		V1Trig1 [label="V1 Triggering:\nsub bank 1", color=magenta4];
+# 		H1Trig2 [label="H1 Triggering:\nsub bank 2", color=red4];
+# 		L1Trig2 [label="L1 Triggering:\nsub bank 2", color=green4];
+# 		V1Trig2 [label="V1 Triggering:\nsub bank 2", color=magenta4];
+# 		H1TrigN [label="H1 Triggering:\nsub bank N", color=red4];
+# 		L1TrigN [label="L1 Triggering:\nsub bank N", color=green4];
+# 		V1TrigN [label="V1 Triggering:\nsub bank N", color=magenta4];
+# 		
+# 		H1src -> H1multirate;
+# 		L1src -> L1multirate;
+# 		V1src -> V1multirate;
+# 
+# 		H1multirate -> H1LLOID [label="h(t) 4096Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) 4096Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) 4096Hz"];
+# 		H1multirate -> H1LLOID [label="h(t) 2048Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) 2048Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) 2048Hz"];
+# 		H1multirate -> H1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 		L1multirate -> L1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 		V1multirate -> V1LLOID [label="h(t) Nth-pow-of-2 Hz"];
+# 	
+# 		H1LLOID -> H1Trig1 [label="SNRs sub bank 1"];
+# 		L1LLOID -> L1Trig1 [label="SNRs sub bank 1"];
+# 		V1LLOID -> V1Trig1 [label="SNRs sub bank 1"];
+# 		H1LLOID -> H1Trig2 [label="SNRs sub bank 2"];
+# 		L1LLOID -> L1Trig2 [label="SNRs sub bank 2"];
+# 		V1LLOID -> V1Trig2 [label="SNRs sub bank 2"];
+# 		H1LLOID -> H1TrigN [label="SNRs sub bank N"];
+# 		L1LLOID -> L1TrigN [label="SNRs sub bank N"];
+# 		V1LLOID -> V1TrigN [label="SNRs sub bank N"];
+# 	}
+# 
+# 
+# 	Coincidence [label="Coincidence\nO(1)s latency"];
+# 	SigEst [label="Significance\nEstimation\nO(1)s latency"];
+# 	Thresh [label="Thresholding\nO(1)s latency"];
+# 	EventGen [label="Event\nGeneration\nO(1)s latency"];
+# 		
+# 	H1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	L1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	V1Trig1 -> Coincidence [label="Trigs sub bank 1"];
+# 	H1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	L1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	V1Trig2 -> Coincidence [label="Trigs sub bank 2"];
+# 	H1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	L1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	V1TrigN -> Coincidence [label="Trigs sub bank N"];
+# 	
+# 	Coincidence -> SigEst -> Thresh -> EventGen;
+# 
+# 	EventGen -> gracedb;
+# 	
+# }
+# @enddot
 
 import os
 import resource
@@ -111,6 +204,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 def now():
 	return XLALUTCToGPS(time.gmtime())
 
+
 #
 # =============================================================================
 #
@@ -154,7 +248,7 @@ def parse_command_line():
 
 	# Online options
 
-	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (required).")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
@@ -162,6 +256,11 @@ def parse_command_line():
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
+	# in the process_params table to determine the threshold below
+	# which it can delete uninteresting singles after the coincs are
+	# ranked.  if the name of this option is changed, be sure to update
+	# gstlal_inspiral_calc_likelihood
 	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
 
 	options, filenames = parser.parse_args()
@@ -209,10 +308,10 @@ def parse_command_line():
 		required_files += [options.veto_segments_file]
 	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
 	if missing_files:
-		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
+		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
 
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-		raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
+		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 
 	# do this before converting option types
 	process_params = options.__dict__.copy()
@@ -276,6 +375,36 @@ def parse_command_line():
 #
 # =============================================================================
 #
+#                                Signal Handler
+#
+# =============================================================================
+#
+
+
+class OneTimeSignalHandler(object):
+	def __init__(self, pipeline):
+		self.pipeline = pipeline
+		self.count = 0
+
+	def __call__(self, signum, frame):
+		self.count += 1
+		if self.count == 1:
+			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			try:
+				#FIXME how do I choose a timestamp?
+				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+				if not self.pipeline.send_event(gst.event_new_eos()):
+					raise Exception("pipeline.send_event(EOS) returned failure")
+			except Exception as e:
+				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+				os._exit(1)
+		else:
+			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+
+
+#
+# =============================================================================
+#
 #                                     Main
 #
 # =============================================================================
@@ -324,35 +453,16 @@ else:
 # Process svd banks in serial
 #
 
-class OneTimeSignalHandler(object):
-	def __init__(self, pipeline):
-		self.pipeline = pipeline
-		self.count = 0
-
-	def __call__(self, signum, frame):
-		self.count += 1
-		if self.count == 1:
-			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
-			try:
-				#FIXME how do I choose a timestamp?
-				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-				if not self.pipeline.send_event(gst.event_new_eos()):
-					raise Exception("pipeline.send_event(EOS) returned failure")
-			except Exception, e:
-				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
-				os._exit(1)
-		else:
-			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
-
 
 for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output, options.likelihood_file):
 	#
 	# create a new, empty, Bottle application and make it the current
-	# default
+	# default, then start http server(s) to serve it up
 	#
 
 
 	bottle.default_app.push()
+	httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
 
 
 	#
@@ -361,14 +471,23 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	@bottle.route("/")
-	@bottle.route("/registry.txt")
-	def register(job_tag = options.job_tag, host = socket.gethostname(), instruments = set(svd_bank.keys())):
-		yield "# %s %s %s\n" % (job_tag, host, " ".join(instruments))
+	@bottle.route("/index.html")
+	def index(job_tag = options.job_tag, instruments = set(svd_bank.keys())):
+		host = socket.gethostname()
+		server_address = "http://%s:%d" % (host, httpservers[0][0].port)
+		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
-			if route.rule in ("/", "/registry.txt"):
+			if route.rule in ("/", "/index.html"):
 				# don't create links back to this page
 				continue
-			yield "http://%s:16953/%s\n" % (host, route.rule)
+			if route.method != "GET":
+				# only create links for GET methods
+				continue
+			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+		yield "</p>\n</body></html>"
+	# FIXME:  get service-discovery working, then don't do this
+	if "GSTLAL_LL_JOB" in os.environ:
+		open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
 
 	#
@@ -424,6 +543,8 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 	if options.data_source in ("lvshm", "framexmit"):
 		coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+		if coinc_params_distributions is None:
+			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
 	else:
 		coinc_params_distributions = far.ThincaCoincParamsDistributions()
 
@@ -490,35 +611,24 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	#
 
 
-	if options.data_source not in ("lvshm", "framexmit"):
-		if options.verbose:
-			print >>sys.stderr, "setting pipeline state to paused ..."
-		if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError, "pipeline did not enter paused state"
-		httpservers = None
-	else:
+	if options.data_source in ("lvshm", "framexmit"):
 		#
-		# start http interface and dump URL list
+		# setup sigint handler to shutdown pipeline.  this is how
+		# the program stops gracefully, it is the only way to stop
+		# it.  Otherwise it runs forever man.
 		#
-
-		# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
-		httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
-		open("%s_registry.txt" % os.environ['GSTLAL_LL_JOB'], "w").writelines(register())
-
-		#
-		# setup sigint handler to shutdown pipeline.  this is how the program stops
-		# gracefully, it is the only way to stop it.  Otherwise it runs forever
-		# man.
+		# this is only done in the online case because we want
+		# offline jobs to just die and not write partial databases
 		#
 
 		signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
 		signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
 
-	
+
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
 	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline did not enter playing state"
+		raise RuntimeError("pipeline did not enter playing state")
 
 	if options.write_pipeline is not None:
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
@@ -565,22 +675,28 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline could not be set to NULL"
+		raise RuntimeError("pipeline could not be set to NULL")
 	del handler
+
 
 #
 # Cleanup local caches
 #
 
+
 if options.local_frame_caching:
 	if options.verbose:
-		print >> sys.stderr, "deleting temporary cache file ", detectors.frame_cache
-		os.remove(detectors.frame_cache)
-		del detectors.local_cache_list
+		print >>sys.stderr, "deleting temporary cache file ", detectors.frame_cache
+	os.remove(detectors.frame_cache)
+	del detectors.local_cache_list
+
 
 #
-# done
+# done.  online pipeline always ends with an error code so that dagman does
+# not mark the job "done" and the job will be restarted when the dag is
+# restarted.
 #
+
 
 if options.data_source in ("lvshm", "framexmit"):
-	sys.exit(1) # online pipeline always ends with an error code
+	sys.exit(1)

@@ -1,4 +1,4 @@
-# Copyright (C) 2012  Kipp Cannon
+# Copyright (C) 2012--2014  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -24,10 +24,12 @@
 #
 
 
-import socket
+import avahi
+import dbus
+import sys
 
 
-from gstlal.pyzeroconf import Zeroconf
+__all__ = ["DEFAULT_PROTO", "DEFAULT_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -38,16 +40,14 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
-#                             Service Description
+#                            HTTP Service Metadata
 #
 # =============================================================================
 #
 
 
-DEFAULT_STYPE = "_http._tcp.local."
-
-
-from gstlal.pyzeroconf.Zeroconf import ServiceInfo
+DEFAULT_PROTO = "_http._tcp"
+DEFAULT_DOMAIN = "local"
 
 
 #
@@ -59,68 +59,33 @@ from gstlal.pyzeroconf.Zeroconf import ServiceInfo
 #
 
 
-try:
-	#
-	# avahi is the preferred way to do this.  as a system-level service
-	# it allows multiple applications to advertise services without
-	# contention (there can be only one responder per host), and the
-	# daemon can cache service announcements even when the application
-	# that cares about them has not yet started
-	#
+class Publisher(object):
+	def __init__(self):
+		bus = dbus.SystemBus()
+		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+		self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
 
-	import avahi
-	import dbus
+	def add_service(self, sname, stype, sdomain, host, port, properties = None):
+		if properties is not None:
+			assert not any("=" in key for key in properties)
+		self.group.AddService(
+			avahi.IF_UNSPEC,	# interface
+			avahi.PROTO_INET,	# protocol
+			dbus.UInt32(0),		# flags
+			sname,			# service name
+			stype,			# service type
+			sdomain,		# domain
+			host,			# host name
+			dbus.UInt16(port),	# port
+			avahi.dict_to_txt_array(properties if properties is not None else {})	# text/description
+		)
+		self.group.Commit()
 
-	_zc = None
+	def unpublish(self):
+		self.group.Reset()
 
-	class Publisher(object):
-		def __init__(self):
-			bus = dbus.SystemBus()
-			server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-			self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
-
-		def addservice(self, serviceinfo):
-			self.group.AddService(
-				avahi.IF_UNSPEC,	# interface
-				avahi.PROTO_UNSPEC,	# protocol
-				dbus.UInt32(0),		# flags
-				serviceinfo.getName().rstrip(".local."),	# service name
-				serviceinfo.getType().rstrip(".local."),	# service type
-				"local",	# FIXME	# domain
-				"", # FIXME socket.inet_ntoa(serviceinfo.getAddress()),	# host/address
-				dbus.UInt16(serviceinfo.getPort()),	# port
-				serviceinfo.getText()	# text/description
-			)
-			self.group.Commit()
-
-		def unpublish(self):
-			self.group.Reset()
-
-		def __del__(self):
-			self.unpublish()
-
-except ImportError:
-	#
-	# the Zeroconf module provides a pure python responder
-	# implementation that we can fall back on if avahi isn't available
-	#
-
-	_zc = Zeroconf.Zeroconf(bindaddress = "0.0.0.0")
-
-	class Publisher(object):
-		def __init__(self):
-			self.group = set()
-
-		def addservice(self, serviceinfo):
-			_zc.registerService(serviceinfo)
-			self.group.add(serviceinfo)
-
-		def unpublish(self):
-			while self.group:
-				_zc.unregisterService(self.group.pop())
-
-		def __del__(self):
-			self.unpublish()
+	def __del__(self):
+		self.unpublish()
 
 
 #
@@ -133,49 +98,68 @@ except ImportError:
 
 
 class Listener(object):
-	def addService(self, stype, name, address, port, properties):
+	def add_service(self, sname, stype, sdomain, host, port, properties):
 		pass
 
-	def removeService(self, stype, name, address, port, properties):
+	def remove_service(self, sname, stype, sdomain):
+		pass
+
+	def all_for_now(self):
+		pass
+
+	def failure(self, exception):
 		pass
 
 
-if _zc is None:
+class ServiceBrowser(object):
+	def __init__(self, mainloop, listener, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, ignore_local = False):
+		self.listener = listener
+		self.ignore_local = ignore_local
+		bus = dbus.SystemBus(mainloop = mainloop)
+		self.server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+		browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME, self.server.ServiceBrowserNew(
+			avahi.IF_UNSPEC,	# interface
+			avahi.PROTO_UNSPEC,	# protocol
+			stype,			# service type
+			sdomain,		# service domain
+			dbus.UInt32(0)		# flags
+		)), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
+		browser.connect_to_signal("ItemNew", self.itemnew_handler)
+		browser.connect_to_signal("ItemRemove", self.itemremove_handler)
+		browser.connect_to_signal("AllForNow", self.allfornow_handler)
 
-	class ServiceBrowser(object):
-		def __init__(self, listener, stype = DEFAULT_STYPE):
-			self.listener = listener
-			bus = dbus.SystemBus()
-			server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-			browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.ServiceBrowserNew(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, stype, "local", dbus.UInt32(0))), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-			browser.connect_to_signal("ItemNew", self.__itemnew_handler)
+	def itemnew_handler(self, interface, protocol, sname, stype, sdomain, flags):
+		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
+			# local service (on this machine)
+			return
+		self.server.ResolveService(interface, protocol, sname, stype, sdomain, avahi.PROTO_UNSPEC, dbus.UInt32(0), reply_handler = self.itemnew_resolved_handler, error_handler = self.resolve_error)
 
-		def __itemnew_handler(self, interface, protocol, name, stype, domain, flags):
-			if flags & avahi.LOOKUP_RESULT_LOCAL:
-				# local service
-				pass
-			self.listener.addService(stype, name, interface, None, None)
+	def itemnew_resolved_handler(self, interface, protocol, sname, stype, sdomain, host, aprotocol, address, port, txt, flags):
+		self.listener.add_service(sname, stype, sdomain, host, port, dict(s.split("=", 1) for s in avahi.txt_array_to_string_array(txt)))
 
-else:
+	def resolve_error(self, *args, **kwargs):
+		print >>sys.stderr, "resolve error:", args, kwargs
 
-	class ServiceBrowser(Zeroconf.ServiceBrowser):
-		def __init__(self, listener, stype = DEFAULT_STYPE):
-			self._listener = listener
-			super(type(self), self).__init__(_zc, stype, self)
+	def itemremove_handler(self, interface, protocol, sname, stype, sdomain, flags):
+		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
+			# local service (on this machine)
+			return
+		self.listener.remove_service(sname, stype, sdomain)
 
-		def addService(self, zc, stype, name):
-			info = zc.getServiceInfo(stype, name)
-			if info is not None:
-				self._listener.addService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
-			else:
-				self._listener.addService(stype, name, None, None, None)
+	def allfornow_handler(self):
+		self.listener.all_for_now()
 
-		def removeService(self, zc, stype, name):
-			info = zc.getServiceInfo(stype, name)
-			if info is not None:
-				self._listener.removeService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
-			else:
-				self._listener.removeService(stype, name, None, None, None)
+	def failure_handler(self, exception):
+		self.listener.failure(exception)
+
+
+#
+# =============================================================================
+#
+#                                     Demo
+#
+# =============================================================================
+#
 
 
 if __name__ == "__main__":
@@ -189,7 +173,9 @@ if __name__ == "__main__":
 	# are printed
 	#
 
-	import sys
+	from dbus.mainloop.glib import DBusGMainLoop
+	import gobject
+	import socket
 
 	if sys.argv[-1] == "publish":
 		#
@@ -197,17 +183,18 @@ if __name__ == "__main__":
 		#
 
 		publisher = Publisher()
-		publisher.addservice(ServiceInfo(
-			DEFAULT_STYPE,
-			"%s.%s" % ("My Test Service", DEFAULT_STYPE),
-			address = socket.inet_aton("127.0.0.1"),
-			port = 3000,
+		publisher.add_service(
+			sname = "My Test Service",
+			stype = DEFAULT_PROTO,
+			sdomain = DEFAULT_DOMAIN,
+			host = socket.getfqdn(),
+			port = 3456,
 			properties = {
 				"version": "0.10",
 				"a": "test value",
 				"b": "another value"
 			}
-		))
+		)
 		raw_input("Service published.  Press return to unpublish and quit.\n")
 		publisher.unpublish()
 	else:
@@ -216,12 +203,17 @@ if __name__ == "__main__":
 		#
 
 		class MyListener(Listener):
-			def addService(self, stype, name, address, port, properties):
-				print >>sys.stderr, "Service \"%s\" added" % name
+			def print_msg(self, action, sname, stype, sdomain, host, port, properties):
+				print >>sys.stderr, "Service \"%s\" %s" % (sname, action)
 				print >>sys.stderr, "\tType is \"%s\"" % stype
-				print >>sys.stderr, "\tAddress is %s" % (address and socket.inet_ntoa(address))
+				print >>sys.stderr, "\tDomain is \"%s\"" % sdomain
+				print >>sys.stderr, "\tHost is \"%s\"" % host
 				print >>sys.stderr, "\tPort is %s" % port
-				print >>sys.stderr, "\tProperties are %s" % properties
-				print >>sys.stderr, "Browsing for services.  Press return quit."
-		browser = ServiceBrowser(MyListener())
-		raw_input("Browsing for services.  Press return quit.\n")
+				print >>sys.stderr, "\tProperties are %s\n" % properties
+			def add_service(self, sname, stype, sdomain, host, port, properties):
+				self.print_msg("added", sname, stype, sdomain, host, port, properties)
+			def remove_service(self, sname, stype, sdomain):
+				self.print_msg("removed", sname, stype, sdomain, None, None, None)
+		browser = ServiceBrowser(DBusGMainLoop(), MyListener())
+		print "Browsing for services.  Press CTRL-C to quit.\n"
+		gobject.MainLoop().run()

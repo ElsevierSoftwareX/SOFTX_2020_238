@@ -17,7 +17,7 @@
 		PATH=${INSTALLPATH}/bin:$PATH
 		PKG_CONFIG_PATH=${INSTALLPATH}/lib64/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
 		PYTHONPATH=${INSTALLPATH}/lib64/python2.6/site-packages:${INSTALLPATH}/lib/python2.6/site-packages:$PYTHONPATH
-		GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:/opt/lscsoft/gst/lib64/gstreamer-0.10
+		GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${INSTALLPATH}/lib64/gstreamer-0.10:${GST_PLUGIN_PATH}
 
 		export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
 

@@ -50,8 +50,8 @@ from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
 from pylal import ligolw_thinca
-from pylal import progress
 
 
 from gstlal import far
@@ -84,6 +84,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
+	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -93,12 +94,18 @@ def parse_command_line():
 	if options.likelihood_cache is not None:
 		options.likelihood_filenames += [CacheEntry(line).path for line in open(options.likelihood_cache)]
 	if options.likelihood_file is not None:
-		options.likelihood_filenames += options.likelihod_file
+		options.likelihood_filenames += options.likelihood_file
 	if not options.likelihood_filenames:
 		raise ValueError("must provide --likelihood-cache and/or one or more --likelihood-file options")
 
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
+
+	if options.restrict_to_instruments is not None:
+		try:
+			options.restrict_to_instruments = frozenset(lsctables.instrument_set_from_ifos(options.restrict_to_instruments))
+		except:
+			ValueError("invalid --restrict-to-instruments '%s'" % options.restrict_to_instruments)
 
 	return options, filenames
 
@@ -120,19 +127,19 @@ def load_ranking_data(filenames, verbose = False):
 		if verbose:
 			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
 		xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose)
-		ignored, ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
+		ignored, this_ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
 		xmldoc.unlink()
-		if ranking_data is None:
+		if this_ranking_data is None:
 			raise ValueError("'%s' does not contain ranking statistic PDFs" % filename)
 		if ranking_data is None:
-			ranking_data = ranking_data
+			ranking_data = this_ranking_data
 		else:
-			ranking_data += ranking_data
+			ranking_data += this_ranking_data
 	ranking_data.finish(verbose = verbose)
 	return ranking_data
 
 
-def load_search_results(filenames, likelihood_ratio_threshold, tmp_path = None, verbose = False):
+def load_search_results(filenames, likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
 	background_likelihood_ratios = []
 	zerolag_likelihood_ratios = []
 
@@ -159,10 +166,14 @@ SELECT
 	)
 FROM
 	coinc_event
+	JOIN coinc_inspiral ON (
+		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	)
 WHERE
 	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?
-		""", (definer_id, likelihood_ratio_threshold)):
+	AND coinc_event.likelihood >= ?""" + ("""
+	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
+	, (definer_id, likelihood_ratio_threshold)):
 			if is_background:
 				background_likelihood_ratios.append(likelihood_ratio)
 			else:
@@ -174,11 +185,14 @@ WHERE
 	return background_likelihood_ratios, zerolag_likelihood_ratios
 
 
-def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None):
+def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, restrict_to_instruments = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
-	fig.suptitle("Rate Posterior")
+	if restrict_to_instruments is None:
+		fig.suptitle("Rate Posterior")
+	else:
+		fig.suptitle("Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
 	if noise_rate is None:
 		signal_axes = fig.gca()
 	else:
@@ -189,7 +203,7 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None):
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
 	lo, hi = signal_axes.get_xlim()
 	signal_axes.set_xlim((lo, hi))
-	signal_axes.set_xlabel("Count")
+	signal_axes.set_xlabel("$\mathrm{Signals} / \mathrm{Experiment}$")
 	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
 
 	if confidence_intervals is not None:
@@ -245,7 +259,7 @@ ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options
 #
 
 
-background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(filenames, ranking_data.likelihood_ratio_threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(filenames, ranking_data.likelihood_ratio_threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -255,10 +269,10 @@ background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(fi
 
 if options.verbose:
 	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_likelihood_ratios)
-	progressbar = progress.ProgressBar()
+	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, progressbar = progressbar)
+signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar)
 del progressbar
 
 
@@ -284,7 +298,7 @@ if options.verbose and confidence_intervals is not None:
 filename = "rate_posteriors.png"
 if options.verbose:
 	print >>sys.stderr, "writing %s ..." % filename
-plot_rates(signal_rate_pdf, noise_rate = noise_rate_pdf if options.with_background else None, confidence_intervals = confidence_intervals).savefig(filename)
+plot_rates(signal_rate_pdf, noise_rate = noise_rate_pdf if options.with_background else None, confidence_intervals = confidence_intervals, restrict_to_instruments = options.restrict_to_instruments).savefig(filename)
 
 if options.verbose:
 	print >>sys.stderr, "done"

@@ -1,5 +1,5 @@
 dist_pkgdata_DATA = \
-	Makefile.ERBank \
+	Makefile.BNSERBank \
 	Makefile.ERHMBank \
 	Makefile.S5LMCBC \
 	simplify_and_cluster.sql \

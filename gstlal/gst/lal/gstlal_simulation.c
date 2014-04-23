@@ -667,13 +667,21 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 		/* FIXME:  hard-coded = BAD BAD BAD */
 		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
 		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
-		/* FIXME we don't understand what about this funciton isn't
-		 * thread safe, so we need to figure that out properly and
-		 * remove the locks.
-		 */
+		/* FIXME remove locks when we can be sure LAL has been
+		 * compiled with pthread support.
+		 * load_injection_document() relies on testing the xlal
+		 * errno variable, which is only thread-safe when lal was
+		 * compiled with pthread locking turned on.  previously
+		 * there have also been thread safety problems in
+		 * libmetaio, but those have been fixed so it's just lal
+		 * that we're waiting on now. */
+#ifndef LAL_PTHREAD_LOCK
 		gstlal_fftw_lock();
+#endif
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
+#ifndef LAL_PTHREAD_LOCK
 		gstlal_fftw_unlock();
+#endif
 		if(!element->injection_document) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("error loading \"%s\"", element->xml_location));
 			result = GST_FLOW_ERROR;

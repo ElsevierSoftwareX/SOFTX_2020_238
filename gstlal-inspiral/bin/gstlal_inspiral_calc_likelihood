@@ -81,7 +81,7 @@ def parse_command_line():
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
-	parser.add_option("--no-trim-database", action = "store_true", help = "Do not delete events that are found to be below the pipeline's likelihood ratio threshold (default = delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to try reranking the events later with a different ranking statistic.")
+	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
 	options.likelihood_filenames = []
@@ -225,17 +225,23 @@ if options.verbose:
 #
 
 
-if options.verbose:
-	print >>sys.stderr, "1/%d:" % len(options.likelihood_filenames),
-coincparamsdistributions, ignored, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
-for n, likelihood_filename in enumerate(options.likelihood_filenames[1:], start = 2):
+coincparamsdistributions = None
+seglists = segments.segmentlistdict()
+for n, likelihood_filename in enumerate(options.likelihood_filenames, start = 1):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_filenames)),
 	xmldoc = ligolw_utils.load_filename(likelihood_filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
 	xmldoc.unlink()
-	coincparamsdistributions += this_coincparamsdistributions
+	if this_coincparamsdistributions is None:
+		raise ValueError("%s does not contain parameter distribution data" % likelihood_filename)
+	if coincparamsdistributions is None:
+		coincparamsdistributions = this_coincparamsdistributions
+	else:
+		coincparamsdistributions += this_coincparamsdistributions
 	seglists |= this_seglists
+if options.verbose:
+	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
 coincparamsdistributions.horizon_distances = horizon_distances
 
@@ -354,13 +360,15 @@ for n, filename in enumerate(filenames, 1):
 	# Delete low significance events to reduce database size
 	#
 
-	if not options.no_trim_database:
-		connection.cursor().execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
-		connection.cursor().execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		connection.cursor().execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		# FIXME:  don't hard-code program and parameter names
-		connection.cursor().execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT MAX(value) FROM process_params WHERE program == "gstlal_inspiral" AND param == "--singles-threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
-		connection.cursor().execute("""VACUUM;""")
+	if options.trim_database:
+		cursor = connection.cursor()
+		cursor.execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
+		cursor.execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		cursor.execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
+		# FIXME:  don't hard-code parameter name
+		cursor.execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT value FROM process_params WHERE process_params.process_id == sngl_inspiral.process_id AND param == "--singles-threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
+		cursor.execute("""VACUUM;""")
+		cursor.close()
 
 	#
 	# Close out process metadata

@@ -21,7 +21,7 @@
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from pylal.datatypes import LIGOTimeGPS
 
 
@@ -57,13 +57,16 @@ def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
 
 	# Parse the XML file
 
-	xmldoc=utils.load_filename(fname, contenthandler=ContentHandler, verbose=verbose)
+	xmldoc = ligolw_utils.load_filename(fname, contenthandler=ContentHandler, verbose=verbose)
 
 	# extract the padded geocentric end times into segment lists
 
-	sim_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SimInspiralTable.tableName)
-	for row in sim_inspiral_table:
+	for row in lsctables.SimInspiralTable.get_table(xmldoc):
 		t = LIGOTimeGPS(row.get_time_geocent())
 		seglist.append(segments.segment(t-pad, t+pad))
+
+	# help the garbage collector
+
+	xmldoc.unlink()
 
 	return seglist

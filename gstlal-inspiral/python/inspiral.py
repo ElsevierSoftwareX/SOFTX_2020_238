@@ -227,15 +227,15 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			# to close later without a ulimit problem
 			xmldoc = ligolw.Document()
 			root = xmldoc.appendChild(ligolw.LIGO_LW())
-			fobj, fname = tempfile.mkstemp(suffix=".gz")
+			fname = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			root.appendChild(bank.sngl_inspiral_table)
 			ligolw_utils.write_filename(xmldoc, fname, gz = True, verbose = verbose)
+			xmldoc.unlink()	# help garbage collector
 			bank.template_bank_filename = fname
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
-			os.close(fobj) #close the temporary file or else you will have ulimit issues
 
 	return banks
 
@@ -492,9 +492,9 @@ class CoincsDocument(object):
 	def write_output_file(self, verbose = False):
 		ligolw_process.set_process_end_time(self.process)
 
-		# FIXME:  should signal trapping be disabled in this code
-		# path?  I think not
 		if self.connection is not None:
+			# FIXME:  should signal trapping be disabled in
+			# this code path?  I think not
 			seg = self.search_summary_outseg
 			# record the final state of the search_summary and
 			# process rows in the database
@@ -507,12 +507,12 @@ class CoincsDocument(object):
 			self.connection.commit()
 			dbtables.build_indexes(self.connection, verbose = verbose)
 			self.connection.close()
-			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
 			self.connection = None
+			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
-			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
 
 
 class Data(object):

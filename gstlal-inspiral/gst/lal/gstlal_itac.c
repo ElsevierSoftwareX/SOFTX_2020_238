@@ -36,6 +36,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
+#include <gst/controller/gstcontroller.h>
 #include <math.h>
 #include <string.h>
 
@@ -572,8 +573,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
+	guint64 maxsize;
+
+	/* do this before accessing any element properties */
+	gst_object_sync_values(G_OBJECT(element), GST_BUFFER_TIMESTAMP(sinkbuf));
+
 	/* The max size to copy from an adapter is the typical output size plus the padding */
-	guint64 maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
+	maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
@@ -817,7 +823,7 @@ static void class_init(gpointer class, gpointer class_data)
 				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
 	
