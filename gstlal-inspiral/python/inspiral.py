@@ -465,7 +465,7 @@ class CoincsDocument(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		# NOTE:  the encoding used here is not compatible with
-		# ihope, but I can't find ihope's format documented
+		# ihope
 		row = self.summ_value_table.RowType()
 		row.summ_value_id = self.summ_value_table.get_next_id()
 		row.program = self.process.program
