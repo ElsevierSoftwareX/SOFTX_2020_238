@@ -39,7 +39,6 @@ from glue import lal
 from glue.ligolw import lsctables
 from glue import segments
 from optparse import OptionParser
-from gstlal import dagparts
 from gstlal import inspiral_pipe
 
 ## @file gstlal_inspiral_svd_bank_pipe
@@ -161,7 +160,7 @@ for i, f in enumerate(groups):
 	if i == len(groups) - 1:
 		clipright[-1] = 0
 	bank_ids = range(bank_ids[-1] + 1, bank_ids[-1] + 1 + len(f))
-	svd_bank_name = inspiral_pipe.T050017_filename(ifo, "GSTLAL_SVD_BANK_%d" % i, 0, 0, ".xml.gz")
+	svd_bank_name = inspiral_pipe.T050017_filename(ifo, "GSTLAL_SVD_BANK_%d" % i, 0, 0, ".xml.gz", path = svdJob.output_path)
 	svd_bank_name = os.path.join(os.getcwd(), svd_bank_name)
 	dag.output_cache.append(lal.CacheEntry(ifo, "GSTLAL_SVD_BANK_%d" % i, segments.segment(0, 0), "file://localhost%s" % (svd_bank_name,)))
 	
