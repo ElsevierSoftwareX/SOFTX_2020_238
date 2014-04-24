@@ -226,8 +226,8 @@ class Handler(simplehandler.Handler):
 				ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# Reset the segment lists
-				for name in self.seglists:
-					del self.seglists[name][:]
+				for seglist in self.seglists.values():
+					del seglist[:]
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
