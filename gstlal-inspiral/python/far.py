@@ -429,7 +429,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# the segment lists
 
 		if verbose:
-			print >>sys.stderr, "synthesizing background-like instrument combination probabilities..."
+			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
 		coincsynth = snglcoinc.CoincSynthesizer(
 			eventlists = dict((instrument, self.background_rates["instruments"][self.instrument_categories.category([instrument]),]) for instrument in segs),
 			segmentlists = segs,
@@ -488,7 +488,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		if verbose:
-			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions..."
+			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
 		for instrument in segs:
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
@@ -523,7 +523,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
 		if verbose:
-			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions..."
+			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for instrument in instruments:
 			binarr = target_dict["%s_snr_chi" % instrument]
@@ -933,7 +933,8 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 		V_at_snr_threshold = (snr_times_D / snr_threshold)**3.
 
 		# order[0] is index of instrument that can see sources the
-		# farthest, etc.
+		# farthest, order[1] is index of instrument that can see
+		# sources the next farthest, etc.
 		order = sorted(range(len(V_at_snr_threshold)), key = V_at_snr_threshold.__getitem__, reverse = True)
 
 		# instrument combination and volume of space visible to
