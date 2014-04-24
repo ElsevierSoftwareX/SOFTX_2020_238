@@ -39,6 +39,7 @@ import sys
 
 from glue import iterutils
 from glue.lal import CacheEntry
+from glue.text_progress_bar import ProgressBar
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
@@ -282,7 +283,7 @@ threads = []
 if options.write_likelihood is not None:
 	# take a moment to make sure we have SNR PDFs for all instrument combinations
 	for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
-		coincparamsdistributions.get_snr_joint_pdf(dict((instrument, coincparamsdistributions.horizon_distances[instrument]) for instrument in instruments))
+		coincparamsdistributions.get_snr_joint_pdf(instruments, progressbar = ProgressBar() if options.verbose else None)
 	q = multiprocessing.queues.SimpleQueue()
 	p = multiprocessing.Process(target = generate_ranking_data, args = (q, coincparamsdistributions, seglists), kwargs = {"verbose": options.verbose})
 	p.start()

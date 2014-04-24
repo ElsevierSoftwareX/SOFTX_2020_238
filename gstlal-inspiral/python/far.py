@@ -333,13 +333,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = 15
 	snr_joint_pdf_cache = {}
 
-	def get_snr_joint_pdf(self, instrument_horizon_distance_mapping, log_distance_tolerance = math.log(1.2)):
+	def get_snr_joint_pdf(self, instruments, horizon_distances, log_distance_tolerance = math.log(1.2), progressbar = None):
 		#
-		# key for cache:  frozen set of (instrument, horizon
-		# distance) pairs.  horizon distances are normalized to
-		# fractions of the largest among them and then are
-		# quantized to integer powers of
-		# exp(log_distance_tolerance)
+		# key for cache:  two element tuple, first element is
+		# frozen set of instruments for which this is the PDF,
+		# second element is frozen set of (instrument, horizon
+		# distance) pairs for all instruments in the network.
+		# horizon distances are normalized to fractions of the
+		# largest among them and then are quantized to integer
+		# powers of exp(log_distance_tolerance)
 		#
 		# FIXME:  is the default distance tolerance appropriate?
 		#
@@ -347,8 +349,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# consider a fast-path that just returns an all-0 array
 		#
 
-		horizon_distance_norm = max(instrument_horizon_distance_mapping.values())
-		key = frozenset((instrument, math.exp(math.floor(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance)) for instrument, horizon_distance in instrument_horizon_distance_mapping.items())
+		horizon_distance_norm = max(horizon_distances.values())
+		key = frozenset(instruments), frozenset((instrument, math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance)) for instrument, horizon_distance in horizon_distances.items())
 
 		#
 		# retrieve cached PDF, or build new one
@@ -366,8 +368,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
 			else:
 				age = 0
-			# FIXME:  turn off verbose
-			binnedarray = self.joint_pdf_of_snrs(dict(key), verbose = True)
+			if progressbar is not None:
+				progressbar.update(value = 0, text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
+			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
 			pdf = rate.InterpBinnedArray(binnedarray)
 			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
 			# if the cache is full, delete the entry with the
@@ -378,15 +381,25 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@staticmethod
 	def coinc_params(events, offsetvector):
-		# FIXME:  extract horizon distances from sngl_inspiral
-		# triggers and add an instrument-->horizon distance mapping
-		# to the params dictionary
 		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		# don't allow both H1 and H2 to participate in the same
 		# coinc.  if both have participated favour H1
 		if "H2_snr_chi" in params and "H1_snr_chi" in params:
 			del params["H2_snr_chi"]
 		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
+
+		# FIXME:  the effective distances are currently broken so
+		# we can't use this yet.  add into params dictionary when
+		# fixed.  will need to add a .P_noise() override when we do
+		# so it understands this dictionary isn't to be combined
+		# with a binning
+		# FIXME:  need to add horizon distances for instruments
+		# that don't participate, too.  eventually this class will
+		# have a history of horizon distances stored in it, and the
+		# trigger times can be used to retrieve the distance for
+		# the missing instrument(s)
+		horizon_distances = dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events)
+
 		return params
 
 	def P_signal(self, params):
@@ -397,7 +410,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# retrieve the SNR PDF
 		# FIXME:  get instrument-->horizon distance mapping from
 		# params
-		snr_pdf = self.get_snr_joint_pdf(dict((instrument, self.horizon_distances[instrument]) for instrument, rho in snrs))
+		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), self.horizon_distances)
 		# evaluate it (snrs are alphabetical by instrument)
 		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
@@ -643,7 +656,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		xml = self.get_xml_root(xml, name)
 		prefix = u"cached_snr_joint_pdf"
 		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
-			key = frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in ligolw_param.get_pyvalue(elem, u"key").strip().split(u",")))
+			key = ligolw_param.get_pyvalue(elem, u"key").strip().split(u";")
+			key = frozenset(lsctables.instrument_set_from_ifos(key[0].strip())), frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in key[1].strip().split(u",")))
 			binnedarray = rate.binned_array_from_xml(elem, prefix)
 			if self.snr_joint_pdf_cache:
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
@@ -659,7 +673,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		prefix = u"cached_snr_joint_pdf"
 		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
 			elem = xml.appendChild(rate.binned_array_to_xml(binnedarray, prefix))
-			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key))))
+			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", "%s;%s" % (lsctables.ifos_from_instrument_set(key[0]), u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key[1])))))
 		return xml
 
 	@property
@@ -766,6 +780,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		and the second is the natural logarithm (up to an arbitrary
 		constant) of the PDF from which the parameters have been drawn.
 		"""
+		# FIXME:  this generator needs to also populate a choice of
+		# horizon distance in each return value.  that information
+		# isn't used yet, but eventually it will be.  eventually
+		# self will have some sort of history of horizon distances,
+		# and it should be enough to just a set of distances out of
+		# the history at random.
 		snr_slope = 0.5
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
@@ -790,7 +810,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				yield params, ln_P
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, inst_horiz_mapping, n_samples = 10000, decades_per_bin = 1.0 / 50.0, verbose = False):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 10000, decades_per_bin = 1.0 / 50.0, progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -811,12 +831,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		assert snr_min > 0.0
 
 		# get instrument names in alphabetical order
-		names = sorted(inst_horiz_mapping)
+		instruments = sorted(instruments)
 		# get horizon distances and responses in that same order
-		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in names])
-		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names)
+		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
+		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in instruments)
 
-		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log10(cls.snr_max / snr_min) / decades_per_bin)))] * len(names)))
+		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log10(cls.snr_max / snr_min) / decades_per_bin)))] * len(instruments)))
 
 		steps_per_bin = 3.
 		decades_per_step = decades_per_bin / steps_per_bin
@@ -824,10 +844,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		psi = gmst = 0.0
 
-		if verbose:
-			progressbar = ProgressBar("%s SNR joint PDF" % ", ".join(names), max = n_samples)
-		else:
-			progressbar = None
+		if progressbar is not None:
+			progressbar.max = n_samples
 
 		for i in xrange(n_samples):
 			theta = math.acos(random.uniform(-1., 1.))
@@ -886,15 +904,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# number of bins per unit in SNR in the binnings.  For use
 		# as the width parameter in the filtering.
 		bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
-		rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(inst_horiz_mapping))))
+		rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(instruments))))
 		numpy.clip(pdf.array, 0, PosInf, pdf.array)
 		# set the region where any SNR is lower than the input
 		# threshold to zero before normalizing the pdf and
 		# returning.
 		range_all = slice(None,None)
 		range_low = slice(snr_min, cls.snr_min)
-		for i in xrange(len(inst_horiz_mapping)):
-			slices = [range_all] * len(inst_horiz_mapping)
+		for i in xrange(len(instruments)):
+			slices = [range_all] * len(instruments)
 			slices[i] = range_low
 			pdf[tuple(slices)] = 0
 		pdf.to_pdf()
