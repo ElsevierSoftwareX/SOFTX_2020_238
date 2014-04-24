@@ -48,6 +48,8 @@ digraph llpipe {
 	L1 -> HeadNode [label="TCP link", color=green4];
 	V1 -> HeadNode [label="TCP link", color=magenta4];
 
+	Analyst [shape=house, style=filled, color=orange, URL="http://tinyurl.com/cgxkc25"];
+
 	subgraph clusterCIT { 
 
 		label="CIT HTCondor Pool";
@@ -88,4 +90,6 @@ digraph llpipe {
 	Node1 -> gracedb [label="https"];
 	Node2 -> gracedb [label="https"];
 	NodeN -> gracedb [label="https"];
+	WebServer -> Analyst [label="eyes and fingers"];
+	gracedb -> Analyst [label="eyes and fingers"];
 }
