@@ -510,8 +510,6 @@ class CoincsDocument(object):
 		ligolw_process.set_process_end_time(self.process)
 
 		if self.connection is not None:
-			# FIXME:  should signal trapping be disabled in
-			# this code path?  I think not
 			seg = self.search_summary_outseg
 			# record the final state of the search_summary and
 			# process rows in the database
@@ -529,7 +527,7 @@ class CoincsDocument(object):
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
-			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
+			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
 class Data(object):

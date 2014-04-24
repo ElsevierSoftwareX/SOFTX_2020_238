@@ -223,7 +223,7 @@ class Handler(simplehandler.Handler):
 				ext = self.seglists.extent_all()
 				instruments = set(name.split("_")[0] for name in self.seglists)
 				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(ext[0]), int(abs(ext)))
-				ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose)
+				ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# Reset the segment lists
 				for name in self.seglists:
