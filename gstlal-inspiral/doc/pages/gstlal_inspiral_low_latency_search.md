@@ -101,50 +101,7 @@ banks. These steps are mostly automated by a Makefile and a condor dag.
 
 Steps in the Makefile
 
-@dot
-digraph banks {
-	// graph attributes
-	graph [fontname="Roman", fontsize=11];
-	edge [ fontname="Roman", fontsize=10 ];
-	node [fontname="Roman", shape=box, fontsize=11, style=filled];
-
-	gstlal_fake_frames [URL="\ref gstlal_fake_frames"];
-	lalapps_tmpltbank;
-	"H1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=red1];
-	"L1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=green1];
-	"V1 gstlal_bank_splitter" [URL="\ref gstlal_bank_splitter", color=magenta1];
-
-	gstlal_fake_frames -> lalapps_tmpltbank;
-	lalapps_tmpltbank -> "H1 gstlal_bank_splitter";
-	lalapps_tmpltbank -> "L1 gstlal_bank_splitter";
-	lalapps_tmpltbank -> "V1 gstlal_bank_splitter";
-
-	"H1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=red1]
-	"L1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=green1]
-	"V1 gstlal_psd_xml_from_asd_txt" [URL="\ref gstlal_psd_xml_from_asd_txt", color=magenta1]
-	ligolw_add;
-
-	"H1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
-	"L1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
-	"V1 gstlal_psd_xml_from_asd_txt" -> ligolw_add;
-
-	"H1 gstlal_inspiral_svd_bank_pipe" [color=red1];
-	"L1 gstlal_inspiral_svd_bank_pipe" [color=green1];
-	"V1 gstlal_inspiral_svd_bank_pipe" [color=magenta1];
-
-	"H1 gstlal_bank_splitter" -> "H1 gstlal_inspiral_svd_bank_pipe";
-	"L1 gstlal_bank_splitter" -> "L1 gstlal_inspiral_svd_bank_pipe";
-	"V1 gstlal_bank_splitter" -> "V1 gstlal_inspiral_svd_bank_pipe";
-	ligolw_add -> "H1 gstlal_inspiral_svd_bank_pipe";
-
-	"bank dag" [shape=doubleoctagon];
-
-	"H1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
-	"L1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
-	"V1 gstlal_inspiral_svd_bank_pipe" -> "bank dag";
-}
-@enddot
-
+@dotfile bankgeneration.dot
 
 \subsection Instructions
 
@@ -172,25 +129,22 @@ example</a>
 
 		$ tail -f bank.dag.dagman.out
 
+\subsection Resources Resources used 
+
+- gstlal_fake_frames
+- lalapps_tmpltbank
+- gstlal_bank_splitter
+- gstlal_psd_xml_from_asd_txt
+- ligolw_add
+- gstlal_inspiral_svd_bank_pipe
+
 \section Analysis Setting up the analysis dag
 
 A makefile automates the construction of a HTCondor DAG.  The steps in the
 makefile are shown in the diagram below.  The dag requires the template banks
 set up in the previous section.
 
-@dot
-digraph analysis {
-	// graph attributes
-	graph [fontname="Roman", fontsize=11];
-	edge [ fontname="Roman", fontsize=10 ];
-	node [fontname="Roman", shape=box, fontsize=11, style=filled];
-	
-	"bank dag" [shape=doubleoctagon];
-	"analysis dag" [shape=doubleoctagon];
-	
-	"bank dag" -> gstlal_inspiral_create_prior_diststats -> gstlal_inspiral_marginalize_likelihood -> gstlal_ll_trigger_pipe -> "analysis dag"
-}
-@enddot
+@dotfile analysisgeneration.dot
 
 - begin by making a directory for the analysis dag to run, e.g.,
 
@@ -286,9 +240,9 @@ Events are uploaded to https://gracedb.ligo.org
 
 \section Review Review status
 
-*Review table*
-
 Redundant entries are ommitted
+
+\subsection pythontable Python programs and modules
 
 <table>
 <tr><th> Program				</th><th> Sub programs or modules	</th><th> Line count	</th><th> Review status	</th><th> Comments	</th></tr>
@@ -346,3 +300,31 @@ Redundant entries are ommitted
 <tr><td> lvalert_listen				</td><td>                               </td><td> ?		</td><td> ?		</td><td>		     </td></tr>
 </table>
 
+
+\subsection gsttable gstreamer elements
+
+<table>
+<tr><th> Element					</th><th> depenedencies		</th><th> # lines </th><th> Review status	</th><th> Comments	</th></tr>
+<tr><td> \ref pipeparts.mkwhiten() lal_whiten		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mktogglecomplex() lal_togglecomplex</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mksumsquares() lal_sumsquares	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkstatevector() lal_statevector	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkinjections() lal_simulation 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mksegmentsrc() lal_segmentsrc 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkreblock() lal_reblock 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkpeak() lal_peak		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mknxydump() lal_nxydump		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>debug only?	</td></tr>
+<tr><td> \ref pipeparts.mknofakedisconts() lal_nofakedisconts</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkmatrixmixer() lal_matrixmixer	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkgate() lal_gate		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkfirbank() lal_firbank		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkdrop() lal_drop		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkcachesrc() lal_cachesrc	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkitac() lal_itac		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> \ref pipeparts.mkcachesrc() lal_cachesrc	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> framecpp_filesink				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> framecpp_channelmux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> framecpp_channeldemux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> gds_framexmitsrc				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+<tr><td> gds_lvshmsrc					</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td>		</td></tr>
+</table>
