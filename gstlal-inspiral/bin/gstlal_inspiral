@@ -462,6 +462,9 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	bottle.default_app.push()
+	# uncomment the next line to show tracebacks when something fails
+	# in the web server
+	#bottle.app().catchall = False
 	httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
 
 
