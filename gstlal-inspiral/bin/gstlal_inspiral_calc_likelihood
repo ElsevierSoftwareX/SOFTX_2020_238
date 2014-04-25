@@ -263,6 +263,7 @@ if options.background_prior != 0:
 coincparamsdistributions.finish(verbose = options.verbose)
 
 
+coincparamsdistributions.horizon_distances = horizon_distances	# FIXME:  band-aid for coinc params func.  remove
 likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 
 
