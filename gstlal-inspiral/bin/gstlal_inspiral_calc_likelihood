@@ -74,7 +74,7 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
-	parser.add_option("-l", "--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.")
+	parser.add_option("-l", "--likelihood-url", metavar = "URL", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
@@ -85,16 +85,16 @@ def parse_command_line():
 	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
-	options.likelihood_filenames = []
-	if options.likelihood_file is not None:
-		options.likelihood_filenames += options.likelihood_file
+	options.likelihood_urls = []
+	if options.likelihood_urls is not None:
+		options.likelihood_urls += options.likelihood_url
 	if options.likelihood_cache is not None:
-		options.likelihood_filenames += [CacheEntry(line).path for line in file(options.likelihood_cache)]
-	if not options.likelihood_filenames:
-		raise ValueError("no likelihood files specified")
+		options.likelihood_urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
+	if not options.likelihood_urls:
+		raise ValueError("no likelihood URLs specified")
 
 	if options.input_cache:
-		filenames += [CacheEntry(line).path for line in file(options.input_cache)]
+		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
 
 	return options, filenames
 
@@ -228,14 +228,14 @@ if options.verbose:
 
 coincparamsdistributions = None
 seglists = segments.segmentlistdict()
-for n, likelihood_filename in enumerate(options.likelihood_filenames, start = 1):
+for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_filenames)),
-	xmldoc = ligolw_utils.load_filename(likelihood_filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_urls)),
+	xmldoc = ligolw_utils.load_url(likelihood_url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
 	xmldoc.unlink()
 	if this_coincparamsdistributions is None:
-		raise ValueError("%s does not contain parameter distribution data" % likelihood_filename)
+		raise ValueError("%s does not contain parameter distribution data" % likelihood_url)
 	if coincparamsdistributions is None:
 		coincparamsdistributions = this_coincparamsdistributions
 	else:
