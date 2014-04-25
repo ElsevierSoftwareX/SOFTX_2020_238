@@ -34,6 +34,7 @@ from glue import iterutils
 from glue.lal import CacheEntry
 from glue.text_progress_bar import ProgressBar
 from glue.ligolw import ligolw
+from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
@@ -61,7 +62,7 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
-	parser.add_option("--horizon-history-url", metavar = "filename", help = "Load horizon distance history from this URL.  Required, can be given multiple times.")
+	parser.add_option("--horizon-history-url", action = "append", metavar = "filename", help = "Load horizon distance history from this URL.  Required, can be given multiple times.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
@@ -71,6 +72,8 @@ def parse_command_line():
 
 	if options.likelihood_cache is not None:
 		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
+	if not urls:
+		raise ValueError("must provide some likelihood files")
 
 	if options.output is None:
 		raise ValueError("must set --output")
@@ -110,7 +113,7 @@ for row in lsctables.SummValueTable.get_table(ligolw_add.ligolw_add(ligolw.Docum
 	# FIXME:  check that these are what we expect?
 	m1, m2, snr_threshold = inspiral.CoincsDocument.summ_value_name_decode(row.name)
 	for instrument in row.instruments:
-		horizon_distances.setdefault(instrument, []).append((row.start, dist))
+		horizon_distances.setdefault(instrument, []).append((row.start, row.value))
 
 
 #
@@ -138,9 +141,9 @@ if options.verbose:
 
 coincparamsdistributions = None
 seglists = segments.segmentlistdict()
-for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
+for n, likelihood_url in enumerate(urls, start = 1):
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_urls)),
+		print >>sys.stderr, "%d/%d:" % (n, len(urls)),
 	xmldoc = ligolw_utils.load_url(likelihood_url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
 	xmldoc.unlink()
