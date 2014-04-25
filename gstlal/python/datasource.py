@@ -67,8 +67,7 @@ lsctables.use_in(ContentHandler)
 # Misc useful functions
 #
 
-## #### A dictionary of channel names from a list
-#  _Python doc string_:
+
 def channel_dict_from_channel_list(channel_list):
 	"""!
 	Given a list of channels, produce a dictionary keyed by ifo of channel names:
@@ -84,8 +83,6 @@ def channel_dict_from_channel_list(channel_list):
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
 
-## #### A string of channel names from a dictionary
-#  _Python doc string_:
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
 	"""!
 	Creates a string of channel names options from a dictionary keyed by ifos.
@@ -131,8 +128,6 @@ state_vector_on_off_dict = {
 }
 
 
-## #### A dictionary of state vector bits from a list
-#  _Python doc string_:
 def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = state_vector_on_off_dict):
 	"""!
 	Produce a dictionary (keyed by detector) of on / off bit tuples from a
@@ -182,8 +177,6 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 	return state_vector_on_off_dict
 
 
-## #### A list of state vector command line arguments from a dictionary
-#  _Python doc string_:
 def state_vector_on_off_list_from_bits_dict(bit_dict):
 	"""!
 	Produce a tuple of useful command lines from a dictionary of on / off state
@@ -213,7 +206,7 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 	return onstr, offstr
 
 
-## #### framexmit ports in use on the LDG
+## framexmit ports in use on the LDG
 # Look-up table to map instrument name to framexmit multicast address and
 # port
 #
@@ -230,8 +223,7 @@ framexmit_ports = {
 	}
 }
 
-## #### Main organizational data class of this module
-#  _Python doc string_:
+
 class GWDataSourceInfo(object):
 	"""!
 	Hold the data associated with data source command lines.
@@ -347,8 +339,7 @@ class GWDataSourceInfo(object):
 			## Store the ndssrc specific options: channel_type
 			self.nds_channel_type = options.nds_channel_type
 
-## #### Generic data source options used by many programs to append options to an OptionParser
-# _Python doc string_:
+
 def append_options(parser):
 	"""!
 	Append generic data source options to an OptionParser object in order
@@ -468,9 +459,8 @@ def do_seek(pipeline, seekevent):
 ## @endcond
 
 
-## #### Gate controlled by a segment source
-#
-# ##### Gstreamer graph describing this function:
+##
+# _Gstreamer graph describing this function:_
 #
 # @dot
 # digraph G {
@@ -486,7 +476,8 @@ def do_seek(pipeline, seekevent):
 #	lal_segmentsrc -> lal_gate;
 # }
 # @enddot
-# _Python doc string_:
+#
+#
 def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False):
 	"""!
 	Takes a segment list and produces a gate driven by it. Hook up your own input and output.
@@ -499,9 +490,8 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
 
 
-## #### All-in-one data source
-#
-# ##### Gstreamer graph describing this function
+##
+# _Gstreamer graph describing this function:_
 #
 # @dot
 # digraph mkbasicsrc {
@@ -558,7 +548,8 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #	audioconv -> progress -> sim -> queue -> "?"
 # }
 # @enddot
-# _Python doc string_:
+#
+#
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""!
 	All the conditionals and stupid pet tricks for reading real or
@@ -705,9 +696,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	return src
 
 
-## #### h(t) Gate: quick glitch excision trick
-#
-# ##### Gstreamer graph
+## 
+# _Gstreamer graph describing the pipeline_
 #
 # @dot
 # digraph G {
@@ -724,7 +714,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 #	tee -> controlqueue -> lal_gate;
 # }
 # @enddot
-# _Python doc string_:
+#
+#
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
 	"""!
 	A convenience function to provide thresholds on input data.  This can
