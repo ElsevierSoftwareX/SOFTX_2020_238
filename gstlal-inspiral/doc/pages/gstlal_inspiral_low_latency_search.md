@@ -77,6 +77,36 @@ including additional signal consistency checks, coincidence analysis,
 background estimation, etc., but it roughly sets the order of magnitude
 required to do a low latency search with the LLOID algorithm.
 
+\subsection literature Relationship to published work 
+
+- <a href=http://arxiv.org/abs/1005.0012>Phys Rev D82 044025 (2010)</a>:
+  Provides basic expressions for computing the singular value decomposition of
+waveforms and expectations for signal-to-noise ratio loss, etc.
+- <a href=http://arxiv.org/abs/1101.0584> Phys Rev D83 084053 (2011)</a>
+  describes the composite detection statistic that is formed from the singular
+value decomposition basis vectors.  This statistic allows one to infer the
+presence of signals in the data without reconstructing the physical SNRs.  This
+is used optionally in gstlal inspiral pipelines.  Using it saves substantial
+CPU cost but at the cost of some detection efficiency.  Unlike the published
+result, we do not threshold on the composite detection statistic value, rather
+we do "peak finding" with the composite detection statistic time series and
+reconstruct physical SNRs around the peaks.  The peak time window is a free
+parameter.
+- <a href=http://arxiv.org/abs/1107.2665>ApJ 748 136 (2012)</a>: The so called
+  "LLOID" algorithm combines singular value decomposition with multirate
+sampling of the data and waveforms to produce a computationally efficient
+time-domain algorithm.  The algorithm described in the paper is basically
+identical to what is done.
+- <a href=http://arxiv.org/abs/1209.0718>Phys Rev D88 024025 (2013)</a> The
+  basic principle of significance estimation in the gstlal inspiral pipeline is
+described in this paper.  Since this paper was published, the likelihood ratio
+ranking statistic has been extended to more accuratly account for correlated
+(between detector) signal probabilities, which was ignored in the published
+work.  This has led to substantial sensitivity improvement, but also a more
+computationally complex background estimation procedure which is still being
+developed.  The first 5 engineering runs used the simpler procedure as
+published.  The 6th engineering run will be the first to use the new procedure. 
+
 \section Preliminaries Preliminaries
 
 - start by making a directory where you will run the analysis:
