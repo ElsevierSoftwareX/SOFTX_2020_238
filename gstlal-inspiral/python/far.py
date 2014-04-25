@@ -575,17 +575,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# add to raw counts
 			binarr += new_binarr
 
-	def add_foreground_prior(self, segs, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
+	def add_foreground_prior(self, segs, horizon_distances, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
 		#
 		# populate instrument combination binning
 		#
 
 		assert len(segs) > 1
-		assert set(self.horizon_distances) <= set(segs)
+		assert set(horizon_distances) <= set(segs)
 
 		# probability that a signal is detectable by each of the
 		# instrument combinations
-		P = P_instruments_given_signal(self.horizon_distances, snr_threshold = self.snr_min)
+		P = P_instruments_given_signal(horizon_distances, snr_threshold = self.snr_min)
 		# multiply by probability that enough instruments are on to
 		# form each of those combinations
 		P_live = snglcoinc.CoincSynthesizer(segmentlists = segs).P_live

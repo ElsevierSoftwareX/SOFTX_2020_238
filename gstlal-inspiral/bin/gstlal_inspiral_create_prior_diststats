@@ -99,7 +99,7 @@ coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
 # FIXME:  need segment lists and horizon distances
 seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(0., 1.)]))
-coincparamsdistributions.horizon_distances = {
+horizon_distances = {
 	"H1": 120.0,
 	"L1": 120.0,
 	"V1": 45.0
@@ -107,7 +107,7 @@ coincparamsdistributions.horizon_distances = {
 
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
-coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, verbose = options.verbose)
+coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
 
 
 #

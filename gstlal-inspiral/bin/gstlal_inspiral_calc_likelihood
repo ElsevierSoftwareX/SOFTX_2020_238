@@ -244,11 +244,9 @@ for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-coincparamsdistributions.horizon_distances = horizon_distances
-
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, verbose = options.verbose)
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
@@ -283,7 +281,7 @@ threads = []
 if options.write_likelihood is not None:
 	# take a moment to make sure we have SNR PDFs for all instrument combinations
 	for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
-		coincparamsdistributions.get_snr_joint_pdf(instruments, progressbar = ProgressBar() if options.verbose else None)
+		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
 	q = multiprocessing.queues.SimpleQueue()
 	p = multiprocessing.Process(target = generate_ranking_data, args = (q, coincparamsdistributions, seglists), kwargs = {"verbose": options.verbose})
 	p.start()
