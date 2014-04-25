@@ -14,6 +14,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## 
+# @file
+#
+# A file that contains the lloidparts module code; Roughly speaking it
+# implements the algorithm described in <a
+# href=http://arxiv.org/abs/1107.2665>ApJ 748 136 (2012)</a>
+#
+
+##
+# @package lloidparts
+#
+# a module for building gstreamer graphs of the LLOID algorithm
+#
+
 
 #
 # =============================================================================
@@ -68,9 +82,16 @@ from pylal.datatypes import LIGOTimeGPS
 
 
 class DetectorData(object):
-	# default block_size = 16384 samples/second * 8 bytes/sample * 512
-	# second
+	"""!
+	A class to store a cache file, channel name and the characteristic
+	block size (in bytes) of h(t) data to read.
+	"""
 	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
+		"""!
+		@param frame_cache A cache file containing the frames to find the h(t) data for this detector
+		@param channel A string to store the channel name
+		@param block_size The block size of data to read in bytes.
+		"""
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
@@ -86,13 +107,19 @@ class DetectorData(object):
 
 
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
-	"""Create a new seek event for a given gps_start_time and gps_end_time,
-	with optional flags.  gps_start_time and gps_end_time may be provided as
-	instances of LIGOTimeGPS, as doubles, or as floats."""
+	"""!
+	Create a new seek event, i.e., gst.event_new_seek()  for a given
+	gps_start_time and gps_end_time, with optional flags.  
+
+	@param gps_start_time start time as LIGOTimeGPS, double or float
+	@param gps_end_time start time as LIGOTimeGPS, double or float
+	"""
 
 	def seek_args_for_gps(gps_time):
-		"""Convenience routine to convert a GPS time to a seek type and a
-		GStreamer timestamp."""
+		"""!
+		Convenience routine to convert a GPS time to a seek type and a
+		GStreamer timestamp.
+		"""
 
 		if gps_time is None or gps_time == -1:
 			return (gst.SEEK_TYPE_NONE, -1) # -1 == gst.CLOCK_TIME_NONE
@@ -107,12 +134,52 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	return gst.event_new_seek(1., gst.FORMAT_TIME, flags, start_type, start_time, stop_type, stop_time)
 
 
+##
+# A "sum-of-squares" aggregator
+# 
+# _Gstreamer graph describing this function:_
 #
-# sum-of-squares aggregator
+# @dot
+# digraph G {
+#	rankdir="LR";
 #
-
-
+#	// nodes
+#	node [shape=box, style=rounded];
+#
+#	lal_adder
+#	lal_peak [URL="\ref pipeparts.mkpeak()", style=filled, color=grey, label="lal_peak\niff control_peak_samples > 0"];
+#	capsfilter [URL = "\ref pipeparts.mkcapsfilter()"];
+#	"mksegmentsrcgate()" [URL="\ref datasource.mksegmentsrcgate()"];
+#	tee [URL="\ref pipeparts.mktee()"];
+#	lal_checktimestamps [URL="\ref pipeparts.mkchecktimestamps()"];
+#
+#	// connections
+#	"? sink 1" -> lal_adder;
+#	"? sink 2" -> lal_adder;
+#	"? sink N" -> lal_adder;
+#	lal_adder -> capsfilter;
+#	capsfilter -> lal_peak;
+#	lal_peak -> "mksegmentsrcgate()";
+#	"mksegmentsrcgate()" -> lal_checktimestamps;
+#	lal_checktimestamps -> tee;
+#	tee -> "? src";
+# }
+# @enddot
+#
+#
 def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, seekevent = None, control_peak_samples = None):
+	"""!
+	This function implements a portion of a gstreamer graph to provide a
+	control signal for deciding when to reconstruct physical SNRS
+
+	@param pipeline A reference to the gstreamer pipeline in which to add this graph
+	@param rate An integer representing the target sample rate of the resulting src
+	@param verbose Make verbose
+	@param suffix Log name for verbosity
+	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
+	@param seekevent A seek event such as what would be created by seek_event_for_gps()
+	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
+	"""
 	#
 	# start with an adder and caps filter to select a sample rate
 	#
@@ -155,12 +222,24 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 
 
 class Handler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
-		"""
-		here gates is a dict of gate names and messages for example
-		gates = {"my_gate_name": "my message"}
+	"""!
+	A subclass of simplehandloer.Handler to be used with e.g.,
+	gstlal_inspiral
 
-		my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
+	Implements additional message handling for dealing with
+	spectrum messages and checkpoints for the online analysis including periodic
+	dumps of segment information, trigger files and background distribution
+	statistics. 
+	
+	"""
+	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
+		"""!
+		@param mainloop The main application's event loop
+		@param pipeline The gstreamer pipeline that is being controlled by this handler
+		@param gates A dictionary of gate names and messages, e.g., gates = {"my_gate_name": "my message"}.  my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
+		@param tag The tag to use for naming file snapshots, e.g. the description will be "%s_LLOID" % tag
+		@param An inspiral.Data class instance
+		@param verbose Be verbose
 		"""
 		super(Handler, self).__init__(mainloop, pipeline)
 
@@ -183,6 +262,13 @@ class Handler(simplehandler.Handler):
 			bottle.route("/segments.xml")(self.web_get_segments_xml)
 
 	def do_on_message(self, bus, message):
+		"""!
+		Override the on_message method of simplehandler to handle
+		additional message types, e.g., spectrum and checkpointing messages.
+
+		@param bus A reference to the pipeline's bus
+		@param message A reference to the incoming message
+		"""
 		if message.type == gst.MESSAGE_ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
@@ -198,15 +284,30 @@ class Handler(simplehandler.Handler):
 		elif message.type == gst.MESSAGE_APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
-				self.flush_segments_to_disk(message.structure["timestamp"])
-				try:
-					self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
-				except TypeError as te:
-					print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
+				timestamp = message.structure["timestamp"]
+				self.checkpoint(timestamp)
 				return True
 		return False
 
+	def checkpoint(self, timestamp):
+		"""!
+		Checkpoint, e.g., flush segments and triggers to disk.
+
+		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		"""
+		self.flush_segments_to_disk(timestamp)
+		try:
+			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
+		except TypeError as te:
+			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
+
 	def flush_segments_to_disk(self, timestamp):
+		"""!
+		Flush segments to disk, e.g., when checkpointing or shutting
+		down an online pipeline.
+
+		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		"""
 		with self.dataclass.lock:
 			try:
 				# close out existing segments
@@ -232,6 +333,14 @@ class Handler(simplehandler.Handler):
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
 	def gatehandler(self, elem, timestamp, segment_type):
+		"""!
+		A handler that intercepts gate state transitions. This can set
+		the "on" segments for each detector
+
+		@param elem A reference to the lal_gate element
+		@param timestamp A gstreamer time stamp that marks the state transition (in nanoseconds)
+		@param segment_type the type of state transition, i.e. either "on" or "off"
+		"""
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
 		name = elem.get_name()
 
@@ -247,6 +356,10 @@ class Handler(simplehandler.Handler):
 			raise AssertionError
 
 	def gen_segments_doc(self):
+		"""!
+		A method to output the segment list in a valide ligolw xml
+		format.
+		"""
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
@@ -257,6 +370,9 @@ class Handler(simplehandler.Handler):
 		return xmldoc
 
 	def web_get_segments_xml(self):
+		"""!
+		provide a bottle route to get segment information via a url
+		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
@@ -265,6 +381,9 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 	def web_get_horizon_history_xml(self):
+		"""!
+		provide a bottle route to get horizon distance history information via a url
+		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.dataclass.coincs_document.horizon_history_xml(), output, trap_signals = None)
@@ -273,12 +392,87 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 
+##
+# _Gstreamer graph describing this function:_
 #
-# one instrument, one template bank
+# @dot
+# digraph G {
+#	rankdir="LR";
 #
-
-
+#	// nodes
+#	node [shape=box, style=rounded];
+#
+# 	lal_firbank [URL="\ref pipeparts.mkfirbank()"];
+#	lal_checktimestamps1 [URL="\ref pipeparts.mkchecktimestamps()"];
+#	lal_checktimestamps2 [URL="\ref pipeparts.mkchecktimestamps()"];
+#	queue [URL="\ref pipeparts.mkqueue()"];
+#	matrixmixer [URL="\ref pipeparts.mkmatrixmixer()", label="lal_matrixmixer\niff bank.mix_matrix", style=filled, color=grey];
+#
+#	"? sink" -> lal_firbank;
+#	lal_firbank -> lal_checktimestamps1;
+#
+#	// without control
+#
+#	lal_checktimestamps1 -> queue [label="iff control_snk, control_src are None"];
+#	queue -> matrixmixer;
+#	matrixmixer -> lal_checktimestamps2;
+#	lal_checktimestamps2 -> "? src";
+#
+#	// with control
+#
+#	tee [URL="\ref pipeparts.mktee()"];
+#	queue2 [URL="\ref pipeparts.mkqueue()"];
+#	queue3 [URL="\ref pipeparts.mkqueue()"];
+#	queue4 [URL="\ref pipeparts.mkqueue()"];
+#	lal_checktimestamps3 [URL="\ref pipeparts.mkchecktimestamps()"];
+#	lal_checktimestamps4 [URL="\ref pipeparts.mkchecktimestamps()"];
+#	lal_checktimestamps5 [URL="\ref pipeparts.mkchecktimestamps()"];
+#	capsfilter [URL="\ref pipeparts.mkcapsfilter()"];
+#	lal_nofakedisconts [URL="\ref pipeparts.mknofakedisconts()"];
+#	gate [URL="\ref pipeparts.mkgate()"];
+#	"mkcontrolsnksrc()" [URL="\ref mkcontrolsnksrc()"];
+#	lal_sumsquares [URL="\ref pipeparts.mksumsquares()"];
+#	audioresample [URL="\ref pipeparts.mkresample()"];
+#	
+#	
+#	lal_checktimestamps1 -> tee [label="iff control_snk, control_src are not None"];
+#	tee -> lal_sumsquares -> queue2;
+#	queue2 -> lal_checktimestamps3;
+#	lal_checktimestamps3 -> audioresample;
+#	audioresample -> capsfilter;
+#	capsfilter -> lal_nofakedisconts;
+#	lal_nofakedisconts -> lal_checktimestamps4;
+#	lal_checktimestamps4 -> "mkcontrolsnksrc()"
+#	"mkcontrolsnksrc()" -> queue3;
+#	queue3 -> gate;
+#	tee -> queue4 -> gate;
+#	gate -> lal_checktimestamps5;
+#	lal_checktimestamps5 -> matrixmixer;
+#
+# }
+# @enddot
+#
+#
 def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None):
+	"""!
+	Make a single slice of one branch of the lloid graph, e.g. one instrument and one
+	template bank fragment. For details see: http://arxiv.org/abs/1107.2665
+
+	Specifically this implements the filtering of multirate svd basis and
+	(conditional) resampling and reconstruction of the physical SNR
+	
+	@param pipeline The gstreamer pipeline in which to place this graph
+	@param src The source of data for this graph provided by a gstreamer element
+	@param bank The template bank class
+	@param bank_fragment The specific fragment (time slice) of the template bank in question
+	@param (control_snk, control_src) An optional tuple of the sink and source elements for a graph that will construct a control time series for the gate which aggregates the orthogonal snrs from each template slice. This is used to conditionally reconstruct the physical SNR of interesting times
+	@param gate_attack_length The attack time for the lal_gate element that controls the reconstruction of physical SNRs
+	@param gate_attack_hold The hold time for the lal_gate element that controls the reconstruction of physical SNRs
+	@param block_duration The characteristic buffer size that is passed around, which is useful for constructing queues.
+	@param nxydump_segment Not used
+	@param fir_stride The target length of output buffers from lal_firbank.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
+	@param control_peak_time The window over which to find peaks in the control signal.  Shorter windows increase computational cost but probably also detection efficiency.
+	"""
 	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
@@ -385,7 +579,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 
 def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None):
-	"""Build the pipeline fragment that creates the SnrSlices associated with different sample rates from hoft."""
+	"""!
+	Build the pipeline fragment that creates the SnrSlices associated with
+	different sample rates from hoft.
+	"""
 	#
 	# parameters
 	#
@@ -551,7 +748,9 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 
 
 def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duration):
-	"""Build pipeline fragment that computes the TimeSliceChisq from SnrSlices."""
+	"""!
+	Build pipeline fragment that computes the TimeSliceChisq from SnrSlices.
+	"""
 	#
 	# parameters
 	#
@@ -598,7 +797,10 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 
 
 def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydump_segment = None, logname = ""):
-	"""Build pipeline fragment that converts single detector SNR and Chisq into triggers."""
+	"""!
+	Build pipeline fragment that converts single detector SNR and Chisq
+	into triggers.
+	"""
 	#
 	# trigger generator and progress report
 	#
@@ -622,6 +824,10 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, reconstruction_segment_list = None):
+	"""!
+	The multiple instrument, multiple bank LLOID algorithm
+	"""
+
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
