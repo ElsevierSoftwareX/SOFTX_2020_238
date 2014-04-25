@@ -1,0 +1,200 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue import iterutils
+from glue.lal import CacheEntry
+from glue.text_progress_bar import ProgressBar
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import ligolw_add
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import search_summary as ligolw_search_summary
+from glue import segments
+from gstlal import far
+from gstlal import inspiral
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("--horizon-history-url", metavar = "filename", help = "Load horizon distance history from this URL.  Required, can be given multiple times.")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
+	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
+	options, urls = parser.parse_args()
+
+	if options.likelihood_cache is not None:
+		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
+
+	if options.output is None:
+		raise ValueError("must set --output")
+
+	return options, urls
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, urls = parse_command_line()
+
+
+#
+# retrieve horizon distance data
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "retrieving horizon distances ..."
+
+horizon_distances = {}
+for row in lsctables.SummValueTable.get_table(ligolw_add.ligolw_add(ligolw.Document(), options.horizon_history_url, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)):
+	if not row.name.startswith("Dh:"):
+		continue
+	# FIXME:  check that these are what we expect?
+	m1, m2, snr_threshold = inspiral.CoincsDocument.summ_value_name_decode(row.name)
+	for instrument in row.instruments:
+		horizon_distances.setdefault(instrument, []).append((row.start, dist))
+
+
+#
+# put horizon distances for each instrument in time order
+#
+
+for dists in horizon_distances.values():
+	dists.sort()
+
+# FIXME:  for now we just take the average of the distances recorded for
+# each instrument.  this needs to be worked out properly so that events are
+# ranked with the appropriate distance
+horizon_distances = dict((instrument, sum(dist for t, dist in dists) / len(dists)) for instrument, dists in horizon_distances.items())
+
+if options.verbose:
+	print >>sys.stderr, "done retrieving horizon distances"
+	for instrument, dist in sorted(horizon_distances.items()):
+		print >>sys.stderr, "\t%s:  %g Mpc" % (instrument, dist)
+
+
+#
+# load parameter distribution data
+#
+
+
+coincparamsdistributions = None
+seglists = segments.segmentlistdict()
+for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_urls)),
+	xmldoc = ligolw_utils.load_url(likelihood_url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
+	xmldoc.unlink()
+	if this_coincparamsdistributions is None:
+		raise ValueError("%s does not contain parameter distribution data" % likelihood_url)
+	if coincparamsdistributions is None:
+		coincparamsdistributions = this_coincparamsdistributions
+	else:
+		coincparamsdistributions += this_coincparamsdistributions
+	seglists |= this_seglists
+if options.verbose:
+	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
+
+coincparamsdistributions.horizon_distances = horizon_distances
+
+# calculate injections before writing to disk
+if options.synthesize_injections != 0:
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, verbose = options.verbose)
+
+# add a uniform prior to background, by default 0 is added so it has no effect
+if options.background_prior != 0:
+	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
+
+
+#
+# rebuild event parameter PDFs (+= method has not constructed these
+# correctly, and we might have added additional priors to the histograms)
+#
+
+
+coincparamsdistributions.finish(verbose = options.verbose)
+
+
+#
+# generate likelihood ratio histograms
+#
+
+
+# take a moment to make sure we have SNR PDFs for all instrument combinations
+for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
+	coincparamsdistributions.get_snr_joint_pdf(instruments, progressbar = ProgressBar() if options.verbose else None)
+ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, verbose = options.verbose)
+
+
+#
+# Collect the PDF writing thread if one was created and write the parameter
+# and ranking statistic distribution data to a file
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = {})
+search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
+ligolw_process.set_process_end_time(process)
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
