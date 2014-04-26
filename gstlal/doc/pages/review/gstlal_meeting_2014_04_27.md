@@ -29,3 +29,5 @@ Here are some details on what the committee would like to see during the review 
 6. gstlal uses the same template bank for all detectors and data. How robust this?
 
 7. During the afternoon sessions we will walk through the codes but it is up to you how you would like to organise this.
+
+8. Status of technical documentation 
