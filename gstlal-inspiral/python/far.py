@@ -1023,29 +1023,24 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 #
 
 
-def binned_likelihood_rates_from_samples(samples, bins_per_decade = 250.0, min_bins = 1000, limits = None):
+def binned_likelihood_ratio_rates_from_samples(samples, limits, bins_per_decade = 250.0, min_bins = 1000, nsamples = 8000000):
 	"""
-	Construct and return a BinnedArray containing a histogram of a
-	sequence of samples.  If limits is None (default) then the limits
-	of the binning will be determined automatically from the sequence,
-	otherwise limits is expected to be a tuple or other two-element
-	sequence providing the (low, high) limits, and in that case the
-	sequence can be a generator.
+	Construct and return a BinnedArray containing a histogram of a sequence
+	of samples (which can be a generator).  The first nsamples elements
+	from the sequence are used.  limits is expected to be a tuple or other
+	two-element sequence providing the (low, high) limits.
 	"""
-	if limits is None:
-		# add a factor of 10 of padding for the smoothing that will
-		# be done later
-		lo, hi = min(samples) / 10.0, max(samples) * 10.0
-	else:
-		lo, hi = limits
-		if lo >= hi:
-			raise ValueError("limits out of order (%g, %g)" % limits)
+	lo, hi = limits
+	if lo >= hi:
+		raise ValueError("limits out of order (%g, %g)" % limits)
 	nbins = max(int(round(bins_per_decade * math.log10(hi / lo))), min_bins)
 	if nbins < 1:
 		raise ValueError("bins_per_decade (%g) too small for limits (%g, %g)" % (nbins, lo, hi))
 	signal_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
 	noise_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
-	for lamb, lnP_signal, lnP_noise in samples:
+	samples = iter(samples)
+	for i in xrange(nsamples):
+		lamb, lnP_signal, lnP_noise = samples.next()
 		signal_rates[lamb,] += math.exp(lnP_signal)
 		noise_rates[lamb,] += math.exp(lnP_noise)
 	return signal_rates, noise_rates
@@ -1109,7 +1104,7 @@ class RankingData(object):
 			if verbose:
 				print >>sys.stderr, "computing signal and noise likelihood PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_rates_from_samples(self.likelihoodratio_samples(coinc_params_distributions.random_params(key).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits)))
+			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.likelihoodratio_samples(coinc_params_distributions.random_params(key).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits)))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1167,8 +1162,16 @@ class RankingData(object):
 		self.finish()
 
 	@staticmethod
-	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func, nsamples = 8000000):
-		for i in xrange(nsamples):
+	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func):
+		"""
+		Generator that yields an unending sequence of 3-element
+		tuples.  Each tuple's elements are a value of the
+		likelihood rato, the natural log of the probability density
+		of that likelihood ratio in the signal population, the
+		natural log of the probability density of that likelihood
+		ratio in the noise population.
+		"""
+		while 1:
 			params, lnP_params = random_params_func()
 			lamb = likelihoodratio_func(params)
 			if math.isnan(lamb):
