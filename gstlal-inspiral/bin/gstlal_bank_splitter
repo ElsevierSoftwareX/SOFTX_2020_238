@@ -67,7 +67,12 @@ lsctables.use_in(LIGOLWContentHandler)
 #	+ `--verbose`: Be verbose.
 #
 # ### Review status
+#
+# Compared original bank with the split banks.  Verified that they are the same.
+#
+# Boundary effects need to still be addressed in group_templates()
 # 
+# 268726dc53785e6d92efda416a42436d52eaeabd 2014-04-28
 
 #FIXME FIXME FIXME distribute templates evenly so the last chunk doesn't end up too small
 def group_templates(templates, n, overlap = 0):
