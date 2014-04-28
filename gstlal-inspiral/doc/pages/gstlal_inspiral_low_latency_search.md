@@ -140,17 +140,17 @@ Steps in the Makefile
 		$ mkdir /home/gstlalcbc/engineering/5/bns_bank
 
 - Next obtain a Makefile to automate the bank generation, e.g. : <a
-  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.ERBank>this
+  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.BNSERBank>this
 example</a>
 
-		$ wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.ERBank
+		$ wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.BNSERBank
 
 - Then modify the make file to suit your needs, e.g. changing the masses or low
   frequency starting points
 
 - Then run make
 
-		$ make -f Makefile.ERBank
+		$ make -f Makefile.BNSERBank
 
 - After several minutes this will result in a dag file that can be submited by
 		$ condor_submit_dag bank.dag
