@@ -810,7 +810,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				yield params, ln_P
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 10000, decades_per_bin = 1.0 / 50.0, progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, decades_per_bin = 1.0 / 50.0, progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -836,6 +836,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
 		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in instruments)
 
+		# get horizon distances and responses of remaining
+		# instruments (order doesn't matter as long as they're in
+		# the same order)
+		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
+		resps_other = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in inst_horiz_mapping if inst not in instruments)
+
+		# initialize the PDF array
 		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log10(cls.snr_max / snr_min) / decades_per_bin)))] * len(instruments)))
 
 		steps_per_bin = 3.
@@ -852,10 +859,18 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			phi = random.uniform(0., 2. * math.pi)
 			cosi2 = random.uniform(-1., 1.)**2.
 
+			# F+^2 and Fx^2 for each instrument
 			fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
+			fpfc2_other = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps_other])**2.
 
-			# ratio of inverse SNR to distance for each instrument
+			# ratio of distance to inverse SNR for each instrument
 			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
+			# minimum of those quantities for the instruments
+			# that aren't involved
+			if len(DH_times_8_other):
+				min_snr_times_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min()
+			else:
+				min_snr_times_D_other = 0.0
 
 			# snr * D in instrument whose SNR grows fastest
 			# with decreasing D
@@ -896,6 +911,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				#	\propto D^2 |dD|
 				#	\propto D^3 * (10**decades_per_step - 1.)
 				D = max_snr_times_D / snr
+				if min_snr_times_D_other >= cls.snr_min * D:
+					# source can be seen in one of the
+					# other instruments
+					break
 				pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
 
 			if progressbar is not None:
