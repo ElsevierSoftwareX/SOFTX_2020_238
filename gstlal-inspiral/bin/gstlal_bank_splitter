@@ -19,10 +19,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
+import itertools
 import os
 import sys
-import numpy
-import copy
 from optparse import OptionParser
 from pylal import spawaveform
 from glue.ligolw import ligolw
@@ -74,7 +73,6 @@ lsctables.use_in(LIGOLWContentHandler)
 # 
 # 268726dc53785e6d92efda416a42436d52eaeabd 2014-04-28
 
-#FIXME FIXME FIXME distribute templates evenly so the last chunk doesn't end up too small
 def group_templates(templates, n, overlap = 0):
 	"""
 	break up the template table into sub tables of length n with overlap
@@ -84,13 +82,14 @@ def group_templates(templates, n, overlap = 0):
 	if n >= len(templates):
 		yield templates
 	else:
-		end = 0
-		start = 0
-		assert overlap < n
-		while end < len(templates):
-			end = start + n + overlap
-			yield templates[start:end]
-			start += n
+		n = len(templates) / round(len(templates) / float(n))
+		assert n >= 1
+		for i in itertools.count():
+			start = int(round(i * n)) - overlap // 2
+			end = int(round((i + 1) * n)) + overlap // 2
+			yield templates[max(start, 0):end]
+			if end >= len(templates):
+				break
 
 
 def parse_command_line():
