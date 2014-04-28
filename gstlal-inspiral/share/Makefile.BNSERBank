@@ -78,7 +78,6 @@ reference_psd.xml: H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz  L1psd.xml.gz V1psd.xml.gz
 
 %_bank.dag : %_split_bank.cache reference_psd.xml
-	cp $< tmp
 	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument $* --reference-psd reference_psd.xml --bank-cache $< --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name $@ --num-banks $(NUMBANKS)
 
 bank.dag : H1_bank.dag L1_bank.dag V1_bank.dag
@@ -86,4 +85,4 @@ bank.dag : H1_bank.dag L1_bank.dag V1_bank.dag
 	rm -f H1_bank.dag L1_bank.dag V1_bank.dag
 
 clean :
-	rm -rf *.sub* *.dag* *.cache *.sh *.xml *.gz logs gstlal_svd_bank*
+	rm -rf *.sub* *.dag* *.cache *.sh *.xml *.gz logs gstlal_svd_bank* *_split_bank
