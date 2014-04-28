@@ -56,6 +56,7 @@ lsctables.use_in(LIGOLWContentHandler)
 # ### Command line interface
 #
 #	+ `--output-path` [path]: Set the path to the directory where output files will be written.  Default is "."
+#	+ `--output-cache` [file]: Set the file name for the output cache.
 #	+ `--n` [count] (int): Set the number of templates per output file (required).
 #	+ `--overlap` [count] (int): Overlap the templates in each file by this amount, must be even.
 #	+ `--sort-by` [mchirp|mtotal|ffinal|chirptime]: Select the template sort order (required).
@@ -65,7 +66,8 @@ lsctables.use_in(LIGOLWContentHandler)
 #	+ `--bank-program` [name]: Select name of the program used to generate the template bank (default: tmpltbank).
 #	+ `--verbose`: Be verbose.
 #
-
+# ### Review status
+# 
 
 #FIXME FIXME FIXME distribute templates evenly so the last chunk doesn't end up too small
 def group_templates(templates, n, overlap = 0):
@@ -115,26 +117,15 @@ output_cache_file = open(options.output_cache, "w")
 bank_count = 0
 
 for filename in filenames:
-
-	# FIXME use all the options
-	options_params=[("--filename","string",filename),("--output_path","string", options.output_path), ("--n","int",options.n),("--add-f-final","string",options.add_f_final),("--max-f-final","float",options.max_f_final)]
-
-
 	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-	process_params_table = lsctables.ProcessParamsTable.get_table(xmldoc)
-	tmpltbank_process_ids = lsctables.ProcessTable.get_table(xmldoc).get_ids_by_program(options.bank_program)
 
 	if options.add_f_final:
-		for row in process_params_table:
-			if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
-				approximant=row.value
-			#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
-			if row.param in ("--low-frequency-cutoff", "--flow"):
-				flow = float(row.value)
+		approximant, = ligolw_process.get_process_params(xmldoc, options.bank_program, "--approximant")
+		flow, = ligolw_process.get_process_params(xmldoc, options.bank_program, "--flow") + ligolw_process.get_process_params(xmldoc, options.bank_program, "--low-frequency-cutoff")
 		for row in sngl_inspiral_table:
 			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
-			if approximant in ['IMRPhenomB', 'EOBNRv2']:
+			if approximant in ('IMRPhenomB', 'EOBNRv2'):
 				row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
 				if options.max_f_final and row.f_final>options.max_f_final:
 					row.f_final=options.max_f_final
@@ -161,13 +152,8 @@ for filename in filenames:
 	for row in sngl_inspiral_table:
 		sample_rates.setdefault(templates.ceil_pow_2(row.f_final), []).append(row)
 
-	# prepare the replacement sngl inspiral table
-	sngl_inspiral_table_split = lsctables.table.new_from_template(sngl_inspiral_table)
-	sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_split, sngl_inspiral_table)
-
 	# store the process params
-	process = ligolw_process.append_process(xmldoc, program = "bank_splitter", comment = "split bank into smaller banks after sorting", ifos = None)
-	ligolw_process.append_process_params(xmldoc, process, options_params)
+	process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
 
 	
 	def sort_func(row, column = options.sort_by):
@@ -177,7 +163,7 @@ for filename in filenames:
 		sample_rates[r].sort(key=sort_func)
 
 		for rows in group_templates(sample_rates[r], options.n, options.overlap):
-			sngl_inspiral_table_split[:] = rows
+			sngl_inspiral_table[:] = rows
 			output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
 			cache_entry = lal.CacheEntry.from_T050017("file://localhost/%s/%s" % (os.getcwd(), output))
 			output_cache_file.write("%s\n" % cache_entry)
