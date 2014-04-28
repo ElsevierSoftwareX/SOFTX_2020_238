@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (C) 2012  Kipp Cannon
+# Copyright (C) 2012,2014  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -26,32 +26,64 @@
 # This program is not meant to be executed standalone by a user. It should be
 # part of a DAG managing a running gstlal_inspiral online analysis.
 #
-# This program takes two arguments;
+# This program takes two or more arguments;
 #
-# - The path to the registry txt files that it will use to figure out the nodes
-#   of the running jobs
-# - The output file name
+# - The path of the output file name
+# - One or more root URLs of the web servers from which to retrieve event
+#   parameter distribution data (e.g., "http://node001.ligo.caltech.edu")
 #
-# This program queries each running gstlal_inspiral job via the URL recorded in
-# its registry file and computes the marginalized likelihood distribution used
-# for computing the false-alarm-probability.
+# This program queries each running gstlal_inspiral job via the URL,
+# computes PDFs of the likelihood ratio ranking statistics from the
+# parameter distribution data, then marginalizes the ranking statistic PDFs
+# across jobs and writes the result to the given output file.
 #
-# It continues to do that in a while True loop (with a 10 minute break).  Files
-# are not overwritten directly, but rather via a temporary file and mv
-# operation to ensure that no files are corrupted in a POSIX file environment.
+# It continues to do that in an infinite loop with a 10 minute pause on
+# each iteration.  Files are not overwritten directly, but rather via a
+# temporary file and mv operation to ensure that no files are corrupted in
+# a POSIX file environment.
 # 
 
-REGPATH=$1
-OUTPUT=$2
+#
+# get the output file name
+#
 
+OUTPUT="${1}"
+shift
+
+#
+# paths on the web server to the horizon history and trigger parameter
+# files
+#
+
+HORIZON_HISTORY_PATH="horizon_history.xml"
+LIKELIHOOD_PATH="likelihood.xml"
+
+#
+# pause for each iteration (seconds)
+#
+
+SLEEP="600"
+
+#
+# loop forever
+#
 
 while true ; do
-	echo "...sleeping for 600 seconds..."
-	sleep 600 # 10 minutes
-	cp ${OUTPUT} ${OUTPUT}.next.gz
-	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz $(echo ${url}/likelihood.xml for url in $(cat ${REGPATH}/*registry*.txt)) || break
+	echo "... sleeping for ${SLEEP} seconds ..."
+	sleep ${SLEEP}
+	RANKING_PDF_FILES=
+	for SERVER in "$@" ; do
+		RANKING_PDF_FILE=$(mktemp)
+		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
+		gstlal_inspiral_calc_rate_pdfs --verbose --horizon-history-url ${SERVER}/${HORIZON_HISTORY_PATH} --output ${RANKING_PDF_FILE} ${SERVER}/${LIKELIHOOD_PATH} || break
+	done || break
+	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${RANKING_PDF_FILES} || break 
+	rm -vf ${RANKING_PDF_FILES}
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
 done
 
-# If this program ends its an error, always - then condor will restart it
+#
+# this program ends its an error, always, so condor will restart it
+#
+
 exit 1
