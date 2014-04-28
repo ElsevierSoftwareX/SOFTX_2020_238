@@ -1023,7 +1023,7 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 #
 
 
-def binned_likelihood_ratio_rates_from_samples(samples, limits, bins_per_decade = 250.0, min_bins = 1000, nsamples = 8000000):
+def binned_likelihood_ratio_rates_from_samples(samples, limits, nsamples, bins_per_decade = 250.0, min_bins = 1000):
 	"""
 	Construct and return a BinnedArray containing a histogram of a sequence
 	of samples (which can be a generator).  The first nsamples elements
@@ -1077,7 +1077,7 @@ class RankingData(object):
 	likelihood_ratio_threshold = math.exp(2)
 
 
-	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 8000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -1104,7 +1104,7 @@ class RankingData(object):
 			if verbose:
 				print >>sys.stderr, "computing signal and noise likelihood PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.likelihoodratio_samples(coinc_params_distributions.random_params(key).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits)))
+			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.likelihoodratio_samples(coinc_params_distributions.random_params(key).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits, nsamples = nsamples)))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
