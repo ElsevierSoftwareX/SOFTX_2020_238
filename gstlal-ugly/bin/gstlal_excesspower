@@ -195,12 +195,12 @@ def get_triggers(elem, handler):
 			continue
 		# FIXME: Determine "magic number" or remove it
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
-		#if options.compat:
-		row.snr = row.snr / row.chisq_dof - 1
 
 		# This is done here so that the current PSD is used rather than
 		# what might be there when the triggers are actually output
 		ep.compute_amplitude( row, handler.psd )
+
+		row.snr = numpy.sqrt(row.snr / row.chisq_dof - 1)
 
 		# Reassign IDs since they won't be unique
 		row.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % handler.event_number)
@@ -243,6 +243,12 @@ def get_triggers(elem, handler):
 
 		if handler.clustering:
 			handler.process_triggers( [], cluster_passes = True )
+
+			# Final check on clustered SNR
+			for i in range(len(handler.triggers))[::-1]:
+				if handler.snr_thresh and handler.triggers[i].snr < handler.snr_thresh:
+					del handler.triggers[i]
+
 		handler.write_triggers( filename = fname, seg = outseg )
 		#handler.time_since_dump = handler.stop 
 		handler.time_since_dump = float(outseg[1])
@@ -451,12 +457,10 @@ if cfg.has_option( "triggering", "snr-thresh" ):
 if cfg.has_option( "triggering", "fap-thresh" ):
 	handler.fap = cfg.getfloat( "triggering", "fap-thresh" )
 
-if handler.snr_thresh is not None and handler.fap is not None:
-	print >>sys.stderr, "WARNING: Both an SNR threshold and a FAP threshold have been specified. The FAP threshold will take precedence."
-elif handler.fap is not None:
+if handler.fap is not None:
 	print "False alarm probability threshold (in Gaussian noise) is %f" % handler.fap
-else:
-	print "SNR threshold (sqrt of tile energy) is %f" % handler.snr_thresh
+if handler.snr_thresh is not None:
+	print "Trigger SNR threshold sqrt(E/ndof-1) is %f" % handler.snr_thresh
 
 # If one wishes to try and automatically upload events to an event database 
 # (read: gracedb and friends) these options will be sufficient to the pipeline 
@@ -739,14 +743,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 		# Determine the SNR threshold for this trigger generator
-		if handler.fap is not None:
-			# FIXME: Still needs magic number... or use the EP version
-			# ndof_eff = ndof * 0.62
-			snr_thresh = ep.determine_thresh_from_fap(handler.fap, ndof)**2
-		else:
-			# TODO: Make clear in the ini file that the thresh is power SNR, 
-			# not amplitude and then remove the square here
-			snr_thresh = handler.snr_thresh**2
+		snr_thresh = ep.determine_thresh_from_fap(handler.fap, ndof)**2
 		if verbose:
 			print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
 		durtee.set_property( "snr-thresh", snr_thresh )

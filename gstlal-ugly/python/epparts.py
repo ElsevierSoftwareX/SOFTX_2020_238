@@ -158,7 +158,7 @@ class EPHandler( Handler ):
 		self.triggers = self.make_output_table()
 		self.output_cache = Cache()
 		self.output_cache_name = None
-		self.snr_thresh = 5.5
+		self.snr_thresh = None
 		self.event_number = 0
 		self.fap = None
 		self.dump_frequency = 600 # s
@@ -456,7 +456,7 @@ class EPHandler( Handler ):
 		for trig in newtrigs:
 			# For some reason, importing the XLAL SnglBurst 
 			# causes the write to crash -- we still need a better
-			# way to identified processed triggers
+			# way to identify processed triggers
 			if trig.process_id is not None:
 				continue
 			trig.process_id = self.process.process_id
