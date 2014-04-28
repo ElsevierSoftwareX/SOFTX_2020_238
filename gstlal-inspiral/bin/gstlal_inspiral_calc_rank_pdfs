@@ -66,7 +66,8 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
-	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
+	parser.add_option("--ranking-stat-samples", metavar = "N", default = 1000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 1000000).")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
 
@@ -184,7 +185,7 @@ coincparamsdistributions.horizon_distances = horizon_distances	# FIXME:  band-ai
 # take a moment to make sure we have SNR PDFs for all instrument combinations
 for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
 	coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
-ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
