@@ -170,8 +170,7 @@ for filename in filenames:
 		for rows in group_templates(sample_rates[r], options.n, options.overlap):
 			sngl_inspiral_table[:] = rows
 			output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-			cache_entry = lal.CacheEntry.from_T050017("file://localhost/%s/%s" % (os.getcwd(), output))
-			output_cache_file.write("%s\n" % cache_entry)
+			output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 			ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 			bank_count += 1
 
