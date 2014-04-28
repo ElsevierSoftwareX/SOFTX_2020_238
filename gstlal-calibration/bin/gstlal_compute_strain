@@ -73,7 +73,6 @@ datasource.append_options(parser)
 # These options should be used whether the pipeline runs in recoloring or calibration mode
 parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
-parser.add_option("--dq-sample-rate", metavar = "Hz", default = 32768, type = "int", help = "Sample rate for the data quality vector being used to determine the state of the instrument/subsystem.  (Default = 32768 Hz)")
 parser.add_option("--lldq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for the outgoing LLD-DQ_VECTOR.  (Default = 1 Hz)")
 parser.add_option("--odc-float", action = "store_true", help = "Set this if the data quality vector (ODC) is broadcasted as a float.")
 parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be in science mode. (Default = 0x1)")
@@ -128,7 +127,6 @@ instrument = gw_data_source.channel_dict.keys()[0]
 
 # Set up short-cut names for each of the sample rates used throughout the pipeline
 sr = options.sample_rate
-dqsr = options.dq_sample_rate
 lldqsr = options.lldq_sample_rate
 actuationsr = options.actuation_sr
 
@@ -144,6 +142,13 @@ if options.recolor:
 		if options.verbose:
 			print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
 	rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+
+# Set the caps for doubles vs. floats based on the command line option
+# FIXME: This pipeline fails in --fake-calibrate mode (at least) when --doubles is not set
+if not options.doubles:
+	caps = "audio/x-raw-float, width=32, rate=%d" % sr # = 4 bytes, a float
+if options.doubles:
+	caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
 
 #
 # Setup the pipeline
@@ -172,13 +177,13 @@ elif options.data_source == "frames":
 elif options.data_source == "white":
 	if options.recolor or options.fake_calibrate:
 		rawdata = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=sr, blocksize = sr * 4 * 1)
-		rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, width=32, rate=%d" % sr)	
+		rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, caps)	
 	else:
 		raise ValueError("invalid --data-source white; this option can only be used when operating in --recolor or --fake-calibrate mode")
 
 	if not options.no_dq_vector:
-		odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=dqsr, blocksize = dqsr * 4 * 1)
-		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=%d" % dqsr)
+		odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=sr, blocksize = sr * 4 * 1)
+		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=%d" % sr)
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
 else:
@@ -188,15 +193,12 @@ if options.data_source != "white":
 	# FIXME: Patch datasource so that you can give it multiple channels to the same instrument. In the meantime, the channel list can only be setup from datasource if one input channel is given (not including the dq channel), which is the case for --recolor and --fake-calibrate mode.
 	if options.recolor or options.fake_calibrate:
 		channel_list = gw_data_source.channel_dict.items()
-		if not options.no_dq_vector:
-			dq_channel_list = (instrument, gw_data_source.dq_channel_dict[instrument])
-			channel_list.append(dq_channel_list)
 	else:
 		channel_list = [(instrument, options.darm_ctrl_channel), (instrument, options.darm_err_channel)]
 		if not options.no_gamma:
 			channel_list.append((instrument, options.exc_channel))
-		if not options.no_dq_vector:
-			channel_list.append((instrument, gw_data_source.dq_channel_dict[instrument]))
+	if not options.no_dq_vector:
+		channel_list.append((instrument, gw_data_source.dq_channel_dict[instrument]))
 	
 	# Hook up the relevant channels to the demuxer
 	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
@@ -206,7 +208,7 @@ if options.data_source != "white":
 
 	# Set up the appropriate branches within the pipeline
 	if options.recolor or options.fake_calibrate:
-		rawdata = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 1000)
+		rawdata = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	else:
 		dctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 		derr = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
@@ -244,8 +246,7 @@ if not options.no_dq_vector:
 		# If the ODC is ints, change the caps to ensure they are unsigned ints
 		# FIXME: When the ODC is written as unsigned ints, this piece can be removed
 		odcstatevector = pipeparts.mkaudioconvert(pipeline, odcstatevector)
-		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, rate=%d, width=32, signed=false" % dqsr)
-		odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
+		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
 
 # When reading from disk, clip the incoming data stream(s) to segment list
 if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
@@ -259,14 +260,16 @@ if options.data_source == "frames" and gw_data_source.frame_segments[instrument]
 	# FIXME: This was not here for the dq vector before.  Is there a reason that it wouldn't need to be clipped?
 	if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkgate(pipeline, odcstatevector, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
-		
+
 # RECOLORING OR FAKE-CALIBRATE MODE: Make sure the data is in the right format and resample it to the desired sample rate
 if options.recolor or options.fake_calibrate:
-	rawdata = pipeparts.mkaudioconvert(pipeline, rawdata)
+	#rawdata = pipeparts.mkaudioconvert(pipeline, rawdata)
 	rawdata = pipeparts.mkprogressreport(pipeline, rawdata, "progress_src_%s" % instrument)
 	rawdata = pipeparts.mkresample(pipeline, rawdata, quality = 9)
-	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, width=64, rate=%d" % sr)
+	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, rate=%d" % sr)
 	rawdata = pipeparts.mkaudiorate(pipeline, rawdata, skip_to_first = True, silent = False) # This audiorate works around a bug in the resampler
+	rawdata = pipeparts.mkaudioconvert(pipeline, rawdata)
+	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, caps)
 	rawdata = pipeparts.mkchecktimestamps(pipeline, rawdata, "%s_timestamps_%d_hoft" % (instrument, sr))
 
 #
@@ -338,12 +341,6 @@ else:
 	#wR = filters["whitener_re"]
 	#wI = filters["whitener_im"]
 	#cal_line_freq = filters["cal_line_freq"]
-
-	# Set the caps for doubles vs. floats based on the command line option
-	if not options.doubles:
-		caps = "audio/x-raw-float, width=32, rate=%d" % sr # = 4 bytes, a float
-	if options.doubles:
-		caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
 
 	# EXC branch
 	if not options.no_gamma:
@@ -426,7 +423,7 @@ if not options.no_dq_vector:
 
 	htdqbit = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkqueue(pipeline, straintee))
 	htdqbit = pipeparts.mkbitvectorgen(pipeline, htdqbit, bit_vector = 0x4, nongap_is_control = True)
-	htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, width=32, signed=false, depth=32, channels=1, rate=%d, endianness=1234" % sr)
+	htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 	htdqbit = pipeparts.mkaudiorate(pipeline, htdqbit, skip_to_first = True, silent = False) # This audiorate fixes issues with zero-sized buffers that are not marked as gaps being passed between the two surrounding elements.  I'm not sure why this is happening, so more work needs to be done to investigate the root of the problem.
 	htdqbit = pipeparts.mkgeneric(pipeline, htdqbit, "lal_logical_undersampler", required_on = 0x4, status_out = 0x4)
 	htdqbit = pipeparts.mkcapsfilter(pipeline, htdqbit, "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % lldqsr)
@@ -466,10 +463,9 @@ if not options.no_dq_vector:
 pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
 
 # Link the real and imaginary gammas to the muxer
-if not options.no_gamma:
-	#pipeparts.mkqueue(pipeline, gammaRtee).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
-	#pipeparts.mkqueue(pipeline, gammaI).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
-	pipeparts.mkfakesink(pipeline, gammaI)
+if not options.no_gamma and not options.recolor:
+	pipeparts.mkqueue(pipeline, gammaRtee).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
+	pipeparts.mkqueue(pipeline, gammaI).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
 
 # FIXME: More outputs need to be hooked up to the muxer
 
