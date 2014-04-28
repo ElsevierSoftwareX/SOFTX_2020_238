@@ -355,8 +355,7 @@ fig.savefig(plotname)
 
 
 for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint_pdf_cache.items():
-	key = dict(key)
-	instruments = sorted(key)
+	instruments = sorted(key[0])
 	if len(instruments) > 2:
 		# FIXME:  figure out how to plot 3D PDFs
 		continue
@@ -368,7 +367,7 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	y = binnedarray.bins[1].centres()[1:-1]
 	z = binnedarray.array.T[1:-1,1:-1]
 	if numpy.isnan(z).any():
-		warnings.warn("%s PDF contains NaNs" % key)
+		warnings.warn("%s PDF contains NaNs" % sorted(instruments))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
