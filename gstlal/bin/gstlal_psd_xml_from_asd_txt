@@ -50,6 +50,19 @@ from optparse import OptionParser
 #
 # specify the ASD or PSD text file as a file argument at the end
 #
+#
+# ### Notes
+#
+# - The PSD will be interpolated with with linear interpolation if needed.  The user is highly encouraged to plot the result to see if it is satisfactory.  See, e.g., gstlal_plot_psd
+#
+#
+# ### Review status
+
+# | Reviewers				| git hash					| date 		|
+# | ----------------------------------- | --------------------- 			| ------------- |
+# | Florent, Duncan, Jolien, Kipp, Chad | | 2014-04-29	|
+#
+#
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--instrument", help="instrument, e.g. H1")
