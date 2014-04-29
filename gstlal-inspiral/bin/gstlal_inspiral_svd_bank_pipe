@@ -92,9 +92,12 @@ from gstlal import far
 #	+ `--output-name` [file]: Set the base name of the output, required
 #	+ `--verbose`: Be verbose.
 #
-# | Reviewers				| git hash		| date 		|
-# | ----------------------------------- | --------------------- | ------------- |
-# | Florent, Duncan, Jolien, Kipp, Chad | 
+# ### Review Status
+#
+# | Reviewers				| git hash					| date 		|
+# | ----------------------------------- | --------------------- 			| ------------- |
+# | Florent, Duncan, Jolien, Kipp, Chad | 004cf84d7e980eca0c7fd228c6d49cad959649c7 	| 2014-04-29	|
+#
 
 def parse_command_line():
 	parser = OptionParser()
