@@ -14,6 +14,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+
+## @package templates
 
 #
 # =============================================================================
@@ -48,7 +51,7 @@ __date__ = "FIXME"
 #
 
 gstlal_FD_approximants = set(('IMRPhenomB', 'TaylorF2', 'TaylorF2RedSpin', 'TaylorF2RedSpinTidal'))
-gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'TaylorEt', 'EOBNRv2'))
+gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'EOBNRv2'))
 gstlal_approximants = gstlal_FD_approximants | gstlal_TD_approximants
 
 
@@ -96,7 +99,6 @@ def add_quadrature_phase(fseries, n):
 	positive_frequencies[0] = 0	# set DC to zero
 	if have_nyquist:
 		positive_frequencies[-1] = 0	# set Nyquist to 0
-	#negative_frequencies = numpy.conj(positive_frequencies[::-1])
 	zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
 	if have_nyquist:
 		# complex transform never includes positive Nyquist
@@ -208,6 +210,16 @@ def time_slices(
 	where rate is the sampling rate and begin/end mark the boundaries
 	during which the given rate is guaranteed to be appropriate (no
 	template exceeds a frequency of Nyquist/padding during these times).
+
+	@param sngl_inspiral_rows The snigle inspiral rows for this sub bank
+	@param flow The low frequency to generate the waveform from
+	@param fhigh The maximum frequency for generating the waveform
+	@param padding Allow a template to be generated up to Nyquist / padding for any slice
+	@param samples_min The minimum number of samples to use in any time slice
+	@param samples_max_256 The maximum number of samples to have in any time slice greater than or equal to 256 Hz
+	@param samples_max_64 The maximum number of samples to have in any time slice greater than or equal to 64 Hz
+	@param samples_max The maximum number of samples in any time slice below 64 Hz
+	@param verbose Be verbose
 	"""
 
 	#
@@ -259,8 +271,11 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
+		# First factor of 2 goes from sample rate to Nyquist freq,
+		# second factor of two gives you the lower boundary since we
+		# know all slices are powers of 2.
 		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = longest_chirp = max(spawaveform.chirptime(row.mass1,row.mass2,7,this_flow,fhigh,row.chi) for row in sngl_inspiral_rows)
+		longest_chirp = max(spawaveform.chirptime(row.mass1,row.mass2,7,this_flow,fhigh,row.chi) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
