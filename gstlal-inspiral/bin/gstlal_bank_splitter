@@ -69,11 +69,12 @@ lsctables.use_in(LIGOLWContentHandler)
 #
 # Compared original bank with the split banks.  Verified that they are the same, e.g., add sub bank files into test.xml.gz and run (except that lalapps_tmpltbank adds redundant templates):
 #
-#	ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
-#	ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
+#		ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
+#		ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
 #
-# 
-# 268726dc53785e6d92efda416a42436d52eaeabd 2014-04-28
+# | Names 	                                | Hash 					      | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-28 |
 
 def group_templates(templates, n, overlap = 0):
 	"""
