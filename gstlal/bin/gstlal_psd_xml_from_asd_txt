@@ -57,10 +57,10 @@ from optparse import OptionParser
 #
 #
 # ### Review status
-
+#
 # | Reviewers				| git hash					| date 		|
 # | ----------------------------------- | --------------------- 			| ------------- |
-# | Florent, Duncan, Jolien, Kipp, Chad | | 2014-04-29	|
+# | Florent, Duncan, Jolien, Kipp, Chad |abedb7c19ad3d5348c000bc5f9435d5d2e810e42	| 2014-04-29	|
 #
 #
 
