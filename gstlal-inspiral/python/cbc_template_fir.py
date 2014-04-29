@@ -14,6 +14,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+
+## @package cbc_template_fir
 
 #
 # =============================================================================
@@ -235,19 +238,18 @@ def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
 
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
-	"""
+	"""!
 	Generate a bank of templates, which are
 	 (1) broken up into time slice,
-	 (2) optimally down-sampled in each time slice and
+	 (2) down-sampled in each time slice and
 	 (3) whitened with the given psd.
 	"""
 	sample_rate_max = max(time_slices['rate'])
 	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
-	length = int(round(sum(rate*(end-begin) for rate,begin,end in time_slices)))
 
 	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = int(round(2**math.ceil(math.log(length_max + round(32.0 * sample_rate_max), 2))))
+	working_length = templates.ceil_pow_2(length_max + round(32.0 * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
 	# Give the PSD the same frequency spacing as the waveforms we are about to generate
@@ -278,7 +280,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		autocorrelation_bank = None
 		autocorrelation_mask = None
 
-	# Have one template bank for each time_slice
+	# Multiply by 2 * length of the number of sngl_inspiral rows to get the sine/cosine phases.
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
 
 	# Store the original normalization of the waveform.  After whitening, the waveforms
