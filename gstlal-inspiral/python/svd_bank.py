@@ -15,6 +15,10 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+
+## @package svd_bank
+
 
 #
 # =============================================================================
@@ -177,6 +181,27 @@ class Bank(object):
 
 
 def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = DefaultContentHandler):
+	"""!
+	Return an instance of a Bank class.
+
+	@param template_bank_filename The template bank filename containing a subbank of templates to decompose in a single inpsiral table.
+	@param psd A class instance of a psd.
+	@param flow The lower frequency cutoff.
+	@param ortho_gate_fap The FAP threshold for the sum of squares threshold, see http://arxiv.org/abs/1101.0584
+	@param snr_threshold The SNR threshold for the search
+	@param svd_tolerance The target SNR loss of the SVD, see http://arxiv.org/abs/1005.0012
+	@param padding The padding from Nyquist for any template time slice, e.g., if a time slice has a Nyquist of 256 Hz and the padding is set to 2, only allow the template frequency to extend to 128 Hz.
+	@param identity_transform Don't do the SVD, just do time slices and keep the raw waveforms
+	@param verbose Be verbose
+	@param autocorrelation_length The number of autocorrelation samples to use in the chisquared test.  Must be odd
+	@param samples_min The minimum number of samples to use in any time slice
+	@param samples_max_256 The maximum number of samples to have in any time slice greater than or equal to 256 Hz
+	@param samples_max_64 The maximum number of samples to have in any time slice greater than or equal to 64 Hz
+	@param samples_max The maximum number of samples in any time slice below 64 Hz
+	@param bank_id The id of the bank in question
+	@param contenthandler The ligolw content handler for file I/O
+	"""
+
 	# Open template bank file
 	bank_xmldoc = ligolw_utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
