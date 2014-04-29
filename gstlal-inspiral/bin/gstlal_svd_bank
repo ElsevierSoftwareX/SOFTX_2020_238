@@ -45,6 +45,8 @@ from gstlal import svd_bank
 
 ## @package gstlal_svd_bank
 #
+# @image html svdtable.png
+#
 # ### Usage examples
 # 
 # - Typical use
@@ -55,7 +57,7 @@ from gstlal import svd_bank
 #
 # ### Command line options
 #	+ `--flow` [float] (Hz): Set the template low-frequency cut-off (default = 40.0).
-#	+ `--identity-transform`: Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.
+#	+ `--identity-transform`: Do not perform an SVD; instead, use the original templates as the analyzing templates.
 #	+ `--padding` [pad factor] (float): Fractional amount to pad time slices. Default 1.5
 #	+ `--svd-tolerance` [match]: Set the SVD reconstruction tolerance (default = 0.9995).
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
@@ -92,7 +94,7 @@ ligolw_param.use_in(LIGOLWContentHandler)
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
-parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
+parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates.")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
