@@ -40,6 +40,7 @@ from glue.ligolw import lsctables
 from glue import segments
 from optparse import OptionParser
 from gstlal import inspiral_pipe
+from gstlal import far 
 
 ## @file gstlal_inspiral_svd_bank_pipe
 # This program will make a HTCondor DAG to automate the creation of svd bank files; see gstlal_inspiral_svd_bank_pipe for more information
@@ -90,7 +91,10 @@ from gstlal import inspiral_pipe
 #	+ `--num-banks [str]: The number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 #	+ `--output-name` [file]: Set the base name of the output, required
 #	+ `--verbose`: Be verbose.
-
+#
+# | Reviewers				| git hash		| date 		|
+# | ----------------------------------- | --------------------- | ------------- |
+# | Florent, Duncan, Jolien, Kipp, Chad | 
 
 def parse_command_line():
 	parser = OptionParser()
@@ -127,7 +131,6 @@ def parse_command_line():
 options, filenames = parse_command_line()
 ifo = options.instrument
 ref_psd = options.reference_psd
-input_cache = options.bank_cache
 
 
 #
@@ -142,14 +145,14 @@ except:
 dag = inspiral_pipe.DAG(options.output_name)
 svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = {"request_memory":"1999"})
 # Assumes cache is sorted by chirpmass or whatever the SVD sorting algorithm that was chosen
-files = [lal.CacheEntry(line).path for line in open(input_cache)]
+files = [lal.CacheEntry(line).path for line in open(options.bank_cache)]
 
 
 #
 # loop over files to set up svd bank jobs
 #
 
-groups = [g for g in inspiral_pipe.group(files, options.num_banks)]
+groups = list(inspiral_pipe.group(files, options.num_banks))
 bank_ids = [0]
 for i, f in enumerate(groups):
 	# handle the edges by not clipping so you retain the template bank as intended.  
@@ -165,7 +168,7 @@ for i, f in enumerate(groups):
 	dag.output_cache.append(lal.CacheEntry(ifo, "GSTLAL_SVD_BANK_%d" % i, segments.segment(0, 0), "file://localhost%s" % (svd_bank_name,)))
 	
 	svdNode = inspiral_pipe.generic_node(svdJob, dag, [],
-		opts = {"snr-threshold":4.0,
+		opts = {"snr-threshold":far.ThincaCoincParamsDistributions.snr_min,
 			"flow":options.flow,
 			"svd-tolerance":options.tolerance,
 			"ortho-gate-fap":0.5,
