@@ -1,0 +1,209 @@
+#
+# Bank data
+#
+
+BANKSTART = 966393725
+BANKSTOP =  966395773
+MIN_MASS = 1.1
+MAX_MASS = 1.7
+MIN_TOTAL_MASS = 2.2
+MAX_TOTAL_MASS = 3.4
+LOW_FREQUENCY_CUTOFF = 40.0
+HIGH_PASS_FREQ = 35
+HIGH_FREQUENCY_CUTOFF = 2047.0
+SAMPLE_RATE = 4096
+NUM_SPLIT_TEMPLATES = 100
+OVERLAP = 10
+MM = 0.975
+
+#
+# Triggers
+#
+
+IFOS = H1 L1
+START = 966384015
+STOP = 967384015
+TAG = test_example
+WEBDIR = ~/public_html/MDC_new/${START}-${STOP}-${TAG}
+NUMBANKS = 4
+PEAK = 0
+
+#
+# Injections data
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+#
+
+INJECTIONS := 1_injections.xml
+INJ_MAX_DIST = 150 # Mpc
+INJ_MIN_MASS1 = 1.3
+INJ_MAX_MASS1 = 1.4
+INJ_MIN_MASS2 = 1.3
+INJ_MAX_MASS2 = 1.4
+INJ_MIN_TOTAL_MASS = 2.6
+INJ_MAX_TOTAL_MASS = 2.8
+INJ_FLOW = 35
+
+#
+# Epoch specific info.  Change as appropriate
+#
+
+SEG_SERVER=https://segdb.ligo.caltech.edu
+LIGO_FRAME_TYPE='T1200307_V4_EARLY_RECOLORED_V2'
+VIRGO_FRAME_TYPE='T1300121_V1_EARLY_RECOLORED_V2'
+LIGO_SEGMENTS="$*:CBC-MDC1_SCIENCE_EARLY_RECOLORED:2"
+# NOTE: just veto hardware injections. Anything else and you are on your own 
+VIRGO_VETOES="V1:INJECTION_INSPIRAL,V1:INJECTION_BURST"
+LIGO_VETOES="$*:DMT-INJECTION_INSPIRAL,$*:DMT-INJECTION_BURST"
+H1_CHANNEL=LDAS-STRAIN
+L1_CHANNEL=LDAS-STRAIN
+V1_CHANNEL=h_16384
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+
+#
+# Code to build the workflow
+#
+
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
+
+# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+BANK_CACHE_PREFIX = $(empty)
+BANK_CACHE_SUFFIX = _split_bank.cache
+BANK_CACHE_FILES = $(addsuffix $(BANK_CACHE_SUFFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix $(BANK_CACHE_PREFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix =,$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(addsuffix $(BANK_CACHE_SUFFIX),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(join $(IFOS),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(strip $(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+# Vetoes file names
+vetoes_suffix := _vetoes.xml
+VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+# Injection file names
+injections:=--injections $(space)
+INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
+
+
+#
+# Workflow
+#
+
+
+all : dag
+
+
+H1-TMPLTBANK-966393725-2048.xml: H1_frame.cache
+	lalapps_tmpltbank \
+		--disable-compute-moments \
+		--grid-spacing Hexagonal \
+		--dynamic-range-exponent 69.0 \
+		--enable-high-pass $(HIGH_PASS_FREQ) \
+		--high-pass-order 8 \
+		--strain-high-pass-order 8 \
+		--minimum-mass $(MIN_MASS) \
+		--maximum-mass $(MAX_MASS) \
+		--min-total-mass $(MIN_TOTAL_MASS) \
+		--max-total-mass $(MAX_TOTAL_MASS) \
+		--gps-start-time $(BANKSTART) \
+		--gps-end-time $(BANKSTOP) \
+		--calibrated-data real_8 \
+		--channel-name H1:LDAS-STRAIN \
+		--space Tau0Tau3 \
+		--number-of-segments 15 \
+		--minimal-match $(MM) \
+		--high-pass-attenuation 0.1 \
+		--min-high-freq-cutoff ERD \
+		--segment-length 1048576 \
+		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
+		--pad-data 8 \
+		--num-freq-cutoffs 1 \
+		--sample-rate $(SAMPLE_RATE) \
+		--high-frequency-cutoff $(HIGH_FREQUENCY_CUTOFF) \
+		--resample-filter ldas \
+		--strain-high-pass-atten 0.1 \
+		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
+		--frame-cache H1_frame.cache \
+		--max-high-freq-cutoff ERD \
+		--approximant TaylorF2 \
+		--order twoPN \
+		--spectrum-type median \
+		--verbose 
+
+%_split_bank.cache : H1-TMPLTBANK-966393725-2048.xml
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --output-path $*_split_bank --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+plots :
+	mkdir plots
+	mkdir $(WEBDIR)
+
+tisi.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+	ligolw_add --output $@ tisi0.xml tisi1.xml
+
+%_vetoes.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_VETOES) --result-name=vetoes > $@
+
+V1_vetoes.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(VIRGO_VETOES) --result-name=vetoes > $@
+
+vetoes.xml: $(VETOES_FILES)
+	ligolw_add --output $@ $(VETOES_FILES)
+
+dag : segments.xml frame.cache tisi.xml plots vetoes.xml $(INJECTIONS) $(BANK_CACHE_FILES)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length 351 
+
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+
+V1_frame.cache:
+	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+
+%_frame.cache:
+	#FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	ligo_data_find -o $(OBS) -t $(LIGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+
+segments.xml: $(SEGMENTS_FILES) frame.cache
+	ligolw_add --output $@ $(SEGMENTS_FILES)
+	gstlal_segments_trim --trim 16 --min-length 512 --output $@ $@
+
+%_injections.xml: 
+	gstlal_injections_by_local_rate \
+		--output $@ \
+		--seed $* \
+		--flower $(INJ_FLOW) \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--bns-max-distance $(INJ_MAX_DIST) \
+		--nsbh-local-rate 0 \
+		--bbh-local-rate 0 \
+		--bns-local-rate 22000
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots $(WEBDIR) *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rvf *split_bank
+	-rm -vf vetoes.xml
