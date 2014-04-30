@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 #
+# Copyright (C) 2014  Kipp Cannon
 # Copyright (C) 2010  Leo Singer
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -16,13 +17,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
-Prune duplicate mass pairs from a template bank.
-lalapps_tmpltbank often places the same template more than once.
+Prune duplicate templates from a template bank.  lalapps_tmpltbank often
+places the same template more than once.
 """
 
 
 __prog__ = "gstlal_prune_duplicate_mass_pairs"
 
+from optparse import OptionParser
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -33,19 +35,47 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(LIGOLWContentHandler)
 
-filename, out_filename = sys.argv[1:3]
 
-bank_xmldoc = ligolw_utils.load_filename(filename, contenthandler = LIGOLWContentHandler)
-process = ligolw_process.append_process(bank_xmldoc, __prog__, cvs_repository="gstlal")
-ligolw_process.append_process_params(bank_xmldoc, process, ((filename, u"string", ""),(out_filename, u"string", "")))
-bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+def parse_command_line():
+	parser = OptionParser(
+		usage = "%prog [options] filename ...",
+		description = "Iterate over XML template bank files, removing duplicate templates from each.  Templates are taken to be the same if their masses and spins are the same.  If --orderless is given then the order of the components in each template is irrelevant, otherwise for two templates to be considered the same the masses and spins of the 1st components must match each other, and those of the 2nd components must match each other."
+	)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-r", "--orderless", action = "store_true", help = "Order of component bodies doesn't matter.")
+	return parser.parse_args()
 
-mass_pairs = set()
-for i, child in enumerate(bank_sngl_table):
-	mass_pair = (child.mass1, child.mass2)
-	if mass_pair in mass_pairs:
-		del bank_sngl_table[i]
-	mass_pairs.add(mass_pair)
+options, filenames = parse_command_line()
 
-ligolw_process.set_process_end_time(process)
-ligolw_utils.write_filename(bank_xmldoc, out_filename, gz=out_filename.endswith(".gz"))
+
+class SnglInspiral(lsctables.SnglInspiral):
+	if options.orderless:
+		def hash_components(self):
+			return frozenset(((self.mass1, self.spin1x, self.spin1y, self.spin1z), (self.mass2, self.spin2x, self.spin2y, self.spin2z)))
+	else:
+		def hash_components(self):
+			return (self.mass1, self.spin1x, self.spin1y, self.spin1z), (self.mass2, self.spin2x, self.spin2y, self.spin2z)
+
+	def __hash__(self):
+		return hash(self.hash_components())
+	def __cmp__(self, other):
+		return cmp(self.hash_components(), other.hash_components())
+
+lsctables.SnglInspiralTable.RowType = SnglInspiral
+
+
+for n, filename in enumerate(filenames, start=1):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler=LIGOLWContentHandler, verbose=options.verbose)
+	process = ligolw_process.register_to_xmldoc(xmldoc, __prog__, options.__dict__, cvs_repository=u"gstlal")
+	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+	n_before = len(sngl_inspiral_table)
+	sngl_inspiral_table[:] = set(sngl_inspiral_table)
+	if options.verbose:
+		print >>sys.stderr, "removed %d duplicate template(s), %d remaining" % (n_before - len(sngl_inspiral_table), len(sngl_inspiral_table))
+
+	ligolw_process.set_process_end_time(process)
+	ligolw_utils.write_filename(xmldoc, filename, gz=filename.endswith(".gz"), verbose=options.verbose)
