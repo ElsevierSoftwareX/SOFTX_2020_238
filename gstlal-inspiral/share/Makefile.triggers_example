@@ -172,6 +172,8 @@ dag : segments.xml frame.cache tisi.xml plots vetoes.xml $(INJECTIONS) $(BANK_CA
 
 V1_frame.cache:
 	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+	sed "s@V @V1 V1@g" $@ > $@.tmp
+	mv $@.tmp  $@
 
 %_frame.cache:
 	#FIXME horrible hack to get the observatory, not guaranteed to work
@@ -179,6 +181,8 @@ V1_frame.cache:
 	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
 	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
 	ligo_data_find -o $(OBS) -t $(LIGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+	sed "s@$(OBS) @$* $*@g" $@ > $@.tmp
+	mv $@.tmp  $@
 
 frame.cache: $(FRAME_CACHE_FILES)
 	cat $(FRAME_CACHE_FILES) > frame.cache
