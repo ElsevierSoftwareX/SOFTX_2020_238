@@ -407,7 +407,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			template_bank[j][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
 			template_bank[j][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
-	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq
+	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq, psd
 
 
 def decompose_templates(template_bank, tolerance, identity = False):
