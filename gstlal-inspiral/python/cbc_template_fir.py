@@ -143,6 +143,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			lalsim.GetApproximantFromString(str(approximant))
 			)
 
+		#FIXME replace with sin^2 taper and tie to sample rate, etc.
 		hplus.data.data *= tukeywindow(hplus.data.data)
 		data = numpy.zeros((sample_rate * duration,))
 		data[-hplus.data.length:] = hplus.data.data
