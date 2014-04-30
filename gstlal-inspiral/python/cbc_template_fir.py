@@ -350,18 +350,34 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		data *= cmath.sqrt(2 / norm)
 
 		#
-		# sigmasq = 4 \sum |h(f)|^2 / S(f) \Delta f
+		# sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
 		#
 		# XLALWhitenCOMPLEX16FrequencySeries() computed
 		#
-		# h'(f) = \sqrt{2 \Delta f} h(f) / \sqrt{S(f)}
+		# \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
 		#
-		# therefore,
+		# and XLALCOMPLEX16FreqTimeFFT() computed
 		#
-		# sigmasq = 2 \sum |h'(f)|^2
+		# h'_{j} = \Delta f \sum_{k=0}^{N-1} exp(2\pi i j k / N) \tilde{h}'_{k}
+		#
+		# therefore, "norm" is
+		#
+		# \sum_{j} |h'_{j}|^{2} = (\Delta f)^{2} \sum_{j} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} exp(2\pi i j (k-k') / N) \tilde{h}'_{k} \tilde{h}'^{*}_{k'}
+		#                       = (\Delta f)^{2} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} \tilde{h}'_{k} \tilde{h}'^{*}_{k'} \sum_{j} exp(2\pi i j (k-k') / N)
+		#                       = (\Delta f)^{2} N \sum_{k=0}^{N-1} |\tilde{h}'_{k}|^{2}
+		#                       = (\Delta f)^{2} N 2 \Delta f \sum_{k=0}^{N-1} |\tilde{h}_{k}|^{2} / S_{k}
+		#                       = (\Delta f)^{2} N sigmasq
+		#
+		# and \Delta f = 1 / (N \Delta t), so "norm" is
+		#
+		# \sum_{j} |h'_{j}|^{2} = 1 / (N \Delta t^2) sigmasq
+		#
+		# therefore
+		#
+		# sigmasq = norm * N * (\Delta t)^2
 		#
 
-		sigmasq.append(2 * norm)
+		sigmasq.append(norm * len(data) / sample_rate_max**2.)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
