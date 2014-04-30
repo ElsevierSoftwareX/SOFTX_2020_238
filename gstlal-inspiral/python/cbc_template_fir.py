@@ -41,7 +41,7 @@ import lal
 import lalsimulation as lalsim
 
 
-from gstlal.reference_psd import interpolate_psd, psd_to_fir_kernel
+from gstlal.reference_psd import interpolate_psd
 
 
 from gstlal import templates
@@ -207,35 +207,45 @@ def movingaverage(interval, window_size):
 
 
 def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
-	assert newdeltaF < psd.deltaF
+	#
+	# fill in high-frequency bins to counter-act the roll-off observed
+	# due to filters in data path, then smooth PSD.  don't do in place.
+	#
+
 	psddata = psd.data
 	psddata[int(0.85*len(psddata)):] = max(psddata)
-	psd.data = movingmedian(psddata, avgwindow)
-	psd.data = movingaverage(psd.data, avgwindow)
-	half_impulse = len(psd.data) - 1
-	kernel, latency, sample_rate = psd_to_fir_kernel(psd)
-	# FIXME is this a no-op? Is the latency returned correct?
-	d = kernel[latency-half_impulse:latency+half_impulse+1]
-	# FIXME check even/odd
-	length = int(round(psd.deltaF / newdeltaF * 2 * half_impulse))
-	# FIXME maybe don't do the uwrapping??
-	out = numpy.zeros((length,))
-	out[-half_impulse-1:] = d[:half_impulse+1]
-	out[:half_impulse] = d[half_impulse+1:]
-	newdata = scipy.fft(out)
-	newdata = abs(newdata)**2
-	newdata = newdata[:length//2+1] / len(newdata)**.5 * (newdeltaF / psd.deltaF)**.5
-	newdata[int(0.85*len(newdata)):] = max(newdata)
-	newdata[:int(minf / newdeltaF)] = max(newdata)
-
-	return laltypes.REAL8FrequencySeries(
+	psddata = movingmedian(psddata, avgwindow)
+	psddata = movingaverage(psddata, avgwindow)
+	psd = laltypes.REAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
-		deltaF = newdeltaF,
+		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = newdata
-		)
+		data = psddata
+	)
+
+	#
+	# interpolate to new \Delta f
+	#
+
+	psd = interpolate_psd(psd, newdeltaF)
+
+	#
+	# again fill in high-frequency bins, and also any bins below the
+	# lowest frequency in the original PSD
+	#
+
+	psddata = psd.data
+	psddata[int(0.85*len(psddata)):] = max(psddata)
+	psddata[:int(minf / newdeltaF)] = max(psddata)
+	psd.data = psddata
+
+	#
+	# done
+	#
+
+	return psd
 
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
@@ -253,9 +263,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	working_length = templates.ceil_pow_2(length_max + round(32.0 * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
-	# Give the PSD the same frequency spacing as the waveforms we are about to generate
+	# Smooth the PSD and interpolate to required resolution
 	if psd is not None:
-		psd_initial_deltaF = psd.deltaF # store for normalization later
 		psd = condition_psd(psd, 1.0 / working_duration, minf = f_low)
 
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
