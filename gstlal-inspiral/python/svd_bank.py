@@ -40,7 +40,7 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
-
+from pylal import series
 
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
@@ -144,7 +144,7 @@ class Bank(object):
 		self.bank_id = bank_id
 
 		# Generate downsampled templates
-		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = cbc_template_fir.generate_templates(
+		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq, processed_psd = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
 			read_approximant(bank_xmldoc),
 			psd,
@@ -155,6 +155,8 @@ class Bank(object):
 		
 		# Include signal inspiral table
 		self.sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+		# Include the processed psd
+		self.processed_psd = processed_psd
 
 		# Assign template banks to fragments
 		self.bank_fragments = [BankFragment(rate,begin,end) for rate,begin,end in time_slices]
