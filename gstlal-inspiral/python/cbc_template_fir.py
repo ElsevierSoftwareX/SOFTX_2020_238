@@ -366,14 +366,16 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# rows of template bank
 		#
 
-		for frag_num,slice in enumerate(time_slices):
+		for j, time_slice in enumerate(time_slices):
 			# start and end times are measured *backwards* from
 			# template end;  subtract from n to convert to
 			# start and end index;  end:start is the slice to
 			# extract (argh!  Chad!)
-			begin_index = length_max - int(round(slice['begin'] * sample_rate_max))
-			end_index = length_max - int(round(slice['end'] * sample_rate_max))
-			stride = int(round(sample_rate_max / slice['rate']))
+			begin_index = length_max - int(round(time_slice['begin'] * sample_rate_max))
+			end_index = length_max - int(round(time_slice['end'] * sample_rate_max))
+			stride = int(round(sample_rate_max / time_slice['rate']))
+			# make sure the rates are commensurate
+			assert stride * time_slice['rate'] == sample_rate_max
 
 			# extract every stride-th sample.  we multiply by
 			# \sqrt{stride} to maintain inner product
@@ -384,8 +386,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			# normalization of the basis vectors used for
 			# filtering but it ensures that the chifacs values
 			# have the correct relative normalization.
-			template_bank[frag_num][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
-			template_bank[frag_num][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
+			template_bank[j][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
+			template_bank[j][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
 	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq
 
