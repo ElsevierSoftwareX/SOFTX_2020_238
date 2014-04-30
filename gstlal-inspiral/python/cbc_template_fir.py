@@ -110,8 +110,8 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			)
 
 		# NOTE assumes fhigh is the Nyquist frequency!!!
-		assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
 		z = hplus.data.data
+		assert len(z) == int(round(sample_rate * duration))//2 +1
 
 	elif approximant in templates.gstlal_TD_approximants:
 
