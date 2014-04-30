@@ -119,8 +119,8 @@ class QuadraturePhase(object):
 	>>> import numpy
 	>>> from pylal.datatypes import REAL8TimeSeries
 	>>> q = QuadraturePhase(128) # initialize for 128-sample templates
-	>>> input = REAL8TimeSeries(deltaT = 1.0 / 128, data = numpy.cos(numpy.arange(128, dtype = "double") * 2 * numpy.pi / 128)) # one cycle of cos(t)
-	>>> output = q(input) # output has cos(t) in real part, sin(t) in imaginary part
+	>>> inseries = REAL8TimeSeries(deltaT = 1.0 / 128, data = numpy.cos(numpy.arange(128, dtype = "double") * 2 * numpy.pi / 128)) # one cycle of cos(t)
+	>>> outseries = q(inseries) # output has cos(t) in real part, sin(t) in imaginary part
 	"""
 
 	def __init__(self, n):
