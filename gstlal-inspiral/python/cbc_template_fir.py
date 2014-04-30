@@ -283,8 +283,9 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# Multiply by 2 * length of the number of sngl_inspiral rows to get the sine/cosine phases.
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
 
-	# Store the original normalization of the waveform.  After whitening, the waveforms
-	# are normalized.  Use the sigmasq factors to get back the original waveform.
+	# Store the original normalization of the waveform.  After
+	# whitening, the waveforms are normalized.  Use the sigmasq factors
+	# to get back the original waveform.
 	sigmasq = []
 
 	# Generate each template, downsampling as we go to save memory
@@ -294,7 +295,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
 
 		#
-		# generate "cosine" component of frequency-domain template
+		# generate "cosine" component of frequency-domain template.
+		# waveform is generated for a canonical distance of 1 Mpc.
 		#
 
 		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
@@ -328,12 +330,15 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		data = tseries.data[-length_max:]
 
 		#
-		# condition the template if necessary (e.g. line up IMR waveforms by peak amplitude)
+		# condition the template if necessary (e.g. line up IMR
+		# waveforms by peak amplitude)
 		#
+
 		if approximant in ("IMRPhenomB", "EOBNRv2"):
 			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
 		else:
 			data *= tukeywindow(data)
+
 		#
 		# normalize so that inner product of template with itself
 		# is 2
@@ -343,14 +348,18 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		data *= cmath.sqrt(2 / norm)
 
 		#
-		# definition of sigmasq is: sigmasq = \int h(f) h^*(f) df the
-		# norm we have computed so far is missing df, with a factor of
-		# 2 from the psd definition NOTE!!! We have to use the original
-		# psd spacing, the interpolation does *not* preserve the
-		# integral properly
+		# sigmasq = 4 \sum |h(f)|^2 / S(f) \Delta f
+		#
+		# XLALWhitenCOMPLEX16FrequencySeries() computed
+		#
+		# h'(f) = \sqrt{2 \Delta f} h(f) / \sqrt{S(f)}
+		#
+		# therefore,
+		#
+		# sigmasq = 2 \sum |h'(f)|^2
 		#
 
-		sigmasq.append(2*norm)
+		sigmasq.append(2 * norm)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
