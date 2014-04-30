@@ -338,6 +338,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if approximant in ("IMRPhenomB", "EOBNRv2"):
 			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
 		else:
+			#FIXME what should this tukey window size be???  Tie this to the TD conditioning earlier and make sure that all IMR models are also consistent...
 			data *= tukeywindow(data)
 
 		#
