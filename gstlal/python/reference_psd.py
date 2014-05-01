@@ -611,16 +611,21 @@ def interpolate_psd(psd, deltaF):
 
 
 def movingmedian(psd, window_size):
-	data = numpy.copy(psd.data)
+	"""
+	Assumes that the underlying PSD doesn't have variance, i.e., that there
+	is no median / mean correction factor required
+	"""
+	data = psd.data
+	datacopy = numpy.copy(psd.data)
 	for i in range(window_size, len(data)-window_size):
-		data[i] = numpy.median(data[i-window_size:i+window_size])
+		datacopy[i] = numpy.median(data[i-window_size:i+window_size])
 	return laltypes.REAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = data
+		data = datacopy
 	)
 
 
