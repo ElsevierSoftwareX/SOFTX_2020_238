@@ -56,7 +56,7 @@
 #
 # - \ref gstlal_plot_psd
 # - \ref gstlal_plot_psd_horizon
-#
+# - \ref gstlal_spectrum_movie
 
 #
 # parse command line
