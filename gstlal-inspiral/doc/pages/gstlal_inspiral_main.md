@@ -11,6 +11,7 @@
 ### Searches for Compact Binary Coalescence
 
 - \ref gstlalinspirallowlatencysearchpage
+- \ref gstlalinspiralofflinesearchpage
 - Offline searches
 
 ### References
