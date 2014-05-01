@@ -32,7 +32,6 @@
 import numpy
 import sys
 
-
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
@@ -41,6 +40,8 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
 from pylal import series
+
+Attributes = ligolw.sax.xmlreader.AttributesImpl
 
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
@@ -253,9 +254,10 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 
 	for bank, clipleft, clipright in zip(banks, cliplefts, cliprights):
 		# set up root for this sub bank
-		root = ligolw.LIGO_LW()
+		root = ligolw.LIGO_LW(Attributes({u"Name": u"gstlal_svd_bank_Bank"}))
 		lw.appendChild(root)
-		
+
+		# FIXME FIXME FIXME move this clipping stuff to the Bank class
 		# Open template bank file
 		bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
@@ -322,6 +324,11 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 
 			# Add bank fragment container to root container
 			root.appendChild(el)
+
+	# put a copy of the processed PSD file in
+	# FIXME in principle this could be different for each bank included in
+	# this file, but we only put one here
+	series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# add top level LIGO_LW to document
 	xmldoc.appendChild(lw)
