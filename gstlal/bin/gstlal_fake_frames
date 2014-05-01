@@ -16,21 +16,11 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from gstlal import pipeparts
-from gstlal import reference_psd
-from gstlal import simplehandler
-from gstlal import datasource
-from gstlal import multirate_datasource
-from optparse import OptionParser, Option
-from glue import segments
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
+from optparse import OptionParser
+import os
+import numpy
+import sys
+
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -38,9 +28,23 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 import gst
-import sys
-import os
-import numpy
+
+from gstlal import pipeparts
+from gstlal import reference_psd
+from gstlal import simplehandler
+from gstlal import datasource
+from gstlal import multirate_datasource
+from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
+from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
 
 ## @file gstlal_fake_frames
 # This program will make fake data in a variety of ways; see gstlal_fake_frames for help and usage
@@ -275,7 +279,7 @@ if options.shift is not None:
 
 if options.whiten_reference_psd:
 	## If whitening read the PSD
-	wpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+	wpsd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))[instrument]
 else:
 	## else set wpsd to None
 	wpsd = None
@@ -296,7 +300,7 @@ else:
 if options.color_psd:
 
 	## read coloring psd file and convert to an FIR filter
-	rpsd = lalseries.read_psd_xmldoc(utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+	rpsd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))[instrument]
 	
 	## Calculate the maximum sample rate
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1
