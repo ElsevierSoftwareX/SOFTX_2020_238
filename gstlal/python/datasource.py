@@ -235,7 +235,9 @@ class GWDataSourceInfo(object):
 		""" 
 
 		## A list of possible, valid data sources ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
-		self.data_sources = ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
+		self.data_sources = set(("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO"))
+		self.live_sources = set(("framexmit", "lvshm"))
+		assert self.live_sources <= self.data_sources
 
 		## Callback function to handle the "start" signals from the gate
 		self.gate_start_callback = None
@@ -274,8 +276,8 @@ class GWDataSourceInfo(object):
 		if options.gps_start_time is not None:
 			if options.gps_end_time is None:
 				raise ValueError("must provide both --gps-start-time and --gps-end-time")
-			if options.data_source == "lvshm":
-				raise ValueError("cannot set --gps-start-time or --gps-end-time with --data-source=lvshm")
+			if options.data_source in self.live_sources:
+				raise ValueError("cannot set --gps-start-time or --gps-end-time with %s" % " or ".join("--data-source=%s" % src for src in sorted(self.live_sources)))
 			try:
 				start = LIGOTimeGPS(options.gps_start_time)
 			except ValueError:
@@ -292,8 +294,8 @@ class GWDataSourceInfo(object):
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
 		elif options.gps_end_time is not None:
 			raise ValueError("must provide both --gps-start-time and --gps-end-time")
-		elif options.data_source != "lvshm":
-			raise ValueError("--gps-start-time and --gps-end-time must be specified when --data-source is not lvshm")
+		elif options.data_source not in self.live_sources:
+			raise ValueError("--gps-start-time and --gps-end-time must be specified when %s" % " or ".join("--data-source=%s" % src for src in sorted(self.live_sources)))
 
 		if options.frame_segments_file is not None:
 			## Frame segments from a user defined file
