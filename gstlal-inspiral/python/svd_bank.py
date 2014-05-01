@@ -345,8 +345,8 @@ def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False
 
 	banks = []
 
-	for root in xmldoc.childNodes[0].childNodes:
-
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+	
 		# Create new SVD bank object
 		bank = Bank.__new__(Bank)
 
