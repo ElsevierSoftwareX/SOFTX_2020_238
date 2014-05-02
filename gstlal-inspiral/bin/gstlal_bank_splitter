@@ -33,16 +33,10 @@ from pylal.datatypes import LIGOTimeGPS
 from gstlal import templates
 from gstlal import inspiral_pipe
 
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(LIGOLWContentHandler)
-
 
 ## @file gstlal_bank_splitter
 #
 # This program splits template banks into sub banks suitable for singular value decomposition; see gstlal_bank_splitter for more information
-
-## @package gstlal_bank_splitter
 # 
 # ### Usage examples
 #
@@ -75,6 +69,13 @@ lsctables.use_in(LIGOLWContentHandler)
 # | Names 	                                | Hash 					      | Date       |
 # | ------------------------------------------- | ------------------------------------------- | ---------- |
 # | Florent, Sathya, Duncan, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-28 |
+#
+
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
 
 def group_templates(templates, n, overlap = 0):
 	"""
