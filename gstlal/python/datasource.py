@@ -224,6 +224,33 @@ framexmit_ports = {
 }
 
 
+def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
+	"""!
+	Create a new seek event, i.e., gst.event_new_seek()  for a given
+	gps_start_time and gps_end_time, with optional flags.  
+
+	@param gps_start_time start time as LIGOTimeGPS, double or float
+	@param gps_end_time start time as LIGOTimeGPS, double or float
+	"""
+	def seek_args_for_gps(gps_time):
+		"""!
+		Convenience routine to convert a GPS time to a seek type and a
+		GStreamer timestamp.
+		"""
+
+		if gps_time is None or gps_time == -1:
+			return (gst.SEEK_TYPE_NONE, -1) # -1 == gst.CLOCK_TIME_NONE
+		elif hasattr(gps_time, 'ns'):
+			return (gst.SEEK_TYPE_SET, gps_time.ns())
+		else:
+			return (gst.SEEK_TYPE_SET, long(float(gps_time) * gst.SECOND))
+
+	start_type, start_time = seek_args_for_gps(gps_start_time)
+	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
+
+	return gst.event_new_seek(1., gst.FORMAT_TIME, flags, start_type, start_time, stop_type, stop_time)
+
+
 class GWDataSourceInfo(object):
 	"""!
 	Hold the data associated with data source command lines.
