@@ -70,7 +70,10 @@ from gstlal import inspiral_pipe
 # | ------------------------------------------- | ------------------------------------------- | ---------- |
 # | Florent, Sathya, Duncan, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-28 |
 #
-
+# #### Action
+#
+# - Consider cleanup once additional bank programs are used and perhaps have additional metadata
+#
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
