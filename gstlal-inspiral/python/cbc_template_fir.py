@@ -15,6 +15,22 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 ## @file
+#
+# ### Review Status
+#
+# STATUS: Not reviewed, actions must be dealt with
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+#
+# #### Action items
+#
+# - Are all waveform approximants being conditioned properly?
+# - Is the PSD being conditioned properly, .e.g, high Q lines, wandering lines?
+# - Test waveform conditioning in isolation and analysis DAGs 
+# - Is the @f$\sigma^{2}@f$ calculation correct?
+
 
 ## @package cbc_template_fir
 
