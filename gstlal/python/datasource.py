@@ -28,11 +28,23 @@
 #
 # A file that contains the datasource module code
 #
+# ### Review Status
+#
+# | Names                                       | Hash                                        | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan, Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
+#
+# #### Action items
+#
+# - State vector, DQ, etc must be in place by November and should be coordinated with JRPC/DAC/DetChar/CBC/etc
+# - Consider a dynamic data time out that seneses when data is not going to arrive for a while
 
 ##
 # @package python.datasource
 #
 # datasource module
+#
+
 
 import sys
 import optparse
