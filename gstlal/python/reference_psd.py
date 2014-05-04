@@ -61,9 +61,25 @@ from gstlal import simplehandler
 
 ## @file
 # module for reference psds
+#
+# ### Review Status
+#
+# | Names                                       | Hash                                        | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan, Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
+#
+#
+# #### Action items
+#
+# - Make graphs of code and compare with gstreamer graphs
+# - Link spectrum movie from DCC
+# - Consider exposing the average samples property
+# - Check FIR kernel normalization norm
+
 
 ## @package python.reference_psd
 # the reference_psd module
+
 
 #
 # =============================================================================
