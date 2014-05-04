@@ -26,8 +26,7 @@ from optparse import OptionParser
 
 ## @file
 # gstlal_psd_xml_from_asd_txt
-
-## @package gstlal_psd_xml_from_asd_txt
+#
 #
 # A program to turn an ASCII PSD or ASD into an xml file suitable for consumption by various gstlal programs; see gstlal_psd_xml_from_asd_txt for details
 #
