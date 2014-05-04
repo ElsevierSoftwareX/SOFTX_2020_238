@@ -21,6 +21,22 @@
 # implements the algorithm described in <a
 # href=http://arxiv.org/abs/1107.2665>ApJ 748 136 (2012)</a>
 #
+#
+# Review Status
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# |          Sathya, Duncan Me, Jolien, Kipp, Chad | 4bb3204b4ea43e4508dc279ddcfc417366c72841    | 2014-05-02 |
+#
+# #### Actions
+#
+#
+# #### Functions/classes not reviewed since they will be moved
+# - DetectorData 
+# - mkSPIIRmulti
+# - mkSPIIRhoftToSnrSlices
+# - mkLLOIDSnrSlicesToTimeSliceChisq
+# - mkLLOIDSnrChisqToTriggers
 
 ##
 # @package lloidparts
@@ -85,6 +101,8 @@ class DetectorData(object):
 	"""!
 	A class to store a cache file, channel name and the characteristic
 	block size (in bytes) of h(t) data to read.
+
+	FIXME: move to IIR module
 	"""
 	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
 		"""!
@@ -104,7 +122,6 @@ class DetectorData(object):
 #
 # =============================================================================
 #
-
 
 ##
 # A "sum-of-squares" aggregator
@@ -329,7 +346,7 @@ class Handler(simplehandler.Handler):
 
 	def gen_segments_doc(self):
 		"""!
-		A method to output the segment list in a valide ligolw xml
+		A method to output the segment list in a valid ligolw xml
 		format.
 		"""
 		xmldoc = ligolw.Document()
@@ -438,8 +455,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	@param bank The template bank class
 	@param bank_fragment The specific fragment (time slice) of the template bank in question
 	@param (control_snk, control_src) An optional tuple of the sink and source elements for a graph that will construct a control time series for the gate which aggregates the orthogonal snrs from each template slice. This is used to conditionally reconstruct the physical SNR of interesting times
-	@param gate_attack_length The attack time for the lal_gate element that controls the reconstruction of physical SNRs
-	@param gate_attack_hold The hold time for the lal_gate element that controls the reconstruction of physical SNRs
+	@param gate_attack_length The attack length in samples for the lal_gate element that controls the reconstruction of physical SNRs
+	@param gate_hold_length The hold length in samples for the lal_gate element that controls the reconstruction of physical SNRs
 	@param block_duration The characteristic buffer size that is passed around, which is useful for constructing queues.
 	@param nxydump_segment Not used
 	@param fir_stride The target length of output buffers from lal_firbank.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
@@ -450,7 +467,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# FIR filter bank.  low frequency branches use time-domain
 	# convolution, high-frequency branches use FFT convolution with a
-	# block stride of 4 s.
+	# block stride given by fir_stride.
 	#
 	# FIXME:  why the -1?  without it the pieces don't match but I
 	# don't understand where this offset comes from.  it might really
@@ -517,12 +534,13 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 	else:
 		#
-		# buffer orthogonal SNRs / or actual SNRs if SVD is not
+		# buffer orthogonal SNRs / or actual SNRs if SVD is no
+t
 		# used.  the queue upstream of the sum-of-squares gate
 		# plays this role if that feature has been enabled
-		#
+   		#
 		# FIXME:  teach the collectpads object not to wait for
-		# buffers on pads whose segments have not yet been reached
+		# buf  fers on pads whose segments have not yet been reached
 		# by the input on the other pads.  then this large queue
 		# buffer will not be required because streaming can begin
 		# through the downstream adders without waiting for input
@@ -567,6 +585,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 	upsample_factor[output_rate] = 0
 
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
+	assert autocorrelation_length % 2 == 1
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
 	#
@@ -795,7 +814,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, reconstruction_segment_list = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
 	"""!
 	The multiple instrument, multiple bank LLOID algorithm
 	"""
@@ -816,12 +835,9 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 
 	hoftdicts = {}
 	for instrument in detectors.channel_dict:
-		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
+		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		if veto_segments is not None:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
-		else:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# build gate control branches
