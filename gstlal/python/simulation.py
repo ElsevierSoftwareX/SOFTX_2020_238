@@ -27,6 +27,13 @@ from pylal.datatypes import LIGOTimeGPS
 
 ## @file
 # the simulation module
+#
+# Review status
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Sathya, Duncan Me, Jolien, Kipp, Chad          | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
+#
 
 
 ## @package python.simulation
@@ -69,4 +76,4 @@ def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
 
 	xmldoc.unlink()
 
-	return seglist
+	return seglist.coalesce()
