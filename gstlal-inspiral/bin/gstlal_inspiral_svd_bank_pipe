@@ -44,8 +44,7 @@ from gstlal import far
 
 ## @file gstlal_inspiral_svd_bank_pipe
 # This program will make a HTCondor DAG to automate the creation of svd bank files; see gstlal_inspiral_svd_bank_pipe for more information
-
-## @package gstlal_inspiral_svd_bank_pipe
+#
 #
 # ### Graph of the condor DAG
 #
