@@ -28,9 +28,6 @@
 
 ## @file gstlal_inspiral
 #
-
-## @package gstlal_inspiral
-#
 # @dot
 # digraph llpipe {
 # 	labeljust = "r";
@@ -119,6 +116,18 @@
 # 	
 # }
 # @enddot
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
+#
+# #### Actions
+#
+# - Consider cleaning up the nxydump segment option.  Currently it only works with modifying source code
+# - Consider changing the thinca-interval name to thinca-cadence
+# - consider replacing  the 'in ("framexmitsrc", "lvshmsrc")' tests with a property or method in the data source class
+# - Consider allowing a single detector analysis
+# - Consider deleting timeslicechisq
 
 import os
 import resource
