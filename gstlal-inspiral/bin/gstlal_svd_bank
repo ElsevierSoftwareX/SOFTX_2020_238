@@ -42,8 +42,6 @@ from gstlal import svd_bank
 
 ## @file gstlal_svd_bank
 # This program will create svd bank files; see gstlal_svd_bank for more information
-
-## @package gstlal_svd_bank
 #
 # @image html svdtable.png
 #
@@ -63,7 +61,7 @@ from gstlal import svd_bank
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
 #	+ `--ortho-gate-fap` [probability]: Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).
-#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 5.5).
+#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 4.0).
 #	+ `--write-svd-bank` [filename]: Set the filename in which to save the template bank (required).
 #	+ `--verbose`: Be verbose (optional).
 #	+ `--clipleft` [int]: Remove poorly reconstructable templates from the left edge of each sub-bank.
@@ -75,6 +73,16 @@ from gstlal import svd_bank
 #	+ `--samples-max` [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
 #	+ `--bank-id` [id] (string): Set a string to be used as the globally unique ID for this bank (default = generate a UUID)
 #
+# ### Review Status
+#
+# | Names                                       | Hash                                        | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+#
+# #### Actions
+# 
+# - Add process params to output
+# 
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
