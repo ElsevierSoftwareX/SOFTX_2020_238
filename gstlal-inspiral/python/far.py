@@ -731,6 +731,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		n = 1 yields a uniform distribution;  n > 1 favours
 		larger integers, n < 1 favours smaller integers.
 		"""
+		# FIXME:  move to glue.iterutils?
+
 		# NOTE:  nothing requires the probabilities returned by
 		# this generator to be properly normalized, but it turns
 		# out to be trivial to achieve so we do it anyway, just in
@@ -746,7 +748,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				yield lo, 0.
 		elif n == 1.:
 			# special case for uniform distribution
-			lnP = math.log(1. / (hi - lo))
+			try:
+				lnP = math.log(1. / (hi - lo))
+			except ValueError:
+				raise ValueError("[lo, hi) domain error")
 			hi -= 1
 			rnd = random.randint
 			while 1:
@@ -758,6 +763,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		lnP /= lnP[-1]
 		# differences give probabilities
 		lnP = tuple(numpy.log(lnP[1:] - lnP[:-1]))
+		if numpy.isinf(lnP).any():
+			raise ValueError("[lo, hi) domain error")
 
 		beta = lo**n / (hi**n - lo**n)
 		n = 1. / n
@@ -766,8 +773,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		rnd = random.random
 		while 1:
 			index = int(flr(alpha * (rnd() + beta)**n))
-			# the tuple look-up also provides the range safety
-			# check on index
+			# the tuple look-up provides the second part of the
+			# range safety check on index
+			assert index >= lo
 			yield index, lnP[index - lo]
 
 	def random_params(self, instruments):
