@@ -778,15 +778,44 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			assert index >= lo
 			yield index, lnP[index - lo]
 
+	@staticmethod
+	def randbin(binning, n = 1.):
+		# FIXME:  move to rate.py?
+		x = binning.centres()
+		ln_dx = numpy.log(binning.upper() - binning.lower())
+		isinf = math.isinf
+		for i, ln_Pi in ThincaCoincParamsDistributions.randindex(0, len(x), n = n):
+			if isinf(ln_dx[i]):
+				continue
+			# yield x, ln(P(x)) tuples where x is the bin
+			# centre and P(x) is the PDF from which x has been
+			# drawn evaluated at x
+			yield x[i], ln_Pi - ln_dx[i]
+
+	@staticmethod
+	def randndbin(ndbins, ns):
+		# FIXME:  move to rate.py?
+		bingens = tuple(iter(ThincaCoincParamsDistributions.randbin(binning, n)).next for binning, n in zip(ndbins, ns))
+		while 1:
+			seq = sum((bingen() for bingen in bingens), ())
+			# yield (x0, x1, ...), ln(P(x0, x1, ...)) tuples
+			# where P(x0, x1, ...) is the PDF from which the
+			# co-ordinate tuple has been drawn evaluated at
+			# those co-ordinates
+			yield seq[0::2], sum(seq[1::2])
+
 	def random_params(self, instruments):
 		"""
 		Generator that yields an endless sequence of randomly
 		generated parameter dictionaries for the given keys.  NOTE:
 		the parameters will be within the domain of the repsective
-		binnings but are not drawn from their PDF.  The return value is
-		a tuple, the first element of which is the parameter dictionary
-		and the second is the natural logarithm (up to an arbitrary
-		constant) of the PDF from which the parameters have been drawn.
+		binnings but are not drawn from the PDF stored in their
+		binnings --- this is not an MCMC style sampler.  The return
+		value is a tuple, the first element of which is the random
+		parameter dictionary and the second is the natural
+		logarithm (up to an arbitrary constant) of the PDF from
+		which the parameters have been drawn evaluated at the
+		co-ordinates in the parameter dictionary.
 		"""
 		# FIXME:  this generator needs to also populate a choice of
 		# horizon distance in each return value.  that information
@@ -798,24 +827,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
-		x = dict((key, self.binnings[key].centres()) for key in keys)
-		ln_dxes = dict((key, tuple(numpy.log(u - l) for u, l in zip(self.binnings[key].upper(), self.binnings[key].lower()))) for key in keys)
-		indexgen = tuple((key, (self.randindex(0, len(centres_a), snr_slope).next, self.randindex(0, len(centres_b)).next)) for key, (centres_a, centres_b) in x.items())
-		isinf = math.isinf
-		isnan = math.isnan
+		coordgens = tuple(iter(self.randndbin(self.binnings[key], (snr_slope, 1.))).next for key in keys)
 		while 1:
-			indexes = tuple((key, (indexgen_a(), indexgen_b())) for key, (indexgen_a, indexgen_b) in indexgen)
-			# P(index) / (size of bin) = probability density
-			#
+			seq = sum((coordgen() for coordgen in coordgens), ())
+			params = dict(zip(keys, seq[0::2]))
+			params.update(base_params)
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
-			# it to be and I've not checked that it is so the
-			# documentation doesn't promise that it is.
-			ln_P = sum(sum(ln_P_i - ln_dx[i] for ln_dx, (i, ln_P_i) in zip(ln_dxes[key], value)) for key, value in indexes)
-			if not (isinf(ln_P) or isnan(ln_P)):
-				params = dict((key, tuple(centres[i] for centres, (i, ln_P_i) in zip(x[key], value))) for key, value in indexes)
-				params.update(base_params)
-				yield params, ln_P
+			# it to be (only that it be correct up to an
+			# unknown constant) and I've not checked that it is
+			# so the documentation doesn't promise that it is.
+			yield params, sum(seq[1::2])
 
 	@classmethod
 	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, decades_per_bin = 1.0 / 50.0, progressbar = None):
