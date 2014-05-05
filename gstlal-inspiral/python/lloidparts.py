@@ -173,9 +173,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	# start with an adder and caps filter to select a sample rate
 	#
 
-	snk = gst.element_factory_make("lal_adder")
-	snk.set_property("sync", True)
-	pipeline.add(snk)
+	snk = pipeparts.mkadder(pipeline, None)
 	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
 
 	#
@@ -646,11 +644,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# head of the stream at this sample rate
 			#
 
-			branch_heads[rate] = gst.element_factory_make("lal_adder")
-			branch_heads[rate].set_property("sync", True)
-			pipeline.add(branch_heads[rate])
-			for head in heads:
-				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration).link(branch_heads[rate])
+			branch_heads[rate] = pipeparts.mkadder(pipeline, pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration) for head in heads)
 		else:
 			#
 			# this sample rate has only one stream.  it's the
@@ -684,11 +678,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# head of the stream at this sample rate
 			#
 
-			branch_heads[rate] = gst.element_factory_make("lal_adder")
-			branch_heads[rate].set_property("sync", True)
-			pipeline.add(branch_heads[rate])
-			for head in heads:
-				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate])
+			branch_heads[rate] = pipeparts.mkadder(pipeline, pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate]) for head in heads)
 			# FIXME capsfilter shouldn't be needed remove when adder is fixed
 			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
@@ -1007,12 +997,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%d_%s_%s" % (sr, instrument, bank.logname))
 		head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		if prehead is not None:
-			adder = gst.element_factory_make("lal_adder")
-			adder.set_property("sync", True)
-			pipeline.add(adder)
-			head.link(adder)
-			prehead.link(adder)
-			head = adder
+			head = pipeparts.mkadder(pipeline (head, prehead))
 		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
 		head = pipeparts.mkresample(pipeline, head, quality = quality)
 		if sr == max_rate:
