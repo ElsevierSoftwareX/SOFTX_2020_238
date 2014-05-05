@@ -807,15 +807,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def random_params(self, instruments):
 		"""
 		Generator that yields an endless sequence of randomly
-		generated parameter dictionaries for the given keys.  NOTE:
-		the parameters will be within the domain of the repsective
-		binnings but are not drawn from the PDF stored in their
-		binnings --- this is not an MCMC style sampler.  The return
-		value is a tuple, the first element of which is the random
-		parameter dictionary and the second is the natural
-		logarithm (up to an arbitrary constant) of the PDF from
-		which the parameters have been drawn evaluated at the
+		generated parameter dictionaries for the given instruments.
+		NOTE: the parameters will be within the domain of the
+		repsective binnings but are not drawn from the PDF stored
+		in those binnings --- this is not an MCMC style sampler.
+		The return value is a tuple, the first element of which is
+		the random parameter dictionary and the second is the
+		natural logarithm (up to an arbitrary constant) of the PDF
+		from which the parameters have been drawn evaluated at the
 		co-ordinates in the parameter dictionary.
+
+		Example:
+
+		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
+		>>> x.next()
 		"""
 		# FIXME:  this generator needs to also populate a choice of
 		# horizon distance in each return value.  that information
