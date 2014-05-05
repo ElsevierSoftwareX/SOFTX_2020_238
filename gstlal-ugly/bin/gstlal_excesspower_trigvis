@@ -66,7 +66,7 @@ parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
 parser.add_option("-X", "--overlay-summary", action="append", help="Parse the search summaries for information provided by excesspower and mark their times in the plot. Valid choices are 'spectrum_message', 'prebuild', 'postbuild'.")
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
-parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
+parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', 'both', or most_significant. Default is 'tile'.")
 parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
 parser.add_option("-O", "--tile-opacity", type=float, action="store", default=1.0, help="Set the opacity of the plotted tiles. This is useful in the case of non-clustered output to see tiles which may obscured by others. Set to a value between 0 and 1. Default is 1.")
 parser.add_option("-E", "--exclude-outside-segments", action="store_true", help="Only plot triggers within segments indicated by the -x option.")
@@ -156,7 +156,7 @@ for info in plotsum:
 		print >>sys.stderr, "Invalid summary info choice %s." % ax
 		exit()
 
-plotting_types = ["tile", "marker", "both"]
+plotting_types = ["tile", "marker", "both", "most_significant"]
 if( opts.plotting_type not in plotting_types ):
 	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types))
 	exit()
@@ -425,21 +425,30 @@ for channel, selected_events in event_iter:
 		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
 		sys.stdout.write( statstr )
 		statlen = len(statstr)
+
 		# 1. plot tile 
-		start = float(event.get_start())# + event.start_time_ns*1e-9
+
+		if opts.plotting_type == "most_significant":
+			start = float(event.ms_start)
+			band = event.ms_band
+			duration = event.ms_duration
+			# TODO: Is this correct?
+			freq = event.peak_frequency
+		else:
+			start = float(event.get_start())
+			band = event.bandwidth
+			duration = event.duration
+			freq = event.central_freq
+
 		tile = matplotlib.patches.Rectangle(
 			# lower left point
-			( start,
-			# FIXME: Presumes tile energy is uniform in frequency
-			(event.central_freq - event.bandwidth/2.0) ),
+			( start, (freq - band/2.0) ),
 			# tile extent
-			event.duration,
-			event.bandwidth
-			#color = colormap.to_rgba( numpy.log10(event.snr) )
-			#color = colormap.to_rgba( event.snr )
+			duration,
+			band
 		)
 		#ax.add_patch( tile )
-		if opts.plotting_type in ["tile", "both"]:
+		if opts.plotting_type in ["tile", "both", "most_significant"]:
 			tiles.append( tile )
 		if opts.plotting_type in ["marker", "both"]:
 			try:
@@ -447,16 +456,20 @@ for channel, selected_events in event_iter:
 			except AttributeError:
 				freq = event.central_freq
 			if 'c' in logaxes:
-				markers.append( (float(event.get_peak()), freq, numpy.log10(event.snr)) )
+				markers.append( (float(event.get_peak()), freq, numpy.log10(event.ms_snr if opts.plotting_type == "most_significant" else event.snr)) )
 			else:
-				markers.append( (float(event.get_peak()), freq, event.snr) )
+				markers.append( (float(event.get_peak()), freq, event.ms_snr if opts.plotting_type == "most_significant" else event.snr) )
 
 		if 'c' in logaxes:
-			snrs.append( numpy.log10(event.snr) )
+			snrs.append(numpy.log10(event.ms_snr if opts.plotting_type == "most_significant" else event.snr))
 		else:
-			snrs.append( event.snr )
-		if loudest[0] < event.snr and opts.mark_loudest == 'snr':
-			loudest = [event.snr, float(event.get_peak()), event.central_freq, event.duration, event.bandwidth]
+			snrs.append(event.ms_snr if opts.plotting_type == "most_significant" else event.snr)
+
+        #
+        # Keep track of the loudest / most significant
+        #
+		if loudest[0] < (event.ms_snr if opts.plotting_type == "most_significant" else event.snr) and opts.mark_loudest == 'snr':
+			loudest = [(event.ms_snr if opts.plotting_type == "most_significant" else event.snr), float(event.get_peak()), event.central_freq, event.duration, event.bandwidth]
 		elif loudest[0] < event.confidence and opts.mark_loudest == 'conf':
 			loudest = [event.confidence, event.get_peak(), event.central_freq, event.duration, event.bandwidth]
 
