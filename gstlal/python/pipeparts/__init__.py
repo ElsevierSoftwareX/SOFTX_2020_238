@@ -100,14 +100,30 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 
 
 class src_deferred_link(object):
-	def __init__(self, src, srcpadname, sinkpad):
-		no_more_pads_handler_id = src.connect("no-more-pads", self.no_more_pads, srcpadname)
-		src.connect("pad-added", self.pad_added, (srcpadname, sinkpad, no_more_pads_handler_id))
+	"""!
+	A class that manages the task of watching for and connecting to new
+	source pads by name.  The inputs are an element, the name of the
+	source pad to watch for on that element, and the sink pad (on a
+	different element) to which the source pad should be linked when it
+	appears.
+
+	The "pad-added" signal of the element will be used to watch for new
+	pads, and if the "no-more-pads" signal is emitted by the element
+	before the requested pad has appeared ValueException is raised.
+	"""
+	def __init__(self, element, srcpadname, sinkpad):
+		no_more_pads_handler_id = element.connect("no-more-pads", self.no_more_pads, srcpadname)
+		assert no_more_pads_handler_id > 0
+		pad_added_data = [srcpadname, sinkpad, no_more_pads_handler_id]
+		pad_added_handler_id = element.connect("pad-added", self.pad_added, pad_added_data)
+		assert pad_added_handler_id > 0
+		pad_added_data.append(pad_added_handler_id)
 
 	@staticmethod
-	def pad_added(element, pad, (srcpadname, sinkpad, no_more_pads_handler_id)):
+	def pad_added(element, pad, (srcpadname, sinkpad, no_more_pads_handler_id, pad_added_handler_id)):
 		if pad.get_name() == srcpadname:
-			pad.get_parent().handler_disconnect(no_more_pads_handler_id)
+			element.handler_disconnect(no_more_pads_handler_id)
+			element.handler_disconnect(pad_added_handler_id)
 			pad.link(sinkpad)
 
 	@staticmethod
