@@ -488,6 +488,9 @@ class CoincsDocument(object):
 
 	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
+		# FIXME:  should also do
+		# start, end = math.floor(start), math.ceil(end)
+		# switch when we are sure it won't break anything to do so
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, int(start), int(end - start), extension)
 
 
