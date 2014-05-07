@@ -270,9 +270,14 @@ Events are uploaded to https://gracedb.ligo.org
 
 \section Review Review status
 
-Redundant entries are ommitted
+\subsection Team Review Team 2014
+
+Reviewees: Chad, Kipp
+Reviewers: Jolien, Florent, Duncan Me, Sathya
 
 \subsection pythontable Python programs and modules
+
+Redundant entries are ommitted
 
 <table>
 <tr><th> Program				</th><th> Sub programs or modules	</th><th> Lines	</th><th> Review status	</th><th> Stability </th></tr>
@@ -374,4 +379,8 @@ Redundant entries are ommitted
 - Explore autocorrelation chisquared mismatch scaling with number of samples e.g., @f$ \nu + \epsilon(\nu) \delta^{2} @f$
 - Make sure capsfilters and other similar elements are well documented within graphs (e.g. put in rates, etc)
 - Add description of arrows in graphs
- 
+- Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
+- Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
+
+
+![Kipp explaining that the Flux Capacitor is what makes time travel possible; Jolien responds incredulously](@ref kipp.png)  ![LLOID](@ref lloid.png) 
