@@ -29,6 +29,18 @@
 # |          Sathya, Duncan Me, Jolien, Kipp, Chad | 4bb3204b4ea43e4508dc279ddcfc417366c72841    | 2014-05-02 |
 #
 # #### Actions
+# - Feature request: do checkpointing when instruments are down
+# - Feature request: need to hook up equivalent of "CAT 2" vetoes to online analysis when ready, and HW inj veto, etc.
+# - Document the parameters in mkLLOIDmulti()
+# - Check if bank ids are the same across different instruments
+# - Feature request: Make time-frequency videos for interesting events
+# - Inject signals of known, high SNR and measure loss
+# - move the makesegmentsrcgate to before the matrix mixer, not in the current sum-of-squares control loop
+# - Make conditional branches in the graph gray boxes
+# - consider zero padding the beginning of jobs to get rid of mkdrop()
+# - Decide how to properly normalize SNRs for incomplete filter segments (currently filters are not renormalized so the loss in SNR is bigger than might be expected)
+# - Check and possibly fix the function that switches between time-domain and FFT convolution based on stride and number of samples
+# - Consider if quality = 9 is right for downsampling (it should be plenty good, but maybe excessive?)
 #
 #
 # #### Functions/classes not reviewed since they will be moved
