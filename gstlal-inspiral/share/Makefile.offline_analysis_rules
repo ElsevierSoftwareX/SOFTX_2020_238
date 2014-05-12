@@ -1,0 +1,27 @@
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
+
+# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+BANK_CACHE_PREFIX = $(empty)
+BANK_CACHE_SUFFIX = _split_bank.cache
+BANK_CACHE_FILES = $(addsuffix $(BANK_CACHE_SUFFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix $(BANK_CACHE_PREFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix =,$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(addsuffix $(BANK_CACHE_SUFFIX),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(join $(IFOS),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(strip $(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+# Injection file names
+injections:=--injections $(space)
+INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
