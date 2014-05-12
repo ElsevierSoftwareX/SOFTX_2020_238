@@ -134,6 +134,7 @@ static void set_property(GObject *object, guint prop_id, const GValue *value, GP
 	GST_OBJECT_LOCK(element);
 
 	switch(prop_id){
+
 	case ARG_DEPTH:
 		element->depth = g_value_get_int(value);
 		break;
@@ -307,6 +308,7 @@ static void set_metadata(GstPad *srcpad, GstBuffer *inbuf, GstBuffer *outbuf)
 }
 
 /*
+
  * chain(), create src pads if not existed, 
  * perform downsampler, and push buffers accordingly
  */
@@ -324,6 +326,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer*inbuf)
 
 	GstPad *srcpad;
 	gint i;
+
 	for(i = 0; i < element->depth; i++)
 	{
 		srcpad = get_src_pad(element, i, inbuf);
