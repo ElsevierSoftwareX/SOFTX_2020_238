@@ -4,12 +4,6 @@ plugin_LTLIBRARIES = libcuda_plugin.la
 
 libcuda_plugin_la_SOURCES = \
 	cuda_plugin.c \
-	iirfilter/iirfilter_kernel.cu \
-	iirfilter/cuda_gstlal_iirbank.c \
-	audioresample/cuda_gstaudioresample.c \
-	audioresample/speex_resampler_int.c \
-	audioresample/speex_resampler_float.c \
-	audioresample/speex_resampler_double.c \
 	multidownsample/gstlal_multidownsample.c
 
 libcuda_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) $(NVCC_CFLAGS)

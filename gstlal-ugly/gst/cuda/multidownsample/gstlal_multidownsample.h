@@ -55,6 +55,7 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
+	gint inrate;
 	gint depth;
 
 } GstlalMultiDownsample;

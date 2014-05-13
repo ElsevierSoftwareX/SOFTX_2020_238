@@ -33,6 +33,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 
 /*
  * stuff from glib/gobject/gstreamer
@@ -41,7 +42,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/audio/audio.h>
 
 
 /*
@@ -52,8 +52,10 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
+#include <multidownsample/gstlal_multidownsample.h>
 
-#define GET_NEW_RATE(rate, depth) (rate/int(pow(2,depth)))
+#define GET_NEW_RATE(rate, depth) (rate/(int)(pow(2,depth)))
+#define DEFAULT_DEPTH 8
 /*
  * ============================================================================
  *
@@ -125,19 +127,19 @@ enum property{
 	ARG_DEPTH = 8
 };
 
-static void set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
+static void set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-	GstlalMultiDownsample *element = GSTLAL_MULTIDOWNSAMPLE(object);
+	GstlalMultiDownsample *element = GSTLAL_MULTI_DOWNSAMPLE(object);
 
-	GST_OBJECT_LOCK(elment);
+	GST_OBJECT_LOCK(element);
 
-	switch((enum property) id){
+	switch(prop_id){
 	case ARG_DEPTH:
 		element->depth = g_value_get_int(value);
 		break;
 	
 	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
 
@@ -145,19 +147,19 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 }
 
 
-static void get_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
+static void get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-	GstlalMultiDownsample *element = GSTLAL_MULTIDOWNSAMPLE(object);
+	GstlalMultiDownsample *element = GSTLAL_MULTI_DOWNSAMPLE(object);
 
-	GST_OBJECT_LOCK(elment);
+	GST_OBJECT_LOCK(element);
 
-	switch((enum property) id){
+	switch(prop_id){
 	case ARG_DEPTH:
 		g_value_set_int(value, element->depth);
 		break;
 	
 	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
 
@@ -175,6 +177,16 @@ static void get_property(GObject *object, guint id, const GValue *value, GParamS
  * ============================================================================
  */
 
+gint get_buffer_rate(GstBuffer *buf)
+{
+	GstStructure *str;
+	gint rate;
+	str = gst_caps_get_structure(GST_BUFFER_CAPS(buf), 0);
+	gst_structure_get_int(str, "rate", &rate);
+	return rate;
+}
+	
+
 
 typedef struct _PadState{
 	guint64 next_offset;
@@ -183,10 +195,10 @@ typedef struct _PadState{
 
 static void src_pad_linked_handler(GstPad *pad, GstPad *peer, gpointer data)
 {
-	PadState *pad_state = g_new0(struct pad_state, 1);
+	PadState *pad_state = g_new0(PadState, 1);
 
 	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
-	pad_state->next_out_offset = 0;
+	pad_state->next_offset = 0;
 
 	g_assert(gst_pad_get_element_private(pad) == NULL);
 	gst_pad_set_element_private(pad, pad_state);
@@ -212,12 +224,12 @@ static GstPad *add_src_pad_setcaps(GstlalMultiDownsample *element, const guint8 
 	/* parse caps of inbuf */
 	GstCaps *incaps = GST_BUFFER_CAPS(inbuf);
 	GstStructure *instr;
-	gint rate, width;
+	gint rate, width, new_rate;
 	gboolean success = TRUE;
 	
-	str = gst_caps_get_structure(incaps, 0);
-	success &= gst_structure_get_int(str, "rate", &rate);
-	success &= gst_structure_get_int(str, "width", &width);
+	instr = gst_caps_get_structure(incaps, 0);
+	success &= gst_structure_get_int(instr, "rate", &rate);
+	success &= gst_structure_get_int(instr, "width", &width);
 
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse inbuf");
@@ -239,10 +251,9 @@ static GstPad *add_src_pad_setcaps(GstlalMultiDownsample *element, const guint8 
 	gst_object_unref(template);
 
 	GstStructure *src_str = gst_caps_get_structure(gst_pad_get_caps(srcpad), 0);
-	success &= gst_stucture_set(src_str, "rate", G_TYPE_INT, GET_NEW_RATE(rate, current_depth, NULL);
-	success &= gst_stucture_set(src_str, "width", G_TYPE_INT, width, NULL);
-	if(!success)
-		GST_ERROR_OBJECT(element, "unable to set src caps");
+	new_rate = GET_NEW_RATE(rate, current_depth);
+	gst_structure_set(src_str, "rate", G_TYPE_INT, new_rate, NULL);
+	gst_structure_set(src_str, "width", G_TYPE_INT, width, NULL);
 
 	/*
 	 * connect signal handlers
@@ -266,10 +277,11 @@ static GstPad *add_src_pad_setcaps(GstlalMultiDownsample *element, const guint8 
 static GstPad *get_src_pad(GstlalMultiDownsample *element, const guint8 current_depth, GstBuffer *inbuf)
 {
 	GstPad *srcpad;
+	gchar *name;
 
 	/* construct the name for the sink pad */
 
-	name = GET_SINK_NAME(element->inrate, current_depth);
+	name = g_strdup_printf("src_%dHz", GET_NEW_RATE(element->inrate,current_depth));
 
 	srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 	if(!srcpad){
@@ -283,50 +295,35 @@ static GstPad *get_src_pad(GstlalMultiDownsample *element, const guint8 current_
 }
 
 static void set_metadata(GstPad *srcpad, GstBuffer *inbuf, GstBuffer *outbuf)
-{GstlalMultiDownsample *element
+{
 		PadState *pad_state = (PadState *) gst_pad_get_element_private(srcpad);
 		if(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf)){
 			GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf);
-			GST_BUFFER_DURATION(outbuf) = 0 
-			GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_END(outbuf) = pad_state->next_out_offset;
+			GST_BUFFER_DURATION(outbuf) = 0 ;
+			GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_END(outbuf) = pad_state->next_offset;
 		}else{
 			GST_WARNING_OBJECT(outbuf, "unable to set outbuf");
 		}
 }
-static GstCaps *src_get_caps(GstCaps* incaps, gint depth)
-{
-	GstStructure *str;
-	gint rate;
-	gboolean success = TRUE;
-	
-	str = gst_caps_get_structure(incaps, 0);
-	success =&= gst_structure_get_int(str, "rate", &rate);
 
-	if(success){
-		GstCaps *new_caps;
-		new_caps = gst_caps_copy(incaps);
-		gst_caps_set_value(new_caps, "rate", GET_NEW_RATE(rate, depth));
-	} else{
-		GST_ERROR_OBJECT(incaps, "unable to parse caps");
-	}
-	return new_caps;
-}
-/* 
+/*
  * chain(), create src pads if not existed, 
  * perform downsampler, and push buffers accordingly
  */
 
 static GstFlowReturn chain(GstPad *pad, GstBuffer*inbuf)
 {
-	GstlalMultiDownsample *element = GSTLAL_MULTIDOWSAMPLE(gst_pad_get_parent(pad));
+	GstlalMultiDownsample *element = GSTLAL_MULTI_DOWNSAMPLE(gst_pad_get_parent(pad));
 
 	gint insamples, outsamples;
 	GstFlowReturn result = GST_FLOW_OK;
 //	insamples = GST_BUFFER_SIZE(inbuf) / (element->inrate / 8);
 
 	GST_DEBUG_OBJECT(element, "received %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+	element->inrate = get_buffer_rate(inbuf);
 
-
+	GstPad *srcpad;
+	gint i;
 	for(i = 0; i < element->depth; i++)
 	{
 		srcpad = get_src_pad(element, i, inbuf);
@@ -342,12 +339,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer*inbuf)
 		/* allocate buffer */
 
 		GstBuffer *outbuf;
-		gint srcsize = GST_BUFFER_SIZE(inbuf)/int(pow(2, i)); 
+		gint srcsize = GST_BUFFER_SIZE(inbuf)/(int)(pow(2, i)); 
 		outbuf = gst_buffer_new_and_alloc(srcsize);
-		memcpy(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 
 		/* set buffer caps */
-		gst_buffer_set_caps(outbuf, GST_PAD_CAPS(srcpad);
+		gst_buffer_set_caps(outbuf, GST_PAD_CAPS(srcpad));
 		g_assert(GST_BUFFER_CAPS(outbuf) != NULL);
 
 		/* set timestamp and duration */
@@ -360,7 +357,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer*inbuf)
 //		}			
 				
 	}
-
+	return result;
 }
 
 /*
@@ -381,7 +378,7 @@ static void gstlal_multi_downsample_base_init(gpointer klass)
 static void gstlal_multi_downsample_class_init(GstlalMultiDownsampleClass *kclass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(kclass);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(kclass);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -391,18 +388,20 @@ static void gstlal_multi_downsample_class_init(GstlalMultiDownsampleClass *kclas
 		element_class,
 		gst_static_pad_template_get(&gstlal_multi_downsample_sink_template));	
 
-	gst_object_class_install_property(
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	g_object_class_install_property(
 		gobject_class,
 		ARG_DEPTH,
 		g_param_spec_int(
 			"downsample depth",
 			"Downsample depth",
-			"Downsample to multiply rates by a series of factors that are power of 2. The minimum output rate is determined by the depth.",
-			DEFAULT_DEPTH,
-			(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
+			"Downsample to multiple rates by a series of factors that are power of 2. The minimum output rate is determined by the depth.",
+			0, 10, DEFAULT_DEPTH,
+			G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS
 		)
 	);
-
+	gst_element_class_set_details_simple(element_class, "Multi Downsample", "downsample to multiple rates", "multi downsample", "qi.chu <qi.chu@ligo.org");
 }
 
 /*
@@ -413,14 +412,15 @@ static void gstlal_multi_downsample_init(GstlalMultiDownsample *element, GstlalM
 {
 	/* configure sink pad */
 	GstPadTemplate *template;
+	GstPad *sinkpad;
 	template = gst_static_pad_template_get(&gstlal_multi_downsample_sink_template);
-	element->sinkpad = gst_pad_new_from_template(template, "sink");
+	sinkpad = gst_pad_new_from_template(template, "sink");
 	gst_object_unref(template);
 
-	gst_pad_set_chain_function(element->sinkpad, GST_DEBUG_FUNCPTR(chain));
-	gst_pad_set_event_function(element->sinkpad, GST_DEBUG_FUNCPTR(sink_event));
+	gst_pad_set_chain_function(sinkpad, GST_DEBUG_FUNCPTR(chain));
+//	gst_pad_set_event_function(element->sinkpad, GST_DEBUG_FUNCPTR(sink_event));
 
-	gst_element_add_pad(GST_ELEMENT(element), element->sinkpad);
+	gst_element_add_pad(GST_ELEMENT(element), sinkpad);
 
 }
 
