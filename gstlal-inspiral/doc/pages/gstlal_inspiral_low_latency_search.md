@@ -272,8 +272,8 @@ Events are uploaded to https://gracedb.ligo.org
 
 \subsection Team Review Team 2014
 
-Reviewees: Chad, Kipp
-Reviewers: Jolien, Florent, Duncan Me, Sathya
+- Reviewees: Chad, Kipp
+- Reviewers: Jolien, Florent, Duncan Me, Sathya
 
 \subsection pythontable Python programs and modules
 
