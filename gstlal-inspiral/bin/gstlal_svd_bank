@@ -43,8 +43,6 @@ from gstlal import svd_bank
 ## @file gstlal_svd_bank
 # This program will create svd bank files; see gstlal_svd_bank for more information
 #
-# @image html svdtable.png
-#
 # ### Usage examples
 # 
 # - Typical use
@@ -82,7 +80,14 @@ from gstlal import svd_bank
 # #### Actions
 # 
 # - Add process params to output
-# 
+#
+# #### Methods
+#
+# @image html svdtable.png
+#
+# @image html svd.png
+
+
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
