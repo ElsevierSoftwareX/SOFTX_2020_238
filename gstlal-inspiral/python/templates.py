@@ -286,7 +286,7 @@ def time_slices(
 		# second factor of two gives you the lower boundary since we
 		# know all slices are powers of 2.
 		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = max(spawaveform.chirptime(row.mass1,row.mass2,7,this_flow,fhigh,row.chi) for row in sngl_inspiral_rows)
+		longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,row.chi) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
