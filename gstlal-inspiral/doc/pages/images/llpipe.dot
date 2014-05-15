@@ -82,7 +82,6 @@ digraph llpipe {
 		Node1 -> HeadNode [dir=both, label="http"];
 		Node2 -> HeadNode [dir=both, label="http"];
 		NodeN -> HeadNode [dir=both, label="http"];
-		HeadNode -> WebServer [label="nfs"];
 
 	}
 
