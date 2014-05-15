@@ -157,7 +157,7 @@ class EPHandler( Handler ):
 		self.outfile = "test.xml.gz"
 		self.outdir = "./"
 		self.outdirfmt = ""
-		self.triggers = self.make_output_table()
+		self.triggers = EPHandler.make_output_table()
 		self.output_cache = Cache()
 		self.output_cache_name = None
 		self.snr_thresh = None
@@ -183,7 +183,7 @@ class EPHandler( Handler ):
 		self.pipeline = pipeline
 
 		self.verbose = False
-		self.clustering = False
+		self._clustering = False
 		self.channel_monitoring = False
 		self.stats = ep.SBStats()
 
@@ -241,18 +241,14 @@ class EPHandler( Handler ):
 			return
 
 		# TODO: Move this to PSD difference checker
-		# FIXME: This code no longer works since the timestamp doesn't
-		# appear in the structure anymore -- don't know why
-		"""
 		if message.structure.get_name() == "spectrum":
 			# FIXME: Units
-			ts = message.structure[ "timestamp" ]*1e-9
+			ts = message.timestamp*1e-9
 			if self.trigger_segment is not None and ts in self.trigger_segment:
 				self.dump_psd( ts, self.cache_psd_dir )
 			elif self.cache_psd is not None and self.cache_psd + self.last_psd_cache < ts:
 				self.dump_psd( ts, self.cache_psd_dir )
 				self.last_psd_cache = ts
-		"""
 
 	def dump_psd( self, timestamp, psddir="./" ):
 		"""
@@ -434,16 +430,28 @@ class EPHandler( Handler ):
 
 		return self.process
 
-	# TODO: Move this into library code
-	def make_output_table( self ):
-		return lsctables.New(lsctables.SnglBurstTable,
-			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
+	@property
+	def clustering(self):
+		return self._clustering
+
+	# Ensure that if clustering is on, we add the appropriate columns to be 
+	# output
+	@clustering.setter
+	def clustering(self, value):
+		self._clustering = value
+		if self.triggers is not None:
+			ligolw_bucluster.add_ms_columns_to_table(self.triggers)
+
+	@classmethod
+	def make_output_table(cls, add_ms_columns=False):
+		tbl = lsctables.New(lsctables.SnglBurstTable, ["ifo", "peak_time", 
+			"peak_time_ns", "start_time", "start_time_ns",
 			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
-			#"peak_frequency",
-			#"stop_time", "peak_time_ns", "start_time_ns", "stop_time_ns",
- 			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
+		if add_ms_columns:
+			ligolw_bucluster.add_ms_columns_to_table(tbl)
+		return tbl
 
 	def process_triggers( self, newtrigs, cluster_passes=0 ):
 		"""
@@ -500,7 +508,7 @@ class EPHandler( Handler ):
 		self.triggers.extend( newtrigs )
 
 		# Avoid all the temporary writing and the such
-		if cluster_passes == 0 or not self.clustering:
+		if cluster_passes == 0 or not self._clustering:
 			return
 
 		full = cluster_passes is True
@@ -510,7 +518,7 @@ class EPHandler( Handler ):
 		verbose = self.verbose and full
 		changed = True
 		off = ligolw_bucluster.ExcessPowerPreFunc( self.triggers )
-		while changed and self.clustering:
+		while changed and self._clustering:
 			changed = snglcluster.cluster_events( 
 				events = self.triggers,
 				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
@@ -558,8 +566,8 @@ class EPHandler( Handler ):
 		process = self.make_process_tables( None, output )
 
 		# Append only triggers in requested segment
-		outtable = self.make_output_table()
-		remainder = self.make_output_table()
+		outtable = EPHandler.make_output_table(self._clustering)
+		remainder = EPHandler.make_output_table(self._clustering)
 		for sb in self.triggers:
 			# FIXME: Less than here rather than a check for being in the segment
 			# This is because triggers can arrive "late" and thus not be put in
@@ -687,7 +695,7 @@ class EPHandler( Handler ):
 			self.lock.release()
 
 		if flush: 
-			self.triggers = self.make_output_table()
+			self.triggers = EPHandler.make_output_table(self._clustering)
 		if self.db_thresh is None: 
 			return
 
