@@ -1,0 +1,44 @@
+digraph G {
+	node [shape=box];
+	"H1_frame.cache" [color=red4];
+	"L1_frame.cache" [color=green4];
+	"V1_frame.cache" [color=magenta];
+	"frame.cache";
+	
+	"H1_frame.cache" -> "frame.cache";
+	"L1_frame.cache" -> "frame.cache";
+	"V1_frame.cache" -> "frame.cache";
+
+	"H1_segments_padded.xml" [color=red4];
+	"L1_segments_padded.xml" [color=green4];
+	"V1_segments_padded.xml" [color=magenta];
+	"segments.xml";
+
+	"H1_segments_padded.xml" -> "segments.xml";
+	"L1_segments_padded.xml" -> "segments.xml";
+	"V1_segments_padded.xml" -> "segments.xml";
+
+	"frame.cache" -> "segments.xml";	
+
+	"H1-TMPLTBANK-966393725-2048.xml" [color=red4];
+
+	"frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
+
+	"H1-TMPLTBANK-966393725-2048.xml" -> "H1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "L1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "V1_split_bank.cache";
+
+	plots;
+	"1_injections.xml";
+	"tisi.xml";
+
+	dag;
+
+	"H1_split_bank.cache" -> dag;
+	"L1_split_bank.cache" -> dag;
+	"V1_split_bank.cache" -> dag;
+	plots -> dag;
+	"1_injections.xml" -> dag;
+	"tisi.xml" -> dag;
+	"segments.xml" -> dag;
+}
