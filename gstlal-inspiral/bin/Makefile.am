@@ -39,5 +39,5 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_trigger_pipe \
 	gstlal_ll_inspiral_plot_segments_at_gps_time \
 	gstlal_prune_duplicate_mass_pairs \
-	gstlal_s5_pbh_summary_page \
+	gstlal_inspiral_summary_page \
 	gstlal_svd_bank
