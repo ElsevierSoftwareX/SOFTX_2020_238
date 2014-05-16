@@ -320,8 +320,8 @@ else:
 	# If you are operating in --fake-calibrate mode, tee off the incoming data stream into the control signal, error signal, and excitation signal (if applicable)
 	if options.fake_calibrate:
 		rawdatatee = pipeparts.mktee(pipeline, rawdata)
-		dctrl = pipeparts.mkqueue(pipeline, rawdatatee)
-		derr = pipeparts.mkqueue(pipeline, rawdatatee)
+		dctrl = pipeparts.mkqueue(pipeline, rawdatatee, max_size_time = gst.SECOND * 1000)
+		derr = pipeparts.mkqueue(pipeline, rawdatatee, max_size_time = gst.SECOND * 1000)
 		if not options.no_gamma:
 			exc = pipeparts.mkqueue(pipeline, rawdatatee)
 
@@ -372,13 +372,13 @@ else:
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
 		deltat = 1.0/sr
-		cos = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr * 4)
+		coshead = cos = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr * 4)
 		cos = pipeparts.mkcapsfilter(pipeline, cos, caps)
 
-		sin = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr*4)
+		sinhead = sin = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr*4)
 		sin = pipeparts.mkcapsfilter(pipeline, sin, caps)
 
-		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, pipeparts.mkqueue(pipeline, dctrltee), exc, cos, sin, olgI = olgI, olgR = olgR, sr = sr, time_domain = options.time_domain, wI = wI, wR = wR)
+		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 1000), olgI = olgI, olgR = olgR, sr = sr, time_domain = options.time_domain, wI = wI, wR = wR)
 		gammaR = compute_gamma_bin.get_pad("gammaR")
 		gammaRtee = pipeparts.mktee(pipeline, gammaR)
 
@@ -389,7 +389,7 @@ else:
 		derr_gamma = gst.element_factory_make("lal_multiplier")
 		derr_gamma.set_property("sync", True)
 		pipeline.add(derr_gamma)
-		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*100).link(derr_gamma)
+		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*1000).link(derr_gamma)
 		pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gammaRtee, exponent = -1.0), max_size_time = gst.SECOND*100).link(derr_gamma)
 
 	# Add DARM_ERR and DARM_CTRL to make h(t)
@@ -397,10 +397,10 @@ else:
 	strain.set_property("sync", True)
 	pipeline.add(strain)
 	if not options.no_gamma:
-		pipeparts.mkqueue(pipeline, derr_gamma, max_size_time = gst.SECOND * 100).link(strain)
+		pipeparts.mkqueue(pipeline, derr_gamma, max_size_time = gst.SECOND * 1000).link(strain)
 	else:
-		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100).link(strain)
-	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100).link(strain)
+		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 1000).link(strain)
+	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 1000).link(strain)
 	strain = pipeparts.mkprogressreport(pipeline, strain, "%s_progress_hoft" % instrument)
 	
 	# FIXME: This sometimes seems to break things, so I've commented it out for now.
@@ -436,8 +436,8 @@ if not options.no_dq_vector:
 	dqvector = gst.element_factory_make("lal_adder")
 	dqvector.set_property("sync", True)
 	pipeline.add(dqvector)
-	pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 100).link(dqvector)
-	pipeparts.mkqueue(pipeline, htdqbit, max_size_time = gst.SECOND * 100).link(dqvector)
+	pipeparts.mkqueue(pipeline, odcstatevector, max_size_time = gst.SECOND * 1000).link(dqvector)
+	pipeparts.mkqueue(pipeline, htdqbit, max_size_time = gst.SECOND * 1000).link(dqvector)
 
 	dqvector = pipeparts.mkprogressreport(pipeline, dqvector, "progress_llddq_%s" % instrument)
 	dqtagstr = "channel-name=%s:LLD-DQ_VECTOR, instrument=%s" % (instrument, instrument)
@@ -457,15 +457,15 @@ if options.frames_per_file is not None:
 
 # Link the output DQ vector up to the muxer, if applicable
 if not options.no_dq_vector:
-	dqvector.get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR" % instrument))
+	pipeparts.mkqueue(pipeline, dqvector, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:LLD-DQ_VECTOR" % instrument))
 
 # Link the strain branch to the muxer
-pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
+pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma and not options.recolor:
-	pipeparts.mkqueue(pipeline, gammaRtee).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
-	pipeparts.mkqueue(pipeline, gammaI).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
+	pipeparts.mkqueue(pipeline, gammaI, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
 
 # FIXME: More outputs need to be hooked up to the muxer
 
@@ -491,17 +491,30 @@ if gw_data_source.data_source == "frames":
 	datasource.do_seek(pipeline, gw_data_source.seekevent)
 	print >>sys.stderr, "seeking GPS start and stop times ..."
 
-# FIXME: Is this right? Should I be seeking the pipeline this way when I'm using lvshmsrc? This part is here to seek the sin and cos elements, but maybe this will screw with how the data is read from shared memory too.
-if options.data_source == "white" or (options.data_source == "lvshmsrc" and not options.no_gamma):
+if options.data_source == "white" or (options.data_source == "lvshm" and not options.no_gamma):
 	tm = time.gmtime()
 	NOW = XLALUTCToGPS(tm).ns()
 	seek = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
-	datasource.do_seek(pipeline, seek)	
+	if options.data_source == "white":
+		datasource.do_seek(pipeline, seek)	
+	elif options.data_source == "lvshm" and not options.no_gamma:
+		if coshead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
+		if not coshead.send_event(seek):
+			raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
+			
+		if sinhead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
+		if not sinhead.send_event(seek):
+			raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
+		
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
 if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
+else:
+	print "set to playing successfully"
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
 	
