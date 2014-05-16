@@ -1,17 +1,17 @@
 digraph G {
-	node [shape=box];
-	"H1_frame.cache" [color=red4];
-	"L1_frame.cache" [color=green4];
-	"V1_frame.cache" [color=magenta];
+	node [shape=box, style=filled];
+	"H1_frame.cache" [color=red1];
+	"L1_frame.cache" [color=green1];
+	"V1_frame.cache" [color=magenta1];
 	"frame.cache";
 	
 	"H1_frame.cache" -> "frame.cache";
 	"L1_frame.cache" -> "frame.cache";
 	"V1_frame.cache" -> "frame.cache";
 
-	"H1_segments_padded.xml" [color=red4];
-	"L1_segments_padded.xml" [color=green4];
-	"V1_segments_padded.xml" [color=magenta];
+	"H1_segments_padded.xml" [color=red1];
+	"L1_segments_padded.xml" [color=green1];
+	"V1_segments_padded.xml" [color=magenta1];
 	"segments.xml";
 
 	"H1_segments_padded.xml" -> "segments.xml";
@@ -20,7 +20,7 @@ digraph G {
 
 	"frame.cache" -> "segments.xml";	
 
-	"H1-TMPLTBANK-966393725-2048.xml" [color=red4];
+	"H1-TMPLTBANK-966393725-2048.xml" [color=red1];
 
 	"frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
 
@@ -32,7 +32,7 @@ digraph G {
 	"1_injections.xml";
 	"tisi.xml";
 
-	dag;
+	dag [shape=doubleoctagon];
 
 	"H1_split_bank.cache" -> dag;
 	"L1_split_bank.cache" -> dag;
