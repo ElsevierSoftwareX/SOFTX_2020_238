@@ -25,6 +25,7 @@
 
 
 import sys
+import os
 
 
 import pygtk
@@ -81,6 +82,22 @@ class Handler(object):
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		self.on_message_handler_id = bus.connect("message", self.on_message)
+
+		def excepthook(*args):
+			# system exception hook that forces hard exit.  without this,
+			# exceptions that occur inside python code invoked as a call-back
+			# from the gstreamer pipeline just stop the pipeline, they don't
+			# cause gstreamer to exit.
+
+			# FIXME:  they probably *would* cause if we could figure out why
+			# element errors and the like simply stop the pipeline instead of
+			# crashing it, as well.  Perhaps this should be removed when/if the
+			# "element error's don't crash program" problem is fixed
+			sys.__excepthook__(*args)
+			os._exit(1)
+
+		sys.excepthook = excepthook
+
 
 	def quit(self, bus):
 		"""
