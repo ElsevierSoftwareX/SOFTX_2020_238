@@ -568,8 +568,8 @@ toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_
 lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite")
 plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary")
 plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity")
-openpageJob = inspiral_pipe.generic_job("gstlal_s5_pbh_summary_page", tag_base = 'gstlal_s5_pbh_summary_page_open')
-pageJob = inspiral_pipe.generic_job("gstlal_s5_pbh_summary_page")
+openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open')
+pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page")
 marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood")
 plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background")
 
@@ -669,7 +669,7 @@ plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_node
 
 
 # make backround plots
-plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"base":name_tag}, input_files = {"marginalized-file":"post_marginalized_likelihood.xml.gz"}))
+plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"base":name_tag}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
 
 # make a web page
 
