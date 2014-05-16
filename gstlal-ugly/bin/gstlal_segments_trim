@@ -48,12 +48,6 @@ trim = options.trim
 xmldoc = utils.load_filename(fname, verbose = True)
 
 segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce()
-for k in segs:
-	# Make it safe to contract by elimating segments that are smaller than
-	# 2 * trim value.  Remove segments that don't satisfy the minimum length
-	segs[k] = segments.segmentlist([seg for seg in segs[k] if (abs(seg) > 2 * trim) and (abs(seg) > options.min_length)])
-	
-segs.contract(trim)
 
 # trim the segment list to certain GPS times if start and end GPS times are given
 if options.gps_start_time is not None or options.gps_end_time is not None:
@@ -62,6 +56,13 @@ if options.gps_start_time is not None or options.gps_end_time is not None:
 	boundaries = segments.segmentlist([segments.segment(start, stop)])
 	for seglist in segs.values():
 		seglist &= boundaries
+
+for k in segs:
+	# Make it safe to contract by elimating segments that are smaller than
+	# 2 * trim value.  Remove segments that don't satisfy the minimum length
+	segs[k] = segments.segmentlist([seg for seg in segs[k] if (abs(seg) > 2 * trim) and (abs(seg) > options.min_length)])
+	
+segs.contract(trim)
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
