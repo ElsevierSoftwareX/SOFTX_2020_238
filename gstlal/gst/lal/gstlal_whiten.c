@@ -1062,7 +1062,13 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		gchar *instrument;
 		gchar *units;
 
+		/*
+		 * get a pointer to the taglist in the event, then make
+		 * copy.  do not modify the taglist in the event.
+		 */
+
 		gst_event_parse_tag(event, &taglist);
+		taglist = gst_tag_list_copy(taglist);
 
 		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument)) {
 			/*
@@ -1084,45 +1090,22 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			if(!XLALParseUnitString(&sample_units, units)) {
 				GST_ERROR_OBJECT(element, "cannot parse units \"%s\"", units);
 				sample_units = lalDimensionlessUnit;
-				/*
-				 * re-use the event
-				 */
-
-				gst_event_ref(event);
 			} else {
 				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
 				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
-
-				/*
-				 * create a new event with a new taglist
-				 * object (don't corrupt the original
-				 * event, 'cause we don't own it)
-				 */
-
-				taglist = gst_tag_list_copy(taglist);
 				/* FIXME:  gstreamer doesn't like empty strings */
 				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
-				event = gst_event_new_tag(taglist);
 			}
 
 			g_free(units);
 			element->sample_units = sample_units;
-		} else
-			/*
-			 * re-use the event
-			 */
-
-			gst_event_ref(event);
+		}
 
 		/*
-		 * gst_pad_push_event() consumes the reference count
+		 * gst_element_found_tags() takes ownership of the taglist
 		 */
 
-		if(element->mean_psd_pad) {
-			gst_event_ref(event);
-			gst_pad_push_event(element->mean_psd_pad, event);
-		}
-		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
+		gst_element_found_tags(GST_ELEMENT(trans), taglist);
 
 		/*
 		 * don't forward the event (we did it)
