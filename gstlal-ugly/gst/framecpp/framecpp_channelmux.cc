@@ -56,13 +56,13 @@
 #include <framecpp/Common/MemoryBuffer.hh>
 #include <framecpp/Common/Verify.hh>
 #include <framecpp/Dimension.hh>
-#include <framecpp/OFrameStream.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
 #include <framecpp/FrProcData.hh>
 #include <framecpp/FrRawData.hh>
 #include <framecpp/FrSimData.hh>
 #include <framecpp/FrVect.hh>
+#include <framecpp/OFrameStream.hh>
 
 
 /*
