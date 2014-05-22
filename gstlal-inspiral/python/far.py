@@ -1577,10 +1577,15 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 	samples drawn from the n_dim-dimensional parameter space.  Each
 	sample is returned as a numpy array.
 
-	mean and stdev adjust the Gaussian random number generator used to
-	set the initial co-ordinates of the walkers.  n_burn iterations of
-	the MCMC sampler will be executed and discarded to allow the system
-	to stabilize before samples are yielded to the calling code.
+	pos0 is an n_walker by n_dim array giving the initial positions of
+	the walkers (this parameter is currently not optional).  n_burn
+	iterations of the MCMC sampler will be executed and discarded to
+	allow the system to stabilize before samples are yielded to the
+	calling code.
+
+	NOTE:  the samples yielded by this generator are not drawn from the
+	PDF independently of one another.  The correlation length is not
+	known at this time.
 	"""
 	#
 	# construct a sampler
