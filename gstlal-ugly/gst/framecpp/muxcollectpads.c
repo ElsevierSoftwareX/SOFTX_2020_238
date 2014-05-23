@@ -104,10 +104,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
 	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
 	if(data->eos || data->segment.format == GST_FORMAT_UNDEFINED) {
+		GST_ERROR_OBJECT(pad, "recieved buffer after EOS or with segment format not defined");
 		gst_buffer_unref(buffer);
 		result = GST_FLOW_UNEXPECTED;
-	} else
+	} else {
+		GST_DEBUG_OBJECT(pad, "received buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 		result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
+	}
 
 	return result;
 }
