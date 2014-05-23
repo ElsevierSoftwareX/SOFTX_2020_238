@@ -116,30 +116,32 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
 static gboolean all_pads_are_at_eos(FrameCPPMuxCollectPads *collectpads)
 {
 	GSList *collectdatalist;
+	gboolean at_eos = TRUE;
 
 	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist))
 		if(!((FrameCPPMuxCollectPadsData *) collectdatalist->data)->eos) {
-			FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
-			return FALSE;
+			at_eos = FALSE;
+			break;
 		}
 	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
-	return TRUE;
+	return at_eos;
 }
 
 
 static gboolean all_pads_are_flushing(FrameCPPMuxCollectPads *collectpads)
 {
 	GSList *collectdatalist;
+	gboolean flushing = TRUE;
 
 	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 	for(collectdatalist = collectpads->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist))
 		if(!framecpp_muxqueue_get_flushing(((FrameCPPMuxCollectPadsData *) collectdatalist->data)->queue)) {
-			FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
-			return FALSE;
+			flushing = FALSE;
+			break;
 		}
 	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
-	return TRUE;
+	return flushing;
 }
 
 
