@@ -32,6 +32,7 @@
 #include <gst/gst.h>
 
 
+#include <gstlal/gstlal_debug.h>
 #include <gstlal/gstaudioadapter.h>
 #include <muxqueue.h>
 
@@ -226,11 +227,15 @@ gboolean framecpp_muxqueue_get_flushing(FrameCPPMuxQueue *queue)
 GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
+	guint64 samples;
 	GList *head;
 	GList *result;
 
 	FRAMECPP_MUXQUEUE_LOCK(queue);
-	result = gst_audioadapter_get_list_samples(adapter, gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
+	samples = gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND);
+	if(samples == 0 && time > 0)
+		GST_WARNING_OBJECT(queue, "requested time %" GST_TIME_SECONDS_FORMAT " corresponds to 0 samples at %u Hz, no data will be retrieved", GST_TIME_SECONDS_ARGS(time), queue->rate);
+	result = gst_audioadapter_get_list_samples(adapter, samples);
 	if(result) {
 		/* correct timestamp and duration of first buffer */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
