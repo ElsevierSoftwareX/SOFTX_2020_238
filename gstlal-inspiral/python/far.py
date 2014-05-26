@@ -291,6 +291,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	snr_min = 4.
 	snr_max = 100.
 
+	# if two horizon distances, D1 and D2, differ by less than
+	#
+	#	| ln(D1 / D2) | <= log_distance_tolerance
+	#
+	# then they are considered to be equal for the purpose of recording
+	# horizon distance history, generating joint SNR PDFs, and so on.
+	#
+	# FIXME:  is this choice of distance quantization appropriate?
+	log_distance_tolerance = math.log(1.2)
+
 	# binnings and filters
 	binnings = {
 		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
@@ -334,7 +344,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = 15
 	snr_joint_pdf_cache = {}
 
-	def get_snr_joint_pdf(self, instruments, horizon_distances, log_distance_tolerance = math.log(1.2), progressbar = None):
+	def get_snr_joint_pdf(self, instruments, horizon_distances, progressbar = None):
 		#
 		# key for cache:  two element tuple, first element is
 		# frozen set of instruments for which this is the PDF,
@@ -344,14 +354,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# largest among them and then are quantized to integer
 		# powers of exp(log_distance_tolerance)
 		#
-		# FIXME:  is the default distance tolerance appropriate?
-		#
 		# FIXME:  if horizon distance discrepancy is too large,
 		# consider a fast-path that just returns an all-0 array
 		#
 
 		horizon_distance_norm = max(horizon_distances.values())
-		key = frozenset(instruments), frozenset((instrument, math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance)) for instrument, horizon_distance in horizon_distances.items())
+		key = frozenset(instruments), frozenset((instrument, math.exp(round(math.log(horizon_distance / horizon_distance_norm) / self.log_distance_tolerance) * self.log_distance_tolerance)) for instrument, horizon_distance in horizon_distances.items())
 
 		#
 		# retrieve cached PDF, or build new one
