@@ -820,9 +820,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# minimum distance at which source becomes visible
 			# in an instrument that isn't involved
 			if len(DH_times_8_other):
-				min_snr_times_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min()
+				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min() / cls.snr_min
 			else:
-				min_snr_times_D_other = 0.0
+				min_D_other = 0.0
 
 			# snr * D in instrument whose SNR grows fastest
 			# with decreasing D
@@ -867,7 +867,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				#	\propto D^2 |dD|
 				#	\propto D^3 * (10**decades_per_step - 1.)
 				D = max_snr_times_D / snr
-				if min_snr_times_D_other >= cls.snr_min * D:
+				if D <= min_D_other:
 					# source can be seen in one of the
 					# other instruments
 					break
