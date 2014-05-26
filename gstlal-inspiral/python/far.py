@@ -776,8 +776,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@staticmethod
 	def randbin(binning, n = 1.):
 		# FIXME:  move to rate.py?
-		x = binning.centres()
-		ln_dx = numpy.log(binning.upper() - binning.lower())
+		x = tuple(binning.centres())
+		ln_dx = tuple(numpy.log(binning.upper() - binning.lower()))
 		isinf = math.isinf
 		for i, ln_Pi in ThincaCoincParamsDistributions.randindex(0, len(x), n = n):
 			if isinf(ln_dx[i]):
