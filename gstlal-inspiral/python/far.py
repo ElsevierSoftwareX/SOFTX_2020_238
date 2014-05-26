@@ -816,8 +816,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 			# ratio of distance to inverse SNR for each instrument
 			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
-			# minimum of those quantities for the instruments
-			# that aren't involved
+
+			# minimum distance at which source becomes visible
+			# in an instrument that isn't involved
 			if len(DH_times_8_other):
 				min_snr_times_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min()
 			else:
@@ -827,10 +828,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# with decreasing D
 			max_snr_times_D = snr_times_D.max()
 
-			# furthest an event can be and still be above
-			# snr_min in all instruments, and the SNR that
-			# corresponds to in the instrument whose SNR grows
-			# fastest
+			# snr_times_D.min() / snr_min = the furthest a
+			# source can be and still be above snr_min in all
+			# instruments involved.  max_snr_times_D / that
+			# distance = the SNR that distance corresponds to
+			# in the instrument whose SNR grows fastest with
+			# decreasing distance --- the SNR the source has in
+			# that instrument when the source is just visible
+			# in all instruments involved
 			snr_start = max_snr_times_D * (snr_min / snr_times_D.min())
 
 			# 3 steps per bin
