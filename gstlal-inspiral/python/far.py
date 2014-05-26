@@ -769,7 +769,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			yield params, sum(seq[1::2])
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, decades_per_bin = 1.0 / 50.0, progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, efolds_per_bin = 1.0 / 20.0, progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -802,11 +802,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		resps_other = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in inst_horiz_mapping if inst not in instruments)
 
 		# initialize the PDF array
-		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log10(cls.snr_max / snr_min) / decades_per_bin)))] * len(instruments)))
+		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log(cls.snr_max / snr_min) / efolds_per_bin)))] * len(instruments)))
 
 		steps_per_bin = 3.
-		decades_per_step = decades_per_bin / steps_per_bin
-		_per_step = 10.**decades_per_step - 1.
+		efolds_per_step = efolds_per_bin / steps_per_bin
+		_per_step = math.exp(efolds_per_step) - 1.
 
 		psi = gmst = 0.0
 
@@ -847,7 +847,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			snr_start = max_snr_times_D * (snr_min / snr_times_D.min())
 
 			# 3 steps per bin
-			for snr in 10.**numpy.arange(math.log10(snr_start), math.log10(cls.snr_max), decades_per_step):
+			for snr in numpy.exp(numpy.arange(math.log(snr_start), math.log(cls.snr_max), efolds_per_step)):
 				# "snr" is SNR in fastest growing instrument, from
 				# this the distance to the source is:
 				#
@@ -886,7 +886,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# number of bins per unit in SNR in the binnings.  For use
 		# as the width parameter in the filtering.
-		bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
+		bins_per_snr_at_8 = 1. / ((math.exp(efolds_per_bin) - 1.) * 8.)
 		rate.filter_array(pdf.array, rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(instruments))))
 		numpy.clip(pdf.array, 0., PosInf, pdf.array)
 		# set the region where any SNR is lower than the input
