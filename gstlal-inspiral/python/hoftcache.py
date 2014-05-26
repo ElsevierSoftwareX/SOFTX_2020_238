@@ -152,8 +152,6 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % sample_rate)
 			src = pipeparts.mkresample(pipeline, src, quality = 9)
 			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % sample_rate)
-			# put in a thread boundary to speed things up
-			src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0)
 
 		#
 		# pack into frame files for output
