@@ -717,14 +717,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@staticmethod
 	def randindex(lo, hi, n = 1.):
 		"""
-		Yields integers in the range [lo, hi) where both lo and hi
-		are not negative.  Each return value is a two-element
-		tuple.  The first element is the random integer, the second
-		is the natural logarithm of the probability with which that
-		integer will be chosen.
+		Yields integers in the range [lo, hi) where 0 <= lo < hi.
+		Each return value is a two-element tuple.  The first
+		element is the random integer, the second is the natural
+		logarithm of the probability with which that integer will
+		be chosen.
 
 		The CDF for the distribution from which the integers are
-		drawn goes as [integer]^{n}.  Specifically, it's
+		drawn goes as [integer]^{n}, where n >= 0.  Specifically,
+		it's
 
 			CDF(x) = (x^{n} - lo^{n}) / (hi^{n} - lo^{n})
 
@@ -732,12 +733,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		larger integers, n < 1 favours smaller integers.
 		"""
 		# FIXME:  move to glue.iterutils?
-
-		# NOTE:  nothing requires the probabilities returned by
-		# this generator to be properly normalized, but it turns
-		# out to be trivial to achieve so we do it anyway, just in
-		# case it turns out to be helpful later.
-
 		if not 0 <= lo < hi:
 			raise ValueError("require 0 <= lo < hi: lo = %d, hi = %d" % (lo, hi))
 		if n < 0.:
