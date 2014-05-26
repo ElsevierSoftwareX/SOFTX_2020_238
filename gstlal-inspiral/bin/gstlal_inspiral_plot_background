@@ -384,9 +384,8 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
 	axes.loglog()
 	axes.grid(which = "both")
-	# FIXME:  don't hard-code minima
-	axes.set_xlim((4., x.max()))
-	axes.set_ylim((4., y.max()))
+	axes.set_xlim((far.ThincaCoincParamsDistributions.snr_min, x.max()))
+	axes.set_ylim((far.ThincaCoincParamsDistributions.snr_min, y.max()))
 	fig.colorbar(mesh, ax = axes)
 	# co-ordinates are in alphabetical order
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
