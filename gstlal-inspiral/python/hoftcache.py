@@ -137,7 +137,6 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 	channelmux_input_dict = {}
 
 	for instrument, channel_name in data_source_info.channel_dict.items():
-
 		#
 		# retrieve h(t)
 		#
@@ -160,7 +159,7 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 		# pack into frame files for output
 		#
 
-		src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" %(instrument, channel_name):src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
+		src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
 		for pad in src.sink_pads():
 			if channel_comment is not None:
 				pad.set_property("comment", channel_comment)
