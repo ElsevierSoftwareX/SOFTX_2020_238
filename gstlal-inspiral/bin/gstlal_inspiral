@@ -358,16 +358,22 @@ def parse_command_line():
 		if options.verbose:
 			print >> sys.stderr, "caching frame data locally to ", fname
 		f = open(fname, "w")
-		# FIXME shouldn't hard code sample rate.  But we never analyze
-		# data at a higher rate.  If the user provides svd bank files
-		# that request a higher rate an assertion would fail later
-		# anyway.  Replace with a function to get max sample rate from
-		# provided svd banks.
+		# FIXME:  should try to down-sample if possible.  there are
+		# MDCs data sets floating around whose streams do not start
+		# on integer second boundaries, however, and it's possible
+		# to trigger a failure in the frame muxer if those get
+		# down-sampled so for now we're not doing any resampling.
+		# later, when we don't care about those MDCs, we can go
+		# back to down-sampling.  if not being able to down-sample
+		# is a problem in the meantime, I think the best way
+		# forward is to clip the start of said streams using a drop
+		# element and a (to be written) buffer probe that figures
+		# out how many samples to clip off the start of the stream.
 		# FIXME shouldn't use tempfile.gettempdir() directly, use
 		# _CONDOR_SCRATCH_DIR like glue??
 		# FIXME, note that at least for now condor sets TMPDIR to the
 		# run scratch space so this *will* work properly
-		detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), sample_rate = 4096, verbose = options.verbose)
+		detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), verbose = options.verbose)
 		for cacheentry in detectors.local_cache_list:
 			print >>f, str(cacheentry)
 		detectors.frame_cache = fname
