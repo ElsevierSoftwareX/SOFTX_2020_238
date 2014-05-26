@@ -887,8 +887,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# number of bins per unit in SNR in the binnings.  For use
 		# as the width parameter in the filtering.
 		bins_per_snr_at_8 = 1. / ((10.**decades_per_bin - 1.) * 8.)
-		rate.filter_array(pdf.array,rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(instruments))))
-		numpy.clip(pdf.array, 0, PosInf, pdf.array)
+		rate.filter_array(pdf.array, rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(instruments))))
+		numpy.clip(pdf.array, 0., PosInf, pdf.array)
 		# set the region where any SNR is lower than the input
 		# threshold to zero before normalizing the pdf and
 		# returning.
@@ -897,7 +897,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for i in xrange(len(instruments)):
 			slices = [range_all] * len(instruments)
 			slices[i] = range_low
-			pdf[tuple(slices)] = 0
+			pdf[tuple(slices)] = 0.
 		pdf.to_pdf()
 		return pdf
 
