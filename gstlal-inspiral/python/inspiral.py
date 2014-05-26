@@ -672,6 +672,8 @@ class Data(object):
 					# external process generating this
 					# input file must do that for us.
 					coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					if coinc_params_distributions is None:
+						raise ValueError("\"%s\" does not contain coinc parameter PDFs" % self.marginalized_likelihood_file)
 					if ranking_data is None:
 						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
 					# we're using the class attribute
