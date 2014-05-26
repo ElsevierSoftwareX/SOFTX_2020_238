@@ -1171,19 +1171,7 @@ class RankingData(object):
 			pdf = binnedarray.copy()
 			pdf.array[0] = pdf.array[-1] = 0.
 			bins_per_efold = pdf.bins[0].n / math.log(pdf.bins[0].max / pdf.bins[0].min)
-			kernel = rate.gaussian_window(bins_per_efold * smoothing_efolds)
-			# FIXME:  this algorithm should be implemented in a
-			# reusable function
-			result = numpy.zeros_like(pdf.array)
-			while pdf.array.any():
-				workspace = numpy.copy(pdf.array)
-				cutoff = abs(workspace[abs(workspace) > 0]).min() * 1e4
-				pdf.array[abs(pdf.array) <= cutoff] = 0.
-				workspace[abs(workspace) > cutoff] = 0.
-				rate.filter_array(workspace, kernel)
-				workspace[abs(workspace) < abs(workspace).max() * 1e-14] = 0.
-				result += workspace
-			pdf.array = result
+			rate.filter_array(pdf.array, rate.gaussian_window(bins_per_efold * smoothing_efolds))
 			# zero the PDF below the threshold.  need to
 			# make sure the bin @ threshold is also 0'ed
 			pdf[:likelihood_ratio_threshold,] = 0.
