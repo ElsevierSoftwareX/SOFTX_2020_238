@@ -66,7 +66,7 @@ from gstlal import simplehandler
 #
 # | Names                                       | Hash                                        | Date       |
 # | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan, Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
+# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
 #
 #
 # #### Action items

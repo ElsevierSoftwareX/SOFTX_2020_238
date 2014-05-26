@@ -95,7 +95,7 @@ from gstlal import far
 #
 # | Reviewers				| git hash					| date 		|
 # | ----------------------------------- | --------------------- 			| ------------- |
-# | Florent, Duncan, Jolien, Kipp, Chad | 004cf84d7e980eca0c7fd228c6d49cad959649c7 	| 2014-04-29	|
+# | Florent, Duncan Me., Jolien, Kipp, Chad | 004cf84d7e980eca0c7fd228c6d49cad959649c7 	| 2014-04-29	|
 #
 
 def parse_command_line():
