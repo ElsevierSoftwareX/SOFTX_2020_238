@@ -170,7 +170,7 @@ else:
 	channels = opts.channels
 
 if opts.instruments is not None:
-	print instruments
+    instruments = opts.instruments
 else: instruments = None
 
 if opts.overlay_segments is not None: 
