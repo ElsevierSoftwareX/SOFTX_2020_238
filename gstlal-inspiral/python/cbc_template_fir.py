@@ -57,7 +57,7 @@ import lal
 import lalsimulation as lalsim
 
 
-from gstlal.reference_psd import interpolate_psd
+from gstlal.reference_psd import interpolate_psd, horizon_distance
 
 
 from gstlal import templates
@@ -77,14 +77,18 @@ __date__ = "FIXME"
 #
 
 
-def tukeywindow(data):
+def tukeywindow(data, samps = 200.):
 	# Taper the edges unless it goes over 50%
-	samps = 200.
 	if len(data) >= 2 * samps:
 		tp = samps / len(data)
 	else:
 		tp = 0.50
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
+
+
+def lefttukeywindow(data, samps = 200.):
+	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
+	wn[len(wn)//2:] = 1.0
 
 
 
@@ -159,8 +163,8 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			lalsim.GetApproximantFromString(str(approximant))
 			)
 
-		#FIXME replace with sin^2 taper and tie to sample rate, etc.
-		hplus.data.data *= tukeywindow(hplus.data.data)
+		# Taper a couple of cycles at the start
+		hplus.data.data *= lefttukeywindow(hplus.data.data, samps = int(4 * sample_rate / f_low))
 		data = numpy.zeros((sample_rate * duration,))
 		data[-hplus.data.length:] = hplus.data.data
 
@@ -193,7 +197,7 @@ def condition_imr_template(approximant, data, sample_rate_max, max_mass):
 	max_index = numpy.argmax(numpy.abs(data))
 	phase = numpy.arctan2(data[max_index].real, data[max_index].imag)
 	data *= numpy.exp(1.j * phase)
-	target_index = len(data) - int(sample_rate_max * max_mass * 100 * 5e-6) # 100 M for the max mass to leave room for ringdown
+	target_index = len(data) - int(sample_rate_max * max_mass * 300 * 5e-6) # 300 M for the max mass to leave room for ringdown
 	data = numpy.roll(data, target_index - max_index)
 	target_tukey_percentage = 2 * (1. - float(target_index) / len(data))
 	data *= lal.CreateTukeyREAL8Window(len(data), target_tukey_percentage).data.data
@@ -222,25 +226,24 @@ def movingaverage(interval, window_size):
 	return numpy.convolve(interval, window, 'same')
 
 
-def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
+def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), smoothing_frequency = 4.):
+	"""
+	A function to condition the psd that will be used to whiten waveforms
+
+	@param psd A real8 frequency series containing the psd
+	@param newdeltaF (Hz) The target delta F to interpolate to
+	@param minfs (Hz) The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
+	@param smoothing_frequency (Hz) The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
+
+	returns a conditioned psd
+	"""
+
 	#
-	# fill in high-frequency bins to counter-act the roll-off observed
-	# due to filters in data path, then smooth PSD.  don't do in place.
+	# store the psd horizon before conditioning
 	#
 
-	psddata = psd.data
-	psddata[int(0.85*len(psddata)):] = max(psddata)
-	psddata = movingmedian(psddata, avgwindow)
-	psddata = movingaverage(psddata, avgwindow)
-	psd = laltypes.REAL8FrequencySeries(
-		name = psd.name,
-		epoch = psd.epoch,
-		f0 = psd.f0,
-		deltaF = psd.deltaF,
-		sampleUnits = psd.sampleUnits,
-		data = psddata
-	)
-
+	horizon_before = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
+	
 	#
 	# interpolate to new \Delta f
 	#
@@ -248,14 +251,38 @@ def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
 	psd = interpolate_psd(psd, newdeltaF)
 
 	#
-	# again fill in high-frequency bins, and also any bins below the
-	# lowest frequency in the original PSD
+	# Smooth the psd
 	#
 
 	psddata = psd.data
-	psddata[int(0.85*len(psddata)):] = max(psddata)
-	psddata[:int(minf / newdeltaF)] = max(psddata)
+	avgwindow = int(smoothing_frequency / newdeltaF)
+	psddata = movingmedian(psddata, avgwindow)
+	psddata = movingaverage(psddata, avgwindow)
+
+	#
+	# Taper to infinity to turn this psd into an effective band pass filter
+	#
+
+	kmin = int(minfs[0] / newdeltaF)
+	kmax = int(minfs[1] / newdeltaF)
+	psddata[:kmin] = float('Inf')
+	psddata[kmin:kmax] /= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+	
+	kmin = int(maxfs[0] / newdeltaF)
+	kmax = int(maxfs[1] / newdeltaF)
+	psddata[kmax:] = float('Inf')
+	psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+
 	psd.data = psddata
+	
+	#
+	# compute the psd horizon after conditioning and renormalize
+	#
+
+	horizon_after = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
+
+	psddata = psd.data
+	psd.data =  psddata * (horizon_after / horizon_before)**2
 
 	#
 	# done
@@ -263,6 +290,61 @@ def condition_psd(psd, newdeltaF, minf = 40.0, avgwindow = 64):
 
 	return psd
 
+
+def joliens_function(f, template_table):
+	"""
+	A function to compute the padding needed to gaurantee well behaved waveforms
+
+	@param f The target low frequency starting point
+	@param template_table The sngl_inspiral table containing all the template parameters for this bank
+
+	Returns the extra padding in time (tx) and the new low frequency cut
+	off that should be used (f_new) as a tuple: (tx, f_new)
+	"""
+	def _chirp_duration(f, m1, m2):
+		"""
+		@returns the Newtonian chirp duration in seconds
+		@param f the starting frequency in Hertz
+		@param m1 mass of one component in solar masses
+		@param m2 mass of the other component in solar masses
+		"""
+		G = 6.67e-11
+		c = 3e8
+		m1 *= 2e30 # convert to kg
+		m2 *= 2e30 # convert to kg
+		m1 *= G / c**3 # convert to s
+		m2 *= G / c**3 # convert to s
+		M = m1 + m2
+		nu = m1 * m2 / M**2
+		v = (numpy.pi * M * f)**(1.0/3.0)
+		return 5.0 * M / (256.0 * nu * v**8)
+
+	def _chirp_start_frequency(t, m1, m2):
+		"""
+		@returns the Newtonian chirp start frequency in Hertz
+		@param t the time before coalescence in seconds
+		@param m1 mass of one component in solar masses
+		@param m2 mass of the other component in solar masses
+		"""
+		G = 6.67e-11
+		c = 3e8
+		m1 *= 2e30 # convert to kg
+		m2 *= 2e30 # convert to kg
+		m1 *= G / c**3 # convert to s
+		m2 *= G / c**3 # convert to s
+		M = m1 + m2
+		nu = m1 * m2 / M**2
+		theta = (nu * t / (5.0 * M))**(-1.0/8.0)
+		return theta**3 / (8.0 * numpy.pi * M)
+
+	minmc = min(template_table.getColumnByName('mchirp'))
+	row = [t for t in template_table if t.mchirp == minmc][0]
+	m1, m2 = row.mass1, row.mass2
+	tc = _chirp_duration(f, m1, m2)
+	tx = .1 * tc + 1.0
+	f_new = _chirp_start_frequency(tx + tc, m1, m2)
+	return tx, f_new
+	
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
 	"""!
@@ -275,13 +357,16 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
 
+	# working f_low to actually use for generating the waveform
+	working_f_low_extra_time, working_f_low = joliens_function(f_low, template_table)
+
 	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = templates.ceil_pow_2(length_max + round(32.0 * sample_rate_max))
+	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
 	# Smooth the PSD and interpolate to required resolution
 	if psd is not None:
-		psd = condition_psd(psd, 1.0 / working_duration, minf = f_low)
+		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max))
 
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
@@ -325,7 +410,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# waveform is generated for a canonical distance of 1 Mpc.
 		#
 
-		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, working_f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
@@ -363,8 +448,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if approximant in ("IMRPhenomB", "EOBNRv2"):
 			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
 		else:
-			#FIXME what should this tukey window size be???  Tie this to the TD conditioning earlier and make sure that all IMR models are also consistent...
-			data *= tukeywindow(data)
+			data *= tukeywindow(data, samps = 32)
 
 		#
 		# normalize so that inner product of template with itself
