@@ -70,6 +70,7 @@ from gstlal import svd_bank
 #	+ `--samples-max-64` [int]: The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048
 #	+ `--samples-max` [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
 #	+ `--bank-id` [id] (string): Set a string to be used as the globally unique ID for this bank (default = generate a UUID)
+#	+ `--write-psd`: Write the PSD used to actually whiten the templates after interpolating and conditioning.  It will be inserted into the svd bank file.
 #
 # ### Review Status
 #
@@ -124,6 +125,7 @@ parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 parser.add_option("--bank-id", metavar = "id", action = "append", help = "Set a string to be used as the globally unique ID for each bank (default = generate a UUID).")
+parser.add_option("--write-psd", action = "store_true", default = False, help = "Write the PSD used to actually whiten the templates after interpolating and conditioning.  It will be inserted into the svd bank file.")
 
 options, filenames = parser.parse_args()
 
@@ -175,5 +177,6 @@ svd_bank.write_bank(
 		bank_id = bank_id
 	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
 	options.clipleft,
-	options.clipright
+	options.clipright,
+	write_psd = options.write_psd
 )
