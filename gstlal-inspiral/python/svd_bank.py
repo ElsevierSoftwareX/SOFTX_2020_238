@@ -255,7 +255,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthandler = DefaultContentHandler, verbose = False):
+def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthandler = DefaultContentHandler, write_psd = False, verbose = False):
 	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
@@ -338,7 +338,8 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 	# put a copy of the processed PSD file in
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
-	series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+	if write_psd:
+		series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# add top level LIGO_LW to document
 	xmldoc.appendChild(lw)
