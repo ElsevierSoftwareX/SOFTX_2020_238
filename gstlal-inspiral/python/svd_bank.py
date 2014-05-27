@@ -82,10 +82,10 @@ lsctables.use_in(DefaultContentHandler)
 def read_approximant(xmldoc, programs = ("tmpltbank", "lalapps_cbc_sbank")):
 	process_ids = set()
 	for program in programs:
-		process_ids |= lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(program)
+		process_ids |= lsctables.ProcessTable.get_table(xmldoc).get_ids_by_program(program)
 	if not process_ids:
 		raise ValueError("document must contain process entries for at least one of the programs %s" % ", ".join(programs))
-	approximant = set(row.pyvalue for row in lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName) if (row.process_id in process_ids) and (row.param == "--approximant"))
+	approximant = set(row.pyvalue for row in lsctables.ProcessParamsTable.get_table(xmldoc) if (row.process_id in process_ids) and (row.param == "--approximant"))
 	if not approximant:
 		raise ValueError("document must contain an 'approximant' process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs))
 	if len(approximant) > 1:
@@ -99,8 +99,7 @@ def read_approximant(xmldoc, programs = ("tmpltbank", "lalapps_cbc_sbank")):
 #
 
 def check_ffinal_and_find_max_ffinal(xmldoc):
-	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	f_final=sngl_inspiral_table.getColumnByName("f_final")
+	f_final = lsctables.SnglInspiralTable.get_table(xmldoc).getColumnByName("f_final")
 	if not all(f_final):
 		raise ValueError("f_final column not populated")
 	return max(f_final)
@@ -157,7 +156,7 @@ class Bank(object):
 
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq, processed_psd = cbc_template_fir.generate_templates(
-			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+			lsctables.SnglInspiralTable.get_table(bank_xmldoc),
 			read_approximant(bank_xmldoc),
 			psd,
 			flow,
@@ -166,7 +165,7 @@ class Bank(object):
 			verbose = verbose)
 		
 		# Include signal inspiral table
-		self.sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 		# Include the processed psd
 		self.processed_psd = processed_psd
 
@@ -220,7 +219,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	bank_xmldoc = ligolw_utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
-	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+	bank_sngl_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_slices(
@@ -273,7 +272,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 		bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 		# Get sngl inspiral table
-		sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 
 		# set the right clipping index
 		clipright = len(sngl_inspiral_table) - clipright
@@ -363,7 +362,7 @@ def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False
 		bank = Bank.__new__(Bank)
 
 		# Read sngl inspiral table
-		bank.sngl_inspiral_table = lsctables.table.get_table(root, lsctables.SnglInspiralTable.tableName)
+		bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 
 		# Read root-level scalar parameters
 		bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
