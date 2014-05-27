@@ -228,7 +228,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 #undef ABSFUNC
 
 /* float complex */
-#define ABSFUNC(x) (cabsf(x))
+#define ABSFUNC(x) sqrt(((float *) &x)[0] * ((float *) &x)[0] + ((float *) &x)[1] * ((float *) &x)[1])
 #define TYPE_STRING float_complex
 #define XLAL_TYPE_STRING COMPLEX8
 #define TYPE float complex
