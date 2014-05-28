@@ -331,8 +331,10 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 				break;
 		} else
 			GST_DEBUG_OBJECT(element, "have 0 control segments");
-		if(element->control_eos)
+		if(element->control_eos) {
+			GST_DEBUG_OBJECT(element, "control is at EOS");
 			break;
+		}
 
 		/*
 		 * no, wait for buffer to arrive
@@ -341,8 +343,6 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
 		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
-	if(element->control_eos)
-		GST_DEBUG_OBJECT(element, "control is at EOS");
 	g_mutex_unlock(element->control_lock);
 }
 
