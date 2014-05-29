@@ -20,13 +20,17 @@ digraph G {
 
 	"frame.cache" -> "segments.xml";	
 
-	"H1-TMPLTBANK-966393725-2048.xml" [color=red1];
+	"H1-TMPLTBANK-966393725-2048.xml" [color=red1, label="lalapps_tmpltbank"];
 
 	"frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
+	
+	"h1_split_bank.cache" [color=red1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
+	"l1_split_bank.cache" [color=green1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
+	"v1_split_bank.cache" [color=magenta1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
 
-	"H1-TMPLTBANK-966393725-2048.xml" -> "H1_split_bank.cache";
-	"H1-TMPLTBANK-966393725-2048.xml" -> "L1_split_bank.cache";
-	"H1-TMPLTBANK-966393725-2048.xml" -> "V1_split_bank.cache";
+	"h1-tmpltbank-966393725-2048.xml" -> "h1_split_bank.cache";
+	"h1-tmpltbank-966393725-2048.xml" -> "l1_split_bank.cache";
+	"h1-tmpltbank-966393725-2048.xml" -> "v1_split_bank.cache";
 
 	plots;
 	"1_injections.xml";
