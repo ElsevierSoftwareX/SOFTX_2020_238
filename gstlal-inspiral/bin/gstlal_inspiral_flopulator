@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+import numpy
+import sys
+from gstlal import svd_bank
+
+#FIXME hack to deal with pre ER5 / post ER5 bank file formats, remove when not an issue
+try:
+	banks = svd_bank.read_banks(sys.argv[1])
+except AttributeError:
+	banks = [svd_bank.read_bank(sys.argv[1])]
+
+totalMFLOPS=0
+averageMFLOPS=0
+totalMT = 0
+
+for i, bank in enumerate(banks):
+
+	print ""
+	rT = [f.rate for f in bank.bank_fragments]
+	r = numpy.array(sorted(list(set(rT))))
+	rT = numpy.array(rT)
+
+	UT = numpy.array([f.mix_matrix.shape[0] for f in bank.bank_fragments])
+	MT = [f.mix_matrix.shape[1] for f in bank.bank_fragments][0]
+	NT = numpy.array([(f.end - f.start) * f.rate for f in bank.bank_fragments])
+
+	print "\nSUB BANK %d" % i
+	print "--->\tUnique sampling rates: ",r
+	print "--->\tSampling rate for a given time slice: ",rT
+	print "--->\tTotal SVD filters for a given time slice: ",UT
+	print "--->\tNumber of SVD filter samples: ",NT
+	print "--->\tTotal real templates (e.g. twice number of complex templates): ",MT
+
+	# Convolution of a 16 sample filter requires a multiply-add per sample point of data for each sample of the filter for each physical template
+	resample = (r * 16 * 2 * MT).sum()
+
+	# Convolution of a NT sample filter requires a multiply-add per sample point of data for each sample of the filter for each svd template
+	filter = (NT * rT * UT * 2).sum()
+
+	reconstruct = (MT * UT * rT * 2).sum()
+
+	add = (rT * MT).sum()
+
+	# get FLOPs per *complex* template (note the divide by 2)
+	totalMT += MT / 2
+	print "--->\tMFLOPS from resampling: ", resample / 1000.**2
+	print "--->\tMFLOPS from filtering: ", filter / 1000.**2
+	print "--->\tMFLOPS from reconstruction: ", reconstruct / 1000.**2
+	print "--->\tMFLOPS from addition: ", add / 1000.**2
+
+	MFLOPs = resample / 1000.**2  + filter / 1000.**2 + reconstruct / 1000.**2 + add / 1000.**2
+	totalMFLOPS += MFLOPs
+
+	print "--->\tTotal MFLOPS per template: ", MFLOPs
+	print "--->\tMFLOPS per template: ", MFLOPs / MT / 2
+	
+averageMFLOPS = totalMFLOPS / totalMT
+print "--\nAverage MFLOPS per template:", averageMFLOPS
