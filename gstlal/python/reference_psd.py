@@ -162,7 +162,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
 	if gw_data_source_info.seg is not None:
-		average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2) - 1))
+		average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2.) - 1.))
 	else:
 		#FIXME maybe let the user specify this
 		average_samples = 64
