@@ -222,20 +222,15 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 	for instrument, filename in svd_banks.items():
 		for n, bank in enumerate(svd_bank.read_banks(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)):
-			# FIXME over ride the file name stored in the bank file with
 			# Write out sngl inspiral table to temp file for trigger generator
 			# FIXME teach the trigger generator to get this information a better way
-			# FIXME use named temporary file and store a reference
-			# to close later without a ulimit problem
+			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			xmldoc = ligolw.Document()
-			root = xmldoc.appendChild(ligolw.LIGO_LW())
-			fname = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
-			root.appendChild(bank.sngl_inspiral_table)
-			ligolw_utils.write_filename(xmldoc, fname, gz = True, verbose = verbose)
+			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table)
+			ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
 			xmldoc.unlink()	# help garbage collector
-			bank.template_bank_filename = fname
-			bank.logname = "%sbank%d" % (instrument,n)
-			banks.setdefault(instrument,[]).append(bank)
+			bank.logname = "%sbank%d" % (instrument, n)
+			banks.setdefault(instrument, []).append(bank)
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
 
