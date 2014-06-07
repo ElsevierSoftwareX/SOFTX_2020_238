@@ -234,6 +234,9 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
 
+	# FIXME remove when this is no longer an issue
+	if not banks:
+		raise ValueError("Could not parse bank files into valid bank dictionary.\n\t- Perhaps you are using out-of-date svd bank files?  Please ensure that they were generated with the same code version as the parsing code")
 	return banks
 
 def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
