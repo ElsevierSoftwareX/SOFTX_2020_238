@@ -295,7 +295,8 @@ def parse_command_line():
 	try:
 		svd_banks = [inspiral.parse_svdbank_string(svdbank) for svdbank in options.svd_bank]
 	except ValueError as e:
-		raise e("--svd-banks: %s" % str(e))
+		print "Unable to parse svd banks"
+		raise
 
 	# FIXME: should also check for read permissions
 	required_files = []
