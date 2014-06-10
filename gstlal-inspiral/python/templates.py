@@ -250,6 +250,9 @@ def time_slices(
 	while allowed_rates[0] > sample_rate_max:
 		allowed_rates.pop(0)
 
+	# make sure the second highest rate is less than ringdown frequency
+	allowed_rates = [allowed_rates[0]] + [r for r in allowed_rates if r < min(spawaveform.imrffinal(row.mass1, row.mass2, spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z), 'ringdown') for row in sngl_inspiral_rows)]
+
 	#
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
 	#
@@ -271,7 +274,11 @@ def time_slices(
 	# when all the waveforms are a fraction (padding-1) below the fN/2.
 	time_freq_boundaries = []
 	accum_time = 0
-	for rate in allowed_rates:
+
+	# get the lower rate boundaries
+	rates_below = [r for r in allowed_rates[1:]] + [flow]
+
+	for rate_below, rate in zip(rates_below, allowed_rates):
 		if rate >= 256:
 			segment_samples_max = samples_max_256
 		elif rate >= 64:
@@ -282,11 +289,9 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		# First factor of 2 goes from sample rate to Nyquist freq,
-		# second factor of two gives you the lower boundary since we
-		# know all slices are powers of 2.
-		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,row.chi) for row in sngl_inspiral_rows)
+		# Factor of 2 goes from sample rate to Nyquist freq
+		this_flow = float(rate_below)/(2*padding)
+		longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
