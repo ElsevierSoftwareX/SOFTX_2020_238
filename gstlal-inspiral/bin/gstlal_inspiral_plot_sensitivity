@@ -230,8 +230,8 @@ class upper_limit(object):
             self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
         if bin_type == "Aligned_Spin":
-            self.bins = imr_utils.guess_distance_phenomb_spin_parameter_bins_from_sims(self.total_injections[inst], chibins = opts.spin_bins, distbins = opts.dist_bins)
-            self.sim_to_bins = imr_utils.sim_to_distance_phenomb_spin_parameter_bins_function
+            self.bins = imr_utils.guess_distance_effective_spin_parameter_bins_from_sims(self.total_injections[inst], chibins = opts.spin_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_effective_spin_parameter_bins_function
         if bin_type == "Mass_Ratio":
             self.bins = imr_utils.guess_distance_mass_ratio_bins_from_sims(self.total_injections[inst], qbins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass_ratio_bins_function
