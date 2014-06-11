@@ -58,7 +58,6 @@ from gstlal import simplehandler
 from gstlal import simulation
 from pylal.datatypes import LIGOTimeGPS
 
-
 #
 # SPIIR many instruments, many template banks
 #
@@ -133,7 +132,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
@@ -160,7 +159,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%d_%s_%s" % (sr, instrument, bank.logname))
 		head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		if prehead is not None:
-			head = pipeparts.mkadder(pipeline (head, prehead))
+			head = pipeparts.mkadder(pipeline, (head, prehead))
 		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
 		head = pipeparts.mkresample(pipeline, head, quality = quality)
 		if sr == max_rate:
