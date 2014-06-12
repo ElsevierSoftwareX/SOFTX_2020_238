@@ -225,7 +225,9 @@ def get_triggers(elem, handler):
 	# latest available buffer, so we guarantee that the span of triggers is
 	# always greater than file stride duration
 	if buf_ts - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
+		trigseg = segment( LIGOTimeGPS(handler.time_since_dump), LIGOTimeGPS(buf_ts) )
 		outseg = segment( LIGOTimeGPS(handler.time_since_dump), LIGOTimeGPS(handler.time_since_dump + handler.dump_frequency) )
+		outseg = trigseg if abs(trigseg) < abs(outseg) else outseg
 
 		subdir = ep.append_formatted_output_path( handler.outdirfmt, handler, mkdir=False )
 		subdir = handler.outdir + "/" + subdir
