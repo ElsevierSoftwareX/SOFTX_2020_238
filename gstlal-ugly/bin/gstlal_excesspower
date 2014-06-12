@@ -176,24 +176,12 @@ def get_triggers(elem, handler):
 	# TODO: Can I set units here on the buffer fields, avoid changing the 
 	# triggers themslves and *not* screw up the underlying framework?
 
-	# NOTE: This is here and not in the handler, since self.start may not be 
-	# well defined before the pipeline starts, and thus shouldn't be checked 
-	# until after we start running. We must know handler.start by the time we 
-	# start drawing triggers, though
-	# FIXME: This probably isn't needed anymore because of the drop time
-	whiten_seg = segment( 
-		LIGOTimeGPS(handler.start), 
-		LIGOTimeGPS(handler.start + handler.whitener_offset)
-	)
-
 	trigs = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
 			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 	for row in sngl_bursts_from_buffer(buffer):
-		if row.peak_time in whiten_seg:
-			continue
 		# FIXME: Determine "magic number" or remove it
 		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
 
