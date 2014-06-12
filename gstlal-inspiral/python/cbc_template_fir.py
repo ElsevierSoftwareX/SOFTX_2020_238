@@ -78,17 +78,17 @@ __date__ = "FIXME"
 
 
 def tukeywindow(data, samps = 200.):
-	# Taper the edges unless it goes over 50%
-	if len(data) >= 2 * samps:
-		tp = samps / len(data)
-	else:
-		tp = 0.50
+	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+	tp = samps / len(data)
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
 
 
 def lefttukeywindow(data, samps = 200.):
+	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+	tp = samps / len(data)
 	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
 	wn[len(wn)//2:] = 1.0
+	return wn
 
 
 
