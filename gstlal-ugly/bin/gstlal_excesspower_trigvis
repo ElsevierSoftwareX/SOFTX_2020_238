@@ -64,7 +64,6 @@ parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a 
 parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
-parser.add_option("-X", "--overlay-summary", action="append", help="Parse the search summaries for information provided by excesspower and mark their times in the plot. Valid choices are 'spectrum_message', 'prebuild', 'postbuild'.")
 parser.add_option("-C", "--coalesce-segments", action="store_true", help="If segments are found to be plotted, this will cause them to be coalesced before adding them to the plot.")
 parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', 'both', or most_significant. Default is 'tile'.")
 parser.add_option("-l", "--logscale", action="append", help="Set logscale on an axis. Valid options are x, y, and c (for colorbar). Several can be given.")
@@ -187,7 +186,6 @@ analyzed_segments = segments.segmentlistdict()
 
 search_map = defaultdict(list)
 event_map = defaultdict(list)
-summary_info = defaultdict(list)
 for arg in args:
 	xmldoc = utils.load_filename( arg )
 
@@ -200,14 +198,6 @@ for arg in args:
 		analyzed_segments.extend( tbl.get_out_segmentlistdict() )
 		for ss in tbl:
 			search_map[ss.process_id].append( ss )
-			if len(plotsum) == 0 or ss.comment is None:
-				continue
-			for typetime in ss.comment.split(","):
-				try:
-					type, time = typetime.split(":")
-					summary_info[type].append( float(time) )
-				except ValueError:
-					pass
 
 # Map events to their searches, and ensure they are in the proper "out" segment
 for pid, eventlist in event_map.iteritems():
@@ -627,25 +617,6 @@ for channel, selected_events in event_iter:
 				t = 0
 			ax.text( lastwrite, 0.95*high_frequency, name, rotation = "vertical" )
 			ax.add_patch( tile )
-
-	for (type, timelist) in summary_info.iteritems():
-		# TODO: Divide this up by channel
-		for time in timelist:
-			# Indicate the name and if the segment extent continues to left or right
-			if time not in viewseg : continue
-			if type not in plotsum : continue
-			pyplot.axvline(time, color="r")
-
-			# If multiple segment names would be written to the same area
-			# move the text over. FIXME: This is not the definitive way to do 
-			# this it's a hack at best
-			if lastwrite == time:
-				lastwrite += tsize*t
-				t+=1
-			else:
-				lastwrite = time
-				t = 0
-			ax.text( lastwrite, 0.95*high_frequency, type, rotation = "vertical" )
 
 	if 'x' in logaxes and 'y' in logaxes:
 		ax.loglog()

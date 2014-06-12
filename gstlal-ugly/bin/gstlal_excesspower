@@ -442,6 +442,7 @@ if cfg.has_option( "cache", "reference-psd" ):
 		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
 		# Reference PSD disables caching (since we already have it)
 		handler.cache_psd = None
+		handler.psd_mode = 1
 	except KeyError: # Make sure we have a PSD for this instrument
 		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
 
@@ -553,16 +554,12 @@ head = pipeparts.mkcapsfilter( pipeline, pipeparts.mkresample( pipeline, head ),
 # Add reblock to break up data into smaller pieces
 head = pipeparts.mkreblock(pipeline, head, block_duration = 1*gst.SECOND)
 
-head = whitener = pipeparts.mkwhiten( pipeline, head )
+head = handler.whitener = pipeparts.mkwhiten( pipeline, head )
 # Amount of time to do a spectrum estimate over
-whitener.set_property( "fft-length", handler.fft_length ) 
+handler.whitener.set_property( "fft-length", handler.fft_length ) 
 # Ignore gaps in the whitener. Turning this off will induce wild triggers because
 # the whitener will see sudden drops in the data (due to the gaps)
-whitener.set_property( "expand-gaps", True ) 
-
-if psdfile is not None: # In other words, we have a reference PSD
-	whitener.set_property( "mean-psd", handler.psd.data )
-	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
+handler.whitener.set_property( "expand-gaps", True ) 
 
 # Drop first PSD estimates until it settles
 if psdfile is None:
@@ -799,10 +796,10 @@ for ifo, seglist in gw_data_source_opts.frame_segments.iteritems():
 ### END OF PIPELINE
 
 # Spectrum notification processing
-whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
+handler.whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
 # Handle spectral correlation changes
 # TODO: Make sure this doesn't have to be in the mm loop
-whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
+handler.whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
 
 # Handle shutdowns
 signal.signal( signal.SIGINT, handler.shutdown )

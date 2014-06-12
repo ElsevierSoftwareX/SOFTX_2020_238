@@ -135,6 +135,7 @@ class EPHandler( Handler ):
 		self.whitener = None
 		# Current measured PSD from the whitener
 		self.prev_psd = self.psd = None
+		self.psd_mode = 0  # default is to adapt
 		# This is used to store the previous value of the PSD power
 		self.psd_power = 0
 		self.cache_psd = None
@@ -235,6 +236,16 @@ class EPHandler( Handler ):
 		elif message.type == gst.MESSAGE_LATENCY:
 			if self.verbose:
 				print >>sys.stderr, "Got latency message, ignoring for now."
+			return
+		elif message.type == gst.MESSAGE_TAG:
+			if self.psd_mode == 1 and self.psd is not None:
+				if self.verbose:
+					print >>sys.stderr, "Got tags message, fixing current PSD to whitener."
+				self.whitener.set_property( "mean-psd", self.psd.data )
+				self.whitener.set_property( "psd-mode", self.psd_mode ) # GSTLAL_PSDMODE_FIXED
+			else:
+				if self.verbose:
+					print >>sys.stderr, "Got tags message, but no fixed spectrum to set, so ignoring for now."
 			return
 		elif message.structure is None: 
 			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored." % str(message.type)
