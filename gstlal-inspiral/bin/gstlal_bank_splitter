@@ -137,7 +137,7 @@ for filename in filenames:
 		for row in sngl_inspiral_table:
 			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
 			if approximant in ('IMRPhenomB', 'EOBNRv2'):
-				row.f_final= max(512, 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi)) # over sample these waveforms Use at least a 512 Hz rate
+				row.f_final= max(1024, 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi)) # over sample these waveforms Use at least a 512 Hz rate
 				if options.max_f_final and row.f_final>options.max_f_final:
 					row.f_final=options.max_f_final
 				row.template_duration = spawaveform.imrchirptime(row.mass1, row.mass2, flow, chi)
@@ -174,6 +174,7 @@ for filename in filenames:
 		sample_rates[r].sort(key=sort_func)
 
 		for rows in group_templates(sample_rates[r], options.n, options.overlap):
+			assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
 			sngl_inspiral_table[:] = rows
 			output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
 			output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
