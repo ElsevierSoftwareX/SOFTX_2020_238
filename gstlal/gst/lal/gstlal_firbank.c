@@ -156,7 +156,7 @@ static unsigned fir_length(const GSTLALFIRBank *element)
 static unsigned fft_block_length(const GSTLALFIRBank *element)
 {
 	unsigned block_length = element->block_stride + fir_length(element) - 1;
-	return block_length & 1 ? block_length + 1 : block_length;
+	return block_length + (block_length & 1);
 }
 
 
