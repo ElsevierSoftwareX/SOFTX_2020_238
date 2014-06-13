@@ -270,7 +270,7 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
 	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
 	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
-	if(element->need_discont) {
+	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
@@ -1458,7 +1458,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	g_mutex_lock(element->fir_matrix_lock);
-	while(!element->fir_matrix) {
+	while(G_UNLIKELY(!element->fir_matrix)) {
 		GST_DEBUG_OBJECT(element, "fir matrix not available, waiting ...");
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
@@ -1475,7 +1475,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * size or latency changes, but those cases should produce "update"
 	 * new segment events */
 
-	if(element->need_new_segment) {
+	if(G_UNLIKELY(element->need_new_segment)) {
 		do_new_segment(element);
 		element->need_new_segment = FALSE;
 	}
@@ -1484,7 +1484,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * check for discontinuity
 	 */
 
-	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 		/*
 		 * flush any previous history and clear the adapter
 		 */
