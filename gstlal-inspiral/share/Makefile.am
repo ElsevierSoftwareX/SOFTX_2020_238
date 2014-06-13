@@ -4,5 +4,6 @@ dist_pkgdata_DATA = \
 	Makefile.offline_analysis_rules \
 	Makefile.ERHMBank \
 	Makefile.S5LMCBC \
+	Makefile.IMBH_example \
 	simplify_and_cluster.sql \
 	inj_simplify_and_cluster.sql
