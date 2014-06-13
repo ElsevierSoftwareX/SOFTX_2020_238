@@ -137,7 +137,7 @@ for filename in filenames:
 		for row in sngl_inspiral_table:
 			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
 			if approximant in ('IMRPhenomB', 'EOBNRv2'):
-				row.f_final= 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi) # over sample these waveforms
+				row.f_final= max(512, 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi)) # over sample these waveforms Use at least a 512 Hz rate
 				if options.max_f_final and row.f_final>options.max_f_final:
 					row.f_final=options.max_f_final
 				row.template_duration = spawaveform.imrchirptime(row.mass1, row.mass2, flow, chi)
