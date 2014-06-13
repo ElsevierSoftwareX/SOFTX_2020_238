@@ -1,0 +1,92 @@
+# Template bank parameters
+HIGH_FREQUENCY_CUTOFF = 4096
+LOW_FREQUENCY_CUTOFF = 20
+NUM_SPLIT_TEMPLATES = 100
+OVERLAP = 10
+
+# controls triggers
+IFOS = H1 L1 V1
+START = 966384015
+STOP = 967384015
+TAG = IMBH_50-50_test
+WEBDIR = ~/public_html/MDC_new/${START}-${STOP}-${TAG}
+NUMBANKS = 4
+PEAK = 0
+AC_LENGTH = 351
+# additional options, e.g.,
+#ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
+
+# Injections
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+INJECTIONS := IMBHB-MDC-50-50.xml.gz
+
+# Segment and frame type info
+SEG_SERVER=https://segdb.ligo.caltech.edu
+LIGO_FRAME_TYPE='$*_T1200307_V4_EARLY_GAUSSIAN'
+LIGO_SEGMENTS="$*:CBC-MDC1_SCIENCE_EARLY_GAUSSIAN"
+VIRGO_FRAME_TYPE='V1_T1300121_V1_EARLY_GAUSSIAN'
+CHANNEL_NAMES:=--channel-name=H1=GAUSSIAN --channel-name=L1=GAUSSIAN --channel-name=V1=GAUSSIAN
+
+# Get some basic definitions
+include Makefile.offline_analysis_rules
+
+#
+# Workflow
+#
+
+
+all : dag
+
+H1-SBANK_IMBH-0-1.xml.gz: 
+	lalapps_cbc_sbank --aligned-spin --approximant=IMRPhenomB --mass1-min 4 --mass1-max 200 --mtotal-min 40 --mtotal-max 400 --mratio-min 1 --mratio-max 10 --spin1-min 0 --spin1-max 0 --spin2-min 0 --spin2-max 0 --noise-model aLIGOZeroDetHighPower --flow 20 --instrument H1 --gps-start-time 0 --gps-end-time 1 --verbose --match-min 0.99 --user-tag IMBH
+
+%_split_bank.cache : H1-SBANK_IMBH-0-1.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --bank-program lalapps_cbc_sbank --output-path $*_split_bank --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+plots :
+	mkdir plots
+
+$(WEBDIR) : 
+	mkdir $(WEBDIR)
+
+tisi.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+	ligolw_add --output $@ tisi0.xml tisi1.xml
+
+dag : segments.xml frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS)
+
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+
+V1_frame.cache:
+	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+
+%_frame.cache:
+	#FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	ligo_data_find -o $(OBS) -t $(LIGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+
+segments.xml: $(SEGMENTS_FILES) frame.cache
+	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
+	gstlal_cache_to_segments frame.cache nogaps.xml
+	gstlal_segments_operations --segment-file1 segdb.xml --segment-file2 nogaps.xml --intersection --output-file $@
+	-rm -vf nogaps.xml segdb.xml
+	gstlal_segments_trim --trim 8 --min-length 512 --output $@ $@
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots $(WEBDIR) *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rvf *split_bank*
