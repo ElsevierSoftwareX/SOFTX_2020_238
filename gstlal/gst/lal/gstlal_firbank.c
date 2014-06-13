@@ -490,7 +490,7 @@ static void free_workspace(GSTLALFIRBank *element)
 
 
 /*
- * transform input samples to output samples using a frequency-domain
+ * transform input samples to output samples using a time-domain
  * algorithm.  output_length is the number of output samples to compute.  if
  * this is more than will fit in the output buffer, only as many as will fit in
  * the output buffer will be computed.  the return value is the actual number
