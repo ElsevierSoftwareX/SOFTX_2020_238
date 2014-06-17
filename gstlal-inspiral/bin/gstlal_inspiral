@@ -27,6 +27,7 @@
 #
 
 ## @file gstlal_inspiral
+# A program to analyze gravitational wave data for compact binary coalescence in real time or in an offline mode
 #
 # @dot
 # digraph llpipe {
