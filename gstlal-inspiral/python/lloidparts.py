@@ -103,33 +103,6 @@ from pylal.datatypes import LIGOTimeGPS
 #
 # =============================================================================
 #
-#                              Pipeline Metadata
-#
-# =============================================================================
-#
-
-
-class DetectorData(object):
-	"""!
-	A class to store a cache file, channel name and the characteristic
-	block size (in bytes) of h(t) data to read.
-
-	FIXME: move to IIR module
-	"""
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
-		"""!
-		@param frame_cache A cache file containing the frames to find the h(t) data for this detector
-		@param channel A string to store the channel name
-		@param block_size The block size of data to read in bytes.
-		"""
-		self.frame_cache = frame_cache
-		self.channel = channel
-		self.block_size = block_size
-
-
-#
-# =============================================================================
-#
 #                              Pipeline Elements
 #
 # =============================================================================
