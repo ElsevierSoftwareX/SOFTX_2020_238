@@ -23,8 +23,12 @@ from urlparse import urlparse
 from multiprocessing import Pool
 import time
 
-#FIXME use cgi url parsing, or optparse
-# usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop poolnum
+## @file
+# A program to get urls from running gstlal inspiral jobs
+#
+# ### Usage:
+# gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop poolnum
+#
 # Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153 10
 
 directory = sys.argv[1]
