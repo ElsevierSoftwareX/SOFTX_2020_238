@@ -16,6 +16,10 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# A legacy program to make spin aligned banks from an existing non spinning bank; DO NOT USE; instead consider lalapp_cbc_sbank or pycbc_geom_aligned_bank
+
+
 import os
 import sys
 import numpy
