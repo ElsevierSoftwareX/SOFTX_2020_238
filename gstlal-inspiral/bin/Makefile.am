@@ -2,7 +2,6 @@ dist_bin_SCRIPTS = \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_compute_far_from_snr_chisq_histograms \
-	gstlal_h1h2_coh_frames \
 	gstlal_iir_bank \
 	gstlal_iir_inspiral \
 	gstlal_iir_ll_inspiral \
