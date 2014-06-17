@@ -1,43 +1,67 @@
-digraph G {
+digraph triggers {
 	node [shape=box, style=filled];
-	"H1_frame.cache" [color=red1];
-	"L1_frame.cache" [color=green1];
-	"V1_frame.cache" [color=magenta1];
-	"frame.cache";
+	subgraph cluster_ligo_data_find_0 {
+	label = "ligo_data_find jobs"
+	"H1_frame.cache" [color=red1, label="Detectors: H1"];
+	"L1_frame.cache" [color=green1, label="Detectors: L1"];
+	"V1_frame.cache" [color=magenta1, label="Detectors: V1"];
+	}
+
+	subgraph cluster_frame_cache_0 {
+		"frame.cache" [color=grey, label="cat"];
+	}
 	
 	"H1_frame.cache" -> "frame.cache";
 	"L1_frame.cache" -> "frame.cache";
 	"V1_frame.cache" -> "frame.cache";
 
-	"H1_segments_padded.xml" [color=red1];
-	"L1_segments_padded.xml" [color=green1];
-	"V1_segments_padded.xml" [color=magenta1];
-	"segments.xml";
+	subgraph cluster_segmentspadded_0 {
+	"H1_segmentspadded.xml" [color=red1];
+	"L1_segmentspadded.xml" [color=green1];
+	"V1_segmentspadded.xml" [color=magenta1];
+	}
 
-	"H1_segments_padded.xml" -> "segments.xml";
-	"L1_segments_padded.xml" -> "segments.xml";
-	"V1_segments_padded.xml" -> "segments.xml";
+	subgraph cluster_gstlal_segments_operations_0 {
+	"segments.xml" [color=grey, label="gstlal_segments_operations", URL="\ref gstlal_segments_operations"];
+	}
+
+	"H1_segmentspadded.xml" -> "segments.xml";
+	"L1_segmentspadded.xml" -> "segments.xml";
+	"V1_segmentspadded.xml" -> "segments.xml";
 
 	"frame.cache" -> "segments.xml";	
 
+	subgraph cluster_lalapps_tmplbank_0 {
 	"H1-TMPLTBANK-966393725-2048.xml" [color=red1, label="lalapps_tmpltbank"];
+	}
 
-	"frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
+	"H1_frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
+
+	subgraph cluster_gstlal_bank_splitter_0 {
+	label = "gstlal_bank_splitter jobs"
+	"H1_split_bank.cache" [color=red1, label="Detectors: H1"];
+	"L1_split_bank.cache" [color=green1, label="Detectors: L1"];
+	"V1_split_bank.cache" [color=magenta1, label="Detectors: V1"];
+	}
+	"H1-TMPLTBANK-966393725-2048.xml" -> "H1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "L1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "V1_split_bank.cache";
+
+	subgraph cluster_mkdir_0 {
+	plots [color=grey, label="mkdir"];
+	}
+
+	subgraph cluster_gstlal_injections_by_local_rate_0 {
+	"1_injections.xml" [color=grey, label="gstlal_injections_by_local_rate", URL="\ref gstlal_injections_by_local_rate"];
+	}
 	
-	"h1_split_bank.cache" [color=red1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
-	"l1_split_bank.cache" [color=green1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
-	"v1_split_bank.cache" [color=magenta1, label="gstlal_bank_splitter", URL="\ref gstlal_bank_splitter"];
+	subgraph cluster_tixi_0 {
+	"tisi.xml" [color=grey, label="ligolw_tisi"];
+	}
 
-	"h1-tmpltbank-966393725-2048.xml" -> "h1_split_bank.cache";
-	"h1-tmpltbank-966393725-2048.xml" -> "l1_split_bank.cache";
-	"h1-tmpltbank-966393725-2048.xml" -> "v1_split_bank.cache";
+	dag [color=grey, shape=doubleoctagon];
 
-	plots;
-	"1_injections.xml";
-	"tisi.xml";
-
-	dag [shape=doubleoctagon];
-
+	"frame.cache" -> dag;
 	"H1_split_bank.cache" -> dag;
 	"L1_split_bank.cache" -> dag;
 	"V1_split_bank.cache" -> dag;
