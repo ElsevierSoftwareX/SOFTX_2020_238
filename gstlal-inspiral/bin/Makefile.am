@@ -4,7 +4,6 @@ dist_bin_SCRIPTS = \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_iir_bank \
 	gstlal_iir_inspiral \
-	gstlal_iir_ll_inspiral \
 	gstlal_inspiral \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
@@ -18,7 +17,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_pipe \
 	gstlal_inspiral_plot_background \
-	gstlal_inspiral_plot_efficiency \
 	gstlal_inspiral_plot_likelihoods \
 	gstlal_inspiral_plot_log_state_at_gps_time \
 	gstlal_inspiral_plot_sensitivity \
