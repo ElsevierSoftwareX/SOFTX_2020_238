@@ -16,6 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
+## @file
+# A program to extract the loudest coincs from an offline gstlal_inspiral DAG database into single files that can be uploaded to gracedb
+
 from glue.ligolw import ligolw, lsctables, utils, dbtables
 import sqlite3
 import sys
