@@ -48,6 +48,13 @@ import numpy
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
 
+## @file
+# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+#
+# @dotfile trigger_pipe
+# 
+
+
 
 #
 # Utility functions
