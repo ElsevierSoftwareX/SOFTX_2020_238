@@ -18,6 +18,14 @@
 
 ## @file
 # Compute FAR and FAP distributions from the likelihood CCDFs.
+#
+# ### Command line interface
+#
+#	+ `--background-bins-file` [filename]: Set the name of the xml file containing the marginalized likelihood (required).
+#	+ `--tmp-space` [dir]: Set the name of the tmp space if working with sqlite.
+#	+ `--non-injection-db` [filename]: Provide the name of a database from a non-injection run.  Can be given multiple times (default = []).
+#	+ `--injection-db` [filename]: Provide the name of a database from an injection run.  Can be given multiple times.  Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense (default = []).
+#	+ `--verbose`: Be verbose.
 
 #
 # =============================================================================
