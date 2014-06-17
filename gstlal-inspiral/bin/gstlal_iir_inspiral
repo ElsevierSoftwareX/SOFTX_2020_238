@@ -18,6 +18,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """Stream-based inspiral analysis tool use IIR filters"""
 
+## @file
+# A version of gstlal_inspiral that uses IIR filter banks
 
 #
 # =============================================================================
