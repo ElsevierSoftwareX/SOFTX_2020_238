@@ -17,8 +17,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_pipe \
 	gstlal_inspiral_plot_background \
-	gstlal_inspiral_plot_likelihoods \
-	gstlal_inspiral_plot_log_state_at_gps_time \
 	gstlal_inspiral_plot_sensitivity \
 	gstlal_inspiral_plotsummary \
 	gstlal_inspiral_plot_svd_bank \
