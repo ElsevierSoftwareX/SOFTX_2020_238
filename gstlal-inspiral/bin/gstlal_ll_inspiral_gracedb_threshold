@@ -34,10 +34,8 @@ import os
 import sys
 import urllib
 
-# @file gstlal_ll_inspiral_gracedb_threshold
+## @file
 # This program queries running gstlal_inspiral jobs and displays or updates the gracedb FAR threshold; See gstlal_ll_inspiral_gracedb_threshold for more details
-
-# @namespace gstlal_ll_inspiral_gracedb_threshold
 
 #
 # =============================================================================
