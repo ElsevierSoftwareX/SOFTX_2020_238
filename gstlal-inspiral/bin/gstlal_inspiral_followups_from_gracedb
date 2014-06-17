@@ -16,6 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
+
 import sys, os
 from pylal import rate
 os.environ["MPLCONFIGDIR"] = "/tmp"
