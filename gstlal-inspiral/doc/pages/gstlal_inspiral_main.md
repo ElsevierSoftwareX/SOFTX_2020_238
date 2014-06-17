@@ -12,13 +12,12 @@
 
 - \ref gstlalinspirallowlatencysearchpage
 - \ref gstlalinspiralofflinesearchpage
-- Offline searches
 
 ### References
 
 - <a href=@gstlaldoc> gstlal documentation</a>
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
-- \ref gstlalmeetings
+- \ref gstlalmeetingspage
 - SVD for CBC: http://arxiv.org/abs/1005.0012
 - SVD composite detection statistic: http://arxiv.org/abs/1101.0584
 - Full filtering paradigm: http://arxiv.org/abs/1107.2665
