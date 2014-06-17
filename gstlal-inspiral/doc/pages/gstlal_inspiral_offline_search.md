@@ -16,19 +16,29 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
 
 		$ mkdir /home/channa/test
 
-- Get two makefiles to set up the analysis dag.  One defines standard rules that should not need to be modified, the other is use-case specific.  The examples 
+\section makefiles Get example makefiles tailored to your application
+
+- Get two makefiles to set up the analysis dag.  This example is for BNS analysis in early ALIGO.  One defines standard rules that should not need to be modified by the user, the other is use-case specific.  The examples 
 
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.offline_analysis_rules>Makefile.offline_analysis_rules</a>
  
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.triggers_example>Makefile.triggers_example</a>
 
-will need to be modified to your situation.
+will need to be modified to your situation and there are comments in the files for further documentation.
 
-The makefile will execute the following workflow that culminates in an HTCondor DAG
+\section making Making the workflow
+
+To make the workflow you need to run "make", e.g.,
+
+		$ make -f Makefile.triggers_example
+
+The makefile will execute the following graph that culminates in an HTCondor DAG
 
 @dotfile Makefile_offline_triggers.dot
 
-To see the HTCondor DAG please see the documenation for gstlal_inspiral_pipe
+To see the HTCondor DAG please see the documenation for \ref gstlal_inspiral_pipe
+
+\section submittion Submitting the HTCondor workflow
 
 The DAG can be submitted via:
 
