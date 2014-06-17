@@ -16,6 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
+
 """
 This program makes a dag for a gstlal inspiral low latency pipeline
 """
@@ -42,11 +45,7 @@ from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
 
-## @file gstlal_ll_trigger_pipe
-# This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
-
-## @package gstlal_ll_trigger_pipe
-#
+##
 # ### Graph of the HTCondor DAG
 #
 # - gray boxes are optional and depend on the command line given
