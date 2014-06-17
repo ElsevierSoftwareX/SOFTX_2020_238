@@ -16,6 +16,45 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file gstlal_inspiral_pipe
+# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+#
+# ### Usage:
+# It is rare that you would invoke this program in a standalone mode. Usually the inputs are complicated and best automated via a Makefile, e.g., Makefile.triggers_example
+#
+# ### Command line options
+#
+# See datasource.append_options() for generic options
+#
+#	+ `--psd-fft-length` [int] (s): FFT length, default 16s.
+#	+ `--reference-psd: Don't measure PSDs, use this one instead
+#	+ `--overlap [int]: Set the factor that describes the overlap of the sub banks, must be even!
+#	+ `--autocorrelation-length [int]: The minimum number of samples to use for auto-chisquared, default 201 should be odd
+#	+ `--samples-min [int]: The minimum number of samples to use for time slices default 1024
+#	+ `--samples-max-256 [int]: The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024
+#	+ `--samples-max-64 [int]: The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048
+#	+ `--samples-max [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
+#	+ `--bank-cache [file names]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..
+#	+ `--tolerance [float]: set the SVD tolerance, default 0.9999
+#	+ `--flow [float]: set the low frequency cutoff, default 40 (Hz)
+#	+ `--identity-transform: Use identity transform, i.e. no SVD
+#	+ `--vetoes [filename]: Set the veto xml file.
+#	+ `--time-slide-file [filename]: Set the time slide table xml file
+#	+ `--web-dir [filename]: Set the web directory like /home/USER/public_html
+#	+ `--fir-stride [int] (s): Set the duration of the fft output blocks, default 8
+#	+ `--control-peak-time [int] (s): Set the peak finding time for the control signal, default 8
+#	+ `--coincidence-threshold [int] (s): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--num-banks [str]: The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.
+#	+ `--max-inspiral-jobs [int]: Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.
+#	+ `--ht-gate-threshold [float]: set a threshold on whitened h(t) to veto glitches
+#	+ `--inspiral-executable [str]: Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
+#	+ `--blind-injections [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
+#	+ `--verbose: Be verbose
+#
+# ### Diagram of the HTCondor workfow produced
+# @dotfile trigger_pipe.dot
+# 
+
 """
 This program makes a dag to run gstlal_inspiral offline
 """
@@ -47,13 +86,6 @@ from pylal import series as lalseries
 import numpy
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
-
-## @file
-# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
-#
-# @dotfile trigger_pipe
-# 
-
 
 
 #
@@ -498,7 +530,7 @@ def parse_command_line():
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
+	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
