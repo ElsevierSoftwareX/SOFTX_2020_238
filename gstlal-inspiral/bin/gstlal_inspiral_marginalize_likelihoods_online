@@ -20,8 +20,7 @@
 #
 # This program runs gstlal_inspiral_marginalize_likelihood in a while True
 # loop; See gstlal_inspiral_marginalize_likelihoods_online for more details
-
-## @package gstlal_inspiral_marginalize_likelihoods_online
+#
 #
 # This program is not meant to be executed standalone by a user. It should be
 # part of a DAG managing a running gstlal_inspiral online analysis.
