@@ -1,0 +1,515 @@
+digraph flow {
+	node [shape=box, style=filled];
+	ranksep="3.0 equally";
+	splines = line;
+	ordering = out;
+	
+
+	subgraph cluster_0 {
+		//style=invis
+		label = "gstlal_reference_psd jobs";
+				
+		"gstlal_reference_psd_1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1</td> </tr> <tr> <td> GPS Segments: 1 </td> </tr> </table>>];	
+
+		"gstlal_reference_psd_2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 2 </td> </tr> </table>>];	
+
+		"gstlal_reference_psd_N" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: ...N </td> </tr> </table>>];	
+
+
+
+
+		{rank = same; "gstlal_reference_psd_1" -> "gstlal_reference_psd_2" -> "gstlal_reference_psd_N" [style=invis];}
+		//gstlal_reference_psd_2 -> gstlal_reference_psd_N [style="dotted",arrowhead="none"];rankdir=LR; }
+	
+		
+
+		//"gstlal_reference_psd_2" -> "gstlal_reference_psd_N" [style="dotted", arrowhead="none"];	
+
+	}
+
+	subgraph cluster_1 {
+		//style=invis
+		
+		"gstlal_median_of_psds" [color=grey, label=<<table> <tr> <td> H1,L1,V1 gstlal_median_of_psds </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> </table>>, constraint=false];
+
+		"gstlal_plot_psd_horizons" [color=grey, label=<<table> <tr> <td> H1,L1,V1 gstlal_plot_psd_horizons </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> </table>>, constraint=false];
+
+		{rank = same; "gstlal_median_of_psds" -> "gstlal_plot_psd_horizons";}
+	}
+	"gstlal_reference_psd_1" -> "gstlal_median_of_psds";
+	"gstlal_reference_psd_2" -> "gstlal_median_of_psds";
+	"gstlal_reference_psd_N" -> "gstlal_median_of_psds";
+
+
+//                "H1 gstlal_svd_bank 1" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>, constraint=false];
+//                "L1 gstlal_svd_bank 1" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>, constraint=false];
+//                "V1 gstlal_svd_bank 1" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>, constraint=false];
+
+//                "H1 gstlal_svd_bank 2" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>, constraint=false];
+//                "L1 gstlal_svd_bank 2" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>, constraint=false];
+//                "V1 gstlal_svd_bank 2" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>, constraint=false];
+
+//                "H1 gstlal_svd_bank M" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>, constraint=false];
+//                "L1 gstlal_svd_bank M" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>, constraint=false];
+//                "V1 gstlal_svd_bank M" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>, constraint=false];
+
+
+
+	subgraph cluster_2 {
+		//style=invis
+		label="gstlal_svd_bank jobs";
+		//rank=same;
+
+		"H1 gstlal_svd_bank 1" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+		"L1 gstlal_svd_bank 1" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+		"V1 gstlal_svd_bank 1" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+
+		"H1 gstlal_svd_bank 2" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+		"L1 gstlal_svd_bank 2" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+		"V1 gstlal_svd_bank 2" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+
+		"H1 gstlal_svd_bank M" [color=red1, label=<<table> <tr> <td> Detectors: H1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>];
+		"L1 gstlal_svd_bank M" [color=green1, label=<<table> <tr> <td> Detectors: L1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>];
+		"V1 gstlal_svd_bank M" [color=magenta1, label=<<table> <tr> <td> Detectors: V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: M </td> </tr> </table>>];
+		
+		{rank=same; "H1 gstlal_svd_bank 1" -> "L1 gstlal_svd_bank 1" -> "V1 gstlal_svd_bank 1" -> "H1 gstlal_svd_bank 2" -> "L1 gstlal_svd_bank 2" -> "V1 gstlal_svd_bank 2" -> "H1 gstlal_svd_bank M" -> "L1 gstlal_svd_bank M" -> "V1 gstlal_svd_bank M" [style=invis];}
+//		"H1 gstlal_svd_bank 1" -> "L1 gstlal_svd_bank 1" -> "V1 gstlal_svd_bank 1" -> "H1 gstlal_svd_bank 2" -> "L1 gstlal_svd_bank 2" -> "V1 gstlal_svd_bank 2" -> "H1 gstlal_svd_bank M" -> "L1 gstlal_svd_bank M" -> "V1 gstlal_svd_bank M" [style=invis,rank=same];
+
+}
+
+	//{rank=same; "H1 gstlal_svd_bank 1" -> "L1 gstlal_svd_bank 1" -> "V1 gstlal_svd_bank 1" -> "H1 gstlal_svd_bank 2" -> "L1 gstlal_svd_bank 2" -> "V1 gstlal_svd_bank 2" -> "H1 gstlal_svd_bank M" -> "L1 gstlal_svd_bank M" -> "V1 gstlal_svd_bank M" [style=invis];}
+
+
+ 
+	"gstlal_median_of_psds" -> "H1 gstlal_svd_bank 1";
+	"gstlal_median_of_psds" -> "L1 gstlal_svd_bank 1";
+	"gstlal_median_of_psds" -> "V1 gstlal_svd_bank 1";
+
+	"gstlal_median_of_psds" -> "H1 gstlal_svd_bank 2";
+	"gstlal_median_of_psds" -> "L1 gstlal_svd_bank 2";
+	"gstlal_median_of_psds" -> "V1 gstlal_svd_bank 2";
+
+	"gstlal_median_of_psds" -> "H1 gstlal_svd_bank M";
+	"gstlal_median_of_psds" -> "L1 gstlal_svd_bank M";
+	"gstlal_median_of_psds" -> "V1 gstlal_svd_bank M";
+
+//	{rank = same;
+//	rankdir="LR";
+//	"H1 gstlal_svd_bank 1" -> "L1 gstlal_svd_bank 1" [style=invis, constraint = false, ordering = out];
+//	"L1 gstlal_svd_bank 1" -> "V1 gstlal_svd_bank 1" [style=invis, constraint = false, ordering = out];
+//	"V1 gstlal_svd_bank 1" -> "H1 gstlal_svd_bank 2" [style=invis, constraint = false, ordering = out];
+//	"H1 gstlal_svd_bank 2" -> "L1 gstlal_svd_bank 2" [style=invis, constraint = false, ordering = out, weight = 5];
+//	"L1 gstlal_svd_bank 2" -> "V1 gstlal_svd_bank 2" [style=invis, constraint = false, ordering = out];
+//	"V1 gstlal_svd_bank 2" -> "H1 gstlal_svd_bank M" [style=invis, constraint = false, ordering = out];
+//	"H1 gstlal_svd_bank M" -> "L1 gstlal_svd_bank M" [style=invis, constraint = false, ordering = out];
+//	"L1 gstlal_svd_bank M" -> "V1 gstlal_svd_bank M" [style=invis, constraint = false, ordering = out];
+//	}
+	
+
+
+	subgraph cluster_3 {
+		//style=invis
+		label="gstlal_inspiral jobs";
+
+		"gstlal_inspiral 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1 </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+		"gstlal_inspiral 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 2 </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+		"gstlal_inspiral N" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: ...N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	
+	{rank=same; "gstlal_inspiral 1" -> "gstlal_inspiral 2" -> "gstlal_inspiral N" [style=invis];}
+
+	}
+
+	//"gstlal_inspiral 2" -> "gstlal_inspiral N" [style="dotted", arrowhead="none"];
+
+	"H1 gstlal_svd_bank 1" -> "gstlal_inspiral 1";
+	"L1 gstlal_svd_bank 1" -> "gstlal_inspiral 1";
+	"V1 gstlal_svd_bank 1" -> "gstlal_inspiral 1";
+
+	"H1 gstlal_svd_bank 2" -> "gstlal_inspiral 1";
+	"L1 gstlal_svd_bank 2" -> "gstlal_inspiral 1";
+	"V1 gstlal_svd_bank 2" -> "gstlal_inspiral 1";
+
+	"H1 gstlal_svd_bank M" -> "gstlal_inspiral 1";
+	"L1 gstlal_svd_bank M" -> "gstlal_inspiral 1";
+	"V1 gstlal_svd_bank M" -> "gstlal_inspiral 1";
+
+	"H1 gstlal_svd_bank 1" -> "gstlal_inspiral 2";
+	"L1 gstlal_svd_bank 1" -> "gstlal_inspiral 2";
+	"V1 gstlal_svd_bank 1" -> "gstlal_inspiral 2";
+
+	"H1 gstlal_svd_bank 2" -> "gstlal_inspiral 2";
+	"L1 gstlal_svd_bank 2" -> "gstlal_inspiral 2";
+	"V1 gstlal_svd_bank 2" -> "gstlal_inspiral 2";
+
+	"H1 gstlal_svd_bank M" -> "gstlal_inspiral 2";
+	"L1 gstlal_svd_bank M" -> "gstlal_inspiral 2";
+	"V1 gstlal_svd_bank M" -> "gstlal_inspiral 2";
+
+	"H1 gstlal_svd_bank 1" -> "gstlal_inspiral N";
+	"L1 gstlal_svd_bank 1" -> "gstlal_inspiral N";
+	"V1 gstlal_svd_bank 1" -> "gstlal_inspiral N";
+
+	"H1 gstlal_svd_bank 2" -> "gstlal_inspiral N";
+	"L1 gstlal_svd_bank 2" -> "gstlal_inspiral N";
+	"V1 gstlal_svd_bank 2" -> "gstlal_inspiral N";
+
+	"H1 gstlal_svd_bank M" -> "gstlal_inspiral N";
+	"L1 gstlal_svd_bank M" -> "gstlal_inspiral N";
+	"V1 gstlal_svd_bank M" -> "gstlal_inspiral N";
+
+	//{rank=same; "gstlal_inspiral 1" -> "gstlal_inspiral 2" -> "gstlal_inspiral N" [style=invis];}
+
+
+        subgraph cluster_4 {
+                label="gstlal_inspiral_calc_likelihood jobs";
+
+                "gstlal_inspiral_calc_likelihood 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+                "gstlal_inspiral_calc_likelihood 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+                "gstlal_inspiral_calc_likelihood M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+	//	"gstlal_inspiral_calc_likelihood 2" -> "gstlal_inspiral_calc_likelihood M" [style="dotted", arrowhead="none"];
+        }
+
+	"gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood 1";
+	"gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood 2";
+	"gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood M";
+
+	"gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood 1";
+	"gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood 2";
+	"gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood M";
+
+	"gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood 1";
+	"gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood 2";
+	"gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood M";
+
+	//{rank=same; "gstlal_inspiral_calc_likelihood 1" -> "gstlal_inspiral_calc_likelihood 2" -> "gstlal_inspiral_calc_likelihood M" [style=invis];}
+
+	subgraph cluster_5 {
+		label="gstlal_inspiral injection jobs";
+
+		"gstlal_inspiral injection 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1 </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+		"gstlal_inspiral injection 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 2 </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+		"gstlal_inspiral injection N" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: ...N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+        "H1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 1";
+        "L1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 1";
+        "V1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 1";
+
+        "H1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 1";
+        "L1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 1";
+        "V1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 1";
+
+        "H1 gstlal_svd_bank M" -> "gstlal_inspiral injection 1";
+        "L1 gstlal_svd_bank M" -> "gstlal_inspiral injection 1";
+        "V1 gstlal_svd_bank M" -> "gstlal_inspiral injection 1";
+
+        "H1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 2";
+        "L1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 2";
+        "V1 gstlal_svd_bank 1" -> "gstlal_inspiral injection 2";
+
+        "H1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 2";
+        "L1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 2";
+        "V1 gstlal_svd_bank 2" -> "gstlal_inspiral injection 2";
+
+        "H1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+        "L1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+        "V1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+
+        "H1 gstlal_svd_bank 1" -> "gstlal_inspiral injection N";
+        "L1 gstlal_svd_bank 1" -> "gstlal_inspiral injection N";
+        "V1 gstlal_svd_bank 1" -> "gstlal_inspiral injection N";
+
+        "H1 gstlal_svd_bank 2" -> "gstlal_inspiral injection N";
+        "L1 gstlal_svd_bank 2" -> "gstlal_inspiral injection N";
+        "V1 gstlal_svd_bank 2" -> "gstlal_inspiral injection N";
+
+        "H1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+        "L1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+        "V1 gstlal_svd_bank M" -> "gstlal_inspiral injection N";
+
+	//{rank = same; "gstlal_inspiral injection 1" -> "gstlal_inspiral injection 2" -> "gstlal_inspiral injection N" [style=invis];}
+
+	subgraph cluster_6 {
+                label="gstlal_inspiral_calc_likelihood injection jobs";
+
+                "gstlal_inspiral_calc_likelihood injection 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+                "gstlal_inspiral_calc_likelihood injection 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+                "gstlal_inspiral_calc_likelihood injection M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+          //      "gstlal_inspiral_calc_likelihood injection 2" -> "gstlal_inspiral_calc_likelihood injection M" [style="dotted", arrowhead="none"];
+        }
+
+        "gstlal_inspiral injection 1" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral injection 1" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral injection 1" -> "gstlal_inspiral_calc_likelihood injection M";
+
+        "gstlal_inspiral injection 2" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral injection 2" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral injection 2" -> "gstlal_inspiral_calc_likelihood injection M";
+
+        "gstlal_inspiral injection N" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral injection N" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral injection N" -> "gstlal_inspiral_calc_likelihood injection M";
+
+        "gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral 1" -> "gstlal_inspiral_calc_likelihood injection M";
+
+        "gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral 2" -> "gstlal_inspiral_calc_likelihood injection M";
+
+        "gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood injection 1";
+        "gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood injection 2";
+        "gstlal_inspiral N" -> "gstlal_inspiral_calc_likelihood injection M";
+
+	//{rank=same; "gstlal_inspiral 1", "gstlal_inspiral 2", "gstlal_inspiral N", "gstlal_inspiral injection 1", "gstlal_inspiral injection 2", "gstlal_inspiral injection N"}
+
+	//{rank=same; "gstlal_inspiral_calc_likelihood injection 1" -> "gstlal_inspiral_calc_likelihood injection 2" -> "gstlal_inspiral_calc_likelihood injection M" [style=invis];}
+
+	subgraph cluster_7 {
+		label="lalapps_run_sqlite (clustering) jobs"
+
+		"lalapps_run_sqlite clustering 1part1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+		"lalapps_run_sqlite clustering 1part2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+
+		"lalapps_run_sqlite clustering 2part1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+		"lalapps_run_sqlite clustering 2part2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+
+		"lalapps_run_sqlite clustering Mpart1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+		"lalapps_run_sqlite clustering Mpart2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+	//"lalapps_run_sqlite clustering 2part2" -> "lalapps_run_sqlite clustering Mpart1"  [style="dotted", arrowhead="none"];
+	}
+
+	"gstlal_inspiral_calc_likelihood 1" -> "lalapps_run_sqlite clustering 1part1";
+	"gstlal_inspiral_calc_likelihood 1" -> "lalapps_run_sqlite clustering 1part2";
+
+	"gstlal_inspiral_calc_likelihood 2" -> "lalapps_run_sqlite clustering 2part1";
+	"gstlal_inspiral_calc_likelihood 2" -> "lalapps_run_sqlite clustering 2part2";
+
+	"gstlal_inspiral_calc_likelihood M" -> "lalapps_run_sqlite clustering Mpart1";
+	"gstlal_inspiral_calc_likelihood M" -> "lalapps_run_sqlite clustering Mpart2";
+
+	subgraph cluster_8 {
+		label="lalapps_run_sqlite injections (clustering) jobs"
+
+		"lalapps_run_sqlite injection clustering 1part1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+		"lalapps_run_sqlite injection clustering 1part2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+
+		"lalapps_run_sqlite injection clustering 2part1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+		"lalapps_run_sqlite injection clustering 2part2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+
+		"lalapps_run_sqlite injection clustering Mpart1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,i </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+		"lalapps_run_sqlite injection clustering Mpart2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: i+1,i+2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+	//"lalapps_run_sqlite injection clustering 2part2" -> "lalapps_run_sqlite injection clustering Mpart1"  [style="dotted", arrowhead="none"];
+	}
+
+	"gstlal_inspiral_calc_likelihood injection 1" -> "lalapps_run_sqlite injection clustering 1part1";
+	"gstlal_inspiral_calc_likelihood injection 1" -> "lalapps_run_sqlite injection clustering 1part2";
+
+	"gstlal_inspiral_calc_likelihood injection 2" -> "lalapps_run_sqlite injection clustering 2part1";
+	"gstlal_inspiral_calc_likelihood injection 2" -> "lalapps_run_sqlite injection clustering 2part2";
+
+	"gstlal_inspiral_calc_likelihood injection M" -> "lalapps_run_sqlite injection clustering Mpart1";
+	"gstlal_inspiral_calc_likelihood injection M" -> "lalapps_run_sqlite injection clustering Mpart2";
+
+	subgraph cluster_9 {
+		label="ligolw_sqlite jobs (merge across time)"
+
+		"ligolw_sqlite 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+		"ligolw_sqlite 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+		"ligolw_sqlite M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+		//"ligolw_sqlite 2" -> "ligolw_sqlite M" [style="dotted", arrowhead="none"];
+	}
+
+	"lalapps_run_sqlite clustering 1part1" -> "ligolw_sqlite 1";
+	"lalapps_run_sqlite clustering 1part2" -> "ligolw_sqlite 1";
+
+	"lalapps_run_sqlite clustering 2part1" -> "ligolw_sqlite 2";
+	"lalapps_run_sqlite clustering 2part2" -> "ligolw_sqlite 2";
+
+	"lalapps_run_sqlite clustering Mpart1" -> "ligolw_sqlite M";
+	"lalapps_run_sqlite clustering Mpart2" -> "ligolw_sqlite M";
+
+
+	subgraph cluster_10 {
+                label="ligolw_sqlite injections jobs (merge across time)"
+
+                "ligolw_sqlite injection 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+                "ligolw_sqlite injection 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+                "ligolw_sqlite injection M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+                //"ligolw_sqlite injection 2" -> "ligolw_sqlite injection M" [style="dotted", arrowhead="none"];
+        }
+
+        "lalapps_run_sqlite injection clustering 1part1" -> "ligolw_sqlite injection 1";
+        "lalapps_run_sqlite injection clustering 1part2" -> "ligolw_sqlite injection 1";
+
+        "lalapps_run_sqlite injection clustering 2part1" -> "ligolw_sqlite injection 2";
+        "lalapps_run_sqlite injection clustering 2part2" -> "ligolw_sqlite injection 2";
+        
+        "lalapps_run_sqlite injection clustering Mpart1" -> "ligolw_sqlite injection M";
+        "lalapps_run_sqlite injection clustering Mpart2" -> "ligolw_sqlite injection M";
+
+	subgraph cluster_11 {
+		label="lalapps_run_sqlite (clustering) jobs"
+
+                "lalapps_run_sqlite clustering merged 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+
+                "lalapps_run_sqlite clustering merged 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+
+                "lalapps_run_sqlite clustering merged M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+        //"lalapps_run_sqlite clustering merged 2" -> "lalapps_run_sqlite clustering merged M"  [style="dotted", arrowhead="none"];
+        }
+
+	"ligolw_sqlite 1" -> "lalapps_run_sqlite clustering merged 1";
+	"ligolw_sqlite 2" -> "lalapps_run_sqlite clustering merged 2";
+	"ligolw_sqlite M" -> "lalapps_run_sqlite clustering merged M";
+
+        subgraph cluster_12 {
+                label="lalapps_run_sqlite injections (clustering) jobs"
+
+                "lalapps_run_sqlite injection clustering merged 1" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1 </td> </tr> </table>>];
+
+                "lalapps_run_sqlite injection clustering merged 2" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 2 </td> </tr> </table>>];
+
+                "lalapps_run_sqlite injection clustering merged M" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: ...M </td> </tr> </table>>];
+
+        //"lalapps_run_sqlite injection clustering merged 2" -> "lalapps_run_sqlite injection clustering merged M"  [style="dotted", arrowhead="none"];
+        }
+
+        "ligolw_sqlite injection 1" -> "lalapps_run_sqlite injection clustering merged 1";
+        "ligolw_sqlite injection 2" -> "lalapps_run_sqlite injection clustering merged 2";
+        "ligolw_sqlite injection M" -> "lalapps_run_sqlite injection clustering merged M";
+
+	subgraph cluster_13 {
+	label="ligolw_sqlite jobs (merge across Mchirp)"
+
+	"ligolw_sqlite merged" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"lalapps_run_sqlite clustering merged 1" -> "ligolw_sqlite merged";
+	"lalapps_run_sqlite clustering merged 2" -> "ligolw_sqlite merged";
+	"lalapps_run_sqlite clustering merged M" -> "ligolw_sqlite merged";
+
+        subgraph cluster_14 {
+        label="ligolw_sqlite injections jobs (merge across Mchirp)"
+        
+        "ligolw_sqlite injection merged" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+        }
+
+        "lalapps_run_sqlite injection clustering merged 1" -> "ligolw_sqlite injection merged";
+        "lalapps_run_sqlite injection clustering merged 2" -> "ligolw_sqlite injection merged";
+        "lalapps_run_sqlite injection clustering merged M" -> "ligolw_sqlite injection merged";
+
+	subgraph cluster_15 {
+	label="lalapps_runsqlite (clustering) jobs"
+
+	"lapps_run_sqlite clustering merged final" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+
+
+	}
+
+	"ligolw_sqlite merged" -> "lapps_run_sqlite clustering merged final";
+
+	subgraph cluster_16 {
+	label="lalapps_runsqlite injections (clustering) jobs"
+
+	"lapps_run_sqlite injection clustering merged final" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+
+
+	}
+
+	"ligolw_sqlite injection merged" -> "lapps_run_sqlite injection clustering merged final";
+
+	subgraph cluster_17 {
+		label="lalapps_run_sqlite injections jobs";
+
+		"lalapps_run_sqlite_cluster_17" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+	
+	"lapps_run_sqlite injection clustering merged final" -> "lalapps_run_sqlite_cluster_17";
+
+	subgraph cluster_18 {
+		label="ligolw_sqlite jobs (to XML)";
+
+		"ligolw_sqlite_cluster_17" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+
+	}
+
+	"lalapps_run_sqlite_cluster_17" -> "ligolw_sqlite_cluster_17";
+
+	subgraph cluster_19 {
+		label="ligolw_inspinjfind jobs"
+
+		"ligolw_inspinjfind" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"ligolw_sqlite_cluster_17" -> "ligolw_inspinjfind";
+
+	subgraph cluster_20 {
+		label="ligolw_sqlite jobs (to DB)"
+
+		"ligolw_sqlite_cluster_20" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"ligolw_inspinjfind" -> "ligolw_sqlite_cluster_20";
+
+	subgraph cluster_21 {
+		label="gstlal_inspiral_marginalize_likelihood jobs"
+	
+		"gstlal_inspiral_marginalize_likelihood" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}	
+
+	"gstlal_inspiral_calc_likelihood 1" -> "gstlal_inspiral_marginalize_likelihood";
+	"gstlal_inspiral_calc_likelihood 2" -> "gstlal_inspiral_marginalize_likelihood";
+	"gstlal_inspiral_calc_likelihood M" -> "gstlal_inspiral_marginalize_likelihood";
+
+	subgraph cluster_22 {
+		label="gstlal_compute_far_from_snr_chisq_histograms jobs"
+
+		"gstlal_compute_far_from_snr_chisq_histograms" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"gstlal_inspiral_marginalize_likelihood" -> "gstlal_compute_far_from_snr_chisq_histograms";
+	"ligolw_sqlite_cluster_20" -> "gstlal_compute_far_from_snr_chisq_histograms";	
+	"lapps_run_sqlite clustering merged final" -> "gstlal_compute_far_from_snr_chisq_histograms";
+
+	subgraph cluster_23 {
+		label="gstlal_inspiral_plotsummary jobs"
+
+		"gstlal_plotsummary" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"gstlal_compute_far_from_snr_chisq_histograms" -> "gstlal_plotsummary";
+
+	subgraph cluster_24 {
+		label="gstlal_inspiral_plot_sensitivity jobs"
+
+		"gstlal_plot_sensitivity" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"gstlal_plotsummary" -> "gstlal_plot_sensitivity";
+
+	subgraph cluster_25 {
+		label="gstlal_inspiral_plot_background jobs"
+
+		"gstlal_inspiral_plot_backgrounds" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}
+
+	"gstlal_plot_sensitivity" -> "gstlal_inspiral_plot_backgrounds";
+
+	subgraph cluster_26 {
+		label="gstlal_inspiral_summary_page jobs";
+
+		"gstlal_inspiral_summary_page" [color=grey, label=<<table> <tr> <td> Detectors: H1,L1,V1 </td> </tr> <tr> <td> GPS Segments: 1,2,...,N </td> </tr> <tr> <td> Mchirp Bins: 1,2,...,M </td> </tr> </table>>];
+	}	
+
+	"gstlal_inspiral_plot_backgrounds" -> "gstlal_inspiral_summary_page";
+
+}
