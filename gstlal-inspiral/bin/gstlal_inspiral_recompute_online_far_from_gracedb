@@ -1,4 +1,6 @@
 #!/bin/bash
+## @file
+# This program might be deprecated; do not use for now
 GID=$1
 mkdir ${GID}
 echo "Recomputing far with data from GPS " $(lalapps_tconvert)
