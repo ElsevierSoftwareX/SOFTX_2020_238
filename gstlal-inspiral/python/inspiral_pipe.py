@@ -17,7 +17,7 @@
 ## 
 # @file
 #
-# A file that contains the datasource module code
+# A file that contains the inspiral_pipe module code; used to construct condor dags
 #
 
 ##
@@ -26,7 +26,7 @@
 # inspiral_pipe module
 
 import sys, os
-import subprocess, socket, tempfile, copy
+import subprocess, socket, tempfile, copy, doctest
 from glue import pipeline, lal
 from glue.ligolw import utils, lsctables, array
 
@@ -38,7 +38,11 @@ from glue.ligolw import utils, lsctables, array
 
 def which(prog):
 	"""!
-	like the which program to find the path to an executable
+	Like the which program to find the path to an executable
+
+	>>> which("ls")
+	'/bin/ls'
+
 	"""
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
 	out = which.stdout.read().strip()
@@ -51,6 +55,8 @@ def which(prog):
 def condor_scratch_space():
 	"""!
 	A way to standardize the condor scratch space even if it changes
+	>>> condor_scratch_space()
+	'_CONDOR_SCRATCH_DIR'
 	"""
 	return "_CONDOR_SCRATCH_DIR"
 
@@ -95,7 +101,7 @@ class DAG(pipeline.CondorDAG):
 	"""!
 	A thin subclass of pipeline.CondorDAG.
 
-	Extra features include and add_node method and a cache writing method.
+	Extra features include an add_node() method and a cache writing method.
 	Also includes some standard setup, e.g., log file paths etc.
 	"""
 	def __init__(self, name, logpath = log_path()):
@@ -108,13 +114,10 @@ class DAG(pipeline.CondorDAG):
 		pipeline.CondorDAG.__init__(self,logfile)
 		self.set_dag_file(self.basename)
 		self.jobsDict = {}
-		self.node_id = 0
 		self.output_cache = []
 
 	def add_node(self, node):
 		node.set_retry(0)
-		self.node_id += 1
-		node.add_macro("macroid", self.node_id)
 		node.add_macro("macronodename", node.get_name())
 		pipeline.CondorDAG.add_node(self, node)
 
@@ -214,7 +217,7 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 	A way to work around the dictionary nature of pipeline.py which can
 	only record options once.
 
-	>>> inspiral_pipe.pipeline_dot_py_append_opts_hack("my-favorite-option", [1,2,3])
+	>>> pipeline_dot_py_append_opts_hack("my-favorite-option", [1,2,3])
 	'1 --my-favorite-option 2 --my-favorite-option 3'
 	"""	
 	out = str(vals[0])
@@ -259,7 +262,7 @@ def parse_cache_str(instr):
 	A way to decode a command line option that specifies different bank
 	caches for different detectors, e.g.,
 
-	>>> bankcache = inspiral_pipe.parse_cache_str("H1=H1_split_bank.cache,L1=L1_split_bank.cache,V1=V1_split_bank.cache")
+	>>> bankcache = parse_cache_str("H1=H1_split_bank.cache,L1=L1_split_bank.cache,V1=V1_split_bank.cache")
 	>>> bankcache
 	{'V1': 'V1_split_bank.cache', 'H1': 'H1_split_bank.cache', 'L1': 'L1_split_bank.cache'}
 	"""
@@ -304,3 +307,8 @@ def T050017_filename(instruments, description, start, end, extension, path = Non
 		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
 	else:
 		return '%s-%s-%d-%d.%s' % (instruments, description, start, duration, extension)
+
+
+if __name__ == "__main__":
+	import doctest
+	doctest.testmod()
