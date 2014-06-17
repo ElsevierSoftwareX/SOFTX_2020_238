@@ -16,6 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# A program to compute the noise probability distributions of likehood ratios for inspiral triggers
 
 #
 # =============================================================================
@@ -108,7 +110,7 @@ if options.verbose:
 	print >>sys.stderr, "retrieving horizon distances ..."
 
 horizon_distances = {}
-for row in lsctables.SummValueTable.get_table(ligolw_add.ligolw_add(ligolw.Document(), options.horizon_history_url, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)):
+for row in lsctables.SummValueTable.get_table(ligolw_add.ligolw_add(ligolw.Document(), options.horizon_history_url, non_lsc_tables_ok = True, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)):
 	if not row.name.startswith("Dh:"):
 		continue
 	# FIXME:  check that these are what we expect?
