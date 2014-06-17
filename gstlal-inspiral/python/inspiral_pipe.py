@@ -21,9 +21,9 @@
 #
 
 ##
-# @package python.inspiral_pipe
+# @package inspiral_pipe
 #
-# inspiral_pipe module
+# A module that contains the inspiral_pipe module code; used to construct condor dags
 
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
