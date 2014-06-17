@@ -39,7 +39,9 @@ from gstlal import dagparts
 from gstlal import datasource
 
 ## @file gstlal_ll_trigger_pipe
-# This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
+# This program is deprecated and being transitioned to gstlal_ll_inspiral_pipe
+#
+#This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
 
 ## @package gstlal_ll_trigger_pipe
 #
