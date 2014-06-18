@@ -15,7 +15,16 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
+#
+## @file gstlal_inspiral_create_prior_diststats
+#
+# ### Command line interface
+#	+ `--verbose`: Be verbose.
+#	+ `--synthesize-injection-count` [N] (int): Synthesize an injection distribution with N injections (default is 1000000).
+#	+ `--write-likelihood` [filename]: Write merged raw likelihood data to this file.
+#	+ `--instrument`: Append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze.
+#	+ `--trials-far-thresh` (float): Set the far threshold for the thresh parameter in the trials table.
+#	+ `--background-prior` [N] (float): Include an exponential background prior with the maximum bin count = N (default is 1).
 
 #
 # =============================================================================
