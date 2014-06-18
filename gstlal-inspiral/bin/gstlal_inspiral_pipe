@@ -592,12 +592,12 @@ if options.max_inspiral_jobs is not None:
 #
 
 refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd')
-refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_cpus":"2", "+RequiresMultipleCores":"True"})
+refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":2048, "request_cpus":"2", "+RequiresMultipleCores":"True"})
 medianPSDJob = inspiral_pipe.generic_job('gstlal_median_of_psds')
 svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
-gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_cpus":"6", "+RequiresMultipleCores":"True"})
-gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_cpus":"6", "+RequiresMultipleCores":"True"})
+gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":16384, "request_cpus":"8", "+RequiresMultipleCores":"True"})
+gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":16384, "request_cpus":"6", "+RequiresMultipleCores":"True"})
 calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood")
 calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj')
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms")
