@@ -30,12 +30,6 @@
 G_BEGIN_DECLS
 
 
-/**
- * Custom GstCollectData structure with extra metadata required for
- * synchronous mixing of input streams.
- */
-
-
 typedef struct _GstLALCollectData {
 	/*
 	 * parent structure first so we can be cast to it
@@ -63,16 +57,16 @@ typedef struct _GstLALCollectData {
  */
 
 
-GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *, GstPad *, guint);
-GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *, GstPad *, guint, GstCollectDataDestroyNotify);
-gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
-void gstlal_collect_pads_set_unit_size(GstPad *, guint);
-guint gstlal_collect_pads_get_unit_size(GstPad *);
-void gstlal_collect_pads_set_rate(GstPad *, gint);
-gint gstlal_collect_pads_get_rate(GstPad *);
+GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size);
+GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify);
+gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad);
+void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size);
+guint gstlal_collect_pads_get_unit_size(GstPad *pad);
+void gstlal_collect_pads_set_rate(GstPad *pad, gint rate);
+gint gstlal_collect_pads_get_rate(GstPad *pad);
 GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads);
-gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *, GstClockTime *, GstClockTime *);
-GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *, GstLALCollectData *, GstClockTime);
+gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTime *t_start, GstClockTime *t_end);
+GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALCollectData *data, GstClockTime t_end);
 
 
 G_END_DECLS

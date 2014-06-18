@@ -20,6 +20,14 @@
  */
 
 
+/**
+ * SECTION:gstlalcollectpads
+ *
+ * Custom GstCollectData structure with extra metadata required for
+ * synchronous mixing of input streams.
+ */
+
+
 /*
  * ============================================================================
  *
@@ -48,9 +56,16 @@
 
 
 /**
- * Wraps gst_collect_pads_add_pad(), initializing the additional fields in
- * the custom GstLALCollectData object and installing a custom event
- * handler.
+ * gstlal_collect_pads_add_pad_full:
+ * @pads:  passed to #gst_collect_pads_add_pad()
+ * @pad:  passed to #gst_collect_pads_add_pad()
+ * @size:  passed to #gst_collect_pads_add_pad()
+ * @destroy_notify:  passed to#gst_collect_pads_add_pad()
+ *
+ * Wraps #gst_collect_pads_add_pad(), initializing the additional fields in
+ * the custom #GstLALCollectData object.
+ *
+ * Returns:  #GstLALCollectData associated with the #GstPad.
  */
 
 
@@ -83,6 +98,18 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 }
 
 
+/**
+ * gstlal_collect_pads_add_pad:
+ * @pads:  passed to #gstlal_collect_pads_add_pad_full()
+ * @pad:  passed to #gstlal_collect_pads_add_pad_full()
+ * @size:  passed to #gstlal_collect_pads_add_pad_full()
+ *
+ * Equivalent of #gst_collect_pads_add_pad().
+ *
+ * Returns:  #GstLALCollectData associated with the #GstPad.
+ */
+
+
 GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size)
 {
 	return gstlal_collect_pads_add_pad_full(pads, pad, size, NULL);
@@ -90,7 +117,13 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
 
 
 /**
- * Wraps gst_collect_pads_remove_pad().
+ * gstlal_collect_pads_remove_pad:
+ * @pads:  passed to #gst_collect_pads_remove_pad()
+ * @pad:  passed to #gst_collect_pads_remove_pad()
+ *
+ * Wraps #gst_collect_pads_remove_pad().
+ *
+ * Returns:  TRUE if #GstPad was removed successfully, FALSE if not.
  */
 
 
@@ -110,10 +143,14 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
 
 
 /**
+ * gstlal_collect_pads_set_unit_size:
+ * @pad:  the #GstPad whose unit size is to be set
+ * @unit_size:  the size in bytes of one unit
+ *
  * Set the number of bytes per unit (e.g., sample, frame, etc.) on the
  * given input stream.
  *
- * Should be called with the GstCollectPads' lock held (e.g., from the
+ * Should be called with the #GstCollectPads' lock held (e.g., from the
  * collected() method).
  */
 
@@ -129,11 +166,16 @@ void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size)
 
 
 /**
+ * gstlal_collect_pads_get_unit_size:
+ * @pad:  the #GstPad whose unit size is to be retrieved
+ *
  * Get the number of bytes per unit (e.g., sample, frame, etc.) on the
  * given input stream.
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
+ *
+ * Returns:  unit size in bytes.
  */
 
 
@@ -148,10 +190,14 @@ guint gstlal_collect_pads_get_unit_size(GstPad *pad)
 
 
 /**
+ * gstlal_collect_pads_set_rate:
+ * @pad:  the #GstPad whose unit rate (in Hertz) is to be set
+ * @rate:  the number of units per second.
+ *
  * Set the unit rate (e.g., sample rate, frame rate, etc.) on the given
  * input stream.
  *
- * Should be called with the GstCollectPads' lock held (e.g., from the
+ * Should be called with the #GstCollectPads' lock held (e.g., from the
  * collected() method).
  */
 
@@ -167,11 +213,16 @@ void gstlal_collect_pads_set_rate(GstPad *pad, gint rate)
 
 
 /**
+ * gstlal_collect_pads_get_rate:
+ * @pad:  the #GstPad whose unit rate is to be retrieved
+ *
  * Get the unit rate (e.g., sample rate, frame rate, etc.) on the given
  * input stream.
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
+ *
+ * Returns:  unit rate in Hertz.
  */
 
 
@@ -186,13 +237,19 @@ gint gstlal_collect_pads_get_rate(GstPad *pad)
 
 
 /**
+ * gstlal_collect_pads_get_segment:
+ * @pads:  #GstCollectPads
+ *
  * Compute the smallest segment that contains the segments (from the most
  * recent newsegment events) of all pads.  The segments must be in the same
- * format on all pads.  The return value is a newly allocated GstSegment
+ * format on all pads.  The return value is a newly allocated #GstSegment
  * owned by the calling code.
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
+ *
+ * Returns:  newly-allocated #GstSegment.  #gst_segment_free() when no
+ * longer needed.
  */
 
 
@@ -254,15 +311,20 @@ done:
 
 
 /**
+ * gstlal_collect_pads_get_earliest_times:
+ * @pads:  #GstCollectPads
+ * @t_start:  address of #GstClockTime where start time will be stored
+ * @t_end:  address of #GstClockTime where end time will be stored
+ *
  * Computes the earliest of the start and of the end times of the
- * GstCollectPad's input buffers.
+ * #GstCollectPad's input buffers.
  *
  * The return value indicates the successful execution of this function.
  * TRUE indicates the function was able to procede to a successful
  * conclusion, FALSE indicates that one or more errors occured.
  *
  * Upon the successful completion of this function, both time parameters
- * will be set to GST_CLOCK_TIME_NONE if all input streams are at EOS.
+ * will be set to #GST_CLOCK_TIME_NONE if all input streams are at EOS.
  * Otherwise, if at least one stream is not at EOS, the times are set to
  * the earliest interval spanned by all the buffers that are available.
  *
@@ -281,8 +343,10 @@ done:
  * EOS         TRUE           GST_CLOCK_TIME_NONE
  * success     TRUE           >= 0
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
+ *
+ * Returns:  see above.
  */
 
 
@@ -403,12 +467,18 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 
 /**
- * Wrapper for gst_collect_pads_take_buffer().  Returns a buffer containing
- * the samples taken from the start of the current buffer upto (not
- * including) the offset corresponding to t_end.  The buffer returned might
- * be shorter if the pad does not have data upto the requested time.  The
- * buffer returned by this function has its offset and offset_end set to
- * indicate its location in the input stream.  Calling this function has
+ * gstlal_collect_pads_take_buffer_sync:
+ * @pads:  #GstCollectPads
+ * @data:  #GstLALCollectData associated with the #GstPad from which to
+ * take the data
+ * @t_end:  the #GstClockTime up to which to retrieve data
+ *
+ * Wrapper for #gst_collect_pads_take_buffer().  Returns a #GstBuffer
+ * containing the samples taken from the start of the current buffer upto
+ * (not including) the offset corresponding to t_end.  The buffer returned
+ * might be shorter if the pad does not have data upto the requested time.
+ * The buffer returned by this function has its offset and offset_end set
+ * to indicate its location in the input stream.  Calling this function has
  * the effect of flushing the pad upto the offset corresponding to t_end or
  * the upper bound of the available data, whichever comes first.
  *
@@ -416,8 +486,10 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
  * EOS.  If the pad has data available but it is subsequent to the
  * requested interval then a zero-length buffer is returned.
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
+ *
+ * Returns:  #GstBuffer.  #gst_buffer_unref() when no longer needed.
  */
 
 
