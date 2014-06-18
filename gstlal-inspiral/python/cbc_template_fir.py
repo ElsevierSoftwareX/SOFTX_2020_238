@@ -15,6 +15,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 ## @file
+# The python module to implement SVD decomposed FIR filtering
 #
 # ### Review Status
 #
