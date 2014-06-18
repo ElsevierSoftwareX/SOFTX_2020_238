@@ -18,6 +18,20 @@
 
 ## @file
 # Compute an IIR bank for inspiral waveforms
+#
+# ### Command line interface
+#
+#	+ `--flow` [Hz] (float): Set the template low-frequency cut-off (default = 40.0).
+#	+ `--sampleRate` [Hz] (float): Set the sample rate of the IIR template bank (optional).
+#	+ `--padding` [pad] (float): Fractional amount to pad time slices (default = 1.1).
+#	+ `--epsilon` [pad] (float): Second order correction factor (default = 0.02).
+#	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
+#	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
+#	+ `--instrument` [ifo]: Set the instrument.
+#	+ `--output` [filename]: Set the filename in which to save the template bank (required).
+#	+ `--verbose`: Be verbose.
+#	+ `--downsample`: Choose if you want to downsample IIR bank (recommended).
+
 
 import sys
 import scipy
