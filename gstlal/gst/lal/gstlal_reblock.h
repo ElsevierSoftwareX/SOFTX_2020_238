@@ -65,6 +65,7 @@ struct _GSTLALReblock {
 
 /**
  * GSTLALReblockClass:
+ * @parent_class:  the parent class
  */
 
 

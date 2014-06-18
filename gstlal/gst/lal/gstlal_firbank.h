@@ -131,6 +131,7 @@ struct _GSTLALFIRBank {
 
 /**
  * GSTLALFIRBankClass:
+ * @parent_class:  the parent class
  */
 
 

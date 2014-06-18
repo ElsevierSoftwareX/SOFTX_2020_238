@@ -64,6 +64,7 @@ struct _GSTLALToggleComplex {
 
 /**
  * GSTLALToggleComplexClass:
+ * @parent_class:  the parent class
  */
 
 

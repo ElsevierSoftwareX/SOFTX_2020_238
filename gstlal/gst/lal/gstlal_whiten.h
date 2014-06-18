@@ -149,6 +149,7 @@ struct _GSTLALWhiten {
 
 /**
  * GSTLALWhitenClass:
+ * @parent_class:  the parent class
  */
 
 

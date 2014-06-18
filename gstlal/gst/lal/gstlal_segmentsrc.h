@@ -38,6 +38,7 @@ struct _GSTLALSegmentSrc {
 
 /**
  * GSTLALSegmentSrcClass:
+ * @parent_class:  the parent class
  */
 
 struct _GSTLALSegmentSrcClass {

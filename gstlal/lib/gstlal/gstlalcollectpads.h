@@ -30,24 +30,19 @@
 G_BEGIN_DECLS
 
 
-typedef struct _GstLALCollectData {
-	/*
-	 * parent structure first so we can be cast to it
-	 */
+/**
+ * GstLALCollectData:
+ * @as_gstcollectdata:  the parent structure
+ * @unit_size:  size of one "unit", e.g. (multi-channel) audio sample,
+ * video frame, etc.  For audio, = (sample width) / 8 * (channels).
+ * @rate:  number of units per second
+ */
 
+
+typedef struct _GstLALCollectData {
 	GstCollectData as_gstcollectdata;
 
-	/*
-	 * size of one "unit", e.g. (multi-channel) audio sample, video
-	 * frame, etc.  For audio, = (sample width) / 8 * (channels).
-	 */
-
 	guint unit_size;
-
-	/*
-	 * number of units per second.
-	 */
-
 	gint rate;
 } GstLALCollectData;
 

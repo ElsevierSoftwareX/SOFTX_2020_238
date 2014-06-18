@@ -91,6 +91,7 @@ struct _GstLALCacheSrc {
 
 /**
  * GstLALCacheSrcClass:
+ * @parent_class:  the parent class
  */
 
 

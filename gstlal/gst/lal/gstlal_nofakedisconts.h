@@ -65,6 +65,7 @@ struct _GSTLALNoFakeDisconts {
 
 /**
  * GSTLALNoFakeDiscontsClass:
+ * @parent_class:  the parent class
  */
 
 

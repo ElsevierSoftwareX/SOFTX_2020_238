@@ -64,6 +64,7 @@ struct _GSTLALShift {
 
 /**
  * GSTLALShiftClass:
+ * @parent_class:  the parent class
  */
 
 

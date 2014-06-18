@@ -73,6 +73,7 @@ struct _GSTLALStateVector {
 
 /**
  * GSTLALStateVectorClass:
+ * @parent_class:  the parent class
  */
 
 

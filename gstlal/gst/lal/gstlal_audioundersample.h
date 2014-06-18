@@ -60,6 +60,8 @@ typedef struct _GSTLALAudioUnderSampleClass GSTLALAudioUnderSampleClass;
 struct _GSTLALAudioUnderSample {
 	GstBaseTransform element;
 
+	/*< private >*/
+
 	/*
 	 * stream info
 	 */
@@ -87,7 +89,8 @@ struct _GSTLALAudioUnderSample {
 
 
 /**
- * GSTLALAudioUnderSampleClass
+ * GSTLALAudioUnderSampleClass:
+ * @parent_class:  the parent class
  */
 
 

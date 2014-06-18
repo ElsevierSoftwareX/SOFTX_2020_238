@@ -78,6 +78,7 @@ struct _GstLALGPSSystemClock {
 
 /**
  * GstLALGPSSystemClockClass:
+ * @parent_class:  the parent class
  */
 
 

@@ -85,6 +85,7 @@ struct _GSTLALGate {
 
 /**
  * GSTLALGateClass:
+ * @parent_class:  the parent class
  */
 
 

@@ -81,6 +81,7 @@ struct _GSTLALPeak {
 
 /**
  * GSTLALPeakClass:
+ * @parent_class:  the parent class
  */
 
 

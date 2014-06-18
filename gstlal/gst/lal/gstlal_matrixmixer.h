@@ -76,6 +76,7 @@ struct _GSTLALMatrixMixer {
 
 /**
  * GSTLALMatrixMixerClass:
+ * @parent_class:  the parent class
  */
 
 

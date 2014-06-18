@@ -73,6 +73,7 @@ struct _GSTLALSumSquares {
 
 /**
  * GSTLALSumSquaresClass:
+ * @parent_class:  the parent class
  */
 
 

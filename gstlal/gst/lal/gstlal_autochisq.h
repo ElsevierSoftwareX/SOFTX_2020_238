@@ -121,6 +121,7 @@ struct _GSTLALAutoChiSq {
 
 /**
  * GSTLALAutoChiSqClass:
+ * @parent_class:  the parent class
  */
 
 

@@ -48,14 +48,17 @@ G_BEGIN_DECLS
 typedef struct _GSTLALSimulation GSTLALSimulation;
 typedef struct _GSTLALSimulationClass GSTLALSimulationClass;
 
+
 /**
  * GSTLALSimulation:
+ * @parent:  the parent structure
  */
 
 
 struct _GSTLALSimulation {
 	GstBaseTransform parent;
 
+	/*< private >*/
 	char *xml_location;
 
 	struct injection_document {
@@ -77,6 +80,7 @@ struct _GSTLALSimulation {
 
 /**
  * GSTLALSimulationClass:
+ * @parent_class:  the parent class
  */
 
 

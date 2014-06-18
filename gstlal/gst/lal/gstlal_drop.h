@@ -65,6 +65,7 @@ struct _GSTLALDrop {
 
 /**
  * GSTLALDropClass:
+ * @parent_class:  the parent class
  */
 
 

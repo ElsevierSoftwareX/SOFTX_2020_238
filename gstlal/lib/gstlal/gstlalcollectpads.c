@@ -23,7 +23,7 @@
 /**
  * SECTION:gstlalcollectpads
  * @short_description:  Custom #GstCollectPads to assist with combining
- * input streams synchronously
+ * input streams synchronously.
  *
  * Custom GstCollectData structure with extra metadata to facilitate
  * synchronous mixing of input streams.  In fact, only the #GstCollectData

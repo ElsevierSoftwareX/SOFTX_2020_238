@@ -86,6 +86,7 @@ struct _GstAudioAdapter {
 
 /**
  * GstAudioAdapterClass:
+ * @parent_class:  the parent class
  */
 
 

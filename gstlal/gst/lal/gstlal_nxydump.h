@@ -65,6 +65,7 @@ struct _GstTSVEnc
 
 /**
  * GstTSVEncClass:
+ * @parent_class:  the parent class
  */
 
 
