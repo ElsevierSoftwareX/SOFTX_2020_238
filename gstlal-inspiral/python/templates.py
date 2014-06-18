@@ -15,6 +15,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 ## @file
+# A module to implement template slicing and other operations as part of the LLOID aglorithm
 #
 # ### Review Status
 #
