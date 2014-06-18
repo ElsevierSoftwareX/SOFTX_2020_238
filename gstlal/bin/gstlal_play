@@ -47,8 +47,6 @@ from pylal import series as lalseries
 
 ## @file gstlal_play
 # This program will play data in a variety of ways; See gstlal_play for help and usage.
-
-## @package gstlal_play
 #
 # This program will play data in a variety of ways.  Its input is anything
 # supported by datasource.py.  You can additionally whiten the data or apply a
