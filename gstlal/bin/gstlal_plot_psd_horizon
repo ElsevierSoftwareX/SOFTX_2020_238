@@ -32,8 +32,6 @@ from pylal import series as lalseries
 
 ## @file
 # A program to plot the horizon distance as a function of time from various psd estimates; See gstlal_plot_psd_horizon for usage.
-
-## @package gstlal_plot_psd_horizon
 #
 # Plot the horizon distance as a function of time from PSDs computed from gstlal_reference_psd
 #
