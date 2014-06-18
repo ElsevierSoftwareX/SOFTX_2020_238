@@ -33,9 +33,7 @@ from pylal import series as lalseries
 from pylal import datatypes as laltypes
 
 ## @file
-# gstlal_psd_polyfit
-
-## @package gstlal_psd_polyfit
+# A program to fit a PSD to a polynomial
 #
 #
 # ### Usage cases
