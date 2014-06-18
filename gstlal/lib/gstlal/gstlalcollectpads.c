@@ -22,9 +22,14 @@
 
 /**
  * SECTION:gstlalcollectpads
+ * @short_description:  Custom #GstCollectPads to assist with combining
+ * input streams synchronously
  *
- * Custom GstCollectData structure with extra metadata required for
- * synchronous mixing of input streams.
+ * Custom GstCollectData structure with extra metadata to facilitate
+ * synchronous mixing of input streams.  In fact, only the #GstCollectData
+ * structure is customized, replaced here with the #GstLALCollectData
+ * structure;  however, a few shim functions are required to adapt function
+ * signatures to accept and return pointers to the custom type.
  */
 
 
@@ -62,8 +67,8 @@
  * @size:  passed to #gst_collect_pads_add_pad()
  * @destroy_notify:  passed to#gst_collect_pads_add_pad()
  *
- * Wraps #gst_collect_pads_add_pad(), initializing the additional fields in
- * the custom #GstLALCollectData object.
+ * Wraps #gst_collect_pads_add_pad_full(), initializing the additional
+ * fields in the custom #GstLALCollectData object.
  *
  * Returns:  #GstLALCollectData associated with the #GstPad.
  */
@@ -104,7 +109,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
  * @pad:  passed to #gstlal_collect_pads_add_pad_full()
  * @size:  passed to #gstlal_collect_pads_add_pad_full()
  *
- * Equivalent of #gst_collect_pads_add_pad().
+ * Equivalent to #gst_collect_pads_add_pad().
  *
  * Returns:  #GstLALCollectData associated with the #GstPad.
  */
@@ -121,7 +126,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
  * @pads:  passed to #gst_collect_pads_remove_pad()
  * @pad:  passed to #gst_collect_pads_remove_pad()
  *
- * Wraps #gst_collect_pads_remove_pad().
+ * Equivalent to #gst_collect_pads_remove_pad().
  *
  * Returns:  TRUE if #GstPad was removed successfully, FALSE if not.
  */
@@ -319,10 +324,6 @@ done:
  * Computes the earliest of the start and of the end times of the
  * #GstCollectPad's input buffers.
  *
- * The return value indicates the successful execution of this function.
- * TRUE indicates the function was able to procede to a successful
- * conclusion, FALSE indicates that one or more errors occured.
- *
  * Upon the successful completion of this function, both time parameters
  * will be set to #GST_CLOCK_TIME_NONE if all input streams are at EOS.
  * Otherwise, if at least one stream is not at EOS, the times are set to
@@ -335,18 +336,41 @@ done:
  * therefore only after at least one pad has received a buffer, and
  * therefore the "no data available" condition is only seen at EOS.
  *
- * Summary:
- *
- * condition   return value   times
- * ----------------------------------
- * bad input   FALSE          ?
- * EOS         TRUE           GST_CLOCK_TIME_NONE
- * success     TRUE           >= 0
+ * <table><title>Return Values</title>
+ * <tgroup cols='3' align='center'>
+ * <thead>
+ *	<row>
+ *		<entry>condition</entry>
+ *		<entry>return value</entry>
+ *		<entry>t_end, t_start</entry>
+ *	</row>
+ * </thead>
+ * <tbody>
+ *	<row>
+ *		<entry>bad input</entry>
+ *		<entry>FALSE</entry>
+ *		<entry>undefined</entry>
+ *	</row>
+ *	<row>
+ *		<entry>EOS</entry>
+ *		<entry>TRUE</entry>
+ *		<entry>#GST_CLOCK_TIME_NONE</entry>
+ *	</row>
+ *	<row>
+ *		<entry>success</entry>
+ *		<entry>TRUE</entry>
+ *		<entry>&ge;0</entry>
+ *	</row>
+ * </tbody>
+ * </tgroup>
+ * </table>
  *
  * Should be called with the #GstCollectPads' lock held (i.e., from the
  * collected() method).
  *
- * Returns:  see above.
+ * Returns:  TRUE indicates the function was able to procede to a
+ * successful conclusion, FALSE indicates that one or more errors occured
+ * (see above).
  */
 
 
