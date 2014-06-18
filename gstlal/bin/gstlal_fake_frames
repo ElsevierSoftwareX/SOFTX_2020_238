@@ -48,8 +48,7 @@ ligolw_param.use_in(LIGOLWContentHandler)
 
 ## @file gstlal_fake_frames
 # This program will make fake data in a variety of ways; see gstlal_fake_frames for help and usage
-
-## @package gstlal_fake_frames
+#
 # This program will make fake data in a variety of ways.  Its input is anything
 # supported by datasource.py.  You can additionally whiten the data or apply a
 # frequency domain coloring filter.  It writes its output to frame files.
