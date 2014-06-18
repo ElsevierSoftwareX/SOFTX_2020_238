@@ -134,7 +134,7 @@ gint *gstlal_ints_from_g_value_array(GValueArray *va, gint *dest, gint *n)
  *
  * Build a #GValueArray from an array of ints.
  *
- * Returns : newly-allocated #GValueArray object or %NULL on failure.
+ * Returns: newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -201,7 +201,7 @@ guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint 
  *
  * Build a #GValueArray from an array of #guint64.
  *
- * Returns : newly-allocated #GValueArray object or %NULL on failure.
+ * Returns: newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -268,7 +268,7 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
  *
  * Build a #GValueArray from an array of doubles.
  *
- * Returns : newly-allocated #GValueArray object or %NULL on failure.
+ * Returns: newly-allocated #GValueArray object or %NULL on failure.
  */
 
 
@@ -912,7 +912,7 @@ done:
 /**
  * gstlal_lalStrainPerADCCount:
  *
- * Return a #LALUnit structure equal to "strain / ADC count".
+ * Returns:  #LALUnit equal to "strain / ADC count".
  */
 
 
@@ -927,7 +927,7 @@ LALUnit gstlal_lalStrainPerADCCount(void)
 /**
  * gstlal_lalUnitSquaredPerHertz:
  *
- * Return a #LALUnit structure equal to "units^2 / Hz".
+ * Returns:  #LALUnit equal to "units^2 / Hz".
  */
 
 
@@ -944,7 +944,7 @@ LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit)
  * Converts a #GstClockTime containing a GPS time (in integer nanoseconds)
  * to a #GstDateTime object representing the same time.
  *
- * Returns a newly-allocated #GstDateTime.  Use gst_date_time_unref() to
+ * Returns:  newly-allocated #GstDateTime.  Use gst_date_time_unref() to
  * free.
  */
 
