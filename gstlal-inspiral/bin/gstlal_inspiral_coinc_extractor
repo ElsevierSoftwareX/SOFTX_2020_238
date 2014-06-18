@@ -18,6 +18,10 @@
 
 ## @file
 # A program to extract the loudest coincs from an offline gstlal_inspiral DAG database into single files that can be uploaded to gracedb
+#
+# ### Command line interface
+#	+ `--fap-thresh` [probability] (float): Set the false alarm probability: default 0.01.
+#	+ `--gps-times` [GPS (comma separated)]: Restrict times to this list. give as GPS1,GPS2,...GPSN. Assumes +- 1s.
 
 from glue.ligolw import ligolw, lsctables, utils, dbtables
 import sqlite3
