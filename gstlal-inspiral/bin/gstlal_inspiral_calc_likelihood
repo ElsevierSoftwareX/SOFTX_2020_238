@@ -19,6 +19,8 @@
 ## @file
 # A program to compute the likelhood ratios of inspiral triggers
 #
+# ### Command line interface
+#
 #	+ `--input-cache` [filename]: Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
 #	+ `--likelihood-url` [URL]: Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted.
 #	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
