@@ -18,6 +18,17 @@
 
 ## @file
 # A program to compute the likelhood ratios of inspiral triggers
+#
+#	+ `--input-cache` [filename]: Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
+#	+ `--likelihood-url` [URL]: Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted.
+#	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
+#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--vetoes-name` [name]: Set the name of the segment lists to use as vetoes (default = do not apply vetoes).
+#	+ `--verbose`: Be verbose.
+#	+ `--synthesize-injections` [N] (int): Synthesize an injection distribution with N injections (default = 0).
+#	+ `--background-prior` [N] (float): Include an exponential background prior with the maximum bin count = N, default 0, no additional prior.
+#	+ `--write-likelihood` [filename]: Write merged raw likelihood data to this file.
+#	+ `--trim-database`: Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.
 
 #
 # =============================================================================
