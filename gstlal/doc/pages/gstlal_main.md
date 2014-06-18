@@ -29,23 +29,23 @@
 
 - \ref gstlalfakedataoverviewpage
 - Relevant programs
-  - gstlal_fake_frames
-  - gstlal_fake_frames_pipe
+  - \ref gstlal_fake_frames
+  - \ref gstlal_fake_frames_pipe
 
 ### Measuring PSDs
 
 - Relevant programs
-  - gstlal_reference_psd
-  - gstlal_plot_psd
-  - gstlal_plot_psd_horizon
-  - gstlal_psd_polyfit
-  - gstlal_psd_xml_from_asd_txt
+  - \ref gstlal_reference_psd
+  - \ref gstlal_plot_psd
+  - \ref gstlal_plot_psd_horizon
+  - \ref gstlal_psd_polyfit
+  - \ref gstlal_psd_xml_from_asd_txt
 
 ### Data interaction
 
 - Relevant programs
-  - gstlal_spectrum_movie
-  - gstlal_play
+  - \ref gstlal_spectrum_movie
+  - \ref gstlal_play
 
 ### References
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
