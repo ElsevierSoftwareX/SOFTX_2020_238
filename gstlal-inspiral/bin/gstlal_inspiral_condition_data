@@ -18,6 +18,11 @@
 
 ## @file
 # A program to read data, possibly downsample and add injections and cache it to local disks.
+#
+# ### Command line interface
+#	+ `--output-path` [path]: Set the path where the output frame files are to be written (default = value of TMPDIR environment variable if set, otherwise the current working directory).
+#	+ `--sample-rate` [Hz] (int): Downsample to this sample rate (default = no resampling).
+#	+ `--verbose`: Be verbose (optional).
 
 #
 # =============================================================================
