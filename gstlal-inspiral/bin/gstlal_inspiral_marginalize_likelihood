@@ -16,9 +16,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-##@file
+##@file gstlal_inspiral_marginalize_likelihood
 # A program to marginalize the likelihood pdfs in noise across mass bins for a gstlal inspiral analysis.
-
+#
+# ### Command line interface
+#
+#	+ `--ignore-missing`: Ignore and skip missing input documents.
+#	+ `--output` [filename]: Set the output file name (default = write to stdout).
+#	+ `--verbose`: Be verbose.
 #
 # =============================================================================
 #
