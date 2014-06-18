@@ -376,8 +376,9 @@ Redundant entries are ommitted
 - Background estimations should have more informative plots e.g., smoothed likelihood functions
 - Study the dependence of coincidence triggers on SNR threshold
 - Document offline pipeline including graphs of workflows
- - *Chad: Done, see \ref gstlalinspiralofflinesearchpage * 
+ - *Chad: Done*, see \ref gstlalinspiralofflinesearchpage
 - Test pipeline with control peak times set to different values
+ - *Chad: Done* see \ref gstlalinspiralcontrolpeaktimestudy
 - Write documentation for autochisq (paper in progress)
 - Write joint likelihood ranking and FAP calculation (paper in progress)
 - Explore autocorrelation chisquared mismatch scaling with number of samples e.g., @f$ \nu + \epsilon(\nu) \delta^{2} @f$
