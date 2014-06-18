@@ -22,7 +22,7 @@
 /**
  * SECTION:gstaudioadapter
  * @include: gstlal/gstaudioadapter.h
- * @short_description:  GstAdapter-like class that understands audio
+ * @short_description:  #GstAdapter like class that understands audio
  * stream formats.
  *
  * #GstAudioAdapter provides a queue to accumulate time series data and
