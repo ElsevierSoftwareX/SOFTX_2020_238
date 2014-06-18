@@ -366,13 +366,17 @@ Redundant entries are ommitted
 \subsection Broader action items
 
 - Test robustness of fixed bank (start by figuring out the right question!)
+ - *Chad: Can we leverage Marcel's tests of this? Need it be gstlal specific?*
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
+ - *Chad: This process has been started.  See, e.g., Makefile.triggers_example*
 - Test delta function input to LLOID algorithm (e.g with and without SVD)
 - Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
 - Add synopses for all programs in documentation
+ - *Chad: Done*
 - Background estimations should have more informative plots e.g., smoothed likelihood functions
 - Study the dependence of coincidence triggers on SNR threshold
 - Document offline pipeline including graphs of workflows
+ - *Chad: Done, see \ref gstlalinspiralofflinesearchpage * 
 - Test pipeline with control peak times set to different values
 - Write documentation for autochisq (paper in progress)
 - Write joint likelihood ranking and FAP calculation (paper in progress)
