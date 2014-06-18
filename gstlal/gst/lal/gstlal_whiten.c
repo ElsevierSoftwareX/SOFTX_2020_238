@@ -30,14 +30,14 @@
  * the <ulink
  * url="https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/group___time_freq_f_f_t__h.html#ga155912059da0e88b76856c3a72800223">LALPSDRegressor</ulink>
  * machinery.  When measuring the spectrum internally, the element will
- * track changes in the spectrum.  The #GSTLALWhiten::average-samples and
- * #GSTLALWhiten::n-samples parameters control the time scales of the
+ * track changes in the spectrum.  The #GSTLALWhiten:average-samples and
+ * #GSTLALWhiten:n-samples parameters control the time scales of the
  * averaging.
  *
  * The power spectral density function measured by the element is available
  * to external code via three communication channels.  The PSD and its
- * physical parameters can be retrieved through the #GSTLALWhiten::delta-f,
- * #GSTLALWhiten::f-nyquist, and #GSTLALWhiten::psd properites.  Use
+ * physical parameters can be retrieved through the #GSTLALWhiten:delta-f,
+ * #GSTLALWhiten:f-nyquist, and #GSTLALWhiten:psd properites.  Use
  * GObject's notify mechanism to be informed of changes in these values.
  * When a new PSD is measured, the element posts a #GstMessage to the
  * pipeline's message bus containing the PSD and its properites (see
@@ -45,12 +45,12 @@
  * request pad named "mean-psd" is available.  If the pad is present,
  * each PSD is packed into a #GstBuffer and pushed out that #GstPad.
  *
- * To set a PSD, the #GSTLALWhiten::f-nyquist property should be consulted.
+ * To set a PSD, the #GSTLALWhiten:f-nyquist property should be consulted.
  * This property gives the Nyquist frequency (in Hertz) of the PSD data
  * that must be provided and is determined by the sample rate of the time
- * series.  The #GSTLALWhiten::fft-length property sets the length of the
+ * series.  The #GSTLALWhiten:fft-length property sets the length of the
  * FFT blocks that will be used for filtering the data, and thus determines
- * the value of the #GSTLALWhiten::delta-f property.
+ * the value of the #GSTLALWhiten:delta-f property.
  * 
  */
 
