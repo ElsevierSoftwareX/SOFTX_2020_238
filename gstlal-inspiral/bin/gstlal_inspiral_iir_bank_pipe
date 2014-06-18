@@ -16,8 +16,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
+## @file gstlal_inspiral_iir_bank_pipe
 # A program to make an HTCondor DAG to create banks of IIR filters for an online CBC analysis
+#
+# ### Command line interface
+#	+ `--flow` [Hz] (float): Set the template low-frequency cut-off (default = 40.0).
+#	+ `--sampleRate` [Hz] (float): Set the sample rate of the IIR template bank (optional).
+#	+ `--padding` [pad] (float): Fractional amount to pad time slices (default = 1.1).
+#	+ `--epsilon` [pad] (float): Second order correction factor (default = 0.02).
+#	+ `--reference-psd` [file]: Set the name of the reference psd file, required.
+#	+ `--bank-cache` [file]: Set the name of the bank cache, required.
+#	+ `--output-name`: Set the base name of the output, required.
+#	+ `--instrument`: Set the name of the instrument, required.
+#	+ `--verbose`: Be verbose.
+#	+ `--downsample`: Choose if you want to downsample IIR bank (recommended).
 
 """
 This program makes a dag to generate iir banks
