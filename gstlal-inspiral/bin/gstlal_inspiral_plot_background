@@ -16,8 +16,17 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
+## @file gstlal_inspiral_plot_background
 # A program to plot the likelihood distributions in noise of a gstlal inspiral analysis
+#
+# ### Command line interface
+#
+#	+ `--base` [base]: Set the prefix for output filenames (default = \"cbc_plotsummary_\").
+#	+ `--database` [filename]: Retrieve search results from this database (optional).  Can be given multiple times.
+#	+ `--database-cache` [filename]: Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.
+#	+ `--max-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).
+#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--verbose`: Be verbose.
 
 import bisect
 import math
