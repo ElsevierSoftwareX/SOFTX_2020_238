@@ -20,6 +20,36 @@
 
 ## @file
 # A version of gstlal_inspiral that uses IIR filter banks
+#
+#	+ `--psd-fft-length` [s] (int): FFT length, default 16s.
+#	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional).
+#	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list (default = "vetoes").
+#	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  (default is \":\", i.e. dump all time.")
+#	+ `--output` [filename]: Set the filename in which to save the triggers (required).
+#	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
+#	+ `--track-psd`: Track PSD even if a reference is given
+#	+ `--iir-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets.
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal).
+#	+ `--chisq-type` [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
+#	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
+#	+ `--comment`  [str]
+#	+ `--check-time-stamps`: Turn on time stamp checking.
+#	+ `--verbose`: Be verbose (optional).
+#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
+#	+ `--svd-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.
+#	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
+#	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds (default = 8).
+#	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required"
+#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.
+#	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
+#	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
+#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
+#	+ `--gracedb-type`: gracedb type (default is LowMass).
+#	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--thinca-interval` [secs] (float): Set the thinca interval (default = 30s).
 
 #
 # =============================================================================
