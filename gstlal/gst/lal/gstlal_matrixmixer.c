@@ -22,10 +22,10 @@
 
 /**
  * SECTION:gstlal_matrixmixer
- * @short_description:  Compute linear combinations of time series.
+ * @short_description:  Compute linear combinations of time series channels.
  *
- * Generates one or more time series streams as linear combinations of one
- * or more input streams.  The mixer is controlled using a matrix whose
+ * Generates one or more time series channels as linear combinations of one
+ * or more input channels.  The mixer is controlled using a matrix whose
  * elements provide the mixing coefficients and whose size sets the number
  * of input and output channels.  The meaning of the coefficients is shown
  * in the following diagram.
