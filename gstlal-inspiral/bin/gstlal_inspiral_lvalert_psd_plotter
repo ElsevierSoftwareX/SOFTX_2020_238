@@ -16,9 +16,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
+## @file gstlal_inspiral_lvalert_psd_plotter
 # A program to listen to lvalerts, download the psd from gstlal gracedb events, plot it, and upload the results
-
+#
+# ### Command line interface
+#
+#	+ `--no-upload`: Write plots to disk.
+#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort).
+#	+ `--verbose`: Be verbose.
 #
 # =============================================================================
 #
