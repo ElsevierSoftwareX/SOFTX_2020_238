@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008  Chad Hanna, Kipp Cannon
+ * Copyright (C) 2008--2014  Chad Hanna, Kipp Cannon
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -169,7 +169,7 @@ GType gstlal_whiten_get_type(void);
  */
 
 
-GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const REAL8FrequencySeries *psd);
+GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const gchar *instrument, const REAL8FrequencySeries *psd);
 REAL8FrequencySeries *gstlal_whiten_message_psd_parse(GstMessage *m);
 
 

@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008-2011  Kipp Cannon, Chad Hanna, Drew Keppel
+ * Copyright (C) 2008-2014  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,42 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/**
+ * SECTION:gstlal_whiten
+ * @short_description:  Whiten coloured Gaussian noise.
+ *
+ * This element constructs a whitening filter from a power spectral density
+ * function, which it uses to transform coloured Gaussian noise into white
+ * Gaussian noise.  The power spectral density function can be provided
+ * externally or the element can measure it from the time series data using
+ * the <ulink
+ * url="https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/group___time_freq_f_f_t__h.html#ga155912059da0e88b76856c3a72800223">LALPSDRegressor</ulink>
+ * machinery.  When measuring the spectrum internally, the element will
+ * track changes in the spectrum.  The #GSTLALWhiten::average-samples and
+ * #GSTLALWhiten::n-samples parameters control the time scales of the
+ * averaging.
+ *
+ * The power spectral density function measured by the element is available
+ * to external code via three communication channels.  The PSD and its
+ * physical parameters can be retrieved through the #GSTLALWhiten::delta-f,
+ * #GSTLALWhiten::f-nyquist, and #GSTLALWhiten::psd properites.  Use
+ * GObject's notify mechanism to be informed of changes in these values.
+ * When a new PSD is measured, the element posts a #GstMessage to the
+ * pipeline's message bus containing the PSD and its properites (see
+ * #gstlal_whiten_message_psd_parse() for parsing the message).  Finally, a
+ * request pad named "mean-psd" is available.  If the pad is present,
+ * each PSD is packed into a #GstBuffer and pushed out that #GstPad.
+ *
+ * To set a PSD, the #GSTLALWhiten::f-nyquist property should be consulted.
+ * This property gives the Nyquist frequency (in Hertz) of the PSD data
+ * that must be provided and is determined by the sample rate of the time
+ * series.  The #GSTLALWhiten::fft-length property sets the length of the
+ * FFT blocks that will be used for filtering the data, and thus determines
+ * the value of the #GSTLALWhiten::delta-f property.
+ * 
  */
 
 
@@ -532,7 +568,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
  */
 
 
-GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const REAL8FrequencySeries *psd)
+GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const gchar *instrument, const REAL8FrequencySeries *psd)
 {
 	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
 	char units[50];
@@ -546,8 +582,8 @@ GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const REAL8Freq
 	GstMessage *m = gst_message_new_element(GST_OBJECT(element), s);
 	g_value_array_free(va);
 
-	if(element->instrument)
-		gst_structure_set(s, "instrument", G_TYPE_STRING, element->instrument, NULL);
+	if(instrument)
+		gst_structure_set(s, "instrument", G_TYPE_STRING, instrument, NULL);
 
 	GST_MESSAGE_TIMESTAMP(m) = XLALGPSToINT8NS(&psd->epoch);
 
@@ -751,7 +787,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				 */
 
 				g_object_notify(G_OBJECT(element), "mean-psd");
-				gst_element_post_message(GST_ELEMENT(element), gstlal_whiten_message_psd_new(element, element->psd));
+				gst_element_post_message(GST_ELEMENT(element), gstlal_whiten_message_psd_new(element, element->instrument, element->psd));
 				if(element->mean_psd_pad) {
 					/* fft_length is sure to be even */
 					GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd, fft_length(element) / 2 - zero_pad_length(element), element->sample_rate);
@@ -1710,7 +1746,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		g_param_spec_double(
 			"delta-f",
 			"Delta f",
-			"PSD frequency resolution in Hz",
+			"PSD frequency resolution in Hertz",
 			0, G_MAXDOUBLE, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
@@ -1721,7 +1757,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		g_param_spec_double(
 			"f-nyquist",
 			"Nyquist Frequency",
-			"Nyquist frequency in Hz",
+			"Nyquist frequency in Hertz",
 			0, G_MAXDOUBLE, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
