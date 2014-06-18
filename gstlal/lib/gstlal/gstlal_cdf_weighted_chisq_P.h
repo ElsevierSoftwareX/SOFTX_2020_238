@@ -42,7 +42,7 @@ struct gstlal_cdf_weighted_chisq_P_trace {
 #define GSTLAL_CDF_WEIGHTED_CHISQ_P_TRACE_INITIALIZER ((struct gstlal_cdf_weighted_chisq_P_trace) {0.0, 0, 0, 0.0, 0.0, 0.0, 0})
 
 
-double gstlal_cdf_weighted_chisq_P(const double *, const double *, const int *, int, double, double, int, double, struct gstlal_cdf_weighted_chisq_P_trace *, int *);
+double gstlal_cdf_weighted_chisq_P(const double *A, const double *noncent, const int *dof, int N, double var, double c, int lim, double accuracy, struct gstlal_cdf_weighted_chisq_P_trace *trace, int *fault);
 
 
 #endif /* __GSTLAL_CDF_WEIGHTED_CHISQ_P_H__ */

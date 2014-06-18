@@ -376,38 +376,41 @@ static double cfe(double x, jmp_buf env, int *count, int lim, const double *A, c
 
 
 /**
+ * gstlal_cdf_weighted_chisq_P:
+ * @A:  coefficient of j-th \chi^{2} variable
+ * @noncent:  non-centrality parameter of the j-th \chi^{2} variable
+ * @dof:  degrees of freedom of the j-th \chi^{2} variable
+ * @N:  number of \chi^{2} variables
+ * @var:  variance of zero-mean normal variable 
+ * @c:  point at which distribution is to be evaluated
+ * @lim:  maximum number of terms in integration;  < 0 --> no limit
+ * @accuracy:  maximum error
+ * @trace:  if not NULL will contain diagnostic information
+ * @fault: if not NULL will contain reason for failure
+ *
  * Compute the cummulative distribution function for a linear combination
- * of non-central chi-squared random variables.  Returns the value of the
- * cumulative distribution function at c or NaN on failure.
+ * of non-central chi-squared random variables.
+ *
+ * On failure, the value stored in the location pointed to by fault means:
+ * 1 required accuracy NOT achieved, 2 round-off error possibly
+ * significant, 3 invalid parameters, 4 unable to locate integration
+ * parameters, 5 out of memory,
+ *
+ * Returns:  the value of the cumulative distribution function at c or NaN
+ * on failure.
  */
 
 
 double gstlal_cdf_weighted_chisq_P(
-	/* coefficient of j-th \chi^{2} variable */
 	const double *A,
-	/* non-centrality parameter of the j-th \chi^{2} variable */
 	const double *noncent,
-	/* degrees of freedom of the j-th \chi^{2} variable */
 	const int *dof,
-	/* number of \chi^{2} variables */
 	int N,
-	/* variance of zero-mean normal variable */
 	double var,
-	/* point at which distribution is to be evaluated */
 	double c,
-	/* maximum number of terms in integration;  < 0 --> no limit */
 	int lim,
-	/* maximum error */
 	double accuracy,
-	/* output: if not NULL will contain diagnostic information */
 	struct gstlal_cdf_weighted_chisq_P_trace *trace,
-	/* output: if not NULL will contain reason for failure
-	 *	1      required accuracy NOT achieved
-	 *	2      round-off error possibly significant
-	 *	3      invalid parameters
-	 *	4      unable to locate integration parameters
-	 *	5      out of memory
-	 */
 	int *fault
 )
 {
