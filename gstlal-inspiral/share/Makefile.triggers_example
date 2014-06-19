@@ -7,23 +7,23 @@
 # Minimum component mass for the template bank
 MIN_MASS = 1.0
 # Maximum component mass for the template bank
-MAX_MASS = 3.0				
+MAX_MASS = 3.0
 # Minimum total mass for the template bank
-MIN_TOTAL_MASS = 2.0			
+MIN_TOTAL_MASS = 2.0
 # Maximum total mass for the template bank
-MAX_TOTAL_MASS = 6.0			
+MAX_TOTAL_MASS = 6.0
 # Low frequency cut off for the template bank placement
-LOW_FREQUENCY_CUTOFF = 40.0	
+LOW_FREQUENCY_CUTOFF = 40.0
 # High pass frequency to condition the data before measuring the psd for template placement
-HIGH_PASS_FREQ = 35			
+HIGH_PASS_FREQ = 35
 # Highest frequency at which to compute the metric
-HIGH_FREQUENCY_CUTOFF = 2047.0		
+HIGH_FREQUENCY_CUTOFF = 2047.0
 # The sample rate at which to compute the template bank
-SAMPLE_RATE = 4096			
+SAMPLE_RATE = 4096
 # The minimal match of the template bank; determines how much SNR is retained for signals "in between the bank points"
-MM = 0.975				
+MM = 0.975
 # The start time for reading the data for the bank
-BANKSTART = 966393725			
+BANKSTART = 966393725
 # The stop time for reading the data for the bank
 BANKSTOP =  966395773
 
@@ -31,28 +31,28 @@ BANKSTOP =  966395773
 ## Sub bank parameters
 # The large template bank is split into sub banks before they are SVD'd
 # Number of templates to put in each sub bank; this should probably always be ~100. For highly degenerate banks it might be possible to make this 200 or so.  
-NUM_SPLIT_TEMPLATES = 100		
+NUM_SPLIT_TEMPLATES = 100
 # The number of templates to overlap for each sub bank. This overlap just goes into the SVD, the overlapping templates are not reconstructed and the bank remains contiguous
-OVERLAP = 10 				
+OVERLAP = 10
 
 ## Controls trigger creation
 #
 # The dectors to analyze; provide as a space separated list
-IFOS = H1 L1 V1				
+IFOS = H1 L1 V1
 # The start time to analyze
-START = 966384015			
+START = 966384015
 # The end time to analyze
-STOP = 967384015			
+STOP = 967384015
 # The tag to name the output web directory
-TAG = Test				
+TAG = Test
 # the output directory for the results
-WEBDIR = ~/public_html/${START}-${STOP}-${TAG}	
+WEBDIR = ~/public_html/${START}-${STOP}-${TAG}
 # The number of sub banks to analyze in parallel.  This means that the total number of templates in parallel is NUMBANKS * NUM_SPLIT_TEMPLATES * num(IFOS);  A typical number of parallel templates might be 4 * 100 * 3 = 1200.  Setting this too high might cause memory to be exhausted
-NUMBANKS = 4				
+NUMBANKS = 4
 # If non-zero, this is the interval over which to apply the composite detection statistic to avoid reconstructing all of the SVD filters
-PEAK = 0				
+PEAK = 0
 # The length in samples of the auto correlation "chisquared" veto.
-AC_LENGTH = 351				
+AC_LENGTH = 351
 # additional options, e.g.,
 #ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
 
@@ -61,23 +61,23 @@ AC_LENGTH = 351
 # Change as appropriate, whitespace is important
 # NOTE This uses gstlal_injections_by_local_rate for this example, but you might want to use lalapps_inspinj since it is reviewed etc.
 # specify the seeds and number of injections.  The should be <seed>_injections.xml.  The same rule will be applied to each target.  For a more heterogeneous injection plan more work has to go into this Makefile but it is straight forward.
-INJECTIONS := 1_injections.xml 2_injections.xml	
+INJECTIONS := 1_injections.xml 2_injections.xml
 # Maximum injection distance in Mpc
-INJ_MAX_DIST = 150			
+INJ_MAX_DIST = 150
 # Minimum component mass 1 for injections
-INJ_MIN_MASS1 = 1.0			
+INJ_MIN_MASS1 = 1.0
 # Maximum component mass 1 for injections
-INJ_MAX_MASS1 = 3.0			
+INJ_MAX_MASS1 = 3.0
 # Minimum component mass 2 for injections
-INJ_MIN_MASS2 = 1.0			
+INJ_MIN_MASS2 = 1.0
 # Maximum component mass 2 for injections
-INJ_MAX_MASS2 = 3.0			
+INJ_MAX_MASS2 = 3.0
 # Minimum total mass for injections
-INJ_MIN_TOTAL_MASS = 2.0		
+INJ_MIN_TOTAL_MASS = 2.0
 # Maximum total mass for injections
-INJ_MAX_TOTAL_MASS = 6.0		
+INJ_MAX_TOTAL_MASS = 6.0
 # minimum frequency for injections. NOTE this should be lower than the intended filtering frequency
-INJ_FLOW = 35				
+INJ_FLOW = 35
 
 ## Segment and frame type info
 SEG_SERVER=https://segdb.ligo.caltech.edu
@@ -85,7 +85,7 @@ LIGO_FRAME_TYPE='$*_T1200307_V4_EARLY_GAUSSIAN'
 LIGO_SEGMENTS="$*:CBC-MDC1_SCIENCE_EARLY_GAUSSIAN"
 VIRGO_FRAME_TYPE='V1_T1300121_V1_EARLY_GAUSSIAN'
 # Channel names to analyze. NOTE every IFO should get a channel name, but they can be different and depend on the data
-CHANNEL_NAMES:=--channel-name=H1=GAUSSIAN --channel-name=L1=GAUSSIAN --channel-name=V1=GAUSSIAN 
+CHANNEL_NAMES:=--channel-name=H1=GAUSSIAN --channel-name=L1=GAUSSIAN --channel-name=V1=GAUSSIAN
 
 ## FIXME MISSING vetoes
 # In principle a similar set of segment queries can be written to extract vetoes
