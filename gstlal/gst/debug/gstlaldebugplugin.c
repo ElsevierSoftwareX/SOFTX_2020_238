@@ -41,6 +41,7 @@
  */
 
 
+#include <tsvdec.h>
 
 
 /*
@@ -58,6 +59,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"tsvdec", GSTLAL_TSVDEC_TYPE},
 		{NULL, 0},
 	};
 
