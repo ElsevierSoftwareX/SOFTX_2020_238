@@ -129,8 +129,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps;
 	guint nbytes;
 	guint nlines = 0;
-	char *bufdata = NULL;
-	guint bufsize = 0;
 
 	/* get copy of caps of srcpad */
 	caps = gst_pad_get_fixed_caps_func(element->srcpad);
