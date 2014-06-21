@@ -658,12 +658,12 @@ static void finalize(GObject *object)
 {
 
 	GSTLALItac *element = GSTLAL_ITAC(object);
-	//FIXME make sure everything is freed
 	g_mutex_free(element->bank_lock);
 	gst_object_unref(element->sinkpad);
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+	gst_audioadapter_clear(element->adapter);
 	g_object_unref(element->adapter);
 	if (element->instrument) {
 		free(element->instrument);
@@ -676,7 +676,7 @@ static void finalize(GObject *object)
 	if (element->bankarray)
 		free_bank(element);
 	if (element->maxdata) {
-		free(element->maxdata);
+		gstlal_peak_state_free(element->maxdata);
 		element->maxdata = NULL;
 		}
 	if (element->data) {
