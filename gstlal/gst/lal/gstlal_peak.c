@@ -385,7 +385,11 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+	gst_audioadapter_clear(element->adapter);
 	g_object_unref(element->adapter);
+	gstlal_peak_state_free(element->maxdata);
+	if (!element->data)
+		free(element->data);  
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
