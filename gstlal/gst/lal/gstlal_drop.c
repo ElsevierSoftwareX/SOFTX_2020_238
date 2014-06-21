@@ -268,6 +268,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if ( GST_BUFFER_SIZE(sinkbuf) <= dropsize )
 	/* drop entire buffer */
 	{
+		gst_buffer_unref(sinkbuf);
 		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 		result = GST_FLOW_OK;
 	}
@@ -275,6 +276,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* drop part of buffer, pass the rest */
 	{
 		GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, dropsize, GST_BUFFER_SIZE(sinkbuf) - dropsize);
+		gst_buffer_unref(sinkbuf); // unref sinkbuf since gst_buffer_create_sub() will ref it
 		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
 		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
