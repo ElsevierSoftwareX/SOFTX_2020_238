@@ -44,7 +44,6 @@ import threading
 import time
 import httplib
 import tempfile
-import multiprocessing
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -212,19 +211,6 @@ def parse_iirbank_string(bank_string):
 		out.setdefault(ifo, []).append(bank)
 	return out
 
-def parse_bank_file((instrument, filename, verbose, snr_threshold)):
-	for n, bank in enumerate(svd_bank.read_banks(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)):
-		# Write out sngl inspiral table to temp file for trigger generator
-		# FIXME teach the trigger generator to get this information a better way
-		bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
-		xmldoc = ligolw.Document()
-		xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table)
-		ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
-		xmldoc.unlink()	# help garbage collector
-		bank.logname = "%sbank%d" % (instrument, n)
-		if snr_threshold is not None:
-			bank.snr_threshold = snr_threshold
-		return instrument, bank
 
 def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	"""
@@ -234,9 +220,19 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 	banks = {}
 
-	pool = multiprocessing.Pool(processes = 4)
-	for instrument, bank in pool.map(parse_bank_file, [(instrument, filename, verbose, snr_threshold) for instrument, filename in svd_banks.items()]):
-		banks.setdefault(instrument, []).append(bank)
+	for instrument, filename in svd_banks.items():
+		for n, bank in enumerate(svd_bank.read_banks(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)):
+			# Write out sngl inspiral table to temp file for trigger generator
+			# FIXME teach the trigger generator to get this information a better way
+			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
+			xmldoc = ligolw.Document()
+			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table)
+			ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
+			xmldoc.unlink()	# help garbage collector
+			bank.logname = "%sbank%d" % (instrument, n)
+			banks.setdefault(instrument, []).append(bank)
+			if snr_threshold is not None:
+				bank.snr_threshold = snr_threshold
 
 	# FIXME remove when this is no longer an issue
 	if not banks:
