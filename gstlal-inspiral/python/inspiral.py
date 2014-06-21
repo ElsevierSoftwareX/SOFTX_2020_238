@@ -238,7 +238,6 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	for instrument, bank in pool.map(parse_bank_file, [(instrument, filename, verbose, snr_threshold) for instrument, filename in svd_banks.items()]):
 		banks.setdefault(instrument, []).append(bank)
 
-	del pool
 	# FIXME remove when this is no longer an issue
 	if not banks:
 		raise ValueError("Could not parse bank files into valid bank dictionary.\n\t- Perhaps you are using out-of-date svd bank files?  Please ensure that they were generated with the same code version as the parsing code")
