@@ -4,7 +4,24 @@ plugin_LTLIBRARIES = libcuda_plugin.la
 
 libcuda_plugin_la_SOURCES = \
 	cuda_plugin.c \
-	multidownsample/gstlal_multidownsample.c
+	multiratespiir/resampler_state_utils.c \
+	multiratespiir/spiir_state_utils.c \
+	multiratespiir/multiratespiir_utils.c \
+	multiratespiir/multiratespiir.c
+
+#	iirfilter folder is working 
+#	iirfilter/iirfilter_kernel.cu \
+#	iirfilter/cuda_gstlal_iirbank.c \
+#
+
+#	audioresample folder not working, seg fault
+#	audioresample/cuda_gstaudioresample.c \
+#	audioresample/speex_resampler_int.c \
+#	audioresample/speex_resampler_float.c \
+#	audioresample/speex_resampler_double.c
+
+#	multidownsample folder not working, seg fault
+#	multidownsample/gstlal_multidownsample.c
 
 libcuda_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) $(NVCC_CFLAGS)
 
@@ -18,15 +35,5 @@ libcuda_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS)
 noinst_HEADERS = \
 	iirfilter/iirfilter_kernel.h \
 	iirfilter/cuda_gstlal_iirbank.h \
-	audioresample/arch.h \
-	audioresample/fixed_arm4.h \
-	audioresample/fixed_arm5e.h \
-	audioresample/fixed_bfin.h \
-	audioresample/fixed_debug.h \
-	audioresample/fixed_generic.h \
-	audioresample/cuda_gstaudioresample.h \
-	audioresample/resample.c \
-	audioresample/resample_sse.h \
-	audioresample/speex_resampler.h \
-	audioresample/speex_resampler_wrapper.h
- 
+	multiratespiir/multiratespiir.h
+
