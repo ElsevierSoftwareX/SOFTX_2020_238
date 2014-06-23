@@ -609,7 +609,6 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     g_assert(last_num_out_spiirup == out_len);
     free(tmp_out);
 
-
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
       GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
