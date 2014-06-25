@@ -368,7 +368,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 	# Smooth the PSD and interpolate to required resolution
 	if psd is not None:
-		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max))
+		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
 
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
