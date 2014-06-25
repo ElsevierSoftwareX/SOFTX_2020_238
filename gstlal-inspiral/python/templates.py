@@ -251,8 +251,10 @@ def time_slices(
 	while allowed_rates[0] > sample_rate_max:
 		allowed_rates.pop(0)
 
-	# make sure the second highest rate is less than ringdown frequency
-	allowed_rates = [allowed_rates[0]] + [r for r in allowed_rates if r < min(spawaveform.imrffinal(row.mass1, row.mass2, spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z), 'ringdown') for row in sngl_inspiral_rows)]
+	# make sure the Nyquist rate of the second allowed rate is less than
+	# ringdown frequency else cut allowed rates until it is true
+	min_ringdown_frequency = min(spawaveform.imrffinal(row.mass1, row.mass2, spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z), 'ringdown') for row in sngl_inspiral_rows)
+	allowed_rates = [allowed_rates[0]] + [r for r in allowed_rates[1:] if r/(2.*padding) < min_ringdown_frequency]
 
 	#
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
@@ -276,10 +278,15 @@ def time_slices(
 	time_freq_boundaries = []
 	accum_time = 0
 
-	# get the lower rate boundaries
-	rates_below = [r for r in allowed_rates[1:]] + [flow]
+	# Get the low frequency staring points for the chirptimes at a given
+	# rate.  This is always a factor of 2*padding smaller than the rate
+	# below to gaurantee that the waveform doesn't cross the Nyquist rate
+	# in the next time slice. The last element should always be the
+	# requested flow.  The allowed rates won't go below that by
+	# construction.
+	rates_below = [r/(2.*padding) for r in allowed_rates[1:]] + [flow]
 
-	for rate_below, rate in zip(rates_below, allowed_rates):
+	for this_flow, rate in zip(rates_below, allowed_rates):
 		if rate >= 256:
 			segment_samples_max = samples_max_256
 		elif rate >= 64:
@@ -290,8 +297,6 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		# Factor of 2 goes from sample rate to Nyquist freq
-		this_flow = float(rate_below)/(2*padding)
 		longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
