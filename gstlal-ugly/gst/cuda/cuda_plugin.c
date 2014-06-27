@@ -45,6 +45,7 @@
 #include <iirfilter/cuda_gstlal_iirbank.h>
 #include <audioresample/cuda_gstaudioresample.h>
 #include <multidownsample/gstlal_multidownsample.h>
+#include <multiratespiir/multiratespiir.h>
 
 
 /*
@@ -64,7 +65,8 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 //		{"cuda_iirbank", CUDA_IIRBANK_TYPE},
 //		{"cuda_audioresample", CUDA_AUDIO_RESAMPLE_TYPE},
-		{"gstlal_multidownsample", GSTLAL_MULTI_DOWNSAMPLE_TYPE},
+//		{"gstlal_multidownsample", GSTLAL_MULTI_DOWNSAMPLE_TYPE},
+		{"cuda_multiratespiir", CUDA_TYPE_MULTIRATE_SPIIR},
 		{NULL, 0},
 	};
 
