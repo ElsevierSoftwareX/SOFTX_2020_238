@@ -286,7 +286,7 @@ Redundant entries are ommitted
 <tr><td>					</td><td> reference_psd.py		</td><td> 648	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> simplehandler.py		</td><td> 143	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> datasource.py			</td><td> 749	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>					</td><td> multirate_datasource.py	</td><td> 291	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td>					</td><td> multirate_datasource.py	</td><td> 291	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> glue.segments			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> glue.ligolw*			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.datatypes		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
@@ -296,7 +296,7 @@ Redundant entries are ommitted
 <tr><td>					</td><td> pylal.spawaveform		</td><td> 1244	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> glue.lal			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> templates.py			</td><td> 299	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td>					</td><td> inspiral_pipe.py		</td><td> 279	</td><td> \notreviewed	</td><td> \moddev </td></tr>
+<tr><td>					</td><td> inspiral_pipe.py		</td><td> 279	</td><td> \reviewed with actions	</td><td> \moddev </td></tr>
 <tr><td> gstlal_psd_xml_from_asd_txt		</td><td>                               </td><td> 81	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.xlal*			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td> ligolw_add				</td><td>                               </td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
@@ -366,7 +366,7 @@ Redundant entries are ommitted
 \subsection Broader action items
 
 - Test robustness of fixed bank (start by figuring out the right question!)
- - *Chad: Can we leverage Marcel's tests of this? Need it be gstlal specific?*
+ - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
  - *Chad: This process has been started.  See, e.g., Makefile.triggers_example*
 - Test delta function input to LLOID algorithm (e.g with and without SVD)
@@ -386,6 +386,5 @@ Redundant entries are ommitted
 - Add description of arrows in graphs
 - Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
-
 
 ![Kipp explaining that the Flux Capacitor is what makes time travel possible; Jolien responds incredulously](@ref kipp.png)  ![LLOID](@ref lloid.png) 
