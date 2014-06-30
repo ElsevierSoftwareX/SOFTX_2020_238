@@ -310,10 +310,8 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	AC_DEFINE([HAVE_FRAMECPP], [1], [Defined if you have framecpp])
 	framecpp_VERSION=`$PKG_CONFIG --modversion framecpp`
 	AC_MSG_NOTICE([framecpp version: $framecpp_VERSION])
-	# we now require this version so this isn't needed, it's left as an
-	# example
-	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [1.19.25], [
-		AC_DEFINE([HAVE_FRAMECPP_FrameLibraryName], [1], [Defined if framecpp supplies FrameLibraryName() function])
+	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [2.0.0], [
+		AC_DEFINE([HAVE_FRAMECPP_2x], [1], [Defined if framecpp >= 2.x])
 	])
 	# FIXME:  the "-std=c++0x" option is here as a temporary hack until
 	# we can find a way to get the autoconf macros to configure the
