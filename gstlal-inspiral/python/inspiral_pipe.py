@@ -24,6 +24,17 @@
 # @package inspiral_pipe
 #
 # A module that contains the inspiral_pipe module code; used to construct condor dags
+#
+# ### Review Status
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e    | 2014-06-18 |
+#
+# #### Actions
+#
+# - In inspiral_pipe.py Fix the InsiralJob.___init___: fix the arguments
+# - On line 201, fix the comment or explain what the comment is meant to be
 
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
