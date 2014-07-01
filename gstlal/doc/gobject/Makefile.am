@@ -93,7 +93,7 @@ expand_content_files=
 # signals and properties.
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
-GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/lib/gstlal -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/lib -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 GTKDOC_LIBS = $(AM_LDFLAGS) -static \
 	$(top_builddir)/lib/gstlal/libgstlal.la \
 	$(top_builddir)/lib/gstlal/libgstlaltags.la \
