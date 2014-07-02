@@ -57,12 +57,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE(
+GST_BOILERPLATE_FULL(
 	CudaMultirateSPIIR,
 	cuda_multirate_spiir,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
-//	additional_initializations
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 enum
@@ -219,6 +219,7 @@ static gboolean
 cuda_multirate_spiir_start (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+  element->adapter = gst_adapter_new();
 
   element->adapter = gst_adapter_new();
   element->need_discont = TRUE;
@@ -776,6 +777,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
     element->spstate_initialised = TRUE;
   }
+
 
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event
