@@ -57,12 +57,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+GST_BOILERPLATE(
 	CudaMultirateSPIIR,
 	cuda_multirate_spiir,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_TYPE_BASE_TRANSFORM
+//	additional_initializations
 );
 
 enum
