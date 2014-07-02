@@ -33,7 +33,7 @@ Immediate development tasks in no particular order
 * Incorporate bank veto
 * add to the gstlal summary page
   * population statement plot
-  * plots showing likelihood distributions and background pdfs, etc.
+  * plots showing likelihood distributions, signal and background pdfs, etc.
   * histograms for injection accuracy
 * inspiral DAGs:
   * try to get it to do something sane on 1 core?
