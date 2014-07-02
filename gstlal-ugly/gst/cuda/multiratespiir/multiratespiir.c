@@ -51,12 +51,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE(
+GST_BOILERPLATE_FULL(
 	CudaMultirateSPIIR,
 	cuda_multirate_spiir,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
-//	additional_initializations
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 enum
 {
@@ -105,6 +105,10 @@ static gboolean cuda_multirate_spiir_set_caps (GstBaseTransform * base,
     GstCaps * incaps, GstCaps * outcaps);
 static GstFlowReturn cuda_multirate_spiir_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
+//static gboolean cuda_multirate_spiir_transform_size (GstBaseTransform * base,
+//   GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
+//    guint * othersize);
+
 // FIXME:event
 //static gboolean cuda_multirate_spiir_event (GstBaseTransform * base,
 //    GstEvent * event);
@@ -141,6 +145,9 @@ cuda_multirate_spiir_base_init (gpointer g_class)
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_caps);
   GST_BASE_TRANSFORM_CLASS (g_class)->transform =
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform);
+
+//  GST_BASE_TRANSFORM_CLASS (g_class)->transform_size =
+//      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform_size);
 //  GST_BASE_TRANSFORM_CLASS (g_class)->event =
 //      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_event);
 
@@ -186,6 +193,7 @@ static gboolean
 cuda_multirate_spiir_start (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+  element->adapter = gst_adapter_new();
 
   element->need_discont = TRUE;
 
@@ -210,6 +218,8 @@ cuda_multirate_spiir_stop (GstBaseTransform * base)
   if (element->spstate) {
     spiir_state_destroy (element->spstate, element->num_depths);
     }
+  g_object_unref (element->adapter);
+  element->adapter = NULL;
 
   return TRUE;
 }
@@ -233,6 +243,7 @@ cuda_multirate_spiir_get_unit_size (GstBaseTransform * base, GstCaps * caps,
     return FALSE;
 
   *size = (width / 8) * channels;
+  GST_DEBUG_OBJECT (base, "get unit size of caps %d", *size);
 
   return TRUE;
 }
@@ -247,23 +258,20 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
 
   othercaps = gst_caps_copy(caps);
 
-  if (direction == GST_PAD_SRC) {
+  if (direction == GST_PAD_SRC)
     /*
      * sink caps is the same with src caps, except it only has 1 channel
      */
 
-    gst_structure_set(gst_caps_get_structure(caps, 0), "channels", G_TYPE_INT, 1, NULL);
+    gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, 1, NULL);
 
-  } else {
+   else 
     /*
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
 
-    if (element->matrix_initialised)
-      gst_structure_set(gst_caps_get_structure(caps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_num_templates(element), NULL);
-    else
-      gst_structure_set(gst_caps_get_structure(caps, 0), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
-  }
+    gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+  
 
   return othercaps;
 }
@@ -304,7 +312,6 @@ no_in_rate_channels:
     return FALSE;
   }
 }
-
 #if 0
 // FIXME: sizes calculated here are uplimit sizes, not necessarily the true sizes. 
 static gboolean
@@ -340,14 +347,14 @@ cuda_multirate_spiir_transform_size (GstBaseTransform * base,
      * asked to convert size of an incoming buffer. The output size 
      * will be determined by the lowest rate
      */
-    g_assert(element->matrix_initialised);
-    *othersize = samples * get_num_templates(element);
+//    g_assert(element->matrix_initialised == TRUE);
+    *othersize = samples * cuda_multirate_spiir_get_num_templates(element);
     *othersize *= bytes_per_samp;
   } else {
     /* asked to convert size of an outgoing buffer. 
      */
-    g_assert(element->matrix_initialised);
-    *othersize = samples / get_num_templates(element);
+//    g_assert(element->matrix_initialised == TRUE);
+    *othersize = samples / cuda_multirate_spiir_get_num_templates(element);
     *othersize *= bytes_per_samp;
   }
 
@@ -751,7 +758,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
    * output buffer is generated in filter_and_push function.
    * no need for the outbuf here.
    */
-  gst_buffer_unref(outbuf);
+ // gst_buffer_unref(outbuf);
 
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
   GstFlowReturn res;
@@ -759,7 +766,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   /*
    * initialise spiir state
    */
-
   if (element->spstate_initialised == FALSE) {
     element->spstate = spiir_state_init (element->num_depths, 
 		    element->num_cover_samples, element->num_exe_samples,
@@ -768,11 +774,13 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->spstate_initialised = TRUE;
   }
 
+  gulong size;
+  size = GST_BUFFER_SIZE (inbuf);
 
   GST_LOG_OBJECT (element, "transforming buffer of %ld bytes, ts %"
       GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
-      GST_BUFFER_SIZE(inbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)),
+      size, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (inbuf)),
       GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
 
@@ -928,7 +936,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
     case PROP_MATRIX:
       GST_BASE_TRANSFORM_LOCK (element);
       element->outchannels = g_value_get_int (value); //FIXME: hard code to 1 for outchannels
-      element->matrix_initialised = 1;
+      element->matrix_initialised = TRUE;
       GST_DEBUG_OBJECT (element, "set number of outchannels %d", element->outchannels);
       GST_BASE_TRANSFORM_UNLOCK (element);
       break;
