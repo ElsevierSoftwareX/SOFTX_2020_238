@@ -1,7 +1,7 @@
 
 #include "multiratespiir_utils.h"
 
-gint init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen)
+gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen)
 {
 	gint i = num_depths;
 	gint rateleft = rate; 
@@ -15,7 +15,7 @@ gint init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_
 }
 
 
-gint get_num_templates(CudaMultirateSPIIR *element)
+gint cuda_multirate_spiir_get_num_templates(CudaMultirateSPIIR *element)
 {
 	if( element->matrix_initialised)
 		return element->outchannels;
@@ -23,19 +23,19 @@ gint get_num_templates(CudaMultirateSPIIR *element)
 		return 1;
 }
 
-gint get_num_cover_samples(CudaMultirateSPIIR *element)
+gint cuda_multirate_spiir_get_num_cover_samples(CudaMultirateSPIIR *element)
 {
 	return element->num_cover_samples;
 }
 
-void add_two_data(float *data1, float *data2, gint len)
+void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len)
 {
 	int i;
 	for(i=0; i<len; i++)
 		data1[i] = data1[i] + data2[i];
 }
 
-guint64 get_available_samples(CudaMultirateSPIIR *element)
+guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element)
 {
 	return gst_adapter_available(element->adapter) / ( element->width / 8 );
 }

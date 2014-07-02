@@ -22,6 +22,7 @@
 #ifndef __CUDA_MULTIRATE_SPIIR_H__
 #define __CUDA_MULTIRATE_SPIIR_H__
 
+#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 #include <gst/base/gstadapter.h>

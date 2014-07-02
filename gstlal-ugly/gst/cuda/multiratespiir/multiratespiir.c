@@ -30,14 +30,17 @@
 #include <string.h>
 #include <math.h>
 
+#include <glib.h>
+#include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
+#include <gst/base/gstadapter.h>
+#include <gstlal/gstlal.h>
+
+
 #include "multiratespiir.h"
 #include "multiratespiir_utils.h"
 #include "spiir_state_utils.h"
 #include "resampler_state_utils.h"
-#include <gst/gstutils.h>
-#include <gst/base/gstbasetransform.h>
-#include <gst/base/gstadapter.h>
-
 #define GST_CAT_DEFAULT cuda_multirate_spiir_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
@@ -48,12 +51,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+GST_BOILERPLATE(
 	CudaMultirateSPIIR,
 	cuda_multirate_spiir,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_TYPE_BASE_TRANSFORM
+//	additional_initializations
 );
 enum
 {
@@ -62,22 +65,31 @@ enum
   PROP_MATRIX
 };
 
-#define SUPPORTED_CAPS \
-GST_STATIC_CAPS ( \
-    "audio/x-raw-float, " \
-      "rate = (int) [ 1, MAX ], "  \
-      "channels = (int) [ 1, MAX ], " \
-      "endianness = (int) BYTE_ORDER, " \
-      "width = (int) { 32, 64 }; " \
-)
-
 static GstStaticPadTemplate cuda_multirate_spiir_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
-    GST_PAD_SINK, GST_PAD_ALWAYS, SUPPORTED_CAPS);
+GST_STATIC_PAD_TEMPLATE (
+		"sink",
+		GST_PAD_SINK, 
+		GST_PAD_ALWAYS, 
+		GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
+		));
 
 static GstStaticPadTemplate cuda_multirate_spiir_src_template =
-GST_STATIC_PAD_TEMPLATE ("src",
-    GST_PAD_SRC, GST_PAD_ALWAYS, SUPPORTED_CAPS);
+GST_STATIC_PAD_TEMPLATE (
+		"src",
+		GST_PAD_SRC, 
+		GST_PAD_ALWAYS, 
+		GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
+		));
 
 static void cuda_multirate_spiir_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -108,14 +120,30 @@ cuda_multirate_spiir_base_init (gpointer g_class)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (g_class);
 
+  gst_element_class_set_details_simple (gstelement_class, "Multirate SPIIR",
+      "Filter/Converter/Audio", "Resamples audio",
+      "Qi Chu <qi.chu@ligo.org>");
+
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&cuda_multirate_spiir_src_template));
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&cuda_multirate_spiir_sink_template));
 
-  gst_element_class_set_details_simple (gstelement_class, "Multirate SPIIR",
-      "Filter/Converter/Audio", "Resamples audio",
-      "Qi Chu <qi.chu@ligo.org>");
+  GST_BASE_TRANSFORM_CLASS (g_class)->start =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_start);
+  GST_BASE_TRANSFORM_CLASS (g_class)->stop =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_stop);
+  GST_BASE_TRANSFORM_CLASS (g_class)->get_unit_size =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_unit_size);
+  GST_BASE_TRANSFORM_CLASS (g_class)->transform_caps =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform_caps);
+  GST_BASE_TRANSFORM_CLASS (g_class)->set_caps =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_caps);
+  GST_BASE_TRANSFORM_CLASS (g_class)->transform =
+      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform);
+//  GST_BASE_TRANSFORM_CLASS (g_class)->event =
+//      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_event);
+
 }
 
 static void
@@ -123,38 +151,20 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
 
-  gobject_class->set_property = cuda_multirate_spiir_set_property;
-  gobject_class->get_property = cuda_multirate_spiir_get_property;
+  gobject_class->set_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_property);
+  gobject_class->get_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_property);
 
   g_object_class_install_property (gobject_class, PROP_NUM_DEPTHS,
-      g_param_spec_int ("num_depths", "Num_depths", "Resample depths"
-          "[0-7]",
-          RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
-          RESAMPLER_NUM_DEPTHS_DEFAULT,
-          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class, PROP_MATRIX,
-      g_param_spec_int ("matrix", "Matrix", "Matrix"
-          "[0-7]",
+      g_param_spec_int ("num_depths", "Num_depths", "number of depths [0-7] ",
           RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
           MATRIX_DEFAULT,
-          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
+          G_PARAM_READWRITE));
 
-
-  GST_BASE_TRANSFORM_CLASS (klass)->start =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_start);
-  GST_BASE_TRANSFORM_CLASS (klass)->stop =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_stop);
-  GST_BASE_TRANSFORM_CLASS (klass)->get_unit_size =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_unit_size);
-  GST_BASE_TRANSFORM_CLASS (klass)->transform_caps =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform_caps);
-  GST_BASE_TRANSFORM_CLASS (klass)->set_caps =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_caps);
-  GST_BASE_TRANSFORM_CLASS (klass)->transform =
-      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform);
-//  GST_BASE_TRANSFORM_CLASS (klass)->event =
-//      GST_DEBUG_FUNCPTR (cuda_multirate_spiir_event);
+  g_object_class_install_property (gobject_class, PROP_MATRIX,
+      g_param_spec_int ("matrix", "Matrix", "matrix [0-7]",
+          RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
+          MATRIX_DEFAULT,
+          G_PARAM_READWRITE));
 
 }
 
@@ -249,8 +259,10 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
 
-    g_assert(element->matrix_initialised);
-    gst_structure_set(gst_caps_get_structure(caps, 0), "channels", G_TYPE_INT, get_num_templates(element), NULL);
+    if (element->matrix_initialised)
+      gst_structure_set(gst_caps_get_structure(caps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_num_templates(element), NULL);
+    else
+      gst_structure_set(gst_caps_get_structure(caps, 0), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
   }
 
   return othercaps;
@@ -367,9 +379,9 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
 
   if (!success) 
     GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
-  if (channels != (gint) get_num_templates(element))
+  if (element->matrix_initialised && (channels != (gint) cuda_multirate_spiir_get_num_templates(element)))
     /* impossible to happen */
-    GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, get_num_templates(element), outcaps);
+    GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, cuda_multirate_spiir_get_num_templates(element), outcaps);
   if (width != (gint) element->width) {
     if (element->spstate_initialised)
       /*
@@ -388,7 +400,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
       element->rate = rate; }
 
   if (!element->spstate_initialised) {
-    element->num_cover_samples = init_cover_samples(rate, element->num_depths, DOWN_FILT_LEN, UP_FILT_LEN);
+    element->num_cover_samples = cuda_multirate_spiir_init_cover_samples(rate, element->num_depths, DOWN_FILT_LEN, UP_FILT_LEN);
     element->num_exe_samples = rate;
   }
   return success;
@@ -533,7 +545,7 @@ spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths)
     iir_filter (pos_inqueue, num_inchunk, pos_out_spiir);
 
     if (i < num_depths - 1) {
-      add_two_data (SPSTATE(i)->out_spiir, SPSTATE(i+1)->out_up, num_inchunk);
+      cuda_multirate_spiir_add_two_data (SPSTATE(i)->out_spiir, SPSTATE(i+1)->out_up, num_inchunk);
     }
 
     pos_out_up = SPSTATE(i)->out_up;
@@ -549,7 +561,7 @@ spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths)
   pos_inqueue = SPSTATE(0)->queue;
   pos_out_spiir = SPSTATE(0)->out_spiir;
   iir_filter (pos_inqueue, num_inchunk, pos_out_spiir);
-  add_two_data (SPSTATE(0)->out_spiir, SPSTATE(1)->out_up, num_inchunk);
+  cuda_multirate_spiir_add_two_data (SPSTATE(0)->out_spiir, SPSTATE(1)->out_up, num_inchunk);
   spiir_state_flush_queue (spstate, 0, out_processed);
   return out_processed;
 }
@@ -819,7 +831,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
          */
         num_zeros = num_cover_samples - history_gap_samples;
         adapter_push_zeros (element, num_zeros);
-	adapter_len = get_available_samples(element);
+	adapter_len = cuda_multirate_spiir_get_available_samples(element);
         filter_and_push (element, adapter_len);
         /*
          * one gap buffer
@@ -868,7 +880,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       gst_adapter_clear (element->adapter);
     }
     element->num_gap_samples = 0;
-    adapter_len = get_available_samples(element);
+    adapter_len = cuda_multirate_spiir_get_available_samples(element);
     /*
      * here merely speed consideration: samples ready to be processed less than num_exe_samples,
      * wait until there are more than num_exe_samples
@@ -887,7 +899,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       /* 
        * to speed up, number of samples to be filtered is times of num_exe_samples
        */
-      adapter_len = get_available_samples(element);
+      adapter_len = cuda_multirate_spiir_get_available_samples(element);
       num_filt_samples = gst_util_uint64_scale_int (adapter_len, 1, num_exe_samples) * num_exe_samples;
       filter_and_push(element, num_filt_samples);
     }

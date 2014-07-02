@@ -14,14 +14,14 @@
 // guint get_num_outsamples(SpiirState **pspstate, guint insamples
 //
 
-gint init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen);
+gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen);
 
-gint get_num_templates(CudaMultirateSPIIR *element);
+gint cuda_multirate_spiir_get_num_templates(CudaMultirateSPIIR *element);
 
-gint get_num_cover_samples(CudaMultirateSPIIR *element);
-guint64 get_available_samples(CudaMultirateSPIIR *element);
+gint cuda_multirate_spiir_get_num_cover_samples(CudaMultirateSPIIR *element);
+guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element);
 
-void add_two_data(float *data1, float *data2, gint len);
+void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len);
 
 
 
