@@ -83,6 +83,7 @@ def matrixmixer_test_01(pipeline, name, width, channels):
 
 
 def matrixmixer_test_02(name, dtype, samples, channels_in, channels_out):
+	numpy.random.seed(0)
 	input_array = numpy.random.random((samples, channels_in)).astype(dtype)
 	# element always ingests mix matrix as double-precision floats
 	mix = numpy.random.random((channels_in, channels_out)).astype("float64")
