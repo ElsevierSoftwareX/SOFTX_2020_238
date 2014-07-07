@@ -148,7 +148,7 @@
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
 #	+ `--gracedb-type`: gracedb type, default is LowMass.
 #	+ `--gracedb-group`: gracedb group, default is Test.
-#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 30s.
+#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
 #
 # ### Review Status
@@ -176,6 +176,7 @@ import socket
 import time
 import tempfile
 import itertools
+import math
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -286,7 +287,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
-	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
 	# in the process_params table to determine the threshold below
 	# which it can delete uninteresting singles after the coincs are
