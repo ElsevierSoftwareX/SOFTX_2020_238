@@ -152,7 +152,24 @@ for n, url in enumerate(urls, start = 1):
 
 #
 # regenerate event parameter PDFs.  += method doesn't compute these
-# correctly.  also generate likelihood ratio PDFs
+# correctly.
+#
+# NOTE:  the FAP/FAR code doesn't actually use any of the information in
+# the parameter PDF file.  that code does need to know the "count above
+# threshold" but in the offline case that count isn't known until after the
+# coincs are ranked (the files loaded here have the count of all coincs,
+# not just coincs above the ranking stat FAP/FAR normalization threshold).
+# the compute_far_from_snr_chisq_histograms program will count the
+# above-threshold events itself and replace the coinc counts in the
+# parameter PDF file with its counts and write a new file.  we wouldn't
+# need to load the parameter PDF files here at all except that the Farr et
+# al. rate estimation code needs the marginalized numerator and denominator
+# parameter PDFs.
+#
+# also re-generate likelihood ratio (ranking data) PDFs from the combined
+# bin counts.  this shouldn't be needed but it's fast and maybe more
+# accurate than relying on the weighted sum of the PDFs to have been
+# numerically stable
 #
 
 
