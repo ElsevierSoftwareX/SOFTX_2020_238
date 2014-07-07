@@ -24,8 +24,6 @@
 #	+ `--horizon-history-url` [filename]: Load horizon distance history from this URL.  Required, can be given multiple times.
 #	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
 #	+ `--verbose`: Be verbose.
-#	+ `--synthesize-injections` [N] (int): Synthesize an injection distribution with N injections, default is 0.
-#	+ `--background-prior` [N] (float): Include an exponential background prior with the maximum bin count = N, default is 0, no additional prior.
 #	+ `--ranking-stat-samples` [N] (int): Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 1000000).
 #	+ `--output` [filename]: Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.
 
@@ -77,8 +75,6 @@ def parse_command_line():
 	parser.add_option("--horizon-history-url", action = "append", metavar = "filename", help = "Load horizon distance history from this URL.  Required, can be given multiple times.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
-	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 1000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 1000000).")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
@@ -170,13 +166,8 @@ for n, likelihood_url in enumerate(urls, start = 1):
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-# calculate injections before writing to disk
-if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
-
-# add a uniform prior to background, by default 0 is added so it has no effect
-if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
+# Compute the intrument combination counts
+coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
 
 
 #
