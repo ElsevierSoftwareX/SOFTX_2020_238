@@ -267,6 +267,8 @@ if options.synthesize_injections != 0:
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
 
+# compute the instrument combination counts
+coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
 
 #
 # rebuild event parameter PDFs (+= method has not constructed these
