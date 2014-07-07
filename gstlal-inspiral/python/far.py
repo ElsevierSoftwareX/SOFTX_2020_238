@@ -40,6 +40,7 @@ import multiprocessing
 import multiprocessing.queues
 import numpy
 import random
+import warnings
 from scipy import interpolate
 from scipy import optimize
 from scipy import stats
@@ -425,6 +426,47 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def add_background_prior(self, segs, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		#
+		# populate snr,chi2 binnings
+		#
+
+		if verbose:
+			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
+		for instrument in segs:
+			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] = n
+			binarr = self.background_rates["%s_snr_chi" % instrument]
+			if verbose:
+				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
+			else:
+				progressbar = None
+
+			# will need to normalize results so need new
+			# storage
+			new_binarr = rate.BinnedArray(binarr.bins)
+			# Custom handle the first and last over flow bins
+			snrs = new_binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = new_binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for snr in snrs:
+				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
+				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
+				for chi2_over_snr2 in chi2_over_snr2s:
+					new_binarr[snr, chi2_over_snr2] += p
+				if progressbar is not None:
+					progressbar.increment()
+			# normalize to the requested count
+			new_binarr.array *= n / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
+
+		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
+		self.add_foreground_snrchi_prior(self.background_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
+
+	def add_instrument_combination_counts(self, segs, verbose = False):
+
+		#
 		# populate instrument combination binning.  assume the
 		# single-instrument categories in the background rates
 		# instruments binning provide the background event counts
@@ -471,22 +513,23 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# of templates (experience shows that it is not equal to
 		# the number of templates, though I don't know why).
 		livetime = get_live_time(segs)
-		n = 0
+		N = 0
 		coincidence_bins = 0.
 		for instruments in coincsynth.all_instrument_combos:
 			predicted_count = coincsynth.rates[frozenset(instruments)] * livetime
 			observed_count = self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),]
 			if predicted_count > 0 and observed_count > 0:
 				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
-				n += 1
-		coincidence_bins /= n
-		if verbose:
-			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
-		if math.isnan(coincidence_bins) or coincidence_bins == 0.:
-			# in these cases all the rates are just 0
-			for instruments in coincsynth.all_instrument_combos:
-				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = 0.
+				N += 1
+		#FIXME this code path should not exist. You should not be allowed to do this. But for now it is useful for creating "prior" information.
+		if (coincidence_bins == 0) or (N == 0):
+			warnings.warn("There seems to be insufficient information to compute coincidence rates, setting them to unity")
+			for instruments, count in coincsynth.mean_coinc_count.items():
+				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = 1.
 		else:
+			coincidence_bins /= N
+			if verbose:
+				print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
 			assert coincidence_bins >= 1.
 			# convert single-instrument event rates to rates/bin
 			coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
@@ -496,43 +539,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for instruments, count in coincsynth.mean_coinc_count.items():
 				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
-		#
-		# populate snr,chi2 binnings
-		#
-
-		if verbose:
-			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
-		for instrument in segs:
-			binarr = self.background_rates["%s_snr_chi" % instrument]
-			if verbose:
-				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
-			else:
-				progressbar = None
-
-			# will need to normalize results so need new
-			# storage
-			new_binarr = rate.BinnedArray(binarr.bins)
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
-				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
-				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
-				for chi2_over_snr2 in chi2_over_snr2s:
-					new_binarr[snr, chi2_over_snr2] += p
-				if progressbar is not None:
-					progressbar.increment()
-			# normalize to the requested count
-			new_binarr.array *= n / new_binarr.array.sum()
-			# add to raw counts
-			binarr += new_binarr
-
-		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
-		self.add_foreground_snrchi_prior(self.background_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
 		if verbose:
