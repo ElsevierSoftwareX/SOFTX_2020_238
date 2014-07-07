@@ -395,6 +395,8 @@ def parse_command_line():
 		# run scratch space so this *will* work properly
 		detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), verbose = options.verbose)
 		for cacheentry in detectors.local_cache_list:
+			# Guarantee a lal cache complient file with only integer starts and durations.
+			cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
 			print >>f, str(cacheentry)
 		detectors.frame_cache = fname
 
