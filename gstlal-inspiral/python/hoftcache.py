@@ -128,7 +128,7 @@ class Handler(simplehandler.Handler):
 #
 
 
-def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 16384, verbose = False):
+def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 1024, verbose = False):
 	#
 	# get instrument and channel name (requires exactly one
 	# instrument+channel)
