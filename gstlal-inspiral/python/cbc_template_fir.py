@@ -109,8 +109,8 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		hplus,hcross = lalsim.SimInspiralChooseFDWaveform(
 			0., # phase
 			1.0 / duration, # sampling interval
-			lal.LAL_MSUN_SI * template_bank_row.mass1,
-			lal.LAL_MSUN_SI * template_bank_row.mass2,
+			lal.MSUN_SI * template_bank_row.mass1,
+			lal.MSUN_SI * template_bank_row.mass2,
 			template_bank_row.spin1x,
 			template_bank_row.spin1y,
 			template_bank_row.spin1z,
@@ -120,7 +120,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			f_low,
 			f_high,
 			f_high, #FIXME chosen until suitable default value for f_ref is defined
-			1.e6 * lal.LAL_PC_SI, # distance
+			1.e6 * lal.PC_SI, # distance
 			0., # inclination
 			0., # tidal deformability lambda 1
 			0., # tidal deformability lambda 2
@@ -144,8 +144,8 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		hplus,hcross = lalsim.SimInspiralChooseTDWaveform(
 			0., # phase
 			1.0 / sample_rate, # sampling interval
-			lal.LAL_MSUN_SI * template_bank_row.mass1,
-			lal.LAL_MSUN_SI * template_bank_row.mass2,
+			lal.MSUN_SI * template_bank_row.mass1,
+			lal.MSUN_SI * template_bank_row.mass2,
 			template_bank_row.spin1x,
 			template_bank_row.spin1y,
 			template_bank_row.spin1z,
@@ -154,7 +154,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			template_bank_row.spin2z,
 			f_low,
 			0, # reference frequency?
-			1.e6 * lal.LAL_PC_SI, # distance
+			1.e6 * lal.PC_SI, # distance
 			0., # inclination
 			0., # tidal deformability lambda 1
 			0., # tidal deformability lambda 2
