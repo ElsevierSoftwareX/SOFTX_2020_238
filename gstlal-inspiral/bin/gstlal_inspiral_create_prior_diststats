@@ -17,6 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 ## @file gstlal_inspiral_create_prior_diststats
+# A program to create some prior likelihood data to seed an online analysis
 #
 # ### Command line interface
 #	+ `--verbose`: Be verbose.
@@ -35,15 +36,17 @@
 #
 
 
+import sys
 from optparse import OptionParser
 
 
 from glue import segments
-from gstlal import far
-from glue.ligolw import ligolw
+from gstlal import far, inspiral
+from glue.ligolw import ligolw, lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from pylal.datatypes import LIGOTimeGPS
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -68,7 +71,6 @@ def parse_command_line():
 	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze")
-	parser.add_option("--trials-far-thresh", type = "float", help = "set the far threshold for the thresh parameter in the trials table")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
@@ -107,7 +109,7 @@ options, filenames = parse_command_line()
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
 # FIXME:  need segment lists and horizon distances
-seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(0., 1.)]))
+seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(LIGOTimeGPS(0.), LIGOTimeGPS(1.))]))
 horizon_distances = {
 	"H1": 120.0,
 	"L1": 120.0,
@@ -129,6 +131,37 @@ xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_prior_diststats", paramdict = {})
 search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, None, seglists, comment = u"background and signal priors (no real data)")
+ligolw_process.set_process_end_time(process)
+
+
+#
+# Make a fake horizon distance summ_values table
+#
+
+
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", {})
+# can't use .copy() method, need to make new one, because
+# it might be in a database
+summ_value_table = lsctables.New(lsctables.SummValueTable)
+
+for instrument, dist in horizon_distances.items():
+	row =summ_value_table.RowType()
+	row.summ_value_id = summ_value_table.get_next_id()
+	row.program = process.program
+	row.process_id = process.process_id
+	row.frameset_group = None
+	row.segment_def_id = None
+	# claim the PSD to be valid for a point in time
+	row.segment = segments.segment(LIGOTimeGPS(0.), LIGOTimeGPS(1.))
+	row.instruments = (instrument,)
+	row.name = inspiral.CoincsDocument.summ_value_name_encode(1.4, 1.4, 8.0)
+	row.value = dist
+	row.error = None
+	row.intvalue = None
+	row.comment = u"horizon distance (Mpc)"
+	summ_value_table.append(row)
+summ_value_table._end_of_rows()
+xmldoc.childNodes[0].appendChild(summ_value_table)
 ligolw_process.set_process_end_time(process)
 
 ligolw_utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith(".gz"), verbose = options.verbose)
