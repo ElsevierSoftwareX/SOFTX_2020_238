@@ -147,6 +147,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     SPSTATEDOWN(i)->last_sample = 0 ;
     SPSTATE(i+1)->queue_eff_len += out_processed;
     num_inchunk = out_processed;
+    GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
   }
     SPSTATE(num_depths-1)->queue_down_start = SPSTATE(num_depths-1)->queue_eff_len;
   GST_LOG ("multi downsample out processed %d samples", out_processed);
@@ -185,6 +186,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
    * SPIIR filter for the lowest depth 
    */
 
+  GST_LOG ("spiirup %d samples", num_inchunk);
   int threadsPerBlock = num_inchunk;
   int numBlocks = 1;
   pos_out_spiir = SPSTATEUP(num_depths-1)->d_mem + SPSTATEUP(num_depths-1)->filt_len - 1;
@@ -217,13 +219,20 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
     num_remains = SPSTATE(i)->queue_eff_len - num_inchunk;
     cudaMemcpy(SPSTATE(i)->d_queue, SPSTATE(i)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
     SPSTATE(i)->queue_eff_len -= num_inchunk;
+    SPSTATE(i)->queue_down_start -= num_inchunk;
     SPSTATE(i)->queue_len -= num_inchunk;
     SPSTATEUP(i)->last_sample = 0;
-    num_inchunk = up_spiir_processed;
+    num_inchunk = up_spiir_processed; 
+    GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
   }
   num_remains = SPSTATE(0)->queue_eff_len - num_inchunk;
   cudaMemcpy(SPSTATE(0)->d_queue, SPSTATE(0)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
-
+  SPSTATE(0)->queue_eff_len -= num_inchunk;
+  SPSTATE(0)->queue_down_start -= num_inchunk;
+  SPSTATE(0)->queue_len -= num_inchunk;
+  GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
+ 
+  GST_LOG ("spiirup out processed %d samples", num_inchunk);
   out = (float *)malloc(num_inchunk * sizeof(float));
   cudaMemcpy(out, pos_out_spiir, num_inchunk * sizeof(float), cudaMemcpyDeviceToHost);
   return up_spiir_processed;

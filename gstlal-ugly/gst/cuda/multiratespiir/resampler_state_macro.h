@@ -1,4 +1,4 @@
 
-#define DOWN_FILT_LEN 64
-#define UP_FILT_LEN 16
+#define DOWN_FILT_LEN 32 
+#define UP_FILT_LEN 16 
 

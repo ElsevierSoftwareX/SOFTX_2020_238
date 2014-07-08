@@ -510,16 +510,20 @@ filter_and_push (CudaMultirateSPIIR *element, gint in_len)
 
     num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths);
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, out_spiirup);
+    g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
     gst_adapter_flush (element->adapter, num_in_multidown * sizeof(float));
 
  
     GstBuffer *outbuf;
     outsize = num_out_spiirup * element->width / 8;
-    memcpy (GST_BUFFER_DATA(outbuf), out_spiirup, outsize);
-    free(out_spiirup);
-
+#if 0
     res =
       gst_pad_alloc_buffer_and_set_caps (GST_BASE_TRANSFORM_SRC_PAD (element),
+      GST_BUFFER_OFFSET_NONE, outsize,
+      GST_PAD_CAPS (GST_BASE_TRANSFORM_SRC_PAD (element)), &outbuf);
+#endif
+    res =
+      gst_pad_alloc_buffer (GST_BASE_TRANSFORM_SRC_PAD (element),
       GST_BUFFER_OFFSET_NONE, outsize,
       GST_PAD_CAPS (GST_BASE_TRANSFORM_SRC_PAD (element)), &outbuf);
 
@@ -528,7 +532,11 @@ filter_and_push (CudaMultirateSPIIR *element, gint in_len)
           outsize);
       return res;
     }
+    memcpy (GST_BUFFER_DATA(outbuf), out_spiirup, outsize);
+    free(out_spiirup);
 
+
+    GST_LOG ("allocated buffer");
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
       GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
