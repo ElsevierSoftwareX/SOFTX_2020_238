@@ -630,7 +630,7 @@ def compute_amplitude( sb, psd ):
 	"""
 	flow = int((sb.central_freq - sb.bandwidth/2.0 - psd.f0)/psd.deltaF)
 	fhigh = int((sb.central_freq + sb.bandwidth/2.0 - psd.f0)/psd.deltaF)
-	snr = sb.snr *sb.chisq_ndof
+	snr = sb.snr * sb.chisq_dof
 	sb.amplitude = numpy.sqrt(1./2.*snr/((1/psd.data[flow:fhigh]*psd.deltaF ).sum()/sb.bandwidth))
 
 class SBStats(object):
