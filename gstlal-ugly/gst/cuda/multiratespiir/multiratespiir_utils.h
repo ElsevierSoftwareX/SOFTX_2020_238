@@ -23,6 +23,3 @@ guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element);
 
 void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len);
 
-
-
-

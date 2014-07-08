@@ -39,8 +39,13 @@
 
 #include "multiratespiir.h"
 #include "multiratespiir_utils.h"
+#include "resampler_state_macro.h"
+#include "spiir_state_macro.h"
 #include "spiir_state_utils.h"
-#include "resampler_state_utils.h"
+#include "resampler2x.h"
+
+#include <cuda_runtime.h>
+
 #define GST_CAT_DEFAULT cuda_multirate_spiir_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
@@ -164,7 +169,7 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
   g_object_class_install_property (gobject_class, PROP_NUM_DEPTHS,
       g_param_spec_int ("num_depths", "Num_depths", "number of depths [0-7] ",
           RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
-          MATRIX_DEFAULT,
+          RESAMPLER_NUM_DEPTHS_DEFAULT,
           G_PARAM_READWRITE));
 
   g_object_class_install_property (gobject_class, PROP_MATRIX,
@@ -409,6 +414,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   if (!element->spstate_initialised) {
     element->num_cover_samples = cuda_multirate_spiir_init_cover_samples(rate, element->num_depths, DOWN_FILT_LEN, UP_FILT_LEN);
     element->num_exe_samples = rate;
+    GST_DEBUG_OBJECT (element, "number of cover samples set to %d, number of exe samples set to %d", element->num_cover_samples, element->num_exe_samples);
   }
   return success;
 }
@@ -466,6 +472,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
 }
 #endif
 
+#if 0
 static void
 downsample2x(ResamplerState *state, float *in, const gint num_inchunk, float *out, gint *out_processed)
 {
@@ -483,95 +490,8 @@ downsample2x(ResamplerState *state, float *in, const gint num_inchunk, float *ou
   for (j = 0; j < *out_processed; ++j)
     out[j] = in[j];
 }
+#endif
 
-static gint
-multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths)
-{
-  float *pos_inqueue, *pos_outqueue;
-  gint i, out_processed;
-  gint num_inchunk = num_in_multidown;
-  g_assert (SPSTATE(0)->queue_eff_len + num_inchunk <= SPSTATE(0)->queue_len);
-  pos_inqueue = SPSTATE(0)->queue + SPSTATE(0)->queue_eff_len ;
-  memcpy (pos_inqueue, in_multidown, num_inchunk * sizeof(float));
-  SPSTATE(0)->queue_eff_len += num_inchunk;
-
-  for (i=1; i<num_depths; i++) {
-    //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
-    /*
-     * downsample 2x of number of filt samples
-     */
-    pos_inqueue = SPSTATE(i-1)->queue + SPSTATE(i-1)->queue_down_start;
-    pos_outqueue = SPSTATE(i)->queue + SPSTATE(i)->queue_down_start;
-    downsample2x(SPSTATEDOWN(i-1), pos_inqueue, num_inchunk, pos_outqueue, &out_processed);
-    /* 
-     * if the number of input samples is odd, discard the last input 
-     * sample. We do not expect this affect accuracy much.
-     */
-    if (num_inchunk % 2 == 1)
-      SPSTATE(i-1)->queue_eff_len -= 1;
-    /*
-     * filter finish, update the next expected down start of upper 
-     * spstate; update the effective length of this spstate;
-     */
-    SPSTATE(i-1)->queue_down_start = SPSTATE(i-1)->queue_eff_len;
-    SPSTATE(i)->queue_eff_len += out_processed;
-    num_inchunk = out_processed;
-  }
-  return out_processed;
-}
-
-static void
-upsample2x(float *in, const gint num_inchunk, float *out, gint *out_processed){
-}
-
-static void
-iir_filter (float *in, const gint num_inchunk, float *out)
-{
-	gint i;
-	for (i=0; i<num_inchunk; i++)
-	{
-		out[i] = in[i];
-	}
-}
-
-static gint
-spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths)
-{
-  float *pos_inqueue, *pos_out_spiir , *pos_out_up;
-  gint num_inchunk = num_in_multiup;
-
-  gint i, out_processed;
-
-  for (i=num_depths-1; i>0; i--) {
-    //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
-    /*
-     * upsample 2x of number of filt samples
-     */
-    pos_inqueue = SPSTATE(i)->queue;
-    pos_out_spiir = SPSTATE(i)->out_spiir;
-    iir_filter (pos_inqueue, num_inchunk, pos_out_spiir);
-
-    if (i < num_depths - 1) {
-      cuda_multirate_spiir_add_two_data (SPSTATE(i)->out_spiir, SPSTATE(i+1)->out_up, num_inchunk);
-    }
-
-    pos_out_up = SPSTATE(i)->out_up;
-    out_processed = num_inchunk * 2;
-    upsample2x(pos_out_spiir, num_inchunk, pos_out_up, &out_processed);
-    /*
-     * filter finish, flush num_inchunk samples of queue;
-     * update the effective length, down_start of this spstate;
-     */
-    spiir_state_flush_queue (spstate, i, num_inchunk);
-    num_inchunk = out_processed;
-  }
-  pos_inqueue = SPSTATE(0)->queue;
-  pos_out_spiir = SPSTATE(0)->out_spiir;
-  iir_filter (pos_inqueue, num_inchunk, pos_out_spiir);
-  cuda_multirate_spiir_add_two_data (SPSTATE(0)->out_spiir, SPSTATE(1)->out_up, num_inchunk);
-  spiir_state_flush_queue (spstate, 0, out_processed);
-  return out_processed;
-}
 
 static gint 
 filter_and_push (CudaMultirateSPIIR *element, gint in_len)
@@ -583,18 +503,21 @@ filter_and_push (CudaMultirateSPIIR *element, gint in_len)
   num_in_multidown = MIN (in_len, num_exe_samples);
 
   gint outsize;
-  float * in_multidown;
+  float * in_multidown, *out_spiirup;
   GstFlowReturn res;
+  gint i;
   while (num_in_multidown > 0) {
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
+
     num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths);
-    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths);
+    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, out_spiirup);
     gst_adapter_flush (element->adapter, num_in_multidown * sizeof(float));
 
  
     GstBuffer *outbuf;
     outsize = num_out_spiirup * element->width / 8;
-    memcpy (GST_BUFFER_DATA(outbuf), (*element->spstate)->out_spiir, outsize);
+    memcpy (GST_BUFFER_DATA(outbuf), out_spiirup, outsize);
+    free(out_spiirup);
 
     res =
       gst_pad_alloc_buffer_and_set_caps (GST_BASE_TRANSFORM_SRC_PAD (element),
@@ -646,6 +569,7 @@ filter_and_push (CudaMultirateSPIIR *element, gint in_len)
 
     if (num_out_spiirup == 0) {
       GST_DEBUG_OBJECT (element, "buffer dropped");
+//      gst_object_unref (outbuf);
       return GST_FLOW_OK;
     }
 
@@ -854,7 +778,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 	 */ 
         num_zeros = in_samples;
         adapter_push_zeros (element, num_zeros);
-        GST_INFO_OBJECT(element, "inbuf absorbed");
+        GST_INFO_OBJECT(element, "inbuf absorbed %d zero samples", num_zeros);
         return GST_FLOW_OK;
       }
     } 
@@ -895,14 +819,16 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      */
     if (in_samples < num_exe_samples - adapter_len) {
       /* absorb the buffer */
+      gst_buffer_ref(inbuf);	/* don't let the adapter free it */
       gst_adapter_push (element->adapter, inbuf);
-      GST_INFO_OBJECT(element, "inbuf absorbed");
+      GST_INFO_OBJECT(element, "inbuf absorbed %d samples", in_samples);
       return GST_FLOW_OK;
 
     } else {
       /*
        * filter
        */
+      gst_buffer_ref(inbuf);	/* don't let the adapter free it */
       gst_adapter_push (element->adapter, inbuf);
       /* 
        * to speed up, number of samples to be filtered is times of num_exe_samples
@@ -912,6 +838,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       filter_and_push(element, num_filt_samples);
     }
   }
+  gst_buffer_unref(outbuf);
   return GST_FLOW_OK;
 }
 

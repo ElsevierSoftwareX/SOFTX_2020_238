@@ -45,11 +45,13 @@ typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
 typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
 
 typedef struct _ResamplerState{
-  float *sinc_table;
-  float *mem; // fixed length to store input
+  float *d_sinc_table;
+  float *d_mem; // fixed length to store input
+  gint channels;
   gint mem_len;
   gint last_sample;
   gint filt_len;
+  gint sinc_len;
   gint inrate;
   gint outrate;
 } ResamplerState;
@@ -60,14 +62,13 @@ typedef struct _SpiirState {
 //	d;
   int depth; // 0-6
   ResamplerState *downstate, *upstate;
-  float *queue; // fixed length structure, to store the intermediate result from downsample, this is the input for upsample
-  float *out_spiir;
-  float *out_up;
+  float *d_queue; // fixed length structure, to store the intermediate result from downsample, this is the input for upsample
+//  float *d_out_spiir;
   int queue_len;
   int queue_eff_len;  // effective length
   int queue_down_start;
   int queue_up_start;
-}SpiirState;
+} SpiirState;
 
 /**
  * CudaMultirateSPIIR:

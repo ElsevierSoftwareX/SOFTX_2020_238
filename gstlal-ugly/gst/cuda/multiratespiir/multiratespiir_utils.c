@@ -5,10 +5,10 @@ gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint d
 {
 	gint i = num_depths;
 	gint rateleft = rate; 
-	for (i=num_depths; i>0; i--)
-		rateleft = (rateleft - down_filtlen)/2;
-	for (i=num_depths; i>0; i--)
-		rateleft = (rateleft - up_filtlen)*2;
+	for (i=num_depths-1; i>0; i--)
+		rateleft = (rateleft - down_filtlen/2)/2;
+	for (i=num_depths-1; i>0; i--)
+		rateleft = (rateleft - up_filtlen/2)*2;
 	return (rate - rateleft);
 
 

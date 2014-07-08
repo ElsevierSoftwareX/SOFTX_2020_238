@@ -5,15 +5,7 @@ plugin_LTLIBRARIES = libcuda_plugin.la
 libcuda_plugin_la_SOURCES = \
 	cuda_plugin.c \
 	iirfilter/iirfilter_kernel.cu \
-	iirfilter/cuda_gstlal_iirbank.c \
-	multiratespiir/resampler_state_utils.c \
-	multiratespiir/spiir_state_utils.c \
-	multiratespiir/multiratespiir_utils.c \
-	multiratespiir/multiratespiir.c 
-
-#	iirfilter folder is working 
-#	iirfilter/iirfilter_kernel.cu \
-#	iirfilter/cuda_gstlal_iirbank.c 
+	iirfilter/cuda_gstlal_iirbank.c 
 
 #	audioresample folder not working, seg fault
 #	audioresample/cuda_gstaudioresample.c \
@@ -36,5 +28,7 @@ libcuda_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS)
 noinst_HEADERS = \
 	iirfilter/iirfilter_kernel.h \
 	iirfilter/cuda_gstlal_iirbank.h \
-	multiratespiir/multiratespiir.h
+	multiratespiir/multiratespiir.h \
+	multiratespiir/spiir_state_macro.h \
+	multiratespiir/resampler_state_macro.h
 
