@@ -2,13 +2,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <glib.h>
+#include <gst/gst.h>
+
 
 #include "multiratespiir.h"
 #include "multiratespiir_utils.h"
 #include "spiir_state_macro.h"
-#include <glib.h>
-#include <gst/gst.h>
-
 
 #ifdef __cplusplus
 }
@@ -110,38 +110,45 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 
   SPSTATE(0)->queue_eff_len += num_inchunk;
 
-  for (i=1; i<num_depths; i++) {
+  for (i=0; i<num_depths-1; i++) {
     // predicted output length of downsample this round
-    out_processed = (num_inchunk - SPSTATEDOWN(i-1)->last_sample)/2;
+    out_processed = (num_inchunk - SPSTATEDOWN(i)->last_sample)/2;
     //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
     /*
      * downsample 2x of number of filt samples
      */
     // make sure lower depth mem is large enough to store queue data.
-    g_assert (num_inchunk <= SPSTATEDOWN(i-1)->mem_len - SPSTATEDOWN(i-1)->filt_len + 1 );
+    g_assert (num_inchunk <= SPSTATEDOWN(i)->mem_len - SPSTATEDOWN(i)->filt_len + 1 );
     // make sure current depth queue is large enough to store output data
-    g_assert (out_processed <= SPSTATE(i)->queue_len - SPSTATE(i)->queue_eff_len);
-    pos_inqueue = SPSTATE(i-1)->d_queue + SPSTATE(i-1)->queue_down_start;
-    pos_outqueue = SPSTATE(i)->d_queue + SPSTATE(i)->queue_down_start;
-    // CUDA downsample2x
+    g_assert (out_processed <= SPSTATE(i+1)->queue_len - SPSTATE(i+1)->queue_eff_len);
+    pos_inqueue = SPSTATE(i)->d_queue + SPSTATE(i)->queue_down_start;
+    pos_outqueue = SPSTATE(i+1)->d_queue + SPSTATE(i+1)->queue_down_start;
+
+    /* 
+     * CUDA downsample2x 
+     */
+
+    
     threadsPerBlock = out_processed;
     numBlocks = 1;
-    downsample2x <<<numBlocks, threadsPerBlock>>>(2, 2, SPSTATEDOWN(i-1)->d_sinc_table, SPSTATEDOWN(i-1)->sinc_len, SPSTATEDOWN(i-1)->last_sample, SPSTATEDOWN(i-1)->d_mem, num_inchunk, pos_inqueue, pos_outqueue);
+    downsample2x <<<numBlocks, threadsPerBlock>>>(2, 2, SPSTATEDOWN(i)->d_sinc_table, SPSTATEDOWN(i)->sinc_len, SPSTATEDOWN(i)->last_sample, SPSTATEDOWN(i)->d_mem, num_inchunk, pos_inqueue, pos_outqueue);
+
     /* 
      * if the number of input samples is odd, discard the last input 
      * sample. We do not expect this affect accuracy much.
      */
     if (num_inchunk % 2 == 1)
-      SPSTATE(i-1)->queue_eff_len -= 1;
+      SPSTATE(i)->queue_eff_len -= 1;
     /*
      * filter finish, update the next expected down start of upper 
      * spstate; update the effective length of this spstate;
      */
-    SPSTATE(i-1)->queue_down_start = SPSTATE(i-1)->queue_eff_len;
-    SPSTATEDOWN(i-1)->last_sample = 0 ;
-    SPSTATE(i)->queue_eff_len += out_processed;
+    SPSTATE(i)->queue_down_start = SPSTATE(i)->queue_eff_len;
+    SPSTATEDOWN(i)->last_sample = 0 ;
+    SPSTATE(i+1)->queue_eff_len += out_processed;
     num_inchunk = out_processed;
   }
+    SPSTATE(num_depths-1)->queue_down_start = SPSTATE(num_depths-1)->queue_eff_len;
   GST_LOG ("multi downsample out processed %d samples", out_processed);
 
 #if 0
@@ -169,10 +176,14 @@ iir_filter (float *in, const gint num_inchunk, float *out)
 #endif 
 gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out)
 {
-  float *pos_inqueue, *pos_out_spiir , *pos_out_up;
-  gint num_inchunk = num_in_multiup;
+  float *pos_out_spiir;
+  gint num_inchunk = num_in_multiup, num_remains;
 
-  gint i, spiir_processed, up_processed;
+  gint i, up_spiir_processed, low_processed;
+
+  /* 
+   * SPIIR filter for the lowest depth 
+   */
 
   int threadsPerBlock = num_inchunk;
   int numBlocks = 1;
@@ -181,36 +192,39 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
 //  spiir_state_flush_queue (spstate, num_depths-1, num_inchunk);
 
-  for (i=num_depths-2; i>=0; i--) {
+  for (i=num_depths-1; i>=1; i--) {
     //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
     /*
      * upsample 2x and add 
      */
 
 
-    up_processed = num_inchunk - SPSTATEUP(i+1)->last_sample;
-    spiir_processed = (num_inchunk - SPSTATEUP(i+1)->last_sample) * 2;
+    low_processed = num_inchunk - SPSTATEUP(i)->last_sample;
+    up_spiir_processed = (num_inchunk - SPSTATEUP(i)->last_sample) * 2;
 
-    threadsPerBlock = spiir_processed;
+    threadsPerBlock = up_spiir_processed;
 
-    pos_out_spiir = SPSTATEUP(i)->d_mem + SPSTATEUP(i)->filt_len - 1;
-    iir_filter <<<numBlocks, threadsPerBlock>>>(SPSTATE(i)->d_queue, pos_out_spiir);
+    pos_out_spiir = SPSTATEUP(i-1)->d_mem + SPSTATEUP(i-1)->filt_len - 1;
+    iir_filter <<<numBlocks, threadsPerBlock>>>(SPSTATE(i-1)->d_queue, pos_out_spiir);
 
-    threadsPerBlock = up_processed;
+    threadsPerBlock = low_processed;
 
-    upsample2x_and_add <<<numBlocks, threadsPerBlock>>>(2, 2, SPSTATEUP(i+1)->d_sinc_table, SPSTATEUP(i+1)->filt_len, SPSTATEUP(i+1)->last_sample, up_processed, SPSTATEUP(i+1)->d_mem, pos_out_spiir);
+    upsample2x_and_add <<<numBlocks, threadsPerBlock>>>(2, 2, SPSTATEUP(i)->d_sinc_table, SPSTATEUP(i)->filt_len, SPSTATEUP(i)->last_sample, low_processed, SPSTATEUP(i)->d_mem, pos_out_spiir);
     /*
      * filter finish, flush num_inchunk samples of queue;
      * update the effective length, down_start of this spstate;
      */
-    threadsPerBlock = SPSTATE(i+1)->queue_eff_len - num_inchunk;
-    flush_queue <<<numBlocks, threadsPerBlock>>>(SPSTATE(i+1)->d_queue, spiir_processed);
-    SPSTATEUP(i+1)->last_sample = 0;
-    num_inchunk = spiir_processed;
+    num_remains = SPSTATE(i)->queue_eff_len - num_inchunk;
+    cudaMemcpy(SPSTATE(i)->d_queue, SPSTATE(i)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
+    SPSTATE(i)->queue_eff_len -= num_inchunk;
+    SPSTATE(i)->queue_len -= num_inchunk;
+    SPSTATEUP(i)->last_sample = 0;
+    num_inchunk = up_spiir_processed;
   }
+  num_remains = SPSTATE(0)->queue_eff_len - num_inchunk;
+  cudaMemcpy(SPSTATE(0)->d_queue, SPSTATE(0)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
 
-  pos_out_spiir = SPSTATEUP(0)->d_mem + SPSTATEUP(i)->filt_len - 1;
   out = (float *)malloc(num_inchunk * sizeof(float));
   cudaMemcpy(out, pos_out_spiir, num_inchunk * sizeof(float), cudaMemcpyDeviceToHost);
-  return spiir_processed;
+  return up_spiir_processed;
 }
