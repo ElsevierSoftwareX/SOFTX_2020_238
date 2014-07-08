@@ -928,6 +928,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
         return res;
     }
   }
+  gst_buffer_unref(outbuf);
   return GST_FLOW_OK;
 }
 
