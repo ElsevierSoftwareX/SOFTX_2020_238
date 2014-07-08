@@ -496,6 +496,7 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     g_assert(last_num_out_spiirup == out_len);
     free(tmp_out);
 
+    GST_LOG ("allocated buffer");
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
       GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
