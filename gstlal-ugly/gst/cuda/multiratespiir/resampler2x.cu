@@ -572,7 +572,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
   GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
   gint resample_processed, spiir_processed;
 
-  for (i=num_depths-2; i>=0; i--) {
+  for (i=num_depths-1; i>=1; i--) {
     //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
 
     resample_processed = num_inchunk - SPSTATEUP(i+1)->last_sample;
@@ -684,6 +684,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
 
   }
+  num_remains = SPSTATE(0)->queue_eff_len - num_inchunk;
+  cudaMemcpy(SPSTATE(0)->d_queue, SPSTATE(0)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
 
  
   GST_LOG ("spiirup out processed %d samples", num_inchunk);
