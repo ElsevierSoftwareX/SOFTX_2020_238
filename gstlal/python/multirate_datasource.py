@@ -206,11 +206,11 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# use running average PSD
 		whiten.set_property("psd-mode", 0)
 	else:
-		# use running psd
 		if track_psd:
+			# use running average PSD
 			whiten.set_property("psd-mode", 0)
-		# use fixed PSD
 		else:
+			# use fixed PSD
 			whiten.set_property("psd-mode", 1)
 
 		#
@@ -299,6 +299,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			head[rate].set_property("emit-signals", True)
 	
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
+
 	#
 	# done.  return value is a dictionary of tee elements indexed by
 	# sample rate

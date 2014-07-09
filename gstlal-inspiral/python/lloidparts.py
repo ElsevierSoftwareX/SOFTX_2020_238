@@ -195,14 +195,13 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 
 class Handler(simplehandler.Handler):
 	"""!
-	A subclass of simplehandloer.Handler to be used with e.g.,
+	A subclass of simplehandler.Handler to be used with e.g.,
 	gstlal_inspiral
 
-	Implements additional message handling for dealing with
-	spectrum messages and checkpoints for the online analysis including periodic
-	dumps of segment information, trigger files and background distribution
-	statistics. 
-	
+	Implements additional message handling for dealing with spectrum
+	messages and checkpoints for the online analysis including periodic
+	dumps of segment information, trigger files and background
+	distribution statistics.
 	"""
 	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
 		"""!
@@ -244,13 +243,17 @@ class Handler(simplehandler.Handler):
 		if message.type == gst.MESSAGE_ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
-				# NOTE:  epoch is the middle of the
-				# interval used to obtain this PSD
+				# NOTE: epoch is used for the timestamp, this
+				# is the middle of the most recent FFT interval
+				# used to obtain this PSD
 				instrument = message.src.get_name().split("_")[-1]
 				psd = pipeio.parse_spectrum_message(message)
 				timestamp = psd.epoch
-				# FIXME:  probably need to compute these
-				# for a bunch of masses.  which ones?
+
+				# update horizon distance history
+				#
+				# FIXME:  probably need to compute these for a
+				# bunch of masses.  which ones?
 				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
 		elif message.type == gst.MESSAGE_APPLICATION:
