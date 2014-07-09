@@ -624,9 +624,13 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	# setup the pipeline hander with dq gates if in online mode
+	# setup the pipeline hander with segment list collection from gates
+	#
+	# FIXME:  knowledge of what gates are present in what
+	# configurations, what they are called, etc., somehow needs to live
+	# with the code that constructs the gates
 	if options.data_source in ("lvshm", "framexmit"):
-		gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
+		gates = dict(("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict)
 	else:
 		gates = {}
 	handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
