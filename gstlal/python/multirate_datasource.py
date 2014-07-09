@@ -194,14 +194,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max(rates)))
 
-	# export PSD in ascii text format
-	# FIXME:  also make them available in XML format as a single document
-	@bottle.route("/%s/psd.txt" % instrument)
-	def get_psd_txt(elem = whiten):
-		delta_f = elem.get_property("delta-f")
-		yield "# frequency\tspectral density\n"
-		for i, value in enumerate(elem.get_property("mean-psd")):
-			yield "%.16g %.16g\n" % (i * delta_f, value)	
 	if psd is None:
 		# use running average PSD
 		whiten.set_property("psd-mode", 0)

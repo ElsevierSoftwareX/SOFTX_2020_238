@@ -263,6 +263,10 @@ class Handler(simplehandler.Handler):
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
 
+		# most recent spectrum reported by each whitener
+		self.psds = {}
+		bottle.route("/psds.xml")(self.web_get_psd_xml)
+
 		bottle.route("/horizon_history.xml")(self.web_get_horizon_history_xml)
 
 		# segment lists
@@ -285,6 +289,9 @@ class Handler(simplehandler.Handler):
 				instrument = message.src.get_name().split("_")[-1]
 				psd = pipeio.parse_spectrum_message(message)
 				timestamp = psd.epoch
+
+				# save
+				self.psds[instrument] = psd
 
 				# update horizon distance history
 				#
@@ -401,6 +408,20 @@ class Handler(simplehandler.Handler):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+		return outstr
+
+	def gen_psd_xmldoc(self):
+		xmldoc = lalseries.make_psd_xmldoc(self.psds)
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_psd_xml(self):
+		with self.dataclass.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr

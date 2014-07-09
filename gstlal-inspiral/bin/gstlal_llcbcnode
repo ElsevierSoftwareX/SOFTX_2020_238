@@ -16,28 +16,36 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
+import bisect
 import cgi
 import cgitb
 import os
 os.environ["MPLCONFIGDIR"] = "/tmp"
+import sys
 import matplotlib
 matplotlib.use('Agg')
-import numpy
 import matplotlib.pyplot as plt
+import numpy
 cgitb.enable()
 form = cgi.FieldStorage()
-from gstlal import far
+import lal
 from glue.ligolw import ligolw
-from glue.ligolw import lsctables, param, array
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import lsctables
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
+from pylal import series as lalseries
+from gstlal import far
+from gstlal import reference_psd
 import copy
 import StringIO
 import base64
-import time
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
 
 ## @file gstlal_llcbcnode
 # This program will monitor the output of a single job in the gstlal inspiral
@@ -100,43 +108,11 @@ import time
 #
 
 
-def now():
-	#FIXME use pylal when available
-	return time.time() - 315964785
-
 def to_png_image():
 	f = StringIO.StringIO()
 	plt.savefig(f, format="png")
 	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
 	f.close()
-
-
-def D(m1, m2, fname):
-	"""
-	takes m1, m2 in solar masses, returns horizon distance in Mpc
-	from (6) of http://arxiv.org/pdf/1003.2481v3.pdf with a factor of
-	2 difference in the spectrum definition.
-	"""
-	try:
-		A = numpy.loadtxt(fname)
-	except IOError:
-		return -1
-	f = A[:,0]
-	Sn = A[:,1]
-
-	pi = numpy.pi
-	c = 3.0e8
-	Mpc = 3.08e22
-	G = 6.67e-11
-	Ms = 1.99e30
-	m1, m2 = m1*Ms, m2*Ms
-	Mc = (m1 * m2 / (m1 + m2))**0.6 * (m1 + m2)**0.4
-
-	df = f[1] - f[0]
-	klow = int(10. / df)
-	khigh = int(0.99 * A.shape[0])
-	integral = (4. * f[klow:khigh]**(-7./3.) / Sn[klow:khigh] * df).sum()
-	return 1./8. * (5. * pi / 24. / c**3)**.5 * (G*Mc)**(5./6.) * pi**(-7./6.) * integral**.5 / Mpc
 
 def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None):
 	fig = plt.figure(figsize=(5,3.5),)
@@ -159,20 +135,17 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None
 		locs = [min(data[:,1]), numpy.median(data[:,1]), max(data[:,1])]
 		labels = ['%.2g' % lab for lab in locs]
 		plt.yticks(locs, labels)
-	if plottype == "plot":
+	elif plottype == "plot":
 		h.plot(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
-	if plottype == "loglog":
-		x = data[:,0]
-		y = data[:,1]
-		y[y == 0] = 1e-100
-		h.loglog(x, y, 'w', alpha=0.75, linewidth=2)
-	if plottype == "hist":
+	elif plottype == "hist":
 		from scipy.interpolate import interp1d
 		x = numpy.linspace(data[0,0], data[-1,0], 100)
 		f = interp1d(data[:,0], data[:,1], kind='linear')
 		y = f(x)
 		y[y<0] = 0.
 		h.fill_between(x, y,  alpha=0.75, linewidth=2, facecolor="w", color="w")
+	else:
+		raise ValueError(plottype)
 
 	if textbox is not None:
 		plt.figtext(0.5, 0.2, textbox, color="w")
@@ -180,6 +153,40 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None
 	plt.xlabel(xlabel)
 	plt.ylabel(ylabel)
 	plt.title(title)
+	plt.savefig(sys.stdout, format="svg")
+
+
+def ceil10(x):
+	return 10**math.ceil(math.log10(x))
+
+def floor10(x):
+	return 10**math.floor(math.log10(x))
+
+
+def psdplot(instrument, psd, fmin = 10., fmax = 2048.):
+	fig = plt.figure(figsize=(5,3.5),)
+	fig.patch.set_alpha(0.0)
+	h = fig.add_subplot(111, axisbg = 'k')
+	plt.subplots_adjust(bottom = 0.2, left = .16)
+	plt.grid(color=(0.1,0.4,0.5), linewidth=2)
+
+	y = psd.data
+	f = numpy.arange(0., len(y), psd.deltaF) + psd.f0
+
+	h.loglog(f, y, 'w', alpha=0.75, linewidth=2)
+
+	plt.figtext(0.5, 0.2, "Horizon %.0f Mpc" % reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8., f_min = 10.), color="w")
+
+	imin = bisect.bisect_left(f, fmin)
+	imax = bisect.bisect_right(f, fmax)
+	ymax = ceil10(y[imin:imax].max())
+	ymin = max(floor10(y[imin:imax].min()), ymax / 1e6)
+	plt.set_xlim((fmin, fmax)))
+	plt.set_ylim((ymin, ymax))
+
+	plt.xlabel("Frequency (Hz)")
+	plt.ylabel("Power (strain^2/Hz)")
+	plt.title(instrument)
 	plt.savefig(sys.stdout, format="svg")
 
 
@@ -241,7 +248,7 @@ print """
 </head>
 <body>
 <img src="../lcbo.jpg"> <font size=10>Low-latency Compact Binary Online %d </font><hr><br>
-""" % (now(),)
+""" % int(lal.GPSTimeNow())
 
 print '<div id="accordion">'
 
@@ -263,15 +270,21 @@ print"</div>"
 
 # Psd table
 print "<h1>PSDs</h1><div>"
-for ifo in ("H1", "L1", "V1"):
-	dist = D(1.4, 1.4, baseurl+'_%spsd.txt' % ifo)
-	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo, textbox = "Horizon %.0f Mpc" % dist)
+try:
+	psds = lalseries.read_psd_xmldoc(ligolw_utils.load_url("%s/psds.xml" % baseurl, contenthandler = LIGOLWContentHandler))
+except IOError:
+	print "Data could not be loaded"
+except ValueError:
+	print "<h2>Data is mis formatted, perhaps the webserver returned an error</h2>"
+else:
+	for instrument, psd in sorted(psds.items()):
+		psdplot(instrument, psd)
 print"</div>"
 
 # likelihoods
 path = form.getlist("url")[0]
 
-likelihood_data = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+likelihood_data = far.LocalRankingData.from_xml(ligolw_utils.load_url(path, contenthandler = LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 
