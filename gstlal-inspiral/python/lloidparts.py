@@ -295,7 +295,7 @@ class Handler(simplehandler.Handler):
 						self.gatehandler(elem, timestamp, "off")
 						# But we have to remember to put it back
 						self.gatehandler(elem, timestamp, "on")
-				xmldoc = self.gen_segments_doc()
+				xmldoc = self.gen_segments_xmldoc()
 				ext = self.seglists.extent_all()
 				instruments = set(name.split("_")[0] for name in self.seglists)
 				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(ext[0]), int(abs(ext)))
@@ -332,7 +332,7 @@ class Handler(simplehandler.Handler):
 			else:
 				assert segment_type == "off"
 
-	def gen_segments_doc(self):
+	def gen_segments_xmldoc(self):
 		"""!
 		A method to output the segment list in a valid ligolw xml
 		format.
@@ -352,7 +352,7 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
