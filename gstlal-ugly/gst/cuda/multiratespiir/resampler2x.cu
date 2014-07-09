@@ -233,7 +233,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
   GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
  
   GST_LOG ("spiirup out processed %d samples", num_inchunk);
-  out = (float *)malloc(num_inchunk * sizeof(float));
   cudaMemcpy(out, pos_out_spiir, num_inchunk * sizeof(float), cudaMemcpyDeviceToHost);
   return up_spiir_processed;
 }
