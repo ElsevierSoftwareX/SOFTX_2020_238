@@ -224,9 +224,9 @@ class Handler(simplehandler.Handler):
 		for name in self.gates:
 			self.seglists[name] = segments.segmentlist()
 			elem = self.pipeline.get_by_name(name)
-			elem.set_property("emit-signals", True)
 			elem.connect("start", self.gatehandler, "on")
 			elem.connect("stop", self.gatehandler, "off")
+			elem.set_property("emit-signals", True)
 
 		bottle.route("/horizon_history.xml")(self.web_get_horizon_history_xml)
 		if gates:
