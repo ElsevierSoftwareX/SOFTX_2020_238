@@ -340,7 +340,9 @@ class GWDataSourceInfo(object):
 			## Frame segments from a user defined file
 			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
 			if self.seg is not None:
-				## Frame segments will be clipped to seek segment if it exists
+				# Clip frame segments to seek segment if it
+				# exists (not required, just saves some
+				# memory and I/O overhead)
 				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([self.seg])) for instrument, seglist in self.frame_segments.items())
 		else:
 			## if no frame segments provided, set them to an empty segment list dictionary
