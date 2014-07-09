@@ -322,13 +322,15 @@ class Handler(simplehandler.Handler):
 		if self.verbose:
 			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, str(timestamp))
 
-		# If there is a current_segment_start for this then the state transition has to be off
-		if name in self.current_segment_start:
-			self.seglists[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
-		if segment_type == "on":
-			self.current_segment_start[name] = timestamp
-		elif segment_type != "off":
-			raise AssertionError
+		with self.dataclass.lock:
+			# If there is a current_segment_start for this then
+			# the state transition has to be off
+			if name in self.current_segment_start:
+				self.seglists[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
+			if segment_type == "on":
+				self.current_segment_start[name] = timestamp
+			else:
+				assert segment_type == "off"
 
 	def gen_segments_doc(self):
 		"""!
