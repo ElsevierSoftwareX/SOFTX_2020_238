@@ -1002,9 +1002,9 @@ def binned_likelihood_ratio_rates_from_samples(samples, limits, nsamples, bins_p
 		raise ValueError("bins_per_decade (%g) too small for limits (%g, %g)" % (nbins, lo, hi))
 	signal_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
 	noise_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
-	samples = iter(samples)
+	sample_func = iter(samples).next
 	for i in xrange(nsamples):
-		lamb, lnP_signal, lnP_noise = samples.next()
+		lamb, lnP_signal, lnP_noise = sample_func()
 		signal_rates[lamb,] += math.exp(lnP_signal)
 		noise_rates[lamb,] += math.exp(lnP_noise)
 	return signal_rates, noise_rates
