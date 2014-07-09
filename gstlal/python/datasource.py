@@ -627,7 +627,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
-			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]))
+			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
 			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
