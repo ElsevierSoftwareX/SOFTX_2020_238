@@ -13,6 +13,10 @@
 - \ref gstlalinspirallowlatencysearchpage
 - \ref gstlalinspiralofflinesearchpage
 
+### Useful Links
+
+- \ref gstlalinspirals6replaypage
+
 ### References
 
 - <a href=@gstlaldoc> gstlal documentation</a>
