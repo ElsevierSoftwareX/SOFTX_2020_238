@@ -738,12 +738,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 #	rankdir=LR;
 # 	tee [URL="\ref pipeparts.mktee()"];
 # 	inputqueue [URL="\ref pipeparts.mkqueue()"];
-# 	controlqueue [URL="\ref pipeparts.mkqueue()"];
 #	lal_gate [URL="\ref pipeparts.mkgate()"];
 #	in [label="?"];
 #	out [label="?"];
 #	in -> tee -> inputqueue -> lal_gate -> out;
-#	tee -> controlqueue -> lal_gate;
+#	tee -> lal_gate;
 # }
 # @enddot
 #
@@ -759,9 +758,8 @@ def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128
 	"""
 	# FIXME someday explore a good bandpass filter
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
-	src = pipeparts.mktee(pipeline, src)
 	if control is None:
-		control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
+		control = src = pipeparts.mktee(pipeline, src)
 	src = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	return pipeparts.mkgate(pipeline, src, control = control, threshold = threshold, attack_length = -attack_length, hold_length = -hold_length, invert_control = True, **kwargs)
 
