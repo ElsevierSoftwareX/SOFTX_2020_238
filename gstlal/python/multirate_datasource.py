@@ -240,6 +240,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, seekevent=seekevent, invert_output=True)
 
 	#
+	# optional gate on whitened h(t) amplitude.  attack and hold are
+	# made to be 1/4 second or 8 samples at the lowest sample rate,
+	# whichever is greater
+	#
+
+	if ht_gate_threshold is not None:
+		window = max(rates) // 4	# samples
+		head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold, hold_length = window, attack_length = window, name = "%s_ht_gate" % instrument)
+
+		# emit signals so that a user can latch on to them
+		head.set_property("emit-signals", True)
+
+	#
 	# tee for highest sample rate stream
 	#
 
@@ -270,34 +283,18 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# adjust for the reduction in variance due to the downsampler.
 	#
 
-	# FIXME this for loop was reworked to allow the h(t) gate to go after
-	# audioresamplers.  There is apparently a cornercase in the
-	# audioresample element that is causing a problem
-	for rate in sorted(set(rates)):
-		if rate < max(rates): # downsample
-			# if requested make sure each output stream is unit
-			# normalized, otherwise the audio resampler removes
-			# power according to the rate difference and filter
-			# rolloff
-			if unit_normalize:
-				head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
-			else:
-				head[rate] = head[max(rates)]
-			head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
-			head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
-			head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
+	for rate in sorted(set(rates))[:-1]:
+		# downsample. make sure each output stream is unit
+		# normalized, otherwise the audio resampler removes power
+		# according to the rate difference and filter rolloff
+		if unit_normalize:
+			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
+		else:
+			head[rate] = head[max(rates)]
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
+		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
+		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 
-		#
-		# optional gate on whitened h(t) amplitude
-		#
-
-		if ht_gate_threshold is not None:
-			# all h(t) gates are controlled by the same max rate control input.
-			head[rate] = datasource.mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = rate // 4, attack_length = rate // 4, name = "%s_%d_ht_gate" % (instrument, rate))
-
-			# emit signals so that a user can latch on to them
-			head[rate].set_property("emit-signals", True)
-	
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
 
 	#
