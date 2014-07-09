@@ -16,6 +16,7 @@
 ### Useful Links
 
 - \ref gstlalinspirals6replaypage
+- \ref gstlalinspiralcodeoptimization
 
 ### References
 
