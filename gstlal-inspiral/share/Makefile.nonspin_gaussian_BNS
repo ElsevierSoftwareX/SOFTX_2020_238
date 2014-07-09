@@ -1,25 +1,17 @@
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 3.0
 LOW_FREQUENCY_CUTOFF = 40.0
-GPS_START = 0
-GPS_END = 1
-INSTRUMENT = H1
-NOISE_MODEL = iLIGOSRD
-MIN_MATCH = 0.97
-HIGH_PASS_FREQ = 35
-HIGH_FREQUENCY_CUTOFF = 2047.0
+HIGH_FREQUENCY_CUTOFF = 2048.0
 NUM_SPLIT_TEMPLATES = 100
 OVERLAP = 10
-USER_TAG = NS_NS_non_spinning
-BANK_PROGRAM = lalapps_cbc_sbank
+BANK_PROGRAM = pycbc_geom_nonspinbank
+APPROXIMANT = TaylorF2
 
 # controls triggers
 IFOS = H1 L1 V1
 START = 966384015
-STOP = 967384015
+STOP = 966484015
 TAG = T1200307_LV_gaussian_4s_w_zerolag_injections_40Hz_5ms_test
-WEBDIR = ~/public_html/MDC_new/${START}-${STOP}-${TAG}
+WEBDIR = ~/public_html/mdc/non_spinning_BNS_aligned_gaussian/
 NUMBANKS = 4
 PEAK = 0
 AC_LENGTH = 351
@@ -29,15 +21,7 @@ AC_LENGTH = 351
 # Injections
 # The seed is the string before the suffix _injections.xml
 # Change as appropriate, whitespace is important
-INJECTIONS := 1_injections.xml
-INJ_MAX_DIST = 150 # Mpc
-INJ_MIN_MASS1 = 1.0
-INJ_MAX_MASS1 = 3.0
-INJ_MIN_MASS2 = 1.0
-INJ_MAX_MASS2 = 3.0
-INJ_MIN_TOTAL_MASS = 2.0
-INJ_MAX_TOTAL_MASS = 6.0
-INJ_FLOW = 35
+INJECTIONS := BNS-SpinMDC-ALIGNED.xml
 
 # Segment and frame type info
 SEG_SERVER=https://segdb.ligo.caltech.edu
@@ -47,43 +31,23 @@ VIRGO_FRAME_TYPE='V1_T1300121_V1_EARLY_GAUSSIAN'
 CHANNEL_NAMES:=--channel-name=H1=GAUSSIAN --channel-name=L1=GAUSSIAN --channel-name=V1=GAUSSIAN
 
 # Get some basic definitions
-include Makefile.rules
+include Makefile.offline_analysis_rules
 
 #
 # Workflow
 #
 
-
 all : dag
 
+BNS_NonSpin_30Hz_earlyaLIGO.xml:
+	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/tmpltbank/BNS_NonSpin_30Hz_earlyaLIGO.xml .
 
-H1-SBANK_NS_NS_non_spinning-0-1.xml.gz:
-	lalapps_cbc_sbank \
-	--approximant TaylorF2RedSpin \
-	--mass1-min $(MIN_MASS) \
-	--mass1-max $(MAX_MASS) \
-	--mass2-min $(MIN_MASS) \
-	--mass2-max $(MAX_MASS) \
-	--spin1-min 0 \
-	--spin1-max 0 \
-	--spin2-min 0 \
-	--spin2-max 0 \
-	--gps-start-time $(GPS_START) \
-	--gps-end-time $(GPS_END) \
-	--noise-model $(NOISE_MODEL) \
-	--flow $(LOW_FREQUENCY_CUTOFF) \
-	--instrument $(INSTRUMENT) \
-	--user-tag $(USER_TAG) \
-	--match-min $(MIN_MATCH) \
-	--aligned-spin \
-	--use-metric \
-	--verbose
+$(INJECTIONS):
+	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/BNS-SpinMDC-ALIGNED.xml .
 
-
-
-%_split_bank.cache : H1-SBANK_NS_NS_non_spinning-0-1.xml.gz
+%_split_bank.cache : BNS_NonSpin_30Hz_earlyaLIGO.xml
 	mkdir -p $*_split_bank
-	gstlal_bank_splitter --output-path $*_split_bank --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+	gstlal_bank_splitter --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 
 plots :
 	mkdir plots
@@ -123,23 +87,11 @@ segments.xml: $(SEGMENTS_FILES) frame.cache
 	-rm -vf nogaps.xml segdb.xml
 	gstlal_segments_trim --trim 8 --min-length 512 --output $@ $@
 
-%_injections.xml: 
-	gstlal_injections_by_local_rate \
-		--output $@ \
-		--seed $* \
-		--flower $(INJ_FLOW) \
-		--gps-start-time $(START) \
-		--gps-end-time $(STOP) \
-		--bns-max-distance $(INJ_MAX_DIST) \
-		--nsbh-local-rate 0 \
-		--bbh-local-rate 0 \
-		--bns-local-rate 22000
 
-clean :
+clean:
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots $(WEBDIR) *.html Images *.css *.js
 	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
 	-rm -vf segments.xml tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml
 	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
 	-rm -vf tisi0.xml tisi1.xml
 	-rm -rf *_split_bank
-	-rm *.xml.gz
