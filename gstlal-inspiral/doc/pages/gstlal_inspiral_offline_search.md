@@ -26,11 +26,25 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
 
 will need to be modified to your situation and there are comments in the files for further documentation.
 
+\section specifics Specific Examples
+
+The following examples need these hashes:
+
+- gstlal hash: 998750aa802f7e3c6877ee1fd51056e5326f95cf
+    - Apply <a href=https://ldas-jobs.phys.uwm.edu/~channa/master_patch_for_mdcs.patch>This Patch</a>
+- lalsuite hash: ded73df0a4a8e7fce5032ca0361fee9705a49c59
+
+\subsection non_spinning_aligned_BNS_gaussian Non-Spinning Aligned BNS Gaussian Noise
+
+This example needs the Makefile.offline_analysis_rules (see above) and the following Makefile:
+
+- <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.nonspinning_BNS_aligned_gaussian>Makefile.nonspinning_BNS_aligned_gaussian</a>
+
 \section making Making the workflow
 
 To make the workflow you need to run "make", e.g.,
 
-		$ make -f Makefile.triggers_example
+		$ make -f FILENAME 
 
 The makefile will execute the following graph that culminates in an HTCondor DAG
 
