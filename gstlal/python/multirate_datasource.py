@@ -293,7 +293,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 		if ht_gate_threshold is not None:
 			# all h(t) gates are controlled by the same max rate control input.
-			head[rate] = datasource.mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate // 4, name = "%s_%d_ht_gate" % (instrument, rate))
+			head[rate] = datasource.mkhtgate(pipeline, head[rate], control = pipeparts.mkqueue(pipeline, head[max(rates)], max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0), threshold = ht_gate_threshold, hold_length = rate // 4, attack_length = rate // 4, name = "%s_%d_ht_gate" % (instrument, rate))
 
 			# emit signals so that a user can latch on to them
 			head[rate].set_property("emit-signals", True)

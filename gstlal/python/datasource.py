@@ -748,23 +748,22 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 # @enddot
 #
 #
-def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = -128, hold_length = -128, name = None):
+def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
 	"""!
 	A convenience function to provide thresholds on input data.  This can
 	be used to remove large spikes / glitches etc.  Of course you can use it for
 	other stuff by plugging whatever you want as input and ouput
-	"""
 
+	NOTE:  the queues constructed by this code assume the attack and
+	hold lengths combined are less than 1 second in duration.
+	"""
 	# FIXME someday explore a good bandpass filter
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
 	src = pipeparts.mktee(pipeline, src)
 	if control is None:
 		control = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_bytes = 0, max_size_buffers = 0)
-	input = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
-	if name is not None:
-		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True, name = name)
-	else:
-		return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
+	src = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	return pipeparts.mkgate(pipeline, src, control = control, threshold = threshold, attack_length = -attack_length, hold_length = -hold_length, invert_control = True, **kwargs)
 
 # Unit tests
 if __name__ == "__main__":
