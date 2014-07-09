@@ -915,7 +915,7 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 	DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in names])
 	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
 
-	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(inst_horiz_mapping) + 1) for instruments in iterutils.choices(tuple(inst_horiz_mapping), n)), 0.0)
+	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
 
 	psi = gmst = 0.0
 	for i in xrange(n_samples):
