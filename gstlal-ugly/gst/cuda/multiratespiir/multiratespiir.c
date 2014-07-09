@@ -496,7 +496,6 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     g_assert(last_num_out_spiirup == out_len);
     free(tmp_out);
 
-    GST_LOG ("allocated buffer");
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
       GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
@@ -607,6 +606,56 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     num_in_multidown = MIN (in_len, num_exe_samples);
     last_num_out_spiirup += num_out_spiirup;
  }
+    memcpy (GST_BUFFER_DATA(outbuf), tmp_out, outsize);
+
+    free(tmp_out);
+
+    /* time */
+    if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
+      GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
+        gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
+        element->rate);
+      GST_BUFFER_DURATION (outbuf) = element->t0 +
+        gst_util_uint64_scale_int_round (element->samples_out + num_out_spiirup,
+        GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP (outbuf);
+    } else {
+      GST_BUFFER_TIMESTAMP (outbuf) = GST_CLOCK_TIME_NONE;
+      GST_BUFFER_DURATION (outbuf) = GST_CLOCK_TIME_NONE;
+    }
+    /* offset */
+    if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
+      GST_BUFFER_OFFSET (outbuf) = element->offset0 + element->samples_out;
+      GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (outbuf) + num_out_spiirup;
+    } else {
+    GST_BUFFER_OFFSET (outbuf) = GST_BUFFER_OFFSET_NONE;
+    GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET_NONE;
+    }
+ 
+    if (element->need_discont) {
+      GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_DISCONT);
+      element->need_discont = FALSE;
+    }
+
+    element->samples_out += outsize / (element->width/8);
+    element->samples_in += old_in_len;
+
+
+    GST_BUFFER_SIZE (outbuf) =
+      outsize;
+
+    GST_LOG_OBJECT (element,
+      "Converted to buffer of %" G_GUINT32_FORMAT
+      " samples (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+      GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
+      G_GUINT64_FORMAT, num_out_spiirup, GST_BUFFER_SIZE (outbuf),
+      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
+      GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
+
+    if (outsize == 0) {
+      GST_DEBUG_OBJECT (element, "buffer dropped");
+      return GST_BASE_TRANSFORM_FLOW_DROPPED;
+    }
 
     g_assert(last_num_out_spiirup == out_len);
     free(tmp_out);
@@ -929,7 +978,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
         return res;
     }
   }
-  gst_buffer_unref(outbuf);
   return GST_FLOW_OK;
 }
 
