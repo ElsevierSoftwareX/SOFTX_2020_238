@@ -349,7 +349,6 @@ class CoincsDocument(object):
 			lal_cvs_tag = None,	# FIXME
 			inseg = seg
 		)
-		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
 		# FIXME:  argh, ugly
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
@@ -418,7 +417,6 @@ class CoincsDocument(object):
 		#
 
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
-		self.summ_value_table = lsctables.SummValueTable.get_table(self.xmldoc)
 
 
 	def commit(self):
@@ -450,59 +448,10 @@ class CoincsDocument(object):
 		return self.sngl_inspiral_table.get_next_id()
 
 
-	@staticmethod
-	def summ_value_name_encode(m1, m2, snr_threshold):
-		return u"Dh:%g+%g@%g" % (m1, m2, snr_threshold)
-
-
-	@staticmethod
-	def summ_value_name_decode(s):
-		assert s[:3] == u"Dh:"
-		masses, snr_threshold = s[3:].split(u"@")
-		m1, m2 = map(float, masses.split(u"+"))
-		return m1, m2, float(snr_threshold)
-
-
-	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold):
-		# NOTE:  the encoding used here is not compatible with
-		# ihope
-		row = self.summ_value_table.RowType()
-		row.summ_value_id = self.summ_value_table.get_next_id()
-		row.program = self.process.program
-		row.process_id = self.process_id
-		row.frameset_group = None
-		row.segment_def_id = None
-		# claim the PSD to be valid for a point in time
-		row.segment = timestamp, timestamp
-		row.instruments = (instrument,)
-		row.name = self.summ_value_name_encode(m1, m2, snr_threshold)
-		row.value = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0)
-		row.error = None
-		row.intvalue = None
-		row.comment = u"horizon distance (Mpc)"
-		self.summ_value_table.append(row)
-		return row
-
-
 	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
 		start, end = int(math.floor(start)), int(math.ceil(end))
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, start, end - start, extension)
-
-
-	def horizon_history_xml(self):
-		xmldoc = ligolw.Document()
-		xmldoc.appendChild(ligolw.LIGO_LW())
-		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", {})
-		# can't use .copy() method, need to make new one, because
-		# it might be in a database
-		summ_value_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
-		for row in self.summ_value_table:	
-			summ_value_table.append(copy.copy(row))
-			summ_value_table[-1].process_id = process.process_id
-		summ_value_table._end_of_rows()
-		ligolw_process.set_process_end_time(process)
-		return xmldoc
 
 
 	def write_output_file(self, verbose = False):
@@ -584,7 +533,6 @@ class Data(object):
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
-		self.horizon_distances = {}
 		self.seglists = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
 		self.fapfar = None
 
@@ -629,16 +577,6 @@ class Data(object):
 				# smooth the distributions.  re-populates
 				# PDF arrays from raw counts
 				self.coinc_params_distributions.finish(verbose = self.verbose)
-
-				# set horizon distances.  SNR joint PDF
-				# regeneration is deferred until coincs are
-				# encountered that require them
-				#
-				# FIXME:  the likelihood ratio code should
-				# be getting the horizon distances directly
-				# from the triggers in each coinc.  when
-				# that's working remove this
-				self.coinc_params_distributions.horizon_distances = self.horizon_distances.copy()
 
 				# post a checkpoint message.  FIXME:  make
 				# sure this triggers
@@ -708,41 +646,17 @@ class Data(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		with self.lock:
-			horizon_distance = self.coincs_document.record_horizon_distance(instrument = instrument, timestamp = timestamp, psd = psd, m1 = m1, m2 = m2, snr_threshold = snr_threshold).value
-			# use a running geometric mean.  value will take
-			# effect on next likelihood snapsot interval.
-			#
-			# FIXME:  there are two different problems being
-			# solved with one hammer here.  on the one hand we
-			# need to get the horizon distances into
-			# coinc_params_distribution so that it can assign
-			# likelihood ratios when in online mode.  *that*
-			# should be done by fixing the trigger generator's
-			# effective distance calculation and getting the
-			# coinc_params() method to extract the horizon
-			# distances directly from the triggers.  that's
-			# tricky, though, because one needs to know the
-			# horizon distances of the other instruments not in
-			# the coinc so even when the trigger generator is
-			# fixed we'll still need to think about how to do
-			# that.  on the other hand, we also need a record
-			# of the horizon distance as a function of time so
-			# that we can marginalize over ranking statistic
-			# PDFs properly when computing the FAP and FAR
-			# functions.  that's relatively straight-forward to
-			# solve, we just need to teach ThincaCoincParams
-			# how to store a history of distances for each
-			# instrument.  hopefully that history record will
-			# also provide the solution to the problem of
-			# getting horizon distances for instruments that
-			# don't participate in a coinc.  when those
-			# problems are both fixed, this code here will
-			# get deleted (and possibly replaced with something
-			# else).
-			if instrument in self.horizon_distances and self.horizon_distances[instrument] > 0.:
-				self.horizon_distances[instrument] = math.exp((9. * math.log(self.horizon_distances[instrument]) + math.log(horizon_distance)) / 10.)
-			else:
-				self.horizon_distances[instrument] = horizon_distance
+			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0)
+			# NOTE:  timestamp is cast to float.  should be
+			# safe, whitener should be reporting PSDs with
+			# integer timestamps.  anyway, we don't need
+			# nanosecond precision for the horizon distance
+			# history.
+			try:
+				horizon_history = self.coinc_params_distributions.horizon_history[instrument]
+			except KeyError:
+				horizon_history = self.coinc_params_distributions.horizon_history[instrument] = far.NearestLeafTree()
+			horizon_history[float(timestamp)] = horizon_distance
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:

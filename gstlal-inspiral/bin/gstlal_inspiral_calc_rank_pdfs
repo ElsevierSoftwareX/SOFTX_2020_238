@@ -44,14 +44,11 @@ from glue import iterutils
 from glue.lal import CacheEntry
 from glue.text_progress_bar import ProgressBar
 from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
 from gstlal import far
-from gstlal import inspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -72,7 +69,6 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
-	parser.add_option("--horizon-history-url", action = "append", metavar = "filename", help = "Load horizon distance history from this URL.  Required, can be given multiple times.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 1000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 1000000).")
@@ -105,42 +101,6 @@ def parse_command_line():
 
 
 options, urls = parse_command_line()
-
-
-#
-# retrieve horizon distance data
-#
-
-
-if options.verbose:
-	print >>sys.stderr, "retrieving horizon distances ..."
-
-horizon_distances = {}
-for row in lsctables.SummValueTable.get_table(ligolw_add.ligolw_add(ligolw.Document(), options.horizon_history_url, non_lsc_tables_ok = True, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)):
-	if not row.name.startswith("Dh:"):
-		continue
-	# FIXME:  check that these are what we expect?
-	m1, m2, snr_threshold = inspiral.CoincsDocument.summ_value_name_decode(row.name)
-	for instrument in row.instruments:
-		horizon_distances.setdefault(instrument, []).append((row.start, row.value))
-
-
-#
-# put horizon distances for each instrument in time order
-#
-
-for dists in horizon_distances.values():
-	dists.sort()
-
-# FIXME:  for now we just take the average of the distances recorded for
-# each instrument.  this needs to be worked out properly so that events are
-# ranked with the appropriate distance
-horizon_distances = dict((instrument, sum(dist for t, dist in dists) / len(dists)) for instrument, dists in horizon_distances.items())
-
-if options.verbose:
-	print >>sys.stderr, "done retrieving horizon distances"
-	for instrument, dist in sorted(horizon_distances.items()):
-		print >>sys.stderr, "\t%s:  %g Mpc" % (instrument, dist)
 
 
 #
@@ -178,7 +138,6 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 coincparamsdistributions.finish(verbose = options.verbose)
 
-coincparamsdistributions.horizon_distances = horizon_distances	# FIXME:  band-aid for coinc params func.  remove
 
 #
 # generate likelihood ratio histograms
@@ -186,8 +145,10 @@ coincparamsdistributions.horizon_distances = horizon_distances	# FIXME:  band-ai
 
 
 # take a moment to make sure we have SNR PDFs for all instrument combinations
+all_horizon_distances = coincparamsdistributions.horizon_history.all()
 for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
-	coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
+	for horizon_distances in all_horizon_distances:
+		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
 ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 

@@ -108,17 +108,12 @@ options, filenames = parse_command_line()
 
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
-# FIXME:  need segment lists and horizon distances
+# FIXME:  need segment lists
 seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(LIGOTimeGPS(0.), LIGOTimeGPS(1.))]))
-horizon_distances = {
-	"H1": 120.0,
-	"L1": 120.0,
-	"V1": 45.0
-}
 
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = seglists.keys(), verbose = options.verbose)
-coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = options.instrument, verbose = options.verbose)
+coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, verbose = options.verbose)
 
 
 #
@@ -129,39 +124,7 @@ coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_c
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_prior_diststats", paramdict = {})
-search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = options.instrument, inseg = seglists.extent_all(), outseg = seglists.extent_all())
 far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, None, seglists, comment = u"background and signal priors (no real data)")
 ligolw_process.set_process_end_time(process)
-
-
-#
-# Make a fake horizon distance summ_values table
-#
-
-
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", {})
-# can't use .copy() method, need to make new one, because
-# it might be in a database
-summ_value_table = lsctables.New(lsctables.SummValueTable)
-
-for instrument, dist in horizon_distances.items():
-	row =summ_value_table.RowType()
-	row.summ_value_id = summ_value_table.get_next_id()
-	row.program = process.program
-	row.process_id = process.process_id
-	row.frameset_group = None
-	row.segment_def_id = None
-	# claim the PSD to be valid for a point in time
-	row.segment = segments.segment(LIGOTimeGPS(0.), LIGOTimeGPS(1.))
-	row.instruments = (instrument,)
-	row.name = inspiral.CoincsDocument.summ_value_name_encode(1.4, 1.4, 8.0)
-	row.value = dist
-	row.error = None
-	row.intvalue = None
-	row.comment = u"horizon distance (Mpc)"
-	summ_value_table.append(row)
-summ_value_table._end_of_rows()
-xmldoc.childNodes[0].appendChild(summ_value_table)
-ligolw_process.set_process_end_time(process)
-
 ligolw_utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith(".gz"), verbose = options.verbose)

@@ -25,6 +25,7 @@
 #
 
 
+import bisect
 import copy
 try:
 	from fpconst import NaN, NegInf, PosInf
@@ -55,6 +56,7 @@ import sys
 
 from glue import iterutils
 from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
@@ -276,13 +278,182 @@ GROUP BY
 
 
 #
+# Horizon distance record keeping
+#
+
+
+class NearestLeafTree(object):
+	"""
+	A simple binary tree in which look-ups return the value of the
+	closest leaf.  Only float objects are supported for the keys and
+	values.  Look-ups raise KeyError if the tree is empty.
+
+	Example:
+
+	>>> x = NearestLeafTree()
+	>>> x[100.0] = 120.
+	>>> x[104.0] = 100.
+	>>> x[102.0] = 110.
+	>>> x[90.]
+	120.0
+	>>> x[100.999]
+	120.0
+	>>> x[101.001]
+	110.0
+	>>> x[200.]
+	100.0
+	>>> del x[104]
+	>>> x[200.]
+	110.0
+	>>> x.keys()
+	[100.0, 102.0]
+	>>> 102 in x
+	True
+	>>> 103 in x
+	False
+	>>> x.to_xml(u"H1").write()
+	<Array Type="real_8" Name="H1:nearestleaftree:array">
+		<Dim>2</Dim>
+		<Dim>2</Dim>
+		<Stream Delimiter=" " Type="Local">
+			100 102
+			120 110
+		</Stream>
+	</Array>
+	"""
+	def __init__(self):
+		self.tree = []
+
+	def __setitem__(self, x, val):
+		# replace all entries having the same co-ordinate with this
+		# one
+		lo = bisect.bisect_left(self.tree, (x, NegInf))
+		hi = bisect.bisect_right(self.tree, (x, PosInf))
+		self.tree[lo:hi] = ((x, val),)
+
+	def __getitem__(self, x):
+		if not self.tree:
+			raise KeyError(x)
+		hi = bisect.bisect_right(self.tree, (x, PosInf))
+		try:
+			x_hi, val_hi = self.tree[hi]
+		except IndexError:
+			x_hi, val_hi = self.tree[-1]
+		if hi == 0:
+			x_lo, val_lo = x_hi, val_hi
+		else:
+			x_lo, val_lo = self.tree[hi - 1]
+		# compute average in way that will be safe if x values are
+		# range-limited objects
+		return val_lo if x < x_lo + (x_hi - x_lo) / 2. else val_hi
+
+	def __delitem__(self, x):
+		if type(x) is slice:
+			assert x.step is None
+			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
+			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
+			del self.tree[lo:hi]
+		elif not self.tree:
+			raise IndexError(x)
+		else:
+			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
+			if self.tree[lo][0] != x:
+				raise IndexError(x)
+			del self.tree[lo]
+
+	def keys(self):
+		return [x for x, val in self.tree]
+
+	def values(self):
+		return [val for x, val in self.tree]
+
+	def items(self):
+		return list(self.tree)
+
+	def __contains__(self, x):
+		try:
+			return bool(self.tree) and self.tree[bisect.bisect_left(self.tree, (x, NegInf))][0] == x
+		except IndexError:
+			return False
+
+	def __len__(self):
+		return len(self.tree)
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		self = cls()
+		self.tree = map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:])
+		# just in case
+		self.tree.sort()
+		return self
+
+	def to_xml(self, name):
+		return ligolw_array.from_array(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
+
+
+class HorizonHistories(dict):
+	def getdict(self, x):
+		return dict((key, value[x]) for key, value in self.iteritems())
+
+	def randhorizons(self):
+		"""
+		Generator yielding a sequence of random horizon distance
+		dictionaries chosen by drawing random times uniformly
+		distributed between the lowest and highest times recorded
+		in the history and returning the dictionary of horizon
+		distances for each of those times.
+		"""
+		x_min = min(min(value.keys()) for value in self.values())
+		x_max = max(max(value.keys()) for value in self.values())
+		getdict = self.getdict
+		rnd = random.uniform
+		while 1:
+			yield getdict(rnd(x_min, x_max))
+
+	def all(self):
+		"""
+		Returns a list of the unique sets of horizon distances
+		recorded in the histories.
+		"""
+		# unique times for which a horizon distance measurement is
+		# available
+		all_x = set(x for value in self.values() for x in value.keys())
+
+		# the unique horizon distances from those times, expressed
+		# as frozensets of instrument/distance pairs
+		result = set(frozenset(self.getdict(x).items()) for x in all_x)
+
+		# return a list of the results converted back to
+		# dictionaries
+		return map(dict, result)
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:horizonhistories" % name]
+		try:
+			xml, = xml
+		except ValueError:
+			raise ValueError("document must contain exactly 1 HorizonHistories named '%s'" % name)
+		keys = [elem.Name.replace(u":nearestleaftree", u"") for elem in xml.getElementsByTagName(ligolw.Array.tagName) if elem.hasAttribute(u"Name") and elem.Name.endswith(u":nearestleaftree")]
+		self = cls()
+		for key in keys:
+			self[key] = NearestLeafTree.from_xml(xml, key)
+		return self
+
+	def to_xml(self, name):
+		xml = ligolw.LIGO_LW({u"Name": u"%s:horizonhistories" % name})
+		for key, value in self.items():
+			xml.appendChild(value.to_xml(key))
+		return xml
+
+
+#
 # Inspiral-specific CoincParamsDistributions sub-class
 #
 
 
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
-	# FIXME:  switch to new default when possible
-	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
+	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
 	instrument_categories = snglcoinc.InstrumentCategories()
 
@@ -326,6 +497,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	del snr_chi_filter
 
+	def __init__(self, *args, **kwargs):
+		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
+		self.horizon_history = HorizonHistories()
+
 	#
 	# class-level cache of pre-computed SNR joint PDFs.  structure is like
 	#
@@ -366,9 +541,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		try:
-			# FIXME:  need to check that the result is
-			# appropriate for the SNR threshold and regenerate
-			# if not
 			pdf = self.snr_joint_pdf_cache[key][0]
 		except KeyError:
 			# no entries in cache for this instrument combo and
@@ -388,8 +560,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
 		return pdf
 
-	@staticmethod
-	def coinc_params(events, offsetvector):
+	def coinc_params(self, events, offsetvector):
 		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		# don't allow both H1 and H2 to participate in the same
 		# coinc.  if both have participated favour H1
@@ -397,19 +568,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			del params["H2_snr_chi"]
 		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
 
-		# FIXME:  the effective distances are currently broken so
-		# we can't use this yet.  add into params dictionary when
-		# fixed.  will need to add a .P_noise() override when we do
-		# so it understands this dictionary isn't to be combined
-		# with a binning
-		# FIXME:  need to add horizon distances for instruments
-		# that don't participate, too.  eventually this class will
-		# have a history of horizon distances stored in it, and the
-		# trigger times can be used to retrieve the distance for
-		# the missing instrument(s)
-		horizon_distances = dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events)
+		# pick one trigger at random to provide a timestamp and
+		# pull the horizon distances from our horizon distance
+		# history at that time.  the horizon history is keyed by
+		# floating-point values (don't need nanosecond precision
+		# for this)
+		horizons = self.horizon_history.getdict(float(events[0].get_end()))
+		# for instruments that provided triggers,
+		# use the trigger effective distance and
+		# SNR to provide the horizon distance.
+		# should be the same, but do this just in
+		# case the history isn't as complete as
+		# we'd like it to be
+		#
+		# FIXME:  for now this is disabled until
+		# we figure out how to get itac's sigmasq
+		# property updated from the whitener
+		#horizons.update(dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events))
+
+		params["horizons"] = horizons
 
 		return params
+
+	def P_noise(self, params):
+		if params is not None:
+			params = params.copy()
+			del params["horizons"]
+		return super(ThincaCoincParamsDistributions, self).P_noise(params)
 
 	def P_signal(self, params):
 		if params is None:
@@ -417,9 +602,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# (instrument, snr) pairs sorted alphabetically by instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
-		# FIXME:  get instrument-->horizon distance mapping from
-		# params
-		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), self.horizon_distances)
+		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
 		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
@@ -429,8 +612,28 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# OK.  we probably need to cache these and save them in the
 		# XML file, too, like P(snrs | signal, instruments)
 		for name, value in params.items():
-			P *= self.injection_pdf_interp[name](*value)
+			if name != "horizons":
+				P *= self.injection_pdf_interp[name](*value)
 		return P
+
+	# FIXME:  this is annoying.  probably need a generic way to
+	# indicate to the parent class that some parameter doesn't have a
+	# corresponding rate array
+	def add_zero_lag(self, params, *args, **kwargs):
+		if params is not None:
+			params = params.copy()
+			del params["horizons"]
+		return super(ThincaCoincParamsDistributions, self).add_zero_lag(params, *args, **kwargs)
+	def add_injection(self, params, *args, **kwargs):
+		if params is not None:
+			params = params.copy()
+			del params["horizons"]
+		return super(ThincaCoincParamsDistributions, self).add_injection(params, *args, **kwargs)
+	def add_background(self, params, *args, **kwargs):
+		if params is not None:
+			params = params.copy()
+			del params["horizons"]
+		return super(ThincaCoincParamsDistributions, self).add_background(params, *args, **kwargs)
 
 	def add_background_prior(self, instruments, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		#
@@ -589,7 +792,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# add to raw counts
 			binarr += new_binarr
 
-	def add_foreground_prior(self, segs, horizon_distances, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
+	def add_foreground_prior(self, segs, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
+		# FIXME:  need to figure out how to make sense of the
+		# horizon distance history now that we have it.  for now,
+		# pick a set of horizon distances at random
+		horizon_distances = iter(self.horizon_history.randhorizons()).next()
+
 		#
 		# populate instrument combination binning
 		#
@@ -668,6 +876,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def from_xml(cls, xml, name):
 		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
 		xml = self.get_xml_root(xml, name)
+		self.horizon_history = HorizonHistories.from_xml(xml, name)
 		prefix = u"cached_snr_joint_pdf"
 		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
 			key = ligolw_param.get_pyvalue(elem, u"key").strip().split(u";")
@@ -684,6 +893,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def to_xml(self, name):
 		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
+		xml.appendChild(self.horizon_history.to_xml(name))
 		prefix = u"cached_snr_joint_pdf"
 		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
 			elem = xml.appendChild(rate.binned_array_to_xml(binnedarray, prefix))
@@ -746,20 +956,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
 		>>> x.next()
 		"""
-		# FIXME:  this generator needs to also populate a choice of
-		# horizon distance in each return value.  that information
-		# isn't used yet, but eventually it will be.  eventually
-		# self will have some sort of history of horizon distances,
-		# and it should be enough to just a set of distances out of
-		# the history at random.
 		snr_slope = 0.5
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
+		horizongen = iter(self.horizon_history.randhorizons()).next
 		coordgens = tuple(iter(self.binnings[key].randcentre(ns = (snr_slope, 1.))).next for key in keys)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = dict(zip(keys, seq[0::2]))
+			params["horizons"] = horizongen()
 			params.update(base_params)
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires

@@ -50,11 +50,9 @@ OUTPUT="${1}"
 shift
 
 #
-# paths on the web server to the horizon history and trigger parameter
-# files
+# path on the web server to the trigger parameter file
 #
 
-HORIZON_HISTORY_PATH="horizon_history.xml"
 LIKELIHOOD_PATH="likelihood.xml"
 
 #
@@ -74,7 +72,7 @@ while true ; do
 	for SERVER in "$@" ; do
 		RANKING_PDF_FILE=$(mktemp)
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
-		gstlal_inspiral_calc_rate_pdfs --verbose --horizon-history-url ${SERVER}/${HORIZON_HISTORY_PATH} --output ${RANKING_PDF_FILE} ${SERVER}/${LIKELIHOOD_PATH} || break
+		gstlal_inspiral_calc_rank_pdfs --verbose --output ${RANKING_PDF_FILE} ${SERVER}/${LIKELIHOOD_PATH} || break
 	done || break
 	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${RANKING_PDF_FILES} || break 
 	rm -vf ${RANKING_PDF_FILES}

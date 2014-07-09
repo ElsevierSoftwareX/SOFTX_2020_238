@@ -67,7 +67,6 @@ from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal import snglcoinc
 from gstlal import far
-from gstlal import inspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -174,69 +173,6 @@ options, filenames = parse_command_line()
 
 
 #
-# retrieve horizon distance data
-#
-
-
-if options.verbose:
-	print >>sys.stderr, "retrieving horizon distances ..."
-
-horizon_distances = {}
-for n, filename in enumerate(filenames, 1):
-	#
-	# open the database file, do the query in-place
-	#
-
-	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
-
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
-
-	#
-	# retrieve horizon distances
-	#
-
-	for instruments, start_time, start_time_ns, name, dist in connection.cursor().execute("""
-SELECT
-	summ_value.ifo,
-	summ_value.start_time,
-	summ_value.start_time_ns,
-	summ_value.name,
-	summ_value.value
-FROM
-	summ_value
-WHERE
-	program == "gstlal_inspiral"
-	AND name LIKE "Dh:%";
-	"""):
-		# FIXME:  check that these are what we expect?
-		m1, m2, snr_threshold = inspiral.CoincsDocument.summ_value_name_decode(name)
-		for instrument in lsctables.instrument_set_from_ifos(instruments):
-			horizon_distances.setdefault(instrument, []).append((lsctables.LIGOTimeGPS(start_time, start_time_ns), dist))
-
-	connection.close()
-	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
-
-#
-# put horizon distances for each instrument in time order
-#
-
-for dists in horizon_distances.values():
-	dists.sort()
-
-# FIXME:  for now we just take the average of the distances recorded for
-# each instrument.  this needs to be worked out properly so that events are
-# ranked with the appropriate distance
-horizon_distances = dict((instrument, sum(dist for t, dist in dists) / len(dists)) for instrument, dists in horizon_distances.items())
-
-if options.verbose:
-	print >>sys.stderr, "done retrieving horizon distances"
-	for instrument, dist in sorted(horizon_distances.items()):
-		print >>sys.stderr, "\t%s:  %g Mpc" % (instrument, dist)
-
-
-#
 # load parameter distribution data
 #
 
@@ -261,7 +197,7 @@ if options.verbose:
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
@@ -278,9 +214,6 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 
 coincparamsdistributions.finish(verbose = options.verbose)
-
-
-coincparamsdistributions.horizon_distances = horizon_distances	# FIXME:  band-aid for coinc params func.  remove
 likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 
 
@@ -298,8 +231,10 @@ likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 threads = []
 if options.write_likelihood is not None:
 	# take a moment to make sure we have SNR PDFs for all instrument combinations
+	all_horizon_distances = coincparamsdistributions.horizon_history.all()
 	for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
-		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
+		for horizon_distances in all_horizon_distances:
+			coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
 	q = multiprocessing.queues.SimpleQueue()
 	p = multiprocessing.Process(target = generate_ranking_data, args = (q, coincparamsdistributions, seglists), kwargs = {"verbose": options.verbose})
 	p.start()

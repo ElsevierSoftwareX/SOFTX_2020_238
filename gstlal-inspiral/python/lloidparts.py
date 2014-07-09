@@ -267,8 +267,6 @@ class Handler(simplehandler.Handler):
 		self.psds = {}
 		bottle.route("/psds.xml")(self.web_get_psd_xml)
 
-		bottle.route("/horizon_history.xml")(self.web_get_horizon_history_xml)
-
 		# segment lists
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
 
@@ -422,17 +420,6 @@ class Handler(simplehandler.Handler):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output, trap_signals = None)
-			outstr = output.getvalue()
-			output.close()
-		return outstr
-
-	def web_get_horizon_history_xml(self):
-		"""!
-		provide a bottle route to get horizon distance history information via a url
-		"""
-		with self.dataclass.lock:
-			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.dataclass.coincs_document.horizon_history_xml(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
