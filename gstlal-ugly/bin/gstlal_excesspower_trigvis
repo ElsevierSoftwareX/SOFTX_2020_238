@@ -150,12 +150,6 @@ for ax in logaxes:
 		print >>sys.stderr, "Invalid log axis choice %s." % ax
 		exit()
 
-plotsum = opts.overlay_summary or []
-for info in plotsum:
-	if info not in ['spectrum_message', 'prebuild', 'postbuild']:
-		print >>sys.stderr, "Invalid summary info choice %s." % ax
-		exit()
-
 plotting_types = ["tile", "marker", "both", "most_significant"]
 if( opts.plotting_type not in plotting_types ):
 	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types))
