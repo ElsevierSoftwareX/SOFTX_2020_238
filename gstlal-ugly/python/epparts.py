@@ -32,6 +32,8 @@ import signal
 import glob
 import threading
 import json
+import tempfile
+import shutil
 from StringIO import StringIO
 
 import numpy
@@ -187,14 +189,17 @@ class EPHandler( Handler ):
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
-	def set_trigger_time_and_action( self, trig_seg, action=["psd"] ):
+	def set_trigger_time_and_action(self, trig_seg, action="psd"):
 		"""
-		Inform the handler of a specific time of interest.
+		Inform the handler of a specific time of interest, along with a action to take.
 		"""
-		# TODO: Bounds checking
-		self.trigger_segment = trig_seg
 
-		# TODO: Handle only specific action requests
+		self.trigger_segment = segment(map(LIGOTimeGPS, trig_seg))
+		# TODO: Bounds checking
+		if action == "psd":
+			pass
+		elif action == "scan":
+			pass
 
 	def handle_segment( self, elem, timestamp, segment_type ):
 		"""
@@ -748,3 +753,52 @@ class EPHandler( Handler ):
 
 		self.destroy_filter_xml()
 
+from gstlal import pipeparts
+def mknxyfdsink(pipeline, src, fd, segment = None):
+    if segment is not None:
+        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
+    else:
+        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump")
+    return pipeparts.mkgeneric(pipeline, elem, "fdsink", fd=fd, sync=False, async=False)
+
+class EPScan(object):
+	def __init__(self, scan_segment, low_freq, high_freq, base_band):
+		self.serializer_dict = {}
+		self.scan_segment = scan_segment
+		self.bandwidth = segment(low_freq, high_freq)
+		self.base_band = base_band
+
+	def add_data_sink(self, pipeline, head, name, type):
+		mknxyfdsink(pipeline,
+			pipeparts.mkqueue(pipeline, head),
+			self.get_tmp_fd(name, type),
+			self.scan_segment
+		)
+
+	def get_tmp_fd(self, name, type):
+		"""
+        Create a temporary file and file descriptor, returning the descriptor... mostly for use with fdsink. Name is an internal identifier and 'write_out' will move the temporary file to this name.
+		"""
+		tmpfile, tmpname = tempfile.mkstemp()
+		self.serializer_dict[name] = (tmpfile, tmpname)
+		return tmpfile
+
+	def write_out(self, scan_name):
+		"""
+		Move all temporary files to their permanent homes. Note that this clears the internal dictionary of filenames / contents.
+		"""
+		for name, (fd, fname) in self.serializer_dict.iteritems():
+			self.serializer_dict[name] = numpy.loadtxt(fname)
+		self.serializer_dict["segment"] = self.scan_segment
+		self.serializer_dict["bandwidth"] = list(self.bandwidth) + [self.base_band]
+		# FIXME: Reenable when it becomes available
+		#numpy.savez_compressed(scan_name, **self.serializer_dict)
+		numpy.savez(scan_name, **self.serializer_dict)
+		self.serializer_dict.clear()
+
+	def close(self):
+		"""
+		Close all temporary files.
+		"""
+		for (fd, fname) in self.serializer_dict.values():
+			os.close(fd)
