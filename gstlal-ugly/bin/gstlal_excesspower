@@ -35,7 +35,7 @@ import tempfile
 import threading
 import math
 
-from optparse import OptionParser
+from optparse import OptionParser, OptionGroup
 import ConfigParser
 from ConfigParser import SafeConfigParser
 
@@ -68,7 +68,8 @@ from gstlal import pipeparts
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
-from gstlal.epparts import EPHandler
+#from gstlal import epparts
+import epparts
 from gstlal import datasource
 
 try:
@@ -263,22 +264,25 @@ def get_triggers(elem, handler):
 
 parser = OptionParser()
 
-datasource.append_options( parser )
+datasource.append_options(parser)
 
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Required.", default=None)
-#parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
 parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
 parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
-#parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
 parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
 parser.add_option("-d", "--drop-start-time", type=float, default=120.0, dest="drop_time", help="Drop this amount of time (in seconds) in the beginning of a run. This is to allow time for the whitener to settle to the mean PSD. Default is 120 s.")
+
+scan_sec = OptionGroup(parser, "Time-frequency scan", "Use these options to scan over a given segment of time for multiple time-frequency maps. Both must be specified to scan a segment of time. If the segment of time begins in the whitening segment, it will be clipped to be outside of it.")
+scan_sec.add_option("--scan-segment-start", type=float, dest="scan_start", help="Beginning of segment to scan.")
+scan_sec.add_option("--scan-segment-end", type=float, dest="scan_end", help="End of segment to scan.")
+parser.add_option_group(scan_sec)
 
 (options, args) = parser.parse_args()
 
@@ -337,7 +341,7 @@ verbose = options.verbose
 # We need a pipeline and pipeline handler instance to configure
 pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
-handler = EPHandler(mainloop, pipeline)
+handler = epparts.EPHandler(mainloop, pipeline)
 
 # Enable the periodic output of trigger statistics
 if options.channel_monitoring:
@@ -458,7 +462,7 @@ if cfg.has_option( "triggering", "fap-thresh" ):
 	handler.fap = cfg.getfloat( "triggering", "fap-thresh" )
 
 if handler.fap is not None:
-	print "False alarm probability threshold (in Gaussian noise) is %f" % handler.fap
+	print "False alarm probability threshold (in Gaussian noise) is %g" % handler.fap
 if handler.snr_thresh is not None:
 	print "Trigger SNR threshold sqrt(E/ndof-1) is %f" % handler.snr_thresh
 
@@ -484,14 +488,10 @@ if cfg.has_option( "triggering", "events_per_file" ):
 
 # If a specific (trigger) time is of interest, specify its GPS here
 # TODO: Read from sngl_inspirals and sngl_bursts
-# TODO: Make this useful -- incorporate into scan
-trigger_begin, trigger_end = None, None
-if cfg.has_option( "triggering", "trig_time_start" ):
-	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
-if cfg.has_option( "triggering", "trig_time_end" ):
-	trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
-if trigger_begin and trigger_end:
-	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
+if options.scan_start and options.scan_end:
+	trigger_segment = segment(map(LIGOTimeGPS, (options.scan_start, options.scan_end)))
+	scan_obj = epparts.EPScan(trigger_segment, low_freq=handler.flow, high_freq=handler.fhigh, base_band=handler.base_band)
+	handler.set_trigger_time_and_action(trigger_segment, action="scan")
 
 # This is invoked here, or else the default rate is used, which will cause
 # funny behavior for the defaults with some cases
@@ -523,6 +523,11 @@ head = datasource.mkbasicsrc( pipeline,
 	handler.inst, 
 	verbose 
 )
+
+# Scan piece: Save the raw time series
+if handler.trigger_segment:
+    head = pipeparts.mktee(pipeline, head)
+    scan_obj.add_data_sink(pipeline, head, "time_series", "time")
 
 # If we're running online, we need to set up a few things
 if gw_data_source_opts.data_source == "lvshm":
@@ -561,6 +566,11 @@ if psdfile is not None: # In other words, we have a reference PSD
 if psdfile is None:
 	head = pipeparts.mkdrop( pipeline, head, int(options.drop_time*handler.rate) )
 
+# Scan piece: Save the whitened time series
+if handler.trigger_segment:
+	head = pipeparts.mktee(pipeline, head)
+	scan_obj.add_data_sink(pipeline, head, "white_series", "time")
+
 head = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
 
 if verbose:
@@ -582,6 +592,10 @@ if verbose:
 	head = pipeparts.mkprogressreport( pipeline, head, "FIR bank stream" )
 
 postfirtee = pipeparts.mktee( pipeline, head )
+
+# Scan piece: Save the filtered time series
+if handler.trigger_segment:
+	scan_obj.add_data_sink(pipeline, postfirtee, "filter_series", "time")
 
 # object to handle the synchronization of the appsinks
 def get_triggers_with_handler( elem ):
@@ -685,6 +699,10 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		if ndof/undersamp_rate > handler.max_duration:
 			break
 
+		# Scan piece: Save the summed square NDOF=1 stream
+		if handler.trigger_segment:
+			scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time")
+
 		print "Resolution level %d, DOFs: %d" % (res_level, ndof)
 
 		# Multi channel FIR filter -- used to add together frequency bands into 
@@ -694,6 +712,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		durtee.set_property( "n", ndof )
 		durtee.set_property( "type", 2 )
 		durtee.set_property( "moment", 1 )
+
+		# Scan piece: Save the summed square NDOF=2 stream
+		if handler.trigger_segment:
+			durtee = pipeparts.mktee(pipeline, durtee)
+			scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time")
 
 		if verbose:
 			durtee = pipeparts.mkprogressreport( pipeline, durtee, 
@@ -756,7 +779,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		# Funnel the triggers for this subbranch to the appsink
 		# FIXME: Why doesn't this negotiate the caps properly?
 		#appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )
-		appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee, max_size_time = 1*gst.SECOND) )
+		appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee, max_size_buffers = 10) )
 
 		ndof <<= 1
 		if ndof > max_samp:
@@ -794,3 +817,7 @@ def write_pipeline_graph():
 	)
 #write_pipeline_graph()
 mainloop.run()
+
+if handler.trigger_segment:
+    scan_obj.close()
+    scan_obj.write_out("gstlal_excesspower_scan_%s_%s_%d_%d" % (handler.channel, handler.inst, numpy.floor(int(options.scan_start)), numpy.ceil(int(options.scan_end))))
