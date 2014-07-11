@@ -20,12 +20,16 @@ import sys
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
-from glue.ligolw import utils
 from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from optparse import OptionParser
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
 
 def parse_command_line():
 	parser = OptionParser()
@@ -45,7 +49,7 @@ options, filenames = parse_command_line()
 fname = filenames[0]
 trim = options.trim
 
-xmldoc = utils.load_filename(fname, verbose = True)
+xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
 
 segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce()
 
@@ -75,5 +79,5 @@ lwseglists.insert_from_segmentlistdict(segs, options.segment_name)
 lwseglists.optimize()
 lwseglists.finalize(process)
 
-utils.write_filename(xmldoc, options.output, gz = options.output.endswith('.gz'), verbose = True)
+ligolw_utils.write_filename(xmldoc, options.output, gz = options.output.endswith('.gz'), verbose = True)
 
