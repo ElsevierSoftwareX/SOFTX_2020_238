@@ -532,17 +532,14 @@ class EPHandler( Handler ):
 
 		# Append only triggers in requested segment
 		outtable = EPHandler.make_output_table(self._clustering)
-		remainder = EPHandler.make_output_table(self._clustering)
-		for sb in self.triggers:
+		for i in list(range(len(self.triggers)))[::-1]:
 			# FIXME: Less than here rather than a check for being in the segment
 			# This is because triggers can arrive "late" and thus not be put in
 			# the proper file span. This might be a bug in the AppSync.
-			if sb.get_peak() < analysis_segment[1]:
-				outtable.append(sb)	
-			else:
-				remainder.append(sb)
-		output.childNodes[0].appendChild( outtable )
-		self.triggers = remainder
+			if self.triggers[i].get_peak() < analysis_segment[1]:
+				outtable.append(self.triggers[i])	
+				del self.triggers[i]
+		output.childNodes[0].appendChild(outtable)
 
 		ligolw_search_summary.append_search_summary( output, process, lalwrapper_cvs_tag=None, lal_cvs_tag=None, inseg=requested_segment )
 		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
