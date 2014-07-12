@@ -1,5 +1,5 @@
 etime=`lalapps_tconvert sept 16 2010 06:42:23 UTC`
-start=$(shell python -c "print ${etime} - 50")
+start=$(shell python -c "print ${etime} - 300")
 end=$(shell python -c "print ${etime} + 50")
 output=$(shell pwd)/triggers/
 
