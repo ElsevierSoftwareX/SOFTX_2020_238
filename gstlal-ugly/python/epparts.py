@@ -421,8 +421,10 @@ class EPHandler( Handler ):
 			print >>sys.stderr, "WARNING: Options have not yet been set in the handler. Process and ProcessParams may not be constructed properly. Call handler.make_process_tables() with the options argument to set command line options."
 			return lsctables.New(lsctables.ProcessTable)
 
-		if xmldoc and self.process is None:
-			self.process = ligolw_process.register_to_xmldoc( xmldoc, "gstlal_excesspower", self.process_params )
+		if self.process is None:
+			xmldoc = ligolw.Document() # dummy document
+			xmldoc.appendChild(ligolw.LIGO_LW())
+			self.process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_excesspower", self.process_params)
 			self.process.set_ifos( [self.inst] )
 		elif xmldoc and self.process is not None:
 			# This branch is here to prevent the register_to_xmldoc method from
@@ -450,7 +452,7 @@ class EPHandler( Handler ):
 	@clustering.setter
 	def clustering(self, value):
 		self._clustering = value
-		if self.triggers is not None:
+		if len(self.triggers) > 1:
 			ligolw_bucluster.add_ms_columns_to_table(self.triggers)
 
 	@classmethod
@@ -460,63 +462,15 @@ class EPHandler( Handler ):
 			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
-		if add_ms_columns:
-			ligolw_bucluster.add_ms_columns_to_table(tbl)
+		#if add_ms_columns:
+			#ligolw_bucluster.add_ms_columns_to_table(tbl)
 		return tbl
 
-	def process_triggers( self, newtrigs, cluster_passes=0 ):
+	def process_triggers(self, cluster_passes=0):
 		"""
-		Add additional information to triggers from the buffer and cluster them with the triggers already present in the handler. The cluster parameter controls how many passes of the clustering routine should be performed, with True being a special value indicating "as many as neccessary".
+		Cluster triggers with a varying number of cluster passes. The cluster parameter controls how many passes of the clustering routine should be performed, with True being a special value indicating "as many as neccessary".
+		FIXME: Dear god, the logic in this function is twisted. Rework.
 		"""
-
-		output = ligolw.Document()
-		output.appendChild(ligolw.LIGO_LW())
-		# FIXME: this is probably broken since it's going to create multiple
-		# process ids for one run of excesspower since the program gets registered
-		# every time this function is called, which is often.
-		process = self.make_process_tables( None, output )
-
-		# Assign process ids to events
-		for trig in newtrigs:
-			# For some reason, importing the XLAL SnglBurst 
-			# causes the write to crash -- we still need a better
-			# way to identify processed triggers
-			if trig.process_id is not None:
-				continue
-			trig.process_id = self.process.process_id
-			# If we're using a different units system, adjust back to SI
-			trig.duration *= self.units
-			#trig.peak_time /= self.units
-			# Readjust start time for units
-			trig.start_time -= self.start
-			trig.start_time /= self.units
-			trig.start_time += self.start
-
-		# FIXME: Write only the triggers that aren't XML
-		if len(newtrigs) != 0:
-			# Just in case any of the handler's trigger tables are the XLAL snglburst
-			output.childNodes[0].appendChild( newtrigs )
-
-			# Do a temporary write to make the SnglBurst objects into XML rows -- 
-			# this should probably be done only if clustering is requested, since 
-			# it's the only thing that thinks the triggers should be XML rows
-
-			self.lock.acquire()
-			# Enable to debug LIGOLW stream
-			#utils.write_fileobj(output, sys.stdout)
-			# TODO: Find out if this is any faster
-			tmpfile = StringIO()
-			utils.write_fileobj(output, tmpfile, trap_signals = None)
-			self.lock.release()
-
-			# Reload the document to convert the SnglBurst type to rows
-			tmpfile.seek(0)
-			output, mdhash = utils.load_fileobj(tmpfile, contenthandler=ContentHandler)
-			ligolw_bucluster.add_ms_columns( output )
-			tmpfile.close()
-
-			newtrigs = table.get_table( output, lsctables.SnglBurstTable.tableName ) 
-		self.triggers.extend( newtrigs )
 
 		# Avoid all the temporary writing and the such
 		if cluster_passes == 0 or not self._clustering:
@@ -528,7 +482,8 @@ class EPHandler( Handler ):
 		# Pipe down unless its important
 		verbose = self.verbose and full
 		changed = True
-		off = ligolw_bucluster.ExcessPowerPreFunc( self.triggers )
+		ligolw_bucluster.add_ms_columns_to_table(self.triggers)
+		off = ligolw_bucluster.ExcessPowerPreFunc(self.triggers)
 		while changed and self._clustering:
 			changed = snglcluster.cluster_events( 
 				events = self.triggers,
@@ -544,8 +499,7 @@ class EPHandler( Handler ):
 			# If we've reached the number of requested passes, break out
 			if cluster_passes <= 0: 
 				break
-		ligolw_bucluster.ExcessPowerPostFunc( self.triggers, off )
-		#self.triggers = newtrigs
+		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
 
 	def write_triggers( self, flush=True, filename=None, seg=None ):
 
@@ -757,6 +711,7 @@ class EPHandler( Handler ):
 			ext = "xml.gz",
 			dir = subdir
 		)
+		self.process_triggers(self._clustering)
 		self.write_triggers( False, filename = outfile )
 
 		if self.output_cache:

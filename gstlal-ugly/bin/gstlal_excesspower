@@ -171,46 +171,72 @@ def get_triggers(elem, handler):
 	buffer = elem.emit("pull-buffer")
 
 	if not handler.output:
+		del buffer
 		return # We don't want event information
 
 	# TODO: Can I set units here on the buffer fields, avoid changing the 
 	# triggers themslves and *not* screw up the underlying framework?
 
-	trigs = lsctables.New(lsctables.SnglBurstTable,
-			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
-			"duration",  "search", "event_id", "process_id",
-			"central_freq", "channel", "amplitude", "snr", "confidence",
-			"chisq", "chisq_dof", "bandwidth"])
 	for row in sngl_bursts_from_buffer(buffer):
+
+		# What comes out of the sngl_bursts_from_buffer is a
+		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have all
+		# the trappings of its glue.ligolw.lsctables cousin, so we convert it
+		# here first
+		import types
+		from pylal.xlal.datatypes.snglburst import SnglBurst
+		event = handler.triggers.RowType()  # lsctables version
+		validattrs = [k for k, v in SnglBurst.__dict__.iteritems() if isinstance(v, types.MemberDescriptorType) or isinstance(v, types.GetSetDescriptorType)]
+		for attr in validattrs:
+			# FIXME: This is probably slow
+			setattr(event, attr, getattr(row, attr))
+
 		# FIXME: Determine "magic number" or remove it
-		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
+		event.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
 
 		# This is done here so that the current PSD is used rather than
 		# what might be there when the triggers are actually output
-		ep.compute_amplitude( row, handler.psd )
+		ep.compute_amplitude(event, handler.psd)
 
-		row.snr = numpy.sqrt(row.snr / row.chisq_dof - 1)
+		event.snr = numpy.sqrt(event.snr / event.chisq_dof - 1)
 
 		# Reassign IDs since they won't be unique
-		row.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % handler.event_number)
+		# FIXME: Use get_next_id
+		event.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % handler.event_number)
+		event.process_id = handler.process.process_id
 		handler.event_number += 1
 
-		trigs.append( row )
-	
-	#buf_ts = (buffer.timestamp*1e-9 - handler.start) / handler.units + handler.start
+		# If we're using a different units system, adjust back to SI
+		event.duration *= handler.units
+		# Readjust start time for units
+		# FIXME: Is self.start already in the 'new' unit system?
+		# IF so, we can permanently delete these comments, otherwise, uncomment
+		#event.start_time -= handler.start
+		event.start_time /= handler.units
+		event.peak_time /= handler.units
+		#event.start_time += handler.start
+		# FIXME: Readjust frequencies? I don't think so, the filter tables are
+		# created 'independently and thus don't see the new units
+		#event.bandwidth /= handler.units
+
+		handler.triggers.append(event)
+
+	# Update the timestamps which tell us how far along in the trigger streams
+	# we are
 	# TODO: Why does the buf_dur need unit conversion, but not the timestamp
+	#buf_ts = (buffer.timestamp*1e-9 - handler.start) / handler.units + handler.start
 	buf_ts = buffer.timestamp*1e-9 
 	buf_dur = buffer.duration*1e-9 / handler.units
 	handler.stop = (buf_ts + buf_dur)
 
+	del buffer
+
 	# Check if clustering reduces the amount of events
 	if len(handler.triggers) >= handler.max_events and handler.clustering:
-		handler.process_triggers( trigs, cluster_passes=1 )
-	else:
-		handler.process_triggers( trigs )
+		handler.process_triggers(cluster_passes=1)
 
 	# We use the buffer timestamp here, since it's always guaranteed to be the
-	# latest available buffer, so we guarantee that the span of triggers is
+	# earliest available buffer, so we guarantee that the span of triggers is
 	# always greater than file stride duration
 	if buf_ts - handler.time_since_dump > handler.dump_frequency or len(handler.triggers) >= handler.max_events:
 		trigseg = segment( LIGOTimeGPS(handler.time_since_dump), LIGOTimeGPS(buf_ts) )
@@ -233,7 +259,7 @@ def get_triggers(elem, handler):
 		)
 
 		if handler.clustering:
-			handler.process_triggers( [], cluster_passes = True )
+			handler.process_triggers(cluster_passes = True)
 
 			# Final check on clustered SNR
 			for i in range(len(handler.triggers))[::-1]:
