@@ -20,13 +20,16 @@ import numpy
 import sys
 import glob
 from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
 from gstlal import reference_psd
 from optparse import OptionParser
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--output-name", metavar = "filename", help = "The output xml file (required)")
@@ -36,7 +39,7 @@ options, filenames = parser.parse_args()
 psd_dict = {}
 # FIXME not memory efficient
 for f in filenames:
-	for ifo, psd in reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose =options.verbose, contenthandler = ligolw.LIGOLWContentHandler)).items():
+	for ifo, psd in reference_psd.read_psd_xmldoc(ligolw_utils.load_filename(f, verbose =options.verbose, contenthandler = LIGOLWContentHandler)).items():
 		if psd is not None:
 			psd_dict.setdefault(ifo, []).append(psd)
 
