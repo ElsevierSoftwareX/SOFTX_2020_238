@@ -475,21 +475,14 @@ class EPHandler( Handler ):
 		# TODO: Can I set units here on the buffer fields, avoid changing the 
 		# triggers themslves and *not* screw up the underlying framework?
 
-		for row in sngl_bursts_from_buffer(buffer):
-
-			# What comes out of the sngl_bursts_from_buffer is a
-			# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
-			# all the trappings of its glue.ligolw.lsctables cousin, so we
-			# convert it here first
-			# FIXME: conver this in a separate function
-			event = self.triggers.RowType()  # lsctables version
-			validattrs = [k for k, v in SnglBurst.__dict__.iteritems() if isinstance(v, types.MemberDescriptorType) or isinstance(v, types.GetSetDescriptorType)]
-			for attr in validattrs:
-				# FIXME: This is probably slow
-				setattr(event, attr, getattr(row, attr))
+		# What comes out of the sngl_bursts_from_buffer is a
+		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
+		# all the trappings of its glue.ligolw.lsctables cousin, so we
+		# convert it here first
+		for event in [convert_sngl_burst(sb, self.triggers) for sb in sngl_bursts_from_buffer(buffer)]:
 
 			# FIXME: Determine "magic number" or remove it
-			event.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, row.chisq_dof * 0.62)
+			event.confidence = -XLALlnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
 
 			# This is done here so that the current PSD is used rather than what
 			# might be there when the triggers are actually output
@@ -499,7 +492,8 @@ class EPHandler( Handler ):
 
 			# Reassign IDs since they won't be unique
 			# FIXME: Use get_next_id
-			event.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % self.event_number)
+			#event.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % self.event_number)
+			event.event_id = self.triggers.get_next_id()
 			event.process_id = self.process.process_id
 			self.event_number += 1
 
@@ -874,3 +868,24 @@ class EPScan(object):
 		"""
 		for (fd, fname) in self.serializer_dict.values():
 			os.close(fd)
+
+
+#
+# =============================================================================
+#
+#                              Utility Functions
+#
+# =============================================================================
+#
+
+# Do this once per module load, since we may end up calling it a lot
+__validattrs = [k for k, v in SnglBurst.__dict__.iteritems() if isinstance(v, types.MemberDescriptorType) or isinstance(v, types.GetSetDescriptorType)]
+def convert_sngl_burst(snglburst, sb_table):
+	"""
+	Convert the snglburst object (presumed to be a pylal.xlal SnglBurst type) into lsctables version, as provided by the RowType() function of the supplied sb_table.
+	"""
+	event = sb_table.RowType()  # lsctables version
+	for attr in __validattrs:
+		# FIXME: This is probably slow
+		setattr(event, attr, getattr(snglburst, attr))
+	return event
