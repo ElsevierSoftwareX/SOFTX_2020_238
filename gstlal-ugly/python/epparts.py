@@ -35,7 +35,6 @@ import json
 import tempfile
 import shutil
 import types
-from StringIO import StringIO
 
 import numpy
 
@@ -47,23 +46,14 @@ import pygst
 pygst.require("0.10")
 import gst
 
-from gstlal.pipeutil import gst
 from gstlal.simplehandler import Handler
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
 
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-from glue.ligolw import lsctables
-from glue.ligolw import table
-from glue.ligolw import ilwd
-
+from glue.ligolw import ligolw, lsctables, table, ilwd
 class ContentHandler(ligolw.LIGOLWContentHandler): 
 	pass 
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 
 from glue.ligolw import utils
