@@ -511,10 +511,10 @@ def append_formatted_output_path( fmt, handler, bdir="./", mkdir=False ):
 		elif gps is not None: return str(handler.time_since_dump)
 		return ic
 
-	subdir = bdir + "/".join( [ converter(seg) for seg in fmt.strip().split("/") ] )
+	subdir = os.path.join(bdir, *[converter(seg) for seg in fmt.strip().split("/")] )
 	if mkdir and not os.path.exists( subdir ):
 		os.makedirs( subdir )
-	return subdir
+	return os.path.abspath(subdir)
 
 def make_cache_parseable_name( inst, tag, start, stop, ext, dir="./" ):
 	"""

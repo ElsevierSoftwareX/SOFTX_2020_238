@@ -790,7 +790,7 @@ class EPHandler( Handler ):
 		subdir = "./"
 		if self.outdirfmt is not None:
 			subdir = ep.append_formatted_output_path( self.outdirfmt, self )
-			subdir = self.outdir + "/" + subdir
+			subdir = os.path.join(self.outdir, subdir)
 		if not os.path.exists( subdir ):
 			self.lock.acquire()
 			os.makedirs( subdir )
