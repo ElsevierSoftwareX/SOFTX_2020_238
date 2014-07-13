@@ -317,7 +317,7 @@ handler.base_band = cfg.getfloat( "tf_parameters", "min-bandwidth" )
 handler.max_duration = cfg.getfloat( "tf_parameters", "max-duration" )
 # Number of resolutions levels. Can't be less than 1, and can't be greater than log_2((fhigh-flow)/base_band)
 max_bandwidth = cfg.getfloat( "tf_parameters", "max-bandwidth" )
-handler.max_level = round(math.log(max_bandwidth / handler.base_band, 2))
+handler.max_level = int(round(math.log(max_bandwidth / handler.base_band, 2)))
 
 # DOF options -- this affects which tile types will be calculated
 max_dof, fix_dof = None, None
