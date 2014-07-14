@@ -33,6 +33,7 @@ from glue.ligolw import lsctables
 from pylal import ligolw_thinca
 from pylal import snglcoinc
 from pylal.date import XLALUTCToGPS
+import lal
 import time
 
 
@@ -287,7 +288,10 @@ class StreamThinca(object):
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.likelihood_func,
-			likelihood_params_func = self.likelihood_params_func
+			likelihood_params_func = self.likelihood_params_func,
+			# add 10% to coincidence window for safety + the
+			# light-crossing time for the Earth
+			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
 		)
 
 		# restore .get_effective_snr() method on trigger class
