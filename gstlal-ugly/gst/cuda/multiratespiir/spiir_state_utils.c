@@ -9,7 +9,7 @@ SpiirState **
 spiir_state_init (gint num_depths, gint num_cover_samples,
 		gint num_exe_samples, gint width, gint rate, gint outchannels)
 {
-	gint i, tmp_len, inrate, outrate, queue_alloc_size;
+	gint i, inrate, outrate, queue_alloc_size;
 	SpiirState ** spstate = (SpiirState **)malloc(num_depths * sizeof(SpiirState*));
 
 	for(i=0; i<num_depths; i++)
@@ -25,13 +25,12 @@ spiir_state_init (gint num_depths, gint num_cover_samples,
 		cudaMemset(SPSTATE(i)->d_queue, 0, queue_alloc_size);
 		inrate = rate/pow(2, i);
 		outrate = inrate / 2;
-  		tmp_len = num_exe_samples / pow(2, i);
 //		SPSTATE(i)->out_spiir = (float*)malloc(tmp_len * sizeof(float));
 //		tmp_len *=2;
 //		SPSTATE(i)->out_up = (float*)malloc(tmp_len * sizeof(float));
 
-		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, outchannels, num_exe_samples);
-		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples);
+		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, outchannels, num_exe_samples, num_cover_samples, i);
+		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i);
 	}
 	return spstate;
 }

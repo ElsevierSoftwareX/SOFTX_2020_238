@@ -1,15 +1,30 @@
 
 #include "multiratespiir_utils.h"
+#include <math.h>
 
 gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen)
 {
 	gint i = num_depths;
-	gint rateleft = rate; 
+	gint rate_start = 0, rateleft; 
+	gboolean success = FALSE;
 	for (i=num_depths-1; i>0; i--)
-		rateleft = (rateleft - down_filtlen/2)/2;
+	       rate_start += down_filtlen * pow (2, i-1);
+
+	while (!success) {
+		rateleft = rate_start;
+		for (i=num_depths-1; i>0; i--) {
+			if ((rateleft - down_filtlen/2) % 2 == 1) {
+				rate_start = rate_start + 2;
+				break;
+			} else
+				rateleft = (rateleft - down_filtlen/2)/2;
+		}
+		if (i == 0)
+			success = TRUE;
+	}
 	for (i=num_depths-1; i>0; i--)
 		rateleft = (rateleft - up_filtlen/2)*2;
-	return (rate - rateleft);
+	return (rate_start);
 
 
 }

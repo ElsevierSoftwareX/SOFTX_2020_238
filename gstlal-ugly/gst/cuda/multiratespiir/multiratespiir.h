@@ -54,6 +54,7 @@ typedef struct _ResamplerState{
   gint sinc_len;
   gint inrate;
   gint outrate;
+  float amplifier;
 } ResamplerState;
 
 typedef struct _SpiirState {
@@ -112,4 +113,4 @@ GType cuda_multirate_spiir_get_type(void);
 
 G_END_DECLS
 
-#endif /* __AUDIO_RESAMPLE_H__ */
+#endif /* __CUDA_MULTIRATE_SPIIR_H__ */

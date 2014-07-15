@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 
-__global__ void downsample2x (const int resolution,
+__global__ void downsample2x (const float amplifier,
 			      const int times,
   			      float *sinc, 
 			      const int sinc_len, 
@@ -27,9 +27,9 @@ __global__ void downsample2x (const int resolution,
 {
 
 
-	const int gap			= resolution / times;
+	const int gap			= 1;
 
-	double tmp = 0.0;
+	float tmp = 0.0;
 	int tx = threadIdx.x;
 
 	// grab data from queue
@@ -39,12 +39,14 @@ __global__ void downsample2x (const int resolution,
 		mem[sinc_len-1 + blockDim.x * times + tx] = 
 			queue_in[blockDim.x * times + tx];
 
+	__syncthreads();
 	for (int j = 0; j < sinc_len; ++j) {
 	  tmp += mem[tx * times + j + last_sample] * sinc[j * gap];
 	}
 
-	queue_out[tx] = tmp / times;
+	queue_out[tx] = tmp;
 	__syncthreads();
+	
 
 	// copy last to first (sinc_len-1) mem data
 	if (tx < sinc_len -1)
@@ -107,6 +109,13 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
    * copy inbuf data to first queue
    */
   cudaMemcpy(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice);
+  float tmp_in[num_inchunk];
+  int j;
+  cudaMemcpy(tmp_in, pos_inqueue, num_inchunk * sizeof(float), cudaMemcpyDeviceToHost);
+  for (j=0; j<num_inchunk; j++) {
+    printf("host_in[%d] = %e \n", j, in_multidown[j]);
+    printf("in[%d] = %e\n", j, tmp_in[j]);
+  }
 
   SPSTATE(0)->queue_eff_len += num_inchunk;
 
@@ -131,14 +140,27 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     
     threadsPerBlock = out_processed;
     numBlocks = 1;
-    downsample2x <<<numBlocks, threadsPerBlock>>>(2, 2, SPSTATEDOWN(i)->d_sinc_table, SPSTATEDOWN(i)->sinc_len, SPSTATEDOWN(i)->last_sample, SPSTATEDOWN(i)->d_mem, num_inchunk, pos_inqueue, pos_outqueue);
+    printf("sinc len %d ; last sample %d; ", SPSTATEDOWN(i)->sinc_len, SPSTATEDOWN(i)->last_sample);
+    downsample2x <<<numBlocks, threadsPerBlock>>>(SPSTATEDOWN(i)->amplifier, 2, SPSTATEDOWN(i)->d_sinc_table, SPSTATEDOWN(i)->sinc_len, SPSTATEDOWN(i)->last_sample, SPSTATEDOWN(i)->d_mem, num_inchunk, pos_inqueue, pos_outqueue);
 
+    if (i == 0) {
+	    float tmp[SPSTATEDOWN(i)->sinc_len + out_processed];
+      	    cudaMemcpy(tmp, pos_outqueue, out_processed * sizeof(float), cudaMemcpyDeviceToHost);
+	    for (j=0; j<out_processed; j++)
+		    printf("out[%d] = %e\n", j, tmp[j]);
+      	    cudaMemcpy(tmp, SPSTATEDOWN(i)->d_mem, (SPSTATEDOWN(i)->sinc_len + out_processed) * sizeof(float), cudaMemcpyDeviceToHost);
+	    for (j=0; j<(SPSTATEDOWN(i)->sinc_len + out_processed); j++)
+		    printf("mem[%d] = %e\n", j, tmp[j]);
+
+    }
+    /* never discard any samples, we already prevent this situation from happening*/
     /* 
      * if the number of input samples is odd, discard the last input 
      * sample. We do not expect this affect accuracy much.
+     * if (num_inchunk % 2 == 1)
+     * SPSTATE(i)->queue_eff_len -= 1;
      */
-    if (num_inchunk % 2 == 1)
-      SPSTATE(i)->queue_eff_len -= 1;
+
     /*
      * filter finish, update the next expected down start of upper 
      * spstate; update the effective length of this spstate;

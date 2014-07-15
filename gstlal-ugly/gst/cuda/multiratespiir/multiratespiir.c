@@ -567,6 +567,8 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
  
     /* move along */
+    if (element->num_exe_samples != element->rate)
+	    element->num_exe_samples = element->rate;
     gst_adapter_flush (element->adapter, num_in_multidown * sizeof(float));
     in_len -= num_in_multidown;
     num_in_multidown = MIN (in_len, num_exe_samples);
@@ -746,6 +748,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->num_gap_samples = 0;
     element->samples_in = 0;
     element->samples_out = 0;
+    element->num_exe_samples = element->num_cover_samples;
   }
 
   element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
@@ -838,8 +841,8 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->num_gap_samples = 0;
     adapter_len = cuda_multirate_spiir_get_available_samples(element);
     /*
-     * here merely speed consideration: samples ready to be processed less than num_exe_samples,
-     * wait until there are more than num_exe_samples
+     * here merely speed consideration: if samples ready to be processed are less than num_exe_samples,
+     * wait until there are over num_exe_samples
      */
     if (in_samples < num_exe_samples - adapter_len) {
       /* absorb the buffer */
