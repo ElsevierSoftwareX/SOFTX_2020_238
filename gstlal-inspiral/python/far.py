@@ -432,14 +432,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			P *= self.injection_pdf_interp[name](*value)
 		return P
 
-	def add_background_prior(self, segs, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
+	def add_background_prior(self, instruments, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
 		#
 		# populate snr,chi2 binnings
 		#
 
 		if verbose:
 			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
-		for instrument in segs:
+		for instrument in instruments:
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
 				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
@@ -470,7 +470,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binarr += new_binarr
 
 		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
-		self.add_foreground_snrchi_prior(self.background_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
+		self.add_foreground_snrchi_prior(self.background_rates, instruments = instruments, n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def add_instrument_combination_counts(self, segs, verbose = False):
 

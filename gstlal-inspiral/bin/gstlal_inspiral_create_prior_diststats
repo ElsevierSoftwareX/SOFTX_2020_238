@@ -117,7 +117,7 @@ horizon_distances = {
 }
 
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = seglists.keys(), verbose = options.verbose)
 coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, horizon_distances = horizon_distances, verbose = options.verbose)
 
 

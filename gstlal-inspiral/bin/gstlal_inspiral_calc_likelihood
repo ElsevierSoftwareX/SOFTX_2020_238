@@ -265,7 +265,7 @@ if options.synthesize_injections != 0:
 
 # add a uniform prior to background, by default 0 is added so it has no effect
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, segs = seglists, verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = seglists.keys(), verbose = options.verbose)
 
 # compute the instrument combination counts
 coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
