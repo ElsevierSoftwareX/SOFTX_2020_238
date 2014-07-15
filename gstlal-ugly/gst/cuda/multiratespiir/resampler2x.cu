@@ -202,6 +202,7 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 		fltrOutptImag[numFilters+i] = 0.0f;
 	}
 	__syncthreads();
+	
 
 
 	if( tx < numFilters ) 
