@@ -440,7 +440,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if verbose:
 			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
 		for instrument in segs:
-			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] = n
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
 				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
@@ -467,6 +466,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# normalize to the requested count
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
+			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] += n
 			binarr += new_binarr
 
 		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
