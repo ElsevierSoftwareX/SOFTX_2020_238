@@ -30,6 +30,7 @@ import sys
 import numpy as np
 import warnings
 import StringIO
+from gstlal.pipeio import repack_complex_array_to_real 
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -106,35 +107,9 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	#
 
 	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
-	# format of banklist : {'H1': <H1Bank0>, <H1Bank1>..;
-	#			'L1': <L1Bank0>, <L1Bank1>..;..}
-	# format of bank: <H1bank0>
-	sample_rates = sorted(bank.get_rates())
-	
+
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		# assemble a bank block
-		bank_block = []
-		#first element is the resample depth
-		itemsize = bank.A[max(sample_rates)].dtype.itemsize/2
-		datatype = np.dtype("f%d" % itemsize)
-		tmparray = []
-		tmparray = np.array([len(sample_rates)], np.dtype("f%d" % itemsize))
-		np.append(bank_block, tmparray)
-		for sr in sample_rates
-			tmparray = []
-			bank.A[sr].view(dtype = np.dype)
-			tmparray = np.array([bank.A[sr].shape], np.dtype("f%d" % itemsize))
-			np.append(bank_block, tmparray)
-			tmparray = []
-			tmparray = np.array([bank.B[sr].shape], np.dtype("f%d" % itemsize))
-			np.append(bank_block, tmparray)
-			tmparray = []
-			tmparray = np.array([bank.D[sr].shape], np.dtype("f%d" % itemsize))
-			np.append(bank_block, tmparray)
-
-
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-
 		snr = mkSPIIRhoftToSnrSlices(
 			pipeline,
 			hoftdicts[instrument],
@@ -196,7 +171,42 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def mkCudaMultirateSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None):
+def build_bank_struct(bank)
+	#FIXME: sanity check about the bank dimention of each sampling rate
+	# build a bank struct
+	sample_rates = sorted(bank.get_rates())
+	bank_struct = []
+	#first element is the resample depth
+	itemsize = bank.A[max(sample_rates)].dtype.itemsize/2
+	datatype = np.dtype("f%d" % itemsize)
+	tmparray = []
+	tmparray = np.array([len(sample_rates)], datatype)
+	np.append(bank_struct, tmparray)
+	for sr in sample_rates
+		tmparray = []
+		tmparray_shape = []
+		tmparray = repack_complex_array_to_real(bank.A[sr])
+		tmparray_shape = np.array(tmparray.shape, datatype)
+		np.append(bank_struct, tmparray_shape)
+		np.append(bank_struct, tmparray)
+
+		tmparray = []
+		tmparray_shape = []
+		tmparray = repack_complex_array_to_real(bank.B[sr])
+		tmparray_shape = np.array(tmparray.shape, datatype)
+		np.append(bank_struct, tmparray_shape)
+		np.append(bank_struct, tmparray)
+
+		tmparray = []
+		tmparray_shape = []
+		tmparray = repack_complex_array_to_real(bank.D[sr])
+		tmparray_shape = np.array(tmparray.shape, datatype)
+		np.append(bank_struct, tmparray_shape)
+		np.append(bank_struct, tmparray)
+	return bank_struct
+
+
+def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -229,7 +239,7 @@ def mkCudaMultirateSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	for instrument in detectors.channel_dict:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		if veto_segments is not None:
+		if veto_segments is not None:		
 			hoftdicts[instrument] = uni_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
 			hoftdicts[instrument] = uni_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
@@ -239,18 +249,16 @@ def mkCudaMultirateSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	#
 
 	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
+	# format of banklist : {'H1': <H1Bank0>, <H1Bank1>..;
+	#			'L1': <L1Bank0>, <L1Bank1>..;..}
+	# format of bank: <H1bank0>
+	
+	snr = pipeparts.mktee(pipeline, snr)
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-
-		snr = mkSPIIRhoftToSnrSlices(
-			pipeline,
-			hoftdicts[instrument],
-			bank,
-			instrument,
-			verbose = verbose,
-			nxydump_segment = nxydump_segment,
-			quality = 4
-		)
+		bank_struct = build_bank_struct(bank)
+		snr = pipeparts.mkCudaMultirateSPIIR(pipeline, hoftdicts[instrument], bank_struct)
+		num_templates = bank.A[max(sample_rates)].shape[0]
+		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d, channels=%d" % (max(sample_rates), num_templates))
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
