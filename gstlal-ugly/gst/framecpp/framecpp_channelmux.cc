@@ -364,7 +364,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 					case GST_FRPAD_TYPE_FRPROCDATA: {
 						/* FIXME:  history */
-						FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND, (double) (buffer_list_t_end - buffer_list_t_start) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
+						FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND, (double) GST_CLOCK_DIFF(buffer_list_t_start, buffer_list_t_end) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
 						GST_LOG_OBJECT(data->pad, "appending FrProcData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
 						proc_data.RefData().append(vect);
 						frame->RefProcData().append(proc_data);
@@ -372,7 +372,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					}
 
 					case GST_FRPAD_TYPE_FRSIMDATA: {
-						FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) (buffer_list_t_start - frame_t_start) / GST_SECOND);
+						FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND);
 						GST_LOG_OBJECT(data->pad, "appending FrSimData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
 						sim_data.RefData().append(vect);
 						frame->RefSimData().append(sim_data);
