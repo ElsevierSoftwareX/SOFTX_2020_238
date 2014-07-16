@@ -437,12 +437,7 @@ output = inspiral.Data(
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
-# setup the pipeline hander with dq gates if in online mode
-if options.data_source in ("lvshm", "framexmit"):
-	gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
-else:
-	gates = {}
-handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",

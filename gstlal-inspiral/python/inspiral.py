@@ -753,6 +753,8 @@ class Data(object):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
 		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglists.keys(), inseg = self.seglists.extent_all(), outseg = self.seglists.extent_all())
+		# FIXME:  now that we've got all kinds of segment lists
+		# being collected, decide which of them should go here.
 		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglists)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
