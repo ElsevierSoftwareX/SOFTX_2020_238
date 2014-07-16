@@ -278,12 +278,6 @@ class GWDataSourceInfo(object):
 		self.live_sources = set(("framexmit", "lvshm"))
 		assert self.live_sources <= self.data_sources
 
-		## Callback function to handle the "start" signals from the gate
-		self.gate_start_callback = None
-
-		## Callback function to handle the "stop" signals from the gate
-		self.gate_stop_callback = None
-
 		# Sanity check the options
 		if options.data_source not in self.data_sources:
 			raise ValueError("--data-source must be one of %s" % ", ".join(self.data_sources))
@@ -675,13 +669,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 		# use state vector to gate strain
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, default_state = False, name = "%s_state_vector_gate" % instrument)
-		# export state vector state
-		if gw_data_source_info.gate_start_callback is not None:
-			src.set_property("emit-signals", True)
-			src.connect("start", gw_data_source_info.gate_start_callback)
-		if gw_data_source_info.gate_stop_callback is not None:
-			src.set_property("emit-signals", True)
-			src.connect("stop", gw_data_source_info.gate_stop_callback)
+
+		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		def strain_add(elem = src):
