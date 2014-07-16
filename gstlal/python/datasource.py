@@ -515,16 +515,17 @@ def do_seek(pipeline, seekevent):
 # @enddot
 #
 #
-def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False):
+def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False, **kwargs):
 	"""!
 	Takes a segment list and produces a gate driven by it. Hook up your own input and output.
-	"""
 
-	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
+	@param kwargs passed through to pipeparts.mkgate(), e.g., used to set the gate's name.
+	"""
+	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output = invert_output)
 	# FIXME:  remove
 	if seekevent is not None:
 		do_seek(pipeline, seekevent)
-	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc)
+	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc, **kwargs)
 
 
 ##
