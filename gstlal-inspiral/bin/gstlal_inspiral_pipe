@@ -233,7 +233,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			# FIXME choose better splitting
 			# split up the non injection runs to make them go faster
-			for svd_bank_strings in chunks(svd_bank_strings_full, 25):
+			for svd_bank_strings in chunks(svd_bank_strings_full, 10):
 				# setup output names
 				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
 				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
@@ -271,48 +271,49 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
-			# Let the injection jobs take all of the svd bank jobs since they run so fast
-			svd_bank_strings = svd_bank_strings_full
+			# FIXME choose better splitting
+			# split up the injection runs to make them go faster
+			for svd_bank_strings in chunks(svd_bank_strings_full, 10):
 
-			# process injections
-			for injections in options.injections:
-			
-				# setup output names	
-				sim_name = sim_tag_from_inj_file(injections)
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
-				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				# process injections
+				for injections in options.injections:
+				
+					# setup output names	
+					sim_name = sim_tag_from_inj_file(injections)
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
 
-				# setup injection node
-				injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
-						opts = {"psd-fft-length":options.psd_fft_length,
-							"ht-gate-threshold":options.ht_gate_threshold,
-							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":seg[0].seconds,
-							"gps-end-time":seg[1].seconds,
-							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"svd-bank":svd_bank_strings,
-							"tmp-space":inspiral_pipe.condor_scratch_space(),
-							"track-psd":"",
-							"control-peak-time":options.control_peak_time,
-							"coincidence-threshold":options.coincidence_threshold,
-							"fir-stride":options.fir_stride,
-							"data-source":"frames",
-							"local-frame-caching":""
-							},
-						input_files = {	"time-slide-file":options.time_slide_file,
-								"frame-cache":options.frame_cache,
-								"frame-segments-file":options.frame_segments_file,
-								"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
-								"veto-segments-file":options.vetoes,
-								"injections": injections
-							},
-						output_files = {
-								"output":output_names,
-								"likelihood-file":dist_stat_names
-							}
-						)
+					# setup injection node
+					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+							opts = {"psd-fft-length":options.psd_fft_length,
+								"ht-gate-threshold":options.ht_gate_threshold,
+								"frame-segments-name":options.frame_segments_name,
+								"gps-start-time":seg[0].seconds,
+								"gps-end-time":seg[1].seconds,
+								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+								"svd-bank":svd_bank_strings,
+								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"track-psd":"",
+								"control-peak-time":options.control_peak_time,
+								"coincidence-threshold":options.coincidence_threshold,
+								"fir-stride":options.fir_stride,
+								"data-source":"frames",
+								"local-frame-caching":""
+								},
+							input_files = {	"time-slide-file":options.time_slide_file,
+									"frame-cache":options.frame_cache,
+									"frame-segments-file":options.frame_segments_file,
+									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+									"veto-segments-file":options.vetoes,
+									"injections": injections
+								},
+							output_files = {
+									"output":output_names,
+									"likelihood-file":dist_stat_names
+								}
+							)
 
-				inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
 
 	return inspiral_nodes
 
