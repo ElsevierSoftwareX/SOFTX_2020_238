@@ -29,13 +29,18 @@ gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint d
 
 }
 
+gboolean cuda_multirate_spiir_parse_bank (gdouble *bank, gint *num_depths, gint *
+		outchannels)
+{
+	// FIXME: do some check?
+	*num_depths = (gint) bank[0];
+	*outchannels = (gint) bank[1];
+	return TRUE;
+}
 
 gint cuda_multirate_spiir_get_num_templates(CudaMultirateSPIIR *element)
 {
-	if( element->matrix_initialised)
 		return element->outchannels;
-	else 
-		return 1;
 }
 
 gint cuda_multirate_spiir_get_num_cover_samples(CudaMultirateSPIIR *element)

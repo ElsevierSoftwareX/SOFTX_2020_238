@@ -31,7 +31,7 @@ __global__ void downsample2x (const float amplifier,
 
 	float tmp = 0.0;
 	int len_loc = len * times;
-	int tx_loc = 0
+	int tx_loc = 0;
 	int tx = threadIdx.x + blockIdx.x * blockDim.x;
 
 	// grab data from queue
@@ -218,7 +218,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
   numBlocks = num_inchunk % threadsPerBlock == 0 ? num_inchunk / threadsPerBlock : (int)num_inchunk / threadsPerBlock + 1;
 
   pos_out_spiir = SPSTATEUP(num_depths-1)->d_mem + SPSTATEUP(num_depths-1)->filt_len - 1;
-  iir_filter <<<numBlocks, threadsPerBlock>>>(SPSTATE(num_depths-1)->d_queue, pos_out_spiir, num_inchunk);
+  iir_filter <<<numBlocks, threadsPerBlock>>>(SPSTATE(num_depths-1)->d_queue, pos_out_spiir);
 
 //  spiir_state_flush_queue (spstate, num_depths-1, num_inchunk);
 

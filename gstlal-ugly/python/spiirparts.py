@@ -59,6 +59,18 @@ from gstlal import simplehandler
 from gstlal import simulation
 from pylal.datatypes import LIGOTimeGPS
 
+from gstlal import uni_datasource
+import pdb
+
+
+def mkCudaMultirateSPIIR(pipeline, src, bank_struct, name=None):
+	if bank_struct is not None:
+		properties["SPIIR-bank"] = bank_struct 
+	elem = pipeparts.mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
+	elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
+	return elem
+
+
 #
 # SPIIR many instruments, many template banks
 #
@@ -98,9 +110,9 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -171,7 +183,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def build_bank_struct(bank)
+def build_bank_struct(bank):
 	#FIXME: sanity check about the bank dimention of each sampling rate
 	# build a bank struct
 	sample_rates = sorted(bank.get_rates())
@@ -181,28 +193,28 @@ def build_bank_struct(bank)
 	datatype = np.dtype("f%d" % itemsize)
 	tmparray = []
 	tmparray = np.array([len(sample_rates)], datatype)
-	np.append(bank_struct, tmparray)
-	for sr in sample_rates
+	bank_struct = np.append(bank_struct, tmparray)
+	for sr in sample_rates:
 		tmparray = []
 		tmparray_shape = []
 		tmparray = repack_complex_array_to_real(bank.A[sr])
 		tmparray_shape = np.array(tmparray.shape, datatype)
-		np.append(bank_struct, tmparray_shape)
-		np.append(bank_struct, tmparray)
+		bank_struct = np.append(bank_struct, tmparray_shape)
+		bank_struct = np.append(bank_struct, tmparray)
 
 		tmparray = []
 		tmparray_shape = []
 		tmparray = repack_complex_array_to_real(bank.B[sr])
 		tmparray_shape = np.array(tmparray.shape, datatype)
-		np.append(bank_struct, tmparray_shape)
-		np.append(bank_struct, tmparray)
+		bank_struct = np.append(bank_struct, tmparray_shape)
+		bank_struct = np.append(bank_struct, tmparray)
 
 		tmparray = []
 		tmparray_shape = []
-		tmparray = repack_complex_array_to_real(bank.D[sr])
+		tmparray = bank.D[sr].astype(dtype = datatype, casting='safe')
 		tmparray_shape = np.array(tmparray.shape, datatype)
-		np.append(bank_struct, tmparray_shape)
-		np.append(bank_struct, tmparray)
+		bank_struct = np.append(bank_struct, tmparray_shape)
+		bank_struct = np.append(bank_struct, tmparray)
 	return bank_struct
 
 
@@ -240,9 +252,9 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -252,8 +264,8 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	# format of banklist : {'H1': <H1Bank0>, <H1Bank1>..;
 	#			'L1': <L1Bank0>, <L1Bank1>..;..}
 	# format of bank: <H1bank0>
-	
-	snr = pipeparts.mktee(pipeline, snr)
+
+	pdb.set_trace()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		bank_struct = build_bank_struct(bank)
 		snr = pipeparts.mkCudaMultirateSPIIR(pipeline, hoftdicts[instrument], bank_struct)

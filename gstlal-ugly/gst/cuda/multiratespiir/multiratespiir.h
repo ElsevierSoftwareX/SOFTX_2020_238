@@ -97,12 +97,14 @@ struct _CudaMultirateSPIIR {
   guint64 num_gap_samples;
 
   gint outchannels; // equals number of templates
-  gint inchannels;
   gint rate;
   gint width;
-  gboolean matrix_initialised;
-  gboolean spstate_initialised;
+  gdouble *bank;
+  gint bank_len;
+  GMutex *iir_bank_lock;
+  GCond *iir_bank_available;
   SpiirState **spstate;
+  gboolean spstate_initialised;
 };
 
 struct _CudaMultirateSPIIRClass {

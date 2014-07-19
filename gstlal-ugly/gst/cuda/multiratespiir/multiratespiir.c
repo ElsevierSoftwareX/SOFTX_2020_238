@@ -24,7 +24,7 @@
  */
 
 /* TODO:
- *  - no update SpiirState at run time. should support streaming format changes such as width/ rate/ quality change at run time. Should support IIR matrix changes at run time.
+ *  - no update SpiirState at run time. should support streaming format changes such as width/ rate/ quality change at run time. Should support IIR bank changes at run time.
  */
 
 #include <string.h>
@@ -65,8 +65,7 @@ GST_BOILERPLATE_FULL(
 enum
 {
   PROP_0,
-  PROP_NUM_DEPTHS,
-  PROP_MATRIX
+  PROP_IIR_BANK
 };
 
 static GstStaticPadTemplate cuda_multirate_spiir_sink_template =
@@ -163,18 +162,22 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
   gobject_class->set_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_property);
   gobject_class->get_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_property);
 
-  g_object_class_install_property (gobject_class, PROP_NUM_DEPTHS,
-      g_param_spec_int ("num_depths", "Num_depths", "number of depths [0-7] ",
-          RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
-          RESAMPLER_NUM_DEPTHS_DEFAULT,
-          G_PARAM_READWRITE));
-
-  g_object_class_install_property (gobject_class, PROP_MATRIX,
-      g_param_spec_int ("matrix", "Matrix", "matrix [0-7]",
-          RESAMPLER_NUM_DEPTHS_MIN, RESAMPLER_NUM_DEPTHS_MAX,
-          MATRIX_DEFAULT,
-          G_PARAM_READWRITE));
-
+  // FIXME: not sure if G_PARAM_READWRITE is the only requirement
+  g_object_class_install_property (gobject_class, PROP_IIR_BANK,
+ 			g_param_spec_value_array(
+				"SPIIR-bank",
+				"IIR bank feedback coefficients",
+				"A parallel bank of first order IIR filter feedback coefficients",
+				g_param_spec_double(
+					"coefficient",
+					"Coefficient",
+					"Feedback coefficient",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					G_PARAM_READWRITE 
+				),
+				G_PARAM_READWRITE
+			)
+		  );
 }
 
 static void
@@ -205,7 +208,10 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
   element->samples_in = 0;
   element->samples_out = 0;
   element->spstate_initialised = FALSE;
-  element->matrix_initialised = FALSE;
+  element->iir_bank_lock = g_mutex_new();
+  element->iir_bank_available = g_cond_new();
+  element->bank = NULL;
+  element->bank_len = 0;
   element->num_exe_samples = 4096; // assumes the rate=4096Hz
   element->num_cover_samples = 3040; // assumes the rate=4096Hz
 
@@ -216,6 +222,8 @@ static gboolean
 cuda_multirate_spiir_stop (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+	g_mutex_free (element->iir_bank_lock);
+	g_cond_free (element->iir_bank_available);
 
   if (element->spstate) {
     spiir_state_destroy (element->spstate, element->num_depths);
@@ -271,9 +279,13 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
     /*
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
+    g_mutex_lock (element->iir_bank_lock);
+    if (!element->bank) 	
+      g_cond_wait (element->iir_bank_available, element->iir_bank_lock);
 
-    gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+    gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_num_templates(element), NULL);
   
+    g_mutex_unlock (element->iir_bank_lock);
 
   return othercaps;
 }
@@ -348,13 +360,13 @@ cuda_multirate_spiir_transform_size (GstBaseTransform * base,
      * asked to convert size of an incoming buffer. The output size 
      * will be determined by the lowest rate
      */
-//    g_assert(element->matrix_initialised == TRUE);
+//    g_assert(element->bank_initialised == TRUE);
     *othersize = samples + cuda_multirate_spiir_get_available_samples (element);
     *othersize *= bytes_per_samp;
   } else {
     /* asked to convert size of an outgoing buffer. 
      */
-//    g_assert(element->matrix_initialised == TRUE);
+//    g_assert(element->bank_initialised == TRUE);
     *othersize = samples;
     *othersize *= bytes_per_samp;
   }
@@ -386,13 +398,13 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
 
   if (!success) 
     GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
-  if (element->matrix_initialised && (channels != (gint) cuda_multirate_spiir_get_num_templates(element)))
+  if (element->bank!=NULL && (channels != (gint) cuda_multirate_spiir_get_num_templates(element)))
     /* impossible to happen */
     GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, cuda_multirate_spiir_get_num_templates(element), outcaps);
   if (width != (gint) element->width) {
     if (element->spstate_initialised)
       /*
-       * do not support width change at run time
+       * FIXME :do not support width change at run time
        */
       GST_ERROR_OBJECT(element, "width != %d in %" GST_PTR_FORMAT, element->width, outcaps);
     else
@@ -400,12 +412,13 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   if (rate != (gint) element->rate) {
     if (element->spstate_initialised)
       /*
-       * do not support rate change at run time
+       * FIXME: do not support rate change at run time
        */
       GST_ERROR_OBJECT(element, "rate != %d in %" GST_PTR_FORMAT, element->rate, outcaps);
     else
       element->rate = rate; }
 
+  /* transform_caps already done, num_depths already set */
   if (!element->spstate_initialised) {
     element->num_cover_samples = cuda_multirate_spiir_init_cover_samples(rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
     element->num_exe_samples = rate;
@@ -712,9 +725,9 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
    * initialise spiir state
    */
   if (element->spstate_initialised == FALSE) {
-    element->spstate = spiir_state_init (element->num_depths, 
+    element->spstate = spiir_state_init (element->bank, element->bank_len,
 		    element->num_cover_samples, element->num_exe_samples,
-		    element->width, element->rate, element->outchannels);
+		    element->width, element->rate);
 
     element->spstate_initialised = TRUE;
   }
@@ -928,21 +941,28 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
   CudaMultirateSPIIR *element;
 
   element = CUDA_MULTIRATE_SPIIR (object);
+  gboolean success = TRUE;
 
   switch (prop_id) {
-    case PROP_NUM_DEPTHS:
-      GST_BASE_TRANSFORM_LOCK (element);
-      element->num_depths = g_value_get_int (value);
-      GST_DEBUG_OBJECT (element, "set number of depths %d", element->num_depths);
+    case PROP_IIR_BANK:
 
-      GST_BASE_TRANSFORM_UNLOCK (element);
-      break;
-    case PROP_MATRIX:
-      GST_BASE_TRANSFORM_LOCK (element);
-      element->outchannels = g_value_get_int (value); //FIXME: hard code to 1 for outchannels
-      element->matrix_initialised = TRUE;
-      GST_DEBUG_OBJECT (element, "set number of outchannels %d", element->outchannels);
-      GST_BASE_TRANSFORM_UNLOCK (element);
+      g_mutex_lock(element->iir_bank_lock);
+      if (element->bank)
+	      free(element->bank);
+
+      if (gstlal_doubles_from_g_value_array (g_value_get_boxed(value), element->bank, &element->bank_len) == NULL)
+         GST_ERROR_OBJECT (element, "bank could not be initialized");
+
+      success = cuda_multirate_spiir_parse_bank(element->bank, &element->num_depths, &element->outchannels);
+      if (!success)
+         GST_ERROR_OBJECT (element, "bank could not be parsed");
+      /*
+       * signal ready of the bank
+       */
+      g_cond_broadcast(element->iir_bank_available);
+      GST_DEBUG_OBJECT (element, "obtain the bank");
+
+      g_mutex_lock(element->iir_bank_lock);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -959,11 +979,14 @@ cuda_multirate_spiir_get_property (GObject * object, guint prop_id,
   element = CUDA_MULTIRATE_SPIIR (object);
 
   switch (prop_id) {
-    case PROP_NUM_DEPTHS:
-      g_value_set_int (value, element->num_depths);
-      break;
-    case PROP_MATRIX:
-      g_value_set_int (value, element->outchannels);
+    case PROP_IIR_BANK:
+      g_mutex_lock(element->iir_bank_lock);
+      if (element->bank)
+	      g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->bank, element->bank_len));
+      else
+	      GST_ERROR_OBJECT(element, "no bank initialised, failed to get property");
+	
+      g_mutex_unlock(element->iir_bank_lock);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

@@ -60,7 +60,7 @@ from pylal import series as lalseries
 from gstlal import far
 from gstlal import inspiral
 from gstlal import pipeparts
-from gstlal import lloidparts
+from gstlal import spiirparts
 from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
@@ -342,7 +342,7 @@ if options.verbose:
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
 
-triggersrc = lloidparts.mkSPIIRmulti(
+triggersrc = spiirparts.mkBuildBossSPIIR(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
