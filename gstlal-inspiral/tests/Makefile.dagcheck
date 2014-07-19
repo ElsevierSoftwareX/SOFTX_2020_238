@@ -1,0 +1,227 @@
+define COMPDATA
+7.971 966384501.4086
+7.609 966391007.9379
+7.496 966388625.0619
+7.466 966391642.1871
+7.422 966392113.9487
+7.4 966390991.6119
+7.39 966390449.6035
+7.388 966393339.5012
+7.377 966386020.161
+7.368 966391204.4937
+endef 
+export COMPDATA
+
+## Template bank parameters
+# Note that these can can change if you modify the template bank program.
+# Minimum component mass for the template bank
+MIN_MASS = 1.4
+# Maximum component mass for the template bank
+MAX_MASS = 1.6
+# Low frequency cut off for the template bank placement
+LOW_FREQUENCY_CUTOFF = 40.0
+# High pass frequency to condition the data before measuring the psd for
+# template placement
+HIGH_PASS_FREQ = 35
+# Highest frequency at which to compute the metric
+HIGH_FREQUENCY_CUTOFF = 2047.0
+# The sample rate at which to compute the template bank
+SAMPLE_RATE = 4096
+# The minimal match of the template bank; determines how much SNR is retained
+# for signals "in between the bank points"
+MM = 0.975
+
+
+## Sub bank parameters
+# The large template bank is split into sub banks before they are SVD'd. This
+# is the number of templates to put in each sub bank; this formula seems to be
+# reasonable
+NUM_SPLIT_TEMPLATES = $(shell python -c "print int(3000./${LOW_FREQUENCY_CUTOFF})")
+# The number of templates to overlap for each sub bank. This overlap just goes
+# into the SVD, the overlapping templates are not reconstructed and the bank
+# remains contiguous
+OVERLAP = $(shell python -c "print 2 * int(0.1 * ${NUM_SPLIT_TEMPLATES})")
+
+## Controls trigger creation
+#
+# The dectors to analyze; provide as a space separated list
+IFOS = H1 L1
+# The start time to analyze
+START = 966384015
+# The end time to analyze
+STOP = 966394015
+# The tag to name the output web directory
+TAG = DAG_Test
+# the output directory for the results
+WEBDIR = ${START}-${STOP}-${TAG}
+# The number of sub banks to analyze in parallel.  This means that the total
+# number of templates in parallel is NUMBANKS * NUM_SPLIT_TEMPLATES *
+# num(IFOS);  A typical number of parallel templates might be 4 * 100 * 3 =
+# 1200.  Setting this too high might cause memory to be exhausted
+NUMBANKS = 4
+# If non-zero, this is the interval over which to apply the composite detection
+# statistic to avoid reconstructing all of the SVD filters
+PEAK = 0
+# The length in samples of the auto correlation "chisquared" veto.
+AC_LENGTH = 351
+# additional options, e.g.,
+#ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
+
+## Injections
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+# NOTE This uses gstlal_injections_by_local_rate for this example, but you
+# might want to use lalapps_inspinj since it is reviewed etc.  specify the
+# seeds and number of injections.  The should be <seed>_injections.xml.  The
+# same rule will be applied to each target.  For a more heterogeneous injection
+# plan more work has to go into this Makefile but it is straight forward.
+INJECTIONS := 1_injections.xml 2_injections.xml
+# Maximum injection distance in Mpc
+INJ_MAX_DIST = 150
+# Minimum component mass 1 for injections
+INJ_MIN_MASS = 1.45
+# Maximum component mass 1 for injections
+INJ_MAX_MASS = 1.55
+# Minimum frequency for injections. NOTE this should be lower than the intended
+# filtering frequency
+INJ_FLOW = 35
+
+# Channel names to analyze. NOTE every IFO should get a channel name, but they
+# can be different and depend on the data
+CHANNEL_NAMES:=--channel-name=H1=FAKE-STRAIN --channel-name=L1=FAKE-STRAIN
+
+## FIXME MISSING vetoes
+# In principle a similar set of segment queries can be written to extract vetoes
+# That is not done in this example
+# If you do decide to do it hten you have to pass the vetoes xml file to the DAG generator
+
+## Get some basic definitions. YOU HAVE TO INCLUDE THIS BEFORE THE ACTUAL RULES OR THEY WONT WORK
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
+
+# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+BANK_CACHE_PREFIX = $(empty)
+BANK_CACHE_SUFFIX = _split_bank.cache
+BANK_CACHE_FILES = $(addsuffix $(BANK_CACHE_SUFFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix $(BANK_CACHE_PREFIX),$(IFOS))
+BANK_CACHE_STRING:= $(addprefix =,$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(addsuffix $(BANK_CACHE_SUFFIX),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(join $(IFOS),$(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(strip $(BANK_CACHE_STRING))
+BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+# Injection file names
+injections:=--injections $(space)
+INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
+
+#
+# Workflow
+#
+
+all : check
+
+TEST_FRAMES:
+	gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=$(START) --gps-end-time=$(STOP) --output-path=TEST_FRAMES --verbose
+	gstlal_fake_frames --data-source=LIGO --channel-name=L1=FAKE-STRAIN --frame-type=L1_FAKE --gps-start-time=$(START) --gps-end-time=$(STOP) --output-path=TEST_FRAMES --verbose
+
+
+H1_frame.cache : TEST_FRAMES
+	ls TEST_FRAMES/H-H1_FAKE*/* | lalapps_path2cache > $@
+
+frame.cache : TEST_FRAMES
+	ls TEST_FRAMES/*/*  | lalapps_path2cache > $@
+
+H1-SBANK_$(TAG)-0-1.xml.gz: 
+	lalapps_cbc_sbank \
+		--mass1-min $(MIN_MASS) \
+		--mass1-max $(MAX_MASS) \
+		--gps-start-time 0 \
+		--gps-end-time 1 \
+		--match-min $(MM) \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		--approximant TaylorF2RedSpin \
+		--aligned-spin \
+		--use-metric \
+		--spin1-min 0 \
+		--spin1-max 0 \
+		--noise-model iLIGOSRD \
+		--instrument H1 \
+		--user-tag $(TAG) \
+		--verbose 
+
+
+## The program to to split the master template bank into sub banks
+%_split_bank.cache : H1-SBANK_$(TAG)-0-1.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --output-path $*_split_bank --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) --bank-program lalapps_cbc_sbank $<
+
+## The directory where plots will go
+plots :
+	mkdir plots
+
+## The output directory
+$(WEBDIR) : 
+	mkdir $(WEBDIR)
+
+## Even though we don't use time slides for background estimation, we still need a time slide table. It is constructed of a zero lag vector and a single offset that we use for "closed box" results
+tisi.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+	ligolw_add --output $@ tisi0.xml tisi1.xml
+
+## The dag generator and the whole point of this makefile. The result is a file: trigger_pipe.dag that can be submitted to HTCondor
+trigger_pipe.sh : segments.xml frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS)
+
+runme.sh : trigger_pipe.sh
+	sed -e "s@_CONDOR_SCRATCH_DIR@$$TMPDIR@g" $< > $@
+
+H1L1-ALL_LLOID-966384015-10000.sqlite : runme.sh
+	bash $<
+
+check: H1L1-ALL_LLOID-966384015-10000.sqlite
+	@echo "$$COMPDATA" > in.txt
+	sqlite3 -separator ' ' H1L1-ALL_LLOID-966384015-10000.sqlite 'SELECT ROUND(snr,3), ROUND(end_time+end_time_ns/1.e9,4) FROM coinc_inspiral ORDER BY SNR DESC LIMIT 10;' > out.txt
+	diff in.txt out.txt > comp.txt
+
+segments.xml:
+	echo $(START) $(STOP) > segs.txt
+	ligolw_segments --insert-from-segwizard=H1=segs.txt --insert-from-segwizard=L1=segs.txt --name datasegments > $@
+
+## Generate injections, e.g., 1_injections.xml or 2_injections.xml for whatever seeds are requested
+%_injections.xml: 
+	gstlal_injections_by_local_rate \
+		--output $@ \
+		--seed $* \
+		--flower $(INJ_FLOW) \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--bns-max-distance $(INJ_MAX_DIST) \
+		--ns-min-mass $(INJ_MIN_MASS) \
+		--ns-max-mass $(INJ_MAX_MASS) \
+		--nsbh-local-rate 0 \
+		--bbh-local-rate 0 \
+		--bns-local-rate 22000
+
+## Cleanup by deleting all of files created.  WARNING this will completely obliterate an analysis. 
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots $(WEBDIR) *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -rvf *_split_bank
+	-rm -vf segments.xml tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf H1-SBANK_DAG_Test-0-1.xml.gz
+	-rm -rvf TEST_FRAMES
+	-rm -rvf segs.txt
+	-rm -rvf comp.txt in.txt out.txt
+	-rm -vf tisi0.xml tisi1.xml
