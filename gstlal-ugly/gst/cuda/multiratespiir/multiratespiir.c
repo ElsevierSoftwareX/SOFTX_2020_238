@@ -241,6 +241,8 @@ static gboolean
 cuda_multirate_spiir_stop (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+	g_mutex_free (element->iir_bank_lock);
+	g_cond_free (element->iir_bank_available);
 
   g_mutex_free (element->iir_bank_lock);
   g_cond_free (element->iir_bank_available);

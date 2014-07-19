@@ -121,7 +121,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_uni_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
