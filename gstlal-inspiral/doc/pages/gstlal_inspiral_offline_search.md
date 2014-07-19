@@ -28,11 +28,14 @@ will need to be modified to your situation and there are comments in the files f
 
 \section specifics Specific Examples
 
-The following examples need these hashes:
+The following examples use these hashes:
 
-- gstlal hash: 998750aa802f7e3c6877ee1fd51056e5326f95cf
-    - Apply <a href=https://ldas-jobs.phys.uwm.edu/~channa/master_patch_for_mdcs.patch>This Patch</a>
-- lalsuite hash: ded73df0a4a8e7fce5032ca0361fee9705a49c59
+- gstlal hash: 14701db478c1ec37d9e21161d1fdc1c607481c75
+    - Apply <a href=https://ldas-jobs.phys.uwm.edu/~channa/master_patch_for_mdcs.patch>framecpp_channelmux_patch and gstlal_compute_far_from_snr_chisq_histograms_patch</a>
+	- Apply <a href=https://ldas-jobs.phys.uwm.edu/~ryan.everett/patches/bank_splitter_approximant.patch>gstlal_bank_splitter_patch</a>
+	- Apply <a href=https://ldas-jobs.phys.uwm.edu/~ryan.everett/patches/svd_bank.patch>svd_bank_patch</a>
+	- Apply <a href=https://ldas-jobs.phys.uwm.edu/~ryan.everett/patches/gstlal_inspiral_plot_background.patch>gstlal_inspiral_plot_backgroun_patch</a>
+- lalsuite hash: c7464b1f0b3efe4b15b34b50fe8701ba57670cf1  
 
 \subsection non_spinning_aligned_BNS_gaussian Non-Spinning Aligned BNS Gaussian Noise
 
