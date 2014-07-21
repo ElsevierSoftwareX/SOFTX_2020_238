@@ -5,6 +5,12 @@
 #include "spiir_state_macro.h"
 #include <cuda_runtime.h>
 
+void
+spiir_state_init_bank (gdouble *bank, SpiirState *subspstate)
+{
+	float *tmp_a1, *tmp_b0, *tmp_d;
+
+}
 SpiirState ** 
 spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 		gint num_exe_samples, gint width, gint rate)
@@ -33,6 +39,7 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 
 		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, 1, num_exe_samples, num_cover_samples, i);
 		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i);
+		spiir_state_init_bank (bank, SPSTATE(i));
 	}
 	return spstate;
 }
