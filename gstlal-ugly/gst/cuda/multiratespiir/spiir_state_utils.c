@@ -5,10 +5,44 @@
 #include "spiir_state_macro.h"
 #include <cuda_runtime.h>
 
-void
-spiir_state_init_bank (gdouble *bank, SpiirState *subspstate)
+static float *
+spiir_state_workspace_realloc (float ** workspace, int * size,
+    int new_size)
 {
-	float *tmp_a1, *tmp_b0, *tmp_d;
+  float *new;
+  if (new_size <= *size)
+    /* no need to resize */
+    return *workspace;
+  new = (float*)realloc (*workspace, new_size * sizeof (float));
+  if (!new)
+    /* failure (re)allocating memeory */
+    return NULL;
+  /* success */
+  *workspace = new;
+  *size = new_size;
+  return *workspace;
+}
+
+void
+spiir_state_init_bank (gdouble *bank, SpiirState **spstate, gint num_depths)
+{
+	float *tmp_a1 = 0, *tmp_b0 = NULL, *tmp_d = NULL;
+	gint a1_size = 0, b0_size = 0, d_size = 0;
+	gint new_a1_size = 0, new_b0_size = 0, new_d_size = 0;
+	int i, depth;
+	gdouble *pos = &bank[1];
+
+	for (depth = 0; depth < num_depths; depth++) {
+			
+	new_a1_size = (gint) bank[pos] * bank[pos+1];	
+	pos = pos + 2;
+	spiir_state_workspace_realloc (tmp_a1, &a1_size, new_a1_size);
+	for (i=0; i<a1_size; i++) 
+		tmp_a1[i] = (float) bank[pos++];
+
+	cudaMalloc((void **) &(SPSTATE(0)->d_a1), a1_size * sizeof (float));
+
+
 
 }
 SpiirState ** 
@@ -39,8 +73,8 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 
 		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, 1, num_exe_samples, num_cover_samples, i);
 		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i);
-		spiir_state_init_bank (bank, SPSTATE(i));
 	}
+	spiir_state_init_bank (bank, spstate, num_depths);
 	return spstate;
 }
 

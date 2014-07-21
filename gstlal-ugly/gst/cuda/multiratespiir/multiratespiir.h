@@ -44,6 +44,13 @@ G_BEGIN_DECLS
 typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
 typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
 
+typedef struct _Complex8_F
+{
+	float re;
+	float im;
+} COMPLEX_F;
+
+
 typedef struct _ResamplerState{
   float *d_sinc_table;
   float *d_mem; // fixed length to store input
@@ -58,9 +65,10 @@ typedef struct _ResamplerState{
 } ResamplerState;
 
 typedef struct _SpiirState {
-//	a0;
-//	b1;
-//	d;
+  COMPLEX_F d_a1;
+  COMPLEX_F d_b0;
+  COMPLEX_F d_delay;
+
   int depth; // 0-6
   ResamplerState *downstate, *upstate;
   float *d_queue; // fixed length structure, to store the intermediate result from downsample, this is the input for upsample
