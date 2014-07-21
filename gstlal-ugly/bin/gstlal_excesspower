@@ -68,8 +68,7 @@ from gstlal import pipeparts
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
-#from gstlal import epparts
-import epparts
+from gstlal import epparts
 from gstlal import datasource
 
 try:
