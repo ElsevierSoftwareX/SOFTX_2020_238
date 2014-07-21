@@ -233,10 +233,11 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			# FIXME choose better splitting
 			# split up the non injection runs to make them go faster
-			for svd_bank_strings in chunks(svd_bank_strings_full, 10):
+			numchunks = 10
+			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 				# setup output names
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
-				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
 
 				# FIXME do better with svd node parents?
 				# non injection node
@@ -272,16 +273,17 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			# FIXME choose better splitting
-			# split up the injection runs to make them go faster
-			for svd_bank_strings in chunks(svd_bank_strings_full, 10):
+			# split up the injection runs to make them go faster. Injections are about 4 times faster than regular runs
+			numchunks = 40
+			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 
 				# process injections
 				for injections in options.injections:
 				
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
 
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
@@ -608,8 +610,8 @@ refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = 
 medianPSDJob = inspiral_pipe.generic_job('gstlal_median_of_psds')
 svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
-gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
-gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"6", "+RequiresMultipleCores":"True"})
+gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"8192", "request_cpus":"4", "+RequiresMultipleCores":"True"})
+gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"8192", "request_cpus":"4", "+RequiresMultipleCores":"True"})
 calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood")
 calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj')
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms")
