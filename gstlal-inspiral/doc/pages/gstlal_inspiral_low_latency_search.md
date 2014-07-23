@@ -109,7 +109,7 @@ published.  The 6th engineering run will be the first to use the new procedure.
 
 \section Preliminaries Preliminaries
 
-- start by making a directory where you will run the analysis:
+- Start by making a directory where you will run the analysis:
 
 		$ mkdir /home/gstlalcbc/engineering/5
 
@@ -176,15 +176,15 @@ set up in the previous section.
 
 @dotfile analysisgeneration.dot
 
-- begin by making a directory for the analysis dag to run, e.g.,
+- Begin by making a directory for the analysis dag to run, e.g.,
 
-		$ mkdir /home/gstlalcbc/engineering/5/bns_bank
+		$ mkdir /home/gstlalcbc/engineering/5/analysis
 
-- next obtain a makefile to automate the dag generation, e.g., <a
+- Next obtain a makefile to automate the dag generation, e.g., <a
   href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.ERTrigs>this
 example</a>
 
-- Modify the makefile to your liking and then run make seed
+- Modify the makefile to your liking (make sure it knows where the files you made with the bank dag are) and then run make seed
 
 		$ make seed -f Makefile.ERTrigs
 
@@ -204,7 +204,7 @@ something like this:
 
 		NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0009&dir=/mnt/qfs3/gstlalcbc/engineering/5/bns_trigs_40Hz
 
-- make seed is the first and necessary step when starting a new analysis from
+- Make seed is the first and necessary step when starting a new analysis from
   scratch. It sets up some of the necessary input files and produces a dag that
 will *not* submit events to gracedb.  This is important because the online
 analysis needs time to run and collect background statistics.
@@ -230,7 +230,7 @@ This is a necessary step, otherwise data will be lost.**
 
 		$ make -f Makefile.ERTrigs 
 
-- this will overwrite your dag file, but not other files, like logs, so you
+- This will overwrite your dag file, but not other files, like logs, so you
   will need to force resubmission
 
 		$ condor_submit_dag -f trigger_pipe.dag
