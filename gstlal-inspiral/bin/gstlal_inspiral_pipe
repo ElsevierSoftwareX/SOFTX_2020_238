@@ -328,15 +328,17 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 	lloid_diststats = {}
 	for ifos in segsdict:
 		for seg in segsdict[ifos]:
-			for node in inspiral_nodes[(ifos, None)][seg]:
+			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
+				len_out_files = len(node.output_files["output"])
 				for i,f in enumerate(node.output_files["output"]):
-					lloid_output[None].setdefault(i,[]).append(f)
+					lloid_output[None].setdefault(i + j * len_out_files,[]).append(f)
 				for i,f in enumerate(node.output_files["likelihood-file"]):
-					lloid_diststats.setdefault(i,[]).append(f)
+					lloid_diststats.setdefault(i + j * len_out_files,[]).append(f)
 			for inj in options.injections:
-				for node in inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]:
+				for j, node in enumerate(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]):
 					for i,f in enumerate(node.output_files["output"]):
-						lloid_output[sim_tag_from_inj_file(inj)].setdefault(i,[]).append(f)
+						len_out_files = len(node.output_files["output"])
+						lloid_output[sim_tag_from_inj_file(inj)].setdefault(i + j * len_out_files,[]).append(f)
 
 	return lloid_output, lloid_diststats
 
