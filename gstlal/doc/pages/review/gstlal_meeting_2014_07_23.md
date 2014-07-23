@@ -17,9 +17,10 @@
  - audioresample:  checks audioresample element for timestamp drift (an old bug we fixed years ago).
  - lal_whiten:  confirm that whitener is an identity transform when given a white PSD, and histogram output of whitener when fed coloured noise to confirm it is a Gaussian with the correct width.  only identity test of automated.
  - other:
-  - framesrc:  feeds a group of frame files into framecpp_channeldemux to see whta happens.  hard-coded to my home directory, not yet useful as part of a general test suite
+  - framesrc:  feeds a group of frame files into framecpp_channeldemux to see what happens.  hard-coded to my home directory, not yet useful as part of a general test suite
   - lal_checktimestamps:  uses lal_shift element to add 1 ns of offset to buffer timestamps on user input to stimulate a response from lal_checktimestamps.  cannot yet be used as part of an automated test suite.
   - lal_reblock
+ - unit tests make use of "cmp_nxydumps.py" (https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal/tests/cmp_nxydumps.py) which contains the logic for "smart" (a.k.a., sloppy) comparison of time series data.
 
 \section minutes minutes
 
