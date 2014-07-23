@@ -9,7 +9,7 @@
 - See completed action items here: \ref gstlalinspirallowlatencysearchpage 
 - Kipp fixed the audioresample element: https://bugzilla.gnome.org/show_bug.cgi?id=732908
 - FAP estimation normalization procedure: https://ldas-jobs.ligo.caltech.edu/~cody.messick/23july2014_gstlalreviewcall_likelihoodthresh.pdf 
-- Les presentation on IMBHB event ranking
+- Les presentation on IMBHB event ranking: https://dcc.ligo.org/LIGO-G1400796
 - S6 replay mdc \ref gstlalinspirals6replaypage 
 
 \section minutes minutes
