@@ -339,11 +339,18 @@ if opts.restrict_bandwidth:
 	only_bnd = map(float, opts.restrict_bandwidth)
 	print "Restricting to tiles with bandwidth = %s" % ",".join(map(str,only_bnd))
 
+freq_band = segments.segment(opts.low_frequency, opts.high_frequency)
 for channel, selected_events in event_iter:
 	if channel not in channels: continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg and event.snr != float("nan") and event.snr != float("Inf") , selected_events )
+	selected_events = filter(lambda event: \
+        event.get_band().intersects(freq_band) \
+        and event.get_period().intersects(viewseg) \
+        and event.snr >= opts.snr_thresh \
+        and event.snr != float("nan") \
+        and event.snr != float("Inf"), selected_events)
+
 	selected_events = filter( lambda event: event.chisq_dof in only_dof and event.bandwidth in only_bnd and event.duration in only_dur, selected_events )
 
 	if opts.exclude_outside_segments:
