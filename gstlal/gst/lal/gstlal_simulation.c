@@ -385,11 +385,12 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		/*
 		 * calculate start and end times for this series containing
 		 * this injection
+		 * FIXME this just uses a 0 PN formula and pads it to be safe
 		 */
 
-		injTime = XLALSimInspiralTaylorLength(1.0 / 4096, thisSimInspiral->mass1 * LAL_MSUN_SI, thisSimInspiral->mass2 * LAL_MSUN_SI, thisSimInspiral->f_lower, twice_pn_order);
+		injTime = 1.0 + XLALSimInspiralTaylorF2ReducedSpinChirpTime(thisSimInspiral->f_lower, thisSimInspiral->mass1 * LAL_MSUN_SI, thisSimInspiral->mass2 * LAL_MSUN_SI, 0, 0);
 		injStartTime = injEndTime = thisSimInspiral->geocent_end_time;
-		XLALGPSAdd(&injStartTime, -(1.9*injTime - 1.0));
+		XLALGPSAdd(&injStartTime, -1.9*injTime - 1.0);
 		XLALGPSAdd(&injEndTime, 0.1*injTime + 1.0);
 
 		/*
