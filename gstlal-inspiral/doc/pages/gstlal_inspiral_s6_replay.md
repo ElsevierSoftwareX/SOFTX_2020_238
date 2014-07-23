@@ -15,3 +15,11 @@ The gstlal development team proposes to start the process by first testing the c
 The following gantt chart is a proposed schedule of schedule of tasks for the gstlal development team.  Lengths of tasks are only estimates, and may change based on team members availabilities.  Note that the benchmarking for HW3 does not have an estimated end date.
 
 \image html images/s6_replay_gannt.png
+
+\section Open Open Questions
+
+ -# What S6 data do we use?
+ -# What segments do we use and how do we make a state vector?
+ -# What parameter space is targetted?
+ -# Who in CBC and Burst (or beyond) would like to work on this?
+
