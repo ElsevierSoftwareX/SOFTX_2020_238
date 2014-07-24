@@ -547,13 +547,15 @@ def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_over
 	# The first frequency band actually begins at flow, so we offset the 
 	# central frequency accordingly
 	if level == 0: # Hann windows
+		edge = band / 2
 		cfreq = flow + band
 	else: # Tukey windows
+		edge = int(band) >> (level+1)
 		# The sin^2 tapering comes from the Hann windows, so we need to know how far
 		# they extend to account for the overlap at the ends
-		cfreq = flow + (int(band) >> (level+1)) + band/2
+		cfreq = flow + edge + (int(band) >> 1)
 
-	while cfreq + band <= fhigh:
+	while cfreq + edge + band/2.0 <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration * ndof
