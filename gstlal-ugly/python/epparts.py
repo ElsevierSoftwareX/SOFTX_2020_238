@@ -810,7 +810,7 @@ class EPHandler( Handler ):
 			dir = subdir
 		)
 		self.process_triggers(self._clustering)
-		self.write_triggers( False, filename = outfile )
+		self.write_triggers(filename = outfile)
 
 		if self.output_cache:
 			outfile = self.output_cache_name or ep.make_cache_parseable_name(
