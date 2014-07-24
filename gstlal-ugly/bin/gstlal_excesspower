@@ -413,7 +413,7 @@ if options.scan_start and options.scan_end:
 # drop samples
 df = 1.0 / handler.fft_length
 if handler.psd is None:
-	handler.psd = EPHandler.build_default_psd( handler.rate, df, handler.fhigh )
+	handler.psd = epparts.EPHandler.build_default_psd( handler.rate, df, handler.fhigh )
 handler.rebuild_filter()
 handler.rebuild_matrix_mixers()
 
