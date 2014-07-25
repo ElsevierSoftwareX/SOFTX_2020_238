@@ -111,9 +111,11 @@ def parse_command_line():
 	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("--bank-program", metavar = "name", default = "tmpltbank", type="string", help = "Select name of the program used to generate the template bank (default: tmpltbank).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--approximant", type = "string", help = "Must specify an approximant")
+	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff")
 	options, filenames = parser.parse_args()
 
-	required_options = ("n", "instrument", "sort_by", "output_cache")
+	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant")
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
@@ -132,11 +134,13 @@ for filename in filenames:
 	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
 	if options.add_f_final:
-		approximant, = ligolw_process.get_process_params(xmldoc, options.bank_program, "--approximant")
-		flow, = ligolw_process.get_process_params(xmldoc, options.bank_program, "--flow") + ligolw_process.get_process_params(xmldoc, options.bank_program, "--low-frequency-cutoff")
+		if options.f_low is None:
+			flow, = ligolw_process.get_process_params(xmldoc, options.bank_program, "--flow") + ligolw_process.get_process_params(xmldoc, options.bank_program, "--low-frequency-cutoff") + ligolw_process.get_process_params(xmldoc, options.bank_program, "--f-low")
+		else:
+			flow = options.f_low
 		for row in sngl_inspiral_table:
 			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
-			if approximant in ('IMRPhenomB', 'EOBNRv2'):
+			if options.approximant in ('IMRPhenomB', 'EOBNRv2'):
 				row.f_final= max(1024, 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi)) # over sample these waveforms Use at least a 512 Hz rate
 				if options.max_f_final and row.f_final>options.max_f_final:
 					row.f_final=options.max_f_final
