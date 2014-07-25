@@ -79,15 +79,15 @@ lsctables.use_in(DefaultContentHandler)
 # Read approximant
 #
 
-def read_approximant(xmldoc, programs = ("tmpltbank", "lalapps_cbc_sbank")):
+def read_approximant(xmldoc, programs = ("gstlal_bank_splitter",)):
 	process_ids = set()
 	for program in programs:
 		process_ids |= lsctables.ProcessTable.get_table(xmldoc).get_ids_by_program(program)
 	if not process_ids:
-		raise ValueError("document must contain process entries for at least one of the programs %s" % ", ".join(programs))
+		raise ValueError("document must contain process entries from %s" % ", ".join(programs))
 	approximant = set(row.pyvalue for row in lsctables.ProcessParamsTable.get_table(xmldoc) if (row.process_id in process_ids) and (row.param == "--approximant"))
 	if not approximant:
-		raise ValueError("document must contain an 'approximant' process_params entry for one or more of the programs %s" % ", ".join("'%s'" for program in programs))
+		raise ValueError("document must contain an 'approximant' process_params entry from %s" % ", ".join("'%s'" for program in programs))
 	if len(approximant) > 1:
 		raise ValueError("document must contain only one approximant")
 	approximant = approximant.pop()
