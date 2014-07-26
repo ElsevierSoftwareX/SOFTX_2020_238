@@ -254,16 +254,6 @@ AC_SUBST([gstreamer_audio_LIBS])
 
 
 #
-# Check for PyGObject
-#
-
-
-PKG_CHECK_MODULES([pygobject], [pygobject-2.0])
-AC_SUBST([pygobject_CFLAGS])
-AC_SUBST([pygobject_LIBS])
-
-
-#
 # Check for NumPy
 #
 
