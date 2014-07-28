@@ -122,6 +122,54 @@ class Handler(simplehandler.Handler):
 #
 # =============================================================================
 #
+#               Modified Version of mkbasicsrc from datasource.py 
+#
+# =============================================================================
+#
+
+
+def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
+
+	if gw_data_source_info.data_source == "frames":
+		if instrument == "V1":
+			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, use_mmap = True, cache_src_regex = "V")
+		else:
+			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, use_mmap = True, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
+		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
+		# allow frame reading and decoding to occur in a diffrent thread
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
+		# FIXME:  remove this when pipeline can handle disconts
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
+	else:
+		raise ValueError("invalid data_source: %s" % gw_data_source_info.data_source)
+
+	# provide an audioconvert element to allow Virgo data (which is single-precision) to be adapted into the pipeline
+	src = pipeparts.mkaudioconvert(pipeline, src)
+
+	# progress report
+	if verbose:
+		src = pipeparts.mkprogressreport(pipeline, src, "progress_src_%s" % instrument)
+
+	# optional injections
+	if gw_data_source_info.injection_filename is not None:
+		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
+		# let the injection code run in a different thread than the whitener, etc.,
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = gst.SECOND * 64)
+
+	# seek the pipeline
+	# FIXME:  remove
+	datasource.do_seek(pipeline, gw_data_source_info.seekevent)
+
+
+	return src
+
+
+#
+# =============================================================================
+#
 #                                   Pipeline
 #
 # =============================================================================
@@ -141,7 +189,7 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 		# retrieve h(t)
 		#
 
-		src = datasource.mkbasicsrc(pipeline, data_source_info, instrument, verbose = verbose)
+		src = mkbasicsrc(pipeline, data_source_info, instrument, verbose = verbose)
 
 		#
 		# optionally resample
