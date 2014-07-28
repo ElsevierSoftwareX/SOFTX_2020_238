@@ -1,94 +1,111 @@
 digraph llpipe {
-	graph [fontname="Roman", fontsize=11];
+	labeljust = "r";
+	rankdir=LR;
+	graph [fontname="Roman", fontsize=24];
 	edge [ fontname="Roman", fontsize=10 ];
 	node [fontname="Roman", shape=box, fontsize=11];
 
-	H1 [label="H1 Observatory:\nO(10)s h(t) generation\nlatency", color=red1, style=filled];
-	L1 [label="L1 Observatory:\nO(10)s h(t) generation\nlatency", color=green1, style=filled];
-	V1 [label="V1 Observatory:\nO(10)s h(t) generation\nlatency", color=magenta1, style=filled];
+	gracedb [label="GW\nCandidate\nDatabase", shape=oval, color=tomato3, style=filled];
 
-	HeadNode [
-		style=filled, color=grey,
-		label = <<TABLE>
-			<TR><TD colspan="3"><B>CIT Head Node</B></TD></TR>
-         		<TR>
-				<TD href="\ref gstlal_inspiral_marginalize_likelihoods_online"> gstlal_inspiral_marginalize_likelihoods_online | </TD>
-				<TD> HTCondor dagman | </TD>
-				<TD> lvalert_listen </TD>
-			</TR>
-        		</TABLE>>
-		]
+	H1src [label="H1\nh(t)", color=red4];
+	L1src [label="L1\nh(t)", color=green4];
+	//V1src [label="V1\nh(t)", color=magenta4];
+	"...1" [label="..."];
+	"...2" [label="..."];
+	"L1...2" [label="..."];
 
-	WebServer [
-		style=filled, color=grey,
-		label = <<TABLE>
-			<TR><TD colspan="3"><B>CIT Web Server</B></TD></TR>
-         		<TR>
-				<TD href="\ref gstlal_llcbcsummary"> gstlal_llcbcsummary | </TD>
-				<TD href="\ref gstlal_llcbcnode"> gstlal_llcbcsummary | </TD>
-			</TR>
-        		</TABLE>>
-		];
+	"...1" -> "...2";
+	H1src -> H1multirate;
+	//L1src -> L1multirate;
+	//V1src -> V1multirate;
+	L1src -> "L1...2"
 
-	HomeDir [
-		style=filled, color=grey,
-		label = <<TABLE>
-			<TR><TD colspan="3"><B>CIT File System</B></TD></TR>
-         		<TR>
-				<TD> Input Files | </TD>
-				<TD> Output Files | </TD>
-				<TD> Background Files | </TD>
-			</TR>
-        		</TABLE>>
-		];
+	subgraph clusterNodeN {
 
-	gracedb [label="GW Candidate Database\nO(1)s processing time", shape=oval, color=tomato3, style=filled];
-
-	H1 -> HeadNode [label="TCP link", color=red4];
-	L1 -> HeadNode [label="TCP link", color=green4];
-	V1 -> HeadNode [label="TCP link", color=magenta4];
-
-	Analyst [shape=house, style=filled, color=orange, URL="http://tinyurl.com/cgxkc25"];
-
-	subgraph clusterCIT { 
-
-		label="CIT HTCondor Pool";
-		fontsize = 14;
 		style=rounded;
-		labeljust="l";
+		fontsize = 14;
+		label="";
+		label="gstlal_inspiral node N\n(multiple instances of this run in parallel)"
 
-		Node1 [label="Node 1\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
-		Node2 [label="Node 2\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
-		NodeN [label="Node N\ngstlal_inspiral\nO(10)s processing\nlatency", URL="\ref gstlal_inspiral"];
+		
+		H1multirate [label="H1 whitening\n+downsampling", color=red4];
+		//L1multirate [label="L1 whitening\n+downsampling", color=green4];
+		//V1multirate [label="V1 whitening\n+downsampling", color=magenta4];
+		"...3" [label="..."];
+		"...4" [label="..."];
+		"L1...3" [label="..."];
+		"L1...4" [label="..."];
+		
+		H1LLOID [label="Matched\nFilter", color=red4];
+		//L1LLOID [label="Matched\nFilter", color=green4];
+		//V1LLOID [label="Matched\nFilter", color=magenta4];
 
-		HeadNode -> HomeDir [dir="both", label="nfs"] ;
-		HomeDir -> Node1 [dir="both", label="nfs"];
-		HomeDir -> Node2 [dir="both", label="nfs"];
-		HomeDir -> NodeN [dir="both", label="nfs"];
-		HomeDir -> WebServer [dir="both", label="nfs"];
+		H1Trig1 [label="Triggering", color=red4];
+		//L1Trig1 [label="Triggering", color=green4];
+		//V1Trig1 [label="Triggering", color=magenta4];
+		H1Trig2 [label="Triggering", color=red4];
+		//L1Trig2 [label="Triggering", color=green4];
+		//V1Trig2 [label="Triggering", color=magenta4];
+		H1TrigN [label="Triggering", color=red4];
+		//L1TrigN [label="Triggering", color=green4];
+		//V1TrigN [label="Triggering", color=magenta4];
+		
+		H1multirate -> H1LLOID ;
+		//L1multirate -> L1LLOID ;
+		//V1multirate -> V1LLOID ;
+		H1multirate -> H1LLOID ;
+		//L1multirate -> L1LLOID ;
+		//V1multirate -> V1LLOID ;
+		H1multirate -> H1LLOID ;
+		//L1multirate -> L1LLOID ;
+		//V1multirate -> V1LLOID ;
+		"L1...2" -> "L1...3";
+		"...2" -> "...3";
+	
+		H1LLOID -> H1Trig1;
+		//L1LLOID -> L1Trig1;
+		//V1LLOID -> V1Trig1;
+		H1LLOID -> H1Trig2;
+		//L1LLOID -> L1Trig2;
+		//V1LLOID -> V1Trig2;
+		H1LLOID -> H1TrigN;
+		//L1LLOID -> L1TrigN;
+		//V1LLOID -> V1TrigN;
+		"L1...3" -> "L1...4";
+		"...3" -> "...4";
 
-		HeadNode -> Node1 [color=red4];
-		HeadNode -> Node1 [color=green4];
-		HeadNode -> Node1 [color=magenta4, label="UDP multicast"];
+		Coincidence [label="Coincidence\nO(1)s latency"];
+		SigEst [label="Significance\nEstimation\nO(1)s latency"];
+		BackStats [label="Global background\nstatistics processing\n(Communicates with\nother jobs)", shape=doubleoctagon];
+		EventGen [label="Event\nGeneration\nO(1)s latency"];
+			
+		H1Trig1 -> Coincidence;
+		//L1Trig1 -> Coincidence;
+		//V1Trig1 -> Coincidence;
+		H1Trig2 -> Coincidence;
+		//L1Trig2 -> Coincidence;
+		//V1Trig2 -> Coincidence;
+		H1TrigN -> Coincidence;
+		//L1TrigN -> Coincidence;
+		//V1TrigN -> Coincidence;
+		"L1...4" -> Coincidence;
+		"...4" -> Coincidence;
 
-		HeadNode -> Node2 [color=red4];
-		HeadNode -> Node2 [color=green4];
-		HeadNode -> Node2 [color=magenta4, label="UDP multicast"];
-
-		HeadNode -> NodeN [color=red4];
-		HeadNode -> NodeN [color=green4];
-		HeadNode -> NodeN [color=magenta4, label="UDP multicast"];
-
-		Node1 -> HeadNode [dir=both, label="http"];
-		Node2 -> HeadNode [dir=both, label="http"];
-		NodeN -> HeadNode [dir=both, label="http"];
-
+		Coincidence -> SigEst;
+		SigEst -> BackStats;
+		BackStats -> SigEst;
+		SigEst -> EventGen;
 	}
 
-	HeadNode -> gracedb [dir="both", label="https"] ;
-	Node1 -> gracedb [label="https"];
-	Node2 -> gracedb [label="https"];
-	NodeN -> gracedb [label="https"];
-	WebServer -> Analyst [label="eyes and fingers"];
-	gracedb -> Analyst [label="eyes and fingers"];
+	subgraph clusterGracedb {
+		"External\nObservers" [shape=doubleoctagon];
+		"Parameter\nEstimation" [shape=oval];
+
+		EventGen -> gracedb;
+		gracedb -> "External\nObservers" [constraint=false];
+		"External\nObservers" -> gracedb [constraint=false];
+		gracedb -> "Parameter\nEstimation" [constraint=false];
+		"Parameter\nEstimation" -> gracedb [constraint=false];
+	}
+	
 }
