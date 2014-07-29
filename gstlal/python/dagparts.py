@@ -35,6 +35,7 @@ import sys
 import socket
 import subprocess
 import tempfile
+import math
 
 from glue import segments
 from glue import pipeline
@@ -169,11 +170,12 @@ def breakupseg(seg, maxextent, overlap):
 
 	# adjust maxextent so that segments are divided roughly equally
 	maxextent = max(int(abs(seg) / (int(abs(seg)) // int(maxextent) + 1)), overlap)
+	maxextent = abs(seg) / math.ceil(abs(seg) / maxextent)
 
 	seglist = segments.segmentlist()
 
 	while abs(seg) > maxextent:
-		seglist.append(segments.segment(seg[0], seg[0] + maxextent))
+		seglist.append(segments.segment(seg[0], seg[0] + maxextent + overlap))
 		seg = segments.segment(seglist[-1][1] - overlap, seg[1])
 
 	seglist.append(seg)
