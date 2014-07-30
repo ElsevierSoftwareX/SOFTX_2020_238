@@ -50,3 +50,4 @@
 ### References
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
 - \ref gstlalmeetingspage
+- \ref gstlalteleconspage
