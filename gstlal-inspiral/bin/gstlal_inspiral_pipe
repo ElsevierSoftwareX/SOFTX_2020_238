@@ -222,6 +222,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 		inspiral_nodes[(ifos, None)] = {}	
 		for injections in options.injections:
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+		
+		# FIXME choose better splitting?
+		numchunks = 10
 
 		for seg in segsdict[ifos]:
 			
@@ -231,9 +234,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 			# get the svd bank strings
 			svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
 
-			# FIXME choose better splitting
-			# split up the non injection runs to make them go faster
-			numchunks = 10
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 				# setup output names
 				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
@@ -272,9 +272,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
-			# FIXME choose better splitting
-			# split up the injection runs to make them go faster. Injections are about 4 times faster than regular runs
-			numchunks = 40
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 
 				# process injections
@@ -328,17 +325,23 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 	lloid_diststats = {}
 	for ifos in segsdict:
 		for seg in segsdict[ifos]:
+			# iterate over the mass space chunks for each segment
 			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
 				len_out_files = len(node.output_files["output"])
 				for i,f in enumerate(node.output_files["output"]):
-					lloid_output[None].setdefault(i + j * len_out_files,[]).append(f)
+					# Store the output files and the node for use as a parent dependency
+					lloid_output[None].setdefault((j,i), []).append((f, [node]))
 				for i,f in enumerate(node.output_files["likelihood-file"]):
-					lloid_diststats.setdefault(i + j * len_out_files,[]).append(f)
-			for inj in options.injections:
-				for j, node in enumerate(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]):
-					for i,f in enumerate(node.output_files["output"]):
-						len_out_files = len(node.output_files["output"])
-						lloid_output[sim_tag_from_inj_file(inj)].setdefault(i + j * len_out_files,[]).append(f)
+					lloid_diststats.setdefault((j,i) ,[]).append(f)
+				for inj in options.injections:
+					# NOTE This assumes that injection jobs
+					# and non injection jobs are 1:1 in
+					# terms of the mass space they cover,
+					# e.g., that the chunks ar the same!
+					injnode = inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j]
+					for i,f in enumerate(injnode.output_files["output"]):
+						# Store the output files and the node and injnode for use as a parent dependencies
+						lloid_output[sim_tag_from_inj_file(inj)].setdefault((j,i), []).append((f, [node, injnode]))
 
 	return lloid_output, lloid_diststats
 
@@ -347,10 +350,13 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 	likelihood_nodes = {}
 	outnodes = {}
 	# first non-injections
-	for n, (inputs, diststats) in enumerate(zip(lloid_output[None].values(), lloid_diststats.values())):
+	for n, (outputs, diststats) in enumerate(zip(lloid_output[None].values(), lloid_diststats.values())):
+		inputs = [o[0] for o in outputs]
+		parents = []
+		[parents.extend(o[1]) for o in outputs]
 		likelihood_nodes.setdefault(None,[]).append(
 			inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes=sum([sum(inspiral_nodes[(ifos, None)].values(),[]) for ifos in segsdict], []), #FIXME flatten input a better way
+				parent_nodes = parents,
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 				input_files = {"likelihood-url":diststats, "":inputs},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
@@ -359,10 +365,13 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 
 	# then injections
 	for inj in options.injections:
-		for n, (inputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
+		for n, (outputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
+			inputs = [o[0] for o in outputs]
+			parents = []
+			[parents.extend(o[1]) for o in outputs]
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
 				inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
-					parent_nodes = sum([sum(inspiral_nodes[(ifos, None)].values(),[]) for ifos in segsdict], []) + sum([sum(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))].values(),[]) for ifos in segsdict], []), #FIXME flatten input a better way
+					parent_nodes = parents,
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 					input_files = {"likelihood-url":diststats, "":inputs}
 				)
