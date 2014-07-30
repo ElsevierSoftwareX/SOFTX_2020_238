@@ -451,11 +451,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		/* prepare_output_buffer() lied.  tell the truth */
-		/* FIXME:  put back when resampler can handle non-malloc()ed buffers */
-		/*GST_BUFFER_SIZE(outbuf) = 0;*/
-		/* FIXME:  this is needed if used in pipelines that don't
-		 * understand gaps at all */
+		/* memset() is needed for pipelines that don't understand
+		 * gaps at all */
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		result = GST_FLOW_OK;
 	}
@@ -467,28 +464,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 done:
 	gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS);
 	g_mutex_unlock(element->mixmatrix_lock);
-	return result;
-}
-
-
-/*
- * prepare_output_buffer()
- */
-
-
-static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, gint size, GstCaps *caps, GstBuffer **buf)
-{
-	GstFlowReturn result;
-
-	/* FIXME:  put back commented-out code when resampler can handle non-malloc()ed buffers */
-	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), /*GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP) ? 0 :*/ size, caps, buf);
-	if(result != GST_FLOW_OK)
-		goto done;
-
-	/* lie to trick basetransform */
-	GST_BUFFER_SIZE(*buf) = size;
-
-done:
 	return result;
 }
 
@@ -722,7 +697,6 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
