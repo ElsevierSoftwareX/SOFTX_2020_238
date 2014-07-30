@@ -15,3 +15,7 @@ spiir_state_reset (SpiirState **spstate, gint num_depths);
 void
 spiir_state_flush_queue (SpiirState **spstate, gint depth, 
 		gint num_flush_samples);
+
+gint
+spiir_state_get_outlen (SpiirState **spstate, gint in_len, gint num_depths);
+

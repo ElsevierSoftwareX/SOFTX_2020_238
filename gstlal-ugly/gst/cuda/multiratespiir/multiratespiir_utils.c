@@ -2,7 +2,7 @@
 #include "multiratespiir_utils.h"
 #include <math.h>
 
-gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint down_filtlen, gint up_filtlen)
+void cuda_multirate_spiir_init_cover_samples (gint *num_cover_samples, gint rate, gint num_depths, gint down_filtlen, gint up_filtlen)
 {
 	gint i = num_depths;
 	gint rate_start = up_filtlen, rateleft; 
@@ -24,9 +24,15 @@ gint cuda_multirate_spiir_init_cover_samples (gint rate, gint num_depths, gint d
 	}
 	for (i=num_depths-1; i>0; i--)
 		rateleft = (rateleft - up_filtlen/2)*2;
-	return (rate_start);
+
+	*num_cover_samples = rate_start;
 
 
+}
+
+void cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value)
+{
+	*num_exe_samples = new_value;
 }
 
 gboolean cuda_multirate_spiir_parse_bank (gdouble *bank, gint *num_depths, gint *
@@ -34,11 +40,11 @@ gboolean cuda_multirate_spiir_parse_bank (gdouble *bank, gint *num_depths, gint 
 {
 	// FIXME: do some check?
 	*num_depths = (gint) bank[0];
-	*outchannels = (gint) bank[1];
+	*outchannels = (gint) bank[1] * 2;
 	return TRUE;
 }
 
-gint cuda_multirate_spiir_get_num_templates(CudaMultirateSPIIR *element)
+gint cuda_multirate_spiir_get_outchannels(CudaMultirateSPIIR *element)
 {
 		return element->outchannels;
 }

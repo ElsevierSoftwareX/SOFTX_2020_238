@@ -229,5 +229,6 @@ def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length 
 	# e.g. if downsample_depth = 8:
 	#      1 channel, rate = 4096-> multi channel, rate = (32, 64, 128, 256, 512, 1024, 2048, 4096)
 	# multi_downsample embeds amplitude correction (audioamplify)
+	return head
 
 

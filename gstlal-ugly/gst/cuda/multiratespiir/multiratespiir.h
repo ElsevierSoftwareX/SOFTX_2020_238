@@ -44,7 +44,7 @@ G_BEGIN_DECLS
 typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
 typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
 
-typedef struct _Complex8_F
+typedef struct _Complex_F
 {
 	float re;
 	float im;
@@ -65,18 +65,26 @@ typedef struct _ResamplerState{
 } ResamplerState;
 
 typedef struct _SpiirState {
-  COMPLEX_F d_a1;
-  COMPLEX_F d_b0;
-  COMPLEX_F d_delay;
+  COMPLEX_F *d_a1;
+  COMPLEX_F *d_b0;
+  int *d_d;
+  int d_max;
+  COMPLEX_F *d_y;
+  float *d_queue_spiir;
+  gint queue_spiir_last_sample;
+  gint queue_spiir_len;
+  gint pre_out_spiir_len;
+  guint nb;
+  gint num_filters;
+  gint num_templates;
 
   int depth; // 0-6
   ResamplerState *downstate, *upstate;
-  float *d_queue; // fixed length structure, to store the intermediate result from downsample, this is the input for upsample
+  float *d_queue; // start queue for downsampler and spiir 
 //  float *d_out_spiir;
   int queue_len;
   int queue_eff_len;  // effective length
   int queue_down_start;
-  int queue_up_start;
 } SpiirState;
 
 /**
@@ -108,7 +116,7 @@ struct _CudaMultirateSPIIR {
   gint rate;
   gint width;
   gdouble *bank;
-  gint bank_len;
+  guint bank_len;
   GMutex *iir_bank_lock;
   GCond *iir_bank_available;
   SpiirState **spstate;
