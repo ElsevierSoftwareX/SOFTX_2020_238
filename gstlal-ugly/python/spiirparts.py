@@ -64,10 +64,8 @@ import pdb
 
 
 def mkCudaMultirateSPIIR(pipeline, src, bank_struct, name=None):
-	if bank_struct is not None:
-		properties["SPIIR-bank"] = bank_struct 
+	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct)) if value is not None)
 	elem = pipeparts.mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
-	elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
 
@@ -211,7 +209,7 @@ def build_bank_struct(bank):
 
 		tmparray = []
 		tmparray_shape = []
-		tmparray = bank.D[sr].astype(dtype = datatype, casting='safe')
+		tmparray = bank.D[sr].astype(datatype)
 		tmparray_shape = np.array(tmparray.shape, datatype)
 		bank_struct = np.append(bank_struct, tmparray_shape)
 		bank_struct = np.append(bank_struct, tmparray)
@@ -265,13 +263,14 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	#			'L1': <L1Bank0>, <L1Bank1>..;..}
 	# format of bank: <H1bank0>
 
-	pdb.set_trace()
+#	pdb.set_trace()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		snr = pipeparts.mkreblock(pipeline, head)
+
 		bank_struct = build_bank_struct(bank)
-		snr = pipeparts.mkCudaMultirateSPIIR(pipeline, hoftdicts[instrument], bank_struct)
-		num_templates = bank.A[max(sample_rates)].shape[0]
-		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d, channels=%d" % (max(sample_rates), num_templates))
-		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+		snr = mkCudaMultirateSPIIR(pipeline, snr, bank_struct)
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
@@ -285,7 +284,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
-		pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+#		pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#

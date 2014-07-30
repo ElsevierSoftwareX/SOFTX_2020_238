@@ -241,8 +241,8 @@ static gboolean
 cuda_multirate_spiir_stop (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
-	g_mutex_free (element->iir_bank_lock);
-	g_cond_free (element->iir_bank_available);
+  g_mutex_free (element->iir_bank_lock);
+  g_cond_free (element->iir_bank_available);
 
   g_mutex_free (element->iir_bank_lock);
   g_cond_free (element->iir_bank_available);
@@ -608,9 +608,10 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     num_in_multidown = MIN (in_len, num_exe_samples);
     last_num_out_spiirup += num_out_spiirup;
  }
-    memcpy (GST_BUFFER_DATA(outbuf), tmp_out, outsize);
 
+    g_assert(last_num_out_spiirup == out_len);
     free(tmp_out);
+
 
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
@@ -638,7 +639,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
       element->need_discont = FALSE;
     }
 
-    element->samples_out += outsize / (element->width/8);
+    element->samples_out += out_len; 
     element->samples_in += old_in_len;
 
 
@@ -826,6 +827,13 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       GST_ERROR_OBJECT(element, "spsate could not be initialised");
       return GST_FLOW_ERROR;
     }
+
+    if (!element->spstate) {
+      GST_ERROR_OBJECT(element, "spsate could not be initialised");
+      return GST_FLOW_ERROR;
+    }
+    for (int i=0; i<element->num_depths; i++)
+	    GST_DEBUG_OBJECT (element, "num of filters %d, num of templates %d", element->spstate[i]->num_filters, element->spstate[i]->num_templates);
 
     element->spstate_initialised = TRUE;
   }

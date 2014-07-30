@@ -268,6 +268,7 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 	}
 }
 
+extern __shared__ char sharedMem[];
 
 
 __global__ void upsample2x_and_add (
@@ -573,7 +574,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
   GST_LOG ("%dth depth: queue eff len %d", i, SPSTATE(i)->queue_eff_len);
   gint resample_processed, spiir_processed;
 
-  for (i=num_depths-1; i>=1; i--) {
+  for (i=num_depths-2; i>=0; i--) {
     //g_assert ((SPSTATE(i-1)->queue_eff_len - SPSTATE(i-1)->queue_down_start >= num_inchunk;
 
     resample_processed = num_inchunk - SPSTATEUP(i+1)->last_sample;
