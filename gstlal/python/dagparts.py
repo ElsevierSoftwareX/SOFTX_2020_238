@@ -168,17 +168,25 @@ def breakupseg(seg, maxextent, overlap):
 	if maxextent <= 0:
 		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
 
+	# Simple case of only one segment
+	if abs(seg) < maxextent:
+		return segments.segmentlist([seg])
+
 	# adjust maxextent so that segments are divided roughly equally
 	maxextent = max(int(abs(seg) / (int(abs(seg)) // int(maxextent) + 1)), overlap)
-	maxextent = abs(seg) / math.ceil(abs(seg) / maxextent)
+	maxextent = int(math.ceil(abs(seg) / math.ceil(abs(seg) / maxextent)))
+	end = seg[1]
 
 	seglist = segments.segmentlist()
 
-	while abs(seg) > maxextent:
-		seglist.append(segments.segment(seg[0], seg[0] + maxextent + overlap))
-		seg = segments.segment(seglist[-1][1] - overlap, seg[1])
 
-	seglist.append(seg)
+	while abs(seg):
+		if (seg[0] + maxextent + overlap) < end:
+			seglist.append(segments.segment(seg[0], seg[0] + maxextent + overlap))
+			seg = segments.segment(seglist[-1][1] - overlap, seg[1])
+		else:
+			seglist.append(segments.segment(seg[0], end))
+			break
 
 	return seglist
 
