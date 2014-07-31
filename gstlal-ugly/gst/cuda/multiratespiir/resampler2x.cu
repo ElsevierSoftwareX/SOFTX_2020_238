@@ -340,6 +340,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   float *pos_inqueue, *pos_outqueue;
   gint i, out_processed;
   gint num_inchunk = num_in_multidown;
+  cudaSetDevice(1);
 
   GST_LOG ("multi downsample %d samples", num_inchunk);
   g_assert (SPSTATE(0)->queue_eff_len + num_inchunk <= SPSTATE(0)->queue_len);
@@ -373,7 +374,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     dim3 block(1, 1, 1);
     dim3 grid(1, 1, 1);
     block.x = MIN(THREADSPERBLOCK, out_processed); 
-    grid.x = out_processed % block.x == 0 ? out_processed/block.x : (int)out_processed/block.x + 1;
+//    grid.x = out_processed % block.x == 0 ? out_processed/block.x : (int)out_processed/block.x + 1;
 
     uint share_mem_sz = (2 * block.x + 4 * SPSTATEDOWN(i)->sinc_len) * sizeof (float);
     GST_LOG ("downsample threads %d, blocks %d, amplifier %f", block.x, grid.x, SPSTATEDOWN(i)->amplifier);
