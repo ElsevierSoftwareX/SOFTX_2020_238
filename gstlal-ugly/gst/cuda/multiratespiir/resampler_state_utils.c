@@ -1,9 +1,19 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "resampler_state_macro.h"
 #include "resampler_state_utils.h"
+#include <glib.h>
 #include <cuda_runtime.h>
+
+#ifdef __cplusplus
+}
+#endif
 
 /* 
  * The following part is copied/ rewritten from resample.c
@@ -162,7 +172,7 @@ int sinc_function (float *sinc_table, gint filt_len, float cutoff, gint den_rate
             sinc (cutoff, ((j -  filt_len / 2 + 1) -
                 ((float) i) / den_rate), filt_len,
             quality_map[quality].window_func);
-	/*printf("%s init sinc[%d] = %e\n", quality > 1 ? "down" : "up", i * filt_len + j, sinc_table[i * filt_len + j]);*/
+	//printf("%s init sinc[%d] = %e\n", quality > 1 ? "down" : "up", i * filt_len + j, sinc_table[i * filt_len + j]);
       		}
 	}
 
@@ -239,16 +249,20 @@ static const float amplifier_up_map[11] = {
 			};
 
 
-float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate)
+float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate, gint depth)
 {
 	float amplifier = 0.0;
 		
-	if (inrate > outrate)
-		amplifier = amplifier_down_map[quality] * outrate / inrate; 
-	else if (inrate < outrate)
+	if (inrate > outrate) {
+		if (depth > 0)
+			amplifier = (float) outrate / (float) inrate;
+		else
+			amplifier = amplifier_down_map[quality] * (float) outrate / (float) inrate; 
+	}
+       	else if (inrate < outrate)
 		amplifier = amplifier_up_map[quality];
 	else
-		amplifier = 1;
+		amplifier = 1.0;
 
 	return 1/sqrt(amplifier);
 }
@@ -256,6 +270,7 @@ float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate)
 ResamplerState *
 resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth)
 {
+	cudaSetDevice(1);
 	gint mem_alloc_size, num_alloc_samples; 
 	gint den_rate; // denominator rate, = outrate / gcd (inrate, outrate) 
 	gint times = 2; // resampler times
@@ -280,13 +295,13 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
   	  free(sinc_table);
 	  sinc_table = NULL;
 
-	  state->amplifier = resampler_state_amplifier_init (DOWN_QUALITY, inrate, outrate);
+	  state->amplifier = resampler_state_amplifier_init (DOWN_QUALITY, inrate, outrate, depth);
 	} else {
 	  cutoff = quality_map[UP_QUALITY].upsample_bandwidth;
 	  den_rate = 2;
 
        	  state->filt_len = quality_map[UP_QUALITY].base_length;
-	  state->sinc_len = state->filt_len * times;
+	  state->sinc_len = state->filt_len * den_rate;
 
 	  cudaMalloc((void **) &(state->d_sinc_table), sizeof(float) * state->sinc_len);
 	  float *sinc_table = (float *)malloc (sizeof(float) * state->sinc_len);
@@ -297,25 +312,29 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
  	  free(sinc_table);
 	  sinc_table = NULL;
 
-	  state->amplifier = resampler_state_amplifier_init (UP_QUALITY, inrate, outrate);
+	  state->amplifier = resampler_state_amplifier_init (UP_QUALITY, inrate, outrate, depth);
 
 	}
-	num_alloc_samples = MAX(num_exe_samples, num_cover_samples)/pow(2, depth);
+	state->channels = channels;
+	num_alloc_samples = MAX(num_exe_samples, num_cover_samples)/pow(2, depth) + 1;// prevent overflow
 
 	state->mem_len = state->filt_len - 1 + num_alloc_samples;
-	mem_alloc_size = state->mem_len * sizeof(float);
+	mem_alloc_size = state->mem_len * channels * sizeof(float);
 	cudaMalloc((void **) &(state->d_mem), mem_alloc_size);
 
 //	state->mem = (float *)malloc(mem_alloc_size);
 	cudaMemset(state->d_mem, 0, mem_alloc_size);
 	state->last_sample = state->sinc_len/2;
+//	GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
+	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
 	return state;
 }
 
 void 
 resampler_state_reset (ResamplerState *state)
 {
-	gint mem_alloc_size = state->mem_len * sizeof(float);
+	cudaSetDevice(1);
+	gint mem_alloc_size = state->mem_len * state->channels * sizeof(float);
 	cudaMemset(state->d_mem, 0, mem_alloc_size);
 	state->last_sample = state->filt_len/2;
 
@@ -323,6 +342,7 @@ resampler_state_reset (ResamplerState *state)
 void
 resampler_state_destroy (ResamplerState *state)
 {
+  cudaSetDevice(1);
   if (state->d_sinc_table)
     cudaFree(state->d_sinc_table) ;
   cudaFree(state->d_mem) ;

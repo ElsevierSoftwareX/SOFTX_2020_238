@@ -46,31 +46,40 @@ __global__ void downsample2x (const float amplifier,
 	float tmp = 0.0;
 	int len_all = len * times;
 	int tx_loc = 0;
-	unsigned int tx = threadIdx.x + blockIdx.x * blockDim.x;
+	unsigned int tx = threadIdx.x, tdx = blockDim.x;
+	int i;
 
 	// grab data from queue
-	if (tx < len) {
-		tx_loc = tx * times;
-		mem[filt_len-1 + tx_loc] = queue_in[tx_loc];
-		mem[filt_len-1 + tx_loc + 1] = queue_in[tx_loc + 1 ];
-		if (tx < last_sample)
-			mem[filt_len-1 +  len_all + tx] = 
-				queue_in[ len_all + tx];
+	for (i=tx; i< len; i+=tdx) {
+		tx_loc = i * times;
+		mem[filt_len-1 + tx_loc] = queue_in[tx_loc] * amplifier;
+		mem[filt_len-1 + tx_loc + 1] = queue_in[tx_loc + 1 ] * amplifier;
+//		printf("in device %d, mem %f in %f\n", tx_loc, mem[filt_len-1+tx_loc], queue_in[tx_loc]);
+//		printf("in device %d, mem %f in %f\n", tx_loc+1, mem[filt_len-1+tx_loc+1], queue_in[tx_loc+1]);
+	}
 
-		__syncthreads();
+	for (i=tx; i< last_sample; i+=tdx) 
+			mem[filt_len-1 +  len_all + i] = 
+				queue_in[ len_all + i] * amplifier;
+
+	__syncthreads();
+
+	for (i=tx; i< len; i+=tdx) {
+		tmp = 0.0;
+		tx_loc = i * times;
 		for (int j = 0; j < filt_len; ++j) {
-		  tmp += mem[tx_loc + j + last_sample] * sinc[j];
+		  tmp += mem[tx_loc + last_sample + j] * sinc[j];
 		}
 
-		queue_out[tx] 	 = tmp * amplifier;
+		queue_out[i] 	 = tmp;
 
 	}
 	__syncthreads();
 	
 
 	// copy last to first (filt_len-1) mem data
-	if (tx < filt_len -1)
-		mem[tx] = mem[tx + len_all + last_sample];
+	for (i=tx; i< filt_len-1; i+=tdx) 
+		mem[i] = mem[i + len_all + last_sample];
 }
 
 extern __shared__ char sharedMem[];
@@ -80,12 +89,11 @@ __global__ void reload_queue_spiir (float *queue,
 				 int num_inchunk,
 				 int num_left,
 				 gint queue_spiir_start,
-				 gint queue_spiir_len,
-				 guint nb)
+				 gint queue_spiir_len)
 {
-	unsigned int tx = threadIdx.x;
+	unsigned int tx = threadIdx.x, tdx = blockDim.x;
 	int i, j;
-	for (i=tx; i< num_inchunk; i+=nb) {
+	for (i=tx; i< num_inchunk; i+=tdx) {
 	  j = (queue_spiir_start + i) % queue_spiir_len;
 	  queue_spiir[j] = queue[i];
 	}
@@ -96,11 +104,11 @@ __global__ void reload_queue_spiir (float *queue,
 
 	float *tmp = (float *) sharedMem;
 
-	for (i=tx; i< num_left; i+=nb) 
+	for (i=tx; i< num_left; i+=tdx) 
 		tmp[i] = queue[i+num_inchunk];
 	__syncthreads();
 
-	for (i=tx; i< num_left; i+=nb) 
+	for (i=tx; i< num_left; i+=tdx) 
 		queue[i] = tmp[i];
 
 
@@ -222,39 +230,35 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 
 __global__ void upsample2x_and_add (
   			      float *sinc, 
-			      const int filt_len, 
-			      int last_sample,
-			      const int len,
+			      const gint filt_len, 
+			      gint last_sample,
+			      const gint len,
 			      float *mem_in, 
 			      float *mem_out,
-			      const int mem_in_len,
-			      const int mem_out_len,
-			      const uint nb)
+			      const gint mem_in_len,
+			      const gint mem_out_len)
 {
 	float tmp0 = 0.0, tmp1 = 0.0, tmp_in;
-	unsigned int tx = threadIdx.x;
+	unsigned int tx = threadIdx.x, tdx = blockDim.x;
 	unsigned int by = blockIdx.y;
 	int  loc, in_loc_start = mem_in_len * by + last_sample, out_loc_start = mem_out_len * by + filt_len - 1;
 	float *in, *out;
 	int i;
-	for (i=0; i<nb; i++) {
+	for (i=tx; i< len; i+=tdx) {
 	  tmp0 = 0.0;
 	  tmp1 = 0.0;
-	  loc = tx * nb + i;
+	  loc = i;
+		in = &(mem_in[in_loc_start + loc]);
 
-		if (loc < len) {
-			in = &(mem_in[in_loc_start + loc]);
-
-			for (int j = 0; j < filt_len; ++j) {
-				tmp_in = in[j];
-				tmp0 += tmp_in * sinc[j];
-				tmp1 += tmp_in * sinc[j + filt_len];
-			}
-			out = &(mem_out[out_loc_start + 2 * loc]);
-
-			out[0] += tmp0;
-			out[1] += tmp1;
+		for (int j = 0; j < filt_len; ++j) {
+			tmp_in = in[j];
+			tmp0 += tmp_in * sinc[j];
+			tmp1 += tmp_in * sinc[j + filt_len];
 		}
+		out = &(mem_out[out_loc_start + 2 * loc]);
+
+		out[0] += tmp0;
+		out[1] += tmp1;
 	}
 
 	__syncthreads();
@@ -289,6 +293,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   float *pos_inqueue, *pos_outqueue;
   gint i, out_processed;
   gint num_inchunk = num_in_multidown;
+  cudaSetDevice(1);
 
   GST_LOG ("multi downsample %d samples", num_inchunk);
   g_assert (SPSTATE(0)->queue_eff_len + num_inchunk <= SPSTATE(0)->queue_len);
@@ -297,6 +302,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
    * copy inbuf data to first queue
    */
   cudaMemcpy(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice);
+
   SPSTATE(0)->queue_eff_len += num_inchunk;
 
   for (i=0; i<num_depths-1; i++) {
@@ -321,7 +327,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     dim3 block(1, 1, 1);
     dim3 grid(1, 1, 1);
     block.x = MIN(THREADSPERBLOCK, out_processed); 
-    grid.x = out_processed % block.x == 0 ? out_processed/block.x : (int)out_processed/block.x + 1;
+//    grid.x = out_processed % block.x == 0 ? out_processed/block.x : (int)out_processed/block.x + 1;
 
     GST_LOG ("downsample threads %d, blocks %d, amplifier %f", block.x, grid.x, SPSTATEDOWN(i)->amplifier);
 
@@ -339,20 +345,35 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     gpuErrchk (cudaPeekAtLastError ());
     /* The following code is used for comparison with gstreamer downsampler2x 
      * quality=6; */
-#if 0
-    if (i == 1) {
-	    float tmp[SPSTATEDOWN(i)->sinc_len + out_processed];
-      	    cudaMemcpy(tmp, pos_outqueue, out_processed * sizeof(float), cudaMemcpyDeviceToHost);
-	    for (int j=0; j<out_processed; j++)
-		    printf("depth %d out[%d] = %e\n", i, j, tmp[j]);
-      	    cudaMemcpy(tmp, SPSTATEDOWN(i)->d_mem, (SPSTATEDOWN(i)->sinc_len -1 + out_processed) * sizeof(float), cudaMemcpyDeviceToHost);
-	    for (int j=0; j<(SPSTATEDOWN(i)->sinc_len -1+ out_processed); j++)
-		    printf("depth %d mem[%d] = %e\n", i, j, tmp[j]);
 
-    }
+#if 1
+//    if (i+1 == 2) {
+	    int j;
+	    float tmp_mem[num_inchunk + SPSTATEDOWN(i)->sinc_len -1 ];
+	    float tmp[num_inchunk + SPSTATEDOWN(i)->sinc_len -1 ];
+	    float tmp_sinc[SPSTATEDOWN(i)->sinc_len];
+	    float tmp_q[num_inchunk];
+
+	    printf ("depth %d, last sample %d\n", i, SPSTATEDOWN(i)->last_sample);
+      	    cudaMemcpy(tmp_sinc, SPSTATEDOWN(i)->d_sinc_table, SPSTATEDOWN(i)->sinc_len * sizeof(float), cudaMemcpyDeviceToHost);
+	//	for (j=0; j<SPSTATEDOWN(i)->sinc_len; j++)
+	//	    printf("depth %d sinc [%d] = %e\n", i, j, tmp_sinc[j]);
+
+      	    cudaMemcpy(tmp, pos_outqueue, out_processed * sizeof(float), cudaMemcpyDeviceToHost);
+	    for (j=0; j<out_processed; j++)
+		    printf("depth %d down out[%d] = %e\n", i+1, j, tmp[j]);
+
+      	    cudaMemcpy(tmp_mem, SPSTATEDOWN(i)->d_mem, (num_inchunk + SPSTATEDOWN(i)->sinc_len -1 ) * sizeof(float), cudaMemcpyDeviceToHost);
+      	    cudaMemcpy(tmp_q, pos_inqueue, (num_inchunk ) * sizeof(float), cudaMemcpyDeviceToHost);
+
+	    for (j=0; j<(num_inchunk); j++) 
+		    printf("depth %d mem[%d] = %f in %f\n", i, j, tmp_mem[j + SPSTATEDOWN(i)->sinc_len -1], tmp_q[j]);
+
+            gpuErrchk (cudaPeekAtLastError ());
+
+//    }
 #endif
 
-    gpuErrchk (cudaPeekAtLastError ());
     /* never discard any samples, we already prevent this situation from 
      * happening by providing a good size of num_cover_samples*/
     /* 
@@ -434,8 +455,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 				 num_inchunk,
 				 num_left,
 				 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
-				 SPSTATE(i)->queue_spiir_len,
-				 nb);
+				 SPSTATE(i)->queue_spiir_len);
   cudaThreadSynchronize();
   gpuErrchk (cudaPeekAtLastError ());
 
@@ -509,8 +529,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 							 spiir_processed,
 							 num_left,
 							 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
-							 SPSTATE(i)->queue_spiir_len,
-							 nb);
+							 SPSTATE(i)->queue_spiir_len);
     cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
 
@@ -575,13 +594,29 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 					SPSTATEUP(i+1)->d_mem, 
 					SPSTATEUP(i)->d_mem,
 					SPSTATEUP(i+1)->mem_len, 
-					SPSTATEUP(i)->mem_len, 
-					nb);
+					SPSTATEUP(i)->mem_len);
 
     cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
     SPSTATEUP(i+1)->last_sample = 0;
     num_inchunk = spiir_processed; 
+    /* The following code is used for comparison with gstreamer downsampler2x 
+     * quality=6; */
+#if 0
+    if (i == 2) {
+	    int tmp_len = (SPSTATEUP(i)->mem_len) * SPSTATEUP(i)->channels;
+	    float tmp[tmp_len];
+      	    cudaMemcpy(tmp, SPSTATEUP(i)->d_mem, tmp_len * sizeof(float), cudaMemcpyDeviceToHost);
+	    for (int j=0; j<spiir_processed; j++)
+	    for (int k=0; j<SPSTATEUP(i)->channels; j++)
+		    printf("depth %d up out channel %d, [%d] = %e\n", i, j, tmp[SPSTATEUP(i)->mem_len * k + SPSTATEUP(i)->filt_len-1 + j]);
+//      	    cudaMemcpy(tmp, SPSTATEDOWN(i)->d_mem, (SPSTATEDOWN(i)->sinc_len -1 + out_processed) * sizeof(float), cudaMemcpyDeviceToHost);
+//	    for (int j=0; j<(SPSTATEDOWN(i)->sinc_len -1+ out_processed); j++)
+//		    printf("depth %d mem[%d] = %e\n", i, j, tmp[j]);
+
+    }
+#endif
+
 
   }
 

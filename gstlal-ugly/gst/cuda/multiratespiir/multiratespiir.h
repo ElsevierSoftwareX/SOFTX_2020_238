@@ -82,9 +82,9 @@ typedef struct _SpiirState {
   ResamplerState *downstate, *upstate;
   float *d_queue; // start queue for downsampler and spiir 
 //  float *d_out_spiir;
-  int queue_len;
-  int queue_eff_len;  // effective length
-  int queue_down_start;
+  gint queue_len;
+  gint queue_eff_len;  // effective length
+  gint queue_down_start;
 } SpiirState;
 
 /**
