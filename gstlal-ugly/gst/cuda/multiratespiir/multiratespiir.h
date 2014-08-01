@@ -68,7 +68,7 @@ typedef struct _SpiirState {
   COMPLEX_F *d_a1;
   COMPLEX_F *d_b0;
   int *d_d;
-  int d_max;
+  gint d_max;
   COMPLEX_F *d_y;
   float *d_queue_spiir;
   gint queue_spiir_last_sample;
@@ -78,7 +78,7 @@ typedef struct _SpiirState {
   gint num_filters;
   gint num_templates;
 
-  int depth; // 0-6
+  gint depth; // 0-6
   ResamplerState *downstate, *upstate;
   float *d_queue; // start queue for downsampler and spiir 
 //  float *d_out_spiir;

@@ -87,7 +87,9 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 
 		for (i=0; i<a1_eff_len; i++) {
 			tmp_a1[i].re = (float) bank[pos++];
+//			printf("a matrix %d, re %e \n", i, tmp_a1[i].re);
 			tmp_a1[i].im = (float) bank[pos++];
+//			printf("a matrix %d, im %e \n", i, tmp_a1[i].im);
 		}
 
 		cudaMalloc((void **) &(SPSTATE(depth)->d_a1), a1_eff_len * sizeof (COMPLEX_F));
@@ -117,11 +119,11 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 		pos = pos + 2;
 		spiir_state_workspace_realloc_int (&tmp_d, &d_len, d_eff_len);
 
+		tmp_max = (int)bank[pos];
 		for (i=0; i<d_eff_len; i++) {
 			tmp_d[i] = (int) bank[pos++];
 			tmp_max = tmp_d[i] > tmp_max ? tmp_d[i] : tmp_max;
 		}
-
 
 		SPSTATE(depth)->d_max = tmp_max;
 		cudaMalloc((void **) &(SPSTATE(depth)->d_d), d_eff_len * sizeof (int));

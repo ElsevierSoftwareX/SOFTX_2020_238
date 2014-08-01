@@ -326,7 +326,7 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 	cudaMemset(state->d_mem, 0, mem_alloc_size);
 	state->last_sample = state->sinc_len/2;
 //	GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
-	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
+//	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
 	return state;
 }
 
