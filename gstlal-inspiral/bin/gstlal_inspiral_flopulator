@@ -72,8 +72,8 @@ for i, bank in enumerate(banks):
 	MFLOPs = resample / 1000.**2  + filter / 1000.**2 + reconstruct / 1000.**2 + add / 1000.**2
 	totalMFLOPS += MFLOPs
 
-	print "--->\tTotal MFLOPS per template: ", MFLOPs
-	print "--->\tMFLOPS per template: ", MFLOPs / MT / 2
+	print "--->\tTotal MFLOPS: ", MFLOPs
+	print "--->\tMFLOPS per complex template: ", MFLOPs / (MT / 2.)
 	
 averageMFLOPS = totalMFLOPS / totalMT
 print "--\nAverage MFLOPS per template:", averageMFLOPS
