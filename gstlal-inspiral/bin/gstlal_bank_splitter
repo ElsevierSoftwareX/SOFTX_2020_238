@@ -20,6 +20,7 @@
 
 
 import itertools
+import math
 import os
 import sys
 from optparse import OptionParser
@@ -113,6 +114,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--approximant", type = "string", help = "Must specify an approximant")
 	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff")
+	parser.add_option("--group-by-chi", action = "store_true", help = "group templates into chi bins 0.1 in chi - helps with SVD.")
 	options, filenames = parser.parse_args()
 
 	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant")
@@ -128,6 +130,13 @@ def parse_command_line():
 options, filenames = parse_command_line()
 output_cache_file = open(options.output_cache, "w")
 bank_count = 0
+
+# Hacky way to bin by chi
+def chikey(chi, group_by_chi = options.group_by_chi):
+	if group_by_chi:
+		return math.floor(chi * 10) / 10.
+	else:
+		return None
 
 for filename in filenames:
 	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
@@ -160,29 +169,33 @@ for filename in filenames:
 	# just to make sure it is set
 	for row in sngl_inspiral_table:
 		row.mtotal = row.mass1 + row.mass2
-
-
-	sample_rates = {}
-	# group by power of two sample rate
-	for row in sngl_inspiral_table:
-		sample_rates.setdefault(templates.ceil_pow_2(row.f_final), []).append(row)
-
-	# store the process params
-	process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
-
 	
-	def sort_func(row, column = options.sort_by):
-		return getattr(row, column)
+	# Bin by Chi, has no effect if option is not specified, i.e. there is only one bin.
+	chidict = {}
+	[chidict.setdefault(chikey(spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)), []).append(row) for row in sngl_inspiral_table]
 
-	for r in sample_rates:
-		sample_rates[r].sort(key=sort_func)
+	for chi in chidict:
+		rows = chidict[chi]
+		sample_rates = {}
+		# group by power of two sample rate
+		for row in rows:
+			sample_rates.setdefault(templates.ceil_pow_2(row.f_final), []).append(row)
 
-		for rows in group_templates(sample_rates[r], options.n, options.overlap):
-			assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
-			sngl_inspiral_table[:] = rows
-			output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-			output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
-			ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
-			bank_count += 1
+		# store the process params
+		process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
+
+		def sort_func(row, column = options.sort_by):
+			return getattr(row, column)
+
+		for r in sample_rates:
+			sample_rates[r].sort(key=sort_func)
+
+			for rows in group_templates(sample_rates[r], options.n, options.overlap):
+				assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
+				sngl_inspiral_table[:] = rows
+				output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
+				output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+				ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
+				bank_count += 1
 
 output_cache_file.close()
