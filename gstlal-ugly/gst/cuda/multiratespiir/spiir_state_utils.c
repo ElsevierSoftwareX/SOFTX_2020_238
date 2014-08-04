@@ -65,7 +65,6 @@ spiir_state_workspace_realloc_int (int ** workspace, int * len,
 void
 spiir_state_load_bank (SpiirState **spstate, gint num_depths, gdouble *bank, gint bank_len, cudaStream_t stream)
 {
-	cudaSetDevice(1);
 
 	COMPLEX_F *tmp_a1 = NULL, *tmp_b0 = NULL;
        	int *tmp_d = NULL, tmp_max = 0;
@@ -150,7 +149,6 @@ SpiirState **
 spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 		gint num_exe_samples, gint width, gint rate, cudaStream_t stream)
 {
-	cudaSetDevice(1);
 
 	printf("init spstate\n");
 	gint i, inrate, outrate, queue_alloc_size;

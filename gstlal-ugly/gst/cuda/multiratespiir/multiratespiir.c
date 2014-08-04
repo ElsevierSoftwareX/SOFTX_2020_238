@@ -828,12 +828,11 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       return GST_FLOW_ERROR;
     }
 
+    printf("bank id %d\n", element->bank_id);
     if (!element->spstate) {
       GST_ERROR_OBJECT(element, "spsate could not be initialised");
       return GST_FLOW_ERROR;
     }
-    for (int i=0; i<element->num_depths; i++)
-	    GST_DEBUG_OBJECT (element, "num of filters %d, num of templates %d", element->spstate[i]->num_filters, element->spstate[i]->num_templates);
 
     element->spstate_initialised = TRUE;
   }

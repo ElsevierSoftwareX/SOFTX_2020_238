@@ -340,7 +340,6 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   float *pos_inqueue, *pos_outqueue;
   gint i, out_processed;
   gint num_inchunk = num_in_multidown;
-  cudaSetDevice(1);
 
   GST_LOG ("multi downsample %d samples", num_inchunk);
   g_assert (SPSTATE(0)->queue_eff_len + num_inchunk <= SPSTATE(0)->queue_len);
