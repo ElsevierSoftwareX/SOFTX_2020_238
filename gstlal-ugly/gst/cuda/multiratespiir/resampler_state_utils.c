@@ -270,7 +270,6 @@ float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate, g
 ResamplerState *
 resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth)
 {
-	cudaSetDevice(1);
 	gint mem_alloc_size, num_alloc_samples; 
 	gint den_rate; // denominator rate, = outrate / gcd (inrate, outrate) 
 	gint times = 2; // resampler times
@@ -333,7 +332,6 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 void 
 resampler_state_reset (ResamplerState *state)
 {
-	cudaSetDevice(1);
 	gint mem_alloc_size = state->mem_len * state->channels * sizeof(float);
 	cudaMemset(state->d_mem, 0, mem_alloc_size);
 	state->last_sample = state->filt_len/2;
@@ -342,7 +340,6 @@ resampler_state_reset (ResamplerState *state)
 void
 resampler_state_destroy (ResamplerState *state)
 {
-  cudaSetDevice(1);
   if (state->d_sinc_table)
     cudaFree(state->d_sinc_table) ;
   cudaFree(state->d_mem) ;

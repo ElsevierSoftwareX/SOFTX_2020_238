@@ -65,7 +65,8 @@ GST_BOILERPLATE_FULL(
 enum
 {
   PROP_0,
-  PROP_IIR_BANK
+  PROP_IIR_BANK,
+  PROP_BANK_ID
 };
 
 //FIXME: not support width=64 yet
@@ -179,6 +180,18 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			)
 		  );
+
+  g_object_class_install_property (gobject_class, PROP_BANK_ID,
+				g_param_spec_int(
+					"bank-id",
+					"Bank ID",
+					"bank ID",
+					0, 1000, 0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				)
+			);
+
+
 }
 
 static void
@@ -754,7 +767,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   /*
    * output buffer is generated in cuda_multirate_spiir_process function.
    */
-  cudaSetDevice(1);
 
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
   GstFlowReturn res;
@@ -771,21 +783,29 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       GST_TIME_ARGS (GST_BUFFER_DURATION (inbuf)),
       GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
 
-//  printf("transform init spsate first \n");
   /*
    * initialise spiir state
    */
+
+
   if (element->spstate_initialised == FALSE) {
+
+#if 1
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    element->deviceID = element->bank_id % deviceCount;
+    cudaSetDevice(element->deviceID);
+#endif
+
     element->spstate = spiir_state_init (element->bank, element->bank_len,
 		    element->num_cover_samples, element->num_exe_samples,
 		    element->width, element->rate);
 
+    printf("bank id %d\n", element->bank_id);
     if (!element->spstate) {
       GST_ERROR_OBJECT(element, "spsate could not be initialised");
       return GST_FLOW_ERROR;
     }
-    for (int i=0; i<element->num_depths; i++)
-	    GST_DEBUG_OBJECT (element, "num of filters %d, num of templates %d", element->spstate[i]->num_filters, element->spstate[i]->num_templates);
 
     element->spstate_initialised = TRUE;
   }
@@ -1004,8 +1024,8 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (element);
   switch (prop_id) {
-    case PROP_IIR_BANK:
 
+    case PROP_IIR_BANK:
       g_mutex_lock(element->iir_bank_lock);
       if (element->bank)
 	      free(element->bank);
@@ -1026,6 +1046,11 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
       g_mutex_unlock(element->iir_bank_lock);
       break;
+
+    case PROP_BANK_ID:
+      element->bank_id = g_value_get_int(value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1048,6 +1073,9 @@ cuda_multirate_spiir_get_property (GObject * object, guint prop_id,
       if (element->bank)
 	      g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->bank, element->bank_len));
       g_mutex_unlock(element->iir_bank_lock);
+      break;
+    case PROP_BANK_ID:
+      g_value_set_int (value, element->bank_id);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

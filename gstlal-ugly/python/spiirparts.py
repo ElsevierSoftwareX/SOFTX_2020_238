@@ -63,8 +63,8 @@ from gstlal import uni_datasource
 import pdb
 
 
-def mkCudaMultirateSPIIR(pipeline, src, bank_struct, name=None):
-	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct)) if value is not None)
+def mkCudaMultirateSPIIR(pipeline, src, bank_struct, bank_id=0, name=None):
+	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct), ("bank_id", bank_id)) if value is not None)
 	elem = pipeparts.mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
 	return elem
 
@@ -108,9 +108,9 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = multirate_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -168,11 +168,21 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		head = pipeparts.mkreblock(pipeline, head)
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%d_%s_%s" % (sr, instrument, bank.logname))
+		suffix = "%s%s" % (instrument, sr)
+		head = pipeparts.mktee(pipeline, head)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "iir_%s.dump" % suffix, segment = nxydump_segment)
+
 		head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		if prehead is not None:
-			head = pipeparts.mkadder(pipeline, (head, prehead))
+			adder = gst.element_factory_make("lal_adder")
+			adder.set_property("sync", True)
+			pipeline.add(adder)
+			head.link(adder)
+			prehead.link(adder)
+			head = adder
+		#	head = pipeparts.mkadder(pipeline, (head, prehead))
 		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
-		head = pipeparts.mkresample(pipeline, head, quality = quality)
+		head = pipeparts.mkresample(pipeline, head, quality = 1)
 		if sr == max_rate:
 			head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
 		else:
@@ -264,13 +274,14 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	# format of bank: <H1bank0>
 
 #	pdb.set_trace()
+	bank_count = 0
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		snr = pipeparts.mkreblock(pipeline, head)
 
 		bank_struct = build_bank_struct(bank)
-		snr = mkCudaMultirateSPIIR(pipeline, snr, bank_struct)
+		snr = mkCudaMultirateSPIIR(pipeline, snr, bank_struct, bank_id = bank_count)
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
@@ -284,7 +295,8 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
-#		pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+		bank_count = bank_count + 1
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
