@@ -501,7 +501,7 @@ def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	return elem
 
 
-def mkCudaIIRBank(pipeline, src, a1, b0, delay, name=None):
+def mkcudaiirbank(pipeline, src, a1, b0, delay, name=None):
  	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
  	if a1 is not None:
  		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
@@ -512,7 +512,7 @@ def mkCudaIIRBank(pipeline, src, a1, b0, delay, name=None):
  	return elem
 
 
-def mkCudaMultirateSPIIR(pipeline, src, bank_struct, bank_id=0, name=None):
+def mkcudamultiratespiir(pipeline, src, bank_struct, bank_id=0, name=None):
 	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct), ("bank_id", bank_id)) if value is not None)
 	elem = pipeparts.mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
 	return elem
