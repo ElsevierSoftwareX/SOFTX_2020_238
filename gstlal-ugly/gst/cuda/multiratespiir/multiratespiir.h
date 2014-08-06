@@ -27,6 +27,8 @@
 #include <gst/base/gstbasetransform.h>
 #include <gst/base/gstadapter.h>
 
+#include <cuda_runtime.h>
+
 
 G_BEGIN_DECLS
 
@@ -124,6 +126,7 @@ struct _CudaMultirateSPIIR {
 
   gint bank_id;
   gint deviceID;
+  cudaStream_t stream;
 };
 
 struct _CudaMultirateSPIIRClass {

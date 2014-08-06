@@ -508,11 +508,10 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
-    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths);
-    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out);
+    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths, element->stream);
+    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
-    GST_DEBUG_OBJECT (element, "cpy data to BUFFER");
     for (i=0; i<num_out_spiirup; i++)
       for (j=0; j<element->outchannels; j++)
 	      outdata[element->outchannels * (i + last_num_out_spiirup) + j] = tmp_out[tmp_out_len * j + i + upfilt_len - 1];
@@ -621,10 +620,9 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
-    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths);
-    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out);
+    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths, element->stream);
+    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
-    GST_DEBUG_OBJECT (element, "cpy data to BUFFER");
 
     for (i=0; i<num_out_spiirup; i++)
       for (j=0; j<element->outchannels; j++)
@@ -790,18 +788,18 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   if (element->spstate_initialised == FALSE) {
 
-#if 1
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
     element->deviceID = element->bank_id % deviceCount;
     cudaSetDevice(element->deviceID);
-#endif
+    cudaStreamCreate(&element->stream);
 
     element->spstate = spiir_state_init (element->bank, element->bank_len,
 		    element->num_cover_samples, element->num_exe_samples,
-		    element->width, element->rate);
+		    element->width, element->rate, element->stream);
 
     printf("bank id %d\n", element->bank_id);
+//    printf("stream id %d\n", element->stream);
     if (!element->spstate) {
       GST_ERROR_OBJECT(element, "spsate could not be initialised");
       return GST_FLOW_ERROR;
@@ -816,7 +814,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   if (G_UNLIKELY (GST_BUFFER_IS_DISCONT (inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
     GST_DEBUG_OBJECT (element, "reset spstate");
-    spiir_state_reset (element->spstate, element->num_depths);
+    spiir_state_reset (element->spstate, element->num_depths, element->stream);
     gst_adapter_clear (element->adapter);
     element->need_discont = TRUE;
 
@@ -922,7 +920,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      * reset spiir state
      */
     if (element->num_gap_samples >= (guint64) num_cover_samples) {
-      spiir_state_reset (element->spstate, element->num_depths);
+      spiir_state_reset (element->spstate, element->num_depths, element->stream);
       gst_adapter_clear (element->adapter);
     }
     element->num_gap_samples = 0;
@@ -986,7 +984,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT PROCESS");
         adapter_push_zeros (element, element->num_cover_samples);
         cuda_multirate_spiir_push_drain (element, element->num_cover_samples);
-        spiir_state_reset (element->spstate, element->num_depths);
+        spiir_state_reset (element->spstate, element->num_depths, element->stream);
       }
       element->num_gap_samples = 0;
       element->t0 = GST_CLOCK_TIME_NONE;
@@ -1002,7 +1000,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       if (element->spstate) {
         adapter_push_zeros (element, element->num_cover_samples);
 	cuda_multirate_spiir_push_drain (element, element->num_cover_samples);
-        spiir_state_reset (element->spstate, element->num_depths);
+        spiir_state_reset (element->spstate, element->num_depths, element->stream);
       }
       break;
     default:

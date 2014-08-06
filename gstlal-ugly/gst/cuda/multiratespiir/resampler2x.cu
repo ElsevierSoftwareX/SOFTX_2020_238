@@ -333,7 +333,7 @@ __global__ void flush_queue (
 }
 
 
-gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths)
+gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths, cudaStream_t stream)
 {
   float *pos_inqueue, *pos_outqueue;
   gint i, out_processed;
@@ -345,7 +345,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   /* 
    * copy inbuf data to first queue
    */
-  cudaMemcpy(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice, stream);
 
   SPSTATE(0)->queue_eff_len += num_inchunk;
 
@@ -376,7 +376,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     uint share_mem_sz = (2 * block.x + 4 * SPSTATEDOWN(i)->sinc_len) * sizeof (float);
     GST_LOG ("downsample threads %d, blocks %d, amplifier %f", block.x, grid.x, SPSTATEDOWN(i)->amplifier);
 
-    downsample2x <<<grid, block, share_mem_sz>>> (SPSTATEDOWN(i)->amplifier,
+    downsample2x <<<grid, block, share_mem_sz, stream>>> (SPSTATEDOWN(i)->amplifier,
 						    2, 
 						    SPSTATEDOWN(i)->d_sinc_table,
 						    SPSTATEDOWN(i)->sinc_len, 
@@ -386,7 +386,6 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 						    pos_inqueue, 
 						    pos_outqueue);
 
-    cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
     /* The following code is used for comparison with gstreamer downsampler2x 
      * quality=6; */
@@ -471,7 +470,7 @@ void update_nb (SpiirState **spstate, gint new_processed, gint depth)
 }
 
 
-gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out)
+gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out, cudaStream_t stream)
 {
   gint num_inchunk = num_in_multiup;
 
@@ -495,13 +494,12 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
   GST_LOG ("%dth depth: reload threads %d, nb %d, block.x %d, block.y %d, block.z %d, grid.x %d, grid.y %d, grid.z %d", i, numThreads, nb, block.x, block.y, block.z, grid.x, grid.y, grid.z);
 
-  reload_queue_spiir <<<grid, block, share_mem_sz>>> (SPSTATE(i)->d_queue,
+  reload_queue_spiir <<<grid, block, share_mem_sz, stream>>> (SPSTATE(i)->d_queue,
 				 SPSTATE(i)->d_queue_spiir,
 				 num_inchunk,
 				 num_left,
 				 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
 				 SPSTATE(i)->queue_spiir_len);
-  cudaThreadSynchronize();
   gpuErrchk (cudaPeekAtLastError ());
 
   SPSTATE(i)->queue_eff_len -= num_inchunk;
@@ -528,7 +526,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
   GST_LOG ("%dth depth: processed %d, nb %d, SPIIR num of filters %d, number of templates %d, block.x %d, block.y %d, block.z %d, grid.x %d, grid.y %d, grid.z %d", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_filters, SPSTATE(i)->num_templates, block.x, block.y, block.z, grid.x, grid.y, grid.z);
 
-  cuda_iir_filter_kernel<<<grid, block, share_mem_sz>>>(SPSTATE(i)->d_a1,
+  cuda_iir_filter_kernel<<<grid, block, share_mem_sz, stream>>>(SPSTATE(i)->d_a1,
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
 							SPSTATE(i)->d_y, 
@@ -588,13 +586,12 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
     GST_LOG ("%dth depth: reload threads %d, nb %d, block.x %d, block.y %d, block.z %d, grid.x %d, grid.y %d, grid.z %d", i, numThreads, nb, block.x, block.y, block.z, grid.x, grid.y, grid.z);
 
-    reload_queue_spiir <<<grid, block, share_mem_sz>>> (SPSTATE(i)->d_queue,
+    reload_queue_spiir <<<grid, block, share_mem_sz, stream>>> (SPSTATE(i)->d_queue,
 							 SPSTATE(i)->d_queue_spiir,
 							 spiir_processed,
 							 num_left,
 							 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
 							 SPSTATE(i)->queue_spiir_len);
-    cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
 
     SPSTATE(i)->queue_eff_len -= spiir_processed;
@@ -619,7 +616,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
     texRef.normalized	= false;
     cudaBindTexture(0, texRef, SPSTATE(i)->d_input_s, channelDesc, available_length * sizeof(float));
     */
-    cuda_iir_filter_kernel<<<grid, block, share_mem_sz>>>(SPSTATE(i)->d_a1,
+    cuda_iir_filter_kernel<<<grid, block, share_mem_sz, stream>>>(SPSTATE(i)->d_a1,
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
 							SPSTATE(i)->d_y, 
@@ -636,7 +633,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
   
 
-    cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
 
     SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + spiir_processed) % SPSTATE(i)->queue_spiir_len;
@@ -652,7 +648,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
      * upsample 2x and add 
      */
 
-    upsample2x_and_add <<<grid, block, share_mem_sz>>>(SPSTATEUP(i+1)->d_sinc_table, 
+    upsample2x_and_add <<<grid, block, share_mem_sz, stream>>>(SPSTATEUP(i+1)->d_sinc_table, 
 					SPSTATEUP(i+1)->filt_len, 
 					SPSTATEUP(i+1)->last_sample, 
 					resample_processed, 
@@ -661,7 +657,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 					SPSTATEUP(i+1)->mem_len, 
 					SPSTATEUP(i)->mem_len);
 
-    cudaThreadSynchronize();
     gpuErrchk (cudaPeekAtLastError ());
     SPSTATEUP(i+1)->last_sample = 0;
     num_inchunk = spiir_processed; 
@@ -687,7 +682,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 
  
   GST_LOG ("spiirup out processed %d samples", num_inchunk);
-  cudaMemcpy(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream);
   GST_LOG ("out %f d mem addr %p ", out[0], SPSTATEUP(0)->d_mem);
   gpuErrchk (cudaPeekAtLastError ());
   return spiir_processed;

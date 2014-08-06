@@ -28,10 +28,10 @@ guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element);
 void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len);
 
 gint
-multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths);
+multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths, cudaStream_t stream);
 
 gint
-spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out);
+spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out, cudaStream_t stream);
 
 
 

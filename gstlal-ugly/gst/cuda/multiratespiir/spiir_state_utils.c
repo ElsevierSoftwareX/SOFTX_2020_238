@@ -20,7 +20,7 @@ static void gpuAssert(cudaError_t code, char *file, int line)
 {
    if (code != cudaSuccess) 
    {
-      GST_LOG ("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      printf ("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
       exit(code);
    }
 }
@@ -63,7 +63,7 @@ spiir_state_workspace_realloc_int (int ** workspace, int * len,
 }
 
 void
-spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint num_depths)
+spiir_state_load_bank (SpiirState **spstate, gint num_depths, gdouble *bank, gint bank_len, cudaStream_t stream)
 {
 
 	COMPLEX_F *tmp_a1 = NULL, *tmp_b0 = NULL;
@@ -93,7 +93,7 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 
 		cudaMalloc((void **) &(SPSTATE(depth)->d_a1), a1_eff_len * sizeof (COMPLEX_F));
 
-		cudaMemcpy(SPSTATE(depth)->d_a1, tmp_a1, a1_eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice);
+		cudaMemcpyAsync(SPSTATE(depth)->d_a1, tmp_a1, a1_eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
 		/* 
 		 * initiate coefficient b0
 		 */
@@ -108,7 +108,7 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 
 		cudaMalloc((void **) &(SPSTATE(depth)->d_b0), b0_eff_len * sizeof (COMPLEX_F));
 
-		cudaMemcpy(SPSTATE(depth)->d_b0, tmp_b0, b0_eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice);
+		cudaMemcpyAsync(SPSTATE(depth)->d_b0, tmp_b0, b0_eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
 		/* 
 		 * initiate coefficient d (delay)
 		 */
@@ -127,14 +127,14 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 		SPSTATE(depth)->d_max = tmp_max;
 		cudaMalloc((void **) &(SPSTATE(depth)->d_d), d_eff_len * sizeof (int));
 
-		cudaMemcpy(SPSTATE(depth)->d_d, tmp_d, d_eff_len * sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpyAsync(SPSTATE(depth)->d_d, tmp_d, d_eff_len * sizeof(int), cudaMemcpyHostToDevice, stream);
 		/* 
 		 * initiate previous output y
 		 */
 
 		cudaMalloc((void **) &(SPSTATE(depth)->d_y), a1_eff_len * sizeof (COMPLEX_F));
 
-		cudaMemset(SPSTATE(depth)->d_y, 0, a1_eff_len * sizeof(COMPLEX_F));
+		cudaMemsetAsync(SPSTATE(depth)->d_y, 0, a1_eff_len * sizeof(COMPLEX_F), stream);
 	}
 	free (tmp_a1);
 	free (tmp_b0);
@@ -147,7 +147,7 @@ spiir_state_load_bank (SpiirState **spstate, gdouble *bank, gint bank_len, gint 
 
 SpiirState ** 
 spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
-		gint num_exe_samples, gint width, gint rate)
+		gint num_exe_samples, gint width, gint rate, cudaStream_t stream)
 {
 
 	printf("init spstate\n");
@@ -165,7 +165,7 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 		SPSTATE(i)->queue_down_start = 0;
 		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
 		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
-		cudaMemset(SPSTATE(i)->d_queue, 0, queue_alloc_size);
+		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
 
         gpuErrchk (cudaPeekAtLastError ());
 		inrate = rate/pow(2, i);
@@ -174,20 +174,20 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 //		tmp_len *=2;
 //		SPSTATE(i)->out_up = (float*)malloc(tmp_len * sizeof(float));
 
-		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, 1, num_exe_samples, num_cover_samples, i);
-		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i);
+		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, 1, num_exe_samples, num_cover_samples, i, stream);
+		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i, stream);
 		g_assert (SPSTATEDOWN(i) != NULL);
 	       	g_assert (SPSTATEUP(i) != NULL);
 
 	}
-	spiir_state_load_bank (spstate, bank, bank_len, num_depths);
+	spiir_state_load_bank (spstate, num_depths, bank, bank_len, stream);
 	for(i=0; i<num_depths; i++) {
 		SPSTATE(i)->nb = 0;
 		SPSTATE(i)->pre_out_spiir_len = 0;
 		SPSTATE(i)->queue_spiir_last_sample = 0;
 		SPSTATE(i)->queue_spiir_len = SPSTATE(i)->queue_len + SPSTATE(i)->d_max;
 		cudaMalloc((void **) &(SPSTATE(i)->d_queue_spiir), SPSTATE(i)->queue_spiir_len * sizeof(float));
-		cudaMemset(SPSTATE(i)->d_queue_spiir, 0, SPSTATE(i)->queue_spiir_len * sizeof(float));
+		cudaMemsetAsync(SPSTATE(i)->d_queue_spiir, 0, SPSTATE(i)->queue_spiir_len * sizeof(float), stream);
 	}
 
 	return spstate;
@@ -209,7 +209,7 @@ spiir_state_destroy (SpiirState ** spstate, gint num_depths)
 }
 
 void
-spiir_state_reset (SpiirState **spstate, gint num_depths)
+spiir_state_reset (SpiirState **spstate, gint num_depths, cudaStream_t stream)
 {
   int i;
   for(i=0; i<num_depths; i++)
@@ -219,8 +219,8 @@ spiir_state_reset (SpiirState **spstate, gint num_depths)
 
     SPSTATE(i)->queue_eff_len = 0;
     SPSTATE(i)->queue_down_start = 0;
-    resampler_state_reset(SPSTATEDOWN(i));
-    resampler_state_reset(SPSTATEUP(i));
+    resampler_state_reset(SPSTATEDOWN(i), stream);
+    resampler_state_reset(SPSTATEUP(i), stream);
   }
 }
 

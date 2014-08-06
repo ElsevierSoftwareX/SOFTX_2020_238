@@ -268,7 +268,7 @@ float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate, g
 }
 
 ResamplerState *
-resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth)
+resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth, cudaStream_t stream)
 {
 	gint mem_alloc_size, num_alloc_samples; 
 	gint den_rate; // denominator rate, = outrate / gcd (inrate, outrate) 
@@ -290,7 +290,7 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 	  float *sinc_table = (float *)malloc (sizeof(float) * state->sinc_len);
 	  /* Sinc function Generator */
 	  sinc_function(sinc_table, state->filt_len, cutoff, den_rate, DOWN_QUALITY);
-          cudaMemcpy(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice);
+          cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream);
   	  free(sinc_table);
 	  sinc_table = NULL;
 
@@ -307,7 +307,7 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 	  /* Sinc function Generator */
 	  sinc_function(sinc_table, state->filt_len, cutoff, den_rate, UP_QUALITY);
 //	  psinc_function(sinc_table, state->filt_len, resolution);
-          cudaMemcpy(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice);
+          cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream);
  	  free(sinc_table);
 	  sinc_table = NULL;
 
@@ -322,7 +322,7 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 	cudaMalloc((void **) &(state->d_mem), mem_alloc_size);
 
 //	state->mem = (float *)malloc(mem_alloc_size);
-	cudaMemset(state->d_mem, 0, mem_alloc_size);
+	cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream);
 	state->last_sample = state->sinc_len/2;
 //	GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
 //	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
@@ -330,10 +330,10 @@ resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_sam
 }
 
 void 
-resampler_state_reset (ResamplerState *state)
+resampler_state_reset (ResamplerState *state, cudaStream_t stream)
 {
 	gint mem_alloc_size = state->mem_len * state->channels * sizeof(float);
-	cudaMemset(state->d_mem, 0, mem_alloc_size);
+	cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream);
 	state->last_sample = state->filt_len/2;
 
 }
