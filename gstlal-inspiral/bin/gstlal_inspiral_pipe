@@ -71,13 +71,12 @@ import subprocess, socket, tempfile
 from glue import iterutils
 from glue import pipeline
 from glue import lal
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue import segments
-from glue.ligolw import array
-from glue.ligolw import param
-import glue.ligolw.utils as utils
+from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import lsctables
+from glue.ligolw import param as ligolw_param
+import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
@@ -86,6 +85,12 @@ from pylal import series as lalseries
 import numpy
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
 
 
 #
@@ -102,9 +107,10 @@ def get_max_length(bank_cache, verbose = False):
 	max_time = 0
 	cache = lal.Cache.fromfilenames([bank_cache.values()[0]])
 	for f in cache.pfnlist():
-		xmldoc = utils.load_filename(f, verbose = verbose, contenthandler = ligolw.LIGOLWContentHandler)
-		sngls = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+		sngls = lsctables.SnglInspiralTable.get_table(xmldoc)
 		max_time = max(max_time, max(sngls.get_column('template_duration')))
+		xmldoc.unlink()
 
 	return max_time
 
@@ -677,7 +683,7 @@ if options.reference_psd is None:
 	ref_psd_parent_nodes = [median_psd_node]
 
 else:
-	ref_psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)) 
+	ref_psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler)) 
 	ref_psd_parent_nodes = []
 
 #
