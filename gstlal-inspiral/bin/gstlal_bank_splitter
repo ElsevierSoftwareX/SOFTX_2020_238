@@ -138,6 +138,8 @@ def chikey(chi, group_by_chi = options.group_by_chi):
 	else:
 		return None
 
+outputrows = []
+
 for filename in filenames:
 	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
@@ -175,11 +177,7 @@ for filename in filenames:
 	[chidict.setdefault(chikey(spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)), []).append(row) for row in sngl_inspiral_table]
 
 	for chi in chidict:
-		rows = chidict[chi]
-		sample_rates = {}
-		# group by power of two sample rate
-		for row in rows:
-			sample_rates.setdefault(templates.ceil_pow_2(row.f_final), []).append(row)
+		chirows = chidict[chi]
 
 		# store the process params
 		process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
@@ -187,15 +185,24 @@ for filename in filenames:
 		def sort_func(row, column = options.sort_by):
 			return getattr(row, column)
 
-		for r in sample_rates:
-			sample_rates[r].sort(key=sort_func)
+		chirows.sort(key=sort_func)
 
-			for rows in group_templates(sample_rates[r], options.n, options.overlap):
-				assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
-				sngl_inspiral_table[:] = rows
-				output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-				output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
-				ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
-				bank_count += 1
+
+		for rows in group_templates(chirows, options.n, options.overlap):
+			assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
+			outputrows.append((rows[0], rows))
+
+
+# One last sort now that the templates have been grouped
+def sort_func((row, rows), column = options.sort_by):
+	return getattr(row, column)
+
+outputrows.sort(key=sort_func)
+
+for bank_count, (row, rows) in enumerate(outputrows):
+	sngl_inspiral_table[:] = rows
+	output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
+	output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
 output_cache_file.close()
