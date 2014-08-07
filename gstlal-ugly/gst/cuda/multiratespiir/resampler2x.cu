@@ -418,8 +418,11 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 //    }
 #endif
 
-    /* never discard any samples, we already prevent this situation from 
-     * happening by providing a good size of num_cover_samples*/
+    /* 
+     * the only possible situation to discard some samples is 
+     * when at the end of a segment
+     */
+
     /* 
      * if the number of input samples is odd, discard the last input 
      * sample. We do not expect this affect accuracy much.
