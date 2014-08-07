@@ -993,6 +993,8 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       element->samples_in = 0;
       element->samples_out = 0;
       element->need_discont = TRUE;
+      cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_cover_samples);
+
       break;
 
     case GST_EVENT_EOS:
