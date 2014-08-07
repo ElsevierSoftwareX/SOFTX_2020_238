@@ -275,7 +275,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"likelihood-file":dist_stat_names
 							}
 						)
-
+				# impose a priority to help with depth first submission
+				noninjnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
@@ -317,7 +318,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 									"likelihood-file":dist_stat_names
 								}
 							)
-
+					# impose a priority to help with depth first submission
+					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
 
 	return inspiral_nodes
@@ -360,14 +362,13 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
-		likelihood_nodes.setdefault(None,[]).append(
-			inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes = parents,
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 				input_files = {"likelihood-url":diststats, "":inputs},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
 			)
-		)	
+		likelihood_nodes.setdefault(None,[]).append(node)
 
 	# then injections
 	for inj in options.injections:
@@ -375,13 +376,12 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 			inputs = [o[0] for o in outputs]
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
-			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
-				inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
+			node = inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents,
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 					input_files = {"likelihood-url":diststats, "":inputs}
 				)
-			)	
+			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(node)
 
 	
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
