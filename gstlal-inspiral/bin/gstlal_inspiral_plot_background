@@ -183,6 +183,7 @@ def plot_snr_chi_pdf(instrument, binnedarray, tag, denom_binnedarray = None):
 	if not z.any():
 		warnings.warn("%s PDF is 0, skipping" % key)
 		return None
+	numpy.clip(z, 1e-100, float("+inf"), out = z)
 	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
 	axes.loglog()
