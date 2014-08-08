@@ -242,7 +242,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 				# setup output names
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
 				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
 
 				# FIXME do better with svd node parents?
@@ -286,7 +286,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.sqlite', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
 					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
 
 					# setup injection node
