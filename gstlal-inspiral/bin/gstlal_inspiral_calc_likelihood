@@ -44,11 +44,6 @@
 import multiprocessing
 import multiprocessing.queues	# not needed in >= 2.7
 from optparse import OptionParser
-try:
-	import sqlite3
-except ImportError:
-	# pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
 import sys
 
 
@@ -56,7 +51,6 @@ from glue import iterutils
 from glue.lal import CacheEntry
 from glue.text_progress_bar import ProgressBar
 from glue.ligolw import ligolw
-from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
@@ -133,21 +127,6 @@ def generate_ranking_data(queue, coincparamsdistributions, seglists, verbose = F
 #
 # =============================================================================
 #
-
-
-def sngl_inspiral_events_func(cursor, coinc_event_id, row_from_cols):
-	return map(row_from_cols, cursor.execute("""
-SELECT
-	sngl_inspiral.*
-FROM
-	sngl_inspiral
-	JOIN coinc_event_map ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-WHERE
-	coinc_event_map.coinc_event_id == ?
-	""", (coinc_event_id,)))
 
 
 def sngl_inspiral_veto_func(event, vetoseglists):
@@ -248,22 +227,19 @@ if options.write_likelihood is not None:
 
 for n, filename in enumerate(filenames, 1):
 	#
-	# Open the database file.
+	# Open the file.  (be lazy and use the content handler for the
+	# distribution data files because it's fine for this, too)
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 
-	if sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_inspiral_calc_likelihood",)).fetchone()[0]:
+	if ligolw_process.doc_includes_process(xmldoc, u"gstlal_inspiral_calc_likelihood"):
 		if options.verbose:
 			print >>sys.stderr, "already processed, skipping"
+		xmldoc.unlink()
 		continue
-
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
-	if options.tmp_space is not None:
-		dbtables.set_temp_store_directory(connection, options.tmp_space, verbose = options.verbose)
-	xmldoc = dbtables.get_xml(connection)
 
 	#
 	# Summarize the database, and record our passage.
@@ -275,15 +251,20 @@ for n, filename in enumerate(filenames, 1):
 		if options.verbose:
 			print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."
 		xmldoc.unlink()
-		connection.commit()
-		connection.close()
-		dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 		continue
 
 	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_likelihood", {})
 	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 
-	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+	if options.verbose:
+		print >>sys.stderr, "indexing document ...",
+	sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
+	coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id)
+	for row in lsctables.CoincMapTable.get_table(xmldoc):
+		if row.coinc_event_id not in coinc_event_map_index:
+			continue
+		coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
+	del sngl_inspiral_table_index
 
 	offset_vectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
 
@@ -291,17 +272,19 @@ for n, filename in enumerate(filenames, 1):
 		vetoseglists = ligolw_segments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
 	else:
 		vetoseglists = segments.segmentlistdict()
+	if options.verbose:
+		print >>sys.stderr, "done"
 
 	#
 	# Run likelihood ratio calculation.
 	#
 
-	ligolw_burca2.assign_likelihood_ratios(
-		connection = connection,
+	ligolw_burca2.assign_likelihood_ratios_xml(
+		xmldoc = xmldoc,
 		coinc_def_id = coinc_def_id,
 		offset_vectors = offset_vectors,
 		vetoseglists = vetoseglists,
-		events_func = lambda cursor, coinc_event_id: sngl_inspiral_events_func(cursor, coinc_event_id, sngl_inspiral_table.row_from_cols),
+		events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
 		veto_func = sngl_inspiral_veto_func,
 		likelihood_ratio_func = likelihood_ratio_func,
 		likelihood_params_func = coincparamsdistributions.coinc_params,
@@ -313,30 +296,28 @@ for n, filename in enumerate(filenames, 1):
 	#
 
 	if options.trim_database:
-		cursor = connection.cursor()
-		cursor.execute("""DELETE FROM coinc_event WHERE coinc_def_id == ? AND likelihood < ?;""", (coinc_def_id, far.RankingData.likelihood_ratio_threshold))
-		cursor.execute("""DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		cursor.execute("""DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event);""")
-		# FIXME:  don't hard-code parameter name
-		cursor.execute("""DELETE FROM sngl_inspiral WHERE snr < (SELECT value FROM process_params WHERE process_params.process_id == sngl_inspiral.process_id AND param == "--singles-threshold") AND event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral");""")
-		cursor.execute("""VACUUM;""")
-		cursor.close()
+		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.likelihood_ratio_threshold)
+		# FIXME:  don't hard-code program and parameter names
+		sngls_snr_threshold, = ligolw_process.get_process_params(xmldoc, u"gstlal_inspiral", u"--singles-threshold")
+		sngl_ids_to_delete = set(sngl.event_id for coinc_event_id in coinc_ids_to_delete for sngl in coinc_event_map_index[coinc_event_id] if sngl.snr < sngls_snr_threshold)
+
+		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincTable.get_table(xmldoc))
+		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincInspiralTable.get_table(xmldoc))
+		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincMapTable.get_table(xmldoc))
+		iterutils.inplace_filter((lambda row: row.event_id not in sngl_ids_to_delete), lsctables.SnglInspiralTable.get_table(xmldoc))
 
 	#
-	# Close out process metadata
+	# Close out process metadata.
 	#
 
 	ligolw_process.set_process_end_time(process)
-	connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
 
 	#
 	# Clean up.
 	#
 
+	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
 	xmldoc.unlink()
-	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
 
 
 #
