@@ -852,10 +852,21 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for name, pdf in self.injection_pdf.items():
 			if not name.endswith("_snr_chi"):
 				continue
+			if numpy.isnan(pdf.array).all():
+				# no events of this type were recorded
+				continue
 			bin_sizes = pdf.bins[1].upper() - pdf.bins[1].lower()
 			for i in xrange(pdf.array.shape[0]):
 				nonzero = pdf.array[i] != 0
-				pdf.array[i] /= numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
+				if not nonzero.any():
+					# PDF is 0 in this column.  leave
+					# that way.  result is not a valid
+					# PDF, but we'll have to live with
+					# it.
+					continue
+				norm = numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
+				assert not math.isnan(norm), "encountered impossible PDF:  %s is non-zero in a bin with infinite volume" % name
+				pdf.array[i] /= norm
 
 		# instrument combos are probabilities, not densities.  be
 		# sure the single-instrument categories are zeroed.
