@@ -24,7 +24,9 @@
  */
 
 /* TODO:
- *  - no update SpiirState at run time. should support streaming format changes such as width/ rate/ quality change at run time. Should support IIR bank changes at run time.
+ *  - no update SpiirState at run time. should support streaming format 
+ *  changes such as width/ rate/ quality change at run time. Should 
+ *  support IIR bank changes at run time.
  */
 #include <stdio.h>
 #include <string.h>
@@ -62,6 +64,7 @@ GST_BOILERPLATE_FULL(
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
+
 enum
 {
   PROP_0,
@@ -128,7 +131,7 @@ cuda_multirate_spiir_base_init (gpointer g_class)
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (g_class);
 
   gst_element_class_set_details_simple (gstelement_class, "Multirate SPIIR",
-      "Filter/Converter/Audio", "Resamples audio",
+      "multi level downsample + spiir + upsample", "single rate data stream -> multi template SNR streams",
       "Qi Chu <qi.chu@ligo.org>");
 
   gst_element_class_add_pad_template (gstelement_class,
@@ -148,7 +151,6 @@ cuda_multirate_spiir_base_init (gpointer g_class)
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_caps);
   GST_BASE_TRANSFORM_CLASS (g_class)->transform =
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform);
-
   GST_BASE_TRANSFORM_CLASS (g_class)->transform_size =
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform_size);
   GST_BASE_TRANSFORM_CLASS (g_class)->event =
@@ -164,7 +166,6 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
   gobject_class->set_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_property);
   gobject_class->get_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_property);
 
-  // FIXME: not sure if G_PARAM_READWRITE is the only requirement
   g_object_class_install_property (gobject_class, PROP_IIR_BANK,
  			g_param_spec_value_array(
 				"spiir-bank",
@@ -218,10 +219,9 @@ static gboolean
 cuda_multirate_spiir_start (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+
   element->adapter = gst_adapter_new();
-
   element->need_discont = TRUE;
-
   element->num_gap_samples = 0;
   element->t0 = GST_CLOCK_TIME_NONE;
   element->offset0 = GST_BUFFER_OFFSET_NONE;
@@ -240,12 +240,14 @@ static gboolean
 cuda_multirate_spiir_stop (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+
   g_mutex_free (element->iir_bank_lock);
   g_cond_free (element->iir_bank_available);
 
   if (element->spstate) {
     spiir_state_destroy (element->spstate, element->num_depths);
-    }
+  }
+
   g_object_unref (element->adapter);
   element->adapter = NULL;
 
@@ -319,42 +321,8 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
 }
 
 
-static gboolean
-cuda_multirate_spiir_parse_caps (GstCaps * incaps,
-    gint * width, gint * channels, gint * inrate,
-    gboolean * fp)
-{
-  GstStructure *structure;
-  gboolean ret;
-  gint mywidth, myinrate, mychannels;
+// Note: sizes calculated here are uplimit sizes, not necessarily the true sizes. 
 
-  GST_DEBUG ("incaps %" GST_PTR_FORMAT, incaps);
-
-  structure = gst_caps_get_structure (incaps, 0);
-
-  ret = gst_structure_get_int (structure, "rate", &myinrate);
-  ret &= gst_structure_get_int (structure, "channels", &mychannels);
-  ret &= gst_structure_get_int (structure, "width", &mywidth);
-  if (G_UNLIKELY (!ret))
-    goto no_in_rate_channels;
-
-  if (channels)
-    *channels = mychannels;
-  if (inrate)
-    *inrate = myinrate;
-  if (width)
-    *width = mywidth;
-
-  return TRUE;
-
-  /* ERRORS */
-no_in_rate_channels:
-  {
-    GST_DEBUG ("could not get input rate and channels");
-    return FALSE;
-  }
-}
-// FIXME: sizes calculated here are uplimit sizes, not necessarily the true sizes. 
 static gboolean
 cuda_multirate_spiir_transform_size (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
@@ -367,7 +335,6 @@ cuda_multirate_spiir_transform_size (GstBaseTransform * base,
   GST_LOG_OBJECT (base, "asked to transform size %d in direction %s",
       size, direction == GST_PAD_SINK ? "SINK" : "SRC");
 
-  /* Get sample width -> bytes_per_samp, channels, inrate, outrate */
   if (!cuda_multirate_spiir_get_unit_size (base, caps, &unit_size))
 	  return FALSE;
 
@@ -378,10 +345,10 @@ cuda_multirate_spiir_transform_size (GstBaseTransform * base,
   if (direction == GST_PAD_SINK) {
     /* 
      * asked to convert size of an incoming buffer. The output size 
-     * will be determined by the lowest rate
+     * is the uplimit size.
      */
 //    g_assert(element->bank_initialised == TRUE);
-  GST_LOG_OBJECT (base, "available samples  %d", cuda_multirate_spiir_get_available_samples (element));
+    GST_LOG_OBJECT (base, "available samples  %d", cuda_multirate_spiir_get_available_samples (element));
     *othersize = (size / unit_size + cuda_multirate_spiir_get_available_samples (element)) * other_unit_size;
   } else {
     /* asked to convert size of an outgoing buffer. 
@@ -446,6 +413,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   return success;
 }
 
+/* c downsample2x */
 #if 0
 static void
 downsample2x(ResamplerState *state, float *in, const gint num_inchunk, float *out, gint *out_processed)
@@ -582,10 +550,10 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
         gst_flow_get_name (res));
   return res;
 
+  /* after the first filtering, update the exe_samples to the rate */
   cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
 
     return GST_FLOW_OK;
-
 
 }
 
@@ -624,6 +592,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
+    /* reshape to the outbuf data */
     for (i=0; i<num_out_spiirup; i++)
       for (j=0; j<element->outchannels; j++)
 	      outdata[element->outchannels * (i + last_num_out_spiirup) + j] = tmp_out[tmp_out_len * j + i + upfilt_len - 1];
@@ -688,6 +657,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
       return GST_BASE_TRANSFORM_FLOW_DROPPED;
     }
 
+    /* after the first filtering, update the exe_samples to the rate */
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
     return GST_FLOW_OK;
 }
@@ -832,9 +802,14 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
-  /* FIXME: sometimes the lal_whiten will generate a lot of 0 size gap buffers */
+  /* 0-length buffers are produced to inform downstreams for current timestamp  */
   if (size == 0) {
-	  return GST_BASE_TRANSFORM_FLOW_DROPPED;
+	 GST_BUFFER_TIMESTAMP (outbuf) = GST_BUFFER_TIMESTAMP (inbuf);
+	 GST_BUFFER_OFFSET (outbuf) = GST_BUFFER_OFFSET (inbuf);
+	 GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (inbuf);
+	 GST_BUFFER_DURATION (outbuf) = 0;
+	 GST_BUFFER_SIZE (outbuf) = GST_BUFFER_SIZE (inbuf); 
+	 return GST_FLOW_OK;
   }
 
   gint in_samples, num_exe_samples, num_cover_samples;
