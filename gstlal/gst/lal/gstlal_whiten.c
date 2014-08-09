@@ -1773,7 +1773,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 				"bin",
 				"Bin",
 				"Power spectral density bin",
-				-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+				0, G_MAXDOUBLE, 1.0,
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
