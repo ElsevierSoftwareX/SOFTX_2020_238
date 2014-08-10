@@ -43,6 +43,9 @@
  * buffer into an output buffer can be performed as a single matrix-matrix
  * multiplication, to allow optimized platform-specific implementations of
  * that operation to be employed.
+ *
+ * Reviewed:  d2dcd2d01c83be1f647a8713fef48e4249433218 2014-08-10 K.
+ * Cannon, J. Creighton, B. Sathyaprakash.
  */
 
 
