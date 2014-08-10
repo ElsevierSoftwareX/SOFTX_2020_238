@@ -458,8 +458,8 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 static REAL8FrequencySeries *make_unit_psd(double f0, double deltaF, int length, LALUnit sample_units)
 {
 	REAL8FrequencySeries *psd = make_empty_psd(f0, deltaF, length, sample_units);
-	double f_nyquist = f0 + length + deltaF;
-	int n = round(f_nyquist / deltaF) + 1;
+	double f_nyquist = f0 + (length - 1) * deltaF;
+	int n = round(f_nyquist / deltaF);
 	unsigned i;
 
 	if(psd)
@@ -467,6 +467,16 @@ static REAL8FrequencySeries *make_unit_psd(double f0, double deltaF, int length,
 
 	for(i = 0; i < psd->data->length; i++)
 		psd->data->data[i] = 1 / (n * deltaF);
+
+	/*
+	 * the DC and Nyquist bins have 1/2 the magnitude.  we assume the
+	 * time-domain data had an even number of samples so that the last
+	 * bin is the Nyquist component
+	 */
+
+	if(f0 == 0.)
+		psd->data->data[0] /= 2.;
+	psd->data->data[psd->data->length - 1] /= 2.
 
 	return psd;
 }
