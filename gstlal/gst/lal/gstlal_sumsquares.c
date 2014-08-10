@@ -115,7 +115,7 @@ static void *make_weights_native_ ## DTYPE(GSTLALSumSquares *element) \
 }
 
 
-#define DEFINE_SUMSQUARES_FUNC(DTYPE, POWFUNC) \
+#define DEFINE_SUMSQUARES_FUNC(DTYPE) \
 static GstFlowReturn sumsquares_ ## DTYPE(GSTLALSumSquares *element, GstBuffer *inbuf, GstBuffer *outbuf) \
 { \
 	const DTYPE *src = (const DTYPE *) GST_BUFFER_DATA(inbuf); \
@@ -126,14 +126,16 @@ static GstFlowReturn sumsquares_ ## DTYPE(GSTLALSumSquares *element, GstBuffer *
 		for(; dst < dst_end; dst++) { \
 			const DTYPE *src_end = src + element->channels; \
 			const DTYPE *w = element->weights_native; \
-			for(*dst = 0; src < src_end; w++, src++) \
-				*dst += POWFUNC(*w * *src, 2); \
+			for(*dst = 0; src < src_end; w++, src++) { \
+				DTYPE x = *w * *src; \
+				*dst += x * x; \
+			} \
 		} \
 	} else { \
 		for(; dst < dst_end; dst++) { \
 			const DTYPE *src_end = src + element->channels; \
 			for(*dst = 0; src < src_end; src++) \
-				*dst += POWFUNC(*src, 2); \
+				*dst += *src * *src; \
 		} \
 	} \
  \
@@ -143,8 +145,8 @@ static GstFlowReturn sumsquares_ ## DTYPE(GSTLALSumSquares *element, GstBuffer *
 
 DEFINE_MAKE_WEIGHTS_NATIVE_FUNC(double)
 DEFINE_MAKE_WEIGHTS_NATIVE_FUNC(float)
-DEFINE_SUMSQUARES_FUNC(double, pow)
-DEFINE_SUMSQUARES_FUNC(float, powf)
+DEFINE_SUMSQUARES_FUNC(double)
+DEFINE_SUMSQUARES_FUNC(float)
 
 
 /*
