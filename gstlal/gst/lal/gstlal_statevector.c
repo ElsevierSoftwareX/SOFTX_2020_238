@@ -507,7 +507,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 			"on-samples",
 			"On samples",
 			"Number of samples seen thus far marked as on",
-			0, G_MAXUINT, 0,
+			0, G_MAXUINT64, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -518,7 +518,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 			"off-samples",
 			"Off samples",
 			"Number of samples seen thus far marked as off",
-			0, G_MAXUINT, 0,
+			0, G_MAXUINT64, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -529,7 +529,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 			"gap-samples",
 			"Gap samples",
 			"number of samples seen thus far marked as gap",
-			0, G_MAXUINT, 0,
+			0, G_MAXUINT64, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
