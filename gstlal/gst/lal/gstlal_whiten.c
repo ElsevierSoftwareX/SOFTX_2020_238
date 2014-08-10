@@ -581,7 +581,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 GstMessage *gstlal_whiten_message_psd_new(GSTLALWhiten *element, const gchar *instrument, const REAL8FrequencySeries *psd)
 {
 	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
-	char units[50];
+	char units[LALUnitTextSize];
 	GstStructure *s = gst_structure_new(
 		"spectrum",
 		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
@@ -877,7 +877,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 			 */
 
 			if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
-				char units[100];
+				char units[LALUnitTextSize];
 				XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
 				GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
 				return GST_FLOW_ERROR;
@@ -1137,7 +1137,7 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 				GST_ERROR_OBJECT(element, "cannot parse units \"%s\"", units);
 				sample_units = lalDimensionlessUnit;
 			} else {
-				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
+				gchar dimensionless_units[LALUnitTextSize];
 				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
 				/* FIXME:  gstreamer doesn't like empty strings */
 				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
