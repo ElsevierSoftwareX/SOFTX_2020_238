@@ -17,6 +17,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_togglecomplex
+ * @short_description:  Toggle complex-valued <--> real-valued format.
+ *
+ * Reviewed:  8d9a33803cbb87f0844001a2207c5e2e55c9340c 2014-08-10 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ============================================================================
  *
