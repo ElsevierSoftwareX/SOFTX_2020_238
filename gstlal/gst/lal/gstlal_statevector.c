@@ -202,6 +202,9 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	GstCaps *othercaps = NULL;
 	guint i;
 
+	if(gst_caps_get_size(caps) > 1)
+		GST_WARNING_OBJECT(trans, "not yet smart enough to transform complex formats");
+
 	switch(direction) {
 	case GST_PAD_SRC:
 		/*
