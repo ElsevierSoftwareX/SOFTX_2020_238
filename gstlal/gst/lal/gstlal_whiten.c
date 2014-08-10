@@ -52,6 +52,8 @@
  * FFT blocks that will be used for filtering the data, and thus determines
  * the value of the #GSTLALWhiten:delta-f property.
  * 
+ * Reviewed:  cf799de0ed55bf454fcd7fd8bc88dcaa8c4bd97e 2014-08-10 K. Cannon, J.
+ * Creighton, B. Sathyaprakash.
  */
 
 
