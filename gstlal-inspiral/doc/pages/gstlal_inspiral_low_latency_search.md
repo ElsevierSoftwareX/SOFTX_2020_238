@@ -387,4 +387,4 @@ Redundant entries are ommitted
 - Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
 
-![Kipp explaining that the Flux Capacitor is what makes time travel possible; Jolien responds incredulously](@ref kipp.png)  ![LLOID](@ref lloid.png) 
+![Kipp explaining that the Flux Capacitor is what makes time travel possible; Jolien responds incredulously at the one point twenty-one jiga-flops of power required](@ref kipp.png)  ![LLOID](@ref lloid.png) 
