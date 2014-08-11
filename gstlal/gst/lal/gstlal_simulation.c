@@ -378,8 +378,8 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 	 * loop over injections in file
 	 */
 
-	thisSimInspiral = element->injection_document->sim_inspiral_table_head;
-	while(thisSimInspiral) {
+	for(thisSimInspiral = element->injection_document->sim_inspiral_table_head; thisSimInspiral; ) {
+		REAL8TimeSeries *inspiral_series = NULL;
 
 		/*
 		 * calculate start and end times for this series containing
@@ -423,11 +423,8 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		 * compute injection waveform
 		 */
 
-		REAL8TimeSeries *inspiral_series = NULL;
 		if(sim_inspiral_strain(&inspiral_series, thisSimInspiral, h->deltaT, *detector))
 			XLAL_ERROR(XLAL_EFUNC);
-
-		// FIXME: should we check that the start of the waveform is contained in simulation_series?
 
 		/*
 		 * resize simulation_series to cover this time
@@ -438,8 +435,10 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		DeltaT -= inspiral_series->deltaT * inspiral_series->data->length;
 		if(DeltaT < 1.) 
 			element->simulation_series = XLALResizeREAL8TimeSeries(element->simulation_series, 0, element->simulation_series->data->length + ceil((1. - DeltaT) / element->simulation_series->deltaT));
-		if(!element->simulation_series)
+		if(!element->simulation_series) {
+			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
+		}
 
 		/*
 		 * add detector strain to simulation_series
@@ -470,11 +469,11 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		if(prevSimInspiral)
 			prevSimInspiral->next = thisSimInspiral->next;
 		{
-			SimInspiralTable *tmpSimInspiral = thisSimInspiral;
-			thisSimInspiral = thisSimInspiral->next;
-			if (tmpSimInspiral == element->injection_document->sim_inspiral_table_head)
-				element->injection_document->sim_inspiral_table_head = thisSimInspiral;
-			XLALFree(tmpSimInspiral);
+		SimInspiralTable *tmpSimInspiral = thisSimInspiral;
+		thisSimInspiral = thisSimInspiral->next;
+		if (tmpSimInspiral == element->injection_document->sim_inspiral_table_head)
+			element->injection_document->sim_inspiral_table_head = thisSimInspiral;
+		XLALFree(tmpSimInspiral);
 		}
 	}
 
