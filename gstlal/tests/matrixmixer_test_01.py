@@ -94,7 +94,7 @@ def matrixmixer_test_02(name, dtype, samples, channels_in, channels_out):
 	output_array, = test_common.transform_arrays([input_array], pipeparts.mkmatrixmixer, name, matrix = mix)
 
 	if (output_array != output_reference).any():
-		raise ValueError("incorrect output:  expected %s, got %s" % (output_reference, output_array))
+		raise ValueError("incorrect output:  expected %s, got %s\ndifference = %s" % (output_reference, output_array, output_array - output_reference))
 
 
 #
