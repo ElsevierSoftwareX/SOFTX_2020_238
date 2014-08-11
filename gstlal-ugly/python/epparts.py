@@ -404,14 +404,16 @@ class EPHandler( Handler ):
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
 		latency = len(self.firbank.get_property("fir_matrix")[0])/2+1 
 		self.firbank.set_property( "latency", latency )
-		print >>sys.stderr, "New filter latency %d (%f s)" % (latency, latency/float(self.rate))
+		if self.verbose:
+			print >>sys.stderr, "New filter latency %d (%f s)" % (latency, latency/float(self.rate))
 
 		if self.verbose:
 			print >>sys.stderr, "Rebuilding matrix mixer"
 		#self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
-		print >>sys.stderr, "...done."
+		if self.verbose:
+			print >>sys.stderr, "...done."
 
 	def make_process_tables( self, options=None, xmldoc=None ):
 		"""
