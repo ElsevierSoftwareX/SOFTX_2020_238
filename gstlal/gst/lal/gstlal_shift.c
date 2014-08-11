@@ -343,7 +343,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if (((gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift) >= 0)
 		GST_BUFFER_TIMESTAMP(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift );
 	else
-		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %d", GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
+		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %" G_GINT64_FORMAT, GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
 
 	/* Finally apply the discont flag if a new shift was detected */
 	if (element->have_discont) {

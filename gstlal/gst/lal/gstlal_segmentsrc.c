@@ -228,8 +228,8 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    GstFlowReturn result;
+    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
+    GstFlowReturn result = GST_FLOW_OK;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint samplesize = sample_size(basesrc);
     guint64 numsamps = blocksize / samplesize;
@@ -251,6 +251,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, blocksize, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+    if(result != GST_FLOW_OK)
+        return result;
 
     gint8 *d = (gint8 *) GST_BUFFER_DATA(*buffer);
     if (element->invert_output)
@@ -308,7 +310,6 @@ static gboolean is_seekable(GstBaseSrc *object)
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    GstClockTime epoch;
 
     /*
      * Parse the segment
@@ -318,7 +319,6 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
         GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("seek failed:  start time is required"), (NULL));
         return FALSE;
     }
-    epoch = segment->start;
 
     /*
      * Try doing the seek
