@@ -81,6 +81,12 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  */
 
 
+static gboolean required_on_off_too_wide(GSTLALStateVector *element)
+{
+	return (element->required_on | element->required_off) & ~element->mask ? TRUE : FALSE;
+}
+
+
 static guint get_input_uint8(void **in)
 {
 	return *(*(guint8 **) in)++;
@@ -293,6 +299,9 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		break;
 	}
 
+	if(required_on_off_too_wide(element))
+		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format");
+
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
@@ -424,6 +433,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
+
+	if(required_on_off_too_wide(element))
+		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format");
 
 	GST_OBJECT_UNLOCK(element);
 }
@@ -568,4 +580,7 @@ static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVector
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 
 	filter->get_input = NULL;
+	/* this value makes all required_on/off masks appear to be OK until
+	 * we know otherwise */
+	filter->mask = 0xffffffff;
 }
