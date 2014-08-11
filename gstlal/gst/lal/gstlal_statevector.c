@@ -300,7 +300,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	if(required_on_off_too_wide(element))
-		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format");
+		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format;  high-order bits will be ignored");
 
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
@@ -435,7 +435,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	}
 
 	if(required_on_off_too_wide(element))
-		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format");
+		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format;  high-order bits will be ignored");
 
 	GST_OBJECT_UNLOCK(element);
 }
