@@ -690,7 +690,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	}
 
 	/*
-	 * If stream tags not sufficient, reduce to pass-through
+	 * Make sure stream tags are sufficient
 	 */
 
 	if(!element->instrument || !element->channel_name || !element->units) {
