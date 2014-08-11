@@ -17,7 +17,6 @@ EXTRA_DIST = \
 	diag.sh \
 	dump_triggers.py \
 	enc_hoft.sh \
-	extract_channel.py \
 	gaptest.sh \
 	gstlal_inspiral.ini \
 	impulse_at_874107198.xml \
