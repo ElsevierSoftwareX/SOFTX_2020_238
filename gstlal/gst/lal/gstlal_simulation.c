@@ -383,8 +383,8 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 		/*
 		 * calculate start and end times for this series containing
-		 * this injection
-		 * FIXME this just uses a 0 PN formula and pads it to be safe
+		 * this injection.  NOTE:  this just uses the 0 PN formula
+		 * and pads it to be safe
 		 */
 
 		injTime = 1.0 + XLALSimInspiralTaylorF2ReducedSpinChirpTime(thisSimInspiral->f_lower, thisSimInspiral->mass1 * LAL_MSUN_SI, thisSimInspiral->mass2 * LAL_MSUN_SI, 0, 0);
