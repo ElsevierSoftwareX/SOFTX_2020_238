@@ -231,16 +231,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_SINK:
 		/*
-		 * source pad must have same sample rate as sink pad
-		 * FIXME:  this doesn't work out all the allowed
-		 * permutations, it just takes the rate from the
-		 * first structure on the sink pad and copies it into all
-		 * the structures on the source pad
+		 * source pad's format must be 8-bit boolean
 		 */
 
-		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans)));
+		othercaps = gst_caps_copy(caps);
 		for(i = 0; i < gst_caps_get_size(caps); i++)
-			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "rate", gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+			gst_structure_set(gst_caps_get_structure(othercaps, i), "width", 8, "depth", 1, "signed", FALSE, NULL);
 		break;
 
 	case GST_PAD_UNKNOWN:
