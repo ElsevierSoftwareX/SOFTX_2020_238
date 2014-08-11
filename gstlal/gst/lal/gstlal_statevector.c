@@ -17,6 +17,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_statevector
+ * @short_description:  Converts a state vector stream into booleans, for example to drive a lal_gate element.
+ *
+ * Reviewed:  f989b34f43aec056f021f10e5e01866846a3c58d 2014-08-10 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ============================================================================
  *
