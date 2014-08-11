@@ -33,6 +33,7 @@ struct _GSTLALTSVDec {
 	guint rate;
 	guint channels;
 	guint64 offset;
+	GstClockTime t0;
 	char *FS;
 	char *RS;
 	/* FILE *fp; */

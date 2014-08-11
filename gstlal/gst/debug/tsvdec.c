@@ -173,6 +173,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/* parse the line */
 		t = parse_line(&chanc, &chanv, line, element->FS);
+		if (element->t0 == GST_CLOCK_TIME_NONE)
+			element->t0 = t; /* very first time stamp */
 		/* fprintf(element->fp, "%d.%09d", t / 1000000000, t % 1000000000);
 		int c;
 		for (c = 0; c < chanc; ++c)
@@ -209,9 +211,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			gst_pad_set_caps(element->srcpad, caps);
 		}
 		
+		/* recompute timestamps from first time, offsets, and rate */
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate);
 		GST_BUFFER_OFFSET(srcbuf) = element->offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = element->offset += nlines;
-		GST_BUFFER_DURATION(srcbuf) = round(nlines * 1e9 / element->rate);
+		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
+		//fprintf(stderr, "offset = %ld, offset end = %ld, timestamp = %ld, duration = %ld\n", GST_BUFFER_OFFSET(srcbuf), GST_BUFFER_OFFSET_END(srcbuf), GST_BUFFER_TIMESTAMP(srcbuf), GST_BUFFER_DURATION(srcbuf));
+
 		gst_buffer_set_caps(srcbuf, caps);
 		result = gst_pad_push(element->srcpad, srcbuf);
 	}
@@ -380,6 +386,7 @@ static void gstlal_tsvdec_init(GSTLALTSVDec *element, GSTLALTSVDecClass *Klass)
 	element->rate = 0;
 	element->channels = 0;
 	element->offset = 0;
+	element->t0 = GST_CLOCK_TIME_NONE;
 	element->FS = strdup(DEFAULT_FS);
 	element->RS = strdup(DEFAULT_RS);
 
