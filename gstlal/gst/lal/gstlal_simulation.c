@@ -387,6 +387,9 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		 * and pads it to be safe
 		 */
 
+		/* the padding will no longer be sufficient at this mass */
+		g_assert((thisSimInspiral->mass1 + thisSimInspiral->mass2) < 1e4);
+
 		injTime = 1.0 + XLALSimInspiralTaylorF2ReducedSpinChirpTime(thisSimInspiral->f_lower, thisSimInspiral->mass1 * LAL_MSUN_SI, thisSimInspiral->mass2 * LAL_MSUN_SI, 0, 0);
 		injStartTime = injEndTime = thisSimInspiral->geocent_end_time;
 		XLALGPSAdd(&injStartTime, -1.9*injTime - 1.0);
