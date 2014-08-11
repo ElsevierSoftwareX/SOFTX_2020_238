@@ -430,11 +430,11 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		 * resize simulation_series to cover this time
 		 */
 
-		DeltaT = XLALGPSDiff(&element->simulation_series->epoch, &inspiral_series->epoch);
-		DeltaT += element->simulation_series->deltaT * element->simulation_series->data->length;
-		DeltaT -= inspiral_series->deltaT * inspiral_series->data->length;
-		if(DeltaT < 1.) 
-			element->simulation_series = XLALResizeREAL8TimeSeries(element->simulation_series, 0, element->simulation_series->data->length + ceil((1. - DeltaT) / element->simulation_series->deltaT));
+		DeltaT = XLALGPSDiff(&inspiral_series->epoch, &element->simulation_series->epoch);
+		DeltaT += inspiral_series->data->length * inspiral_series->deltaT + injection_window;
+		DeltaT -= element->simulation_series->data->length * element->simulation_series->deltaT;
+		if(DeltaT > 0.)
+			element->simulation_series = XLALResizeREAL8TimeSeries(element->simulation_series, 0, element->simulation_series->data->length + ceil(DeltaT / element->simulation_series->deltaT));
 		if(!element->simulation_series) {
 			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
