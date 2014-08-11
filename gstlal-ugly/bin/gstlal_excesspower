@@ -663,6 +663,14 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			#pipeparts.mkgeneric( pipeline, tmptee, "autovideosink", filter_caps=gst.caps_from_string("video/x-raw-rgb") )
 			pipeparts.mkogmvideosink( pipeline, tmptee, "test_%d_%d.ogm" % (res_level, ndof) )
 
+		# FIXME: one the downstream elements is passing buffers marked
+		# as disconts. This resets the triggergen element, and the
+		# timestamps are very messed up as a consequence. This is a
+		# temporary fix until I can figure out which element is culprit
+		# and why its only happening with fixed PSDs
+		if psdfile is None:
+			durtee = pipeparts.mknofakedisconts( pipeline, durtee )
+
 		# Trigger generator
 		# Number of tiles to peak over, if necessary
 		peak_samples = max(1, int((options.peak_fraction or 0) * ndof))
