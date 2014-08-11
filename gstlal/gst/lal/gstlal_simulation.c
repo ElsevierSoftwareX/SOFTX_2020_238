@@ -317,7 +317,6 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 
 static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
 {
-	int twice_pn_order = 7;
 	double injTime, DeltaT, startMinusEnd, endMinusStart;
 	REAL8 tmpREAL8;
 	LIGOTimeGPS hStartTime, hEndTime, injStartTime, injEndTime;
