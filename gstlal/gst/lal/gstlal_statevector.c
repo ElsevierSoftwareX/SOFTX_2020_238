@@ -328,6 +328,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
 	GstFlowReturn result = GST_FLOW_OK;
+	guint64 on_samples = element->on_samples;
+	guint64 off_samples = element->off_samples;
+	guint64 gap_samples = element->gap_samples;
 
 	g_assert(element->get_input != NULL);
 
@@ -363,6 +366,17 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		element->gap_samples += GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	}
+
+	/*
+	 * notify sample count changes
+	 */
+
+	if(element->on_samples != on_samples)
+		g_object_notify(G_OBJECT(trans), "on-samples");
+	if(element->off_samples != off_samples)
+		g_object_notify(G_OBJECT(trans), "off-samples");
+	if(element->gap_samples != gap_samples)
+		g_object_notify(G_OBJECT(trans), "gap-samples");
 
 	/*
 	 * done
