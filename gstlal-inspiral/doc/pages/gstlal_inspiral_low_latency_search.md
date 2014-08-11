@@ -311,7 +311,7 @@ Redundant entries are ommitted
 <tr><td>					</td><td> pylal.inject			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.rate			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.snglcoinc		</td><td> ?	</td><td> ?		</td><td> \moddev </td></tr>
-<tr><td> gstlal_inspiral_marginalize_likelihood	</td><td>                               </td><td> 167	</td><td> \notreviewed	</td><td> \hidev </td></tr>
+<tr><td> gstlal_inspiral_marginalize_likelihood	</td><td>                               </td><td> 167	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td> gstlal_ll_trigger_pipe			</td><td>                               </td><td> -	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> gstlal_inspiral			</td><td>                               </td><td> 707	</td><td> \reviewed with actions	</td><td> \moddev </td></tr>
 <tr><td>					</td><td> lloidparts.py			</td><td> 826	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
@@ -329,7 +329,7 @@ Redundant entries are ommitted
 <tr><td> gstlal_inspiral_followups_from_gracedb	</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_inspiral_recompute_online_far_from_gracedb </td><td>                    </td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> gstlal_inspiral_recompute_online_far   </td><td>                    		</td><td> 92	</td><td> \notreviewed	</td><td> \hidev </td></tr>
-<tr><td> gstlal_inspiral_calc_likelihood   	</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \hidev </td></tr>
+<tr><td> gstlal_inspiral_calc_likelihood   	</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td>					</td><td> pylal.burca2			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td> gstlal_ll_inspiral_gracedb_threshold	</td><td>                               </td><td> 106	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td> lvalert_listen				</td><td>                               </td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
