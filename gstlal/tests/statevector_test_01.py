@@ -50,8 +50,8 @@ def statevector_test_01(name, width, samples):
 
 	while required_on & required_off:
 		# random required-on and required-off bits
-		required_on = sum(1 << bit for bit in numpy.random.randint(width, size=bits))
-		required_off = sum(1 << bit for bit in numpy.random.randint(width, size=bits))
+		required_on = sum(1 << bit for bit in numpy.random.randint(width - 1, size=bits))
+		required_off = sum(1 << bit for bit in numpy.random.randint(width - 1, size=bits))
 
 	input_samples = numpy.random.randint(imax, size=(samples, 1)).astype("i%d" % (width // 8))
 	output_reference = ((input_samples & required_on) == required_on) & ((~input_samples & required_off) == required_off)
