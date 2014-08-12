@@ -19,6 +19,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_reblock
+ * @short_description:  Chop audio buffers into smaller pieces to enforce a maximum allowed buffer duration.
+ *
+ * Reviewed:  2affb49291b24e189afd23d1fd56690e223845b6 2014-08-12 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ========================================================================
  *
@@ -228,7 +237,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GST_DEBUG_OBJECT(element, "received %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
 	/*
-	 * if buffer is already smalle enough or if it doesn't possess
+	 * if buffer is already small enough or if it doesn't possess
 	 * valid metadata, push down stream
 	 */
 
@@ -245,10 +254,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * compute the block length
 	 */
 
-	blocks = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ciel */
+	blocks = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ceil */
 	g_assert_cmpuint(blocks, >, 0);	/* guaranteed by check for short-buffers above */
 	length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-	block_length = (length + blocks - 1) / blocks;	/* ciel */
+	block_length = (length + blocks - 1) / blocks;	/* ceil */
 	g_assert_cmpuint(block_length, >, 0);	/* barf to avoid infinite loop */
 
 	/*
@@ -271,17 +280,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			break;
 		}
-
-		/*
-		 * tweak for buffers that don't have data in them
-		 *
-		 * FIXME:  gst_buffer_create_sub() needs to check for this
-		 * itself if gstreamer is going to allow such buffers.
-		 * submit a patch?
-		 */
-
-		if(!GST_BUFFER_DATA(sinkbuf))
-			GST_BUFFER_DATA(srcbuf) = NULL;
 
 		/*
 		 * set flags, caps, offset, and timestamps.
