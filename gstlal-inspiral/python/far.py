@@ -61,6 +61,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
+from pylal import snglcoinc
 from pylal import ligolw_burca2
 from pylal import inject
 from pylal import progress
@@ -365,13 +366,13 @@ lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTabl
 #
 
 
-class ThincaCoincParamsDistributions(ligolw_burca_tailor.CoincParamsDistributions):
+class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  this is the name used for the burca distributions.
 	# existing XML files were written using this name, so for
 	# compatibility we stick to it for now, but in the future we should
 	# pick a unique name so the files can't be confused for burca
 	# files.
-	ligo_lw_name_suffix = u"pylal_ligolw_burca_tailor_coincparamsdistributions"
+	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
 
 #

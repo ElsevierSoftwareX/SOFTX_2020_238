@@ -613,7 +613,7 @@ class Data(object):
 
 				# smooth the distributions.  re-populates
 				# PDF arrays from raw counts
-				self.coinc_params_distributions.finish(verbose = self.verbose)
+#				self.coinc_params_distributions.finish(verbose = self.verbose)
 
 				# post a checkpoint message.  FIXME:  make
 				# sure this triggers
@@ -625,7 +625,7 @@ class Data(object):
 				# somehow, no?
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
-				if self.marginalized_likelihood_file is not None:
+	#			if self.marginalized_likelihood_file is not None:
 					# FIXME:  must set horizon
 					# distances in coinc params object
 
@@ -633,7 +633,7 @@ class Data(object):
 					# ratio assignment using our own,
 					# local, parameter distribution
 					# data
-					self.stream_thinca.coinc_params_distributions = self.coinc_params_distributions
+				#	self.stream_thinca.coinc_params_distributions = self.coinc_params_distributions
 
 					# read the marginalized likelihood
 					# ratio distributions that have
@@ -644,20 +644,20 @@ class Data(object):
 					# the ranking data here;  the
 					# external process generating this
 					# input file must do that for us.
-					coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-					if ranking_data is None:
-						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
+	#				coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+				#	if ranking_data is None:
+				#		raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
 					# we're using the class attribute
 					# elsewhere so make sure these two
 					# match
-					assert ranking_data.likelihood_ratio_threshold == far.RankingData.likelihood_ratio_threshold
-					self.fapfar = far.FAPFAR(ranking_data.background_likelihood_pdfs, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+				#	assert ranking_data.likelihood_ratio_threshold == far.RankingData.likelihood_ratio_threshold
+				#	self.fapfar = far.FAPFAR(ranking_data.background_likelihood_pdfs, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
 			# coincs
-			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
-				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
+		#	for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
+			#	self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
 
 			# update zero-lag coinc bin counts in
@@ -671,8 +671,8 @@ class Data(object):
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-					if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
-						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
+		#			if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+		#				self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -686,7 +686,7 @@ class Data(object):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
 		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglists.keys(), inseg = self.seglists.extent_all(), outseg = self.seglists.extent_all())
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglists)
+	#	far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglists)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -701,16 +701,16 @@ class Data(object):
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
+#		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
+#			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in coinc_params_distributions
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
-					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
+		#		if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+		#			self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
