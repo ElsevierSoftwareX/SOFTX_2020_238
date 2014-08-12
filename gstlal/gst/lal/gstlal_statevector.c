@@ -241,8 +241,8 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 */
 
 		othercaps = gst_caps_copy(caps);
-		for(i = 0; i < gst_caps_get_size(caps); i++)
-			gst_structure_set(gst_caps_get_structure(othercaps, i), "width", 8, "depth", 1, "signed", FALSE, NULL);
+		for(i = 0; i < gst_caps_get_size(othercaps); i++)
+			gst_structure_set(gst_caps_get_structure(othercaps, i), "width", G_TYPE_INT, 8, "depth", G_TYPE_INT, 1, "signed", G_TYPE_BOOLEAN, FALSE, NULL);
 		break;
 
 	case GST_PAD_UNKNOWN:
