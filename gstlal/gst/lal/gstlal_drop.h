@@ -60,6 +60,7 @@ struct _GSTLALDrop {
 	gint rate;
 	gint unit_size;
 	guint drop_samples;
+	gboolean need_discont;
 };
 
 

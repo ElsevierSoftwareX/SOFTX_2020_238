@@ -259,20 +259,25 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 
-
 	/*
 	 * process buffer
 	 */
 
 	if(!dropsize) {
 		/* pass entire buffer */
+		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
+			sinkbuf = gst_buffer_make_metadata_writable(sinkbuf);
+			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		}
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
+		element->need_discont = FALSE;
 	} else if(GST_BUFFER_SIZE(sinkbuf) <= dropsize) {
 		/* drop entire buffer */
 		gst_buffer_unref(sinkbuf);
 		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		element->need_discont = TRUE;
 		result = GST_FLOW_OK;
 	} else {
 		/* drop part of buffer, pass the rest */
@@ -288,9 +293,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
 		/* never come back */
 		element->drop_samples = 0;
+		element->need_discont = FALSE;
 	}
 
 	/*
@@ -462,6 +468,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	element->unit_size = 0;
+	element->need_discont = TRUE;
 }
 
 
