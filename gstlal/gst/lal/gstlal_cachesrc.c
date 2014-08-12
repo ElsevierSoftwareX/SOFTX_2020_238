@@ -384,7 +384,7 @@ static gboolean start(GstBaseSrc *basesrc)
 	}
 	GST_DEBUG_OBJECT(element, "loaded '%s': %d item(s) in cache", element->location, element->cache->length);
 
-	if(XLALCacheSieve(element->cache, 0, G_MAXINT32, element->cache_src_regex, element->cache_dsc_regex, NULL)) {
+	if(XLALCacheSieve(element->cache, 0, 0, element->cache_src_regex, element->cache_dsc_regex, NULL)) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("error sieving cache '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);
