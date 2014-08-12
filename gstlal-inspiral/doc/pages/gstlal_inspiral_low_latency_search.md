@@ -348,7 +348,7 @@ Redundant entries are ommitted
 <tr><td> \ref pipeparts.mksegmentsrc() lal_segmentsrc 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkreblock() lal_reblock 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkpeak() lal_peak		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
-<tr><td> \ref pipeparts.mknxydump() lal_nxydump		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
+<tr><td> \ref pipeparts.mknxydump() lal_nxydump		</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mknofakedisconts() lal_nofakedisconts</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> \ref pipeparts.mkmatrixmixer() lal_matrixmixer	</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkgate() lal_gate		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable       </td></tr>

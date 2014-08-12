@@ -19,6 +19,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_nxydump
+ * @short_description:  Converts audio time-series to tab-separated ascii text, a format compatible with most plotting utilities.
+ *
+ * Reviewed:  434cd4387c6349e68e764b78ed44e2867839c06d 2014-08-12 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ========================================================================
  *
