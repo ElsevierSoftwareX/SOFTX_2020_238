@@ -729,6 +729,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = int(5**3 * 4)
 	snr_joint_pdf_cache = {}
 
+<<<<<<< HEAD
 	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
 		#
 		# key for cache:  two element tuple, first element is
@@ -739,6 +740,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# largest among them and then the fractions aquantized to
 		# integer powers of a common factor
 		#
+=======
+class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
+	# FIXME:  this is the name used for the burca distributions.
+	# existing XML files were written using this name, so for
+	# compatibility we stick to it for now, but in the future we should
+	# pick a unique name so the files can't be confused for burca
+	# files.
+	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
+>>>>>>> for online to work
 
 		key = frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
 
