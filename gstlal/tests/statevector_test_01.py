@@ -53,12 +53,10 @@ def statevector_test_01(name, width, samples):
 		required_on = sum(1 << bit for bit in numpy.random.randint(width, size=bits))
 		required_off = sum(1 << bit for bit in numpy.random.randint(width, size=bits))
 
-	input_samples = numpy.random.randint(imax, size=samples).astype("int%d" % width)
+	input_samples = numpy.random.randint(imax, size=(samples, 1)).astype("i%d" % (width // 8))
 	output_reference = ((input_samples & required_on) == required_on) & ((~input_samples & required_off) == required_off)
-	input_samples.shape = (samples, 1)
 	output_array, = test_common.transform_arrays([input_samples], pipeparts.mkstatevector, name, required_on = required_on, required_off = required_off)
 	output_array.dtype = bool
-	output_array.shape = samples
 	if (output_array != output_reference).any():
 		raise ValueError("incorrect output:  expected %s, got %s" % (output_reference, output_array))
 
@@ -72,4 +70,5 @@ def statevector_test_01(name, width, samples):
 #
 
 
-statevector_test_01("statevector_test_01a", 32, samples = 1000)
+for _ in range(100):
+	statevector_test_01("statevector_test_01a", 32, samples = 1000)
