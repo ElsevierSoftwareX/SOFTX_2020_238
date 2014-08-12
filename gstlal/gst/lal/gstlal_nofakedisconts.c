@@ -35,6 +35,9 @@
  * available.  This element monitors the data stream, watching timestamps
  * and offsets, and sets or clears the discontinuity flag on each buffer
  * based on exactly whether it is discontinuous with the previous buffer.
+ *
+ * Reviewed:  3d2cf9ea32085a2dd4854cb71b1cbaaf5547fc57 2014-08-12 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
  */
 
 
