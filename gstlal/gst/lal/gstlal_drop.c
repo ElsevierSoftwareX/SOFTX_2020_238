@@ -19,6 +19,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_drop
+ * @short_description:  Drop samples from the start of a stream.
+ *
+ * Reviewed:  185fc2b55190824ac79df11d4165d0d704d68464 2014-08-12 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ========================================================================
  *
@@ -394,7 +403,7 @@ static void class_init(gpointer class, gpointer class_data)
 		element_class,
 		"Drop",
 		"Filter",
-		"Chop audio buffers into smaller pieces to enforce a maximum allowed buffer duration",
+		"Drop samples from the start of a stream",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
 

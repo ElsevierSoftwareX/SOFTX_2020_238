@@ -353,7 +353,7 @@ Redundant entries are ommitted
 <tr><td> \ref pipeparts.mkmatrixmixer() lal_matrixmixer	</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkgate() lal_gate		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable       </td></tr>
 <tr><td> \ref pipeparts.mkfirbank() lal_firbank		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
-<tr><td> \ref pipeparts.mkdrop() lal_drop		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
+<tr><td> \ref pipeparts.mkdrop() lal_drop		</td><td>			</td><td> 	  </td><td> \reviewed (with actions)	</td><td> \stable 	</td></tr>
 <tr><td> \ref pipeparts.mkcachesrc() lal_cachesrc	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> \ref pipeparts.mkitac() lal_itac		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \moddev	</td></tr>
 <tr><td> framecpp_filesink				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
