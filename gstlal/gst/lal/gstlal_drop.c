@@ -261,20 +261,21 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 
 	/*
-	 * if buffer is first, make the buffer of zeros and push
+	 * process buffer
 	 */
 
-
-	if ( GST_BUFFER_SIZE(sinkbuf) <= dropsize )
-	/* drop entire buffer */
-	{
+	if(!dropsize) {
+		/* pass entire buffer */
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+	} else if(GST_BUFFER_SIZE(sinkbuf) <= dropsize) {
+		/* drop entire buffer */
 		gst_buffer_unref(sinkbuf);
 		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 		result = GST_FLOW_OK;
-	}
-	else if ( dropsize > 0 )
-	/* drop part of buffer, pass the rest */
-	{
+	} else {
+		/* drop part of buffer, pass the rest */
 		GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, dropsize, GST_BUFFER_SIZE(sinkbuf) - dropsize);
 		gst_buffer_unref(sinkbuf); // unref sinkbuf since gst_buffer_create_sub() will ref it
 		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
@@ -290,13 +291,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
 		/* never come back */
 		element->drop_samples = 0;
-	}
-	else
-	/* pass entire buffer */
-	{
-		result = gst_pad_push(element->srcpad, sinkbuf);
-		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
 	}
 
 	/*
