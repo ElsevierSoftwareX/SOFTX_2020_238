@@ -342,8 +342,8 @@ Redundant entries are ommitted
 <tr><th> Element					</th><th> depenedencies		</th><th> # lines </th><th> Review status	</th><th> Stability	</th></tr>
 <tr><td> \ref pipeparts.mkwhiten() lal_whiten		</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mktogglecomplex() lal_togglecomplex</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
-<tr><td> \ref pipeparts.mksumsquares() lal_sumsquares	</td><td>			</td><td> 	  </td><td> \reviewed (with actions)	</td><td> \stable	</td></tr>
-<tr><td> \ref pipeparts.mkstatevector() lal_statevector	</td><td>			</td><td> 	  </td><td> \reviewed (with actions)	</td><td> \stable	</td></tr>
+<tr><td> \ref pipeparts.mksumsquares() lal_sumsquares	</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
+<tr><td> \ref pipeparts.mkstatevector() lal_statevector	</td><td>			</td><td> 	  </td><td> \reviewed 		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkinjections() lal_simulation 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mksegmentsrc() lal_segmentsrc 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkreblock() lal_reblock 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
