@@ -219,7 +219,7 @@ gint gstlal_segment_list_index(const struct gstlal_segment_list *segmentlist, gu
 	gint i;
 
 	for(i = 0; i < segmentlist->length; i++)
-		if(t < segmentlist->segments[i].stop
+		if(t < segmentlist->segments[i].stop)
 			break;
 
 	return i;
