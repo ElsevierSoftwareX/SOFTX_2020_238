@@ -46,8 +46,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
         "channels = (int) 1, " \
         "endianness = (int) BYTE_ORDER, " \
         "width = (int) 8," \
-        "depth = (int) 8," \
-        "signed = true"
+        "depth = (int) 1," \
+        "signed = false"
     )
 );
 
@@ -74,18 +74,6 @@ enum property {
 
 
 /*
- * return the sample size (this is always 8 for now)
- */
-
-
-static guint sample_size(GstBaseSrc *basesrc)
-{
-    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return 1; /* FIXME The only size supported, guint8*/
-}
-
-
-/*
  * round a time to the nearest sample based on sample rate
  */
 
@@ -95,33 +83,6 @@ static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
     return gst_util_uint64_scale_int_round(val, 1, element->rate * GST_SECOND) * element->rate * GST_SECOND;
 }
-
-
-/* FIXME a place holder to somehow infer caps from segments??? maybe useless */
-#if 0
-static GstCaps *segments_to_caps(gint rate)
-{
-    GstCaps *caps;
-
-    /*
-     * FIXME, it would be nice to get say, the rate from the segments...
-     * but that seems hard.  So for now everything is hardcoded
-     * FIXME this function isn't even used yet, we get caps from downstream
-     */
-
-    caps = gst_caps_new_simple(
-        "audio/x-raw-int",
-        "rate", G_TYPE_INT, rate,
-        "channels", G_TYPE_INT, 1,
-        "endianness", G_TYPE_INT, G_BYTE_ORDER,
-        "width", G_TYPE_INT, 8,
-        "depth", G_TYPE_INT, 8,
-        "signed", G_TYPE_BOOLEAN, TRUE,
-        NULL
-    );
-    return caps;
-}
-#endif
 
 
 /*
@@ -143,7 +104,7 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
     guint startix=0;
     guint stopix =0;
-    gint8 *data = NULL;
+    guint8 *data = NULL;
 
     if (start > GST_BUFFER_TIMESTAMP(buffer))
         startix = round_to_nearest_sample(basesrc, start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
@@ -155,12 +116,12 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
     else
         stopix = 0;
 
-    data = (gint8 *) GST_BUFFER_DATA(buffer);
+    data = (guint8 *) GST_BUFFER_DATA(buffer);
 
     if (element->invert_output)
         for (guint32 i = startix; i < stopix; i++) data[i] = 0;
     else
-        for (guint32 i = startix; i < stopix; i++) data[i] = G_MAXINT8;
+        for (guint32 i = startix; i < stopix; i++) data[i] = 0x80;
 
     return 0;
 }
@@ -208,21 +169,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
     GstFlowReturn result = GST_FLOW_OK;
+    guint8 *d;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
-    guint samplesize = sample_size(basesrc);
-    guint64 numsamps = blocksize / samplesize;
+    guint64 numsamps = blocksize;
     guint64 start, stop;
-
-    /*
-     * Bail if the requested block size doesn't correspond to integer samples
-     */
-
-    if (blocksize % samplesize) {
-        GST_ERROR_OBJECT(element,
-            "block size %lu is not an integer multiple of the sample size %lu",
-            blocksize, samplesize);
-        return GST_FLOW_ERROR;
-    }
 
     /*
      * Allocate the buffer of ones or zeros depending on the invert property
@@ -232,12 +182,11 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     if(result != GST_FLOW_OK)
         return result;
 
-    gint8 *d = (gint8 *) GST_BUFFER_DATA(*buffer);
+    d = (guint8 *) GST_BUFFER_DATA(*buffer);
     if (element->invert_output)
-        for (guint32 i = 0; i < numsamps; i++) d[i] = G_MAXINT8;
-    else {
+        for (guint32 i = 0; i < numsamps; i++) d[i] = 0x80;
+    else
         for (guint32 i = 0; i < numsamps; i++) d[i] = 0;
-    }
 
     /*
      * update the offsets, timestamps etc
