@@ -345,7 +345,7 @@ Redundant entries are ommitted
 <tr><td> \ref pipeparts.mksumsquares() lal_sumsquares	</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkstatevector() lal_statevector	</td><td>			</td><td> 	  </td><td> \reviewed 		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkinjections() lal_simulation 	</td><td>			</td><td> 	  </td><td> \notreviewed (with actions)	</td><td> \stable	</td></tr>
-<tr><td> \ref pipeparts.mksegmentsrc() lal_segmentsrc 	</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
+<tr><td> \ref pipeparts.mksegmentsrc() lal_segmentsrc 	</td><td>			</td><td> 	  </td><td> \reviewed (with actions)	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkreblock() lal_reblock 	</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mkpeak() lal_peak		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
 <tr><td> \ref pipeparts.mknxydump() lal_nxydump		</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable	</td></tr>
