@@ -82,7 +82,7 @@ typedef struct {
 
 
 typedef struct {
-	GstBaseSink basesrc;
+	GstBaseSink basesink;
 
 	/*
 	 * properties
