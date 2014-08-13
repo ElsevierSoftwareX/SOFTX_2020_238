@@ -78,9 +78,8 @@ enum property {
  */
 
 
-static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer)
+static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 {
-    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
     guint8 *data = GST_BUFFER_DATA(buffer);
     GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
     GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
@@ -147,9 +146,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      * Mark the buffer according to the segments
      */
 
-    mark_segments(basesrc, *buffer);
-
-    /* FIXME Huh? */
+    mark_segments(element, *buffer);
     if(basesrc->offset == 0)
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 
@@ -317,25 +314,6 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
  *
  * ============================================================================
  */
-
-
-/*
- * Compare function to sort segment list
- */
-
-
-gint seg_compare_func(gconstpointer a, gconstpointer b)
-{
-    GValueArray *rowa = (GValueArray *) g_value_get_boxed((GValue *) a);
-    GValueArray *rowb = (GValueArray *) g_value_get_boxed((GValue *) b);
-    guint64 astart = g_value_get_uint64(g_value_array_get_nth(rowa, 0));
-    guint64 bstart = g_value_get_uint64(g_value_array_get_nth(rowb, 0));
-
-    if (astart <  bstart) return -1;
-    if (astart == bstart) return 0;
-    if (astart >  bstart) return 1;
-    return 0;
-}
 
 
 /*
