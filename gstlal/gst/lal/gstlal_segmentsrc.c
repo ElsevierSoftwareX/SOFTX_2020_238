@@ -518,14 +518,16 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 static void finalize(GObject *object)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
+    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(object);
 
     /*
      * free resources
      */
 
-    if (element->seglist) gstlal_segment_list_free(element->seglist);
+    gstlal_segment_list_free(element->seglist);
+    element->seglist = NULL;
     g_mutex_free(element->segment_matrix_lock);
+    element->segment_matrix_lock = NULL;
 
     /*
      * chain to parent class' finalize() method
