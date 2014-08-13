@@ -65,27 +65,6 @@ enum property {
 
 
 /*
- * ======================================================================
- *
- * utility functions
- *
- * ======================================================================
- */
-
-
-/*
- * round a time to the nearest sample based on sample rate
- */
-
-
-static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
-{
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return gst_util_uint64_scale_int_round(val, 1, element->rate * GST_SECOND) * element->rate * GST_SECOND;
-}
-
-
-/*
  * ============================================================================
  *
  *                        GstBaseSrc Method Overrides
@@ -95,65 +74,32 @@ static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
 
 
 /*
- * Mark buffer according to segment
- */
-
-
-static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
-{
-    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
-    guint startix=0;
-    guint stopix =0;
-    guint8 *data = NULL;
-
-    if (start > GST_BUFFER_TIMESTAMP(buffer))
-        startix = round_to_nearest_sample(basesrc, start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
-    else
-        startix = 0;
-
-    if (stop > GST_BUFFER_TIMESTAMP(buffer))
-        stopix = round_to_nearest_sample(basesrc, stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
-    else
-        stopix = 0;
-
-    data = (guint8 *) GST_BUFFER_DATA(buffer);
-
-    if (element->invert_output)
-        for (guint32 i = startix; i < stopix; i++) data[i] = 0;
-    else
-        for (guint32 i = startix; i < stopix; i++) data[i] = 0x80;
-
-    return 0;
-}
-
-
-/*
  * Mark buffer according to segment list
  */
 
 
-static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
+static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    struct gstlal_segment_list *seglist = element->seglist;
-    if (!seglist) return 0; /* FIXME handle no segment lists */
-    guint rows = seglist->length;
-    guint64 segstart, segstop;
+    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
+    guint8 *data = GST_BUFFER_DATA(buffer);
+    GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
+    GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+    gint i;
 
-    /* FIXME provide a bailout and a sensible starting point if you have sorted and coalesced segents */
-    /* This is ridiculous, but doesn't require sorted or coalesced segments.  Could some fancy data structure help? */
-    /* FIXME switch to using gstlal segment routines */
-    for (guint i = 0; i < rows; i++) {
-        segstart = seglist->segments[i].start;
-        segstop = seglist->segments[i].stop;
-        if ((segstart >= start) && (segstart < stop) && (segstop < stop))
-            mark_segment(basesrc, buffer, segstart, segstop);
-        if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
-            mark_segment(basesrc, buffer, segstart, stop);
-        if ((segstop >= start) && (segstop < stop) && (segstart < start))
-            mark_segment(basesrc, buffer, start, segstop);
-        if ((segstart <= start) && (segstop >= stop))
-            mark_segment(basesrc, buffer, start, stop);
+    /* This is ridiculous, but doesn't require sorted or coalesced
+     * segments.  Could some fancy data structure help? */
+    for (i = 0; i < element->seglist->length; i++) {
+    	/* clip segment to buffer */
+        GstClockTime segstart = MIN(MAX(element->seglist->segments[i].start, start), stop);
+        GstClockTime segstop = MIN(MAX(element->seglist->segments[i].stop, start), stop);
+
+	/* convert to samples */
+	guint64 startix = gst_util_uint64_scale_int_round(segstart - start, element->rate, GST_SECOND);
+	guint64 stopix  = gst_util_uint64_scale_int_round(segstop  - start, element->rate, GST_SECOND);
+
+	/* set samples */
+	for(; startix < stopix; startix++)
+		data[startix] = element->invert_output ? 0 : 0x80;
     }
 
     return 0;
@@ -169,7 +115,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
     GstFlowReturn result = GST_FLOW_OK;
-    guint8 *d;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint64 numsamps = blocksize;
     guint64 start, stop;
@@ -182,11 +127,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     if(result != GST_FLOW_OK)
         return result;
 
-    d = (guint8 *) GST_BUFFER_DATA(*buffer);
-    if (element->invert_output)
-        for (guint32 i = 0; i < numsamps; i++) d[i] = 0x80;
-    else
-        for (guint32 i = 0; i < numsamps; i++) d[i] = 0;
+    memset(GST_BUFFER_DATA(*buffer), element->invert_output ? 0x80 : 0x00, GST_BUFFER_SIZE(*buffer));
 
     /*
      * update the offsets, timestamps etc
@@ -206,7 +147,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      * Mark the buffer according to the segments
      */
 
-    mark_segments(basesrc, *buffer, start, stop);
+    mark_segments(basesrc, *buffer);
 
     /* FIXME Huh? */
     if(basesrc->offset == 0)
