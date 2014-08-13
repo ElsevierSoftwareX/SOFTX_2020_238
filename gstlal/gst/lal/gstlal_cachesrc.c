@@ -19,6 +19,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_cachesrc
+ * @short_description:  Retrieve frame files from locations recorded in a LAL cache file.
+ *
+ * Reviewed:  a922d6dd59d0b58442c0bf7bc4cc4d740b8c6a43 2014-08-12 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ============================================================================
  *
