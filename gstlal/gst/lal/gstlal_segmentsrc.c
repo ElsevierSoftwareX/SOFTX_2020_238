@@ -480,7 +480,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
+            g_mutex_lock(element->segment_matrix_lock);
+            gstlal_segment_list_free(element->seglist);
             element->seglist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
+            g_mutex_unlock(element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
