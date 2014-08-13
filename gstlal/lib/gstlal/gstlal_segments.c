@@ -353,6 +353,7 @@ GValueArray *g_value_array_from_gstlal_segment(struct gstlal_segment seg)
 {
 	GValueArray *va = g_value_array_new(2);
 	GValue v = {0,};
+	g_value_init(&v, G_TYPE_UINT64);
 	g_value_set_uint64(&v, seg.start);
 	g_value_array_append(va, &v);
 	g_value_set_uint64(&v, seg.stop);
