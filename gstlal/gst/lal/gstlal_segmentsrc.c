@@ -90,8 +90,8 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer)
      * segments.  Could some fancy data structure help? */
     for (i = 0; i < element->seglist->length; i++) {
     	/* clip segment to buffer */
-        GstClockTime segstart = MIN(MAX(element->seglist->segments[i].start, start), stop);
-        GstClockTime segstop = MIN(MAX(element->seglist->segments[i].stop, start), stop);
+        GstClockTime segstart = CLAMP(element->seglist->segments[i].start, start, stop);
+        GstClockTime segstop  = CLAMP(element->seglist->segments[i].stop,  start, stop);
 
 	/* convert to samples */
 	guint64 startix = gst_util_uint64_scale_int_round(segstart - start, element->rate, GST_SECOND);
