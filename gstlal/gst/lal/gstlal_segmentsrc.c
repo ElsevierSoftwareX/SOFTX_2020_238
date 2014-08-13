@@ -134,28 +134,6 @@ static GstCaps *segments_to_caps(gint rate)
 
 
 /*
- * start()
- */
-
-
-static gboolean start(GstBaseSrc *object)
-{
-    return TRUE;
-}
-
-
-/*
- * stop()
- */
-
-
-static gboolean stop(GstBaseSrc *object)
-{
-    return TRUE;
-}
-
-
-/*
  * Mark buffer according to segment
  */
 
@@ -372,11 +350,12 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					break;
 
 				case GST_FORMAT_BYTES:
-					offset = src_value / (element->width / 8);
+					/* width is 8 bits */
+					offset = src_value;
 					break;
 
 				case GST_FORMAT_BUFFERS:
-					offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
+					offset = src_value * gst_base_src_get_blocksize(basesrc);
 					break;
 
 				case GST_FORMAT_PERCENT:
@@ -403,11 +382,13 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					break;
 
 				case GST_FORMAT_BYTES:
-					dest_value = offset * (element->width / 8);
+					/* width is 8 bits */
+					dest_value = offset;
 					break;
 
 				case GST_FORMAT_BUFFERS:
-					dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
+					/* width is 8 bits */
+					dest_value = gst_util_uint64_scale_int_ceil(offset, 1, gst_base_src_get_blocksize(basesrc));
 					break;
 
 				case GST_FORMAT_PERCENT:
@@ -574,11 +555,8 @@ static gboolean set_caps(GstBaseSrc *src, GstCaps *caps)
         success = FALSE;
     }
 
-    if(success) {
-        if(rate != element->rate)
-            GST_DEBUG_OBJECT(element, "rate changed, but no signal was emitted because it is not implmented: %d -> %d ", element->rate, rate);
+    if(success)
         element->rate = rate;
-    }
 
     return success;
 }
@@ -651,8 +629,6 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
      * GstBaseSrc method overrides
      */
 
-    gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
-    gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
     gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
     gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
     gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
@@ -670,8 +646,6 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentS
 {
     segment_src->seglist = NULL;
     segment_src->rate = 0;
-    /* FIXME hardcoded width */
-    segment_src->width = 8;
     segment_src->segment_matrix_lock = g_mutex_new();
     gst_base_src_set_format(GST_BASE_SRC(segment_src), GST_FORMAT_TIME);
 }
