@@ -33,6 +33,8 @@
  * storage and retrieval functions are provided here.  The purpose of this
  * code is to support passing segment lists through #GObject properties as
  * #GValueArrays, not to implement a segment arithmetic library.
+ *
+ * Reviewed:  fd83b7bb2e8c918577ab7b06b5c358fbef14310f  2014-08-13  K. Cannon, J. Creighton, B. Sathyaprakash.
  */
 
 
