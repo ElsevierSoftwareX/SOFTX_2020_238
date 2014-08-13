@@ -116,7 +116,17 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     GstFlowReturn result = GST_FLOW_OK;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint64 numsamps = blocksize;
-    guint64 start, stop;
+    GstClockTime start = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->offset, GST_SECOND, element->rate);
+    GstClockTime stop = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->offset + numsamps, GST_SECOND, element->rate);
+
+    *buffer = NULL;	/* just in case */
+
+    /*
+     * Check for EOS
+     */
+
+    if(GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) && start >= (GstClockTime) basesrc->segment.stop)
+        return GST_FLOW_UNEXPECTED;
 
     /*
      * Allocate the buffer of ones or zeros depending on the invert property
@@ -133,15 +143,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
-
-    start = GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start
-        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
-
-    stop = basesrc->segment.start
-        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate);
-
+    GST_BUFFER_TIMESTAMP(*buffer) = start;
     GST_BUFFER_DURATION(*buffer) = stop - start;
-    
+
     /*
      * Mark the buffer according to the segments
      */
@@ -242,6 +246,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					break;
 
 				case GST_FORMAT_BUFFERS:
+					/* width is 8 bits */
 					offset = src_value * gst_base_src_get_blocksize(basesrc);
 					break;
 
