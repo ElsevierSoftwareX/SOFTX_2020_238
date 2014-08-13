@@ -172,13 +172,14 @@ gint gstlal_segment_list_length(const struct gstlal_segment_list *segmentlist)
  *
  * Append a struct gstlal_segment to a struct gstlal_segment_list.  This
  * function takes ownership of the struct gstlal_segment, and the calling
- * code must not access it after invoking this function.
+ * code must not access it after invoking this function (even if the append
+ * operation fails).
  *
  * Note that no check is made to ensure the segments in the list are in
  * order and disjoint.  Any conditions such as those must be enforced by
  * the application.
  *
- * Returns:  the struct gstlal_segment_list.
+ * Returns:  the struct gstlal_segment_list or NULL on failure.
  */
 
 
@@ -186,8 +187,10 @@ struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_lis
 {
 	struct gstlal_segment *new_segments = g_try_realloc(segmentlist->segments, (segmentlist->length + 1) * sizeof(*segment));
 
-	if(!new_segments)
+	if(!new_segments) {
+		gstlal_segment_free(segment);
 		return NULL;
+	}
 
 	segmentlist->segments = new_segments;
 	segmentlist->segments[segmentlist->length] = *segment;
@@ -203,8 +206,8 @@ struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_lis
  * @segmentlist:  the struct gstlal_segment_list to search
  * @t:  the value to search for
  *
- * Search for the first struct gstlal_segment in @segmentlist that contains
- * the value t, that is for which stop <= t < stop.
+ * Search for the first struct gstlal_segment in @segmentlist for which t <
+ * stop.
  *
  * Returns:  the index of the first matching struct gstlal_segment or the
  * length of the list if no struct gstlal_segments match.
@@ -215,9 +218,10 @@ gint gstlal_segment_list_index(const struct gstlal_segment_list *segmentlist, gu
 {
 	gint i;
 
-	for(i = segmentlist->length - 1; i >= 0; i--)
-		if(segmentlist->segments[i].start <= t)
+	for(i = 0; i < segmentlist->length; i++)
+		if(t < segmentlist->segments[i].stop
 			break;
+
 	return i;
 }
 
