@@ -171,7 +171,6 @@ for ifo, seglist in gw_data_source_opts.frame_segments.iteritems():
 		sys.exit(0)
 
 # Handle shutdowns
-# FIXME: We can avoid irregular trigger dumping if we remove these
 signal.signal(signal.SIGINT, handler.shutdown)
 signal.signal(signal.SIGTERM, handler.shutdown)
 

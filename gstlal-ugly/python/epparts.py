@@ -775,7 +775,8 @@ class EPHandler( Handler ):
 		self.pipeline.set_state( gst.STATE_NULL )
 		self.mainloop.quit()
 
-		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
+		if signum is not None:
+			return
 
 		subdir = "./"
 		if self.outdirfmt is not None:
