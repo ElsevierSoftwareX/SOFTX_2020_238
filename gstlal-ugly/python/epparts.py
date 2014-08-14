@@ -161,8 +161,6 @@ class EPHandler( Handler ):
 		self.dump_frequency = 600 # s
 		self.max_events = 1e6
 		self.time_since_dump = self.start
-		self.db_thresh = None  # off
-		self.db_client = None  # off
 
 		self.trigger_segment = None
 
@@ -765,26 +763,6 @@ class EPHandler( Handler ):
 
 		if flush: 
 			self.triggers = EPHandler.make_output_table(self._clustering)
-		if self.db_thresh is None: 
-			return
-
-		# FIXME: get_table doesn't return the type of table you want it just 
-		# returns a "Table" this is probbably why the upload_tbl needs the full
-		# definition
-		clus_triggers = table.get_table( output, lsctables.SnglBurstTable.tableName )
-
-		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, clus_triggers ):
-			# TODO: Merge these two
-			#if sb.peak_time in self.discard_segment: continue
-			if sb.peak_time not in analysis_segment: continue
-			upload_tbl = lsctables.New(lsctables.SnglBurstTable,
-			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
-			"duration",  "search", "event_id", "process_id",
-			"central_freq", "channel", "amplitude", "snr", "confidence",
-			"chisq", "chisq_dof", "bandwidth"])
-
-			upload_tbl.append( sb )
-			ep.upload_to_db( upload_tbl, search = "EP", db = self.db_client )
 		
 	def shutdown( self, signum, frame ):
 		"""
@@ -1041,7 +1019,6 @@ def append_options(parser=None):
     parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
     parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
     parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
-    parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
     parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
     parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
     parser.add_option("-o", "--frequency-overlap", type=float, default=0.0, dest="frequency_overlap", help="Overlap frequency bands by this percentage. Default is 0." )
@@ -1216,21 +1193,6 @@ def process_options(options, gw_data_source_opts, pipeline, mainloop):
         print "False alarm probability threshold (in Gaussian noise) is %g" % handler.fap
     if handler.snr_thresh is not None:
         print "Trigger SNR threshold sqrt(E/ndof-1) is %f" % handler.snr_thresh
-
-    # If one wishes to try and automatically upload events to an event database 
-    # (read: gracedb and friends) these options will be sufficient to the
-    # pipeline to do such a thing
-    # FIXME: Rework or delete... this probably isn't going to work in realtime
-    if options.db_uploads:
-
-        handler.db_thresh = cfg.getfloat("triggering", "db-thresh")
-        if handler.db_thresh is None:
-            print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
-
-        handler.db_client = cfg.get("triggering", "db-client")
-        if handler.db_thresh is None:
-            print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
-            handler.db_thresh = None
 
     # Maximum number of events (+/- a few in the buffer) before which we drop an
     # output file
