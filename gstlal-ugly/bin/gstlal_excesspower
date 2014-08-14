@@ -177,14 +177,9 @@ signal.signal(signal.SIGTERM, handler.shutdown)
 print "Startin' up."
 if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
-
-# FIXME: Use pipeutils?
-def write_pipeline_graph():
-	pipeparts.write_dump_dot(pipeline, "gstlal_excesspower", verbose = True)
-	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "gstlal_excesspower")
-#write_pipeline_graph()
 mainloop.run()
 
+# All done, write out a scan if asked
 if handler.trigger_segment:
     scan_obj.close()
     scan_obj.write_out("gstlal_excesspower_scan_%s_%s_%d_%d" % (handler.channel, handler.inst, numpy.floor(int(options.scan_start)), numpy.ceil(int(options.scan_end))))

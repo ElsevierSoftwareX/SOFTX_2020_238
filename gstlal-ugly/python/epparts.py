@@ -68,10 +68,7 @@ from glue.lal import Cache, CacheEntry
 from pylal import snglcluster
 from pylal import ligolw_bucluster
 
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-from pylal.xlal.datatypes.lalunit import LALUnit
-from pylal.xlal.datatypes.snglburst import SnglBurst
+from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
 
 import lalburst
@@ -81,7 +78,7 @@ import lalburst
 #
 #                                Handler Class
 #
-# =============================================================================
+# =============================================================================L
 #
 
 class EPHandler( Handler ):
@@ -288,9 +285,9 @@ class EPHandler( Handler ):
 		"""
 		Builds a dummy PSD to use until we get the right one.
 		"""
-		psd = REAL8FrequencySeries()
+		psd = laltypes.REAL8FrequencySeries()
 		psd.deltaF = df
-		psd.sampleUnits = LALUnit( "s strain^2" )
+		psd.sampleUnits = laltypes.LALUnit( "s strain^2" )
 		psd.data = numpy.ones( int(rate/2/df) + 1 ) 
 		psd.f0 = 0
 		return psd
@@ -503,8 +500,6 @@ class EPHandler( Handler ):
 			event.snr = numpy.sqrt(event.snr / event.chisq_dof - 1)
 
 			# Reassign IDs since they won't be unique
-			# FIXME: Use get_next_id
-			#event.event_id = ilwd.ilwdchar("sngl_burst:event_id:%d" % self.event_number)
 			event.event_id = self.triggers.get_next_id()
 			event.process_id = self.process.process_id
 			self.event_number += 1
@@ -676,10 +671,7 @@ class EPHandler( Handler ):
 
 		llwseg.finalize(process)
 
-		# FIXME: We should be careful to not fragment segments across output too
-		# much
 		self.seglist.clear()
-
 		self.seglist["state"] = segmentlist([])
 
 		if self.stop < 0: # indication that we're quitting with no output
@@ -876,7 +868,7 @@ class EPScan(object):
 #
 
 # Do this once per module load, since we may end up calling it a lot
-__validattrs = [k for k, v in SnglBurst.__dict__.iteritems() if isinstance(v, types.MemberDescriptorType) or isinstance(v, types.GetSetDescriptorType)]
+__validattrs = [k for k, v in laltypes.SnglBurst.__dict__.iteritems() if isinstance(v, types.MemberDescriptorType) or isinstance(v, types.GetSetDescriptorType)]
 def convert_sngl_burst(snglburst, sb_table):
 	"""
 	Convert the snglburst object (presumed to be a pylal.xlal SnglBurst type) into lsctables version, as provided by the RowType() function of the supplied sb_table.
@@ -918,11 +910,7 @@ from gstlal.reference_psd import write_psd, read_psd_xmldoc
 import gstlal.excesspower as ep
 from gstlal import datasource
 
-try:
-    from glue import datafind
-except ImportError:
-    # FIXME: Remove when glue is totally updated to datafind
-    from glue import GWDataFindClient as datafind
+from glue import datafind
 
 from glue.ligolw import ligolw, array, param, lsctables, table, ilwd
 array.use_in(ligolw.LIGOLWContentHandler)
@@ -934,8 +922,6 @@ from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS, Cache, CacheEntry
-
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
 #
 # =============================================================================
@@ -953,10 +939,8 @@ def on_psd_change(elem, pspec, handler, drop_time):
         print >>sys.stderr, "Intercepted spectrum signal."
 
     # Get the new one
-    # FIXME: Reincorpate these kwargs
-    #epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
-    #sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
-    new_psd = REAL8FrequencySeries(name = "PSD", f0 = 0.0, deltaF = elem.get_property("delta-f"), data = numpy.array(elem.get_property("mean-psd")))
+    # FIXME: Reincorpate the kwargs
+    new_psd = laltypes.REAL8FrequencySeries(name = "PSD", f0 = 0.0, deltaF = elem.get_property("delta-f"), data = numpy.array(elem.get_property("mean-psd"))) #, epoch = laltypes.LIGOTimeGPS(0, message.timestamp), sampleUnits = laltypes.LALUnit(message.sample_units.strip()))
     handler.cur_psd = new_psd
 
     # Determine if the PSD has changed enough to warrant rebuilding the 
