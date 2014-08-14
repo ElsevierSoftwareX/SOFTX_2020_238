@@ -17,6 +17,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_firbank
+ * @short_description:  Projects a single audio channel onto a bank of FIR filters to produce a multi-channel output.
+ *
+ * Reviewed:  3a08854e595cf35a002483eae9a2b001b1100d21 2014-08-14 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ============================================================================
  *
