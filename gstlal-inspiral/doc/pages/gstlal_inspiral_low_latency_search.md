@@ -359,8 +359,8 @@ Redundant entries are ommitted
 <tr><td> framecpp_filesink				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> framecpp_channelmux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> framecpp_channeldemux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
-<tr><td> gds_framexmitsrc				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
-<tr><td> gds_lvshmsrc					</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
+<tr><td> gds_framexmitsrc				</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable 	</td></tr>
+<tr><td> gds_lvshmsrc					</td><td>			</td><td> 	  </td><td> \reviewed (with actions)	</td><td> \stable 	</td></tr>
 </table>
 
 \subsection Broader action items

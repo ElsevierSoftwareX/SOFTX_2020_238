@@ -19,6 +19,15 @@
  */
 
 
+/**
+ * SECTION:lvshmsrc
+ * @short_description:  LIGO-Virgo shared memory frame file source element.
+ *
+ * Reviewed:  00d65a70accca228bb76bd07e89b3ec07c78f736 2014-08-13 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ========================================================================
  *
