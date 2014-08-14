@@ -1110,7 +1110,7 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 		start = gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
 		if(stop != -1) {
 			stop = gst_util_uint64_scale_int_round(stop, element->rate, GST_SECOND);
-			stop += -samples_lost - element->latency;
+			stop += -element->latency;
 			stop = gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate);
 		}
 		position = start;
@@ -1653,7 +1653,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		gint block_stride;
 		g_mutex_lock(element->fir_matrix_lock);
 		block_stride = g_value_get_int(value);
-		if(block_stride != element->block_stride && element->time_domain)
+		if(block_stride != element->block_stride && !element->time_domain)
 			/*
 			 * invalidate filter workspace
 			 */
