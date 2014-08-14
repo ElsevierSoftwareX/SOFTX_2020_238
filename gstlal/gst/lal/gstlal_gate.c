@@ -172,6 +172,18 @@ static gdouble control_sample_uint32(const gpointer data, guint64 offset)
 }
 
 
+static gdouble control_sample_int64(const gpointer data, guint64 offset)
+{
+	return ABS(((const gint64 *) data)[offset]);
+}
+
+
+static gdouble control_sample_uint64(const gpointer data, guint64 offset)
+{
+	return ((const guint64 *) data)[offset];
+}
+
+
 static gdouble control_sample_float32(const gpointer data, guint64 offset)
 {
 	return fabsf(((const float *) data)[offset]);
@@ -657,6 +669,9 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 			break;
 		case 32:
 			control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
+			break;
+		case 64:
+			control_sample_func = is_signed ? control_sample_int64 : control_sample_uint64;
 			break;
 		default:
 			success = FALSE;
