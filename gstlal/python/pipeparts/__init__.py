@@ -877,8 +877,8 @@ def mkcomputegamma(pipeline, dctrl, exc, cos, sin, **properties):
 			peer.link_pads(None, elem, padname)
 	return elem
 
-def mkbursttriggergen(pipeline, src, n, bank):
-	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
+def mkbursttriggergen(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_bursttriggergen", **properties)
 
 def mkodctodqv(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_odc_to_dqv", **properties)
