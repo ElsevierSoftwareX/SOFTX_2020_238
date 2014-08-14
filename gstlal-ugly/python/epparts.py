@@ -109,13 +109,16 @@ class EPHandler( Handler ):
 		# Defaults -- Time-frequency map settings
 		self.base_band = 16
 		self.flow = 64 
-		self.fhigh = 1000
+		self.fhigh = 2048
 		self.fft_length = 8 # s
 		self.frequency_overlap = 0 # %
 
 		# Defaults -- Resolution settings
 		self.rate = 2048
 		self.max_level = 1
+		self.max_bandwidth = 512
+		self.max_dof = None
+		self.fix_dof = None
 
 		# Defaults -- filtering
 		self.filter_xml = {}
@@ -904,3 +907,558 @@ def convert_sngl_burst(snglburst, sb_table):
 		# FIXME: This is probably slow
 		setattr(event, attr, getattr(snglburst, attr))
 	return event
+
+############ From pipeline code
+import os
+import sys
+import time
+import signal
+import glob
+import tempfile
+import threading
+import math
+
+from optparse import OptionParser, OptionGroup
+import ConfigParser
+from ConfigParser import SafeConfigParser
+
+import numpy
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+
+import gst
+
+from gstlal import pipeparts
+from gstlal.reference_psd import write_psd, read_psd_xmldoc
+
+import gstlal.excesspower as ep
+from gstlal import datasource
+
+try:
+    from glue import datafind
+except ImportError:
+    # FIXME: Remove when glue is totally updated to datafind
+    from glue import GWDataFindClient as datafind
+
+from glue.ligolw import ligolw, array, param, lsctables, table, ilwd
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+
+from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
+from glue import segmentsUtils
+from glue import gpstime
+from glue.lal import LIGOTimeGPS, Cache, CacheEntry
+
+from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+
+#
+# =============================================================================
+#
+#                        Message Handler Methods
+#
+# =============================================================================
+#
+
+def on_psd_change(elem, pspec, handler, drop_time):
+    """
+    Get the PSD object and signal the handler to rebuild everything if the spectrum has changed appreciably from the PSD which was used to rebuild the filters originally.
+    """
+    if handler.verbose:
+        print >>sys.stderr, "Intercepted spectrum signal."
+
+    # Get the new one
+    # FIXME: Reincorpate these kwargs
+    #epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
+    #sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
+    new_psd = REAL8FrequencySeries(name = "PSD", f0 = 0.0, deltaF = elem.get_property("delta-f"), data = numpy.array(elem.get_property("mean-psd")))
+    handler.cur_psd = new_psd
+
+    # Determine if the PSD has changed enough to warrant rebuilding the 
+    # filter bank.
+    handler.psd_power = sum(new_psd.data)*handler.psd.deltaF
+    
+    whitener_pos = elem.query_position(gst.FORMAT_TIME)[0]*1e-9
+
+    # This will get triggered in two cases: the rate (and thus bin length)
+    # has changed, or we had the default PSD in place previously.
+    if len(new_psd.data) != len(handler.psd.data):
+        if handler.verbose:
+
+            print >>sys.stderr, "Different PSD lengths detected, automatically regenerating filters."
+        handler.psd = new_psd
+        handler.rebuild_everything()
+        return
+    else:
+        # Poor man's coherence
+        handler.psd_change = 2.0/len(handler.psd.data) * sum(abs(handler.psd.data-new_psd.data)/(new_psd.data+handler.psd.data))
+    #psd_change = abs(handler.psd.data-new_psd.data)/(new_psd.data+handler.psd.data)
+    #print >>sys.stderr , "PSD estimate: %g / %g (min: %g, max: %g)" % (sum(handler.psd.data),sum(new_psd.data), min(psd_change), max(psd_change))
+    #print >>sys.stderr , "change estimate: %f" % handler.psd_change
+
+    if abs(handler.psd_change) > handler.psd_change_thresh and whitener_pos - handler.start > 0.75*drop_time:
+        if handler.verbose:
+            print >> sys.stderr, "Processed signal, change estimate: %f, regenerating filters" % handler.psd_change
+        handler.psd = new_psd
+        handler.rebuild_everything()
+
+
+def on_spec_corr_change(elem, pspec, handler):
+    """
+    Get the 2-point spectral correlation object and signal the handler to rebuild everything.
+    """
+    if handler.verbose:
+        print >> sys.stderr, "Intercepted correlation signal."
+    handler.spec_corr = elem.get_property("spectral-correlation")
+
+    # If the spectrum correlation changes, rebuild everything
+    if handler.psd is not None:
+        handler.rebuild_everything()
+
+#
+# =============================================================================
+#
+#                             Options Handling
+#
+# =============================================================================
+#
+
+def append_options(parser=None):
+    if parser is None:
+        parser = OptionParser()
+
+    parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Required.", default=None)
+    parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
+    parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
+    parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
+    parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
+    parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
+    parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
+    parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
+    parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
+    parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
+    parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
+    parser.add_option("-o", "--frequency-overlap", type=float, default=0.0, dest="frequency_overlap", help="Overlap frequency bands by this percentage. Default is 0." )
+    parser.add_option("-d", "--drop-start-time", type=float, default=120.0, dest="drop_time", help="Drop this amount of time (in seconds) in the beginning of a run. This is to allow time for the whitener to settle to the mean PSD. Default is 120 s.")
+
+    scan_sec = OptionGroup(parser, "Time-frequency scan", "Use these options to scan over a given segment of time for multiple time-frequency maps. Both must be specified to scan a segment of time. If the segment of time begins in the whitening segment, it will be clipped to be outside of it.")
+    scan_sec.add_option("--scan-segment-start", type=float, dest="scan_start", help="Beginning of segment to scan.")
+    scan_sec.add_option("--scan-segment-end", type=float, dest="scan_end", help="End of segment to scan.")
+    parser.add_option_group(scan_sec)
+    return parser
+
+
+def process_options(options, gw_data_source_opts, pipeline, mainloop):
+    # Locate and load the initialization file
+    if not options.infile:
+        print >>sys.stderr, "Initialization file required."
+    elif not os.path.exists( options.infile ):
+        print >>sys.stderr, "Initialization file path is invalid."
+        sys.exit(-1)
+
+    cfg = SafeConfigParser()
+    cfg.read(options.infile)
+
+    #
+    # This supplants the ligo_data_find step and is mostly convenience
+    #
+    # TODO: Move to a utility library
+
+    if gw_data_source_opts.data_source == "frames" and gw_data_source_opts.frame_cache is None:
+        if gw_data_source_opts.seg is None:
+            sys.exit("No frame cache present, and no GPS times set. Cannot query for data without an interval to query in.")
+
+        # Shamelessly stolen from gw_data_find
+        print "Querying LDR server for data location." 
+        try:
+            server, port = os.environ["LIGO_DATAFIND_SERVER"].split(":")
+        except ValueError:
+            sys.exit("Invalid LIGO_DATAFIND_SERVER environment variable set")
+        print "Server is %s:%s" % (server, port)
+
+        try:
+            frame_type = cfg.get("instrument", "frame_type")
+        except ConfigParser.NoOptionError:
+            sys.exit("Invalid cache location, and no frame type set, so I can't query LDR for the file locations.")
+        if frame_type == "":
+            sys.exit("No frame type set, aborting.")
+
+        print "Frame type is %s" % frame_type
+        connection = datafind.GWDataFindHTTPConnection(host=server, port=port)
+        print "Equivalent command line is "
+        # FIXME: Multiple instruments?
+        inst = gw_data_source_opts.channel_dict.keys()[0]
+        print "gw_data_find -o %s -s %d -e %d -u file -t %s" % (inst[0], gw_data_source_opts.seg[0], gw_data_source_opts.seg[1], frame_type)
+        cache = connection.find_frame_urls(inst[0], frame_type, gw_data_source_opts.seg[0], gw_data_source_opts.seg[1], urltype="file", on_gaps="error")
+
+        tmpfile, tmpname = tempfile.mkstemp()
+        print "Writing cache of %d files to %s" % (len(cache), tmpname)
+        with open(tmpname, "w") as tmpfile:
+        	cache.tofile(tmpfile)
+        connection.close()
+        gw_data_source_opts.frame_cache = tmpname
+
+    handler = EPHandler(mainloop, pipeline)
+
+    # Enable the periodic output of trigger statistics
+    if options.channel_monitoring:
+        handler.channel_monitoring = True
+
+    # If a sample rate other than the native rate is requested, we'll need to 
+    # keep track of it
+    if options.sample_rate is not None:
+        handler.rate = options.sample_rate
+
+    # Does the user want a cache file to track the trigger files we spit out?
+    if not options.file_cache:
+        handler.output_cache = None
+
+    # And if so, if you give us a name, we'll update it every time we output,
+    # else only at the end of the run
+    if options.file_cache and options.file_cache_name is not None:
+        handler.output_cache_name = options.file_cache_name
+
+    # Clustering on/off
+    handler.clustering = options.clustering
+    # Be verbose?
+    handler.verbose = options.verbose
+
+    # Instruments and channels
+    # FIXME: Multiple instruments
+    if len(gw_data_source_opts.channel_dict.keys()) == 1:
+        handler.inst = gw_data_source_opts.channel_dict.keys()[0]
+    else:
+        sys.exit("Unable to determine instrument.")
+
+    # FIXME: Multiple instruments
+    if gw_data_source_opts.channel_dict[handler.inst] is not None:
+        handler.channel = gw_data_source_opts.channel_dict[handler.inst]
+    else:
+        # TODO: In the future, we may request multiple channels for the same 
+        # instrument -- e.g. from a single raw frame
+        sys.exit("Unable to determine channel.")
+    print "Channel name(s): " + handler.channel 
+
+    # FFT and time-frequency parameters
+    # Low frequency cut off -- filter bank begins here
+    handler.flow = cfg.getfloat("tf_parameters", "min-frequency")
+    # High frequency cut off -- filter bank ends here
+    handler.fhigh = cfg.getfloat("tf_parameters", "max-frequency")
+    # Frequency resolution of the finest filters
+    handler.base_band = cfg.getfloat("tf_parameters", "min-bandwidth")
+    # Tile duration should not exceed this value
+    handler.max_duration = cfg.getfloat("tf_parameters", "max-duration")
+    # Number of resolutions levels. Can't be less than 1, and can't be greater
+    # than log_2((fhigh-flow)/base_band)
+    handler.max_bandwidth = cfg.getfloat("tf_parameters", "max-bandwidth")
+    handler.max_level = int(round(math.log(handler.max_bandwidth / handler.base_band, 2)))
+    # Frequency band overlap -- in our case, handler uses 1 - frequency overlap
+    if options.frequency_overlap > 1 or options.frequency_overlap < 0:
+        sys.exit("Frequency overlap must be between 0 and 1.")
+    handler.frequency_overlap = options.frequency_overlap
+
+    # DOF options -- this affects which tile types will be calculated
+    if cfg.has_option("tf_parameters", "max-dof"):
+        handler.max_dof = cfg.getint("tf_parameters", "max-dof")
+    if cfg.has_option("tf_parameters", "fix-dof"):
+        handler.fix_dof = cfg.getint("tf_parameters", "fix-dof")
+
+    if cfg.has_option("tf_parameters", "fft-length"):
+        handler.fft_length = cfg.getfloat("tf_parameters", "fft-length")
+
+    if cfg.has_option("cache", "cache-psd-every"):
+        handler.cache_psd = cfg.getint("cache", "cache-psd-every")
+        print "PSD caching enabled. PSD will be recorded every %d seconds" % handler.cache_psd
+    else:
+        handler.cache_psd = None
+
+    if cfg.has_option("cache", "cache-psd-dir"):
+        handler.cache_psd_dir = cfg.get("cache", "cache-psd-dir")
+        print "Caching PSD to %s" % handler.cache_psd_dir
+        
+    # Used to keep track if we need to lock the PSD into the whitener
+    psdfile = None
+    if cfg.has_option("cache", "reference-psd"):
+        psdfile = cfg.get("cache", "reference-psd")
+        try:
+            handler.psd = read_psd_xmldoc(utils.load_filename(psdfile, contenthandler = ligolw.LIGOLWContentHandler))[handler.inst]
+            print "Reference PSD for instrument %s from file %s loaded" % (handler.inst, psdfile)
+            # Reference PSD disables caching (since we already have it)
+            handler.cache_psd = None
+            handler.psd_mode = 1
+        except KeyError: # Make sure we have a PSD for this instrument
+            sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
+
+    # Triggering options
+    if cfg.has_option("triggering", "output-file-stride"):
+        handler.dump_frequency = cfg.getint("triggering", "output-file-stride")
+    if cfg.has_option("triggering", "output-directory"):
+        handler.outdir = cfg.get("triggering", "output-directory")
+    if cfg.has_option("triggering", "output-dir-format"):
+        handler.outdirfmt = cfg.get("triggering", "output-dir-format")
+
+    handler.output = not options.disable_triggers
+
+    # FAP thresh overrides SNR thresh, because multiple resolutions will have 
+    # different SNR thresholds, nominally.
+    if cfg.has_option("triggering", "snr-thresh"):
+        handler.snr_thresh = cfg.getfloat("triggering", "snr-thresh")
+    if cfg.has_option("triggering", "fap-thresh"):
+        handler.fap = cfg.getfloat("triggering", "fap-thresh")
+
+    if handler.fap is not None:
+        print "False alarm probability threshold (in Gaussian noise) is %g" % handler.fap
+    if handler.snr_thresh is not None:
+        print "Trigger SNR threshold sqrt(E/ndof-1) is %f" % handler.snr_thresh
+
+    # If one wishes to try and automatically upload events to an event database 
+    # (read: gracedb and friends) these options will be sufficient to the
+    # pipeline to do such a thing
+    # FIXME: Rework or delete... this probably isn't going to work in realtime
+    if options.db_uploads:
+
+        handler.db_thresh = cfg.getfloat("triggering", "db-thresh")
+        if handler.db_thresh is None:
+            print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
+
+        handler.db_client = cfg.get("triggering", "db-client")
+        if handler.db_thresh is None:
+            print >>sys.stderr, "Warning, DB upload requested, but no DB path provided. Disablinhg"
+            handler.db_thresh = None
+
+    # Maximum number of events (+/- a few in the buffer) before which we drop an
+    # output file
+    if cfg.has_option("triggering", "events_per_file"):
+        handler.max_events = cfg.get_int("triggering", "events_per_file")
+
+    return handler
+
+# FIXME: Make into bin
+def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_time=0, peak_fraction=None, disable_triggers=False, histogram_triggers=False, verbose=False):
+
+    # Scan piece: Save the raw time series
+    if handler.trigger_segment:
+        head = pipeparts.mktee(pipeline, head)
+        scan_obj.add_data_sink(pipeline, head, "time_series", "time")
+
+    # Resample down to the requested rate
+    head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate)
+
+    # Add reblock to break up data into smaller pieces
+    head = pipeparts.mkreblock(pipeline, head, block_duration = 1*gst.SECOND)
+
+    head = handler.whitener = pipeparts.mkwhiten(pipeline, head)
+    # Amount of time to do a spectrum estimate over
+    handler.whitener.set_property("fft-length", handler.fft_length) 
+
+    # Ignore gaps in the whitener. Turning this off will induce wild triggers 
+    # because the whitener will see sudden drops in the data (due to the gaps)
+    handler.whitener.set_property("expand-gaps", True) 
+
+    # Drop first PSD estimates until it settles
+    if handler.psd_mode != 1:
+        handler.whitener_offset = drop_time
+        head = pipeparts.mkdrop(pipeline, head, int(drop_time*handler.rate))
+
+    # Scan piece: Save the whitened time series
+    if handler.trigger_segment:
+        head = pipeparts.mktee(pipeline, head)
+        scan_obj.add_data_sink(pipeline, head, "white_series", "time")
+
+    head = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
+
+    if verbose:
+        head = pipeparts.mkprogressreport(pipeline, head, "whitened stream")
+
+    # excess power channel firbank
+    head = pipeparts.mkfirbank(pipeline, head, time_domain=False, block_stride=handler.rate)
+
+    # This function stores a reference to the FIR bank, creates the appropriate 
+    # filters and sets the other options appropriately
+    handler.add_firbank(head)
+    nchannels = handler.filter_bank.shape[0]
+    if verbose:
+        print "FIR bank constructed with %d %f Hz channels" % (nchannels, handler.base_band)
+
+    if verbose:
+        head = pipeparts.mkprogressreport(pipeline, head, "FIR bank stream")
+
+    postfirtee = pipeparts.mktee(pipeline, head)
+
+    # Scan piece: Save the filtered time series
+    if handler.trigger_segment:
+        scan_obj.add_data_sink(pipeline, postfirtee, "filter_series", "time")
+
+    # object to handle the synchronization of the appsinks
+    # FIXME: Rework this
+    def get_triggers_with_handler(elem):
+        return handler.get_triggers(elem)
+    appsync = pipeparts.AppSync(appsink_new_buffer = get_triggers_with_handler)
+
+    # If the rate which would be set by the undersampler falls below one, we 
+    # have to take steps to prevent this, as gstreamer can't handle this. The 
+    # solution is to change the "units" of the rate. Ideally, this should be 
+    # done much earlier in the pipeline (e.g. as the data comes out of the 
+    # source), however, to avoid things like figuring out what that means for 
+    # the FIR bank we change units here, and readjust appropriately in the 
+    # trigger output.
+    min_rate = 2 * handler.base_band
+
+    unit = 'Hz'
+    if min_rate < 1:
+        print "Adjusting units to compensate for undersample rate falling below unity."
+        # No, it's not factors of ten, but rates which aren't factors
+        # of two are often tricky, thus if the rate is a factor of two, the 
+        # units conversion won't change that.
+        if min_rate > ep.EXCESSPOWER_UNIT_SCALE['mHz']:
+            unit = 'mHz'
+        elif min_rate > ep.EXCESSPOWER_UNIT_SCALE['uHz']:
+            unit = 'uHz'
+        elif min_rate > ep.EXCESSPOWER_UNIT_SCALE['nHz']:
+            unit = 'nHz'
+        else:
+            sys.exit( "Requested undersampling rate would fall below 1 nHz." )
+        # FIXME: No love for positive power of 10 units?
+
+        handler.units = ep.EXCESSPOWER_UNIT_SCALE[unit]
+        if handler.units != ep.EXCESSPOWER_UNIT_SCALE["Hz"]:
+            head = pipeparts.mkgeneric(pipeline, head, "audioratefaker")
+            head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=%d,channels=%d,width=64" % (handler.rate/handler.units, nchannels))
+
+    # First branch -- send fully sampled data to wider channels for processing
+    nlevels = int(numpy.ceil(numpy.log2(nchannels))) 
+    for res_level in range(0, min(handler.max_level, nlevels)):
+        # New level bandwidth
+        band = handler.base_band * 2**res_level
+
+        # The undersample_rate for band = R/2 is => sample_rate (passthrough)
+        orig_rate = 2 * handler.base_band
+        undersamp_rate = 2 * band / handler.units
+
+        print "Undersampling rate for level %d: %f Hz -> %f %s" % (res_level, orig_rate, undersamp_rate, unit)
+
+        head = postfirtee
+        # queue up data
+        head = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
+
+        head = pipeparts.mkgeneric(pipeline, head, "lal_audioundersample")
+        head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate)
+
+        if verbose:
+            head = pipeparts.mkprogressreport(pipeline, head, "Undersampled stream level %d" % res_level)
+
+        # This converts N base band channels into M wider channels via the use
+        # of a NxM matrix with M block diagonal elements containing the proper 
+        # renormalization per row
+        head = matmixer = pipeparts.mkmatrixmixer(pipeline, head)
+        handler.add_matmixer(matmixer, res_level)
+
+        if verbose:
+            head = pipeparts.mkprogressreport(pipeline, head, "post matrix mixer %d" % res_level)
+
+        # Square the samples to get energies to sum over
+        # FIXME: Put the power in lal_mean
+        head = pipeparts.mkgeneric(pipeline, head, "pow", exponent=2)
+
+        if verbose:
+            head = pipeparts.mkprogressreport(pipeline, head, "Energy stream level %d" % res_level)
+
+        # Second branch -- duration
+        max_samp = int(handler.max_duration*undersamp_rate*handler.units)
+
+        # If the user requests a maximum DOF, we use that instead
+        if handler.max_dof is not None:
+            max_samp = handler.max_dof
+
+        if max_samp < 2 and res_level == 0:
+            sys.exit("The duration for the largest tile is smaller than a two degree of freedom tile. Try increasing the requested maximum tile duration or maximum DOF requirement.")
+        elif max_samp < 2 and res_level != 0:
+            print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping remaining levels." % handler.max_duration
+            break
+        print "Can sum up to %s degress of freedom in powers of two for this resolution level." % max_samp
+
+        # samples to sum -- two is min number
+        ndof = 2
+
+        head = pipeparts.mktee(pipeline, head)
+        while ndof <= max_samp:
+            if handler.fix_dof is not None and ndof != handler.fix_dof:
+                ndof <<= 1
+                continue
+
+            if ndof/undersamp_rate > handler.max_duration:
+                break
+
+            # Scan piece: Save the summed square NDOF=1 stream
+            if handler.trigger_segment:
+                scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time")
+
+            if verbose:
+                print "Resolution level %d, DOFs: %d" % (res_level, ndof)
+
+            # Multi channel FIR filter -- used to add together frequency bands 
+            # into tiles
+            # FIXME: Use units / samples here
+            durtee = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
+            durtee = pipeparts.mkmean(pipeline, durtee, n=ndof, type=2, moment=1)
+
+            # Scan piece: Save the summed square NDOF=2 stream
+            if handler.trigger_segment:
+                durtee = pipeparts.mktee(pipeline, durtee)
+                scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time")
+
+            if verbose:
+                durtee = pipeparts.mkprogressreport(pipeline, durtee, "After energy summation resolution level %d, %d DOF" % (res_level, ndof))
+
+            if disable_triggers:
+                pipeparts.mkfakesink(pipeline, durtee)
+                ndof = ndof << 1
+                continue
+
+            # FIXME: This never seems to work, but it could be very useful as a 
+            # diagnostic
+            if histogram_triggers:
+                durtee = pipeparts.mkqueue(pipeline, durtee)
+                durtee = tmptee = pipeparts.mktee(pipeline, durtee)
+                tmptee = pipeparts.mkhistogram(pipeline, tmptee)
+                #tmptee = pipeparts.mkcolorspace(pipeline, tmptee)
+                #pipeparts.mkgeneric(pipeline, tmptee, "autovideosink", filter_caps=gst.caps_from_string("video/x-raw-rgb"))
+                pipeparts.mkogmvideosink(pipeline, tmptee, "test_%d_%d.ogm" % (res_level, ndof))
+
+            # FIXME: one the downstream elements is passing buffers marked
+            # as disconts. This resets the triggergen element, and the
+            # timestamps are very messed up as a consequence. This is a
+            # temporary fix until I can figure out which element is culprit
+            # and why its only happening with fixed PSDs
+            if handler.psd_mode == 1:
+                durtee = pipeparts.mknofakedisconts(pipeline, durtee)
+
+            # Trigger generator
+            # Number of tiles to peak over, if necessary
+            peak_samples = max(1, int((peak_fraction or 0) * ndof))
+
+            # Determine the SNR threshold for this trigger generator
+            snr_thresh = ep.determine_thresh_from_fap(handler.fap, ndof)**2
+            if verbose:
+                print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
+            durtee = pipeparts.mkbursttriggergen(pipeline, durtee, n=peak_samples, bank_filename=handler.build_filter_xml(res_level, ndof, verbose=verbose), snr_thresh=snr_thresh)
+
+            if verbose:
+                durtee = pipeparts.mkprogressreport(pipeline, durtee, "Trigger generator resolution level %d, %d DOF" % (res_level, ndof))
+
+            # Funnel the triggers for this subbranch to the appsink
+            # FIXME: Why doesn't this negotiate the caps properly?
+            #appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )
+            appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, durtee, max_size_buffers = 10))
+
+            ndof <<= 1
+            if ndof > max_samp:
+                break
+
+    return handler
