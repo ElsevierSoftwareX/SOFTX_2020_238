@@ -89,6 +89,9 @@ datasource.append_options(parser)
 (options, args) = parser.parse_args()
 gw_data_source_opts = datasource.GWDataSourceInfo(options)
 
+# Verbosity and diagnostics
+verbose = options.verbose
+
 #
 # Handler / Pipeline options
 #
@@ -98,25 +101,7 @@ pipeline = gst.Pipeline("gstlal_excesspower")
 mainloop = gobject.MainLoop()
 
 handler = epparts.process_options(options, gw_data_source_opts, pipeline, mainloop)
-
-# Verbosity and diagnostics
-verbose = options.verbose
-
-# This is invoked here, or else the default rate is used, which will cause
-# funny behavior for the defaults with some cases
-# FIXME: Can we move this back now? This probably isn't even needed with the 
-# drop samples
-df = 1.0 / handler.fft_length
-if handler.psd is None:
-	handler.psd = epparts.EPHandler.build_default_psd(handler.rate, df, handler.fhigh)
-handler.rebuild_filter()
-handler.rebuild_matrix_mixers()
-
-# Set process params in handler for use with the output xmldocs
-handler.make_process_tables(options, None)
-
-# Set all the relevant time bookkeeping
-handler.time_since_dump = handler.stop = handler.start
+handler.initialize_handler_objects(options)
 
 # Construct a scan object if requested
 scan_obj = None

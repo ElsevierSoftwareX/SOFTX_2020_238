@@ -86,6 +86,8 @@ class EPHandler( Handler ):
 	Handler class for the excess power pipeline. Keeps various bits of information that the pipeline emits and consumes. This is also in charge of signalling the rebuild of various matrices and vectors needed by the pipeline.
 	"""
 	def __init__( self, mainloop, pipeline ):
+		# FIXME: Synch with base Handler class, some of the init and message
+		# handling is done better there
 
 		# Instrument and channel
 		self.inst = None
@@ -178,6 +180,23 @@ class EPHandler( Handler ):
 		self.stats = ep.SBStats()
 
 		super(type(self), self).__init__(mainloop, pipeline)
+
+	def initialize_handler_objects(self, options):
+		# This is invoked here, or else the default rate is used, which will 
+		# cause funny behavior for the defaults with some cases
+
+		# Set process params in handler for use with the output xmldocs
+		self.make_process_tables(options, None)
+
+		# Set all the relevant time bookkeeping
+		self.time_since_dump = self.stop = self.start
+
+		# FIXME: This probably isn't even needed with the drop samples
+		df = 1.0 / self.fft_length
+		if self.psd is None:
+			self.psd = EPHandler.build_default_psd(self.rate, df, self.fhigh)
+		self.rebuild_filter()
+		self.rebuild_matrix_mixers()
 
 	def set_trigger_time_and_action(self, trig_seg, action="psd"):
 		"""
@@ -677,10 +696,6 @@ class EPHandler( Handler ):
 		if self.stop < 0: # indication that we're quitting with no output
 			return
 
-		# TODO: replace cbc filter table with our own
-		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
-		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
-		#output.replaceChild( ep_filter_table, cbc_filter_table )
 		print >>sys.stderr, "Outputting triggers for %s\n" % str(requested_segment)
 
 		# write the new distribution stats to disk
