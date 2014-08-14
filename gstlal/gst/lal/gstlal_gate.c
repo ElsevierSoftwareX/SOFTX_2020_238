@@ -20,6 +20,15 @@
  */
 
 
+/**
+ * SECTION:gstlal_gate
+ * @short_description:  Flag buffers as gaps based on the value of a control input.
+ *
+ * Reviewed:  8466e17ed01185bd3182603207d2ac322f502967 2014-08-14 K.
+ * Cannon, J.  Creighton, B. Sathyaprakash.
+ */
+
+
 /*
  * ========================================================================
  *
