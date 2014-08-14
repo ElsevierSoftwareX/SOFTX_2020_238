@@ -512,6 +512,35 @@ def get_triggers_with_handler(elem):
 	return handler.get_triggers(elem)
 appsync = pipeparts.AppSync(appsink_new_buffer = get_triggers_with_handler)
 
+min_rate = 2 * handler.base_band
+
+# If the rate which would be set by the undersampler falls below one, we 
+# have to take steps to prevent this, as gstreamer can't handle this. The 
+# solution is to change the "units" of the rate. Ideally, this should be 
+# done much earlier in the pipeline (e.g. as the data comes out of the 
+# source), however, to avoid things like figuring out what that means for 
+# the FIR bank we change units here, and readjust appropriately in the 
+# trigger output.
+if min_rate < 1:
+	print "Adjusting units to compensate for undersample rate falling below unity."
+	# No, it's not factors of ten, but rates which aren't factors
+	# of two are often tricky, thus if the rate is a factor of two, the 
+	# units conversion won't change that.
+	if min_rate > ep.EXCESSPOWER_UNIT_SCALE['mHz']:
+		unit = 'mHz'
+	elif min_rate > ep.EXCESSPOWER_UNIT_SCALE['uHz']:
+		unit = 'uHz'
+	elif min_rate > ep.EXCESSPOWER_UNIT_SCALE['nHz']:
+		unit = 'nHz'
+	else:
+		sys.exit( "Requested undersampling rate would fall below 1 nHz." )
+	# FIXME: No love for positive power of 10 units?
+
+	handler.units = ep.EXCESSPOWER_UNIT_SCALE[unit]
+	if handler.units != ep.EXCESSPOWER_UNIT_SCALE["Hz"]:
+		head = pipeparts.mkgeneric(pipeline, head, "audioratefaker")
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=%d,channels=%d,width=64" % (handler.rate/handler.units, nchannels))
+
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
 for res_level in range(0, min(handler.max_level, nlevels)):
@@ -523,40 +552,13 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	band = handler.base_band * 2**res_level
 
 	# The undersample_rate for band = R/2 is => sample_rate (passthrough)
-	undersamp_rate = 2 * band
+	orig_rate = 2 * handler.base_band
+	undersamp_rate = 2 * band / handler.units
 
-	# If the rate which would be set by the undersampler falls below one, we 
-	# have to take steps to prevent this, as gstreamer can't handle this. The 
-	# solution is to change the "units" of the rate. Ideally, this should be 
-	# done much earlier in the pipeline (e.g. as the data comes out of the 
-	# source), however, to avoid things like figuring out what that means for 
-	# the FIR bank we change units here, and readjust appropriately in the 
-	# trigger output.
-	if undersamp_rate < 1:
-		print "Automatically adjusting units to compensate for undersample rate falling below unity."
-		# No, it's not factors of ten, but rates which aren't factors
-		# of two are often tricky, thus if the rate is a factor of two, the 
-		# units conversion won't change that.
-		if undersamp_rate > ep.EXCESSPOWER_UNIT_SCALE['mHz']:
-			unit = 'mHz'
-		elif undersamp_rate > ep.EXCESSPOWER_UNIT_SCALE['uHz']:
-			unit = 'uHz'
-		elif undersamp_rate > ep.EXCESSPOWER_UNIT_SCALE['nHz']:
-			unit = 'nHz'
-		else:
-			sys.exit( "Requested undersampling rate would fall below 1 nHz." )
-		# FIXME: No love for positive power of 10 units?
+	print "Undersampling rate for level %d: %f Hz -> %f %s" % (res_level, orig_rate, undersamp_rate, unit)
 
-		handler.units = ep.EXCESSPOWER_UNIT_SCALE[unit]
-		undersamp_rate /= handler.units
-		print "Undersampling rate for level %d: %f %s" % (res_level, undersamp_rate, unit)
-		head = pipeparts.mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate/handler.units), replace=False )
-		head = pipeparts.mkgeneric( pipeline, head, "lal_audioundersample" )
-		head = pipeparts.mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate, replace=False )
-	else:
-		print "Undersampling rate for level %d: %f Hz" % (res_level, undersamp_rate)
-		head = pipeparts.mkgeneric( pipeline, head, "lal_audioundersample" )
-		head = pipeparts.mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
+	head = pipeparts.mkgeneric( pipeline, head, "lal_audioundersample" )
+	head = pipeparts.mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
 	if verbose:
 		head = pipeparts.mkprogressreport( pipeline, head, 
@@ -575,6 +577,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	# Square the samples to get energies to sum over
+	# FIXME: Put the power in lal_mean
 	head = pipeparts.mkgeneric( pipeline, head, "pow", exponent=2 )
 
 	if verbose:
@@ -583,8 +586,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	# Second branch -- duration
-	# FIXME: Units on max_duration need to be adjusted to match undersampling
-	max_samp = int(handler.max_duration*undersamp_rate)
+	max_samp = int(handler.max_duration*undersamp_rate*handler.units)
+
 	# If the user requests a maximum DOF, we use that instead
 	if max_dof is not None:
 		max_samp = max_dof
@@ -617,6 +620,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 		# Multi channel FIR filter -- used to add together frequency bands into 
 		# tiles
+		# FIXME: Use units / samples here
 		durtee = pipeparts.mkqueue(pipeline, head, max_size_time = 1*gst.SECOND)
 		durtee = pipeparts.mkmean( pipeline, durtee )
 		durtee.set_property( "n", ndof )
