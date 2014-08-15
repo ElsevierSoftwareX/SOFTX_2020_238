@@ -57,9 +57,11 @@ else:
 	import gst
 
 from gstlal import pipeparts
-from gstlal import epparts
+#from gstlal import epparts
 from gstlal import datasource
 import gstlal.excesspower as ep
+from gstlal.excesspower import parts
+from gstlal.excesspower.scan import EPScan
 
 from glue.segments import segment
 
@@ -75,7 +77,7 @@ __version__ = "Defiant" # until we get proper versioning tags
 #
 
 parser = OptionParser()
-epparts.append_options(parser)
+ep.append_options(parser)
 datasource.append_options(parser)
 
 (options, args) = parser.parse_args()
@@ -92,14 +94,14 @@ verbose = options.verbose
 pipeline = gst.Pipeline("gstlal_excesspower")
 mainloop = gobject.MainLoop()
 
-handler = epparts.process_options(options, gw_data_source_opts, pipeline, mainloop)
+handler = ep.process_options(options, gw_data_source_opts, pipeline, mainloop)
 handler.initialize_handler_objects(options)
 
 # Construct a scan object if requested
 scan_obj = None
 if options.scan_start and options.scan_end:
     trigger_segment = segment(map(LIGOTimeGPS, (options.scan_start, options.scan_end)))
-    scan_obj = epparts.EPScan(trigger_segment, low_freq=handler.flow, high_freq=handler.fhigh, base_band=handler.base_band)
+    scan_obj = EPScan(trigger_segment, low_freq=handler.flow, high_freq=handler.fhigh, base_band=handler.base_band)
     handler.set_trigger_time_and_action(scan_obj.trigger_segment, action="scan")
 
 #
@@ -131,12 +133,12 @@ elif gw_data_source_opts.seg is not None:
     handler.start = float(gw_data_source_opts.seg[0])
 
 # Construct the analysis end of the pipeline
-epparts.construct_excesspower_pipeline(pipeline, head, handler, scan_obj, options.drop_time, options.peak_fraction, disable_triggers=options.disable_triggers, verbose=verbose)
+parts.construct_excesspower_pipeline(pipeline, head, handler, scan_obj, options.drop_time, options.peak_fraction, disable_triggers=options.disable_triggers, verbose=verbose)
 
 # Spectrum notification processing
-handler.whitener.connect_after("notify::mean-psd", epparts.on_psd_change, handler, options.drop_time)
+handler.whitener.connect_after("notify::mean-psd", parts.on_psd_change, handler, options.drop_time)
 # Handle spectral correlation changes
-handler.whitener.connect_after("notify::spectral-correlation", epparts.on_spec_corr_change, handler)
+handler.whitener.connect_after("notify::spectral-correlation", parts.on_spec_corr_change, handler)
 
 # Check for empty frame segments list if handed frames 
 for ifo, seglist in gw_data_source_opts.frame_segments.iteritems():
