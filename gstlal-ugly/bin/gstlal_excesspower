@@ -30,6 +30,7 @@ import os
 import sys
 import signal
 import math
+import time
 
 from optparse import OptionParser
 
@@ -63,6 +64,7 @@ import gstlal.excesspower as ep
 from gstlal.excesspower import parts
 from gstlal.excesspower.scan import EPScan
 
+from glue import gpstime
 from glue.segments import segment
 
 __author__ = "Chris Pankow <chris.pankow@ligo.org>"
@@ -119,9 +121,9 @@ if verbose:
 head = datasource.mkbasicsrc(pipeline, gw_data_source_opts, handler.inst, verbose)
 
 # If we're running online, we need to set up a few things 
-if gw_data_source_opts.data_source == "lvshm":
+if gw_data_source_opts.data_source in ("lvshm", "framexmit"):
     # FIXME: This is a guess. Not a terrible one, but still inaccurate
-    handler.start = gpstime.GpsSecondsFromPyUTC(time.time())
+    handler.time_since_dump = handler.stop = handler.start = gpstime.GpsSecondsFromPyUTC(time.time())
 
     # This enables EP to get the on and off signals to make a segment list
     gate = pipeline.get_by_name( "%s_state_vector_gate" % handler.inst )
