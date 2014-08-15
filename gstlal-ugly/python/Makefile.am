@@ -1,3 +1,5 @@
+SUBDIRS = excesspower
+
 AM_CPPFLAGS = -I$(top_srcdir)/gst/framecpp
 
 # This is a trick taken from the gst-python automake setup.
@@ -8,7 +10,6 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	epparts.py \
-	excesspower.py \
 	gviz_api.py \
 	httpinterface.py \
 	servicediscovery.py \
