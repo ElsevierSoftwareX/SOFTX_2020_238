@@ -25,18 +25,40 @@
 # =============================================================================
 #
 
-
 import os
 import sys
-import signal
-import glob
-import threading
-import json
+import time
 import tempfile
-import shutil
+import threading
+import math
+import json
 import types
 
+from optparse import OptionParser, OptionGroup
+
+import ConfigParser
+from ConfigParser import SafeConfigParser
+
 import numpy
+
+from glue import datafind
+
+from glue.ligolw import utils, ligolw, lsctables
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import search_summary as ligolw_search_summary
+
+from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
+from glue.lal import LIGOTimeGPS, Cache, CacheEntry
+
+from pylal import snglcluster
+from pylal import ligolw_bucluster
+
+from pylal import datatypes as laltypes
+from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
+
+import lalburst
 
 import pygtk
 pygtk.require("2.0")
@@ -46,32 +68,11 @@ import pygst
 pygst.require("0.10")
 import gst
 
+from gstlal import pipeparts
+from gstlal import datasource
 from gstlal.simplehandler import Handler
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
-
 import gstlal.excesspower as ep
-
-from glue.ligolw import ligolw, lsctables, table, ilwd
-class ContentHandler(ligolw.LIGOLWContentHandler): 
-	pass 
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-
-from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import search_summary as ligolw_search_summary
-
-from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
-from glue import segmentsUtils
-from glue.lal import Cache, CacheEntry
-
-from pylal import snglcluster
-from pylal import ligolw_bucluster
-
-from pylal import datatypes as laltypes
-from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
-
-import lalburst
 
 #
 # =============================================================================
@@ -216,7 +217,6 @@ class EPHandler( Handler ):
 		"""
 		if segment_type == "on":
 			self.current_segment = segment( LIGOTimeGPS(timestamp) / 1e9, PosInfinity )
-			#segmentsUtils.tosegwizard( sys.stdout, self.seglist["state"] )
 			if self.verbose:
 				print >>sys.stderr, "Starting segment #%d: %.9f" % (len(self.seglist["state"]), self.current_segment[0])
 		elif segment_type == "off":
@@ -389,7 +389,7 @@ class EPHandler( Handler ):
 		self.lock.release()
 
 		# Just get the table we want
-		self.filter_xml[(res_level, ndof)] = table.get_table(self.filter_xml[(res_level, ndof)], lsctables.SnglBurstTable.tableName )
+		self.filter_xml[(res_level, ndof)] = lsctables.SnglBurstTable.get_table(self.filter_xml[(res_level, ndof)])
 		return output
 
 	def destroy_filter_xml( self, loc="" ):
@@ -661,7 +661,7 @@ class EPHandler( Handler ):
 		output.childNodes[0].appendChild(outtable)
 
 		ligolw_search_summary.append_search_summary( output, process, lalwrapper_cvs_tag=None, lal_cvs_tag=None, inseg=requested_segment )
-		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
+		search_sum = lsctables.SearchSummaryTable.get_table(output)
 		# TODO: This shouldn't set every one of them in case we reuse XML 
 		# documents later
 		for row in search_sum:
@@ -894,49 +894,6 @@ def convert_sngl_burst(snglburst, sb_table):
 		setattr(event, attr, getattr(snglburst, attr))
 	return event
 
-############ From pipeline code
-import os
-import sys
-import time
-import signal
-import glob
-import tempfile
-import threading
-import math
-
-from optparse import OptionParser, OptionGroup
-import ConfigParser
-from ConfigParser import SafeConfigParser
-
-import numpy
-
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
-
-import gst
-
-from gstlal import pipeparts
-from gstlal.reference_psd import write_psd, read_psd_xmldoc
-
-import gstlal.excesspower as ep
-from gstlal import datasource
-
-from glue import datafind
-
-from glue.ligolw import ligolw, array, param, lsctables, table, ilwd
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-
-from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
-from glue import segmentsUtils
-from glue import gpstime
-from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 
 #
 # =============================================================================

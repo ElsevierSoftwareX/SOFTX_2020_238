@@ -29,10 +29,9 @@
 import os
 import sys
 import signal
+import math
 
-from optparse import OptionParser, OptionGroup
-
-import numpy
+from optparse import OptionParser
 
 import pygtk
 pygtk.require("2.0")
@@ -62,14 +61,7 @@ from gstlal import epparts
 from gstlal import datasource
 import gstlal.excesspower as ep
 
-from glue.ligolw import ligolw, array, param, lsctables, table, ilwd
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-
-from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
-from glue import segmentsUtils
+from glue.segments import segment
 
 __author__ = "Chris Pankow <chris.pankow@ligo.org>"
 __version__ = "Defiant" # until we get proper versioning tags
@@ -167,4 +159,4 @@ mainloop.run()
 # All done, write out a scan if asked
 if handler.trigger_segment:
     scan_obj.close()
-    scan_obj.write_out("gstlal_excesspower_scan_%s_%s_%d_%d" % (handler.channel, handler.inst, numpy.floor(int(options.scan_start)), numpy.ceil(int(options.scan_end))))
+    scan_obj.write_out("gstlal_excesspower_scan_%s_%s_%d_%d" % (handler.channel, handler.inst, math.floor(int(options.scan_start)), math.ceil(int(options.scan_end))))
