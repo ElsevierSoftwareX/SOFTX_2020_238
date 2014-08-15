@@ -704,7 +704,7 @@ class EPHandler( Handler ):
 		self.lock.release()
 
 		# Keep track of the output files we make for later convience
-		if self.output_cache is not None:
+		if self.output_cache_name is not None:
 			self.output_cache.append(
 				CacheEntry(
 					self.inst, self.channel + "_excesspower",
@@ -712,26 +712,6 @@ class EPHandler( Handler ):
 					("file://localhost" + os.path.abspath(filename))
 				)
 			)
-
-		if self.output_cache_name is not None:	
-			self.lock.acquire()
-			# This is to ensure that multiple *processes* don't
-			# write to the file simulateanously, and thereby
-			# invalidating the cache
-			counter, lockf = 100, None
-			while counter > 0:
-				try:
-					lockf = os.open( self.output_cache_name + ".lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY )
-				except OSError:
-					counter -= 1
-				break
-
-			if lockf is not None:
-				self.output_cache.tofile( file(self.output_cache_name, "a") )
-				os.close(lockf)
-				os.remove( self.output_cache_name + ".lock" )
-				
-			self.lock.release()
 
 		# Keeping statistics about event rates
 		if self.channel_monitoring:
@@ -819,7 +799,9 @@ class EPHandler( Handler ):
 				ext = "cache",
 				dir = self.outdir
 			)
+			self.lock.acquire()
 			self.output_cache.tofile( file(outfile, "w") )
+			self.lock.release()
 
 		self.destroy_filter_xml()
 
@@ -973,8 +955,7 @@ def append_options(parser=None):
     parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
     parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
     parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
-    parser.add_option("-T", "--file-cache", dest="file_cache", action="store_true", help="Create file caches of output files. If no corresponding --file-cache-name option is provided, an approrpriate name is constructed by default, and will only be created at the successful conclusion of the pipeline run.", default=False)
-    parser.add_option("-F", "--file-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. If this option is specified, then when each trigger file is written, this file will be written to with the corresponding cache entry. See --file-cache for other details.", default=None)
+    parser.add_option("-F", "--trigger-cache-name", dest="file_cache_name", action="store", help="Name of the trigger file cache to be written to. When specified, the LIGO cache entry of each trigger file is written to this file.")
     parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
     parser.add_option("-m", "--enable-channel-monitoring", dest="channel_monitoring", action="store_true", default=False, help="Emable monitoring of channel statistics like even rate/signifiance and PSD power" )
     parser.add_option("-p", "--peak-over-sample-fraction", type=float, default=None, dest="peak_fraction", help="Take the peak over samples corresponding to this fraction of the DOF for a given tile. Default is no peak." )
@@ -1050,12 +1031,9 @@ def process_options(options, gw_data_source_opts, pipeline, mainloop):
         handler.rate = options.sample_rate
 
     # Does the user want a cache file to track the trigger files we spit out?
-    if not options.file_cache:
-        handler.output_cache = None
-
     # And if so, if you give us a name, we'll update it every time we output,
     # else only at the end of the run
-    if options.file_cache and options.file_cache_name is not None:
+    if options.file_cache_name is not None:
         handler.output_cache_name = options.file_cache_name
 
     # Clustering on/off
