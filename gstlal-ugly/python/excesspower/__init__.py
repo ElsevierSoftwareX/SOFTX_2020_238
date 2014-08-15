@@ -1,5 +1,3 @@
-#!/usr/bin/python
-#
 # Copyright (C) 2012 Chris Pankow
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -34,20 +32,14 @@ from scipy.stats import chi2, poisson, mannwhitneyu, norm
 
 from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-from pylal.xlal.datatypes.complex16frequencyseries import COMPLEX16FrequencySeries
-from pylal.xlal.datatypes.real8timeseries import REAL8TimeSeries
+from pylal import datatypes as laltypes
 
-from glue.ligolw import ligolw
-from glue.ligolw import ilwd
-from glue.ligolw import utils
-from glue.ligolw import lsctables
+from glue.ligolw import ligolw, utils, ilwd, lsctables
 from glue import lal
 from glue.segments import segment, segmentlist
 
-from gstlal.pipeutil import gst
+import gst
 from gstlal import pipeparts 
-
 import gstlal.fftw
 
 #
@@ -246,7 +238,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# save the frequency domain filters, if necessary
 		# We make a deep copy here because we don't want the zero padding that
 		# is about to be done to get the filters into the time domain
-		h_wind_copy = COMPLEX16FrequencySeries()
+		h_wind_copy = laltypes.COMPLEX16FrequencySeries()
 		h_wind_copy.f0 = h_wind.f0
 		h_wind_copy.deltaF = h_wind.deltaF
 		h_wind_copy.data = copy.deepcopy(h_wind.data)
@@ -266,9 +258,9 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		#f.close()
 
 		# IFFT the window into a time series for use as a TD filter
+		t_series = laltypes.REAL8TimeSeries()
+		t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
 		try:
-			t_series = REAL8TimeSeries()
-			t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
 			XLALREAL8FreqTimeFFT( 
 				# t_series =
 				t_series, 
@@ -366,7 +358,7 @@ def build_filter_from_xml(sb_table, psd, corr=None):
 		# save the frequency domain filters, if necessary
 		# We make a deep copy here because we don't want the zero padding that
 		# is about to be done to get the filters into the time domain
-		h_wind_copy = COMPLEX16FrequencySeries()
+		h_wind_copy = laltypes.COMPLEX16FrequencySeries()
 		h_wind_copy.f0 = h_wind.f0
 		h_wind_copy.deltaF = h_wind.deltaF
 		h_wind_copy.data = copy.deepcopy(h_wind.data)
@@ -386,9 +378,9 @@ def build_filter_from_xml(sb_table, psd, corr=None):
 		#f.close()
 
 		# IFFT the window into a time series for use as a TD filter
+		t_series = laltypes.REAL8TimeSeries()
+		t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
 		try:
-			t_series = REAL8TimeSeries()
-			t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
 			XLALREAL8FreqTimeFFT( 
 				# t_series =
 				t_series, 
