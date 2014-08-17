@@ -153,8 +153,7 @@ ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincp
 
 
 #
-# Collect the PDF writing thread if one was created and write the parameter
-# and ranking statistic distribution data to a file
+# Write the parameter and ranking statistic distribution data to a file
 #
 
 
