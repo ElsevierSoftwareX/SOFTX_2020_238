@@ -697,7 +697,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.add_foreground_snrchi_prior(self.background_rates, instruments = instruments, n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def add_instrument_combination_counts(self, segs, verbose = False):
-
 		#
 		# populate instrument combination binning.  assume the
 		# single-instrument categories in the background rates
@@ -1225,21 +1224,17 @@ def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 50
 #
 
 
-def binned_likelihood_ratio_rates_from_samples(samples, limits, nsamples, bins_per_decade = 250.0, min_bins = 1000):
+def binned_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, samples, nsamples):
 	"""
-	Construct and return a BinnedArray containing a histogram of a sequence
-	of samples (which can be a generator).  The first nsamples elements
-	from the sequence are used.  limits is expected to be a tuple or other
-	two-element sequence providing the (low, high) limits.
+	Populate signal and noise BinnedArray histograms from a sequence of
+	samples (which can be a generator).  The first nsamples elements
+	from the sequence are used.  The samples must be a sequence of
+	three-element tuples (or sequences) in which the first element is a
+	value of the ranking statistic (likelihood ratio) and the second
+	and third elements the logs of the probabilities of obtaining that
+	value of the ranking statistic in the signal and noise populations
+	respectively.
 	"""
-	lo, hi = limits
-	if lo >= hi:
-		raise ValueError("limits out of order (%g, %g)" % limits)
-	nbins = max(int(round(bins_per_decade * math.log10(hi / lo))), min_bins)
-	if nbins < 1:
-		raise ValueError("bins_per_decade (%g) too small for limits (%g, %g)" % (nbins, lo, hi))
-	signal_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
-	noise_rates = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo, hi, nbins),)))
 	sample_func = iter(samples).next
 	for i in xrange(nsamples):
 		lamb, lnP_signal, lnP_noise = sample_func()
@@ -1261,16 +1256,16 @@ class RankingData(object):
 	ligo_lw_name_suffix = u"gstlal_inspiral_rankingdata"
 
 	#
-	# Range of likelihood ratios to track in PDFs
+	# likelihood ratio binning
 	#
 
-	likelihood_ratio_limits = (math.exp(-3.0), math.exp(230.0))
+	binnings = {
+		"likelihood_ratio": rate.NDBins((rate.ATanLogarithmicBins(math.exp(0.), math.exp(80.), 5000),))
+	}
 
-	#
-	# e-fold scale on which to smooth likelihood ratio PDFs
-	#
-
-	likelihood_ratio_smoothing_scale = 1. / 8.
+	filters = {
+		"likelihood_ratio": rate.gaussian_window(8.)
+	}
 
 	#
 	# Threshold at which FAP & FAR normalization will occur
@@ -1279,11 +1274,13 @@ class RankingData(object):
 	likelihood_ratio_threshold = math.exp(2)
 
 
-	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 8000000, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
 		self.signal_likelihood_pdfs = {}
+		self.zero_lag_likelihood_rates = {}
+		self.zero_lag_likelihood_pdfs = {}
 		self.process_id = process_id
 
 		# bailout out used by .from_xml() class method to get an
@@ -1298,15 +1295,21 @@ class RankingData(object):
 				instruments |= set(instrument for instrument, distance in key)
 		instruments = tuple(instruments)
 
+		# initialize binnings
+		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
+			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
+			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
+
 		# calculate all of the possible ifo combinations with at least
 		# 2 detectors in order to get the joint likelihood pdfs
 		likelihoodratio_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
 		threads = []
-		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+		for key in self.background_likelihood_rates:
 			if verbose:
 				print >>sys.stderr, "computing signal and noise likelihood PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.likelihoodratio_samples(iter(coinc_params_distributions.random_params(key)).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), limits = self.likelihood_ratio_limits, nsamples = nsamples)))
+			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.signal_likelihood_rates[key], self.background_likelihood_rates[key], self.likelihoodratio_samples(iter(coinc_params_distributions.random_params(key)).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), nsamples = nsamples)))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1363,6 +1366,32 @@ class RankingData(object):
 
 		self.finish()
 
+
+	def collect_zero_lag_rates(self, connection, coinc_def_id):
+		for instruments, likelihood_ratio in connection.cursor().execute("""
+SELECT
+	coinc_inspiral.ifos,
+	coinc_event.likelihood
+FROM
+	coinc_inspiral
+	JOIN coinc_event ON (
+		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND NOT EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+""", (coinc_def_id,)):
+			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][likelihood_ratio,] += 1.
+
+
 	@staticmethod
 	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func):
 		"""
@@ -1404,38 +1433,46 @@ class RankingData(object):
 	def finish(self, verbose = False):
 		self.background_likelihood_pdfs.clear()
 		self.signal_likelihood_pdfs.clear()
-		def build_pdf(binnedarray, likelihood_ratio_threshold, smoothing_efolds):
-			# copy counts into pdf array, 0 the overflow bins, and smooth
+		self.zero_lag_likelihood_pdfs.clear()
+		def build_pdf(binnedarray, likelihood_ratio_threshold, filt):
+			# copy counts into pdf array and smooth
 			pdf = binnedarray.copy()
-			pdf.array[0] = pdf.array[-1] = 0.
-			bins_per_efold = pdf.bins[0].n / math.log(pdf.bins[0].max / pdf.bins[0].min)
-			rate.filter_array(pdf.array, rate.gaussian_window(bins_per_efold * smoothing_efolds))
-			# zero the PDF below the threshold.  need to
+			rate.filter_array(pdf.array, filt)
+			# zero the counts below the threshold.  need to
 			# make sure the bin @ threshold is also 0'ed
 			pdf[:likelihood_ratio_threshold,] = 0.
 			pdf[likelihood_ratio_threshold,] = 0.
+			# zero the counts in the infinite-sized high bin so
+			# the final PDF normalization ends up OK
+			pdf.array[-1] = 0.
 			# convert to normalized PDF
 			pdf.to_pdf()
 			return pdf
 		if verbose:
-			progressbar = ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates))
+			progressbar = ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates) + len(self.zero_lag_likelihood_rates))
 			progressbar.show()
 		else:
 			progressbar = None
 		for key, binnedarray in self.background_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
+			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.signal_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.likelihood_ratio_smoothing_scale)
+			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
+			if progressbar is not None:
+				progressbar.increment()
+		for key, binnedarray in self.zero_lag_likelihood_rates.items():
+			assert not numpy.isnan(binnedarray.array).any(), "%s zero lag likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 
 	def __iadd__(self, other):
 		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
 		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
+		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.zero_lag_likelihood_rates, other.zero_lag_likelihood_rates, self.zero_lag_likelihood_pdfs, other.zero_lag_likelihood_pdfs)
 		return self
 
 	@classmethod
@@ -1456,10 +1493,14 @@ class RankingData(object):
 		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		reconstruct(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
 		reconstruct(xml, u"signal_likelihood_pdf", self.signal_likelihood_pdfs)
+		reconstruct(xml, u"zero_lag_likelihood_rate", self.zero_lag_likelihood_rates)
+		reconstruct(xml, u"zero_lag_likelihood_pdf", self.zero_lag_likelihood_pdfs)
 
 		assert set(self.background_likelihood_rates) == set(self.background_likelihood_pdfs)
 		assert set(self.signal_likelihood_rates) == set(self.signal_likelihood_pdfs)
+		assert set(self.zero_lag_likelihood_rates) == set(self.zero_lag_likelihood_pdfs)
 		assert set(self.background_likelihood_rates) == set(self.signal_likelihood_rates)
+		assert set(self.background_likelihood_rates) == set(self.zero_lag_likelihood_rates)
 
 		self._compute_combined_rates()
 
@@ -1477,6 +1518,8 @@ class RankingData(object):
 		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		store(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
 		store(xml, u"signal_likelihood_pdf", self.signal_likelihood_pdfs)
+		store(xml, u"zero_lag_likelihood_rate", self.zero_lag_likelihood_rates)
+		store(xml, u"zero_lag_likelihood_pdf", self.zero_lag_likelihood_pdfs)
 
 		return xml
 
