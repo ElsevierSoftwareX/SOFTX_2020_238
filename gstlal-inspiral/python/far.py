@@ -361,6 +361,11 @@ class NearestLeafTree(object):
 				raise IndexError(x)
 			del self.tree[lo]
 
+	def __iadd__(self, other):
+		for x, val in other.tree:
+			self[x] = val
+		return self
+
 	def keys(self):
 		return [x for x, val in self.tree]
 
@@ -392,6 +397,14 @@ class NearestLeafTree(object):
 
 
 class HorizonHistories(dict):
+	def __iadd__(self, other):
+		for key, history in other.iteritems():
+			try:
+				self[key] += history
+			except KeyError:
+				self[key] = copy.deepcopy(history)
+		return self
+
 	def getdict(self, x):
 		return dict((key, value[x]) for key, value in self.iteritems())
 
@@ -500,6 +513,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def __init__(self, *args, **kwargs):
 		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
 		self.horizon_history = HorizonHistories()
+
+	def __iadd__(self, other):
+		super(ThincaCoincParamsDistributions, self).__iadd__(other)
+		self.horizon_history += other.horizon_history
+		return self
 
 	#
 	# class-level cache of pre-computed SNR joint PDFs.  structure is like
