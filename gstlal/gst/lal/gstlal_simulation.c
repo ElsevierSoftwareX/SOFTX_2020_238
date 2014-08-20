@@ -276,15 +276,21 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	REAL8TimeSeries *hcross = NULL;
 
 	/*
-	 * create waveform using lalsimulation
+	 * create waveform using lalinspiral's wrapping of lalsimulation.
+	 * XLALInspiralTDWaveformFromSimInspiral() translates the
+	 * sim_inspiral row into a function call into lalsimulation,
+	 * collecting and returning a conditioned waveform suitable for
+	 * injection into an h(t) stream (after projection onto an antenna
+	 * respose).
 	 *
-	 * FIXME:  remove locks when we can be sure lal has been compiled with pthread support
+	 * FIXME:  remove locks when we can be sure lal has been compiled
+	 * with pthread support
 	 */
 
 #ifndef LAL_PTHREAD_LOCK
 	gstlal_fftw_lock();
 #endif
-	if(XLALSimInspiralChooseWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE) {
+	if(XLALInspiralTDWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE) {
 #ifndef LAL_PTHREAD_LOCK
 		gstlal_fftw_unlock();
 #endif
