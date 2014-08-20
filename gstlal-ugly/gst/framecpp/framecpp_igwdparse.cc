@@ -289,7 +289,7 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 		 * pass-through if input is already framed
 		 */
 
-		gst_base_parse_set_passthrough(parse, framed)
+		gst_base_parse_set_passthrough(parse, framed);
 	}
 
 	if(!success)
