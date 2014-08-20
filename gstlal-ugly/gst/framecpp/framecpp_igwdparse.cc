@@ -204,10 +204,10 @@ static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, gui
 	name = fr_get_string(element, &reader);
 	if(!strcmp(name, FRENDOFFILE_NAME)) {
 		*eof_klass = fr_get_int_2u(element, &reader);
-		GST_DEBUG_OBJECT(element, "found " FRENDOFFILE_NAME " structure's class:  %d", (int) *eof_klass);
+		GST_DEBUG_OBJECT(element, "found " FRENDOFFILE_NAME " structure's class:  %hu", (unsigned short) *eof_klass);
 	} else if(!strcmp(name, FRAMEH_NAME)) {
 		*frameh_klass = fr_get_int_2u(element, &reader);
-		GST_DEBUG_OBJECT(element, "found " FRAMEH_NAME " structure's class:  %d", (int) *frameh_klass);
+		GST_DEBUG_OBJECT(element, "found " FRAMEH_NAME " structure's class:  %hu", (unsigned short) *frameh_klass);
 	}
 }
 
