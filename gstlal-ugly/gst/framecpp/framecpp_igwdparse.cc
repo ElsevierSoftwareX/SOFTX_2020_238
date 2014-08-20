@@ -273,13 +273,27 @@ static gboolean start(GstBaseParse *parse)
 static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 {
 	GstPad *srcpad = GST_BASE_PARSE_SRC_PAD(parse);
+	GstStructure *s;
+	gboolean framed;
 	gboolean success = TRUE;
 
-	caps = gst_caps_copy(gst_pad_get_pad_template_caps(srcpad));
-	success = gst_pad_set_caps(srcpad, caps);
+	s = gst_caps_get_structure(caps, 0);
+	success &= gst_structure_get_boolean(s, "framed", &framed);
+
+	if(success) {
+		GstCaps *srccaps = gst_caps_copy(gst_pad_get_pad_template_caps(srcpad));
+		success &= gst_pad_set_caps(srcpad, srccaps);
+		gst_caps_unref(srccaps);
+
+		/*
+		 * pass-through if input is already framed
+		 */
+
+		gst_base_parse_set_passthrough(parse, framed)
+	}
+
 	if(!success)
-		GST_ERROR_OBJECT(srcpad, "unable to set caps to %" GST_PTR_FORMAT, caps);
-	gst_caps_unref(caps);
+		GST_ERROR_OBJECT(srcpad, "unable to accept sink caps %" GST_PTR_FORMAT, caps);
 
 	return success;
 }
@@ -522,7 +536,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 		"application/x-igwd-frame, " \
-		"framed = (boolean) false"
+		"framed = (boolean) {true, false}"
 	)
 );
 
