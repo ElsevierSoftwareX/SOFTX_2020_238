@@ -17,6 +17,7 @@
 
 - \ref gstlalinspirals6replaypage
 - \ref gstlalinspiralcodeoptimization
+  -  \ref gstlalinspiralpatchinformation
 
 ### References
 
