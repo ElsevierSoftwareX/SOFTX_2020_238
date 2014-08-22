@@ -185,15 +185,26 @@ likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
 #
 
 
+failed = []
 for n, filename in enumerate(filenames, 1):
 	#
-	# Open the file.  (be lazy and use the content handler for the
-	# distribution data files because it's fine for this, too)
+	# Open the file.  Be lazy and use the content handler for the
+	# distribution data files because it's fine for this, too.  If a
+	# file can't be loaded because of a filesystem failure or CRC
+	# failure, or whatever, try to do the rest of the files before
+	# exiting instead of crashing right away to reduce the time spent
+	# in rescue dags.
 	#
 
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	try:
+		xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	except Exception as e:
+		if options.verbose:
+			print >>sys.stderr, "failed to load '%s': %s.  trying to continue with remaining files" % (filename, str(e))
+		failed.append(filename)
+		continue
 
 	if ligolw_process.doc_includes_process(xmldoc, u"gstlal_inspiral_calc_likelihood"):
 		if options.verbose:
@@ -278,3 +289,12 @@ for n, filename in enumerate(filenames, 1):
 
 	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
 	xmldoc.unlink()
+
+
+#
+# Crash if any input files were broken
+#
+
+
+if failed:
+	raise ValueError("%s could not be processed" % ", ".join("'%s'" % filename for filename in failed))
