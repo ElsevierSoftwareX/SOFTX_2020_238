@@ -1,0 +1,72 @@
+digraph triggers {
+	node [shape=box, style=filled];
+	subgraph cluster_ligo_data_find_0 {
+	label = "ligo_data_find jobs"
+	"H1_frame.cache" [color=red1, label="Detectors: H1"];
+	"L1_frame.cache" [color=green1, label="Detectors: L1"];
+	"V1_frame.cache" [color=magenta1, label="Detectors: V1"];
+	}
+
+	subgraph cluster_frame_cache_0 {
+		"frame.cache" [color=grey, label="cat"];
+	}
+	
+	"H1_frame.cache" -> "frame.cache";
+	"L1_frame.cache" -> "frame.cache";
+	"V1_frame.cache" -> "frame.cache";
+
+	subgraph cluster_segmentspadded_0 {
+	"H1_segmentspadded.xml" [color=red1];
+	"L1_segmentspadded.xml" [color=green1];
+	"V1_segmentspadded.xml" [color=magenta1];
+	}
+
+	subgraph cluster_gstlal_segments_operations_0 {
+	"segments.xml" [color=grey, label="gstlal_segments_operations", URL="\ref gstlal_segments_operations"];
+	}
+
+	"H1_segmentspadded.xml" -> "segments.xml";
+	"L1_segmentspadded.xml" -> "segments.xml";
+	"V1_segmentspadded.xml" -> "segments.xml";
+
+	"frame.cache" -> "segments.xml";	
+
+	subgraph cluster_lalapps_tmplbank_0 {
+	"H1-TMPLTBANK-966393725-2048.xml" [color=red1, label="pycbc_geom_nonspinbank"];
+	}
+
+	"H1_frame.cache" -> "H1-TMPLTBANK-966393725-2048.xml";
+
+	subgraph cluster_gstlal_bank_splitter_0 {
+	label = "gstlal_bank_splitter jobs"
+	"H1_split_bank.cache" [color=red1, label="Detectors: H1"];
+	"L1_split_bank.cache" [color=green1, label="Detectors: L1"];
+	"V1_split_bank.cache" [color=magenta1, label="Detectors: V1"];
+	}
+	"H1-TMPLTBANK-966393725-2048.xml" -> "H1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "L1_split_bank.cache";
+	"H1-TMPLTBANK-966393725-2048.xml" -> "V1_split_bank.cache";
+
+	subgraph cluster_mkdir_0 {
+	plots [color=grey, label="mkdir"];
+	}
+
+	subgraph cluster_lalapps_inspinj_0 {
+	"1_injections.xml" [color=grey, label="lalapps_inspinj", URL="\ref lalapps_inspinj"];
+	}
+	
+	subgraph cluster_tixi_0 {
+	"tisi.xml" [color=grey, label="ligolw_tisi"];
+	}
+
+	dag [color=grey, shape=doubleoctagon];
+
+	"frame.cache" -> dag;
+	"H1_split_bank.cache" -> dag;
+	"L1_split_bank.cache" -> dag;
+	"V1_split_bank.cache" -> dag;
+	plots -> dag;
+	"1_injections.xml" -> dag;
+	"tisi.xml" -> dag;
+	"segments.xml" -> dag;
+}
