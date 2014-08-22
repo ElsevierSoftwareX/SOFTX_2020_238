@@ -11,7 +11,7 @@ IFOS = H1 L1 V1
 START = 966384015
 STOP = 966484015
 TAG = T1200307_LV_gaussian_4s_w_zerolag_injections_40Hz_5ms_test
-WEBDIR = ~/public_html/mdc/non_spinning_BNS_aligned_gaussian_hoftcache_audio_patch/
+WEBDIR = ~/public_html/mdc/non_spinning_BNS_gaussian/
 NUMBANKS = 4
 PEAK = 0
 AC_LENGTH = 351
@@ -21,7 +21,9 @@ AC_LENGTH = 351
 # Injections
 # The seed is the string before the suffix _injections.xml
 # Change as appropriate, whitespace is important
-INJECTIONS := BNS-SpinMDC-ALIGNED.xml
+INJECTIONS := BNS-SpinMDC-ISOTROPIC.xml BNS-SpinMDC-ALIGNED.xml
+comma:=,
+INJECTION_REGEX = $(subst $(space),$(comma),$(INJECTIONS))
 
 # Segment and frame type info
 SEG_SERVER=https://segdb.ligo.caltech.edu
@@ -43,7 +45,7 @@ BNS_NonSpin_30Hz_earlyaLIGO.xml:
 	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/tmpltbank/BNS_NonSpin_30Hz_earlyaLIGO.xml .
 
 $(INJECTIONS):
-	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/BNS-SpinMDC-ALIGNED.xml .
+	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/"{$(INJECTION_REGEX)}" .
 
 %_split_bank.cache : BNS_NonSpin_30Hz_earlyaLIGO.xml
 	mkdir -p $*_split_bank
@@ -95,3 +97,4 @@ clean:
 	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
 	-rm -vf tisi0.xml tisi1.xml
 	-rm -rf *_split_bank
+	-rm -vf BNS*.xml
