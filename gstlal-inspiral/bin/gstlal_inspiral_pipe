@@ -63,7 +63,7 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math
+import sys, os, copy, math, stat
 import subprocess, socket, tempfile
 
 ##############################################################################
@@ -214,12 +214,13 @@ def create_svd_bank_strings(svd_nodes, instruments = None):
 		outstrings.append(svd_bank_string)
 	return outstrings
 
+
+def chunks(l, n):
+	for i in xrange(0, len(l), n):
+		yield l[i:i+n]
+
+
 def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict):
-
-
-	def chunks(l, n):
-		for i in xrange(0, len(l), n):
-			yield l[i:i+n]
 
 	inspiral_nodes = {}
 	for ifos in segsdict:
@@ -275,6 +276,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"likelihood-file":dist_stat_names
 							}
 						)
+				# Set a post script to check for file integrity
+				noninjnode.set_post_script("gzip_test.sh")
+				noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
 				# impose a priority to help with depth first submission
 				noninjnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
@@ -318,6 +322,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 									"likelihood-file":dist_stat_names
 								}
 							)
+					# Set a post script to check for file integrity
+					injnode.set_post_script("gzip_test.sh")
+					injnode.add_post_script_arg(" ".join(output_names))
 					# impose a priority to help with depth first submission
 					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
@@ -353,17 +360,29 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instruments):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set):
 
 	likelihood_nodes = {}
 	outnodes = {}
+	instruments = "".join(sorted(instrument_set))
 	# first non-injections
-	for n, (outputs, diststats) in enumerate(zip(lloid_output[None].values(), lloid_diststats.values())):
+	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+	#for n, (outputs, diststats) in enumerate(zip(lloid_output[None].values(), lloid_diststats.values())):
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
-		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = parents,
+				opts = {"instrument":instrument_set},
+				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
+			)
+		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
+				parent_nodes = parents,
+				input_files = {"":diststats + [priornode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
+			)
+		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+				parent_nodes = parents, #FIXME this needs to be calcranknode once it is hooked up properly
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
 				input_files = {"likelihood-url":diststats, "":inputs},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
@@ -372,7 +391,8 @@ def rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqlit
 
 	# then injections
 	for inj in options.injections:
-		for n, (outputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
+		for n, (outputs, diststats) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+		#for n, (outputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
 			inputs = [o[0] for o in outputs]
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
@@ -443,11 +463,29 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	else:
 		vetoes = [options.vetoes]
 
+	chunk_nodes = []
+	# Process the chirp mass bins in chunks to paralellize the merging process
+	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
+		# Merge the final non injection database into chunks
+		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d' % chunk, int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"": dbs},
+			output_files = {"database":noninjdb}
+		)
+
+		# cluster the final non injection database
+		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":noninjdb}
+		)
+		chunk_nodes.append(noninjsqlitenode)
+
 	# Merge the final non injection database
 	noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-	sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
+	sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
 		opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"": ([node.input_files[""] for node in innodes[None]] + vetoes + [options.frame_segments_file])},
+		input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file])},
 		output_files = {"database":noninjdb}
 	)
 
@@ -462,23 +500,45 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 	for injections in options.injections:
 
+		# extract only the nodes that were used for injections
+		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
+		chunk_nodes = []
+
+		for chunk, dbs in enumerate(chunks([node.input_files[""] for node in thisinjnodes], 20)):
+
+			# Setup the final output names, etc.
+			injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d_%s' % (chunk, sim_tag_from_inj_file(injections)), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+
+
+			# merge
+			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = thisinjnodes,
+				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"":dbs},
+				output_files = {"database":injdb}
+			)
+
+			# cluster
+			clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"":injdb}
+			)
+			chunk_nodes.append(clusternode)
+
+
 		# Setup the final output names, etc.
 		injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
 		injdbs.append(injdb)
 		injxml = os.path.splitext(injdb)[0] + ".xml.gz"
 
-		# extract only the ndoes that were used for injections
-		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
 
 		# merge
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = thisinjnodes,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"": ([node.input_files[""] for node in thisinjnodes] + vetoes + [options.frame_segments_file, injections])},
+			input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file, injections])},
 			output_files = {"database":injdb}
 		)
 
 		# cluster
-	
 		clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
 			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_files = {"":injdb}
@@ -601,6 +661,7 @@ bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
 detectors = datasource.GWDataSourceInfo(options)
 channel_dict = detectors.channel_dict
 instruments = "".join(sorted(bank_cache.keys()))
+instrument_set = bank_cache.keys()
 boundary_seg = detectors.seg
 name_tag = "plots/gstlal-%d-%d_" % (int(boundary_seg[0]), int(boundary_seg[1]))
 
@@ -619,6 +680,15 @@ if options.max_inspiral_jobs is not None:
 	dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
 
 #
+# Make an xml integrity checker
+#
+
+f = open("gzip_test.sh", "w")
+f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
+f.close()
+os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
+
+#
 # setup the job classes
 #
 
@@ -629,6 +699,8 @@ svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
 gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"8192", "request_cpus":"4", "+RequiresMultipleCores":"True"})
 gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"8192", "request_cpus":"4", "+RequiresMultipleCores":"True"})
+createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats")
+calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs")
 calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood")
 calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj')
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms")
@@ -709,7 +781,7 @@ lloid_output, lloid_diststats = adapt_gstlal_inpiral_output(inspiral_nodes, opti
 # Setup likelihood jobs, clustering and merging
 #
 
-likelihood_nodes, outnodes = rank_and_merge(dag, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instruments)
+likelihood_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
