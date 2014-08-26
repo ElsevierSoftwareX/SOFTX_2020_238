@@ -140,15 +140,23 @@ coincparamsdistributions.finish(verbose = options.verbose)
 
 
 #
-# generate likelihood ratio histograms
+# take a moment to make sure we have SNR PDFs for all instrument
+# combinations so that we don't end up doing this inside the sampling
+# threads
 #
 
 
-# take a moment to make sure we have SNR PDFs for all instrument combinations
 all_horizon_distances = coincparamsdistributions.horizon_history.all()
 for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
 	for horizon_distances in all_horizon_distances:
 		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
+
+
+#
+# generate likelihood ratio histograms
+#
+
+
 ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
