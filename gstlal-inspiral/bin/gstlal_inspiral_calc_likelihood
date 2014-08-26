@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010--2013  Kipp Cannon, Chad Hanna
+# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -41,8 +41,6 @@
 #
 
 
-import multiprocessing
-import multiprocessing.queues	# not needed in >= 2.7
 from optparse import OptionParser
 import sys
 
@@ -89,7 +87,6 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
-	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
@@ -105,19 +102,6 @@ def parse_command_line():
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
 
 	return options, filenames
-
-
-#
-# =============================================================================
-#
-#                    Generate Ranking Statistic Histograms
-#
-# =============================================================================
-#
-
-
-def generate_ranking_data(queue, coincparamsdistributions, seglists, verbose = False):
-	queue.put(far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, verbose = verbose))
 
 
 #
@@ -194,30 +178,6 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 coincparamsdistributions.finish(verbose = options.verbose)
 likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
-
-
-#
-# dump combined distribution data file if requested.  we generate
-# likelihood ratio histograms at this time, as well, even though we don't
-# need them here because this helps parallelize that step in a full-scale
-# analysis.  the program that reads these data files will need those
-# histograms, and would take ages to build them itself, serially, as a
-# single job.  We're about to spend a few hours processing database files
-# and can generate those histograms in the background while we do
-#
-
-
-threads = []
-if options.write_likelihood is not None:
-	# take a moment to make sure we have SNR PDFs for all instrument combinations
-	all_horizon_distances = coincparamsdistributions.horizon_history.all()
-	for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
-		for horizon_distances in all_horizon_distances:
-			coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
-	q = multiprocessing.queues.SimpleQueue()
-	p = multiprocessing.Process(target = generate_ranking_data, args = (q, coincparamsdistributions, seglists), kwargs = {"verbose": options.verbose})
-	p.start()
-	threads.append((p, q, options.write_likelihood))
 
 
 #
@@ -318,25 +278,3 @@ for n, filename in enumerate(filenames, 1):
 
 	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
 	xmldoc.unlink()
-
-
-#
-# Collect the PDF writing thread if one was created and write the parameter
-# and ranking statistic distribution data to a file
-#
-
-
-while threads:
-	p, q, filename = threads.pop(0)
-	ranking_data = q.get()
-	p.join()
-	if p.exitcode:
-		raise Exception("far.RankingData() thread failed")
-	xmldoc = ligolw.Document()
-	xmldoc.appendChild(ligolw.LIGO_LW())
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_likelihood", paramdict = {})
-	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
-	far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
-	ligolw_process.set_process_end_time(process)
-	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
-	assert not threads
