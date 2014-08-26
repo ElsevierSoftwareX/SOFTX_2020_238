@@ -367,7 +367,6 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 	instruments = "".join(sorted(instrument_set))
 	# first non-injections
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
-	#for n, (outputs, diststats) in enumerate(zip(lloid_output[None].values(), lloid_diststats.values())):
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
@@ -392,7 +391,6 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 	# then injections
 	for inj in options.injections:
 		for n, (outputs, diststats) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
-		#for n, (outputs, diststats) in enumerate(zip(lloid_output[sim_tag_from_inj_file(inj)].values(), lloid_diststats.values())):
 			inputs = [o[0] for o in outputs]
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
