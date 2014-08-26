@@ -363,6 +363,7 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set):
 
 	likelihood_nodes = {}
+	rankpdf_nodes = []
 	outnodes = {}
 	instruments = "".join(sorted(instrument_set))
 	# first non-injections
@@ -376,16 +377,16 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
-				parent_nodes = parents,
+				parent_nodes = [priornode],
 				input_files = {"":diststats + [priornode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = parents, #FIXME this needs to be calcranknode once it is hooked up properly
+				parent_nodes = [priornode],
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "background-prior":1.0, "synthesize-injections":1000000},
-				input_files = {"likelihood-url":diststats, "":inputs},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CALC_LIKELIHOOD' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcLikelihoodJob.output_path)}
+				input_files = {"likelihood-url":diststats + [priornode.output_files["write-likelihood"]], "":inputs}
 			)
+		rankpdf_nodes.append(calcranknode)
 		likelihood_nodes.setdefault(None,[]).append(node)
 
 	# then injections
@@ -452,7 +453,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				)
 				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
 
-	return likelihood_nodes, outnodes
+	return rankpdf_nodes, outnodes
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, options, instruments):
 
@@ -564,10 +565,10 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 	return injdbs, noninjdb, outnodes
 
-def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, likelihood_nodes, injdbs, noninjdb, final_sqlite_nodes):
+def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes):
 	# compute FAPs and FARs
 	# split up the marginilization into groups of 10
-	margin = [node.output_files["write-likelihood"] for inj, nodes in likelihood_nodes.items() for node in nodes if inj is None]
+	margin = [node.output_files["output"] for node in rankpdf_nodes]
 	margout = []
 	margnodes = []
 	margnum = 16
@@ -779,7 +780,7 @@ lloid_output, lloid_diststats = adapt_gstlal_inpiral_output(inspiral_nodes, opti
 # Setup likelihood jobs, clustering and merging
 #
 
-likelihood_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
+rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
@@ -791,7 +792,7 @@ injdbs, noninjdb, final_sqlite_nodes = finalize_runs(dag, lalappsRunSqliteJob, t
 # Compute FAP
 #
 
-farnode = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, likelihood_nodes, injdbs, noninjdb, final_sqlite_nodes)
+farnode = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes)
 
 # make summary plots
 plotnodes = []
