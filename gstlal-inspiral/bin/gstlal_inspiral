@@ -57,8 +57,8 @@
 # 		V1multirate [label="V1 whitening and downsampling:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref multirate_datasource.mkwhitened_multirate_src()"];
 # 		
 # 		H1LLOID [label="H1 LLOID filtering engine:\nmkLLOIDmulti()", color=red4, URL="\ref lloidparts.mkLLOIDmulti()"];
-# 		L1LLOID [label="L1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=green4, URL="\ref lloidparts.mkLLOIDmulti()"];
-# 		V1LLOID [label="V1 LLOID filtering engine:\nmkwhitened_multirate_src()", color=magenta4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		L1LLOID [label="L1 LLOID filtering engine:\nmkLLOIDmulti()", color=green4, URL="\ref lloidparts.mkLLOIDmulti()"];
+# 		V1LLOID [label="V1 LLOID filtering engine:\nmkLLOIDmulti()", color=magenta4, URL="\ref lloidparts.mkLLOIDmulti()"];
 # 
 # 		H1Trig1 [label="H1 Triggering:\nsub bank 1", color=red4];
 # 		L1Trig1 [label="L1 Triggering:\nsub bank 1", color=green4];
