@@ -563,10 +563,10 @@ class EPHandler( Handler ):
 				# Do the final clustering
 				self.process_triggers(cluster_passes = True)
 
-				# Final check on clustered SNR
-				for i in range(len(self.triggers))[::-1]:
-					if self.snr_thresh and self.triggers[i].snr < self.snr_thresh:
-						del self.triggers[i]
+			# Final check on SNR
+			for i in range(len(self.triggers))[::-1]:
+				if self.snr_thresh and self.triggers[i].snr < self.snr_thresh:
+					del self.triggers[i]
 
 			self.write_triggers(filename = fname, seg = outseg)
 			self.time_since_dump = float(outseg[1])
@@ -812,6 +812,12 @@ class EPHandler( Handler ):
 			dir = subdir
 		)
 		self.process_triggers(self._clustering)
+
+		# Final check on SNR
+		for i in range(len(self.triggers))[::-1]:
+			if self.snr_thresh and self.triggers[i].snr < self.snr_thresh:
+				del self.triggers[i]
+
 		self.write_triggers(filename = outfile)
 
 		if self.output_cache:
