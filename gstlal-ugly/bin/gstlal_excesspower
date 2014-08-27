@@ -672,7 +672,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		# timestamps are very messed up as a consequence. This is a
 		# temporary fix until I can figure out which element is culprit
 		# and why its only happening with fixed PSDs
-		if psdfile is None:
+		if psdfile is not None:
 			durtee = pipeparts.mknofakedisconts( pipeline, durtee )
 
 		# Trigger generator
