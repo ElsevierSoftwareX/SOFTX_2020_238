@@ -159,7 +159,7 @@ coincparamsdistributions.finish(verbose = options.verbose)
 all_horizon_distances = coincparamsdistributions.horizon_history.all()
 for instruments in [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]:
 	for horizon_distances in all_horizon_distances:
-		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbar = ProgressBar() if options.verbose else None)
+		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, progressbarfunc = ProgressBar if options.verbose else None)
 
 
 #

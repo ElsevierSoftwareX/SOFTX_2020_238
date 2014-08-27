@@ -537,7 +537,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = 15
 	snr_joint_pdf_cache = {}
 
-	def get_snr_joint_pdf(self, instruments, horizon_distances, progressbar = None):
+	def get_snr_joint_pdf(self, instruments, horizon_distances, progressbarfunc = None):
 		#
 		# key for cache:  two element tuple, first element is
 		# frozen set of instruments for which this is the PDF,
@@ -567,8 +567,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
 			else:
 				age = 0
-			if progressbar is not None:
-				progressbar.update(value = 0, text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
+			if progressbarfunc is not None:
+				progressbar = progressbarfunc(text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
+			else:
+				progressbar = None
 			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
 			pdf = rate.InterpBinnedArray(binnedarray)
 			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
@@ -576,6 +578,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# smallest age
 			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
 				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+			del progressbar
 		return pdf
 
 	def coinc_params(self, events, offsetvector):
