@@ -167,7 +167,7 @@ for instruments in [instruments for n in range(2, len(seglists) + 1) for instrum
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, seglists.keys(), coincparamsdistributions.process_id, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
