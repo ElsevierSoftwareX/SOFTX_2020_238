@@ -113,7 +113,7 @@ seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmen
 
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = options.instrument, verbose = options.verbose)
-coincparamsdistributions.add_foreground_prior(n = options.synthesize_injection_count, segs = seglists, verbose = options.verbose)
+coincparamsdistributions.add_foreground_snrchi_prior(coincparamsdistributions.injection_rates, instruments = set(seglists), n = options.synthesize_injection_count, prefactors_range = (0.0, 0.10), df = 40, verbose = options.verbose)
 
 
 #
