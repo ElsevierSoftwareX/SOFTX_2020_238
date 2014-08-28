@@ -27,8 +27,6 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--vetoes-name` [name]: Set the name of the segment lists to use as vetoes (default = do not apply vetoes).
 #	+ `--verbose`: Be verbose.
-#	+ `--synthesize-injections` [N] (int): Synthesize an injection distribution with N injections (default = 0).
-#	+ `--background-prior` [N] (float): Include an exponential background prior with the maximum bin count = N, default 0, no additional prior.
 #	+ `--write-likelihood` [filename]: Write merged raw likelihood data to this file.
 #	+ `--trim-database`: Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.
 
@@ -85,8 +83,6 @@ def parse_command_line():
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
-	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
 
@@ -158,13 +154,8 @@ for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-# calculate injections before writing to disk
-if options.synthesize_injections != 0:
-	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, segs = seglists, verbose = options.verbose)
-
-# add a uniform prior to background, by default 0 is added so it has no effect
-if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = seglists.keys(), verbose = options.verbose)
+# Compute the probability of instruments given signal
+coincparamsdistributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
 
 # compute the instrument combination counts
 coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
