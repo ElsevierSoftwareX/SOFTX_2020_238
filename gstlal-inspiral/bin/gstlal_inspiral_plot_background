@@ -341,7 +341,7 @@ if coinc_params_distributions is not None and ranking_data is not None:
 else:
 	fapfar = None
 
-if coinc_params_distributions is not None:
+if ranking_data is not None:
 	signal_ccdf = far.FAPFAR(ranking_data.signal_likelihood_pdfs, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.likelihood_ratio_threshold).ccdf_interpolator
 else:
 	signal_ccdf = None
@@ -397,7 +397,7 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for key, binnedarray in coinc_params_distributions.background_pdf.items():
+for key, binnedarray in coinc_params_distributions.background_pdf.items() if coinc_params_distributions is not None else ():
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
@@ -409,7 +409,7 @@ for key, binnedarray in coinc_params_distributions.background_pdf.items():
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for key, binnedarray in coinc_params_distributions.injection_pdf.items():
+for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coinc_params_distributions is not None else ():
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
@@ -421,7 +421,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items():
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for key, binnedarray in coinc_params_distributions.injection_pdf.items():
+for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coinc_params_distributions is not None else ():
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
@@ -433,7 +433,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items():
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items():
+for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items() if coinc_params_distributions is not None else ():
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
@@ -445,7 +445,7 @@ for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items():
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
+for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Noise")
 	plotname = "%s%snoise_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
 	if options.verbose:
@@ -466,7 +466,7 @@ for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items():
+for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Signal")
 	plotname = "%s%ssignal_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
 	if options.verbose:
