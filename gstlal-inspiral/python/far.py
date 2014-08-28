@@ -629,7 +629,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
-		# add_foreground_prior() has set the probabilities to is
+		# populate_prob_of_instruments_given_signal() has set the probabilities to is
 		# OK.  we probably need to cache these and save them in the
 		# XML file, too, like P(snrs | signal, instruments)
 		for name, value in params.items():
@@ -812,7 +812,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# add to raw counts
 			binarr += new_binarr
 
-	def add_foreground_prior(self, segs, n = 1., prefactors_range = (0.0, 0.10), df = 40, verbose = False):
+	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
 		# FIXME:  need to figure out how to make sense of the
 		# horizon distance history now that we have it.  for now,
 		# pick a set of horizon distances at random
@@ -840,12 +840,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# populate binning from probabilities
 		for instruments, p in P.items():
 			self.injection_rates["instruments"][self.instrument_categories.category(instruments),] += n * p
-
-		#
-		# populate snr,chi2 binnings
-		#
-
-		self.add_foreground_snrchi_prior(self.injection_rates, instruments = set(segs), n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def _rebuild_interpolators(self):
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
