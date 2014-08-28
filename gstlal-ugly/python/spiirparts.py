@@ -62,23 +62,6 @@ from pylal.datatypes import LIGOTimeGPS
 from gstlal import uni_datasource
 import pdb
 
-def mkCudaIIRBank(pipeline, src, a1, b0, delay, name=None):
- 	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
- 	if a1 is not None:
- 		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
- 	if b0 is not None:
- 		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
- 	elem = mkgeneric(pipeline, src, "cuda_iirbank", **properties)
- 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
- 	return elem
-
-
-
-def mkCudaMultirateSPIIR(pipeline, src, bank_struct, bank_id=0, name=None):
-	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct), ("bank_id", bank_id)) if value is not None)
-	elem = pipeparts.mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
-	return elem
-
 
 #
 # SPIIR many instruments, many template banks
@@ -289,7 +272,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		snr = pipeparts.mkreblock(pipeline, head)
 
 		bank_struct = build_bank_struct(bank)
-		snr = mkCudaMultirateSPIIR(pipeline, snr, bank_struct, bank_id = bank_count)
+		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank_struct, bank_id = bank_count)
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
