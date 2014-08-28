@@ -446,7 +446,7 @@ def append_options(parser):
 -	--state-vector-off-bits [hex]
 		Set the state vector off bits to process (optional).
 		The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.
-		Only currently has meaning for online (lvshm) data.)
+		Only currently has meaning for online (lvshm, framexmit) data
 
 	#### Typical usage case examples
 
