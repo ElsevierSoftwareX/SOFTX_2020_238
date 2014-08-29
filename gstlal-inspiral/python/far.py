@@ -537,7 +537,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = 15
 	snr_joint_pdf_cache = {}
 
-	def get_snr_joint_pdf(self, instruments, horizon_distances, progressbarfunc = None):
+	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
 		#
 		# key for cache:  two element tuple, first element is
 		# frozen set of instruments for which this is the PDF,
@@ -567,8 +567,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
 			else:
 				age = 0
-			if progressbarfunc is not None:
-				progressbar = progressbarfunc(text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
+			if verbose:
+				print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
+				progressbar = ProgressBar(text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
 			else:
 				progressbar = None
 			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
