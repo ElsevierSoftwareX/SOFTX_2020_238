@@ -50,7 +50,6 @@ from glue.ligolw import utils
 import lal
 from pylal import datatypes as laltypes
 from pylal import series as lalseries
-from pylal import lalconstants
 
 
 from gstlal import datasource
@@ -275,7 +274,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = 
 	# clip to ISCO.  see (4) in arXiv:1003.2481
 	#
 
-	f_isco = lalconstants.LAL_C_SI**3 / (6**(3. / 2.) * math.pi * lalconstants.LAL_G_SI * (m1 + m2) * lalconstants.LAL_MSUN_SI)
+	f_isco = lal.C_SI**3 / (6**(3. / 2.) * math.pi * lal.G_SI * (m1 + m2) * lal.MSUN_SI)
 	f_max = min(f_max, f_isco)
 	assert psd.f0 <= f_isco
 	assert psd.f0 <= f_min <= f_isco
@@ -299,7 +298,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = 
 	mu = (m1 * m2) / (m1 + m2)
 	mchirp = mu**(3. / 5.) * (m1 + m2)**(2. / 5.)
 
-	inspiral = (5 * math.pi / (24 * lalconstants.LAL_C_SI**3)) * (lalconstants.LAL_G_SI * mchirp * lalconstants.LAL_MSUN_SI)**(5. / 3.) * (math.pi * f)**(-7. / 3.)
+	inspiral = (5 * math.pi / (24 * lal.C_SI**3)) * (lal.G_SI * mchirp * lal.MSUN_SI)**(5. / 3.) * (math.pi * f)**(-7. / 3.)
 
 	#
 	# SNR for source at D = 1 m <--> D in m for source w/ SNR = 1.  see
@@ -320,7 +319,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = 
 	# D in Mpc for source with desired SNR
 	#
 
-	return D_at_snr_1 / snr / (1e6 * lalconstants.LAL_PC_SI)
+	return D_at_snr_1 / snr / (1e6 * lal.PC_SI)
 
 
 def effective_distance_factor(inclination, fp, fc):

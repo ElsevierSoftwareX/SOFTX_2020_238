@@ -120,7 +120,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	from math import atan2, acos, asin, degrees, sqrt, pi
 	from mpl_toolkits.basemap import Basemap, shiftgrid
 	import numpy as np
-	from pylal.xlal import constants
+	import lal
 	from pylal import inject
 	from pylal.datatypes import LIGOTimeGPS
 	from pylal.date import XLALGreenwichMeanSiderealTime
@@ -154,9 +154,9 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	m.drawmapboundary()
 
 	# lal_skymap outputs geographic coordinates; convert to celestial here.
-	sidereal_time = np.mod(XLALGreenwichMeanSiderealTime(LIGOTimeGPS(gpstime)) * constants.LAL_180_PI, 360)
-	lons_grid = sidereal_time + phi.reshape(450, 900) * constants.LAL_180_PI
-	lats_grid = 90 - theta.reshape(450, 900) * constants.LAL_180_PI
+	sidereal_time = np.mod(XLALGreenwichMeanSiderealTime(LIGOTimeGPS(gpstime)) / lal.PI_180, 360)
+	lons_grid = sidereal_time + phi.reshape(450, 900) / lal.PI_180
+	lats_grid = 90 - theta.reshape(450, 900) / lal.PI_180
 	logp_grid = logp.reshape(450, 900)
 
 	# Rotate the coordinate grid; Basemap is too stupid to correctly handle a
@@ -187,7 +187,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 			site0_location = location_for_site(sites[0])
 			site1_location = location_for_site(sites[1])
 			site_separation = site0_location - site1_location
-			site_distance_seconds = sqrt(np.dot(site_separation, site_separation)) / constants.LAL_C_SI
+			site_distance_seconds = sqrt(np.dot(site_separation, site_separation)) / lal.C_SI
 			lon, lat = spherical2latlon(cart2spherical(site_separation))
 			site0_toa = arrival_times[sites[0]]
 			site1_toa = arrival_times[sites[1]]
