@@ -317,19 +317,45 @@ class NearestLeafTree(object):
 		</Stream>
 	</Array>
 	"""
-	def __init__(self):
-		self.tree = []
+	def __init__(self, items = ()):
+		"""
+		Initialize a NearestLeafTree.
+
+		Example:
+
+		>>> x = NearestLeafTree()
+		>>> x = NearestLeafTree([(100., 120.), (104., 100.), (102., 110.)])
+		>>> y = {100.: 120., 104.: 100., 102.: 100.}
+		>>> x = NearestLeafTree(y.items())
+		"""
+		self.tree = list(items)
+		self.tree.sort()
 
 	def __setitem__(self, x, val):
-		# replace all entries having the same co-ordinate with this
-		# one
-		lo = bisect.bisect_left(self.tree, (x, NegInf))
-		hi = bisect.bisect_right(self.tree, (x, PosInf))
-		self.tree[lo:hi] = ((x, val),)
+		if type(x) is slice:
+			# replace all entries in the requested range of
+			# co-ordiantes with two entries, each with the
+			# given value, one at the start of the range and
+			# one at the end of the range.  thus, after this
+			# all queries within that range will return this
+			# value.
+			if x.step is not None:
+				raise ValueError("%s: step not supported" % repr(x))
+			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
+			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
+			self.tree[lo:hi] = ((x.start, val), (x.stop, val))
+		else:
+			# replace all entries having the same co-ordinate
+			# with this one
+			lo = bisect.bisect_left(self.tree, (x, NegInf))
+			hi = bisect.bisect_right(self.tree, (x, PosInf))
+			self.tree[lo:hi] = ((x, val),)
 
 	def __getitem__(self, x):
 		if not self.tree:
 			raise KeyError(x)
+		if type(x) is slice:
+			raise ValueError("slices not supported")
 		hi = bisect.bisect_right(self.tree, (x, PosInf))
 		try:
 			x_hi, val_hi = self.tree[hi]
@@ -371,6 +397,30 @@ class NearestLeafTree(object):
 	def items(self):
 		return list(self.tree)
 
+	def min(self):
+		"""
+		Return the minimum value stored in the tree.  This is O(n).
+		"""
+		return min(val for x, val in self.tree)
+
+	def minkey(self):
+		"""
+		Return the minimum key stored in the tree.  This is O(1).
+		"""
+		return self.tree[0][0]
+
+	def max(self):
+		"""
+		Return the maximum value stored in the tree.  This is O(n).
+		"""
+		return max(val for x, val in self.tree)
+
+	def maxkey(self):
+		"""
+		Return the maximum key stored in the tree.  This is O(1).
+		"""
+		return self.tree[-1][0]
+
 	def __contains__(self, x):
 		try:
 			return bool(self.tree) and self.tree[bisect.bisect_left(self.tree, (x, NegInf))][0] == x
@@ -380,13 +430,12 @@ class NearestLeafTree(object):
 	def __len__(self):
 		return len(self.tree)
 
+	def __repr__(self):
+		return "NearestLeaftree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
+
 	@classmethod
 	def from_xml(cls, xml, name):
-		self = cls()
-		self.tree = map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:])
-		# just in case
-		self.tree.sort()
-		return self
+		return cls(map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:]))
 
 	def to_xml(self, name):
 		return ligolw_array.from_array(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
