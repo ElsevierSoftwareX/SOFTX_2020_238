@@ -814,11 +814,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binarr += new_binarr
 
 	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
-		# FIXME:  need to figure out how to make sense of the
-		# horizon distance history now that we have it.  for now,
-		# pick a set of horizon distances at random
-		horizon_distances = iter(self.horizon_history.randhorizons()).next()
-
 		#
 		# populate instrument combination binning
 		#
@@ -828,9 +823,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# probability that a signal is detectable by each of the
 		# instrument combinations
-		P = P_instruments_given_signal(horizon_distances, snr_threshold = self.snr_min)
+		P = P_instruments_given_signal(self.horizon_history)
+
 		# multiply by probability that enough instruments are on to
 		# form each of those combinations
+		#
+		# FIXME:  if when an instrument is off it has its horizon
+		# distance set to 0 in the horizon history, then this step
+		# will not be needed because the marginalization over
+		# horizon histories will already reflect the duty cycles.
 		P_live = snglcoinc.CoincSynthesizer(segmentlists = segs).P_live
 		for instruments in P:
 			P[instruments] *= sum(sorted(p for on_instruments, p in P_live.items() if on_instruments >= instruments))
@@ -1134,63 +1135,114 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return pdf
 
 
-def P_instruments_given_signal(inst_horiz_mapping, snr_threshold, n_samples = 500000):
+def P_instruments_given_signal(horizon_history, n_samples = 500000):
+	# FIXME:  this function computes P(instruments | signal)
+	# marginalized over time (i.e., marginalized over the history of
+	# horizon distances).  what we really want is to know P(instruments
+	# | signal, horizon distances), that is we want to leave it
+	# depending parametrically on the instantaneous horizon distances.
+	# this function takes about 30 s to evaluate, so computing it on
+	# the fly isn't practical and we'll require some sort of caching
+	# scheme.  unless somebody can figure out how to compute this
+	# explicitly without resorting to Monte Carlo integration.
+
 	# FIXME:  this function does not yet incorporate the effect of
 	# noise-induced SNR fluctuations in its calculations
 
-	if not inst_horiz_mapping:
-		raise ValueError("inst_horiz_mapping is empty")
-
 	# get instrument names
-	names = tuple(inst_horiz_mapping)
-	# get horizon distances and responses in that same order
-	DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in names])
+	names = tuple(horizon_history)
+	# get responses in that same order
 	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
 
+	# initialize output.  dictionary mapping instrument combination to
+	# probability (initially all 0).
 	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
 
+	# psi chooses the orientation of F+ and Fx, choosing a fixed value
+	# is OK.  we select random uniformly-distributed right ascensions
+	# so there's no point in also choosing random GMSTs and any value
+	# is as good as any other
 	psi = gmst = 0.0
+
+	# function to spit out a choice of horizon distances drawn
+	# uniformly in time
+	rand_horizon_distances = iter(horizon_history.randhorizons()).next
+
+	# in the loop, we'll need a sequence of integers to enumerate
+	# instruments.  construct it here to avoid doing it repeatedly in
+	# the loop
+	indexes = tuple(range(len(names)))
+
+	# avoid attribute look-ups and arithmetic in the loop
+	acos = math.acos
+	numpy_array = numpy.array
+	numpy_dot = numpy.dot
+	numpy_sqrt = numpy.sqrt
+	random_uniform = random.uniform
+	twopi = 2. * math.pi
+	pi_2 = math.pi / 2.
+	xlal_am_resp = inject.XLALComputeDetAMResponse
+
+	# loop as many times as requested
 	for i in xrange(n_samples):
-		theta = math.acos(random.uniform(-1., 1.))
-		phi = random.uniform(0., 2. * math.pi)
-		cosi2 = random.uniform(-1., 1.)**2.
+		# retrieve random horizon distances in the same order as
+		# the instruments.  note:  rand_horizon_distances() is only
+		# evaluated once in this expression.  that's important
+		DH = numpy_array(map(rand_horizon_distances().__getitem__, names))
 
-		fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
+		# select random sky location and source orbital plane
+		# inclination
+		theta = acos(random_uniform(-1., 1.))
+		phi = random_uniform(0., twopi)
+		cosi2 = random_uniform(-1., 1.)**2.
 
-		# ratio of inverse SNR to distance for each instrument
-		snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
+		# compute F+^2 and Fx^2 for each antenna from the sky
+		# location and antenna responses
+		fpfc2 = numpy_array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps))**2.
+
+		# 1/8 ratio of inverse SNR to distance for each instrument
+		# (1/8 because horizon distance is defined for an SNR of 8,
+		# and we've omitted that factor for performance)
+		snr_times_D_over_8 = DH * numpy_sqrt(numpy_dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2)))
 
 		# the volume visible to each instrument given the
-		# requirement that a source be above the SNR threshold
-		# (omitting factor of 4/3 pi)
-		V_at_snr_threshold = (snr_times_D / snr_threshold)**3.
+		# requirement that a source be above the SNR threshold is
+		#
+		# V = [constant] * (8 * snr_times_D_over_8 / snr_threshold)**3.
+		#
+		# but in the end we'll only need ratios of these volumes so
+		# we can omit the proportionality constant and we can also
+		# omit the factor of (8 / snr_threshold)**3
+		V_at_snr_threshold = snr_times_D_over_8**3.
 
 		# order[0] is index of instrument that can see sources the
 		# farthest, order[1] is index of instrument that can see
 		# sources the next farthest, etc.
-		order = sorted(range(len(V_at_snr_threshold)), key = V_at_snr_threshold.__getitem__, reverse = True)
+		order = sorted(indexes, key = V_at_snr_threshold.__getitem__, reverse = True)
+		ordered_names = tuple(names[i] for i in order)
 
-		# instrument combination and volume of space visible to
-		# that combination given the requirement that a source be
-		# above the SNR threshold in that combination (omitting
-		# factor or 4/3 pi).  sequence of instrument combinations
-		# is left as a generator expression for lazy evaluation
-		instruments = (frozenset(names[i] for i in order[:n]) for n in xrange(2, len(order) + 1))
+		# instrument combination and volume of space (up to
+		# irrelevant proportionality constant) visible to that
+		# combination given the requirement that a source be above
+		# the SNR threshold in that combination.  sequence of
+		# instrument combinations is left as a generator expression
+		# for lazy evaluation
+		instruments = (frozenset(ordered_names[:n]) for n in xrange(2, len(order) + 1))
 		V = tuple(V_at_snr_threshold[i] for i in order[1:])
 
 		# for each instrument combination, probability that a
 		# source visible to at least two instruments is visible to
-		# that combination
+		# that combination (here is where the proportionality
+		# constant and factor of (8/snr_threshold)**3 drop out of
+		# the calculation)
 		P = tuple(x / V[0] for x in V)
 
-		# for each instrument combination, probability that a
-		# source visible to at least two instruments is visible to
-		# that combination and no other instruments
-		P = [P[i] - P[i + 1] for i in xrange(len(P) - 1)] + [P[-1]]
-
-		# accumulate result
-		for key, p in zip(instruments, P):
-			result[key] += p
+		# accumulate result.  p - pnext is the probability that a
+		# source (that is visible to at least two instruments) is
+		# visible to that combination of instruments and not any
+		# other combination of instruments.
+		for key, p, pnext in zip(instruments, P, P[1:] + (0.,)):
+			result[key] += p - pnext
 	for key in result:
 		result[key] /= n_samples
 
