@@ -1075,9 +1075,24 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# distance = the SNR that distance corresponds to
 			# in the instrument whose SNR grows fastest with
 			# decreasing distance --- the SNR the source has in
-			# that instrument when the source is just visible
-			# in all instruments involved
-			snr_start = max_snr_times_D * (snr_min / snr_times_D.min())
+			# the most sensitive instrument when visible to all
+			# instruments in the combo
+			min_D_at_snr_min = snr_times_D.min() / snr_min
+			if min_D_at_snr_min == 0.:
+				# one of the instruments that must be able
+				# to see the event is not on (need this
+				# check to avoid divide-by-zero, but it's
+				# just a special case of the check that
+				# follows)
+				continue
+			snr_start = max_snr_times_D / min_D_at_snr_min
+			if snr_start >= cls.snr_max:
+				# by the time the source is close enough to
+				# be visible above threshold in all
+				# instruments, it is already louder than
+				# the high-SNR cut-off in the most
+				# sensitive instrument
+				continue
 
 			# 3 steps per bin
 			for snr in numpy.exp(numpy.arange(math.log(snr_start), math.log(cls.snr_max), efolds_per_step)):
@@ -1094,7 +1109,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				# all SNRs are within the allowed range
 				#
 				# SNR step size:
-				#	d(snr) = (10**decades_per_step - 1.) * snr
+				#	d(snr) = (e**efolds_per_step - 1.) * snr
 				#
 				# rate of change of D with SNR:
 				#	dD/d(snr) = -snr_times_D / snr^2
@@ -1102,11 +1117,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				#
 				# relationship b/w dD and d(snr):
 				#	dD = -D / snr d(snr)
-				#	   = -D * (10**decades_per_step - 1.)
+				#	   = -D * (e**efolds_per_step - 1.)
 				#
 				# number of sources:
 				#	\propto D^2 |dD|
-				#	\propto D^3 * (10**decades_per_step - 1.)
+				#	\propto D^3 * (e**efolds_per_step - 1.)
 				D = max_snr_times_D / snr
 				if D <= min_D_other:
 					# source can be seen in one of the
@@ -1135,7 +1150,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return pdf
 
 
-def P_instruments_given_signal(horizon_history, n_samples = 500000):
+def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance = 0.):
 	# FIXME:  this function computes P(instruments | signal)
 	# marginalized over time (i.e., marginalized over the history of
 	# horizon distances).  what we really want is to know P(instruments
@@ -1149,8 +1164,15 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000):
 	# FIXME:  this function does not yet incorporate the effect of
 	# noise-induced SNR fluctuations in its calculations
 
+	if n_samples < 1:
+		raise ValueError("n_samples=%d must be >= 1" % n_samples)
+	if min_distance < 0.:
+		raise ValueError("min_distance=%g must be >= 0" % min_distance)
+
 	# get instrument names
 	names = tuple(horizon_history)
+	if not names:
+		raise ValueError("horizon_history is empty")
 	# get responses in that same order
 	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
 
@@ -1229,6 +1251,10 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000):
 		# for lazy evaluation
 		instruments = (frozenset(ordered_names[:n]) for n in xrange(2, len(order) + 1))
 		V = tuple(V_at_snr_threshold[i] for i in order[1:])
+		if V[0] <= min_distance:
+			# fewer than two instruments are on, so no
+			# combination can see anything
+			continue
 
 		# for each instrument combination, probability that a
 		# source visible to at least two instruments is visible to
