@@ -1,4 +1,4 @@
-# Copyright (C) 2011--2013  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2011--2014  Kipp Cannon, Chad Hanna, Drew Keppel
 # Copyright (C) 2013  Jacob Peoples
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -45,11 +45,7 @@ import warnings
 from scipy import interpolate
 from scipy import optimize
 from scipy import stats
-try:
-	import sqlite3
-except ImportError:
-	# pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
+import sqlite3
 sqlite3.enable_callback_tracebacks(True)
 import sys
 
