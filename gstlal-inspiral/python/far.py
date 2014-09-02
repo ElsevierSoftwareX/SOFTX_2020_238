@@ -819,7 +819,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		assert len(segs) > 1
-		assert set(horizon_distances) <= set(segs)
+		assert set(self.horizon_history) <= set(segs)
 
 		# probability that a signal is detectable by each of the
 		# instrument combinations
