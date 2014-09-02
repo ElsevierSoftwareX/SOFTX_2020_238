@@ -63,17 +63,18 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue import segmentsUtils
-from glue import gpstime
-from glue.lal import LIGOTimeGPS, Cache, CacheEntry
+from glue.lal import Cache, CacheEntry
 
 from pylal import snglcluster
 from pylal import ligolw_bucluster
 
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 from pylal.xlal.datatypes.lalunit import LALUnit
 from pylal.xlal.datatypes.snglburst import SnglBurst
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
-from pylal.xlal.lalburst import XLALlnOneMinusChisqCdf
+
+import lalburst
 
 #
 # =============================================================================
@@ -492,7 +493,7 @@ class EPHandler( Handler ):
 		for event in [convert_sngl_burst(sb, self.triggers) for sb in sngl_bursts_from_buffer(buffer)]:
 
 			# FIXME: Determine "magic number" or remove it
-			event.confidence = -XLALlnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
+			event.confidence = -lalburst.lnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
 
 			# This is done here so that the current PSD is used rather than what
 			# might be there when the triggers are actually output
