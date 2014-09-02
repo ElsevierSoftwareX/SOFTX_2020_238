@@ -288,7 +288,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
     parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
     parser.add_option("--veto-segments-name", default = "vetoes", help = "Set the name of the veto segments to use from the XML document.")
-    parser.add_option("--data-segments-name", default = "statevectorsegments", help = "Set the name of the data segments. Default = \"statevectorsegments\".")
+    parser.add_option("--data-segments-name", default = "datasegments", help = "Set the name of the data segments. Default = \"datasegments\".")
     parser.add_option("--coinc-table-name", default = "coinc_inspiral", metavar = "name", help = "Set the name of the table containing coincident triggers.  Default = \"coinc_inspiral\".")
 
     # Output data options
