@@ -481,7 +481,7 @@ for bin_type in opts.bin_types:
         # finish xml document
         #
         output_filename = "%s-SEARCH_VOLUME_BINNED_BY_%s_%s-%d-%d.xml" % ("".join(sorted(list(instr))), bin_type.upper(), opts.user_tag, UL.start_time, UL.end_time-UL.start_time)
-        utils.write_filename(xmldoc, output_filename)
+        ligolw_utils.write_filename(xmldoc, output_filename)
         cache_list.append( CacheEntry( "".join(sorted(list(instr))), bin_type,segments.segment(UL.start_time, UL.end_time), "file://localhost%s/%s" % (os.getcwd(), output_filename)) )
 
         #
