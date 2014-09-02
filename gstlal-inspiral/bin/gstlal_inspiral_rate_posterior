@@ -203,13 +203,11 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	x = signal_rate.bins[0].centres()
 	y = signal_rate.array
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
-	lo, hi = signal_axes.get_xlim()
-	signal_axes.set_xlim((lo, hi))
 	signal_axes.set_xlabel("$\mathrm{Signals} / \mathrm{Experiment}$")
 	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signal\ count} \in [%g, %g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.8], loc = "upper right")
+		table = signal_axes.table(cellText = [[r"$P(\mathrm{signal\ count} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
 		for cell in table.get_celld().values():
 			cell.set_edgecolor("w")
 
@@ -219,8 +217,6 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 		y = noise_rate.array
 		line2, = background_axes.plot(x, y, color = "r", linestyle = "-", label = "Background")
 		background_axes.set_ylabel(r"$P(\mathrm{background\ count})$")
-
-	if noise_rate is not None:
 		fig.legend((line1, line2), (line1.get_label(), line2.get_label()), loc = "upper right")
 
 	try:

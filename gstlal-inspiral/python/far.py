@@ -1880,11 +1880,11 @@ def binned_rates_from_samples(samples):
 	sequence can be a generator.
 	"""
 	lo, hi = math.floor(samples.min()), math.ceil(samples.max())
-	nbins = len(samples) // 600
+	nbins = len(samples) // 729
 	binnedarray = rate.BinnedArray(rate.NDBins((rate.LinearBins(lo, hi, nbins),)))
 	for sample in samples:
 		binnedarray[sample,] += 1.
-	rate.filter_array(binnedarray.array, rate.gaussian_window(3))
+	rate.filter_array(binnedarray.array, rate.gaussian_window(5))
 	numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
 	return binnedarray
 
@@ -1894,14 +1894,16 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 	FIXME:  document this
 	"""
 	#
-	# check for funny input
+	# check for bad input
 	#
 
 	if any(math.isnan(lr) for lr in likelihood_ratios):
 		raise ValueError("NaN likelihood ratio encountered")
-	# FIXME;  clip likelihood ratios to some maximum value?
+	# FIXME;  can't we handle this next case somehow?
 	if any(math.isinf(lr) for lr in likelihood_ratios):
 		raise ValueError("infinite likelihood ratio encountered")
+	if any(lr < 0. for lr in likelihood_ratios):
+		raise ValueError("negative likeklihood ratio encountered")
 
 	#
 	# for each sample of the ranking statistic, evaluate the ratio of
