@@ -1407,7 +1407,7 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 			"threshold",
 			"Threshold",
 			"Output will be flagged as non-gap when magnitude of control input is >= this value.  See also invert-control.",
-			0, G_MAXDOUBLE, DEFAULT_THRESHOLD,
+			0, INFINITY, DEFAULT_THRESHOLD,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
