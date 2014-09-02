@@ -233,16 +233,16 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
-	# made to be 1/4 second or 8 samples at the lowest sample rate,
-	# whichever is greater
+	# made to be 1/4 second or 1 sample, whichever is larger
 	#
 
-	if ht_gate_threshold is not None:
-		window = max(rates) // 4	# samples
-		head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold, hold_length = window, attack_length = window, name = "%s_ht_gate" % instrument)
-
-		# emit signals so that a user can latch on to them
-		head.set_property("emit-signals", True)
+	# FIXME:  this could be omitted if ht_gate_threshold is None, but
+	# we need to collect whitened h(t) segments, however something
+	# could be done to collect those if these gates aren't here.
+	ht_gate_window = max(max(rates) // 4, 1)	# samples
+	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
+	# emit signals so that a user can latch on to them
+	head.set_property("emit-signals", True)
 
 	#
 	# tee for highest sample rate stream
