@@ -239,7 +239,7 @@ class Handler(simplehandler.Handler):
 		# likelihood data file to define the livetime for
 		# predicting event rates?  right now what's used for that
 		# are the segments collected from the trigger buffers,
-		# which maybe are the best choice for that purpose.
+		# which maybe aren't the best choice for that purpose.
 		gate_suffix = {
 			# FIXME:  the data segments are provided externally
 			# and could be put straight into the output
