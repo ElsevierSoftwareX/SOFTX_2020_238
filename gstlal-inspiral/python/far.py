@@ -578,8 +578,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# to make room, and the new one added with its age set to the
 	# highest age in the cache + 1.
 	#
+	# 5**3 * 4 = 5 quantizations in 3 instruments, 4 combos per
+	# quantized choice of horizon distances
+	#
 
-	max_cached_snr_joint_pdfs = 15
+	max_cached_snr_joint_pdfs = 5**3 * 4
 	snr_joint_pdf_cache = {}
 
 	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
