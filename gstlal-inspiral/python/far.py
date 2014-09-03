@@ -2068,7 +2068,7 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 
 	ndim = 2
 	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
-	nsample = 40000
+	nsample = 400000
 	nburn = 1000
 
 	if progressbar is not None:
