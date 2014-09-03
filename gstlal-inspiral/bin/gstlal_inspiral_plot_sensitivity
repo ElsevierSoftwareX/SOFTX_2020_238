@@ -221,6 +221,9 @@ class upper_limit(object):
         if bin_type == "Total_Mass":
             self.bins = imr_utils.guess_distance_total_mass_bins_from_sims(self.total_injections[inst], nbins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_total_mass_bins_function
+        if bin_type == "Chirp_Mass":
+            self.bins = imr_utils.guess_distance_chirp_mass_bins_from_sims(self.total_injections[inst], mbins = opts.mass_bins, distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_chirp_mass_bins_function
         if bin_type == "Mass1_Mass2":
             self.bins = imr_utils.guess_distance_mass1_mass2_bins_from_sims(self.total_injections[inst], mass1bins = opts.mass_bins, mass2bins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass1_mass2_bins_function
@@ -321,6 +324,9 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     # Bin injections by total mass
     parser.add_option("--bin-by-total-mass", default = False, action = "store_true", help = "Bin injections by total mass when estimating the search efficiency.")
 
+    # Bin injections by chirp mass
+    parser.add_option("--bin-by-chirp-mass", default = False, action = "store_true", help = "Bin injections by chirp mass when estimating the search efficiency.")
+
     # aligned spin
     parser.add_option("--bin-by-aligned-spin", default = False, action = "store_true", help = "Bin injections by aligned spin parameter when estimating the search efficiency.")
 
@@ -333,6 +339,8 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     opts.bin_types = []
     if opts.bin_by_total_mass:
         opts.bin_types.append("Total_Mass")
+    if opts.bin_by_chirp_mass:
+        opts.bin_types.append("Chirp_Mass")
     if opts.bin_by_mass1_mass2:
         opts.bin_types.append("Mass1_Mass2")
     if opts.bin_by_aligned_spin:
@@ -506,6 +514,8 @@ for bin_type in opts.bin_types:
                 label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
                 label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+            if bin_type == "Chirp_Mass":
+                label = "$M_{chirp} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
