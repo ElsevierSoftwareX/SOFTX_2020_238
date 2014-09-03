@@ -777,13 +777,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).add_background(params, *args, **kwargs)
 
-	def add_background_prior(self, instruments, n = 1., transition = 10., prefactors_range = (1.0, 10.0), df = 40, verbose = False):
+	def add_background_prior(self, instruments, n = 1., transition = 10., verbose = False):
 		#
-		# populate snr,chi2 binnings
+		# populate snr,chi2 binnings with a slope to force
+		# higher-SNR events to be assesed to be more significant
+		# when in the regime beyond the edge of measured or even
+		# extrapolated background.
 		#
 
 		if verbose:
-			print >>sys.stderr, "synthesizing background-like (SNR, \\chi^2) distributions ..."
+			print >>sys.stderr, "adding tilt to (SNR, \\chi^2) background PDFs ..."
 		for instrument in instruments:
 			binarr = self.background_rates["%s_snr_chi" % instrument]
 			if verbose:
@@ -813,9 +816,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# add to raw counts
 			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] += n
 			binarr += new_binarr
-
-		# FIXME, an adhoc way of adding glitches, use a signal distribution with bad matches
-		self.add_foreground_snrchi_prior(self.background_rates, instruments = instruments, n = n, prefactors_range = prefactors_range, df = df, verbose = verbose)
 
 	def add_instrument_combination_counts(self, segs, verbose = False):
 		#
