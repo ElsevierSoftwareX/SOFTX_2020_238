@@ -68,7 +68,8 @@ def parse_command_line():
 	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
 	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
 	parser.add_option("-c", "--database-cache", metavar = "filename", help = "Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.")
-	parser.add_option("-m", "--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
+	parser.add_option("--max-snr", metavar = "SNR", default = 200., type = "float", help = "Plot SNR PDFs up to this value of SNR (default = 200).")
+	parser.add_option("-m", "--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CCDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -165,31 +166,48 @@ def colour_from_instruments(instruments, colours = {
 	return colour / colour.max()
 
 
-def plot_snr_chi_pdf(instrument, binnedarray, tag, denom_binnedarray = None):
+def plot_snr_chi_pdf(instrument, binnedarray, snr_max, tag, denom_binnedarray = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4.5, 3.5))
 	axes = fig.gca()
-	x = binnedarray.bins[0].centres()[1:-1]
-	y = binnedarray.bins[1].centres()[1:-1]
-	z = binnedarray.array.T[1:-1,1:-1]
+	# the last bin can have a centre at infinity, and its value is
+	# always 0 anyway so there's no point in trying to include it
+	x = binnedarray.bins[0].centres()[:-1]
+	y = binnedarray.bins[1].centres()[:-1]
+	z = binnedarray.array[:-1,:-1]
 	if denom_binnedarray is not None:
-		assert (denom_binnedarray.bins[0].centres()[1:-1] == x).all()
-		assert (denom_binnedarray.bins[1].centres()[1:-1] == y).all()
-		z /= denom_binnedarray.array.T[1:-1,1:-1]
+		assert (denom_binnedarray.bins[0].centres()[:-1] == x).all()
+		assert (denom_binnedarray.bins[1].centres()[:-1] == y).all()
+		z /= denom_binnedarray.array[:-1,:-1]
 	if numpy.isnan(z).any():
 		warnings.warn("%s PDF contains NaNs" % key)
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 	if not z.any():
 		warnings.warn("%s PDF is 0, skipping" % key)
 		return None
-	numpy.clip(z, 1e-100, float("+inf"), out = z)
-	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+
+	# the range of the plots
+	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, snr_max
+	ylo, yhi = .0001, 1.
+
+	x = x[binnedarray.bins[xlo:xhi, ylo:yhi][0]]
+	y = y[binnedarray.bins[xlo:xhi, ylo:yhi][1]]
+	z = z[binnedarray.bins[xlo:xhi, ylo:yhi]]
+
+	# matplotlib's colour bar seems to rely on being able to store the
+	# ratio of the lowest and highest value in a double so the range
+	# cannot be more than about 300 orders of magnitude.  experiments
+	# show it starts to go wrong before that but 250 orders of
+	# magnitude seems to be OK
+	numpy.clip(z, z.max() * 1e-250, float("+inf"), out = z)
+
+	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
 	axes.loglog()
 	axes.grid(which = "both")
-	axes.set_xlim((x.min(), x.max()))
-	axes.set_ylim((y.min(), y.max()))
+	#axes.set_xlim((xlo, xhi))
+	#axes.set_ylim((ylo, yhi))
 	fig.colorbar(mesh, ax = axes)
 	axes.set_xlabel(r"$\mathrm{SNR}$")
 	axes.set_ylabel(r"$\chi^{2} / \mathrm{SNR}^{2}$")
@@ -375,18 +393,30 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	FigureCanvas(fig)
 	fig.set_size_inches((5, 4))
 	axes = fig.gca()
-	x = binnedarray.bins[0].centres()[1:-1]
-	y = binnedarray.bins[1].centres()[1:-1]
-	z = binnedarray.array.T[1:-1,1:-1]
+	x = binnedarray.bins[0].centres()
+	y = binnedarray.bins[1].centres()
+	z = binnedarray.array
 	if numpy.isnan(z).any():
 		warnings.warn("%s PDF contains NaNs" % sorted(instruments))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
-	mesh = axes.pcolormesh(x, y, z, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+
+	# the range of the plots
+	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, options.max_snr
+
+	x = x[binnedarray.bins[xlo:xhi, xlo:xhi][0]]
+	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
+	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
+
+	# these plots only require about 20 orders of magnitude of dynamic
+	# range
+	numpy.clip(z, z.max() * 1e-20, float("+inf"), out = z)
+
+	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
 	axes.loglog()
 	axes.grid(which = "both")
-	axes.set_xlim((far.ThincaCoincParamsDistributions.snr_min, x.max()))
-	axes.set_ylim((far.ThincaCoincParamsDistributions.snr_min, y.max()))
+	#axes.set_xlim((xlo, xhi))
+	#axes.set_ylim((xlo, xhi))
 	fig.colorbar(mesh, ax = axes)
 	# co-ordinates are in alphabetical order
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
@@ -401,7 +431,7 @@ for key, binnedarray in coinc_params_distributions.background_pdf.items() if coi
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, "Noise")
+	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Noise")
 	if fig is None:
 		continue
 	plotname = "%s%s_noise_snrchi2_pdf.png" % (options.base, instrument)
@@ -413,7 +443,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coin
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, "Signal")
+	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Signal")
 	if fig is None:
 		continue
 	plotname = "%s%s_signal_snrchi2_pdf.png" % (options.base, instrument)
@@ -425,7 +455,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coin
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, "LR", denom_binnedarray = coinc_params_distributions.background_pdf[key])
+	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "LR", denom_binnedarray = coinc_params_distributions.background_pdf[key])
 	if fig is None:
 		continue
 	plotname = "%s%s_lr_snrchi2.png" % (options.base, instrument)
@@ -437,7 +467,7 @@ for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items() if coinc
 	if "_snr_chi" not in key:
 		continue
 	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, "Candidates")
+	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Candidates")
 	if fig is None:
 		continue
 	plotname = "%s%s_candidate_snrchi2_pdf.png" % (options.base, instrument)

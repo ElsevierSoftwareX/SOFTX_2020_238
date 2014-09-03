@@ -590,7 +590,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# range of SNRs covered by this object
 	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
-	snr_max = 100.
 
 	# if two horizon distances, D1 and D2, differ by less than
 	#
@@ -602,36 +601,34 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  is this choice of distance quantization appropriate?
 	log_distance_tolerance = math.log(1.2)
 
-	# binnings and filters
+	# binnings (filter funcs look-up initialized in .__init__()
 	binnings = {
 		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H1H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(snr_min, snr_max, 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
+		"H1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"H1H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200)))
 	}
-
-	def snr_chi_filter(bins, snr_width_at_8 = math.sqrt(2) / 4.0, sigma = 10):
-		snr_bins = bins[0]
-		bin_width_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.0]]
-		return rate.gaussian_window(snr_width_at_8 / bin_width_at_8, 7, sigma = sigma)
-
-	filters = {
-		"H1_snr_chi": snr_chi_filter(binnings["H1_snr_chi"]),
-		"H2_snr_chi": snr_chi_filter(binnings["H2_snr_chi"]),
-		"H1H2_snr_chi": snr_chi_filter(binnings["H1H2_snr_chi"]),
-		"L1_snr_chi": snr_chi_filter(binnings["L1_snr_chi"]),
-		"V1_snr_chi": snr_chi_filter(binnings["V1_snr_chi"])
-	}
-
-	del snr_chi_filter
 
 	def __init__(self, *args, **kwargs):
 		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
 		self.horizon_history = HorizonHistories()
+		self.pdf_from_rates_func = {
+			"instruments": self.pdf_from_rates_instruments,
+			"H1_snr_chi": self.pdf_from_rates_snrchi2,
+			"H2_snr_chi": self.pdf_from_rates_snrchi2,
+			"H1H2_snr_chi": self.pdf_from_rates_snrchi2,
+			"L1_snr_chi": self.pdf_from_rates_snrchi2,
+			"V1_snr_chi": self.pdf_from_rates_snrchi2,
+		}
 
 	def __iadd__(self, other):
+		# NOTE:  because we use custom PDF constructions, the stock
+		# .__iadd__() method for this class will not result in
+		# valid PDFs.  the rates arrays *are* handled correctly by
+		# the .__iadd__() method, by fiat, so just remember to
+		# invoke .finish() to get the PDFs in shape afterwards
 		super(ThincaCoincParamsDistributions, self).__iadd__(other)
 		self.horizon_history += other.horizon_history
 		return self
@@ -689,7 +686,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				age = 0
 			if verbose:
 				print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
-				progressbar = ProgressBar(text = "%s SNR joint PDF" % ", ".join(sorted(key[0])))
+				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
 			else:
 				progressbar = None
 			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
@@ -777,7 +774,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).add_background(params, *args, **kwargs)
 
-	def add_background_prior(self, instruments, n = 1., transition = 10., verbose = False):
+	def add_background_prior(self, instruments, n = 1., transition = 23., verbose = False):
 		#
 		# populate snr,chi2 binnings with a slope to force
 		# higher-SNR events to be assesed to be more significant
@@ -797,21 +794,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# will need to normalize results so need new
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
-				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
-				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
-				for chi2_over_snr2 in chi2_over_snr2s:
-					new_binarr[snr, chi2_over_snr2] += p
+			# don't compute this in the loop
+			transition_factor = transition**5. * math.exp(-transition**2. / 2.)
+			# iterate over all bins
+			dchi2_over_snr2s = new_binarr.bins[1].upper() - new_binarr.bins[1].lower()
+			dchi2_over_snr2s[numpy.isinf(dchi2_over_snr2s)] = 0.
+			for snr, dsnr in zip(new_binarr.bins[0].centres(), new_binarr.bins[0].upper() - new_binarr.bins[0].lower()):
+				# normalization is irrelevant.  overall
+				# normalization will be imposed afterwards.
+				# tilt looks like expected behaviour for
+				# Gaussian noise + softer fall-off above
+				# some transition SNR to avoid zero-valued
+				# bins
+				#
+				# NOTE:  expression split up so that if a
+				# numerical overflow or underflow occurs we
+				# can see which part of the expression was
+				# the problem from the traceback
+				if math.isinf(dsnr):
+					continue
+				p = math.exp(-snr**2. / 2.)
+				p += transition_factor / snr**5.
+				new_binarr[snr,:] += p * dsnr * dchi2_over_snr2s
 				if progressbar is not None:
 					progressbar.increment()
-			# normalize to the requested count
+			# zero everything below the search threshold and
+			# normalize what's left to the requested count
+			new_binarr[:self.snr_min,:] = 0.
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] += n
@@ -907,28 +916,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			# Custom handle the first and last over flow bins
-			snrs = new_binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
+			# iterate over all bins
 			chi2_over_snr2s = new_binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
-				for chi2_over_snr2 in chi2_over_snr2s:
-					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
-					dist = 0
-					for pf in pfs:
-						nc = pf * snr**2
-						v = stats.ncx2.pdf(chisq, df, nc)
-						if numpy.isfinite(v):
-							dist += v
-					dist *= (snr / snrs[0])**-4
-					if numpy.isfinite(dist):
-						new_binarr[snr, chi2_over_snr2] += dist
+			dchi2_over_snr2s = new_binarr.bins[1].upper() - new_binarr.bins[1].lower()
+			dchi2_over_snr2s[numpy.isinf(dchi2_over_snr2s)] = 0.
+			for snr, dsnr in zip(new_binarr.bins[0].centres(), new_binarr.bins[0].upper() - new_binarr.bins[0].lower()):
+				if math.isinf(dsnr):
+					continue
+				snr2 = snr**2.	# don't compute in loops
+				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
+					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
+					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
+						v = stats.ncx2.pdf(chi2, df, pfs * snr)
+					# remove nans and infs, and barf if
+					# we got a negative number
+					v = v[numpy.isfinite(v)]
+					assert (v >= 0.).all(), v
+					# normalization is irrelevant,
+					# final result will have over-all
+					# normalization imposed
+					p = v.sum() * snr**-4. * dsnr * dchi2_over_snr2
+					assert p >= 0. and not (math.isinf(p) or math.isnan(p)), p
+					new_binarr[snr, chi2_over_snr2] = p
 				if progressbar is not None:
 					progressbar.increment()
-			# normalize to the requested count
+			# zero everything below the search threshold and
+			# normalize what's left to the requested count
+			new_binarr[:self.snr_min,:] = 0.
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
@@ -974,50 +988,52 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.injection_pdf_interp["instruments"] = lambda x: self.injection_pdf["instruments"][x,]
 		self.zero_lag_pdf_interp["instruments"] = lambda x: self.zero_lag_pdf["instruments"][x,]
 
-	def finish(self, *args, **kwargs):
-		super(ThincaCoincParamsDistributions, self).finish(*args, **kwargs)
+	def pdf_from_rates_instruments(self, key, pdf_dict):
+		# instrument combos are probabilities, not densities.  be
+		# sure the single-instrument categories are zeroed.
+		binnedarray = pdf_dict[key]
+		for category in self.instrument_categories.values():
+			binnedarray[category,] = 0
+		with numpy.errstate(invalid = "ignore"):
+			binnedarray.array /= binnedarray.array.sum()
 
-		# NOTE:  because we use custom PDF constructions, the stock
-		# .__iadd__() method for this class will not result in
-		# valid PDFs.  the rates arrays *are* handled correctly by
-		# the .__iadd__() method, by fiat, so just remember to
-		# invoke .finish() to get the PDFs in shape afterwards
+	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = math.sqrt(2) / 4.0, sigma = 10.):
+		# get the binned array we're going to process
+		binnedarray = pdf_dict[key]
 
-		# convert signal (aka injection) (rho, chi^2/rho^2) PDFs
-		# into P(chi^2/rho^2 | rho)
-		for name, pdf in self.injection_pdf.items():
-			if not name.endswith("_snr_chi"):
-				continue
-			if numpy.isnan(pdf.array).all():
-				# no events of this type were recorded
-				continue
-			bin_sizes = pdf.bins[1].upper() - pdf.bins[1].lower()
-			for i in xrange(pdf.array.shape[0]):
-				nonzero = pdf.array[i] != 0
+		# construct the kernel
+		snr_bins = binnedarray.bins[0]
+		snr_per_bin_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.]]
+		snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8
+		assert snr_kernel_bins >= 2.5, snr_kernel_bins	# don't let the window get too small
+		kernel = rate.gaussian_window(snr_kernel_bins, 5, sigma = sigma)
+
+		# smooth the bin count data
+		rate.filter_array(binnedarray.array, kernel)
+
+		# zero everything below the SNR cut-off
+		binnedarray[:self.snr_min,:] = 0.
+
+		# normalize what remains to be a valid PDF
+		with numpy.errstate(invalid = "ignore"):
+			binnedarray.to_pdf()
+
+		# if this is the numerator, convert (rho, chi^2/rho^2) PDFs
+		# into P(chi^2/rho^2 | rho).  don't bother unless some
+		# events of this type were recorded
+		if pdf_dict is self.injection_pdf and not numpy.isnan(binnedarray.array).all():
+			bin_sizes = binnedarray.bins[1].upper() - binnedarray.bins[1].lower()
+			for i in xrange(binnedarray.array.shape[0]):
+				nonzero = binnedarray.array[i] != 0
 				if not nonzero.any():
 					# PDF is 0 in this column.  leave
 					# that way.  result is not a valid
 					# PDF, but we'll have to live with
 					# it.
 					continue
-				norm = numpy.dot(numpy.compress(nonzero, pdf.array[i]), numpy.compress(nonzero, bin_sizes))
+				norm = numpy.dot(numpy.compress(nonzero, binnedarray.array[i]), numpy.compress(nonzero, bin_sizes))
 				assert not math.isnan(norm), "encountered impossible PDF:  %s is non-zero in a bin with infinite volume" % name
-				pdf.array[i] /= norm
-
-		# instrument combos are probabilities, not densities.  be
-		# sure the single-instrument categories are zeroed.
-		self.background_pdf["instruments"] = self.background_rates["instruments"].copy()
-		self.injection_pdf["instruments"] = self.injection_rates["instruments"].copy()
-		self.zero_lag_pdf["instruments"] = self.zero_lag_rates["instruments"].copy()
-		for category in self.instrument_categories.values():
-			self.background_pdf["instruments"][category,] = 0
-			self.injection_pdf["instruments"][category,] = 0
-			self.zero_lag_pdf["instruments"][category,] = 0
-		self.background_pdf["instruments"].array /= self.background_pdf["instruments"].array.sum()
-		self.injection_pdf["instruments"].array /= self.injection_pdf["instruments"].array.sum()
-		self.zero_lag_pdf["instruments"].array /= self.zero_lag_pdf["instruments"].array.sum()
-
-		self._rebuild_interpolators()
+				binnedarray.array[i] /= norm
 
 	@classmethod
 	def from_xml(cls, xml, name):
@@ -1124,7 +1140,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			yield params, sum(seq[1::2], log_P_horizons)
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, efolds_per_bin = 1.0 / 20.0, progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -1135,15 +1151,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		of the PDF correspond to the instruments in alphabetical
 		order.
 		"""
-		assert type(cls.snr_min) is float
-		assert type(cls.snr_max) is float
-		assert cls.snr_max > cls.snr_min
-
-		# An effective threshold used in the calculations in order to simulate
-		# noise effects
-		snr_min = cls.snr_min - 3.0
-		assert snr_min > 0.0
-
 		# get instrument names in alphabetical order
 		instruments = sorted(instruments)
 		# get horizon distances and responses in that same order
@@ -1156,36 +1163,57 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
 		resps_other = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in inst_horiz_mapping if inst not in instruments)
 
-		# initialize the PDF array
-		pdf = rate.BinnedArray(rate.NDBins([rate.LogarithmicBins(snr_min, cls.snr_max, int(round(math.log(cls.snr_max / snr_min) / efolds_per_bin)))] * len(instruments)))
+		# initialize the PDF array, and pre-construct the sequence
+		# of snr,d(snr) tuples.  since the last SNR bin probably
+		# has infinite size, we remove it from the sequence
+		# (meaning the PDF will be left 0 in that bin).
+		pdf = rate.BinnedArray(rate.NDBins([bins] * len(instruments)))
+		snr_sequence = rate.ATanLogarithmicBins(3.6, 120., 300)
+		snr_dsnr_sequence = tuple(zip(snr_sequence.centres(), snr_sequence.upper() - snr_sequence.lower()))[:-1]
 
-		steps_per_bin = 3.
-		efolds_per_step = efolds_per_bin / steps_per_bin
-		_per_step = math.exp(efolds_per_step) - 1.
+		# compute the SNR at which to begin iterations over bins
+		assert type(cls.snr_min) is float
+		snr_min = cls.snr_min - 3.0
+		assert snr_min > 0.0
 
+		# no-op if one of the instruments that must be able to
+		# participate in a coinc is not on.  the PDF that gets
+		# returned is not properly normalized (it's all 0) but
+		# that's the correct value everywhere except at SNR-->+inf
+		# where the product of SNR * no sensitivity might be said
+		# to give a non-zero contribution, who knows.  anyway, for
+		# finite SNR, 0 is the correct value.
+		if DH_times_8.min() == 0.:
+			return pdf
+
+		# psi chooses the orientation of F+ and Fx, choosing a
+		# fixed value is OK.  we select random
+		# uniformly-distributed right ascensions so there's no
+		# point in also choosing random GMSTs and any value is as
+		# good as any other
 		psi = gmst = 0.0
 
+		# run the sampler the requested # of iterations.  save some
+		# symbols to avoid doing module attribute look-ups in the
+		# loop
 		if progressbar is not None:
 			progressbar.max = n_samples
-
+		acos = math.acos
+		random_uniform = random.uniform
+		twopi = 2. * math.pi
+		pi_2 = math.pi / 2.
+		xlal_am_resp = inject.XLALComputeDetAMResponse
 		for i in xrange(n_samples):
-			theta = math.acos(random.uniform(-1., 1.))
-			phi = random.uniform(0., 2. * math.pi)
-			cosi2 = random.uniform(-1., 1.)**2.
+			theta = acos(random_uniform(-1., 1.))
+			phi = random_uniform(0., twopi)
+			cosi2 = random_uniform(-1., 1.)**2.
 
 			# F+^2 and Fx^2 for each instrument
-			fpfc2 = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps])**2.
-			fpfc2_other = numpy.array([inject.XLALComputeDetAMResponse(resp, phi, math.pi / 2. - theta, psi, gmst) for resp in resps_other])**2.
+			fpfc2 = numpy.array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps))**2.
+			fpfc2_other = numpy.array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps_other))**2.
 
 			# ratio of distance to inverse SNR for each instrument
 			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
-
-			# minimum distance at which source becomes visible
-			# in an instrument that isn't involved
-			if len(DH_times_8_other):
-				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min() / cls.snr_min
-			else:
-				min_D_other = 0.0
 
 			# snr * D in instrument whose SNR grows fastest
 			# with decreasing D
@@ -1202,24 +1230,43 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			min_D_at_snr_min = snr_times_D.min() / snr_min
 			if min_D_at_snr_min == 0.:
 				# one of the instruments that must be able
-				# to see the event is not on (need this
-				# check to avoid divide-by-zero, but it's
-				# just a special case of the check that
-				# follows)
+				# to see the event is blind to it (need
+				# this check to avoid a divide-by-zero
+				# error next)
 				continue
-			snr_start = max_snr_times_D / min_D_at_snr_min
-			if snr_start >= cls.snr_max:
-				# by the time the source is close enough to
-				# be visible above threshold in all
-				# instruments, it is already louder than
-				# the high-SNR cut-off in the most
-				# sensitive instrument
-				continue
+			start_index = snr_sequence[max_snr_times_D / min_D_at_snr_min]
 
-			# 3 steps per bin
-			for snr in numpy.exp(numpy.arange(math.log(snr_start), math.log(cls.snr_max), efolds_per_step)):
-				# "snr" is SNR in fastest growing instrument, from
-				# this the distance to the source is:
+			# min_D_other is minimum distance at which source
+			# becomes visible in an instrument that isn't
+			# involved.  max_snr_times_D / min_D_other gives
+			# the SNR in the most sensitive instrument at which
+			# the source becomes visible to one of the
+			# instruments not allowed to participate
+			if len(DH_times_8_other):
+				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min() / cls.snr_min
+				if min_D_other > 0.:
+					end_index = snr_sequence[max_snr_times_D / min_D_other] + 1
+				else:
+					end_index = None
+			else:
+				end_index = None
+
+			# if start_index >= end_index then in order for the
+			# source to be close enough to be visible in all
+			# the instruments that must see it, it is already
+			# visible to one or more instruments that must not.
+			# don't need to check for this, the for loop will
+			# simply not have any iterations.
+
+			# iterate over the SNRs (= SNR in the most
+			# sensitive instrument) at which we will add weight
+			# to the PDF, and the bin sizes at those SNRs.  the
+			# last bin is excluded because dsnr can be infinite
+			# there
+			for snr, dsnr in snr_dsnr_sequence[start_index:end_index]:
+				# "snr" is SNR in fastest growing
+				# instrument, from this the distance to the
+				# source is:
 				#
 				#	D = max_snr_times_D / snr
 				#
@@ -1227,11 +1274,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				#
 				#	snr_times_D / D
 				#
-				# but round-off protection is required to ensure
-				# all SNRs are within the allowed range
-				#
-				# SNR step size:
-				#	d(snr) = (e**efolds_per_step - 1.) * snr
 				#
 				# rate of change of D with SNR:
 				#	dD/d(snr) = -snr_times_D / snr^2
@@ -1239,31 +1281,40 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				#
 				# relationship b/w dD and d(snr):
 				#	dD = -D / snr d(snr)
-				#	   = -D * (e**efolds_per_step - 1.)
 				#
 				# number of sources:
 				#	\propto D^2 |dD|
-				#	\propto D^3 * (e**efolds_per_step - 1.)
+				#	\propto D^3 * dsnr / snr
 				D = max_snr_times_D / snr
-				if D <= min_D_other:
-					# source can be seen in one of the
-					# other instruments
-					break
-				pdf[tuple((snr_times_D / D).clip(snr_min, PosInf))] += D**3. * _per_step
+				pdf[tuple(snr_times_D / D)] += D**3. * (dsnr / snr)
 
 			if progressbar is not None:
 				progressbar.increment()
 
-		# number of bins per unit in SNR in the binnings.  For use
-		# as the width parameter in the filtering.
-		bins_per_snr_at_8 = 1. / ((math.exp(efolds_per_bin) - 1.) * 8.)
-		rate.filter_array(pdf.array, rate.gaussian_window(*([math.sqrt(2.) * bins_per_snr_at_8] * len(instruments))))
+		# convolve the PDF bin values with a Gaussian kernel whose
+		# width in bins is equivalent to \sqrt{2} in SNR at SNR=6.
+		# at SNRs where we are interested in marginal detections,
+		# the binning is approximately uniform in log(SNR) so a
+		# kernel that is Gaussian in bins is close to being
+		# \chi^2-distributed with 2 DOF in SNR and so this
+		# approximates the effect of noise-induced fluctuations on
+		# the SNRs of signals.  at high SNR the window (whose size
+		# is fixed in bin counts) becomes enormous but at high SNR
+		# we need a larger physical kernel to fill in the lower
+		# density of samples that have falled out there.  thus this
+		# kernel is serving a dual role:  at low SNR it simulates
+		# Gaussian noise fluctuations in recovered SNRs and at high
+		# SNR it plays the role of a density estimation kernel.
+		bins_per_snr_at_6 = [1. / (upper[i] - lower[i]) for i, upper, lower in zip(pdf.bins[(6.,) * len(instruments)], pdf.bins.upper(), pdf.bins.lower())]
+		rate.filter_array(pdf.array, rate.gaussian_window(*(math.sqrt(2.) * x for x in bins_per_snr_at_6)))
+		# protect against round-off in FFT convolution leading to
+		# negative values in the PDF
 		numpy.clip(pdf.array, 0., PosInf, pdf.array)
 		# set the region where any SNR is lower than the input
 		# threshold to zero before normalizing the pdf and
 		# returning.
-		range_all = slice(None,None)
-		range_low = slice(snr_min, cls.snr_min)
+		range_all = slice(None, None)
+		range_low = slice(None, cls.snr_min)
 		for i in xrange(len(instruments)):
 			slices = [range_all] * len(instruments)
 			slices[i] = range_low
