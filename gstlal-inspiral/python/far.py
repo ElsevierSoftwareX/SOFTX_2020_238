@@ -1392,7 +1392,7 @@ class RankingData(object):
 	# Threshold at which FAP & FAR normalization will occur
 	#
 
-	likelihood_ratio_threshold = math.exp(2)
+	likelihood_ratio_threshold = math.exp(5.)
 
 
 	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 1000000, verbose = False):
