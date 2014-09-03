@@ -5,4 +5,7 @@
 \section telecons Telecons
 
 - \ref gstlaltelecons20140730page
+- \ref gstlaltelecons20140820page
+- \ref gstlaltelecons20140903page
 - \ref gstlaltelecons20140910page
+- \ref gstlaltelecons20140917page
