@@ -332,6 +332,15 @@ class NearestLeafTree(object):
 		self.tree.sort()
 
 	def __setitem__(self, x, val):
+		"""
+		Example:
+
+		>>> x = NearestLeafTree()
+		>>> x[100.:200.] = 0.
+		>>> x[150.] = 1.
+		>>> x
+		NearestLeaftree([(100, 0), (150, 1), (200, 0)])
+		"""
 		if type(x) is slice:
 			# replace all entries in the requested range of
 			# co-ordiantes with two entries, each with the
@@ -341,6 +350,16 @@ class NearestLeafTree(object):
 			# value.
 			if x.step is not None:
 				raise ValueError("%s: step not supported" % repr(x))
+			if x.start is None:
+				if not self.tree:
+					raise IndexError("open-ended slice not supported with empty tree")
+				x = slice(self.minkey(), x.stop)
+			if x.stop is None:
+				if not self.tree:
+					raise IndexError("open-ended slice not supported with empty tree")
+				x = slice(x.start, self.maxkey())
+			if x.stop < x.start:
+				raise ValueError("%s: bounds out of order" % repr(x))
 			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
 			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
 			self.tree[lo:hi] = ((x.start, val), (x.stop, val))
@@ -370,18 +389,45 @@ class NearestLeafTree(object):
 		return val_lo if x < x_lo + (x_hi - x_lo) / 2. else val_hi
 
 	def __delitem__(self, x):
+		"""
+		Example:
+
+		>>> x = NearestLeafTree([(100., 0.), (150., 1.), (200., 0.)])
+		>>> del x[150.]
+		>>> x
+		NearestLeafTree([(100., 0.), (200., 0.)])
+		>>> del x[:]
+		NearestLeafTree([])
+		"""
 		if type(x) is slice:
-			assert x.step is None
+			if x.step is not None:
+				raise ValueError("%s: step not supported" % repr(x))
+			if x.start is None:
+				if not self.tree:
+					# no-op
+					return
+				x = slice(self.minkey(), x.stop)
+			if x.stop is None:
+				if not self.tree:
+					# no-op
+					return
+				x = slice(x.start, self.maxkey())
+			if x.stop < x.start:
+				# no-op
+				return
 			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
 			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
 			del self.tree[lo:hi]
 		elif not self.tree:
 			raise IndexError(x)
 		else:
-			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
+			lo = bisect.bisect_left(self.tree, (x, NegInf))
 			if self.tree[lo][0] != x:
 				raise IndexError(x)
 			del self.tree[lo]
+
+	def __nonzero__(self):
+		return bool(self.tree)
 
 	def __iadd__(self, other):
 		for x, val in other.tree:
@@ -401,24 +447,32 @@ class NearestLeafTree(object):
 		"""
 		Return the minimum value stored in the tree.  This is O(n).
 		"""
+		if not self.tree:
+			raise ValueError("empty tree")
 		return min(val for x, val in self.tree)
 
 	def minkey(self):
 		"""
 		Return the minimum key stored in the tree.  This is O(1).
 		"""
+		if not self.tree:
+			raise ValueError("empty tree")
 		return self.tree[0][0]
 
 	def max(self):
 		"""
 		Return the maximum value stored in the tree.  This is O(n).
 		"""
+		if not self.tree:
+			raise ValueError("empty tree")
 		return max(val for x, val in self.tree)
 
 	def maxkey(self):
 		"""
 		Return the maximum key stored in the tree.  This is O(1).
 		"""
+		if not self.tree:
+			raise ValueError("empty tree")
 		return self.tree[-1][0]
 
 	def __contains__(self, x):
