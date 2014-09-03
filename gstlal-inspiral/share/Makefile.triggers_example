@@ -4,6 +4,8 @@
 
 ## Template bank parameters
 # Note that these can can change if you modify the template bank program.
+# Waveform approximant
+APPROXIMANT = TaylorF2
 # Minimum component mass for the template bank
 MIN_MASS = 1.0
 # Maximum component mass for the template bank
@@ -54,7 +56,7 @@ PEAK = 0
 # The length in samples of the auto correlation "chisquared" veto.
 AC_LENGTH = 351
 # additional options, e.g.,
-#ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
+#ADDITIONAL_DAG_OPTIONS = --blind-injections BNS-MDC1-WIDE.xml
 
 ## Injections
 # The seed is the string before the suffix _injections.xml
@@ -135,33 +137,28 @@ H1-TMPLTBANK-966393725-2048.xml: H1_frame.cache
 		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
 		--frame-cache H1_frame.cache \
 		--max-high-freq-cutoff ERD \
-		--approximant TaylorF2 \
+		--approximant $(APPROXIMANT) \
 		--order twoPN \
 		--spectrum-type median \
 		--verbose 
 
-## The program to to split the master template bank into sub banks
-%_split_bank.cache : H1-TMPLTBANK-966393725-2048.xml
-	mkdir -p $*_split_bank
-	gstlal_bank_splitter --output-path $*_split_bank --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+## Directories that we'll need
+plots $(WEBDIR) %_split_bank :
+	mkdir -p $@
 
-## The directory where plots will go
-plots :
-	mkdir plots
-
-## The output directory
-$(WEBDIR) : 
-	mkdir $(WEBDIR)
+## The program to to split the master template bank into sub banks.  Note:  this program looks for process parameters recorded for the program "tmpltbank", if that is not correct then the --bank-program option must be added to override.
+%_split_bank.cache : H1-TMPLTBANK-966393725-2048.xml %_split_bank
+	gstlal_bank_splitter --output-path $*_split_bank --output-cache $@ --approximant $(APPROXIMANT) --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 
 ## Even though we don't use time slides for background estimation, we still need a time slide table. It is constructed of a zero lag vector and a single offset that we use for "closed box" results
-tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
-	ligolw_add --output $@ tisi0.xml tisi1.xml
+tisi.xml : %.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 $*_part0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 $*_part1.xml
+	ligolw_add --remove-input --output $@ $*_part0.xml $*_part1.xml
 
 ## The dag generator and the whole point of this makefile. The result is a file: trigger_pipe.dag that can be submitted to HTCondor
 dag : segments.xml frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
-	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS)
+	gstlal_inspiral_pipe --verbose --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS)
 
 ## Excecute a single segment query for a given IFO
 # Note: Virgo might sometimes need a special rule
@@ -213,7 +210,6 @@ segments.xml: $(SEGMENTS_FILES) frame.cache
 ## Cleanup by deleting all of files created.  WARNING this will completely obliterate an analysis. 
 clean :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots $(WEBDIR) *.html Images *.css *.js
-	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -rvf *_split_bank/ lalapps_run_sqlite/ ligolw_* gstlal_*
 	-rm -vf segments.xml tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml
 	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
-	-rm -vf tisi0.xml tisi1.xml
