@@ -583,7 +583,7 @@ class Data(object):
 
 				# smooth the distributions.  re-populates
 				# PDF arrays from raw counts
-#				self.coinc_params_distributions.finish(verbose = self.verbose)
+				self.coinc_params_distributions.finish(verbose = self.verbose)
 
 				# post a checkpoint message.  FIXME:  make
 				# sure this triggers
@@ -595,7 +595,7 @@ class Data(object):
 				# somehow, no?
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
-	#			if self.marginalized_likelihood_file is not None:
+				if self.marginalized_likelihood_file is not None:
 					# FIXME:  must set horizon
 					# distances in coinc params object
 
@@ -603,7 +603,7 @@ class Data(object):
 					# ratio assignment using our own,
 					# local, parameter distribution
 					# data
-				#	self.stream_thinca.coinc_params_distributions = self.coinc_params_distributions
+					self.stream_thinca.coinc_params_distributions = self.coinc_params_distributions
 
 					# read the marginalized likelihood
 					# ratio distributions that have
@@ -628,8 +628,8 @@ class Data(object):
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
 			# coincs
-		#	for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
-			#	self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
+			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
+				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
 
 			# Cluster last coincs before recording number of zero
