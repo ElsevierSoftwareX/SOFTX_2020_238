@@ -1,0 +1,5 @@
+gstlal-burst (0.0.1-1) unstable; urgency=low
+
+  * initial release
+
+ -- Chris Pankow <chris.pankow@ligo.org>  Wed, 27 Aug 2014 12:44:16 -0500

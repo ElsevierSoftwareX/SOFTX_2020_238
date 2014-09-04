@@ -1,0 +1,39 @@
+Source: gstlal-burst
+Maintainer: Chris Pankow <chris.pankow@gravity.phys.uwm.edu>
+Section: lscsoft
+Priority: optional
+Standards-Version: 3.9.2
+X-Python-Version: >= 2.6
+Build-Depends:
+ debhelper (>= 8),
+ python-all-dev (>= 2.6),
+ gstlal-dep (>= 2.2) | gstenvironment,
+ python-gobject-dev,
+ python-numpy,
+ lal-dev (>= @MIN_LAL_VERSION@),
+ lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
+ python-glue (>= @MIN_GLUE_VERSION@),
+ fakeroot,
+ pkg-config,
+ gstlal-dev (>= @MIN_GSTLAL_VERSION@)
+
+Package: gstlal-burst
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
+ python (>= 2.6),
+ python-glue (>= @MIN_GLUE_VERSION@),
+ python-glue-segments (>= @MIN_GLUE_VERSION@),
+ python-pylal (>= @MIN_PYLAL_VERSION@),
+ gstlal-dep (>= 2.2) | gstenvironment,
+ python-gobject,
+ python-numpy,
+ python-scipy,
+ lal (>= @MIN_LAL_VERSION@),
+ lalmetaio (>= @MIN_LALMETAIO_VERSION@),
+ lalburst (>= @MIN_LALBURST_VERSION@),
+ gstlal (>= @MIN_GSTLAL_VERSION@),
+ gstlal-ugly (>= @MIN_GSTLAL_UGLY_VERSION@)
+Conflicts:
+ gstlal-ugly (<< 0.6.0)
+Description: GStreamer for generic transient data analysis
+ This package contains the plugins and shared libraries required to run the gstlal burst (generic transient) pipeline.
