@@ -382,7 +382,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = [priornode],
+				parent_nodes = [priornode] + [parents], # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats + [priornode.output_files["write-likelihood"]], "":inputs}
 			)
