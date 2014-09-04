@@ -636,7 +636,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# quantized choice of horizon distances
 	#
 
-	max_cached_snr_joint_pdfs = 5**3 * 4
+	max_cached_snr_joint_pdfs = int(5**3 * 4)
 	snr_joint_pdf_cache = {}
 
 	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
