@@ -17,8 +17,6 @@ no_inj:
 		--block-size ${blocksize} \
 		--gps-start-time 0 \
 		--gps-end-time 2000 \
-		--file-cache \
-		--file-cache-name H1_no_inj.cache \
 		--data-source AdvLIGO  \
 		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
 		--enable-channel-monitoring \
