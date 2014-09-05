@@ -20,7 +20,6 @@ AC_CONFIG_FILES([ \
 	lib/gstlal-ugly.pc \
 	lib/Makefile \
 	python/Makefile \
-	python/excesspower/Makefile \
 	share/Makefile \
 	gst/Makefile \
 	gst/nds/Makefile \
