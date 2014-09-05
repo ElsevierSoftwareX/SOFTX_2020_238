@@ -504,6 +504,24 @@ class HorizonHistories(dict):
 				self[key] = copy.deepcopy(history)
 		return self
 
+	def minkey(self):
+		"""
+		Return the minimum key stored in the trees.
+		"""
+		minkeys = tuple(history.minkey() for history in self.values() if history)
+		if not minkeys:
+			raise ValueError("empty trees")
+		return min(minkeys)
+
+	def maxkey(self):
+		"""
+		Return the maximum key stored in the trees.
+		"""
+		maxkeys = tuple(history.maxkey() for history in self.values() if history)
+		if not maxkeys:
+			raise ValueError("empty trees")
+		return max(maxkeys)
+
 	def getdict(self, x):
 		return dict((key, value[x]) for key, value in self.iteritems())
 
@@ -515,8 +533,8 @@ class HorizonHistories(dict):
 		in the history and returning the dictionary of horizon
 		distances for each of those times.
 		"""
-		x_min = min(min(value.keys()) for value in self.values())
-		x_max = max(max(value.keys()) for value in self.values())
+		x_min = self.minkey()
+		x_max = self.maxkey()
 		getdict = self.getdict
 		rnd = random.uniform
 		while 1:
