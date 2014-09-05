@@ -67,7 +67,6 @@ pygst.require("0.10")
 import gst
 
 from gstlal import pipeparts
-from gstlal import datasource
 from gstlal.simplehandler import Handler
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 import utils, filters
