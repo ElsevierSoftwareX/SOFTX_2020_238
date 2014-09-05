@@ -75,7 +75,6 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
 {
 	gboolean success = TRUE;
 
-    fprintf(stderr, "do_new_segment called\n");
 	if(element->last_segment) {
 		GstSegment *segment;
 
@@ -102,7 +101,6 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
 			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), gst_event_new_segment(segment));
         */
 		if(format == GST_FORMAT_TIME) {
-            fprintf(stderr, "updating last segment\n");
 			if(GST_CLOCK_TIME_IS_VALID(start))
 				start = gst_util_uint64_scale_int_round(start, element->inrate_over_outrate_num, element->inrate_over_outrate_den);
 			if(GST_CLOCK_TIME_IS_VALID(stop))
@@ -112,7 +110,6 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
 
 			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), gst_event_new_new_segment(update, rate, format, start, stop, position));
 		} else {
-            fprintf(stderr, "using last segment\n");
 			gst_event_ref(element->last_segment);
 			success = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(element), element->last_segment);
 		}
