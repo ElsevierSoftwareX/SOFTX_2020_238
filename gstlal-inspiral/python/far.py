@@ -1108,6 +1108,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
 		horizongen = iter(self.horizon_history.randhorizons()).next
+		# P(horizons) = 1/livetime
+		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
 		coordgens = tuple(iter(self.binnings[key].randcentre(ns = (snr_slope, 1.))).next for key in keys)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
@@ -1119,7 +1121,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
-			yield params, sum(seq[1::2])
+			yield params, sum(seq[1::2], log_P_horizons)
 
 	@classmethod
 	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 30000, efolds_per_bin = 1.0 / 20.0, progressbar = None):
