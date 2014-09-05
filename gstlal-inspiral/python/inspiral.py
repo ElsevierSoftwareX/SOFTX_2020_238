@@ -625,6 +625,16 @@ class Data(object):
 				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
 
+			# Cluster last coincs before recording number of zero
+			# lag events or sending alerts to gracedb
+			# FIXME Do proper clustering that saves states between
+			# thinca intervals and uses an independent clustering
+			# window. This can also go wrong if there are multiple
+			# events with an identical likelihood.  It will just
+			# choose the event with the highest event id
+			if self.stream_thinca.last_coincs:
+				self.stream_thinca.last_coincs.coinc_event_index = dict(max(self.stream_thinca.last_coincs.coinc_event_index.items(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood))
+
 			# update zero-lag coinc bin counts in
 			# coinc_params_distributions.  NOTE:  if likelihood
 			# ratios are known then these are the counts of
@@ -708,21 +718,18 @@ class Data(object):
 			psdmessage = None
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 
-			# FIXME:  this is hacked to only send at most the
-			# one best coinc in this set.  May not make sense
-			# depending on what is in last_coincs.  FIX
-			# PROPERLY.  This is probably mostly okay because
-			# we should be doing coincidences every 10s which
-			# is a reasonable time to cluster over.  the slice
-			# can be edited (or removed) to change this.
-			for likelihood, coinc_event_id in sorted((coinc_event.likelihood, coinc_event.coinc_event_id) for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values())[-1:]:
+			# This appears to be a silly for loop since
+			# coinc_event_index will only have one value, but we're
+			# future proofing this at the point where it could have
+			# multiple clustered events
+			for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values():
 				#
-				# quit if the false alarm rate is not low
-				# enough, or is nan
+				# continue if the false alarm rate is not low
+				# enough, or is nan.
 				#
 
-				if coinc_inspiral_index[coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event_id].combined_far):
-					break
+				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
+					continue
 
 				#
 				# retrieve PSDs
@@ -751,8 +758,8 @@ class Data(object):
 
 				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglists)))
 				instruments = "".join(sorted(self.seglists))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
-				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
+				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
 				#
@@ -769,7 +776,7 @@ class Data(object):
 				if self.verbose:
 					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
-				ligolw_utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
+				ligolw_utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event.coinc_event_id], message, gz = False, trap_signals = None)
 				# FIXME: make this optional from command line?
 				if True:
 					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
