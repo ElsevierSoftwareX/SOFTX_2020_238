@@ -19,6 +19,7 @@ AC_CONFIG_FILES([ \
 	debian/control \
 	debian/Makefile \
 	python/Makefile \
+	python/excesspower/Makefile
 ])
 
 
