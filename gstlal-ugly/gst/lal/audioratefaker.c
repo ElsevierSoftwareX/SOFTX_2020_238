@@ -353,8 +353,11 @@ static void finalize(GObject *object)
 {
 	GstAudioRateFaker *element = GST_AUDIO_RATE_FAKER(object);
 
+	/*
+	 * This will throw up an error -- I don't think we own this object in 0.10
 	if(element->last_segment)
 		gst_event_unref(element->last_segment);
+	*/
 	element->last_segment = NULL;
 
 	/*
