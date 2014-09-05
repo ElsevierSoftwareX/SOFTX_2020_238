@@ -40,13 +40,13 @@ import sys
 from optparse import OptionParser
 
 
-from glue import segments
-from gstlal import far, inspiral
-from glue.ligolw import ligolw, lsctables
+from glue import iterutils
+from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import search_summary as ligolw_search_summary
-from pylal.datatypes import LIGOTimeGPS
+
+
+from gstlal import far
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -70,17 +70,29 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
-	parser.add_option("--instrument", action = "append", help = "append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze")
-	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
+	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
+	parser.add_option("--horizon-distances", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is \"instrument=distance,instrument=distance,...\", e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of two or more instruments from the set.  It is an error for an instrument to be named here and not in a --instrument option.")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
 	if filenames:
 		raise ValueError("unrecognized command line options")
 
-	if not options.instrument or len(options.instrument) < 2:
-		raise ValueError("must specify at least two --instrument's")
+	process_params = dict(options.__dict__)
 
-	return options, filenames
+	options.instrument = set(options.instrument)
+	if not options.instrument or len(options.instrument) < 2:
+		raise ValueError("must specify at least two distinct --instrument's")
+
+	if options.horizon_distances is None:
+		options.horizon_distances = []
+	options.horizon_distances = [dict((name, float(dist)) for name, dist in [name_dist.split("=") for name_dist in horizon_distances.strip().split(",")]) for horizon_distances in options.horizon_distances]
+	if options.horizon_distances:
+		all_horizon_instruments = reduce(lambda a, b: a | b, (set(horizon_distances) for horizon_distances in options.horizon_distances))
+		if all_horizon_instruments > options.instrument:
+			raise ValueError("missing %s for instruments named in --horizon-distances options" % ", ".join("--instrument %s" % inst for inst in all_horizon_instruments - options.instrument))
+
+	return options, process_params, filenames
 
 
 
@@ -98,7 +110,17 @@ def parse_command_line():
 #
 
 
-options, filenames = parse_command_line()
+options, process_params, filenames = parse_command_line()
+
+
+#
+# initialize output document (records process start time)
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_prior_diststats", ifos = options.instrument, paramdict = process_params)
 
 
 #
@@ -108,12 +130,30 @@ options, filenames = parse_command_line()
 
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
-# FIXME:  need segment lists
-seglists = segments.segmentlistdict.fromkeys(options.instrument, segments.segmentlist([segments.segment(LIGOTimeGPS(0.), LIGOTimeGPS(1.))]))
-
-if options.background_prior != 0:
+if options.background_prior > 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = options.instrument, verbose = options.verbose)
-coincparamsdistributions.add_foreground_snrchi_prior(coincparamsdistributions.injection_rates, instruments = set(seglists), n = options.synthesize_injection_count, prefactors_range = (0.0, 0.10), df = 40, verbose = options.verbose)
+
+if options.synthesize_injection_count > 0:
+	coincparamsdistributions.add_foreground_snrchi_prior(coincparamsdistributions.injection_rates, instruments = options.instrument, n = options.synthesize_injection_count, prefactors_range = (0.0, 0.10), df = 40, verbose = options.verbose)
+
+
+#
+# seed SNR PDF cache
+#
+
+
+for horizon_distances in options.horizon_distances:
+	for n in range(2, len(horizon_distances) + 1):
+		for instruments in iterutils.choices(horizon_distances.keys(), n):
+			coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
+
+
+#
+# record results in output file
+#
+
+
+far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, None, {}, comment = u"background and signal priors (no real data)")
 
 
 #
@@ -121,10 +161,5 @@ coincparamsdistributions.add_foreground_snrchi_prior(coincparamsdistributions.in
 #
 
 
-xmldoc = ligolw.Document()
-xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_prior_diststats", paramdict = {})
-search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = options.instrument, inseg = seglists.extent_all(), outseg = seglists.extent_all())
-far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, None, seglists, comment = u"background and signal priors (no real data)")
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith(".gz"), verbose = options.verbose)
