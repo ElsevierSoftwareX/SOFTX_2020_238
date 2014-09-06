@@ -574,7 +574,7 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 	margnum = 16
 	for i,n in enumerate(range(0, len(margin), margnum)):
 		margout.append("%d_marginalized_likelihood.xml.gz" % (i,))
-		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes,
+		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes + rankpdf_nodes,
 			output_files = {"output":margout[-1]}, 
 			input_files = {"":margin[n:n+margnum]}
 		))
