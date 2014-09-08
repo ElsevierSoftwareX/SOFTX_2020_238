@@ -1169,7 +1169,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# (meaning the PDF will be left 0 in that bin).
 		pdf = rate.BinnedArray(rate.NDBins([bins] * len(instruments)))
 		snr_sequence = rate.ATanLogarithmicBins(3.6, 120., 300)
-		snr_dsnr_sequence = tuple(zip(snr_sequence.centres(), snr_sequence.upper() - snr_sequence.lower()))[:-1]
+		snr_snrlo_snrhi_sequence = numpy.array(zip(snr_sequence.centres(), snr_sequence.lower(), snr_sequence.upper())[:-1])
 
 		# compute the SNR at which to begin iterations over bins
 		assert type(cls.snr_min) is float
@@ -1253,43 +1253,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 			# if start_index >= end_index then in order for the
 			# source to be close enough to be visible in all
-			# the instruments that must see it, it is already
+			# the instruments that must see it it is already
 			# visible to one or more instruments that must not.
-			# don't need to check for this, the for loop will
-			# simply not have any iterations.
+			# don't need to check for this, the for loop that
+			# comes next will simply not have any iterations.
 
 			# iterate over the SNRs (= SNR in the most
 			# sensitive instrument) at which we will add weight
-			# to the PDF, and the bin sizes at those SNRs.  the
-			# last bin is excluded because dsnr can be infinite
-			# there
-			for snr, dsnr in snr_dsnr_sequence[start_index:end_index]:
-				# "snr" is SNR in fastest growing
-				# instrument, from this the distance to the
-				# source is:
-				#
-				#	D = max_snr_times_D / snr
-				#
-				# and the SNRs in all instruments are:
-				#
-				#	snr_times_D / D
-				#
-				#
-				# rate of change of D with SNR:
-				#	dD/d(snr) = -snr_times_D / snr^2
-				#	          = -D / snr
-				#
-				# relationship b/w dD and d(snr):
-				#	dD = -D / snr d(snr)
-				#
-				# number of sources:
-				#	\propto D^2 |dD|
-				#	\propto D^3 * dsnr / snr
-				D = max_snr_times_D / snr
-				pdf[tuple(snr_times_D / D)] += D**3. * (dsnr / snr)
+			# to the PDF.  from the SNR in fastest growing
+			# instrument, the distance to the source is:
+			#
+			#	D = max_snr_times_D / snr
+			#
+			# and the SNRs in all instruments are:
+			#
+			#	snr_times_D / D
+			#
+			# number of sources:
+			#
+			#	d count \propto D^2 |dD|
+			#	count \propto Dhi^3 - Dlo**3
+			for D, Dhi, Dlo in max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]:
+				pdf[tuple(snr_times_D / D)] += Dhi**3. - Dlo**3.
 
 			if progressbar is not None:
 				progressbar.increment()
+		# check for divide-by-zeros that weren't caught
+		assert numpy.isfinite(pdf.array).all()
 
 		# convolve the PDF bin values with a Gaussian kernel whose
 		# width in bins is equivalent to \sqrt{2} in SNR at SNR=6.
