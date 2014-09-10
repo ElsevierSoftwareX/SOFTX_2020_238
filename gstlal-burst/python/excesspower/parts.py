@@ -56,7 +56,7 @@ from pylal import ligolw_bucluster
 
 from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
-from pylal.xlal.lalburst import XLALlnOneMinusChisqCdf
+from lalburst import lnOneMinusChisqCdf
 
 import pygtk
 pygtk.require("2.0")
@@ -68,7 +68,7 @@ import gst
 
 from gstlal import pipeparts
 from gstlal.simplehandler import Handler
-from gstlal.reference_psd import write_psd, read_psd_xmldoc
+from gstlal.reference_psd import write_psd
 import utils, filters
 
 #
@@ -507,7 +507,7 @@ class EPHandler(Handler):
 		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in sngl_bursts_from_buffer(buffer)]:
 
 			# FIXME: Determine "magic number" or remove it
-			event.confidence = -XLALlnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
+			event.confidence = -lnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
 
 			# This is done here so that the current PSD is used rather than what
 			# might be there when the triggers are actually output
