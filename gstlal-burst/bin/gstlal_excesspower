@@ -132,7 +132,7 @@ if gw_data_source_opts.data_source in ("lvshm", "framexmit"):
     gate.connect("stop", handler.handle_segment, "off")
 
 elif gw_data_source_opts.seg is not None:
-    handler.start = float(gw_data_source_opts.seg[0])
+	handler.time_since_dump = handler.start = float(gw_data_source_opts.seg[0])
 
 # Construct the analysis end of the pipeline
 parts.construct_excesspower_pipeline(pipeline, head, handler, scan_obj, options.drop_time, options.peak_fraction, disable_triggers=options.disable_triggers, verbose=verbose)
