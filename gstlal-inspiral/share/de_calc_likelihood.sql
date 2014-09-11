@@ -7,7 +7,9 @@
 -- effect and is not suitable when doing a bulk re-analysis of
 -- previously-processed files.  In that case, use this script to erase the
 -- record of gstlal_inspiral_calc_likelihood from the file's metadata,
--- tricking it into believing the file has not been processed yet.
+-- tricking it into believing the file has not been processed yet.  For
+-- safety, this script also deletes the likleihood ratios from the
+-- coinc_event table.
 
 DELETE FROM
 	process_params
@@ -37,3 +39,8 @@ DELETE FROM
 	process
 WHERE
 	program == "gstlal_inspiral_calc_likelihood";
+
+UPDATE
+	coinc_event
+SET
+	likelihood = NULL;
