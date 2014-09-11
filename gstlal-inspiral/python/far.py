@@ -1625,6 +1625,7 @@ WHERE
 			AND time_slide.offset != 0
 	)
 """, (coinc_def_id,)):
+			assert likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
 			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][likelihood_ratio,] += 1.
 
 
