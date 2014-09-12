@@ -102,7 +102,7 @@ static int push_zeros(GSTLALIIRBank *element, unsigned samples)
  */
 
 
-static void set_metadata(GSTLALIIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
+static void set_metadata(GSTLALIIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean isgap)
 {
         GST_BUFFER_SIZE(buf) = outsamples * iir_channels(element) * element->width / 8;
         GST_BUFFER_OFFSET(buf) = element->next_out_offset;
@@ -114,7 +114,7 @@ static void set_metadata(GSTLALIIRBank *element, GstBuffer *buf, guint64 outsamp
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
-	if(gap)
+	if(isgap)
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	else
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
@@ -136,7 +136,7 @@ static guint64 get_available_samples(GSTLALIIRBank *element)
  */
 
 
-static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf)
+static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf, gboolean isgap)
 {
 	unsigned available_length;
 	unsigned output_length;
@@ -220,7 +220,7 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf)
 	 * set buffer metadata
 	 */
 
-	set_metadata(element, outbuf, output_length, FALSE);
+	set_metadata(element, outbuf, output_length, isgap);
 
 	/*
 	 * done
@@ -235,7 +235,7 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf)
  */
 
 
-static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf)
+static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf, gboolean isgap)
 {
 	unsigned available_length;
 	unsigned output_length;
@@ -320,7 +320,7 @@ static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf)
 	 * set buffer metadata
 	 */
 
-	set_metadata(element, outbuf, output_length, FALSE);
+	set_metadata(element, outbuf, output_length, isgap);
 
 	/*
 	 * done
@@ -635,6 +635,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
 	GstFlowReturn result;
 
+	gboolean isgap;
+
 	/*
 	 * wait for IIR matrix
 	 * FIXME:  add a way to get out of this loop
@@ -706,10 +708,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
+		isgap = FALSE;
 		if (element->width == 64)
-			result = filter_d(element, outbuf);
+			result = filter_d(element, outbuf, isgap);
 		else if (element->width == 32){
-			result = filter_s(element, outbuf);
+			result = filter_s(element, outbuf, isgap);
 		}
 	} else if(TRUE) {
 		/*
@@ -717,10 +720,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		push_zeros(element, length);
+		isgap = TRUE;
 		if (element->width == 64)
-			result = filter_d(element, outbuf);
+			result = filter_d(element, outbuf, isgap);
 		else if (element->width == 32){
-			result = filter_s(element, outbuf);
+			result = filter_s(element, outbuf, isgap);
 		}
 	}
 	//fprintf(stderr, "TIMESTAMP %f, BUFFERSIZE %d\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_SIZE(inbuf) / sizeof(double));
