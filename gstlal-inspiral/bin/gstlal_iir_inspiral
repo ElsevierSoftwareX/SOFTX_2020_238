@@ -61,6 +61,7 @@ from gstlal import far
 from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import lloidparts
+from gstlal import spiirparts
 from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
@@ -342,7 +343,7 @@ if options.verbose:
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
 
-triggersrc = lloidparts.mkSPIIRmulti(
+triggersrc = spiirparts.mkBuildBossSPIIR(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
@@ -366,11 +367,13 @@ if options.verbose:
 # Load likelihood ratio data, assume injections are present
 #
 
-
-if options.likelihood_file is not None:
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-else:
-	coinc_params_distributions = far.ThincaCoincParamsDistributions()
+#if options.likelihood_file is not None:
+#	FAR, proc_id = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+#else:
+#	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
+	# initialize an empty trials table with the combinations of detectors
+	# that this job will analyze
+#	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
 
 
 #
@@ -387,7 +390,7 @@ output = inspiral.Data(
 	instruments = set(detectors.channel_dict),
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
-	coinc_params_distributions = coinc_params_distributions,
+	coinc_params_distributions = None,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,

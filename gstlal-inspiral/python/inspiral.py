@@ -763,8 +763,8 @@ class Data(object):
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
+#		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
+#			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in coinc_params_distributions

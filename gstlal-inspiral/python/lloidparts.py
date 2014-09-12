@@ -103,33 +103,6 @@ from pylal.datatypes import LIGOTimeGPS
 #
 # =============================================================================
 #
-#                              Pipeline Metadata
-#
-# =============================================================================
-#
-
-
-class DetectorData(object):
-	"""!
-	A class to store a cache file, channel name and the characteristic
-	block size (in bytes) of h(t) data to read.
-
-	FIXME: move to IIR module
-	"""
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
-		"""!
-		@param frame_cache A cache file containing the frames to find the h(t) data for this detector
-		@param channel A string to store the channel name
-		@param block_size The block size of data to read in bytes.
-		"""
-		self.frame_cache = frame_cache
-		self.channel = channel
-		self.block_size = block_size
-
-
-#
-# =============================================================================
-#
 #                              Pipeline Elements
 #
 # =============================================================================
@@ -199,6 +172,9 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	# optionally add a segment src and gate to only reconstruct around
 	# injections
 	#
+	# FIXME:  set the names of these gates so their segments can be
+	# collected later?  or else propagate this segment list into the
+	# output some other way.
 
 	if reconstruction_segment_list is not None:
 		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, seekevent = seekevent, invert_output = False)
@@ -222,43 +198,77 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 
 class Handler(simplehandler.Handler):
 	"""!
-	A subclass of simplehandloer.Handler to be used with e.g.,
+	A subclass of simplehandler.Handler to be used with e.g.,
 	gstlal_inspiral
 
-	Implements additional message handling for dealing with
-	spectrum messages and checkpoints for the online analysis including periodic
-	dumps of segment information, trigger files and background distribution
-	statistics. 
-	
+	Implements additional message handling for dealing with spectrum
+	messages and checkpoints for the online analysis including periodic
+	dumps of segment information, trigger files and background
+	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, gates = {}, tag = "", dataclass = None, verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, tag = "", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
-		@param gates A dictionary of gate names and messages, e.g., gates = {"my_gate_name": "my message"}.  my_gate_name should refer to a gate element's name property that can be retrieved in this pipeline by name
+		@param dataclass An inspiral.Data class instance
 		@param tag The tag to use for naming file snapshots, e.g. the description will be "%s_LLOID" % tag
-		@param An inspiral.Data class instance
 		@param verbose Be verbose
 		"""
 		super(Handler, self).__init__(mainloop, pipeline)
 
 		self.dataclass = dataclass
 
-		self.seglists = segments.segmentlistdict()
-		self.current_segment_start = {}
-		self.gates = gates
 		self.tag = tag
 		self.verbose = verbose
-		for name in self.gates:
-			self.seglists[name] = segments.segmentlist()
-			elem = self.pipeline.get_by_name(name)
-			elem.set_property("emit-signals", True)
-			elem.connect("start", self.gatehandler, "on")
-			elem.connect("stop", self.gatehandler, "off")
 
-		bottle.route("/horizon_history.xml")(self.web_get_horizon_history_xml)
-		if gates:
-			bottle.route("/segments.xml")(self.web_get_segments_xml)
+		# setup segment list collection from gates
+		#
+		# FIXME:  knowledge of what gates are present in what
+		# configurations, what they are called, etc., somehow needs to live
+		# with the code that constructs the gates
+		#
+		# FIXME:  in the offline pipeline, none of these segments
+		# get recorded.  however, except for the h(t) gate segments
+		# these are all inputs to the pipeline so it probably
+		# doesn't matter.  nevertheless, they maybe should go into
+		# the event database for completeness of that record, or
+		# maybe not because it could result in a lot of duplication
+		# of on-disk data.  who knows.  think about it.
+		#
+		# FIXME:  should one of these be the segments in the
+		# likelihood data file to define the livetime for
+		# predicting event rates?  right now what's used for that
+		# are the segments collected from the trigger buffers,
+		# which maybe aren't the best choice for that purpose.
+		gate_suffix = {
+			# FIXME:  the data segments are provided externally
+			# and could be put straight into the output
+			# document instead of doing it this way
+			"datasegments": "frame_segments_gate",
+			"statevectorsegments": "state_vector_gate",
+			"whitehtsegments": "ht_gate"
+		}
+		self.seglistdicts = {}
+		for segtype, suffix in gate_suffix.items():
+			self.seglistdicts[segtype] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in dataclass.seglists)
+		self.current_segment_start = {}
+		for segtype, seglistdict in self.seglistdicts.items():
+			for instrument in seglistdict:
+				elem = self.pipeline.get_by_name("%s_%s" % (instrument, gate_suffix[segtype]))
+				if elem is None:
+					# silently ignore missing gate
+					# elements
+					continue
+				elem.connect("start", self.gatehandler, (segtype, instrument, "on"))
+				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
+				elem.set_property("emit-signals", True)
+
+		# most recent spectrum reported by each whitener
+		self.psds = {}
+		bottle.route("/psds.xml")(self.web_get_psd_xml)
+
+		# segment lists
+		bottle.route("/segments.xml")(self.web_get_segments_xml)
 
 	def do_on_message(self, bus, message):
 		"""!
@@ -271,13 +281,20 @@ class Handler(simplehandler.Handler):
 		if message.type == gst.MESSAGE_ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
-				# NOTE:  epoch is the middle of the
-				# interval used to obtain this PSD
+				# NOTE: epoch is used for the timestamp, this
+				# is the middle of the most recent FFT interval
+				# used to obtain this PSD
 				instrument = message.src.get_name().split("_")[-1]
 				psd = pipeio.parse_spectrum_message(message)
 				timestamp = psd.epoch
-				# FIXME:  probably need to compute these
-				# for a bunch of masses.  which ones?
+
+				# save
+				self.psds[instrument] = psd
+
+				# update horizon distance history
+				#
+				# FIXME:  probably need to compute these for a
+				# bunch of masses.  which ones?
 				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
 		elif message.type == gst.MESSAGE_APPLICATION:
@@ -309,52 +326,64 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			try:
-				# close out existing segments
-				for name, elem in [(name, self.pipeline.get_by_name(name)) for name in self.gates]:
-					if name in self.current_segment_start:
-						# By construction these gates should be
-						# in the on state.  We fake a state
-						# transition to off in order to flush
-						# the segments
-						self.gatehandler(elem, timestamp, "off")
-						# But we have to remember to put it back
-						self.gatehandler(elem, timestamp, "on")
-				xmldoc = self.gen_segments_doc()
-				ext = self.seglists.extent_all()
-				instruments = set(name.split("_")[0] for name in self.seglists)
-				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(ext[0]), int(abs(ext)))
-				ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
+				# close out existing segments.  the code in
+				# the loop modifies the iteration target,
+				# so iterate over a copy
+				for segtype, instrument in list(self.current_segment_start):
+					# By construction these gates
+					# should be in the on state.  We
+					# fake a state transition to off in
+					# order to flush the segments
+					self.gatehandler(None, timestamp, (segtype, instrument, "off"))
+					# But we have to remember to put it
+					# back
+					self.gatehandler(None, timestamp, (segtype, instrument, "on"))
+				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
+				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
+				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
+				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
-				# Reset the segment lists
-				for seglist in self.seglists.values():
-					del seglist[:]
+				# clear the segment lists in place
+				for seglistdict in self.seglistdicts.values():
+					for seglist in seglistdict.values():
+						del seglist[:]
+				# FIXME:  this is disabled for now.  the
+				# online pipeline needs these to accumulate
+				# forever, but that might not be what it
+				# should be doing.  figure this out
+				#for seglist in self.dataclass.seglists.values():
+				#	del seglist[:]
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
-	def gatehandler(self, elem, timestamp, segment_type):
+	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		"""!
 		A handler that intercepts gate state transitions. This can set
 		the "on" segments for each detector
 
-		@param elem A reference to the lal_gate element
+		@param elem A reference to the lal_gate element or None (only used for verbosity)
 		@param timestamp A gstreamer time stamp that marks the state transition (in nanoseconds)
-		@param segment_type the type of state transition, i.e. either "on" or "off"
+		@param segtype the class of segments this gate is defining, e.g., "datasegments", etc..
+		@param instrument the instrument this state transtion is to be attributed to, e.g., "H1", etc..
+		@param new_state the state transition, must be either "on" or "off"
 		"""
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
-		name = elem.get_name()
+		state_key = (segtype, instrument)
 
-		if self.verbose:
-			print >>sys.stderr, "%s: %s state transition: %s @ %s" % (name, self.gates[name], segment_type, str(timestamp))
+		if self.verbose and elem is not None:
+			print >>sys.stderr, "%s: %s %s state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
 
-		# If there is a current_segment_start for this then the state transition has to be off
-		if name in self.current_segment_start:
-			self.seglists[name] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(name), timestamp)])
-		if segment_type == "on":
-			self.current_segment_start[name] = timestamp
-		elif segment_type != "off":
-			raise AssertionError
+		with self.dataclass.lock:
+			# If there is a current_segment_start for this then
+			# the state transition has to be off
+			if state_key in self.current_segment_start:
+				self.seglistdicts[segtype][instrument] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(state_key), timestamp)])
+			if new_state == "on":
+				self.current_segment_start[state_key] = timestamp
+			else:
+				assert new_state == "off"
 
-	def gen_segments_doc(self):
+	def gen_segments_xmldoc(self):
 		"""!
 		A method to output the segment list in a valid ligolw xml
 		format.
@@ -363,7 +392,9 @@ class Handler(simplehandler.Handler):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-		ligolwsegments.insert_from_segmentlistdict(self.seglists, name = "datasegments", comment = "LLOID snapshot")
+		for segtype, seglistdict in self.seglistdicts.items():
+			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
+		ligolwsegments.insert_from_segmentlistdict(self.dataclass.seglists, name = "triggersegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
@@ -374,18 +405,21 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_segments_doc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
 
-	def web_get_horizon_history_xml(self):
-		"""!
-		provide a bottle route to get horizon distance history information via a url
-		"""
+	def gen_psd_xmldoc(self):
+		xmldoc = lalseries.make_psd_xmldoc(self.psds)
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_psd_xml(self):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.dataclass.coincs_document.horizon_history_xml(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
