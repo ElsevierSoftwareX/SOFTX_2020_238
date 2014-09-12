@@ -26,8 +26,8 @@
  */
 
 
-#ifndef __GST_LAL_IIRBANKCUDA_H__
-#define __GST_LAL_IIRBANKCUDA_H__
+#ifndef __CUDA_GST_LAL_IIRBANK_H__
+#define __CUDA_GST_LAL_IIRBANK_H__
 
 
 #include <complex.h>
