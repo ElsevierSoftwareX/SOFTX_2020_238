@@ -619,6 +619,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
     texRef.normalized	= false;
     cudaBindTexture(0, texRef, SPSTATE(i)->d_input_s, channelDesc, available_length * sizeof(float));
     */
+    if (SPSTATE(i)->num_filters < 4) {
     cuda_iir_filter_kernel<<<grid, block, share_mem_sz, stream>>>(SPSTATE(i)->d_a1,
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
@@ -632,6 +633,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
 							SPSTATE(i)->nb,
 							SPSTATE(i)->queue_spiir_last_sample,
 							SPSTATE(i)->queue_spiir_len);
+    }
     //g_mutex_unlock(element->cuTex_lock);
 
   
