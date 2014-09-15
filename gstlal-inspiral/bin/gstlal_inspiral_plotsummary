@@ -49,6 +49,7 @@ from optparse import OptionParser
 import sqlite3
 import sys
 
+import os
 
 from glue import segments
 from glue.ligolw import dbtables
@@ -61,6 +62,7 @@ from pylal import git_version
 from pylal import SimBurstUtils
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from gstlal import far
+from gstlal import inspiral_pipe
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -88,7 +90,8 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % git_version.verbose_msg
 	)
 	parser.add_option("","--input-cache", help = "Also get the list of databases to process from this LAL cache.")
-	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
+	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
@@ -1207,7 +1210,7 @@ if options.plot_group is None:
 #
 
 
-wiki = open(options.base+"plotsummary.txt","w")
+wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
 
 for n, filename in enumerate(filenames):
 	if options.verbose:
@@ -1215,7 +1218,7 @@ for n, filename in enumerate(filenames):
 	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = options.base)
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = os.path.join(options.output_dir, options.user_tag))
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
@@ -1232,12 +1235,12 @@ for n, filename in enumerate(filenames):
 
 
 n = 0
-filename_template = "%%s%%0%dd_%%s%%s.%%s" % (int(math.log10(max_plot_groups or 1)) + 1)
+filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
 while len(plots):
 	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
 		for format in options.format:
 			if filename_fragment and fig:
-				filename = filename_template % (options.base, options.plot_group[n], filename_fragment, ("_openbox" if is_open_box else "_closedbox"), format)
+				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
 				if options.verbose:
 					print >>sys.stderr, "writing %s ..." % filename
 				fig.savefig(filename)
