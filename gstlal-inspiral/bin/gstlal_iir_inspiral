@@ -180,6 +180,7 @@ def parse_command_line():
 	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+	parser.add_option("--local-frame-caching", action = "store_true", help = "Unused")
 
 
 
@@ -290,7 +291,7 @@ def parse_command_line():
 		f.close()
 	else:
 		bad_options = []
-		for option in ["likelihood_file", "job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
 			if getattr(options, option) is not None:
 				bad_options.append(option)
 		if bad_options:
@@ -376,7 +377,7 @@ if options.verbose:
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
 
-triggersrc = spiirparts.mkSPIIRmulti(
+triggersrc = spiirparts.mkBuildBossSPIIR(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
@@ -400,12 +401,19 @@ if options.verbose:
 # Load likelihood ratio data, assume injections are present
 #
 
-
-if options.likelihood_file is not None:
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+#if options.likelihood_file is not None:
+#	FAR, proc_id = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+#else:
+#	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
+	# initialize an empty trials table with the combinations of detectors
+	# that this job will analyze
+#	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
+if options.data_source in ("lvshm", "framexmit"):
+	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+	if coinc_params_distributions is None:
+		raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
 else:
 	coinc_params_distributions = far.ThincaCoincParamsDistributions()
-
 
 #
 # build output document
@@ -437,6 +445,11 @@ output = inspiral.Data(
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
+# setup the pipeline hander with dq gates if in online mode
+if options.data_source in ("lvshm", "framexmit"):
+	gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
+else:
+	gates = {}
 handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
 
 if options.verbose:

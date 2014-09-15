@@ -239,7 +239,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 		raise ValueError("Could not parse bank files into valid bank dictionary.\n\t- Perhaps you are using out-of-date svd bank files?  Please ensure that they were generated with the same code version as the parsing code")
 	return banks
 
-def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
+def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 	"""
 	given a dictionary of lists of iir template bank file names parse them
 	into a dictionary of bank classes
@@ -692,8 +692,8 @@ class Data(object):
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
+#		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
+#			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in coinc_params_distributions
