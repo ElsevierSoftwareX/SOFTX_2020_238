@@ -236,7 +236,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 	return banks
 
-def parse_iirbank_files(iir_banks, verbose, snr_threshold = 5.5):
+def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 	"""
 	given a dictionary of lists of iir template bank file names parse them
 	into a dictionary of bank classes

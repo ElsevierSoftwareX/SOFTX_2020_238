@@ -147,6 +147,7 @@ def parse_command_line():
 	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+	parser.add_option("--local-frame-caching", action = "store_true", help = "Unused")
 
 
 
@@ -257,7 +258,7 @@ def parse_command_line():
 		f.close()
 	else:
 		bad_options = []
-		for option in ["likelihood_file", "job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
 			if getattr(options, option) is not None:
 				bad_options.append(option)
 		if bad_options:
@@ -374,7 +375,12 @@ if options.verbose:
 	# initialize an empty trials table with the combinations of detectors
 	# that this job will analyze
 #	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
-
+if options.data_source in ("lvshm", "framexmit"):
+	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+	if coinc_params_distributions is None:
+		raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
+else:
+	coinc_params_distributions = far.ThincaCoincParamsDistributions()
 
 #
 # build output document
@@ -390,7 +396,7 @@ output = inspiral.Data(
 	instruments = set(detectors.channel_dict),
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
-	coinc_params_distributions = None,
+	coinc_params_distributions = coinc_params_distributions,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
@@ -411,7 +417,7 @@ if options.data_source in ("lvshm", "framexmit"):
 	gates = dict([("%s_state_vector_gate" % ifo, "state vector gate") for ifo in detectors.channel_dict])
 else:
 	gates = {}
-handler = lloidparts.Handler(mainloop, pipeline, gates = gates, tag = options.job_tag, dataclass = output, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
