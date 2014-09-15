@@ -59,13 +59,15 @@ from pylal import ligolw_thinca
 
 
 from gstlal import far
+from gstlal import inspiral_pipe
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
+	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
 	parser.add_option("-c", "--database-cache", metavar = "filename", help = "Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.")
 	parser.add_option("--max-snr", metavar = "SNR", default = 200., type = "float", help = "Plot SNR PDFs up to this value of SNR (default = 200).")
@@ -378,7 +380,7 @@ background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(op
 
 
 fig = plot_rates(coinc_params_distributions, ranking_data)
-plotname = "%srates.png" % options.base
+plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_rates" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 if options.verbose:
 	print >>sys.stderr, "writing %s" % plotname
 fig.savefig(plotname)
@@ -422,7 +424,7 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
 	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
 	axes.set_title(r"$P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
-	plotname = "%s%s_snr_pdf.png" % (options.base, "".join(instruments))
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_snr_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -434,7 +436,7 @@ for key, binnedarray in coinc_params_distributions.background_pdf.items() if coi
 	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Noise")
 	if fig is None:
 		continue
-	plotname = "%s%s_noise_snrchi2_pdf.png" % (options.base, instrument)
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -446,7 +448,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coin
 	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Signal")
 	if fig is None:
 		continue
-	plotname = "%s%s_signal_snrchi2_pdf.png" % (options.base, instrument)
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -458,7 +460,7 @@ for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coin
 	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "LR", denom_binnedarray = coinc_params_distributions.background_pdf[key])
 	if fig is None:
 		continue
-	plotname = "%s%s_lr_snrchi2.png" % (options.base, instrument)
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_lr_snrchi2" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -470,14 +472,14 @@ for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items() if coinc
 	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Candidates")
 	if fig is None:
 		continue
-	plotname = "%s%s_candidate_snrchi2_pdf.png" % (options.base, instrument)
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_candidate_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Noise")
-	plotname = "%s%snoise_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -491,20 +493,20 @@ for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() 
 	else:
 		ranking_stats = None
 	fig = plot_likelihood_ratio_ccdf(instruments, fapfar.ccdf_interpolator[instruments], ranking_stats, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Noise")
-	plotname = "%s%snoise_likelihood_ratio_ccdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_ccdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Signal")
-	plotname = "%s%ssignal_likelihood_ratio_pdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_likelihood_ratio_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 	fig = plot_likelihood_ratio_ccdf(instruments, signal_ccdf[instruments], None, (ranking_data.likelihood_ratio_threshold, math.exp(options.max_log_lambda)), "Signal")
-	plotname = "%s%ssignal_likelihood_ratio_ccdf.png" % (options.base, ("%s_" % "".join(sorted(instruments))) if instruments is not None else "")
+	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_likelihood_ratio_ccdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -550,7 +552,7 @@ for f in files:
 			pylab.xlim([snr[1],snr[-1]])
 			pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
 			pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
-			pylab.savefig("%s%s-%s-%s.png" % (options.base, ifo, name, os.path.split(f)[1]))
+			pylab.savefig(inspiral_pipe.T050017_filename(ifo, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_%s" % (options.user_tag, name, os.path.split(f)[1]), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir))
 
 
 if options.marginalized_file:
@@ -575,6 +577,6 @@ if options.marginalized_file:
 		pylab.xlabel('ln(Likelihood)')
 		pylab.ylabel('False Alarm Probability')
 		pylab.ylim([1e-8, 1])
-		pylab.savefig("%s%s-marginalized_likelihood_cdf.png" % (options.base, "".join(sorted(list(k)))))
 
+		pylab.savefig(inspiral_pipe.T050017_filename(k.keys(), "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s" % (options.user_tag, "".join(sorted(list(k)))), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir))
 
