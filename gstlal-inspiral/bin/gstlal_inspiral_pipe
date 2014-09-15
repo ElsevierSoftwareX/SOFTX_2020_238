@@ -101,7 +101,7 @@ ligolw_param.use_in(LIGOLWContentHandler)
 def sim_tag_from_inj_file(injections):
 	if injections is None:
 		return None
-	return injections.replace('.xml', '').replace('.gz', '')
+	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
 
 def get_max_length(bank_cache, verbose = False):
 	max_time = 0
@@ -664,8 +664,8 @@ channel_dict = detectors.channel_dict
 instruments = "".join(sorted(bank_cache.keys()))
 instrument_set = bank_cache.keys()
 boundary_seg = detectors.seg
-name_tag = "plots/gstlal-%d-%d_" % (int(boundary_seg[0]), int(boundary_seg[1]))
 
+output_dir = "plots"
 
 #
 # Setup the dag
@@ -710,6 +710,7 @@ toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqli
 toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml")
 lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite")
 plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary")
+plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj")
 plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity")
 openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open')
 pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page")
@@ -738,7 +739,7 @@ if options.reference_psd is None:
 	inspiral_pipe.generic_node(horizonJob, dag,
 		parent_nodes = psd_nodes.values(),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-		output_files = {"":name_tag + "horizon.png"}
+		output_files = {"":inspiral_pipe.T050017_filename(instruments, "HORIZON", boundary_seg[0].seconds, boundary_seg[1].seconds, '.png', path = output_dir)}
 	)
 
 	#
@@ -800,27 +801,37 @@ farnode = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistog
 plotnodes = []
 
 plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[farnode],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space":inspiral_pipe.condor_scratch_space(), "base":name_tag},
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir},
 	input_files = {"":[noninjdb] + injdbs}
 ))
 
+for injdb in injdbs:
+	plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=[farnode],
+		opts = {"segments-name": options.frame_segments_name, "tmp-space":inspiral_pipe.condor_scratch_space(), "user-tag":injdb.replace(".sqlite","").split("-")[1], "plot-group":1, "output-dir":output_dir},
+		input_files = {"":[noninjdb] + [injdb]}
+	))
 # make sensitivity plots
 plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-	opts = {"user-tag":name_tag.split("/")[-1], "output-dir":name_tag.rstrip(name_tag.split("/")[-1]), "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-mass1-mass2":"", "include-play":""},
+	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-mass1-mass2":"", "include-play":""},
 	input_files = {"zero-lag-database":noninjdb, "":injdbs}
 ))
+for injdb in injdbs:
+	plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
+		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-mass1-mass2":"", "include-play":""},
+		input_files = {"zero-lag-database":noninjdb, "":injdb}
+	))
 
 
-# make backround plots
-plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"base":name_tag}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
+# make background plots
+plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
 
 # make a web page
 
 inspiral_pipe.generic_node(openpageJob, dag, parent_nodes = plotnodes, 
-	opts = {"title":"gstlal-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "output-name-tag":name_tag, "open-box":""}
+	opts = {"title":"gstlal-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs], "open-box":""}
 )
 inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
-	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "output-name-tag":name_tag}
+	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs]}
 )
 
 #
