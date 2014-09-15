@@ -1628,6 +1628,18 @@ WHERE
 			assert likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
 			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][likelihood_ratio,] += 1.
 
+		#
+		# update combined rates.  NOTE:  this recomputes all the
+		# combined rates, not just the zero-lag combined rates.
+		# it's safe to do this, but it might be found to be too
+		# much of a performance hit every time one wants to update
+		# the zero-lag rates.  if it becomes a problem, this call
+		# might need to be removed from this method so that it is
+		# invoked explicitly on an as-needed basis
+		#
+
+		self._compute_combined_rates()
+
 
 	@staticmethod
 	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func):
@@ -1648,24 +1660,25 @@ WHERE
 
 	def _compute_combined_rates(self):
 		#
-		# compute combined noise and signal rates
+		# (re-)compute combined noise and signal rates
 		#
 
-		try:
-			del self.background_likelihood_rates[None]
-		except KeyError:
-			pass
-		total_rate = self.background_likelihood_rates.itervalues().next().copy()
-		total_rate.array[:] = sum(binnedarray.array for binnedarray in self.background_likelihood_rates.values())
-		self.background_likelihood_rates[None] = total_rate
+		def compute_combined_rates(rates_dict):
+			try:
+				del rates_dict[None]
+			except KeyError:
+				pass
+			total_rate = rates_dict.itervalues().next().copy()
+			# FIXME:  we don't bother checking that the
+			# binnings are all compatible, we assume they were
+			# all generated in our __init__() method and *are*
+			# the same
+			total_rate.array[:] = sum(binnedarray.array for binnedarray in rates_dict.values())
+			rates_dict[None] = total_rate
 
-		try:
-			del self.signal_likelihood_rates[None]
-		except KeyError:
-			pass
-		total_rate = self.signal_likelihood_rates.itervalues().next().copy()
-		total_rate.array[:] = sum(binnedarray.array for binnedarray in self.signal_likelihood_rates.values())
-		self.signal_likelihood_rates[None] = total_rate
+		compute_combined_rates(self.background_likelihood_rates)
+		compute_combined_rates(self.signal_likelihood_rates)
+		compute_combined_rates(self.zero_lag_likelihood_rates)
 
 	def finish(self, verbose = False):
 		self.background_likelihood_pdfs.clear()
