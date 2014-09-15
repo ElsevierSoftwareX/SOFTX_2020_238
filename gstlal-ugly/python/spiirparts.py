@@ -81,7 +81,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	#
 
 	if detectors.injection_filename is not None:
-		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
 		inj_seg_list = None
 		#
@@ -230,7 +230,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	#
 
 	if detectors.injection_filename is not None:
-		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
 		inj_seg_list = None
 		#
