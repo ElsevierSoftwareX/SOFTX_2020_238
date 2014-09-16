@@ -1847,14 +1847,20 @@ class FAPFAR(object):
 		self.maxrank = max(_ranks)
 
 	def fap_from_rank(self, rank):
+		# implements equation (8) from Phys. Rev. D 88, 024025.
+		# arXiv:1209.0718
 		rank = max(self.minrank, min(self.maxrank, rank))
 		fap = float(self.ccdf_interpolator[None](rank))
 		return fap_after_trials(fap, self.count_above_threshold[None])
 
 	def far_from_rank(self, rank):
+		# implements equation (B4) of Phys. Rev. D 88, 024025.
+		# arXiv:1209.0718.  the return value is divided by T to
+		# convert events/experiment to events/second.
 		assert self.livetime is not None, "cannot compute FAR without livetime"
 		rank = max(self.minrank, min(self.maxrank, rank))
-		# true-dismissal probability = 1 - false-alarm probability
+		# true-dismissal probability = 1 - single-event false-alarm
+		# probability, the integral in equation (B4)
 		tdp = float(self.cdf_interpolator[None](rank))
 		try:
 			log_tdp = math.log(tdp)
