@@ -981,12 +981,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
 
 		#
-		# the instrument combination "interpolators" are pass-throughs
+		# the instrument combination "interpolators" are
+		# pass-throughs.  we pre-evaluate a bunch of attribute,
+		# dictionary, and method look-ups for speed
 		#
 
-		self.background_pdf_interp["instruments"] = lambda x: self.background_pdf["instruments"][x,]
-		self.injection_pdf_interp["instruments"] = lambda x: self.injection_pdf["instruments"][x,]
-		self.zero_lag_pdf_interp["instruments"] = lambda x: self.zero_lag_pdf["instruments"][x,]
+		if "instruments" in self.background_pdf:
+			interp = self.background_pdf["instruments"].__getitem__
+			self.background_pdf_interp["instruments"] = lambda x: interp((x,))
+		if "instruments" in self.injection_pdf:
+			interp = self.injection_pdf["instruments"].__getitem__
+			self.injection_pdf_interp["instruments"] = lambda x: interp((x,))
+		if "instruments" in self.zero_lag_pdf:
+			interp = self.zero_lag_pdf["instruments"].__getitem__
+			self.zero_lag_pdf_interp["instruments"] = lambda x: interp((x,))
 
 	def pdf_from_rates_instruments(self, key, pdf_dict):
 		# instrument combos are probabilities, not densities.  be
