@@ -280,6 +280,8 @@ del progressbar
 
 
 if options.confidence_intervals:
+	if options.verbose:
+		print >>sys.stderr, "determining confidence intervals ..."
 	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)[1:]) for conf in (0.95, 0.999999))
 else:
 	confidence_intervals = None
