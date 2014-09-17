@@ -192,9 +192,9 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	FigureCanvas(fig)
 	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
 	if restrict_to_instruments is None:
-		fig.suptitle("Rate Posterior")
+		fig.suptitle("Event Rate Posterior")
 	else:
-		fig.suptitle("Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
+		fig.suptitle("Event Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
 	if noise_rate is None:
 		signal_axes = fig.gca()
 	else:
@@ -203,11 +203,11 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	x = signal_rate.bins[0].centres()
 	y = signal_rate.array
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
-	signal_axes.set_xlabel("$\mathrm{Signals} / \mathrm{Experiment}$")
-	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
+	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
+	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signal\ count} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
+		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
 		for cell in table.get_celld().values():
 			cell.set_edgecolor("w")
 
