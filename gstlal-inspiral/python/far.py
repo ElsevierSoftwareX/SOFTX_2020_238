@@ -2008,6 +2008,15 @@ def RatesLnPDF((Rf, Rb), f_over_b, lnpriorfunc = lambda Rf, Rb: -0.5 * math.log(
 	return numpy.log1p((Rf / Rb) * f_over_b).sum() + len(f_over_b) * math.log(Rb) - (Rf + Rb) + lnpriorfunc(Rf, Rb)
 
 
+def RatesLnSqrtPDF(*args, **kwargs):
+	"""
+	Compute RatesLnPDF() / 2.  To improve the measurement of the tails
+	of the PDF using the MCMC sampler, we draw from the square root of
+	the PDF and then correct the histogram of the samples.
+	"""
+	return RatesLnPDF(*args, **kwargs) / 2.
+
+
 def maximum_likelihood_rates(f_over_b):
 	from scipy.optimize import fmin
 	# the upper bound is chosen to include N + \sqrt{N}
@@ -2162,7 +2171,7 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 		pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
 		pos0[:,1] = numpy.random.poisson(lam = len(likelihood_ratios), size = (nwalkers,))
 		samples = numpy.empty((nwalkers * nsample, ndim), dtype = "double")
-		for i, sample in enumerate(run_mcmc(nwalkers, ndim, nsample, RatesLnPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar)):
+		for i, sample in enumerate(run_mcmc(nwalkers, ndim, nsample, RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar)):
 			samples[i] = sample
 		import pickle
 		pickle.dump(samples, open("rate_posterior_samples.pickle", "w"))
@@ -2175,12 +2184,27 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
 	#
-	# compute marginalized PDFs for the foreground and background rates
+	# compute marginalized PDFs for the foreground and background
+	# rates.  for each PDF, the samples from the MCMC are histogrammed
+	# and convolved with a density estimation kernel.  the samples have
+	# been drawn from the square root of the correct PDF, so the counts
+	# in the bins must be corrected before converting to a normalized
+	# PDF.  how to correct count:
+	#
+	# correct count = (correct PDF) * (bin size)
+	#               = (measured PDF)^2 * (bin size)
+	#               = (measured count / (bin size))^2 * (bin size)
+	#               = (measured count)^2 / (bin size)
+	#
+	# this assumes small bin sizes.
 	#
 
 	Rf_pdf = binned_rates_from_samples(samples[:,0])
+	Rf_pdf.array = Rf_pdf.array**2. / (Rf_pdf.bins[0].upper() - Rf_pdf.bins[0].lower())
 	Rf_pdf.to_pdf()
+
 	Rb_pdf = binned_rates_from_samples(samples[:,1])
+	Rb_pdf.array = Rb_pdf.array**2. / (Rb_pdf.bins[0].upper() - Rb_pdf.bins[0].lower())
 	Rb_pdf.to_pdf()
 
 	#
