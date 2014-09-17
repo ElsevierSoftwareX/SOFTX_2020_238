@@ -1044,7 +1044,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
 			key = ligolw_param.get_pyvalue(elem, u"key").strip().split(u";")
 			key = frozenset(lsctables.instrument_set_from_ifos(key[0].strip())), frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in key[1].strip().split(u",")))
-			binnedarray = rate.binned_array_from_xml(elem, prefix)
+			binnedarray = rate.BinnedArray.from_xml(elem, prefix)
 			if self.snr_joint_pdf_cache:
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
 			else:
@@ -1059,7 +1059,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		xml.appendChild(self.horizon_history.to_xml(name))
 		prefix = u"cached_snr_joint_pdf"
 		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
-			elem = xml.appendChild(rate.binned_array_to_xml(binnedarray, prefix))
+			elem = xml.appendChild(binnedarray.to_xml(prefix))
 			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", "%s;%s" % (lsctables.ifos_from_instrument_set(key[0]), u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key[1])))))
 		return xml
 
@@ -1738,7 +1738,7 @@ WHERE
 		def reconstruct(xml, prefix, target_dict):
 			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.Name]:
 				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.Name.split("_")[0]))
-				target_dict[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.Name.split(":")[0])
+				target_dict[ifo_set] = rate.BinnedArray.from_xml(ba_elem, ba_elem.Name.split(":")[0])
 		reconstruct(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		reconstruct(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
@@ -1763,7 +1763,7 @@ WHERE
 			for key, binnedarray in source_dict.items():
 				if key is not None:
 					ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-					xml.appendChild(rate.binned_array_to_xml(binnedarray, u"%s_%s" % (ifostr, prefix)))
+					xml.appendChild(binnedarray.to_xml(u"%s_%s" % (ifostr, prefix)))
 		store(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
 		store(xml, u"signal_likelihood_rate", self.signal_likelihood_rates)
