@@ -1203,6 +1203,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		twopi = 2. * math.pi
 		pi_2 = math.pi / 2.
 		xlal_am_resp = inject.XLALComputeDetAMResponse
+		rice_rvs = stats.rice.rvs
 		for i in xrange(n_samples):
 			theta = acos(random_uniform(-1., 1.))
 			phi = random_uniform(0., twopi)
@@ -1266,51 +1267,42 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			#
 			#	D = max_snr_times_D / snr
 			#
-			# and the SNRs in all instruments are:
+			# and the (noise-free) SNRs in all instruments are:
 			#
 			#	snr_times_D / D
+			#
+			# scipy's Rice-distributed RV code is used to
+			# add the effect of background noise, converting
+			# the noise-free SNRs into simulated observed SNRs
 			#
 			# number of sources b/w Dlo and Dhi:
 			#
 			#	d count \propto D^2 |dD|
 			#	  count \propto Dhi^3 - Dlo**3
 			for D, Dhi, Dlo in max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]:
-				pdf[tuple(snr_times_D / D)] += Dhi**3. - Dlo**3.
+				pdf[tuple(rice_rvs(snr_times_D / D))] += Dhi**3. - Dlo**3.
 
 			if progressbar is not None:
 				progressbar.increment()
 		# check for divide-by-zeros that weren't caught
 		assert numpy.isfinite(pdf.array).all()
 
-		# convolve the PDF bin values with a Gaussian kernel whose
-		# width in bins is equivalent to \sqrt{2} in SNR at SNR=6.
-		# at SNRs where we are interested in marginal detections,
-		# the binning is approximately uniform in log(SNR) so a
-		# kernel that is Gaussian in bins is close to being
-		# \chi^2-distributed with 2 DOF in SNR and so this
-		# approximates the effect of noise-induced fluctuations on
-		# the SNRs of signals.  at high SNR the window (whose size
-		# is fixed in bin counts) becomes enormous but at high SNR
-		# we need a larger physical kernel to fill in the lower
-		# density of samples that have falled out there.  thus this
-		# kernel is serving a dual role:  at low SNR it simulates
-		# Gaussian noise fluctuations in recovered SNRs and at high
-		# SNR it plays the role of a density estimation kernel.
-		bins_per_snr_at_6 = [1. / (upper[i] - lower[i]) for i, upper, lower in zip(pdf.bins[(6.,) * len(instruments)], pdf.bins.upper(), pdf.bins.lower())]
-		rate.filter_array(pdf.array, rate.gaussian_window(*(math.sqrt(2.) * x for x in bins_per_snr_at_6)))
+		# convolve the samples with a Gaussian density estimation
+		# kernel
+		rate.filter_array(pdf.array, rate.gaussian_window((3,) * len(pdf.array.shape)))
 		# protect against round-off in FFT convolution leading to
 		# negative values in the PDF
 		numpy.clip(pdf.array, 0., PosInf, pdf.array)
-		# set the region where any SNR is lower than the input
-		# threshold to zero before normalizing the pdf and
-		# returning.
+		# zero counts in bins that are below the trigger threshold
 		range_all = slice(None, None)
 		range_low = slice(None, cls.snr_min)
 		for i in xrange(len(instruments)):
 			slices = [range_all] * len(instruments)
 			slices[i] = range_low
 			pdf[tuple(slices)] = 0.
+		# convert bin counts to normalized PDF
 		pdf.to_pdf()
+		# done
 		return pdf
 
 
