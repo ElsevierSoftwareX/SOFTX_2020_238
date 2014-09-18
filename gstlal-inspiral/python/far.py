@@ -1258,10 +1258,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# don't need to check for this, the for loop that
 			# comes next will simply not have any iterations.
 
-			# iterate over the SNRs (= SNR in the most
-			# sensitive instrument) at which we will add weight
-			# to the PDF.  from the SNR in fastest growing
-			# instrument, the distance to the source is:
+			# iterate over the nominal SNRs (= noise-free SNR
+			# in the most sensitive instrument) at which we
+			# will add weight to the PDF.  from the SNR in
+			# most sensitive instrument, the distance to the
+			# source is:
 			#
 			#	D = max_snr_times_D / snr
 			#
@@ -1269,10 +1270,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			#
 			#	snr_times_D / D
 			#
-			# number of sources:
+			# number of sources b/w Dlo and Dhi:
 			#
 			#	d count \propto D^2 |dD|
-			#	count \propto Dhi^3 - Dlo**3
+			#	  count \propto Dhi^3 - Dlo**3
 			for D, Dhi, Dlo in max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]:
 				pdf[tuple(snr_times_D / D)] += Dhi**3. - Dlo**3.
 
