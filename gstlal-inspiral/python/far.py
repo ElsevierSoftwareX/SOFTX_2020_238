@@ -2224,6 +2224,22 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 	return Rf_pdf, Rb_pdf
 
 
+def moment_from_pdf(binnedarray, moment, c = 0.):
+	if len(binnedarray.bins) != 1:
+		raise ValueError("BinnedArray PDF must have 1 dimension")
+	x = binnedarray.bins.centres()[0]
+	dx = binnedarray.bins.upper()[0] - binnedarray.bins.lower()[0]
+	return ((x - c)**moment * binnedarray.array * dx).sum()
+
+
+def mean_from_pdf(binnedarray):
+	return moment_from_pdf(binnedarray, 1.)
+
+
+def variance_from_pdf(binnedarray):
+	return moment_from_pdf(binnedarray, 2., mean_from_pdf(binnedarray))
+
+
 def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	"""
 	Constructs a confidence interval based on a BinnedArray object
