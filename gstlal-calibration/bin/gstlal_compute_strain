@@ -75,7 +75,8 @@ parser.add_option("--output-channel-name", metavar = "name", help = "The name of
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
 parser.add_option("--lldq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for the outgoing CALIB-STATE_VECTOR.  (Default = 1 Hz)")
 parser.add_option("--odc-float", action = "store_true", help = "Set this if the data quality vector (ODC) is broadcasted as a float.")
-parser.add_option("--required-on", metavar = "bit", type = "int", default = 0x1, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be in science mode. (Default = 0x1)")
+parser.add_option("--science-locked-mask", metavar = "bit", type = "int", default = 3, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be both locked and in science mode. (Default = 0x1)")
+parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, help = "Set the bit mask for bits that must be on for the instrument/subsystem to be locked. (Default = 0x2)")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, frames will be written to a file.")
@@ -408,24 +409,35 @@ strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 
 if not options.no_dq_vector:
 
+	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
+
 	# 
-	# SCIENCE BIT BRANCH
+	# SCIENCE-INTENT+LOCKED BIT BRANCH
 	#
 
-	science = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_logical_undersampler", required_on = options.required_on, status_out = 0x1)
-	science = pipeparts.mkcapsfilter(pipeline, science, "audio/x-raw-int, rate=%d" % lldqsr)
-	science = pipeparts.mkprogressreport(pipeline, science, "progress_odc_%s" % instrument)
-	sciencetee = pipeparts.mktee(pipeline, science)
+	sciencelocked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 1)
+	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=%d" % lldqsr)
+	sciencelocked = pipeparts.mkprogressreport(pipeline, sciencelocked, "progress_odc_%s" % instrument)
+	sciencelockedtee = pipeparts.mktee(pipeline, sciencelocked)
 
+	#
+	# LOCKED BIT BRANCH
+	#
+
+	locked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.locked_mask, status_out = 2)
+	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=%d" % lldqsr)
+	locked = pipeparts.mkprogressreport(pipeline, locked, "progress_locked_%s" % instrument)
+	lockedtee = pipeparts.mktee(pipeline, locked)
+	
 	#
 	# H(t)-PRODUCED BIT BRANCH
 	#
 
 	htproduced = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 1000))
-	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 0x10, nongap_is_control = True)
+	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 32, nongap_is_control = True)
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 	htproduced = pipeparts.mkaudiorate(pipeline, htproduced, skip_to_first = True, silent = False) # This audiorate fixes issues with zero-sized buffers that are not marked as gaps being passed between the two surrounding elements.  I'm not sure why this is happening, so more work needs to be done to investigate the root of the problem.
-	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logical_undersampler", required_on = 0x10, status_out = 0x10)
+	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logical_undersampler", required_on = 32, status_out = 32)
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, rate=%d, width=32, signed=false, channels=1, endianness=1234" % lldqsr)
 	htproduced = pipeparts.mkchecktimestamps(pipeline, htproduced)
 
@@ -434,7 +446,7 @@ if not options.no_dq_vector:
 	#
 	
 	# Set the FILTERS-OK bit based on science mode transitions
-	filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, sciencetee, max_size_time = gst.SECOND * 1000), bit_vector = 0x8, threshold = 0x1, attack_length = -options.filter_settle_time * sr)
+	filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 1000), bit_vector = 16, threshold = 2, attack_length = -options.filter_settle_time * sr)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr) 
 	# Set the FILTERS-OK bit based on input data available
 	# FIXME: This part needs to be coded up...
@@ -444,11 +456,12 @@ if not options.no_dq_vector:
 	#
 	
 	if not options.no_gamma and not options.recolor:
+		# FIXME: What was I doing here? Why I am looking at sciencetee?
 		gammaok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, sciencetee), threshold = 0.8, control = pipeparts.mkqueue(pipeline, gammaRtee))
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRtee))	
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = -0.2, control = pipeparts.mkqueue(pipeline, gammaItee))
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaItee))
-		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 0x4, nongap_is_control = True)
+		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 8, nongap_is_control = True)
 		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr)
 		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
 
@@ -465,7 +478,7 @@ if not options.no_dq_vector:
 	htprod_and_filtersok_tee = pipeparts.mktee(pipeline, htprod_and_filtersok)
 
 	# Now calculate h(t)-OK bit
-	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 1000), bit_vector = 0x2, threshold = 0x18)
+	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 1000), bit_vector = 4, threshold = 48)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr)
 
 	#
@@ -475,7 +488,8 @@ if not options.no_dq_vector:
 	calibstatevector = gst.element_factory_make("lal_adder")
 	calibstatevector.set_property("sync", True)
 	pipeline.add(calibstatevector)
-	pipeparts.mkqueue(pipeline, sciencetee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 1000).link(calibstatevector)
 	if not options.no_gamma and not options.recolor:
