@@ -1194,12 +1194,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if DH_times_8.min() == 0.:
 			return pdf
 
-		# psi chooses the orientation of F+ and Fx, choosing a
-		# fixed value is OK.  we select random
-		# uniformly-distributed right ascensions so there's no
-		# point in also choosing random GMSTs and any value is as
-		# good as any other
-		psi = gmst = 0.0
+		# we select random uniformly-distributed right ascensions
+		# so there's no point in also choosing random GMSTs and any
+		# value is as good as any other
+		gmst = 0.0
 
 		# run the sampler the requested # of iterations.  save some
 		# symbols to avoid doing module attribute look-ups in the
@@ -1216,8 +1214,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#rice_rvs = stats.rice.rvs	# broken on reference OS
 		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.))
 		for i in xrange(n_samples):
+			# select random sky location and source orbital
+			# plane inclination and choice of polarization
 			theta = acos(random_uniform(-1., 1.))
 			phi = random_uniform(0., twopi)
+			psi = random_uniform(0., twopi)
 			cosi2 = random_uniform(-1., 1.)**2.
 
 			# F+^2 and Fx^2 for each instrument
@@ -1344,11 +1345,10 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	# probability (initially all 0).
 	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
 
-	# psi chooses the orientation of F+ and Fx, choosing a fixed value
-	# is OK.  we select random uniformly-distributed right ascensions
-	# so there's no point in also choosing random GMSTs and any value
-	# is as good as any other
-	psi = gmst = 0.0
+	# we select random uniformly-distributed right ascensions so
+	# there's no point in also choosing random GMSTs and any value is
+	# as good as any other
+	gmst = 0.0
 
 	# function to spit out a choice of horizon distances drawn
 	# uniformly in time
@@ -1377,9 +1377,10 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		DH = numpy_array(map(rand_horizon_distances().__getitem__, names))
 
 		# select random sky location and source orbital plane
-		# inclination
+		# inclination and choice of polarization
 		theta = acos(random_uniform(-1., 1.))
 		phi = random_uniform(0., twopi)
+		psi = random_uniform(0., twopi)
 		cosi2 = random_uniform(-1., 1.)**2.
 
 		# compute F+^2 and Fx^2 for each antenna from the sky
