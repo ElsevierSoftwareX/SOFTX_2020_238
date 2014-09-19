@@ -207,7 +207,7 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
+		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (mode, lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
 		for cell in table.get_celld().values():
 			cell.set_edgecolor("w")
 
@@ -282,12 +282,15 @@ del progressbar
 if options.confidence_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining confidence intervals ..."
-	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)[1:]) for conf in (0.95, 0.999999))
+	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
 else:
 	confidence_intervals = None
 if options.verbose and confidence_intervals is not None:
-	for conf, (lo, hi) in sorted(confidence_intervals.items()):
-		print >>sys.stderr, "%g%% confidence interval = [%g, %g] signal events" % (conf * 100., lo, hi)
+	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % far.mean_from_pdf(signal_rate_pdf)
+	# all modes are the same, pick one and report it
+	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % confidence_intervals.values()[0][0]
+	for conf, (mode, lo, hi) in sorted(confidence_intervals.items()):
+		print >>sys.stderr, "%g%% confidence interval = [%g, %g] signals/experiment" % (conf * 100., lo, hi)
 
 
 #
