@@ -54,7 +54,6 @@ import os
 from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue.ligolw import table
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import lal
 from pylal import db_thinca_rings
@@ -64,11 +63,40 @@ from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from gstlal import far
 from gstlal import inspiral_pipe
 
-lsctables.LIGOTimeGPS = LIGOTimeGPS
 
-def get_effective_snr(self, fac):
-	return self.snr / (self.chisq / self.chisq_dof)**.5
-lsctables.SnglInspiral.get_effective_snr = get_effective_snr
+class SimInspiral(lsctables.SimInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+
+class SnglInspiral(lsctables.SnglInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def eta(self):
+		return self.mass1 * self.mass2 / self.mtotal
+
+	@property
+	def mchirp(self):
+		return self.mtotal * self.eta**0.6
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+	def get_effective_snr(self, fac):
+		return self.snr / (self.chisq / self.chisq_dof)**.5
+
+lsctables.LIGOTimeGPS = LIGOTimeGPS
+lsctables.SimInspiralTable.RowType = SimInspiral
+lsctables.SnglInspiralTable.RowType = SnglInspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
@@ -686,7 +714,7 @@ FROM
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
 			del sim.process_id, sim.source, sim.simulation_id
-			del sngl.process_id, sngl.search, sngl.channel, sngl.event_id
+			del sngl.process_id, sngl.event_id
 			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl))
 
 	def finish(self):
@@ -723,7 +751,7 @@ FROM
 
 			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([(sim.mass1*sim.spin1z + sim.mass2*sim.spin2z)/(sim.mass1+sim.mass2) for sim, sngl in pairs], [(sngl.mass1*sngl.spin1z + sngl.mass2*sngl.spin2z)/(sngl.mass1+sngl.mass2) for sim, sngl in pairs], "kx")
+			axes.plot([sim.chi for sim, sngl in pairs], [sngl.chi for sim, sngl in pairs], "kx")
 			yield fig, "chi_acc_%s_%s" % (waveform, instrument), False
 
 
@@ -741,7 +769,6 @@ class BackgroundVsInjectionPlots(object):
 		def __init__(self):
 			self.snr = []
 			self.chi2 = []
-			self.r2 = []
 			self.bankveto = []
 
 	def __init__(self):
@@ -752,12 +779,11 @@ class BackgroundVsInjectionPlots(object):
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
 			# non-injections file
-			for instrument, snr, chi2, r2, bankveto, is_background in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, bankveto, is_background in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
-	sngl_inspiral.rsqveto_duration,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
 	EXISTS (
 		SELECT
@@ -785,23 +811,20 @@ WHERE
 						self.background[instrument] = BackgroundVsInjectionPlots.Points()
 					self.background[instrument].snr.append(snr)
 					self.background[instrument].chi2.append(chi2)
-					self.background[instrument].r2.append(r2)
 					self.background[instrument].bankveto.append(bankveto)
 				else:
 					if instrument not in self.zerolag:
 						self.zerolag[instrument] = BackgroundVsInjectionPlots.Points()
 					self.zerolag[instrument].snr.append(snr)
 					self.zerolag[instrument].chi2.append(chi2)
-					self.zerolag[instrument].r2.append(r2)
 					self.zerolag[instrument].bankveto.append(bankveto)
 		else:
 			# injections file
-			for instrument, snr, chi2, r2, bankveto, end_time in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, bankveto, end_time in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
-	sngl_inspiral.rsqveto_duration,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
 	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9
 FROM
@@ -819,7 +842,6 @@ FROM
 						self.injections[instrument] = BackgroundVsInjectionPlots.Points()
 					self.injections[instrument].snr.append(snr)
 					self.injections[instrument].chi2.append(chi2)
-					self.injections[instrument].r2.append(r2)
 					self.injections[instrument].bankveto.append(bankveto)
 
 	def finish(self):
