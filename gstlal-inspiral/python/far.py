@@ -1203,7 +1203,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		twopi = 2. * math.pi
 		pi_2 = math.pi / 2.
 		xlal_am_resp = inject.XLALComputeDetAMResponse
-		rice_rvs = stats.rice.rvs
+		# FIXME:  scipy.stats.rice.rvs broken on reference OS.
+		# switch to it when we can rely on a new-enough scipy
+		#rice_rvs = stats.rice.rvs	# broken on reference OS
+		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.))
 		for i in xrange(n_samples):
 			theta = acos(random_uniform(-1., 1.))
 			phi = random_uniform(0., twopi)
