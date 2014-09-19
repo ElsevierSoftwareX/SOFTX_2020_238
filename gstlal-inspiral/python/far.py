@@ -1009,14 +1009,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
 
-		# construct the kernel
+		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
 		snr_per_bin_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.]]
 		snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8
 		assert snr_kernel_bins >= 2.5, snr_kernel_bins	# don't let the window get too small
 		kernel = rate.gaussian_window(snr_kernel_bins, 5, sigma = sigma)
 
-		# smooth the bin count data
+		# convolve with the bin count data
 		rate.filter_array(binnedarray.array, kernel)
 
 		# zero everything below the SNR cut-off
@@ -1328,9 +1328,6 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	# scheme.  unless somebody can figure out how to compute this
 	# explicitly without resorting to Monte Carlo integration.
 
-	# FIXME:  this function does not yet incorporate the effect of
-	# noise-induced SNR fluctuations in its calculations
-
 	if n_samples < 1:
 		raise ValueError("n_samples=%d must be >= 1" % n_samples)
 	if min_distance < 0.:
@@ -1402,6 +1399,15 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		# but in the end we'll only need ratios of these volumes so
 		# we can omit the proportionality constant and we can also
 		# omit the factor of (8 / snr_threshold)**3
+		#
+		# FIXME:  noise-induced SNR fluctuations have the effect of
+		# allowing sources slightly farther away than would
+		# nominally allow them to be detectable to be seen above
+		# the detection threshold with some non-zero probability.
+		# this effect is not accounted for here.  it should appear
+		# as an adjustment to the distance to which a source is
+		# visible, but that adjustment is not a multiplicative
+		# factor so it cannot be swept aside like all the rest
 		V_at_snr_threshold = snr_times_D_over_8**3.
 
 		# order[0] is index of instrument that can see sources the
