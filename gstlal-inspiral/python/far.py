@@ -1400,14 +1400,17 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		# we can omit the proportionality constant and we can also
 		# omit the factor of (8 / snr_threshold)**3
 		#
-		# FIXME:  noise-induced SNR fluctuations have the effect of
+		# NOTE:  noise-induced SNR fluctuations have the effect of
 		# allowing sources slightly farther away than would
 		# nominally allow them to be detectable to be seen above
-		# the detection threshold with some non-zero probability.
-		# this effect is not accounted for here.  it should appear
-		# as an adjustment to the distance to which a source is
-		# visible, but that adjustment is not a multiplicative
-		# factor so it cannot be swept aside like all the rest
+		# the detection threshold with some non-zero probability,
+		# and sources close enough to be detectable to be masked by
+		# noise and missed with some non-zero probability.
+		# accounting for this effect correctly shows it to provide
+		# an additional multiplicative factor to the volume that
+		# depends only on the SNR threshold.  therefore, like all
+		# the other factors common to all instruments, it too can
+		# be ignored.
 		V_at_snr_threshold = snr_times_D_over_8**3.
 
 		# order[0] is index of instrument that can see sources the
