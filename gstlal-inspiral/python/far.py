@@ -882,23 +882,19 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if predicted_count > 0 and observed_count > 0:
 				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
 				N += 1
-		#FIXME this code path should not exist. You should not be allowed to do this. But for now it is useful for creating "prior" information.
-		if (coincidence_bins == 0) or (N == 0):
-			warnings.warn("There seems to be insufficient information to compute coincidence rates, setting them to unity")
-			for instruments, count in coincsynth.mean_coinc_count.items():
-				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = 1.
-		else:
-			coincidence_bins /= N
-			if verbose:
-				print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
-			assert coincidence_bins >= 1.
-			# convert single-instrument event rates to rates/bin
-			coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
-			# now compute the expected coincidence rates/bin,
-			# then multiply by the number of bins to get the
-			# expected coincidence rates
-			for instruments, count in coincsynth.mean_coinc_count.items():
-				self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
+		assert N > 0
+		assert coincidence_bins > 0.
+		coincidence_bins /= N
+		if verbose:
+			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
+		assert coincidence_bins >= 1.
+		# convert single-instrument event rates to rates/bin
+		coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
+		# now compute the expected coincidence rates/bin, then
+		# multiply by the number of bins to get the expected
+		# coincidence rates
+		for instruments, count in coincsynth.mean_coinc_count.items():
+			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
 
 	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
