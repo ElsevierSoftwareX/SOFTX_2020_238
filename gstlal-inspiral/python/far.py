@@ -1304,7 +1304,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# convolve the samples with a Gaussian density estimation
 		# kernel
-		rate.filter_array(pdf.array, rate.gaussian_window(*(3,) * len(pdf.array.shape)))
+		rate.filter_array(pdf.array, rate.gaussian_window(*(1.875,) * len(pdf.array.shape)))
 		# protect against round-off in FFT convolution leading to
 		# negative values in the PDF
 		numpy.clip(pdf.array, 0., PosInf, pdf.array)
