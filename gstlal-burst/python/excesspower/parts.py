@@ -619,7 +619,8 @@ class EPHandler(Handler):
 				break
 		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
 
-	def write_triggers(self, filename, flush=True, seg=None):
+	# FIXME: Remove flush argument, it serves no purpose
+	def write_triggers(self, filename, flush=False, seg=None):
 
 		if not self.output:
 			return
@@ -711,6 +712,7 @@ class EPHandler(Handler):
 			)
 
 		# Keeping statistics about event rates
+		# FIXME: This needs to be moved up before the trigger dumping
 		if self.channel_monitoring:
 			self.stats.add_events(self.triggers, cur_seg)
 			self.stats.normalize()
