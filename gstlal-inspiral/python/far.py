@@ -897,12 +897,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
 
-	def add_foreground_snrchi_prior(self, target_dict, instruments, n, prefactors_range, df, verbose = False):
+	def add_foreground_snrchi_prior(self, instruments, n, prefactors_range, df, verbose = False):
 		if verbose:
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for instrument in instruments:
-			binarr = target_dict["%s_snr_chi" % instrument]
+			binarr = self.injection_rates["%s_snr_chi" % instrument]
 			if verbose:
 				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
 			else:
