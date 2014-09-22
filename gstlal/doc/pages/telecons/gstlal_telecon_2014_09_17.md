@@ -14,3 +14,40 @@
 \section attendance Attendance
 
 \section minutes Minutes
+
+Optimization efforts: gstlal_inspiral_flopulater and function call graphs
+
+About gstlal_inspiral_flopulator:
+
+ - assumes "time domain" filtering, and that all physical SNR time series are constructed
+ - MFLOPS = 10^6 floating point operations per second 
+ - possible effects on MFLOPS: 
+    - SVD decomposition (across detectors)
+    - time slice decomposition, template duration (across different sub-banks)
+
+1) Les, analyzing 50Msun to 350Msun, 100 templates per bank, using non-optimized libraries
+
+flopulater results: https://ldas-jobs.phys.uwm.edu/~lwade/Search/optimization_tests/IMBHB_templates/flopulate.txt
+
+ - Chad: MFLOP per template is reasonable, but would like to see better SVD compression
+   - should look into better lining up IMR filters
+
+function call profiling: https://ldas-jobs.phys.uwm.edu/~lwade/Search/optimization_tests/IMBHB_templates/profile.txt
+
+
+2) Tjonnie, running with 200 templates per sub bank, lower mass range, down to mchirp = 5Msun, and non-optimized libraries
+
+flopulator: https://ldas-jobs.phys.uwm.edu/~tgfli/allflops.txt
+
+ - ~ 2MFLOPS per template, consistent with higher sampling rates required for lower mass templates
+
+function call profiling: https://ldas-jobs.phys.uwm.edu/~tgfli/profile.txt
+
+In both cases, audioresample dominates the computational cost. BLAS is another high contender for computational cost, but subject to improvement after linking against optimized libraries installed at UWM.
+
+Code issues:
+
+ - Bugs in ER5 release have required patching and manual building. 
+ - Les and Tjonnie have experienced trouble with compilation due to frame-cpp updates. 
+ - All would like to see point releases deployed to the clusters as bugs are found in the future. 
+ - These point releases should be recompiled whenever the underlying libraries are changed.
