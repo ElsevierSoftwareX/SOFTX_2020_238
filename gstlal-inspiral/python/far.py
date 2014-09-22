@@ -923,7 +923,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for snr, dsnr in zip(new_binarr.bins[0].centres(), new_binarr.bins[0].upper() - new_binarr.bins[0].lower()):
 				if math.isinf(dsnr):
 					continue
-				snr2 = snr**2.	# don't compute in loops
+				# avoid computing things in loops
+				snr2 = snr**2.
+				dsnr_over_snr4 = dsnr / snr**4.
+				# iterate over chi2 bins
 				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
 					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
 					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
@@ -935,7 +938,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					# normalization is irrelevant,
 					# final result will have over-all
 					# normalization imposed
-					p = v.sum() * snr**-4. * dsnr * dchi2_over_snr2
+					p = v.sum() * dsnr_over_snr4 * dchi2_over_snr2
 					assert p >= 0. and not (math.isinf(p) or math.isnan(p)), p
 					new_binarr[snr, chi2_over_snr2] = p
 				if progressbar is not None:
