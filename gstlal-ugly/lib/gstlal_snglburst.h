@@ -25,6 +25,9 @@ SnglBurst *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_peak_state
 SnglBurst *gstlal_snglburst_new_list_from_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime time, guint rate, SnglBurst* output);
 SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime time, guint rate, SnglBurst* output);
 
+SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output);
+SnglBurst *gstlal_snglburst_new_list_from_complex_double_buffer(double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output);
+
 GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count);
 
 G_END_DECLS
