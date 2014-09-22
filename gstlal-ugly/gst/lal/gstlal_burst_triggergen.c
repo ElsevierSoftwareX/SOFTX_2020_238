@@ -337,9 +337,17 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	media_type = gst_structure_get_name(structure);
 	if(!strcmp(media_type, "audio/x-raw-float") && width == 64){
-		element->data_type = GSTLAL_BURSTTRIGGEN_DOUBLE;
+        if(element->n == 0){
+		    element->data_type = GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK;
+        } else {
+		    element->data_type = GSTLAL_BURSTTRIGGEN_DOUBLE;
+        }
 	} else if(!strcmp(media_type, "audio/x-raw-complex") && width == 128 ){
-		element->data_type = GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE;
+        if(element->n == 0){
+		    element->data_type = GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE_NO_PEAK;
+        } else {
+		    element->data_type = GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE;
+        }
 	} else return FALSE;
 
 	/*
@@ -406,7 +414,7 @@ static GstFlowReturn push_gap(GSTLALBurst_Triggergen *element, guint samps)
 
 	/* potentially push the result */
 	GstClockTime total_duration = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, element->total_offset, element->rate);
-	if (total_duration >= 1e10 || element->EOS) {
+	if (total_duration >= 1e10 || element->EOS || element->n == 0) {
 		srcbuf = gstlal_snglburst_new_buffer_from_list(element->event_buffer, element->srcpad, element->next_output_offset, element->total_offset, element->next_output_timestamp, element->rate, &(element->count));
 
 		if (srcbuf == NULL) { 
@@ -453,12 +461,26 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			/* Either update the current buffer or create the new output buffer */
 			if (element->maxdatad->num_events != 0) {
 				element->event_buffer = gstlal_snglburst_new_list_from_double_peak(element->maxdatad, element->bankarray, element->next_output_timestamp + total_duration, element->rate, element->event_buffer);
-		}
+		    }
+			break;
+		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE_NO_PEAK:
+			/* Either update the current buffer or create the new output buffer */
+            dataptr = malloc(sizeof(complex double)*copysamps*element->channels);
+			gst_audioadapter_copy_samples(element->adapter, dataptrd, copysamps, &copied_gap, &copied_nongap);
+            element->event_buffer = gstlal_snglburst_new_list_from_complex_double_buffer(dataptrd, element->bankarray, element->next_output_timestamp, element->channels, copysamps, element->rate, element->snr_thresh, element->event_buffer);
+            free(dataptrd);
+			break;
+		case GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK:
+			/* Either update the current buffer or create the new output buffer */
+            dataptrd = malloc(sizeof(double)*copysamps*element->channels);
+			gst_audioadapter_copy_samples(element->adapter, dataptrd, copysamps, &copied_gap, &copied_nongap);
+            element->event_buffer = gstlal_snglburst_new_list_from_double_buffer(dataptrd, element->bankarray, element->next_output_timestamp, element->channels, copysamps, element->rate, element->snr_thresh, element->event_buffer);
+            free(dataptrd);
 			break;
 	}
 
 	/* potentially push the result */
-	if (total_duration >= 1e10 || element->EOS) {
+	if (total_duration >= 1e10 || element->EOS || element->n == 0) {
 		srcbuf = gstlal_snglburst_new_buffer_from_list(element->event_buffer, element->srcpad, element->next_output_offset, element->total_offset, element->next_output_timestamp, element->rate, &(element->count));
 
 		if (srcbuf == NULL) { 
@@ -482,6 +504,10 @@ static GstFlowReturn process(GSTLALBurst_Triggergen *element)
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
 			padbuf = element->maxdatad->pad;
 			break;
+		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE_NO_PEAK:
+			break;
+		case GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK:
+			break;
 	}
 
 	while( (element->EOS && gst_audioadapter_available_samples(element->adapter)) || gst_audioadapter_available_samples(element->adapter) > (element->n + 2 * padbuf)) {
@@ -490,14 +516,25 @@ static GstFlowReturn process(GSTLALBurst_Triggergen *element)
 		nongapsamps = gst_audioadapter_head_nongap_length(element->adapter);
 		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
 
+
+        if (element->n == 0 && nongapsamps == 0) {
+            outsamps = gapsamps + nongapsamps;
+			result = push_gap(element, gapsamps);
+			gst_audioadapter_flush_samples(element->adapter, gapsamps);
+        }
+        else if (element->n == 0) {
+            outsamps = gapsamps + nongapsamps;
+			result = push_nongap(element, outsamps, outsamps);
+			gst_audioadapter_flush_samples(element->adapter, outsamps);
+        }
 		/* First check if the samples are gap */
-		if (gapsamps > 0) {
+		else if (gapsamps > 0) {
 			element->last_gap = TRUE;
 			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
 			gst_audioadapter_flush_samples(element->adapter, outsamps);
-			}
+		}
 		/* The check to see if we have enough nongap samples to compute an output, else it is a gap too */
 		else if (nongapsamps <= 2 * padbuf) {
 			element->last_gap = TRUE;
@@ -546,6 +583,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
 			padbuf = element->maxdatad->pad;
+			break;
+		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE_NO_PEAK:
+			break;
+		case GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK:
 			break;
 	}
 	/* The max size to copy from an adapter is the typical output size plus the padding */
