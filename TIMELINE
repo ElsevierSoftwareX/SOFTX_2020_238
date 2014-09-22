@@ -1,0 +1,87 @@
+
+Milestone		Sept	Oct	Nov	Dec	Jan	Feb	Mar	Apr	May	Jun	Jul	Aug
+_________________________________________________________________________________________________________________________
+
+gstlal-inspiral
+ CODE RELEASE
+  SCHEDULE
+++++++++++++++++++++++
+
+Stabilize		|-------|
+code for "offline"
+analysis useful for 
+e.g. MDCS
+
+Prepare offline			|---|
+inspiral analysis 
+release candidate
+
+Stabilize online                    |------|
+inspiral
+code for release
+
+Prepare online				   |--|
+code release
+as a point release
+for gstlal-inspiral
+
+
+Milestone		Sept	Oct	Nov	Dec	Jan	Feb	Mar	Apr	May	Jun	Jul	Aug
+_________________________________________________________________________________________________________________________
+
+REVIEW SCHEDULE
+++++++++++++++++++++++
+
+Face-to-face meeting
+at Caltech						  |---|
+
+
+Milestone		Sept	Oct	Nov	Dec	Jan	Feb	Mar	Apr	May	Jun	Jul	Aug
+_________________________________________________________________________________________________________________________
+
+CBC MDC SCHEDULE
+++++++++++++++++++++++
+
+BNS spin MDC offline	|---------------------|
+preliminary
+
+BNS spin MDC offline			      |--->
+with release
+
+NSBH spin MDC offline	|---------------------|
+preliminary
+
+NSBH spin MDC offline			      |--->
+with release
+
+BBH spin MDC offline	|---------------------|
+preliminary
+
+BBH spin MDC offline			      |--->
+with release
+
+S6 Replay MDC with
+ER5 online code			|--------|
+
+S6 Replay MDC			    |--------|
+with prototype
+ER6 code
+
+S6 Replay tests					|-------|
+with ER6 code
+
+S6 Replay final
+version							|-------->
+
+
+Milestone		Sept	Oct	Nov	Dec	Jan	Feb	Mar	Apr	May	Jun	Jul	Aug
+_________________________________________________________________________________________________________________________
+
+Engineering run
+++++++++++++++++++++++
+
+ER6						|-------|
+
+
+* |---> Denotes timelines tied to decisions by a broader working group (e.g. CBC) or review team.
+
