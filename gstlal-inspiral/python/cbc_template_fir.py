@@ -80,13 +80,13 @@ __date__ = "FIXME"
 
 def tukeywindow(data, samps = 200.):
 	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = samps / len(data)
+	tp = float(samps) / len(data)
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
 
 
 def lefttukeywindow(data, samps = 200.):
 	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = samps / len(data)
+	tp = float(samps) / len(data)
 	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
 	wn[len(wn)//2:] = 1.0
 	return wn
