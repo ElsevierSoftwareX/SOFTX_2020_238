@@ -798,6 +798,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->samples_in = 0;
     element->samples_out = 0;
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_cover_samples);
+    
   }
 
   element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
@@ -897,6 +898,8 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     if (element->num_gap_samples >= (guint64) num_cover_samples) {
       spiir_state_reset (element->spstate, element->num_depths, element->stream);
       gst_adapter_clear (element->adapter);
+      cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_cover_samples);
+      num_exe_samples = element->num_exe_samples;
     }
     element->num_gap_samples = 0;
     adapter_len = cuda_multirate_spiir_get_available_samples(element);
