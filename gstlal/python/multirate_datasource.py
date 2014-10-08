@@ -275,6 +275,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# adjust for the reduction in variance due to the downsampler.
 	#
 
+	quality = 6
 	for rate in sorted(set(rates))[:-1]:
 		# downsample. make sure each output stream is unit
 		# normalized, otherwise the audio resampler removes power
