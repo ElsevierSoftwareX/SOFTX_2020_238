@@ -1,7 +1,7 @@
 /*
  * GstLALCacheSrc
  *
- * Copyright (C) 2012  Kipp Cannon
+ * Copyright (C) 2012--2014  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,6 +85,7 @@ struct _GstLALCacheSrc {
 
 	LALCache *cache;
 	guint index;
+	guint last_index;
 	gboolean need_discont;
 };
 
