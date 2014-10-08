@@ -148,10 +148,12 @@ __global__ void reload_queue_spiir (float *queue,
 
 	for (i=tx; i< num_left; i+=tdx) 
 		queue[i] = tmp[i];
-
+#if 0
+	/ should be removed ?
 	for (i=tx; i< num_inchunk; i+=tdx) {
 	  	j = (queue_spiir_start + i) % queue_spiir_len;
 	}
+#endif
 	
 
 }
@@ -621,7 +623,10 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
     texRef.normalized	= false;
     cudaBindTexture(0, texRef, SPSTATE(i)->d_input_s, channelDesc, available_length * sizeof(float));
     */
-    if (SPSTATE(i)->num_filters < 4) {
+#if 0
+    if (SPSTATE(i)->num_filters > 3) 
+#endif
+    {
     cuda_iir_filter_kernel<<<grid, block, share_mem_sz, stream>>>(SPSTATE(i)->d_a1,
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
