@@ -86,7 +86,6 @@ typedef struct _SpiirState {
 //  float *d_out_spiir;
   gint queue_len;
   gint queue_eff_len;  // effective length
-  gint queue_down_start;
 } SpiirState;
 
 /**

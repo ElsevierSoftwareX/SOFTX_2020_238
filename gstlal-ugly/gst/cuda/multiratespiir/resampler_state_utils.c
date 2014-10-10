@@ -172,7 +172,7 @@ int sinc_function (float *sinc_table, gint filt_len, float cutoff, gint den_rate
             sinc (cutoff, ((j -  filt_len / 2 + 1) -
                 ((float) i) / den_rate), filt_len,
             quality_map[quality].window_func);
-	//printf("%s init sinc[%d] = %e\n", quality > 1 ? "down" : "up", i * filt_len + j, sinc_table[i * filt_len + j]);
+//	    printf("%s init sinc[%d] = %e\n", quality > 1 ? "down" : "up", i * filt_len + j, sinc_table[i * filt_len + j]);
       		}
 	}
 
