@@ -162,7 +162,6 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 		SPSTATE(i)->depth = i;
 		SPSTATE(i)->queue_len = (2 * num_cover_samples + num_exe_samples) / pow (2, i) + 1; 
 		SPSTATE(i)->queue_eff_len = 0;
-		SPSTATE(i)->queue_down_start = 0;
 		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
 		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
 		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
@@ -218,7 +217,6 @@ spiir_state_reset (SpiirState **spstate, gint num_depths, cudaStream_t stream)
   SPSTATE(i)->queue_spiir_last_sample = 0;
 
     SPSTATE(i)->queue_eff_len = 0;
-    SPSTATE(i)->queue_down_start = 0;
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);
   }
@@ -252,6 +250,5 @@ spiir_state_flush_queue (SpiirState **spstate, gint depth, gint
 
   SPSTATE(depth)->queue_len = SPSTATE(depth)->queue_len - num_flush_samples;
   SPSTATE(depth)->queue_eff_len = SPSTATE(depth)->queue_eff_len - num_flush_samples;
-  SPSTATE(depth)->queue_down_start = SPSTATE(depth)->queue_down_start - num_flush_samples;
 }
 #endif
