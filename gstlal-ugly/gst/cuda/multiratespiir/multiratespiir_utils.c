@@ -10,21 +10,6 @@ void cuda_multirate_spiir_init_cover_samples (gint *num_cover_samples, gint rate
 	for (i=num_depths-1; i>0; i--)
 	       rate_start = rate_start * 2 + down_filtlen/2 ;
 
-	while (!success) {
-		rateleft = rate_start;
-		for (i=num_depths-1; i>0; i--) {
-			if ((rateleft - down_filtlen/2) % 2 == 1) {
-				rate_start = rate_start + 2;
-				break;
-			} else
-				rateleft = (rateleft - down_filtlen/2)/2;
-		}
-		if (i == 0)
-			success = TRUE;
-	}
-	for (i=num_depths-1; i>0; i--)
-		rateleft = (rateleft - up_filtlen/2)*2;
-
 	*num_cover_samples = rate_start;
 
 
