@@ -144,17 +144,11 @@ __global__ void reload_queue_spiir (float *queue,
 
 	for (i=tx; i< num_left; i+=tdx) 
 		tmp[i] = queue[i+num_inchunk];
+
 	__syncthreads();
 
 	for (i=tx; i< num_left; i+=tdx) 
 		queue[i] = tmp[i];
-#if 0
-	/ should be removed ?
-	for (i=tx; i< num_inchunk; i+=tdx) {
-	  	j = (queue_spiir_start + i) % queue_spiir_len;
-	}
-#endif
-	
 
 }
 /*
