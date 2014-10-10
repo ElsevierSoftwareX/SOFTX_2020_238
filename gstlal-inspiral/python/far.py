@@ -729,31 +729,30 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		return params
 
-	def P_noise(self, params):
+	def lnP_noise(self, params):
 		if params is not None:
 			params = params.copy()
 			del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).P_noise(params)
+		return super(ThincaCoincParamsDistributions, self).lnP_noise(params)
 
-	def P_signal(self, params):
+	def lnP_signal(self, params):
 		if params is None:
 			return None
-		# (instrument, snr) pairs sorted alphabetically by instrument name
+		# (instrument, snr) pairs sorted alphabetically by
+		# instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
 		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
-		P = snr_pdf(*tuple(rho for instrument, rho in snrs))
+		lnP = math.log(snr_pdf(*tuple(rho for instrument, rho in snrs)))
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
-		# populate_prob_of_instruments_given_signal() has set the probabilities to is
-		# OK.  we probably need to cache these and save them in the
-		# XML file, too, like P(snrs | signal, instruments)
-		for name, value in params.items():
-			if name != "horizons":
-				P *= self.injection_pdf_interp[name](*value)
-		return P
+		# populate_prob_of_instruments_given_signal() has set the
+		# probabilities to is OK.  we probably need to cache these
+		# and save them in the XML file, too, like P(snrs | signal,
+		# instruments)
+		return sum((math.log(self.injection_pdf_interp[name](*value)) for name, value in params.items() if name != "horizons"), lnP)
 
 	# FIXME:  this is annoying.  probably need a generic way to
 	# indicate to the parent class that some parameter doesn't have a
