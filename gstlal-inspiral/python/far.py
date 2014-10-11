@@ -744,7 +744,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# retrieve the SNR PDF
 		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
-		lnP = math.log(snr_pdf(*tuple(rho for instrument, rho in snrs)))
+		try:
+			lnP = math.log(snr_pdf(*tuple(rho for instrument, rho in snrs)))
+		except ValueError:
+			return NegInf
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
@@ -752,7 +755,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		return sum((math.log(self.injection_pdf_interp[name](*value)) for name, value in params.items() if name != "horizons"), lnP)
+		params = params.copy()
+		del params["horizons"]
+		return super(ThincaCoincParamsDistributions, self).lnP_signal(params) + lnP
 
 	# FIXME:  this is annoying.  probably need a generic way to
 	# indicate to the parent class that some parameter doesn't have a
