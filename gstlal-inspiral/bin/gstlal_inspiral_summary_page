@@ -185,12 +185,15 @@ page.subpages["search_sensitivity"].div("""
 <big><b>OVERVIEW:</b></big><br><br>
 This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of total mass and component mass.
 """)
+page.subpages["search_sensitivity"].add_section("chirp_mass","Binned by chirp mass")
 page.subpages["search_sensitivity"].add_section("total_mass","Binned by total mass")
 page.subpages["search_sensitivity"].add_section("mass1_mass2","Binned by mass1-mass2")
 page.subpages["search_sensitivity"].add_section("aligned_spin","Binned by aligned spin")
 page.subpages["search_sensitivity"].add_section("mass_ratio","Binned by mass ratio")
 
 for tag in opts.output_user_tag:
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*BINNED_BY_CHIRP_MASS*.png' % tag))
+	page.subpages["search_sensitivity"].sections["chirp_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by chirp mass")
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*BINNED_BY_TOTAL_MASS*.png' % tag))
 	page.subpages["search_sensitivity"].sections["total_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by total mass")
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*BINNED_BY_MASS1_MASS2*.png' % tag))
