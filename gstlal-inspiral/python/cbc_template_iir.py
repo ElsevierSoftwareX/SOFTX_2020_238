@@ -1,11 +1,6 @@
-######
 #
-# This code should read in a xml file and produce three matrices, a1, b0, delay
-# that correspond to a bank of waveforms
-#
-#######
-#
-# Copyright (C) 2010-2012 Shaun Hooper
+# Copyright (C) 2010-2012 Shaun Hooper, David Mckenzie, Qi Chu
+# Copyright (C) 2013-2014 David Mckenzie, Qi Chu
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -29,24 +24,27 @@ import scipy
 from scipy import integrate
 from scipy import interpolate
 import math
-import lal
+from pylal import lalconstants
 import pdb
 import csv
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import pdb
+from subprocess import call
+import waveHandler
+import random
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 def Theta(eta, Mtot, t):
-	Tsun = lal.MTSUN_SI #4.925491e-6
+	Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
 	theta = eta / (5.0 * Mtot * Tsun) * -t
         return theta
 
 def freq(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
-        Tsun = lal.MTSUN_SI #4.925491e-6
+        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
                 theta**(-3.0/8.0) +
                 (743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
@@ -54,6 +52,58 @@ def freq(eta, Mtot, t):
                 (1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
         return f
 
+# Clean up the start and end frequencies
+# Modifies the f array in place
+def cleanFreq(f,fLower):
+    i = 0;
+    fStartFix = 0; #So if f is 0, -1, -2, 15, -3 15 16 17 18 then this will be 4
+    while(i< 100): #This should be enough
+	if(f[i] < fLower-5 or f[i] > fLower+5):  ##Say, 5 or 10 Hz)
+	    fStartFix = i;
+	i=i+1;
+
+    if(fStartFix != 0):
+	f[0:fStartFix+1] = fLower
+
+    i=-100;
+    while(i<0):
+	#require monotonicity
+	if(f[i]>f[i+1]):
+	    f[i+1:]=10; #effectively throw away the end
+	    break;
+	else:
+	    i=i+1;
+# Calculate the phase and amplitude from hc and hp
+# Unwind the phase (this is slow - consider C extension or using SWIG
+# if speed is needed)
+def calc_amp_phase(hc,hp):
+    amp = numpy.sqrt(hc*hc + hp*hp)
+    phase = numpy.arctan2(hc,hp)
+    
+    #Unwind the phase
+    #Based on the unwinding codes in pycbc
+    #and the old LALSimulation interface
+    index = 0
+    count=0
+    prevval = None
+
+    #Pycbc uses 2*PI*0.7 for some reason
+    #We use the more conventional PI (more in line with MATLAB)
+    thresh = lalconstants.LAL_PI;
+    for val in phase:
+	if prevval is None:
+	    pass
+	elif val-prevval >= thresh:
+	    count = count+1
+	elif prevval - val >= thresh:
+	    count = count-1
+
+	phase[index] += count*lalconstants.LAL_TWOPI
+	
+	prevval = val
+	index += 1
+
+    return amp,phase
 def Phase(eta, Mtot, t, phic = 0.0):
         theta = Theta(eta, Mtot, t)
         phi = phic - 2.0 / eta * (
@@ -65,35 +115,38 @@ def Phase(eta, Mtot, t, phic = 0.0):
 
 def Amp(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
-        c = lal.C_SI #3.0e10
-        Tsun = lal.MTSUN_SI #4.925491e-6
-	Mpc = 1e6 * lal.PC_SI #3.08568025e24
+        c = lalconstants.LAL_C_SI #3.0e10
+        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
+	Mpc = 1e6 * lalconstants.LAL_PC_SI #3.08568025e24
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
         amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
         return amp
 
+
+# For IIR bank construction we use LALSimulation waveforms
+# FIR matrix code has not been updated but it is not used
 def waveform(m1, m2, fLow, fhigh, sampleRate):
-        deltaT = 1.0 / sampleRate
-        T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
-        tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
+	deltaT = 1.0 / sampleRate
+	T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
+	tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
 	# the last sampling point of any waveform is always set 
 	# at abs(t) >= delta. this is to avoid ill-condition of 
 	# frequency when abs(t) < 1e-5
 	n_start = math.floor((tc-T) / deltaT + 0.5)
 	n_end = min(math.floor(tc/deltaT), -1)
-        t = numpy.arange(n_start, n_end+1, 1) * deltaT
-        Mtot = m1 + m2
-        eta = m1 * m2 / Mtot**2
-        f = freq(eta, Mtot, t)
-        amp = Amp(eta, Mtot, t);
-        phase = Phase(eta, Mtot, t);
-        return amp, phase, f
+	t = numpy.arange(n_start, n_end+1, 1) * deltaT
+	Mtot = m1 + m2
+	eta = m1 * m2 / Mtot**2
+	f = freq(eta, Mtot, t)
+	amp = Amp(eta, Mtot, t);
+	phase = Phase(eta, Mtot, t);
+	return amp, phase, f
 
 def sigmasq2(mchirp, fLow, fhigh, psd_interp):
-	c = lal.C_SI #299792458
-	G = lal.G_SI #6.67259e-11
-	M = lal.MSUN_SI #1.98892e30
-	Mpc =1e6 * lal.PC_SI #3.0856775807e22
+	c = lalconstants.LAL_C_SI #299792458
+	G = lalconstants.LAL_G_SI #6.67259e-11
+	M = lalconstants.LAL_MSUN_SI #1.98892e30
+	Mpc =1e6 * lalconstants.LAL_PC_SI #3.0856775807e22
 	#mchirp = 1.221567#30787
 	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
 	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
@@ -102,7 +155,6 @@ def sigmasq2(mchirp, fLow, fhigh, psd_interp):
 #
 # Start Code
 #
-
 
 def get_iir_sample_rate(xmldoc):
         pass
@@ -178,10 +230,12 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+
 	if sampleRate is None:
 		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
-	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+	if verbose: 
+		print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
 
         Amat = {}
         Bmat = {}
@@ -207,25 +261,43 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		fFinal = row.f_final
 		if verbose: start = time.time()
 
-                # work out the waveform frequency
-                #fFinal = spawaveform.ffinal(m1,m2)
-                #if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
-
                 # make the waveform
+		
+		
+		hc,hp = lalsimulation.SimChooseTDWaveform(  0,					#reference phase, phi ref
+			    				    1./sampleRate,			#delta T
+							    m1*lalconstants.LAL_MSUN_SI,	#mass 1 in kg
+							    m2*lalconstants.LAL_MSUN_SI,	#mass 2 in kg
+							    0,0,0,				#Spin 1 x, y, z
+							    0,0,0,				#Spin 2 x, y, z
+							    flower,				#Lower frequency
+							    40,					#Reference frequency
+							    dist*lalconstants.LAL_PC_SI,	#r - distance in M (convert to MPc)
+							    0,					#inclination
+							    0,0,				#Lambda1, lambda2
+							    None,				#Waveflags
+							    None,				#Non GR parameters
+							    7,7,				#Amplitude and phase order 2N+1
+							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+		amp,phase=calc_amp_phase(hc,hp)
+		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
-                amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
+		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
+		cleanFreq(f,flower)
+
 		if verbose:
 			print >> sys.stderr, "waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate))))
 			start = time.time()
-                if psd_interp is not None:
-                        amp /= psd_interp(f)**0.5
+		if psd_interp is not None:
+			amp[0:len(f)] /= psd_interp(f[0:len(f)])**0.5
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 		if verbose:
 			print >> sys.stderr, "create IIR bank %f" % (time.time() - start)
 			start = time.time()
-                # get the chirptime
+
+                # get the chirptime (nearest power of two)
                 length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
 		if verbose: print >> sys.stderr, "length = %d, amp length = %d, autocorrelation length = %d" % (length, amp.shape[0], autocorrelation_length)
 
@@ -268,6 +340,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
 		# compute the SNR
 		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
+		print(snr);
 		if verbose:
 			print>>sys.stderr, "dot product %f" % ((time.time() - start))
 			start = time.time()
@@ -340,6 +413,8 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate])))
 			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(B[rate])))
 			root.appendChild(array.from_array('d_%d' % (rate), D[rate]))
+
+
 
 	if output_to_xml: # Create new document and add them together
 		root = xmldoc.childNodes[0]
@@ -436,3 +511,6 @@ def load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, ve
 
 	bank.set_template_bank_filename(filename)
 	return bank
+
+
+
