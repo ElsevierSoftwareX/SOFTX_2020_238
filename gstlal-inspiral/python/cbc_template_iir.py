@@ -1,4 +1,4 @@
-#
+
 # Copyright (C) 2010-2012 Shaun Hooper, David Mckenzie, Qi Chu
 # Copyright (C) 2013-2014 David Mckenzie, Qi Chu
 #
@@ -16,7 +16,6 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from pylal import spawaveform
 import sys
 import time
 import numpy
@@ -24,27 +23,33 @@ import scipy
 from scipy import integrate
 from scipy import interpolate
 import math
-from pylal import lalconstants
-import pdb
 import csv
+import logging
+
+import lal
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
-import pdb
-from subprocess import call
-import waveHandler
 import random
+
+# will be DEPRECATED once the C SPIIR coefficient code be swig binded
+from pylal import spawaveform
+
+# DEPRECATED: The following code is used to generate the amplitude and phase 
+# 	      information of a waveform. NOW we use the standard lalsimulation
+#             to obtain amp and phase.
+
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 def Theta(eta, Mtot, t):
-	Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
+	Tsun = lal.MTSUN_SI #4.925491e-6
 	theta = eta / (5.0 * Mtot * Tsun) * -t
         return theta
 
 def freq(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
-        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
+        Tsun = lal.MTSUN_SI #4.925491e-6
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
                 theta**(-3.0/8.0) +
                 (743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
@@ -52,8 +57,50 @@ def freq(eta, Mtot, t):
                 (1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
         return f
 
+def Phase(eta, Mtot, t, phic = 0.0):
+        theta = Theta(eta, Mtot, t)
+        phi = phic - 2.0 / eta * (
+                theta**(5.0 / 8.0) +
+                (3715.0 /8064.0 +55.0 /96.0 *eta) * theta**(3.0/8.0) -
+                3.0 *scipy.pi / 4.0 * theta**(1.0/4.0) +
+                (9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
+        return phi
+
+def Amp(eta, Mtot, t):
+        theta = Theta(eta, Mtot, t)
+        c = lal.C_SI #3.0e10
+        Tsun = lal.MTSUN_SI #4.925491e-6
+	Mpc = 1e6 * lal.PC_SI #3.08568025e24
+        f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
+        amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
+        return amp
+
+
+# For IIR bank construction we use LALSimulation waveforms
+# FIR matrix code has not been updated but it is not used
+
+def waveform(m1, m2, fLow, fhigh, sampleRate):
+	deltaT = 1.0 / sampleRate
+	T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
+	tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
+	# the last sampling point of any waveform is always set 
+	# at abs(t) >= delta. this is to avoid ill-condition of 
+	# frequency when abs(t) < 1e-5
+	n_start = math.floor((tc-T) / deltaT + 0.5)
+	n_end = min(math.floor(tc/deltaT), -1)
+	t = numpy.arange(n_start, n_end+1, 1) * deltaT
+	Mtot = m1 + m2
+	eta = m1 * m2 / Mtot**2
+	f = freq(eta, Mtot, t)
+	amp = Amp(eta, Mtot, t);
+	phase = Phase(eta, Mtot, t);
+	return amp, phase, f
+
+# end of DEPRECATION
+
 # Clean up the start and end frequencies
 # Modifies the f array in place
+
 def cleanFreq(f,fLower):
     i = 0;
     fStartFix = 0; #So if f is 0, -1, -2, 15, -3 15 16 17 18 then this will be 4
@@ -73,9 +120,11 @@ def cleanFreq(f,fLower):
 	    break;
 	else:
 	    i=i+1;
+
 # Calculate the phase and amplitude from hc and hp
 # Unwind the phase (this is slow - consider C extension or using SWIG
 # if speed is needed)
+
 def calc_amp_phase(hc,hp):
     amp = numpy.sqrt(hc*hc + hp*hp)
     phase = numpy.arctan2(hc,hp)
@@ -89,7 +138,7 @@ def calc_amp_phase(hc,hp):
 
     #Pycbc uses 2*PI*0.7 for some reason
     #We use the more conventional PI (more in line with MATLAB)
-    thresh = lalconstants.LAL_PI;
+    thresh = lal.PI;
     for val in phase:
 	if prevval is None:
 	    pass
@@ -98,123 +147,27 @@ def calc_amp_phase(hc,hp):
 	elif prevval - val >= thresh:
 	    count = count-1
 
-	phase[index] += count*lalconstants.LAL_TWOPI
+	phase[index] += count*lal.TWOPI
 	
 	prevval = val
 	index += 1
 
     return amp,phase
-def Phase(eta, Mtot, t, phic = 0.0):
-        theta = Theta(eta, Mtot, t)
-        phi = phic - 2.0 / eta * (
-                theta**(5.0 / 8.0) +
-                (3715.0 /8064.0 +55.0 /96.0 *eta) * theta**(3.0/8.0) -
-                3.0 *scipy.pi / 4.0 * theta**(1.0/4.0) +
-                (9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
-        return phi
-
-def Amp(eta, Mtot, t):
-        theta = Theta(eta, Mtot, t)
-        c = lalconstants.LAL_C_SI #3.0e10
-        Tsun = lalconstants.LAL_MTSUN_SI #4.925491e-6
-	Mpc = 1e6 * lalconstants.LAL_PC_SI #3.08568025e24
-        f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
-        amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
-        return amp
-
-
-# For IIR bank construction we use LALSimulation waveforms
-# FIR matrix code has not been updated but it is not used
-def waveform(m1, m2, fLow, fhigh, sampleRate):
-	deltaT = 1.0 / sampleRate
-	T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
-	tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
-	# the last sampling point of any waveform is always set 
-	# at abs(t) >= delta. this is to avoid ill-condition of 
-	# frequency when abs(t) < 1e-5
-	n_start = math.floor((tc-T) / deltaT + 0.5)
-	n_end = min(math.floor(tc/deltaT), -1)
-	t = numpy.arange(n_start, n_end+1, 1) * deltaT
-	Mtot = m1 + m2
-	eta = m1 * m2 / Mtot**2
-	f = freq(eta, Mtot, t)
-	amp = Amp(eta, Mtot, t);
-	phase = Phase(eta, Mtot, t);
-	return amp, phase, f
 
 def sigmasq2(mchirp, fLow, fhigh, psd_interp):
-	c = lalconstants.LAL_C_SI #299792458
-	G = lalconstants.LAL_G_SI #6.67259e-11
-	M = lalconstants.LAL_MSUN_SI #1.98892e30
-	Mpc =1e6 * lalconstants.LAL_PC_SI #3.0856775807e22
+	c = lal.C_SI #299792458
+	G = lal.G_SI #6.67259e-11
+	M = lal.MSUN_SI #1.98892e30
+	Mpc =1e6 * lal.PC_SI #3.0856775807e22
 	#mchirp = 1.221567#30787
 	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
 	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
-
-# FIX ME: Change the following to actually read in the XML file
-#
-# Start Code
-#
-
-def get_iir_sample_rate(xmldoc):
-        pass
 
 def sample_rates_array_to_str(sample_rates):
         return ",".join([str(a) for a in sample_rates])
 
 def sample_rates_str_to_array(sample_rates_str):
         return numpy.array([int(a) for a in sample_rates_str.split(',')])
-
-
-def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None, autocorrelation_length=101, verbose=False):
-	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
-	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-        flower = param.get_pyvalue(xmldoc, 'flower')
-	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
-
-        snrvec = []
-        Mlist = []
-
-        if not (autocorrelation_length % 2):
-                raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
-        autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
-
-        for tmp, row in enumerate(sngl_inspiral_table):
-                m1 = row.mass1
-                m2 = row.mass2
-
-                # make the waveform
-                amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
-                if psd_interp is not None:
-                        amp /= psd_interp(f)**0.5 * 1e23
-
-                length = int(2**numpy.ceil(numpy.log2(amp.shape[0])))
-                out = amp * numpy.exp(1j * phase)
-
-                # normalize the fir coefficients
-                vec1 = numpy.zeros(length * 2, dtype=numpy.cdouble)
-                vec1[-len(out):] = out
-                norm1 = (1.0/numpy.sqrt(2.0))*((vec1 * numpy.conj(vec1)).sum()**0.5)
-                vec1 /= norm1
-                #vec1 = vec1[::-1]
-
-                # store the coeffs.
-                Mlist.append(vec1.real)
-                Mlist.append(vec1.imag)
-
-                # compute the SNR
-                #corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec1)))
-
-                #FIXME this is actually the cross correlation between the original waveform and this approximation
-                #autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
-
-        max_len = max([len(i) for i in Mlist])
-        M = numpy.zeros((len(Mlist), max_len))
-
-        for i, Am in enumerate(Mlist): M[i,:len(Am)] = Am
-
-        return M, autocorrelation_bank
 
 def compute_autocorrelation_mask( autocorrelation ):
 	'''
@@ -226,16 +179,17 @@ def compute_autocorrelation_mask( autocorrelation ):
 	return numpy.ones( autocorrelation.shape, dtype="int" )
 
 
-def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=201, downsample=False, verbose=False):
+def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length = 201, downsample = False, verbose = False):
 
-        sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+        sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 
 	if sampleRate is None:
 		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
 	if verbose: 
-		print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+		logging.basicConfig(format='%(asctime)s %(message)s', level = logging.debug)
+		logging.info("f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate))
 
         Amat = {}
         Bmat = {}
@@ -259,25 +213,24 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		m1 = row.mass1
 		m2 = row.mass2
 		fFinal = row.f_final
-		if verbose: start = time.time()
 
-                # make the waveform
+                # generate the waveform
 		
 		
-		hc,hp = lalsimulation.SimChooseTDWaveform(  0,					#reference phase, phi ref
-			    				    1./sampleRate,			#delta T
-							    m1*lalconstants.LAL_MSUN_SI,	#mass 1 in kg
-							    m2*lalconstants.LAL_MSUN_SI,	#mass 2 in kg
-							    0,0,0,				#Spin 1 x, y, z
-							    0,0,0,				#Spin 2 x, y, z
-							    flower,				#Lower frequency
-							    40,					#Reference frequency
-							    dist*lalconstants.LAL_PC_SI,	#r - distance in M (convert to MPc)
-							    0,					#inclination
-							    0,0,				#Lambda1, lambda2
-							    None,				#Waveflags
-							    None,				#Non GR parameters
-							    7,7,				#Amplitude and phase order 2N+1
+		hc,hp = lalsimulation.SimChooseTDWaveform(  0,					# reference phase, phi ref
+			    				    1./sampleRate,			# delta T
+							    m1*lal.MSUN_SI,			# mass 1 in kg
+							    m2*lal.MSUN_SI,			# mass 2 in kg
+							    0,0,0,				# Spin 1 x, y, z
+							    0,0,0,				# Spin 2 x, y, z
+							    flower,				# Lower frequency
+							    40,					# Reference frequency
+							    dist*lal.PC_SI,			# r - distance in M (convert to MPc)
+							    0,					# inclination
+							    0,0,				# Lambda1, lambda2
+							    None,				# Waveflags
+							    None,				# Non GR parameters
+							    7,7,				# Amplitude and phase order 2N+1
 							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
 		amp,phase=calc_amp_phase(hc,hp)
 		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
@@ -285,27 +238,23 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
 		cleanFreq(f,flower)
 
-		if verbose:
-			print >> sys.stderr, "waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate))))
-			start = time.time()
 		if psd_interp is not None:
 			amp[0:len(f)] /= psd_interp(f[0:len(f)])**0.5
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 		if verbose:
-			print >> sys.stderr, "create IIR bank %f" % (time.time() - start)
-			start = time.time()
+			logging.info("SPIIR coefficients generated")
 
                 # get the chirptime (nearest power of two)
                 length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
-		if verbose: print >> sys.stderr, "length = %d, amp length = %d, autocorrelation length = %d" % (length, amp.shape[0], autocorrelation_length)
 
                 # get the IIR response
                 out = spawaveform.iirresponse(length, a1, b0, delay)
 		if verbose:
-			print >> sys.stderr, "create IIR response %f" % (time.time() - start)
-			start = time.time()
+			logging.info("SPIIR response generated")
+
+		# FIXME: very ugly, rename the variables
                 out = out[::-1]
                 u = numpy.zeros(length * 1, dtype=numpy.cdouble)
                 u[-len(out):] = out
@@ -325,27 +274,22 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
 		norm2 = abs(numpy.dot(h, numpy.conj(h)))
                 h *= numpy.sqrt(2 / norm2)
-		if output_to_xml: row.sigmasq = 1.0 * norm2 / sampleRate
+		if output_to_xml: 
+			row.sigmasq = 1.0 * norm2 / sampleRate
+
 		if verbose:
 			newsigma = sigmasq2(row.mchirp, flower, fFinal, psd_interp)
-			print>>sys.stderr, "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma)
-			print>>sys.stderr, "mchirp %fm, fFinal %f, row.f_final %f" % (row.mchirp, fFinal, row.f_final)
-			start = time.time()
+			logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
 		autocorrelation_bank[tmp,:] = crosscorr(h, h, autocorrelation_length)/2.0
-		if verbose:
-			print>>sys.stderr, "auto correlation %f" % ((time.time() - start))
-			start = time.time()
 
 		# compute the SNR
 		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
-		print(snr);
 		if verbose:
-			print>>sys.stderr, "dot product %f" % ((time.time() - start))
-			start = time.time()
+			logging.info("row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr))	
+
 		snrvec.append(snr)
-		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
 
 
                 # store the match for later
@@ -365,7 +309,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 				newdelay = numpy.ceil((delay[i]+1)/(float(M)))
 				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
 				delaydict.setdefault(sampleRate/M, []).append(newdelay)
-				#print>>sys.stderr, "sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay)
+				#logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
 
 		else:
 			a1dict[int(sampleRate)] = a1
@@ -380,8 +324,6 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
 
 
-		if verbose: print>>sys.stderr, "filters per sample rate (rate , num filters)\n",[(k,len(v)) for k,v in a1dict.items()]
-
 
 	A = {}
 	B = {}
@@ -395,7 +337,9 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		max_len = max([len(i) for i in Amat[rate]])
 		DmatMin = min([min(elem) for elem in Dmat[rate]])
 		DmatMax = max([max(elem) for elem in Dmat[rate]])
-		if verbose: print>>sys.stderr, "rate %d, dmin %d, dmax %d, max_row %d, max_len %d" % (rate, DmatMin, DmatMax, max_rows, max_len)
+		if verbose:
+			logging.info("rate %d, dmin %d, dmax %d, max_row %d, max_len %d" % (rate, DmatMin, DmatMax, max_rows, max_len))
+
 		A[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		B[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		D[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.int)
