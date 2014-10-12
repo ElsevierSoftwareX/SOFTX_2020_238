@@ -817,7 +817,7 @@ plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_node
 ))
 for injdb in injdbs:
 	plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"}},
+		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
 		input_files = {"zero-lag-database":noninjdb, "":injdb}
 	))
 
