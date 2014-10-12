@@ -1138,7 +1138,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
 		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
-		coordgens = tuple(iter(self.binnings[key].randcentre(ns = (snr_slope, 1.))).next for key in keys)
+		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = dict(zip(keys, seq[0::2]))
