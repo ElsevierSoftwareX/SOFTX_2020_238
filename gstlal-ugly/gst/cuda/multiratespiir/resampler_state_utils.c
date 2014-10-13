@@ -268,7 +268,7 @@ float resampler_state_amplifier_init (gint quality, gint inrate, gint outrate, g
 }
 
 ResamplerState *
-resampler_state_init (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth, cudaStream_t stream)
+resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_samples, gint num_cover_samples, gint depth, cudaStream_t stream)
 {
 	gint mem_alloc_size, num_alloc_samples; 
 	gint den_rate; // denominator rate, = outrate / gcd (inrate, outrate) 

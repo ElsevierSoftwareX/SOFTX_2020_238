@@ -3,7 +3,7 @@
 
 
 SpiirState ** 
-spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
+spiir_state_create (gdouble *bank, gint bank_len, gint num_cover_samples,
 		gint num_exe_samples, gint width, gint rate, cudaStream_t stream);
 
 void 
