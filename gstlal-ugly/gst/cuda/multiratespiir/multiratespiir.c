@@ -24,7 +24,7 @@
  */
 
 /* TODO:
- *  - no update SpiirState at run time. should support streaming format 
+ *  - no update of SpiirState at run time. should support streaming format 
  *  changes such as width/ rate/ quality change at run time. Should 
  *  support IIR bank changes at run time.
  */
@@ -223,7 +223,7 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
   element->adapter = gst_adapter_new();
   element->need_discont = TRUE;
   element->num_gap_samples = 0;
-  element->num_nongap_samples = 0;
+  element->exist_nongap = FALSE;
   element->t0 = GST_CLOCK_TIME_NONE;
   element->offset0 = GST_BUFFER_OFFSET_NONE;
   element->next_in_offset = GST_BUFFER_OFFSET_NONE;
@@ -232,8 +232,8 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
   element->spstate = NULL;
   element->spstate_initialised = FALSE;
   element->num_exe_samples = 4096; // assumes the rate=4096Hz
-  element->num_head_cover_samples = 3040; // assumes the rate=4096Hz
-  element->num_tail_cover_samples = 3024; // assumes the rate=4096Hz
+  element->num_head_cover_samples = 13120; // assumes the rate=4096Hz, down quality = 9
+  element->num_tail_cover_samples = 13104; // assumes the rate=4096Hz
 
   return TRUE;
 }
@@ -802,7 +802,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
     element->offset0 = GST_BUFFER_OFFSET(inbuf);
     element->num_gap_samples = 0;
-    element->num_nongap_samples = 0;
+    element->exist_nongap = FALSE;
     element->samples_in = 0;
     element->samples_out = 0;
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_head_cover_samples);
@@ -842,7 +842,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     /*
      * if receiving GAPs from the beginning, assemble same length GAPs
      */
-    if (element->num_nongap_samples < 1) {
+    if (element->exist_nongap == FALSE) {
 
         /*
          * one gap buffer
@@ -931,7 +931,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     }
 
     element->num_gap_samples = 0;
-    element->num_nongap_samples += in_samples;
+    element->exist_nongap = TRUE;
     adapter_len = cuda_multirate_spiir_get_available_samples(element);
     /*
      * here merely speed consideration: if samples ready to be processed are less than num_exe_samples,
@@ -976,7 +976,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       if (element->state)
         element->funcs->skip_zeros (element->state);
       element->num_gap_samples = 0;
-      element->num_nongap_samples = 0;
+      element->exist_nongap = FALSE;
       element->t0 = GST_CLOCK_TIME_NONE;
       element->in_offset0 = GST_BUFFER_OFFSET_NONE;
       element->out_offset0 = GST_BUFFER_OFFSET_NONE;
@@ -989,13 +989,14 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
     case GST_EVENT_NEWSEGMENT:
       
       GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT PROCESS");
-      if (element->num_nongap_samples > 0) {
+      if (element->exist_nongap == TRUE) {
         adapter_push_zeros (element, element->num_tail_cover_samples);
-        cuda_multirate_spiir_push_drain (element, element->num_tail_cover_samples);
+	int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+        cuda_multirate_spiir_push_drain (element, adapter_len);
         spiir_state_reset (element->spstate, element->num_depths, element->stream);
       }
       element->num_gap_samples = 0;
-      element->num_nongap_samples = 0;
+      element->exist_nongap = FALSE;
       element->t0 = GST_CLOCK_TIME_NONE;
       element->offset0 = GST_BUFFER_OFFSET_NONE;
       element->next_in_offset = GST_BUFFER_OFFSET_NONE;
@@ -1010,7 +1011,8 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       GST_DEBUG_OBJECT(element, "EVENT EOS");
       if (element->spstate) {
         adapter_push_zeros (element, element->num_tail_cover_samples);
-	cuda_multirate_spiir_push_drain (element, element->num_tail_cover_samples);
+	int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+	cuda_multirate_spiir_push_drain (element, adapter_len);
         spiir_state_reset (element->spstate, element->num_depths, element->stream);
       }
       break;
