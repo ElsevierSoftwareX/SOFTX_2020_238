@@ -22,14 +22,28 @@ import gobject
 gobject.threads_init()
 import pygst
 pygst.require("0.10")
-
-import gst
+	
 import sys
 import os
 import numpy
 import time
 
 from optparse import OptionParser, Option
+
+# This mess is to make gstreamer stop eating our help messages
+if "--help" in sys.argv or "-h" in sys.argv:
+	try:
+		del sys.argv[sys.argv.index("--help")]
+	except ValueError:
+		pass
+	try:
+		del sys.argv[sys.argv.index("-h")]
+	except ValueError:
+		pass
+	import gst
+	sys.argv.append("--help")
+else:
+	import gst
 
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -42,6 +56,7 @@ from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import param
+from glue.ligolw.utils import segments as ligolw_segments
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
@@ -61,19 +76,21 @@ def write_graph(demux):
 parser = OptionParser(description = __doc__)
 
 #
-# Append data source options
-#
-
-datasource.append_options(parser)
-
-#
 # Append program specific options
 #
 
 # These options should be used whether the pipeline runs in recoloring or calibration mode
+parser.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm|white]. Required.")
+parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files (optional).  This is required iff --data-source=frames")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required for --data-source=frames")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required for --data-source=frames")
+parser.add_option("--dq-channel-name", metavar = "name", help = "Set the name of the data quality (or state vector) channel.")
+parser.add_option("--ifo", metavar = "name", help = "Name of the IFO to be calibrated.")
+parser.add_option("--shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition.")
+parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Required for --data-source=frames")
+parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required if --frame-segments-file is given")
 parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
-parser.add_option("--lldq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for the outgoing CALIB-STATE_VECTOR.  (Default = 1 Hz)")
 parser.add_option("--odc-float", action = "store_true", help = "Set this if the data quality vector (ODC) is broadcasted as a float.")
 parser.add_option("--science-locked-mask", metavar = "bit", type = "int", default = 3, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be both locked and in science mode. (Default = 0x1)")
 parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, help = "Set the bit mask for bits that must be on for the instrument/subsystem to be locked. (Default = 0x2)")
@@ -92,21 +109,18 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 
 # These are options specific to the recoloring mode of the pipeline
 parser.add_option("--recolor", action = "store_true", help = "Recolor data to produce fake strain instead of calibrating to produce real strain. Note: If neither --fake-calibrate or --recolor are turned on, then the pipeline will perform a true strain calibration")
+parser.add_option("--recolor-channel-name", metavar = "name", help = "Channel name to be recolored.")
 parser.add_option("--reference-psd", metavar = "name", help = "RECOLORING MODE: Set the name of psd xml file to whiten the data with. Use this option if you are whitening with a fixed PSD.")
 parser.add_option("--recolor-psd", metavar = "name", help = "RECOLORING MODE: Set the name of psd xml file to recolor the data with")
 parser.add_option("--track-psd", action = "store_true", help = "RECOORING MODE: Calculate PSD from input data and track with time. Use this option if you are adaptively whitening.")
 
 # These are options specific to the calibration mode of the pipeline
-parser.add_option("--fake-calibrate", action = "store_true", help = "CALIBRATION MODE: Set this option if you would like to fake the calibration process. In this case, one channel will be read in (i.e. the IMC-F_OUT_DQ channel) and tee-ed off three times to fake being the control, error, and excitation signals. The output of this process will not represent anything physical. Note: If neither --fake-calibrate or --recolor are turned on, then the pipeline will perform a true strain calibration.")
-parser.add_option("--filters-file", help = "CALIBRATION MODE: Name of file containing filters (in npz format)")
-parser.add_option("--wings", type = "int", default = 16, help = "CALIBRATION MODE: Size of wings in seconds.")
-parser.add_option("--singles", action = "store_true", help = "CALIBRATION MODE: Use singles (floats) instead of doubles.")
-parser.add_option("--time-domain", action = "store_true", help = "CALIBRATION MODE: Apply FIR filters in the time domain.")
+parser.add_option("--filters-file", metavar="filename", help = "CALIBRATION MODE: Name of file containing filters (in npz format)")
 parser.add_option("--no-gamma", action = "store_true", help = "CALIBRATION MODE: Set this to turn off the calculation of \gamma from calibration lines.")
-parser.add_option("--actuation-sr", type = "int", default = 2048, help = "CALIBRATION MODE: Set the sample rate for the actuation filtering. (Default = 2048 Hz)")
-parser.add_option("--darm-ctrl-channel", metavar = "name", default = "LSC-DARM_CTRL", help = "CALIBRATION MODE: Set the name for the control signal channel. (Default: LSC-DARM_CTRL)")
-parser.add_option("--darm-err-channel", metavar = "name", default = "LSC-DARM_ERR", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default: LSC-DARM_ERR)")
-parser.add_option("--exc-channel", metavar = "name", default = "LSC-DARM_CTRL_EXC_DAQ", help = "CALIBRATION MODE: Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = LSC-DARM_CTRL_EXC_DAQ)")
+parser.add_option("--actuation-sr", type = "int", metavar="Hz", default = 2048, help = "CALIBRATION MODE: Set the sample rate for the actuation filtering. (Default = 2048 Hz)")
+parser.add_option("--darm-ctrl-channel-name", metavar = "name", default = "LSC-DARM_CTRL", help = "CALIBRATION MODE: Set the name for the control signal channel. (Default: LSC-DARM_CTRL)")
+parser.add_option("--darm-err-channel-name", metavar = "name", default = "LSC-DARM_ERR", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default: LSC-DARM_ERR)")
+parser.add_option("--exc-channel-name", metavar = "name", default = "LSC-DARM_CTRL_EXC_DAQ", help = "CALIBRATION MODE: Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = LSC-DARM_CTRL_EXC_DAQ)")
 
 #
 # Parse options
@@ -114,23 +128,80 @@ parser.add_option("--exc-channel", metavar = "name", default = "LSC-DARM_CTRL_EX
 
 options, filenames = parser.parse_args()
 
-# FIXME: Add in sanity checks for command line options
+# Sanity checks for command line options
+data_sources = set(("frames", "lvshm", "white"))
+
+if options.data_source not in data_sources:
+	raise ValueError("--data-source must be one of %s" % ",".join(data_sources))
+
+if options.data_source == "frames" and options.frame_cache is None:
+	raise ValueError("--frame-cache must be specified when using --data-source=frames")
+
+if options.ifo is None:
+	raise ValueError("must specify --ifo")
+
+if options.recolor and options.data_source != "white" and options.recolor_channel_name is None:
+	raise ValueError("must specify --recolor-channel-name when in --recolor mode and not using --data-source=white")
+
+if not options.recolor and (options.darm_ctrl_channel_name is None or options.darm_err_channel_name is None):
+	raise ValueError("must specify --darm-ctrl-channel-name and --darm-err-channel-name when not in --recolor mode") 
+
+if not options.no_gamma and options.exc_channel_name is None:
+	raise ValueError("must specify --exc-channel-name when computing gamma")
+
+if options.frame_segments_file is not None and options.data_source != "frames":
+	raise ValueError("can only give --frame-segments-file if --data-source=frames")
+
+if options.frame_segments_name is not None and options.frame_segments_file is None:
+	raise ValueError("can only specify --frame-segments-name if --frame-segments-file is given")
+
+if options.data_source == "frames" and (options.gps_start_time is None or options.gps_end_time is None):
+	raise ValueError("must specify --gps-start-time and --gps-end-time when --data-source=frames")
+
+if options.data_source == "white" and not options.recolor:
+	raise ValueError("invalid --data-source white; this option can only be used either in --recolor mode")
+
+if options.gps_start_time is not None:
+	if options.gps_end_time is None:
+		raise ValueError("must provide both --gps-start-time and --gps-end-time")
+	if options.data_source == "lvshm" or options.data_source == "white":
+		raise ValueError("cannot set --gps-start-time or --gps-end-time with --data-source=lvshm or --data-source=white")
+	try:
+		start = LIGOTimeGPS(options.gps_start_time)
+	except ValueError:
+		raise ValueError("invalid --gps-start-time %s" % options.gps_start_time)
+	try:
+		end = LIGOTimeGPS(options.gps_end_time)
+	except ValueError:
+		raise ValueError("invalid --gps-end-time %s" % options.gps_end_time)
+	if start >= end:
+		raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
+	# segment from gps start and stop time if given
+	seg = segments.segment(start, end)
+	# seek event from the gps start and stop time if given
+	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
+elif options.gps_end_time is not None:
+	raise ValueError("must provide both --gps-start-time and --gps-end-time")
 
 if options.output_channel_name is None:
 	options.output_channel_name = options.channel_name
 
-gw_data_source = datasource.GWDataSourceInfo(options)
+# Set up instrument and channel name info from command line options
+instrument = options.ifo
 
-if gw_data_source.data_source == "white" and not (options.recolor or options.fake_calibrate):
-	raise ValueError("invalid --data-source white; this option can only be used either in --recolor or --fake-calibrate mode")
+if options.frame_segments_file is not None:
+	# Frame segments from a user defined file
+	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler = datasource.ContentHandler), options.frame_segments_name).coalesce()
+	if seg is not None:
+		# clip frame segments to seek segment if it exists (not required, just saves some meory and I/O overhead)
+		frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in frame_segments.items())
+else:
+	frame_segments = segments.segmentlistdict((instrument, None))
 
-# Assume instrument is the first (only) key of the channel dict
-instrument = gw_data_source.channel_dict.keys()[0]
-
-# Set up short-cut names for each of the sample rates used throughout the pipeline
+# Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps
 sr = options.sample_rate
-lldqsr = options.lldq_sample_rate
 actuationsr = options.actuation_sr
+caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
 
 #
 # RECOLORING MODE ONLY: Read psd file
@@ -144,13 +215,6 @@ if options.recolor:
 		if options.verbose:
 			print >>sys.stderr, "No reference PSD provided, whitening will be done on the fly."
 	rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.recolor_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
-
-# Set the caps for doubles vs. floats based on the command line option
-# FIXME: This pipeline fails in --fake-calibrate mode (at least) when --singles is set
-if options.singles:
-	caps = "audio/x-raw-float, width=32, rate=%d" % sr # = 4 bytes, a float
-else:
-	caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
 
 #
 # Setup the pipeline
@@ -173,34 +237,28 @@ if not options.verbose:
 #
 
 if options.data_source == "lvshm":
-	src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source.shm_part_dict[instrument], assumed_duration = 1)
+	src = pipeparts.mklvshmsrc(pipeline, shm_name = options.shared_memory_partition, assumed_duration = 1)
 elif options.data_source == "frames":
-	src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source.frame_cache, cache_dsc_regex = instrument)
+	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 elif options.data_source == "white":
-	if options.recolor or options.fake_calibrate:
-		rawdata = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=sr, blocksize = sr * 4 * 1)
-		rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, caps)	
-	else:
-		raise ValueError("invalid --data-source white; this option can only be used when operating in --recolor or --fake-calibrate mode")
+	rawdata = pipeparts.mkaudiotestsrc(pipeline, wave = 9, samplesperbuffer=sr, blocksize = sr * 4 * 1)
+	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, caps)	
 
 	if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=sr, blocksize = sr * 4 * 1)
 		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=%d" % sr)
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
-else:
-	raise ValueError("invalid --data-source %s" % options.data_source)
 
 if options.data_source != "white":
-	# FIXME: Patch datasource so that you can give it multiple channels to the same instrument. In the meantime, the channel list can only be setup from datasource if one input channel is given (not including the dq channel), which is the case for --recolor and --fake-calibrate mode.
-	if options.recolor or options.fake_calibrate:
-		channel_list = gw_data_source.channel_dict.items()
+	if options.recolor:
+		channel_list = [(instrument, options.recolor_channel_name)]
 	else:
-		channel_list = [(instrument, options.darm_ctrl_channel), (instrument, options.darm_err_channel)]
+		channel_list = [(instrument, options.darm_ctrl_channel_name), (instrument, options.darm_err_channel_name)]
 		if not options.no_gamma:
-			channel_list.append((instrument, options.exc_channel))
+			channel_list.append((instrument, options.exc_channel_name))
 	if not options.no_dq_vector:
-		channel_list.append((instrument, gw_data_source.dq_channel_dict[instrument]))
+		channel_list.append((instrument, options.dq_channel_name))
 	
 	# Hook up the relevant channels to the demuxer
 	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
@@ -209,7 +267,7 @@ if options.data_source != "white":
 		demux.connect("no-more-pads", write_graph)	
 
 	# Set up the appropriate branches within the pipeline
-	if options.recolor or options.fake_calibrate:
+	if options.recolor:
 		rawdata = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	else:
 		dctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
@@ -223,18 +281,18 @@ if options.data_source != "white":
 			odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
 
 	# Hook up each branch to the appropriate channel in the demuxer
-	if options.recolor or options.fake_calibrate:
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.channel_dict[instrument]), rawdata.get_pad("sink"))
+	if options.recolor:
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.recolor_channel_name), rawdata.get_pad("sink"))
 	else:
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_ctrl_channel), dctrl.get_pad("sink"))
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_err_channel), derr.get_pad("sink"))
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_ctrl_channel_name), dctrl.get_pad("sink"))
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_err_channel_name), derr.get_pad("sink"))
 		if not options.no_gamma:
-			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.exc_channel), exc.get_pad("sink"))
+			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.exc_channel_name), exc.get_pad("sink"))
 	if not options.no_dq_vector:
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source.dq_channel_dict[instrument]), odcstatevector.get_pad("sink"))
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.dq_channel_name), odcstatevector.get_pad("sink"))
 
 # Make sure each of the channels are blocked to no more than 1 second buffers in order to prevent pipeline hang-ups
-if options.recolor or options.fake_calibrate:
+if options.recolor:
 	rawdata = pipeparts.mkreblock(pipeline, rawdata, block_duration = gst.SECOND)
 else:
 	dctrl = pipeparts.mkreblock(pipeline, dctrl, block_duration = gst.SECOND)
@@ -251,24 +309,23 @@ if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
 
 # When reading from disk, clip the incoming data stream(s) to segment list
-if options.data_source == "frames" and gw_data_source.frame_segments[instrument] is not None:
-	if options.recolor or options.fake_calibrate:
-		rawdata = pipeparts.mkgate(pipeline, rawdata, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
+if options.data_source == "frames" and frame_segments is not None:
+	if options.recolor:
+		rawdata = pipeparts.mkgate(pipeline, rawdata, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 	else:
-		dctrl = pipeparts.mkgate(pipeline, dctrl, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
-		derr = pipeparts.mkgate(pipeline, derr, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
+		dctrl = pipeparts.mkgate(pipeline, dctrl, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		derr = pipeparts.mkgate(pipeline, derr, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 		if not options.no_gamma:
-			exc = pipeparts.mkgate(pipeline, exc, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
+			exc = pipeparts.mkgate(pipeline, exc, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 	if not options.no_dq_vector:
-		odcstatevector = pipeparts.mkgate(pipeline, odcstatevector, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source.frame_segments[instrument]))
+		odcstatevector = pipeparts.mkgate(pipeline, odcstatevector, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 
 # RECOLORING OR FAKE-CALIBRATE MODE: Make sure the data is in the right format and resample it to the desired sample rate
-if options.recolor or options.fake_calibrate:
+if options.recolor:
 	rawdata = pipeparts.mkprogressreport(pipeline, rawdata, "progress_src_%s" % instrument)
 	rawdata = pipeparts.mkresample(pipeline, rawdata, quality = 9)
 	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, rate=%d" % sr)
 	rawdata = pipeparts.mkaudiorate(pipeline, rawdata, skip_to_first = True, silent = False) # This audiorate works around a bug in the resampler
-	rawdata = pipeparts.mkchecktimestamps(pipeline, rawdata, "%s_timestamps_%d_hoft" % (instrument, sr))
 
 #
 # RECOLORING BRANCH
@@ -307,14 +364,6 @@ if options.recolor:
 #
 
 else:
-	# If you are operating in --fake-calibrate mode, tee off the incoming data stream into the control signal, error signal, and excitation signal (if applicable)
-	if options.fake_calibrate:
-		rawdatatee = pipeparts.mktee(pipeline, rawdata)
-		dctrl = pipeparts.mkqueue(pipeline, rawdatatee, max_size_time = gst.SECOND * 1000)
-		derr = pipeparts.mkqueue(pipeline, rawdatatee, max_size_time = gst.SECOND * 1000)
-		if not options.no_gamma:
-			exc = pipeparts.mkqueue(pipeline, rawdatatee)
-
 	# Load in the filters file that contains filter coefficients, etc.
 	filters = numpy.load(options.filters_file)
 
@@ -342,7 +391,7 @@ else:
 	derr = pipeparts.mkaudioconvert(pipeline, derr)
 	derr = pipeparts.mkcapsfilter(pipeline, derr, caps)
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = int(-filters["inv_sens_delay"]), fir_matrix = [filters["inv_sensing"]], time_domain = options.time_domain, block_stride = sr)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1, fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
 
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudioconvert(pipeline, dctrl)
@@ -352,10 +401,10 @@ else:
 
 	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["actuation"]], time_domain = options.time_domain, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["awhitening"]], time_domain = options.time_domain, block_stride = sr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
@@ -366,7 +415,7 @@ else:
 		sinhead = sin = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr*4)
 		sin = pipeparts.mkcapsfilter(pipeline, sin, caps)
 
-		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 1000), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 1000), olgI = olgI, olgR = olgR, sr = sr, time_domain = options.time_domain, wI = wI, wR = wR)
+		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = sr, time_domain = True, wI = wI, wR = wR)
 		gammaR = compute_gamma_bin.get_pad("gammaR")
 		gammaRtee = pipeparts.mktee(pipeline, gammaR)
 
@@ -377,7 +426,7 @@ else:
 		derr_gamma = gst.element_factory_make("lal_multiplier")
 		derr_gamma.set_property("sync", True)
 		pipeline.add(derr_gamma)
-		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*1000).link(derr_gamma)
+		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*100).link(derr_gamma)
 		pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gammaRtee, exponent = -1.0), max_size_time = gst.SECOND*100).link(derr_gamma)
 
 	# Add DARM_ERR and DARM_CTRL to make h(t)
@@ -385,18 +434,12 @@ else:
 	strain.set_property("sync", True)
 	pipeline.add(strain)
 	if not options.no_gamma:
-		pipeparts.mkqueue(pipeline, derr_gamma, max_size_time = gst.SECOND * 1000).link(strain)
+		pipeparts.mkqueue(pipeline, derr_gamma, max_size_time = gst.SECOND * 100).link(strain)
 	else:
-		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 1000).link(strain)
-	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 1000).link(strain)
+		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100).link(strain)
+	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100).link(strain)
 	strain = pipeparts.mkprogressreport(pipeline, strain, "%s_progress_hoft" % instrument)
 	
-	# FIXME: This sometimes seems to break things, so I've commented it out for now.
-	#if options.data_source == "frames":
-	#	T = int(options.gps_end_time) - int(options.gps_start_time)
-	#	strain = pipeparts.mktrim(pipeline, strain, initial_offset = sr * options.wings, final_offset = sr * (T - options.wings))
-	#	strain = pipeparts.mkaudiorate(pipeline, strain, silent = False, skip_to_first = True)	
-
 # Put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line
 straintee = pipeparts.mktee(pipeline, strain)
@@ -415,17 +458,19 @@ if not options.no_dq_vector:
 	# SCIENCE-INTENT+LOCKED BIT BRANCH
 	#
 
-	sciencelocked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 1)
-	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=%d" % lldqsr)
+	sciencelocked = pipeparts.mkqueue(pipeline, odcstatevectortee)
+	sciencelocked = pipeparts.mkgeneric(pipeline, sciencelocked, "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 1)
+	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=16384")
 	sciencelocked = pipeparts.mkprogressreport(pipeline, sciencelocked, "progress_odc_%s" % instrument)
 	sciencelockedtee = pipeparts.mktee(pipeline, sciencelocked)
+	
 
 	#
 	# LOCKED BIT BRANCH
 	#
 
 	locked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.locked_mask, status_out = 2)
-	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=%d" % lldqsr)
+	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=16384")
 	locked = pipeparts.mkprogressreport(pipeline, locked, "progress_locked_%s" % instrument)
 	lockedtee = pipeparts.mktee(pipeline, locked)
 	
@@ -433,21 +478,17 @@ if not options.no_dq_vector:
 	# H(t)-PRODUCED BIT BRANCH
 	#
 
-	htproduced = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 1000))
+	htproduced = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100)
 	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 32, nongap_is_control = True)
-	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
-	htproduced = pipeparts.mkaudiorate(pipeline, htproduced, skip_to_first = True, silent = False) # This audiorate fixes issues with zero-sized buffers that are not marked as gaps being passed between the two surrounding elements.  I'm not sure why this is happening, so more work needs to be done to investigate the root of the problem.
-	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logical_undersampler", required_on = 32, status_out = 32)
-	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, rate=%d, width=32, signed=false, channels=1, endianness=1234" % lldqsr)
-	htproduced = pipeparts.mkchecktimestamps(pipeline, htproduced)
+	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
 
 	#
 	# FILTERS-OK BIT BRANCH
 	#
 	
 	# Set the FILTERS-OK bit based on science mode transitions
-	filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 1000), bit_vector = 16, threshold = 2, attack_length = -options.filter_settle_time * sr)
-	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr) 
+	filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 2, attack_length = -options.filter_settle_time * 16384)
+	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234") 
 	# Set the FILTERS-OK bit based on input data available
 	# FIXME: This part needs to be coded up...
 
@@ -462,7 +503,7 @@ if not options.no_dq_vector:
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = -0.2, control = pipeparts.mkqueue(pipeline, gammaItee))
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaItee))
 		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 8, nongap_is_control = True)
-		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr)
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
 		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
 
 	#
@@ -473,13 +514,13 @@ if not options.no_dq_vector:
 	htprod_and_filtersok = gst.element_factory_make("lal_adder")
 	htprod_and_filtersok.set_property("sync", True)
 	pipeline.add(htprod_and_filtersok)
-	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 10000).link(htprod_and_filtersok)
-	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 1000).link(htprod_and_filtersok)
+	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 100).link(htprod_and_filtersok)
+	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 100).link(htprod_and_filtersok)
 	htprod_and_filtersok_tee = pipeparts.mktee(pipeline, htprod_and_filtersok)
 
 	# Now calculate h(t)-OK bit
-	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 1000), bit_vector = 4, threshold = 48)
-	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % lldqsr)
+	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 100), bit_vector = 4, threshold = 48)
+	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
 
 	#
 	# COMBINE ALL BITS TO MAKE CALIB-STATE_VECTOR
@@ -488,17 +529,16 @@ if not options.no_dq_vector:
 	calibstatevector = gst.element_factory_make("lal_adder")
 	calibstatevector.set_property("sync", True)
 	pipeline.add(calibstatevector)
-	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 1000).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 1000).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	if not options.no_gamma and not options.recolor:
-		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 1000).link(calibstatevector)
+		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:CALIB-STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
-	calibstatevector = pipeparts.mkchecktimestamps(pipeline, calibstatevector)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -513,15 +553,15 @@ if options.frames_per_file is not None:
 
 # Link the output DQ vector up to the muxer, if applicable
 if not options.no_dq_vector:
-	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:CALIB-STATE_VECTOR" % instrument))
+	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:CALIB-STATE_VECTOR" % instrument))
 
 # Link the strain branch to the muxer
-pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
+pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma and not options.recolor:
-	pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
-	pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
+	pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
 
 # FIXME: More outputs need to be hooked up to the muxer
 
@@ -543,8 +583,8 @@ else:
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
 
-if gw_data_source.data_source == "frames":
-	datasource.do_seek(pipeline, gw_data_source.seekevent)
+if options.data_source == "frames":
+	datasource.do_seek(pipeline, seekevent)
 	print >>sys.stderr, "seeking GPS start and stop times ..."
 
 # FIXME: This scheme assumes that the shared memory partitions are keeping up with real time when the data source is lvshm. This is probably not a good assumption outside of the DMT environment.
