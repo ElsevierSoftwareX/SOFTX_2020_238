@@ -146,7 +146,7 @@ spiir_state_load_bank (SpiirState **spstate, gint num_depths, gdouble *bank, gin
 }
 
 SpiirState ** 
-spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
+spiir_state_create (gdouble *bank, gint bank_len, gint num_head_cover_samples,
 		gint num_exe_samples, gint width, gint rate, cudaStream_t stream)
 {
 
@@ -161,7 +161,7 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 	{
 		SPSTATE(i) = (SpiirState *)malloc(sizeof(SpiirState));
 		SPSTATE(i)->depth = i;
-		SPSTATE(i)->queue_len = (2 * num_cover_samples + num_exe_samples) / pow (2, i) + 1; 
+		SPSTATE(i)->queue_len = (2 * num_head_cover_samples + num_exe_samples) / pow (2, i) + 1; 
 		SPSTATE(i)->queue_first_sample = 0;
 		SPSTATE(i)->queue_last_sample = 0;
 		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
@@ -172,8 +172,8 @@ spiir_state_init (gdouble *bank, gint bank_len, gint num_cover_samples,
 		inrate = rate/pow(2, i);
 		outrate = inrate / 2;
 
-		SPSTATEDOWN(i) = resampler_state_init (inrate, outrate, 1, num_exe_samples, num_cover_samples, i, stream);
-		SPSTATEUP(i) = resampler_state_init (outrate, inrate, outchannels, num_exe_samples, num_cover_samples, i, stream);
+		SPSTATEDOWN(i) = resampler_state_create (inrate, outrate, 1, num_exe_samples, num_head_cover_samples, i, stream);
+		SPSTATEUP(i) = resampler_state_create (outrate, inrate, outchannels, num_exe_samples, num_head_cover_samples, i, stream);
 		g_assert (SPSTATEDOWN(i) != NULL);
 	       	g_assert (SPSTATEUP(i) != NULL);
 

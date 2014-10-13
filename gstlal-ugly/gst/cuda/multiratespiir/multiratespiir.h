@@ -102,7 +102,8 @@ struct _CudaMultirateSPIIR {
 
   gboolean need_discont;
   gint num_depths;
-  gint num_cover_samples; // number of samples needed to produce the first buffer
+  gint num_head_cover_samples; // number of samples needed to produce the first buffer
+  gint num_tail_cover_samples; // number of samples needed to produce the last buffer
   gint num_exe_samples; // number of samples executed every time
 
   GstClockTime t0;
@@ -112,6 +113,7 @@ struct _CudaMultirateSPIIR {
   guint64 next_in_offset;
   
   guint64 num_gap_samples;
+  guint64 num_nongap_samples;
 
   gint outchannels; // equals number of templates
   gint rate;

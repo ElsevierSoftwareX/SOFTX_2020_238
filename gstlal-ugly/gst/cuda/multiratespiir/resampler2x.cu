@@ -178,12 +178,16 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 	numSixtnGrp = (numFilters + 16 -1)/16;
 	
 	volatile float *fltrOutptReal = (float *)sharedMem;
+//	volatile float *fltrOutptImag = &(fltrOutptReal[numFilters+8]);
+//	float *grpOutptReal = (float *)&(fltrOutptImag[numFilters+8]);	
+
 	volatile float *fltrOutptImag = &(fltrOutptReal[numFilters+8]);
 	float *grpOutptReal = (float *)&(fltrOutptImag[numFilters+8]);	
 	float *grpOutptImag = &(grpOutptReal[numSixtnGrp*nb]);
 	
 	unsigned int tx_2 = tx%16;
 	unsigned int tx_3 = tx/16;
+//	for (i = tx; i < 8; i += threads)
 	for (i = tx; i < 8; i += threads)
 	{
 		fltrOutptReal[numFilters+i] = 0.0f;
@@ -220,9 +224,10 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 		 
 				fltrOutptImag[tx] = a1.re * previousSnr.im + a1.im * previousSnr.re + b0.im * data;
 			 
+		//		__syncthreads();
 				previousSnr.re = fltrOutptReal[tx];
 				previousSnr.im = fltrOutptImag[tx];
-			
+	
 				fltrOutptReal[tx] += fltrOutptReal[tx+8];
 				fltrOutptImag[tx] += fltrOutptImag[tx+8];
 				fltrOutptReal[tx] += fltrOutptReal[tx+4];
@@ -233,6 +238,12 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 				fltrOutptImag[tx] += fltrOutptImag[tx+1];
 				if(tx_2 == 0)
 				{
+#if 0
+					for (int iter=1; iter<16; iter++) {
+						fltrOutptReal[tx] += fltrOutptReal[tx + iter];
+						fltrOutptImag[tx] += fltrOutptImag[tx + iter];
+					}
+#endif
 					grpOutptReal[tx_3*nb+j] = fltrOutptReal[tx];
 					grpOutptImag[tx_3*nb+j] = fltrOutptImag[tx];
 				}
@@ -257,7 +268,7 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 #if 0
   /* the following is to compare result with cpu */
   if (tx < 1 && by < 1)
-    printf("delay_max, %d, snr.real[0] %f, snr.imag[0] %f, nb %f\n", delay_max, snr_real[0], snr_imag[0], (float)nb);
+    printf("delay_max, %d, snr.real[0] %.10f, snr.imag[0] %.10f, nb %f\n", delay_max, snr_real[0], snr_imag[0], (float)nb);
 #endif
 }
 
@@ -305,8 +316,10 @@ __global__ void upsample2x_and_add (
 
 	__syncthreads();
 
-//	if (tx < 1 && by < 1)
-//		printf("mem_out_len %d, mem_in[filt_len-1] %f, mem_out[filt_len-1] %f\n", mem_out_len, mem_in[filt_len-1], mem_out[filt_len-1]);
+#if 0
+	if (tx < 1 && by < 1)
+		printf("mem_out_len %d, mem_in[filt_len-1] %f, mem_out[filt_len-1] %f\n", mem_out_len, mem_in[filt_len-1], mem_out[filt_len-1]);
+#endif 
 
 
 	// copy last to first (filt_len-1) mem data
@@ -498,7 +511,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
  */
   block.x = SPSTATE(i)->num_filters;
   grid.y = SPSTATE(i)->num_templates;
-  share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+//  share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+  share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
 
   // using mutex to make sure that kernel launch is right after texture binding
   //g_mutex_lock(element->cuTex_lock);
@@ -566,7 +580,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float 
    */
     block.x = SPSTATE(i)->num_filters;
     grid.y =  SPSTATE(i)->num_templates;
-    share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+   // share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+    share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
 
     GST_LOG ("spiir_kernel: depth %d. processed %d, nb %d, num of (templates: %d,filters: %d). block.size (%d, %d, %d), grid.size (%d, %d, %d)", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_templates, SPSTATE(i)->num_filters, block.x, block.y, block.z, grid.x, grid.y, grid.z);
     // using mutex to make sure that kernel launch is right after texture binding
