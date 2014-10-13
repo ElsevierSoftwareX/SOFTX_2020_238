@@ -338,6 +338,11 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   /* make sure that unspiired samples + incoming samples won't exceed the physical queue length */
  // g_assert (SPSTATE(0)->queue_last_sample + num_inchunk <= SPSTATE(0)->queue_len);
 
+  /* 
+   * copy inbuf data to the end of queue
+   */
+
+
   if (SPSTATE(0)->queue_last_sample + num_inchunk <= SPSTATE(0)->queue_len) {
 
     pos_inqueue = SPSTATE(0)->d_queue + SPSTATE(0)->queue_last_sample;
@@ -355,11 +360,6 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   }
 
 
-
-  /* 
-   * copy inbuf data to the end of queue
-   */
-
   /* the following parameters should be updated each time of downsample :
    * queue_last_sample,
    * last_sample.
@@ -367,6 +367,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 
 
   for (i=0; i<num_depths-1; i++) {
+
     /* predicted output length of downsample this round,
      * we already ganrantee earlier that the length in samples 
      * will be even 
@@ -416,11 +417,9 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     gpuErrchk (cudaPeekAtLastError ());
 
     /* 
-     * the only possible situation to discard some samples is 
-     * when at the end of a segment
-     */
-
-    /* 
+     * FIXME: the only possible situation to discard some samples is 
+     * when at the end of a segment. BY tests, this situation could be 
+     * ignorable.
      * if the number of input samples is odd, discard the last input 
      * sample. We do not expect this affect accuracy much.
      * if (num_inchunk % 2 == 1)
