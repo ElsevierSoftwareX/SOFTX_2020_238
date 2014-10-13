@@ -113,7 +113,7 @@ struct _CudaMultirateSPIIR {
   guint64 next_in_offset;
   
   guint64 num_gap_samples;
-  guint64 num_nongap_samples;
+  gboolean exist_nongap;
 
   gint outchannels; // equals number of templates
   gint rate;
