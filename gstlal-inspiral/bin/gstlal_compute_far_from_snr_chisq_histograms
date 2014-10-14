@@ -146,7 +146,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	xmldoc = dbtables.get_xml(connection)
 	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	xmldoc.unlink()
-	count_above_threshold.update(connection, coinc_def_id, ranking_data.likelihood_ratio_threshold)
+	count_above_threshold.update(connection, coinc_def_id, ranking_data.ln_likelihood_ratio_threshold)
 	ranking_data.collect_zero_lag_rates(connection, coinc_def_id)
 
 	#
@@ -180,7 +180,8 @@ ranking_data.finish(verbose = options.verbose)
 # Initialize the FAP & FAR assignment machine
 #
 
-fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = ranking_data.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+
+fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = ranking_data.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 
 #

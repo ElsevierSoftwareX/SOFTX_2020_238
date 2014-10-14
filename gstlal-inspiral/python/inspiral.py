@@ -615,8 +615,8 @@ class Data(object):
 					# we're using the class attribute
 					# elsewhere so make sure these two
 					# match
-					assert ranking_data.likelihood_ratio_threshold == far.RankingData.likelihood_ratio_threshold
-					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+					assert ranking_data.ln_likelihood_ratio_threshold == far.RankingData.ln_likelihood_ratio_threshold
+					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
@@ -647,7 +647,7 @@ class Data(object):
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-					if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+					if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 			# do GraceDB alerts
@@ -701,7 +701,7 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+				if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 		# do GraceDB alerts

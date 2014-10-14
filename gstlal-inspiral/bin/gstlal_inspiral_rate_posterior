@@ -141,9 +141,9 @@ def load_ranking_data(filenames, verbose = False):
 	return ranking_data
 
 
-def load_search_results(filenames, likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
-	background_likelihood_ratios = []
-	zerolag_likelihood_ratios = []
+def load_search_results(filenames, ln_likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
+	background_ln_likelihood_ratios = []
+	zerolag_ln_likelihood_ratios = []
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -154,7 +154,7 @@ def load_search_results(filenames, likelihood_ratio_threshold, restrict_to_instr
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for likelihood_ratio, is_background in connection.cursor().execute("""
+		for ln_likelihood_ratio, is_background in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
 	EXISTS (
@@ -175,16 +175,16 @@ WHERE
 	coinc_event.coinc_def_id == ?
 	AND coinc_event.likelihood >= ?""" + ("""
 	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
-	, (definer_id, likelihood_ratio_threshold)):
+	, (definer_id, ln_likelihood_ratio_threshold)):
 			if is_background:
-				background_likelihood_ratios.append(likelihood_ratio)
+				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
 			else:
-				zerolag_likelihood_ratios.append(likelihood_ratio)
+				zerolag_ln_likelihood_ratios.append(ln_likelihood_ratio)
 
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	return background_likelihood_ratios, zerolag_likelihood_ratios
+	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
 def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, restrict_to_instruments = None):
@@ -257,7 +257,7 @@ ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options
 #
 
 
-background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(filenames, ranking_data.likelihood_ratio_threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ranking_data.ln_likelihood_ratio_threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -266,11 +266,11 @@ background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(fi
 
 
 if options.verbose:
-	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_likelihood_ratios)
+	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_ln_likelihood_ratios)
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar)
+signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar)
 del progressbar
 
 

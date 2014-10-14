@@ -301,13 +301,13 @@ def create_sim_coinc_view(connection):
 	table.
 	"""
 	#
-	# the likelihood ratio stored in the likelihood column of the
+	# the log likelihood ratio stored in the likelihood column of the
 	# coinc_event table is the ranking statistic.  the "best match" is
 	# the coinc with the highest value in this column.  although it has
 	# not been true in the past, there is now a one-to-one relationship
 	# between the value of this ranking statistic and false-alarm rate,
-	# therefore it is OK to order by likelihood ratio and then, later,
-	# impose a "detection" threshold based on false-alarm rate.
+	# therefore it is OK to order by log likelihood ratio and then,
+	# later, impose a "detection" threshold based on false-alarm rate.
 	#
 
 	connection.cursor().execute("""
@@ -363,12 +363,11 @@ class SummaryTable(object):
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
-		contents.connection.create_function("log", 1, lambda x: math.log(x) if x > 0 else float("-inf"))
 		self.candidates += contents.connection.cursor().execute("""
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	log(coinc_event.likelihood),
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
@@ -408,7 +407,7 @@ LIMIT 10
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	log(coinc_event.likelihood),
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
@@ -1083,7 +1082,7 @@ class RateVsThreshold(object):
 
 		self.farsegs |= contents.farsegs
 
-		for likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
+		for ln_likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
 	coinc_inspiral.combined_far,
@@ -1110,17 +1109,13 @@ WHERE
 				ifar = 1. / far
 			except ZeroDivisionError:
 				ifar = float("+inf")
-			try:
-				ln_lr = math.log(likelihood_ratio)
-			except ValueError:
-				ln_lr = float("-inf")
 			if is_background:
-				self.background_ln_likelihood_ratio.append(ln_lr)
+				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
 				self.background_ifar.append(ifar)
 				self.background_fap.append(fap)
 				self.background_snr.append(snr)
 			else:
-				self.zerolag_ln_likelihood_ratio.append(ln_lr)
+				self.zerolag_ln_likelihood_ratio.append(ln_likelihood_ratio)
 				self.zerolag_ifar.append(ifar)
 				self.zerolag_fap.append(fap)
 				self.zerolag_snr.append(snr)

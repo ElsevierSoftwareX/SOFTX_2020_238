@@ -171,8 +171,8 @@ class StreamThinca(object):
 		self.last_coincs = {}
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
-		self.likelihood_func = None
-		self.likelihood_params_func = None
+		self.ln_likelihood_func = None
+		self.ln_likelihood_params_func = None
 
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
@@ -186,11 +186,11 @@ class StreamThinca(object):
 
 
 	def set_coinc_params_distributions(self, coinc_params_distributions):
-		self.likelihood_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
-		self.likelihood_params_func = coinc_params_distributions.coinc_params
+		self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+		self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
 	def del_coinc_params_distributions(self):
-		self.likelihood_func = None
-		self.likelihood_params_func = None
+		self.ln_likelihood_func = None
+		self.ln_likelihood_params_func = None
 	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
 
 
@@ -287,8 +287,8 @@ class StreamThinca(object):
 			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
-			likelihood_func = self.likelihood_func,
-			likelihood_params_func = self.likelihood_params_func,
+			likelihood_func = self.ln_likelihood_func,
+			likelihood_params_func = self.ln_likelihood_params_func,
 			# add 10% to coincidence window for safety + the
 			# light-crossing time for the Earth
 			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI

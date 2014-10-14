@@ -1516,18 +1516,18 @@ class RankingData(object):
 	#
 
 	binnings = {
-		"likelihood_ratio": rate.NDBins((rate.ATanLogarithmicBins(math.exp(0.), math.exp(80.), 5000),))
+		"ln_likelihood_ratio": rate.NDBins((rate.ATanBins(0., 80., 5000),))
 	}
 
 	filters = {
-		"likelihood_ratio": rate.gaussian_window(8.)
+		"ln_likelihood_ratio": rate.gaussian_window(8.)
 	}
 
 	#
 	# Threshold at which FAP & FAR normalization will occur
 	#
 
-	likelihood_ratio_threshold = 0
+	ln_likelihood_ratio_threshold = NegInf
 
 
 	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 1000000, verbose = False):
@@ -1553,19 +1553,19 @@ class RankingData(object):
 
 		# initialize binnings
 		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
-			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
-			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
-			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["likelihood_ratio"])
+			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 
 		# calculate all of the possible ifo combinations with at least
 		# 2 detectors in order to get the joint likelihood pdfs
-		likelihoodratio_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
+		ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
 		threads = []
 		for key in self.background_likelihood_rates:
 			if verbose:
-				print >>sys.stderr, "computing signal and noise likelihood PDFs for %s" % ", ".join(sorted(key))
+				print >>sys.stderr, "computing ranking statistic PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.signal_likelihood_rates[key], self.background_likelihood_rates[key], self.likelihoodratio_samples(iter(coinc_params_distributions.random_params(key)).next, likelihoodratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), nsamples = nsamples)))
+			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.signal_likelihood_rates[key], self.background_likelihood_rates[key], self.ln_likelihoodratio_samples(iter(coinc_params_distributions.random_params(key)).next, ln_likelihood_ratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), nsamples = nsamples)))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1573,9 +1573,9 @@ class RankingData(object):
 			self.signal_likelihood_rates[key], self.background_likelihood_rates[key] = q.get()
 			p.join()
 			if p.exitcode:
-				raise Exception("likelihood ratio sampling thread failed")
+				raise Exception("sampling thread failed")
 		if verbose:
-			print >>sys.stderr, "done computing likelihood PDFs"
+			print >>sys.stderr, "done computing ranking statistic PDFs"
 
 		#
 		# propogate knowledge of the background event rates through
@@ -1624,7 +1624,7 @@ class RankingData(object):
 
 
 	def collect_zero_lag_rates(self, connection, coinc_def_id):
-		for instruments, likelihood_ratio in connection.cursor().execute("""
+		for instruments, ln_likelihood_ratio in connection.cursor().execute("""
 SELECT
 	coinc_inspiral.ifos,
 	coinc_event.likelihood
@@ -1645,8 +1645,8 @@ WHERE
 			AND time_slide.offset != 0
 	)
 """, (coinc_def_id,)):
-			assert likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
-			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][likelihood_ratio,] += 1.
+			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
+			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][ln_likelihood_ratio,] += 1.
 
 		#
 		# update combined rates.  NOTE:  this recomputes all the
@@ -1662,21 +1662,21 @@ WHERE
 
 
 	@staticmethod
-	def likelihoodratio_samples(random_params_func, likelihoodratio_func, lnP_signal_func, lnP_noise_func):
+	def ln_likelihoodratio_samples(random_params_func, ln_likelihood_ratio_func, lnP_signal_func, lnP_noise_func):
 		"""
 		Generator that yields an unending sequence of 3-element
-		tuples.  Each tuple's elements are a value of the
-		likelihood rato, the natural log of the probability density
-		of that likelihood ratio in the signal population, the
-		natural log of the probability density of that likelihood
-		ratio in the noise population.
+		tuples.  Each tuple's elements are a value of the natural
+		logarithm of the likelihood rato, the natural logarithm of
+		the probability density of that likelihood ratio in the
+		signal population, the natural logarithm of the probability
+		density of that likelihood ratio in the noise population.
 		"""
 		while 1:
 			params, lnP_params = random_params_func()
-			lamb = likelihoodratio_func(params)
-			if math.isnan(lamb):
+			ln_lamb = ln_likelihood_ratio_func(params)
+			if math.isnan(ln_lamb):
 				raise ValueError("encountered NaN likelihood ratio at %s" % repr(params))
-			yield lamb, lnP_signal_func(params) - lnP_params, lnP_noise_func(params) - lnP_params
+			yield ln_lamb, lnP_signal_func(params) - lnP_params, lnP_noise_func(params) - lnP_params
 
 	def _compute_combined_rates(self):
 		#
@@ -1704,14 +1704,14 @@ WHERE
 		self.background_likelihood_pdfs.clear()
 		self.signal_likelihood_pdfs.clear()
 		self.zero_lag_likelihood_pdfs.clear()
-		def build_pdf(binnedarray, likelihood_ratio_threshold, filt):
+		def build_pdf(binnedarray, ln_likelihood_ratio_threshold, filt):
 			# copy counts into pdf array and smooth
 			pdf = binnedarray.copy()
 			rate.filter_array(pdf.array, filt)
 			# zero the counts below the threshold.  need to
 			# make sure the bin @ threshold is also 0'ed
-			pdf[:likelihood_ratio_threshold,] = 0.
-			pdf[likelihood_ratio_threshold,] = 0.
+			pdf[:ln_likelihood_ratio_threshold,] = 0.
+			pdf[ln_likelihood_ratio_threshold,] = 0.
 			# zero the counts in the infinite-sized high bin so
 			# the final PDF normalization ends up OK
 			pdf.array[-1] = 0.
@@ -1719,23 +1719,23 @@ WHERE
 			pdf.to_pdf()
 			return pdf
 		if verbose:
-			progressbar = ProgressBar(text = "Computing Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates) + len(self.zero_lag_likelihood_rates))
+			progressbar = ProgressBar(text = "Computing Log Lambda PDFs", max = len(self.background_likelihood_rates) + len(self.signal_likelihood_rates) + len(self.zero_lag_likelihood_rates))
 			progressbar.show()
 		else:
 			progressbar = None
 		for key, binnedarray in self.background_likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s noise model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
+			assert not numpy.isnan(binnedarray.array).any(), "%s noise model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.signal_likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s signal model likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
+			assert not numpy.isnan(binnedarray.array).any(), "%s signal model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.zero_lag_likelihood_rates.items():
-			assert not numpy.isnan(binnedarray.array).any(), "%s zero lag likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.likelihood_ratio_threshold, self.filters["likelihood_ratio"])
+			assert not numpy.isnan(binnedarray.array).any(), "%s zero lag log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
+			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 
@@ -1826,10 +1826,10 @@ class FAPFAR(object):
 			zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[instruments]
 
 			# Check for Nans
-			assert not numpy.isnan(bgcounts_ba.array).any(), "%s likelihood ratio rates contains NaNs" % instruments_name
-			assert not (bgcounts_ba.array < 0.0).any(), "%s likelihood ratio rate contains negative values" % instruments_name
-			assert not numpy.isnan(bgpdf_ba.array).any(), "%s likelihood ratio pdf contains NaNs" % instruments_name
-			assert not (bgpdf_ba.array < 0.0).any(), "%s likelihood ratio pdf contains negative values" % instruments_name
+			assert not numpy.isnan(bgcounts_ba.array).any(), "%s log likelihood ratio rates contains NaNs" % instruments_name
+			assert not (bgcounts_ba.array < 0.0).any(), "%s log likelihood ratio rate contains negative values" % instruments_name
+			assert not numpy.isnan(bgpdf_ba.array).any(), "%s log likelihood ratio pdf contains NaNs" % instruments_name
+			assert not (bgpdf_ba.array < 0.0).any(), "%s log likelihood ratio pdf contains negative values" % instruments_name
 
 			# Grab bins that are not infinite in size
 			finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
@@ -1866,16 +1866,17 @@ class FAPFAR(object):
 			# self.far_from_rank(threshold) * livetime =
 			# observed count of events above threshold.
 			# FIXME this doesn't actually work.
+			# FIXME not doing it doesn't actually work.
 			# ccdf *= 1. - 1. / math.e
 			# cdf *= 1. - 1. / math.e
 			# cdf += 1. / math.e
 
 			# last checks that the CDF and CCDF are OK
-			assert not numpy.isnan(cdf).any(), "%s likelihood ratio CDF contains NaNs" % instruments_name
-			assert not numpy.isnan(ccdf).any(), "%s likelihood ratio CCDF contains NaNs" % instruments_name
-			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s likelihood ratio CDF failed to be normalized" % instruments_name
-			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s likelihood ratio CCDF failed to be normalized" % instruments_name
-			assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
+			assert not numpy.isnan(cdf).any(), "%s log likelihood ratio CDF contains NaNs" % instruments_name
+			assert not numpy.isnan(ccdf).any(), "%s log likelihood ratio CCDF contains NaNs" % instruments_name
+			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s log likelihood ratio CDF failed to be normalized" % instruments_name
+			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s log likelihood ratio CCDF failed to be normalized" % instruments_name
+			assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s log likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
 			# build interpolators
 			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
@@ -2198,7 +2199,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instruments = None, progressbar = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None):
 	"""
 	FIXME:  document this
 	"""
@@ -2206,13 +2207,8 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 	# check for bad input
 	#
 
-	if any(math.isnan(lr) for lr in likelihood_ratios):
-		raise ValueError("NaN likelihood ratio encountered")
-	# FIXME;  can't we handle this next case somehow?
-	if any(math.isinf(lr) for lr in likelihood_ratios):
-		raise ValueError("infinite likelihood ratio encountered")
-	if any(lr < 0. for lr in likelihood_ratios):
-		raise ValueError("negative likeklihood ratio encountered")
+	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
+		raise ValueError("NaN log likelihood ratio encountered")
 
 	#
 	# for each sample of the ranking statistic, evaluate the ratio of
@@ -2226,9 +2222,9 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 	# here then we need to have not lost the original event order).
 	#
 
-	order = range(len(likelihood_ratios))
-	order.sort(key = likelihood_ratios.__getitem__)
-	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][likelihood_ratios[index],] for index in order])
+	order = range(len(ln_likelihood_ratios))
+	order.sort(key = ln_likelihood_ratios.__getitem__)
+	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][ln_likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][ln_likelihood_ratios[index],] for index in order])
 
 	# remove NaNs.  these occur because the ranking statistic PDFs have
 	# been zeroed at the cut-off and some events get pulled out of the
@@ -2259,7 +2255,7 @@ def calculate_rate_posteriors(ranking_data, likelihood_ratios, restrict_to_instr
 	if True:
 		pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
 		pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
-		pos0[:,1] = numpy.random.poisson(lam = len(likelihood_ratios), size = (nwalkers,))
+		pos0[:,1] = numpy.random.poisson(lam = len(ln_likelihood_ratios), size = (nwalkers,))
 		samples = numpy.empty((nwalkers * nsample, ndim), dtype = "double")
 		for i, sample in enumerate(run_mcmc(nwalkers, ndim, nsample, RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar)):
 			samples[i] = sample

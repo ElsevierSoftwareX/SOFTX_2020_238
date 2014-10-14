@@ -168,7 +168,7 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 
 coincparamsdistributions.finish(verbose = options.verbose)
-likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
+ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 
 #
@@ -248,7 +248,7 @@ for n, filename in enumerate(filenames, 1):
 		vetoseglists = vetoseglists,
 		events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
 		veto_func = sngl_inspiral_veto_func,
-		likelihood_ratio_func = likelihood_ratio_func,
+		ln_likelihood_ratio_func = ln_likelihood_ratio_func,
 		likelihood_params_func = coincparamsdistributions.coinc_params,
 		verbose = options.verbose
 	)
@@ -258,7 +258,7 @@ for n, filename in enumerate(filenames, 1):
 	#
 
 	if options.trim_database:
-		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.likelihood_ratio_threshold)
+		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.ln_likelihood_ratio_threshold)
 		# FIXME:  don't hard-code program and parameter names
 		sngls_snr_threshold, = ligolw_process.get_process_params(xmldoc, u"gstlal_inspiral", u"--singles-threshold")
 		sngl_ids_to_delete = set(sngl.event_id for coinc_event_id in coinc_ids_to_delete for sngl in coinc_event_map_index[coinc_event_id] if sngl.snr < sngls_snr_threshold)
