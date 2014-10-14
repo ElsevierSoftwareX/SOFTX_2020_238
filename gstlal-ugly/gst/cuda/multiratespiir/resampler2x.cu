@@ -422,16 +422,17 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
      * ignorable.
      * if the number of input samples is odd, discard the last input 
      * sample. We do not expect this affect accuracy much.
-     * if (num_inchunk % 2 == 1)
-     * SPSTATE(i)->queue_last_sample -= 1;
      */
+   if (num_inchunk % 2 == 1)
+    SPSTATE(i)->queue_last_sample = (SPSTATE(i)->queue_last_sample + num_inchunk - 1) % SPSTATE(i)->queue_len;
+   else
+    SPSTATE(i)->queue_last_sample = (SPSTATE(i)->queue_last_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
     /*
      * filter finish, update the next expected down start of upper 
      * spstate; update the effective length of this spstate;
      */
     SPSTATEDOWN(i)->last_sample = 0 ;
-    SPSTATE(i)->queue_last_sample = (SPSTATE(i)->queue_last_sample + num_inchunk) % SPSTATE(i)->queue_len;
     num_inchunk = out_processed;
   }
   SPSTATE(num_depths - 1)->queue_last_sample = (SPSTATE(i)->queue_last_sample + out_processed) % SPSTATE(i)->queue_len;
