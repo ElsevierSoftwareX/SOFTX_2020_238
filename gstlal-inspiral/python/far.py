@@ -744,8 +744,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# retrieve the SNR PDF
 		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
+		lnP = snr_pdf(*tuple(rho for instrument, rho in snrs))
 		try:
-			lnP = math.log(snr_pdf(*tuple(rho for instrument, rho in snrs)))
+			lnP = math.log(lnP)
 		except ValueError:
 			return NegInf
 
