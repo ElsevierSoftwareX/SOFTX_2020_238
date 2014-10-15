@@ -16,6 +16,50 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+"""
+This pipeline produces h(t) given DARM_ERR and DARM_CTRL. It can be run online in real-time or offline on frame files.  It can write h(t) frames to frame files or to a shared memory partition.  
+
+The differential arm length resulting from external sources is
+
+\Delta L_{ext} = d_{err}/(\gamma(t) C) + A d_{ctrl}
+
+where C is the sensing function, A is the acutuation function, and \gamma(t) is the time dependent gain of the sensing function.  \Delta L_{ext} is divided by the average arm length (4000 km) to obtain h(t), the external strain in the detectors,
+
+h(t) = \Delta L_{ext} / L .
+
+The time dependent gain of the sensing function, \gamma(t), is also calculated in this pipeline if the calibration line injection channel is provided.
+
+Further documentation explaining the time domain calibration procedure can be found in LIGO DCC #T1400256
+
+Example: To run this pipeline on some of the earliest locked stretches of the LLO instrument, first query for the locked segments
+
+$ ligolw_segment_query --query-segments --segment-url https://segdb-er.ligo.caltech.edu --gps-start-time `lalapps_tconvert October 1 2014` --gps-end-time `lalapps_tconvert now` --include-segments L1:DMT-DC_READOUT --result-name datasegments > L1_segments.xml
+
+The above command will write the locked segments for which the DMT-DC_READOUT flag was on from October 1, 2014 until now to a file called L1_segments.xml. To take a look at the start and stop times 
+
+$ ligolw_print -t segment -c start_time -c end_time L1_segments.xml
+
+Now, use ligo_data_find to find the frame files for these segments,
+
+$ ligo_data_find -o L -t L1_R -s start_time -e end_time -l --url-type file > L1_frames.cache
+
+where you can choose start_time and end_time to be any GPS time within these segments, for example
+
+$ ligo_data_find -o L -t L1_R -s 1096167450 -e 1096291128 -l --url-type file > L1_frames.cache
+
+Now create calibrated data by running this executable with the following command line options,
+
+$ gstlal_compute_strain --data-source frames --frame-cache L1_frames.cache --frame-segments-file L1_segments.xml --gps-start-time 1096261732 --gps-end-time 1096261832 --output-channel-name=LSC-STRAIN --sample-rate=16384 --dq-channel-name=ODC-MASTER_CHANNEL_OUT_DQ --science-locked-mask 5 --locked-mask 4  --frame-duration=4 --frames-per-file=1 --darm-err-channel-name=CAL-DELTAL_RESIDUAL_DQ --darm-ctrl-channel-name=CAL-DELTAL_CTRL_DQ --filters-file ER6_filters.npz --no-gamma --frame-segments-name datasegments --ifo L1 --frame-type L1_GSTLAL_CAL
+
+The above command requires the filters file called ER6_filters.npz.  This file can be found at LLO in /home/wademc/calibration/calibrate/. This will write four second frame files containing 1 second frames for a just a short, 100 second chunk of time.  You can also write to shared memory by specifying --write-to-shm-partition=PARTITION-NAME.
+
+Note: There seems to be some delay in accessing the necessary frame files from disk for the above times, so there may be a delay in when frames begin to be written.
+
+Type gstlal_compute_strain --help to see the full list of command line options.
+"""
+
+
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -195,8 +239,6 @@ if options.frame_segments_file is not None:
 	if seg is not None:
 		# clip frame segments to seek segment if it exists (not required, just saves some meory and I/O overhead)
 		frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in frame_segments.items())
-else:
-	frame_segments = segments.segmentlistdict((instrument, None))
 
 # Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps
 sr = options.sample_rate
