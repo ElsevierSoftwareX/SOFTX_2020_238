@@ -15,21 +15,21 @@
 //
 
 void 
-cuda_multirate_spiir_init_cover_samples (gint *num_head_cover_samples, 
-		gint *num_tail_cover_samples, gint rate, gint num_depths, 
+cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, 
+		guint *num_tail_cover_samples, gint rate, guint num_depths, 
 		gint down_filtlen, gint up_filtlen);
 
 void 
-cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value);
+cuda_multirate_spiir_update_exe_samples (guint *num_exe_samples, guint new_value);
 
 gboolean 
-cuda_multirate_spiir_parse_bank (gdouble *bank, gint *num_depths, gint *
+cuda_multirate_spiir_parse_bank (gdouble *bank, guint *num_depths, gint *
 		outchannels);
 
-gint 
+guint 
 cuda_multirate_spiir_get_outchannels (CudaMultirateSPIIR *element);
 
-gint 
+guint 
 cuda_multirate_spiir_get_num_head_cover_samples (CudaMultirateSPIIR *element);
 
 guint64 
@@ -37,10 +37,10 @@ cuda_multirate_spiir_get_available_samples (CudaMultirateSPIIR *element);
 
 gint
 multi_downsample (SpiirState **spstate, float *in_multidown, 
-		gint num_in_multidown, gint num_depths, cudaStream_t stream);
+		gint num_in_multidown, guint num_depths, cudaStream_t stream);
 
 gint
-spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out, cudaStream_t stream);
+spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float *out, cudaStream_t stream);
 
 
 
