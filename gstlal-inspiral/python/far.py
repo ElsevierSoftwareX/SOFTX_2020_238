@@ -1230,7 +1230,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			fpfc2_other = numpy.array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps_other))**2.
 
 			# ratio of distance to inverse SNR for each instrument
-			snr_times_D = DH_times_8 * numpy.dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2))**0.5
+			fpfc_factors = ((1. + cosi2)**2. / 4., cosi2)
+			snr_times_D = DH_times_8 * numpy.dot(fpfc2, fpfc_factors)**0.5
 
 			# snr * D in instrument whose SNR grows fastest
 			# with decreasing D
@@ -1244,14 +1245,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# decreasing distance --- the SNR the source has in
 			# the most sensitive instrument when visible to all
 			# instruments in the combo
-			min_D_at_snr_min = snr_times_D.min() / snr_min
-			if min_D_at_snr_min == 0.:
+			try:
+				start_index = snr_sequence[max_snr_times_D / (snr_times_D.min() / snr_min)]
+			except ZeroDivisionError:
 				# one of the instruments that must be able
-				# to see the event is blind to it (need
-				# this check to avoid a divide-by-zero
-				# error next)
+				# to see the event is blind to it
 				continue
-			start_index = snr_sequence[max_snr_times_D / min_D_at_snr_min]
 
 			# min_D_other is minimum distance at which source
 			# becomes visible in an instrument that isn't
@@ -1260,12 +1259,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# the source becomes visible to one of the
 			# instruments not allowed to participate
 			if len(DH_times_8_other):
-				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, ((1. + cosi2)**2. / 4., cosi2))**0.5).min() / cls.snr_min
-				if min_D_other > 0.:
+				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, fpfc_factors)**0.5).min() / cls.snr_min
+				try:
 					end_index = snr_sequence[max_snr_times_D / min_D_other] + 1
-				else:
+				except ZeroDivisionError:
+					# all instruments that must not see
+					# it are blind to it
 					end_index = None
 			else:
+				# there are no other instruments
 				end_index = None
 
 			# if start_index >= end_index then in order for the
