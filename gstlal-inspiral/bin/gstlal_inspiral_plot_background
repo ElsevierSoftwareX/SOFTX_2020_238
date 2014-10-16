@@ -363,12 +363,14 @@ if ranking_data is not None:
 	ranking_data.finish(verbose = options.verbose)
 
 if coinc_params_distributions is not None and ranking_data is not None:
-	fapfar = far.FAPFAR(ranking_data.background_likelihood_pdfs, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+	fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 else:
 	fapfar = None
 
 if ranking_data is not None:
-	signal_ccdf = far.FAPFAR(ranking_data.signal_likelihood_pdfs, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.likelihood_ratio_threshold).ccdf_interpolator
+	# FIXME
+	signal_ccdf = None
+	#signal_ccdf = far.FAPFAR(ranking_data, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.likelihood_ratio_threshold).ccdf_interpolator
 else:
 	signal_ccdf = None
 
