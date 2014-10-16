@@ -101,10 +101,10 @@ struct _CudaMultirateSPIIR {
   GstAdapter *adapter;
 
   gboolean need_discont;
-  gint num_depths;
-  gint num_head_cover_samples; // number of samples needed to produce the first buffer
-  gint num_tail_cover_samples; // number of samples needed to produce the last buffer
-  gint num_exe_samples; // number of samples executed every time
+  guint num_depths;
+  guint num_head_cover_samples; // number of samples needed to produce the first buffer
+  guint num_tail_cover_samples; // number of samples needed to produce the last buffer
+  guint num_exe_samples; // number of samples executed every time
 
   GstClockTime t0;
   guint64 offset0;
@@ -113,7 +113,7 @@ struct _CudaMultirateSPIIR {
   guint64 next_in_offset;
   
   guint64 num_gap_samples;
-  gboolean exist_nongap;
+  gboolean need_tail_drain;
 
   gint outchannels; // equals number of templates
   gint rate;

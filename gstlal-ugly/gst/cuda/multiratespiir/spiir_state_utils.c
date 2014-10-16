@@ -63,7 +63,7 @@ spiir_state_workspace_realloc_int (int ** workspace, int * len,
 }
 
 void
-spiir_state_load_bank (SpiirState **spstate, gint num_depths, gdouble *bank, gint bank_len, cudaStream_t stream)
+spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gint bank_len, cudaStream_t stream)
 {
 
 	COMPLEX_F *tmp_a1 = NULL, *tmp_b0 = NULL;
@@ -146,8 +146,8 @@ spiir_state_load_bank (SpiirState **spstate, gint num_depths, gdouble *bank, gin
 }
 
 SpiirState ** 
-spiir_state_create (gdouble *bank, gint bank_len, gint num_head_cover_samples,
-		gint num_exe_samples, gint width, gint rate, cudaStream_t stream)
+spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
+		guint num_exe_samples, gint width, guint rate, cudaStream_t stream)
 {
 
 	printf("init spstate\n");
@@ -192,9 +192,10 @@ spiir_state_create (gdouble *bank, gint bank_len, gint num_head_cover_samples,
 }
 
 void 
-spiir_state_destroy (SpiirState ** spstate, gint num_depths)
+spiir_state_destroy (SpiirState ** spstate, guint num_depths)
 {
-	gint i; for(i=0; i<num_depths; i++)
+	gint i;
+       	for(i=0; i<num_depths; i++)
 	{
 		resampler_state_destroy (SPSTATEDOWN(i));
 		resampler_state_destroy (SPSTATEUP(i));
@@ -207,23 +208,27 @@ spiir_state_destroy (SpiirState ** spstate, gint num_depths)
 }
 
 void
-spiir_state_reset (SpiirState **spstate, gint num_depths, cudaStream_t stream)
+spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 {
   int i;
   for(i=0; i<num_depths; i++)
   {
-  SPSTATE(i)->pre_out_spiir_len = 0;
-  SPSTATE(i)->queue_spiir_last_sample = 0;
+    SPSTATE(i)->pre_out_spiir_len = 0;
+    SPSTATE(i)->queue_spiir_last_sample = 0;
 
-    SPSTATE(i)->queue_first_sample = 0;
-    SPSTATE(i)->queue_last_sample = 0;
+    cudaMemsetAsync(SPSTATE(i)->d_queue_spiir, 0, SPSTATE(i)->queue_spiir_len * sizeof(float), stream);
+
+    SPSTATE(i)->queue_first_sample = SPSTATE(i)->queue_last_sample;
+
+    cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
+
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);
   }
 }
 
 gint
-spiir_state_get_outlen (SpiirState **spstate, gint in_len, gint num_depths) {
+spiir_state_get_outlen (SpiirState **spstate, gint in_len, guint num_depths) {
   int i;
   for (i=0; i<num_depths-1; i++) 
    in_len = (in_len - SPSTATEDOWN(i)->last_sample)/2; 
