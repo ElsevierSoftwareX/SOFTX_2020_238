@@ -147,7 +147,7 @@ __global__ void reload_queue_spiir (float *queue,
  * cuda filter kernel
  */
 
-texture<float, 1, cudaReadModeElementType> texRef;
+//texture<float, 1, cudaReadModeElementType> texRef;
 
 __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1, 
 					COMPLEX_F *cudaB0, int *cudaShift, 
@@ -330,7 +330,7 @@ __global__ void upsample2x_and_add (
 }
 
 
-gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, gint num_depths, cudaStream_t stream)
+gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, guint num_depths, cudaStream_t stream)
 {
   float *pos_inqueue, *pos_outqueue;
   gint i, out_processed;
@@ -449,7 +449,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   return out_processed;
 }
 
-void update_nb (SpiirState **spstate, gint new_processed, gint depth)
+void update_nb (SpiirState **spstate, gint new_processed, guint depth)
 {
  
     if(new_processed != SPSTATE(depth)->pre_out_spiir_len)
@@ -469,7 +469,7 @@ void update_nb (SpiirState **spstate, gint new_processed, gint depth)
 }
 
 
-gint spiirup (SpiirState **spstate, gint num_in_multiup, gint num_depths, float *out, cudaStream_t stream)
+gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float *out, cudaStream_t stream)
 {
   gint num_inchunk = num_in_multiup;
 
