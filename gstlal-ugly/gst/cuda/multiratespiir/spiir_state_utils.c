@@ -219,8 +219,6 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 
     SPSTATE(i)->queue_first_sample = SPSTATE(i)->queue_last_sample;
 
-    cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
-
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);
   }

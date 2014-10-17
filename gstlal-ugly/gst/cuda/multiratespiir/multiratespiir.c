@@ -564,7 +564,7 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
-    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths, element->stream);
+    num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
     cudaStreamSynchronize(element->stream);
 
@@ -681,7 +681,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
-    num_out_multidown = multi_downsample (element->spstate, in_multidown, num_in_multidown, element->num_depths, element->stream);
+    num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
@@ -808,7 +808,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
-    element->deviceID = element->bank_id % deviceCount + 1;
+    element->deviceID = (element->bank_id + 1) % deviceCount ;
     cudaSetDevice(element->deviceID);
     cudaStreamCreate(&element->stream);
 
@@ -816,8 +816,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 		    element->num_head_cover_samples, element->num_exe_samples,
 		    element->width, element->rate, element->stream);
 
-    printf("bank id %d\n", element->bank_id);
-//    printf("stream id %d\n", element->stream);
     if (!element->spstate) {
       GST_ERROR_OBJECT(element, "spsate could not be initialised");
       return GST_FLOW_ERROR;
