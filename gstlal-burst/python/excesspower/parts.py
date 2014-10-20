@@ -243,11 +243,14 @@ class EPHandler(Handler):
 				print >>sys.stderr, "Got latency message, ignoring for now."
 			return
 		elif message.type == gst.MESSAGE_TAG:
-			if self.psd_mode == 1 and self.psd is not None:
+			if self.psd_mode == 1 and self.psd is not None and not self.whitener.get_property("mean-psd"):
 				if self.verbose:
 					print >>sys.stderr, "Got tags message, fixing current PSD to whitener."
 				self.whitener.set_property("mean-psd", self.psd.data)
 				self.whitener.set_property("psd-mode", self.psd_mode) # GSTLAL_PSDMODE_FIXED
+			elif self.psd_mode == 1 and self.psd is not None:
+				if self.verbose:
+					print >>sys.stderr, "Got tags message, but already fxed current PSD to whitener."
 			else:
 				if self.verbose:
 					print >>sys.stderr, "Got tags message, but no fixed spectrum to set, so ignoring for now."
