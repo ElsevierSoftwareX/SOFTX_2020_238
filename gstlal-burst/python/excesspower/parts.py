@@ -370,7 +370,8 @@ class EPHandler(Handler):
 			res_level,
 			ndof,
 			self.frequency_overlap,
-			self.inst
+			self.inst,
+			1 if ndof == 1 else self.units,
 		)
 
 		# Store the filter name so we can destroy it later
@@ -497,9 +498,6 @@ class EPHandler(Handler):
 			del buffer
 			return # We don't want event information
 
-		# TODO: Can I set units here on the buffer fields, avoid changing the 
-		# triggers themslves and *not* screw up the underlying framework?
-
 		# What comes out of the sngl_bursts_from_buffer is a
 		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
 		# all the trappings of its glue.ligolw.lsctables cousin, so we
@@ -521,25 +519,16 @@ class EPHandler(Handler):
 			self.event_number += 1
 
 			# If we're using a different units system, adjust back to SI
-			event.duration *= self.units
 			# Readjust start time for units
-			# FIXME: Is self.start already in the 'new' unit system?
-			# If so, we can delete these comments, otherwise, uncomment
-			#event.start_time -= self.start
-			event.start_time /= self.units
-			event.peak_time /= self.units
-			#event.start_time += self.start
-			# FIXME: Readjust frequencies? I don't think so, the filter tables are
-			# created 'independently and thus don't see the new units
-			#event.bandwidth /= self.units
+			event.set_start(event.get_start() / self.units)
+			event.set_peak(event.get_peak() / self.units)
+			event.duration /= self.units
 
 			self.triggers.append(event)
 
 		# Update the timestamps which tell us how far along in the trigger
 		# streams we are
-		# TODO: Why does the buf_dur need unit conversion, but not the timestamp
-		#buf_ts = (buffer.timestamp*1e-9 - self.start) / self.units + self.start
-		buf_ts = buffer.timestamp*1e-9 
+		buf_ts = buffer.timestamp*1e-9 / self.units
 		buf_dur = buffer.duration*1e-9 / self.units
 		self.stop = (buf_ts + buf_dur)
 
@@ -917,10 +906,9 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
     if verbose:
         head = pipeparts.mkprogressreport(pipeline, head, "FIR bank stream")
 
-    postfirtee = pipeparts.mktee(pipeline, head)
-
     # Scan piece: Save the filtered time series
     if handler.trigger_segment:
+        postfirtee = head = pipeparts.mktee(pipeline, head)
         scan_obj.add_data_sink(pipeline, postfirtee, "filter_series", "time")
 
     # object to handle the synchronization of the appsinks
@@ -959,6 +947,9 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             head = pipeparts.mkgeneric(pipeline, head, "audioratefaker")
             head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=%d,channels=%d,width=64" % (handler.rate/handler.units, nchannels))
 
+    postfirtee = pipeparts.mktee(pipeline, head)
+
+
     # First branch -- send fully sampled data to wider channels for processing
     nlevels = int(numpy.ceil(numpy.log2(nchannels))) 
     for res_level in range(0, min(handler.max_level, nlevels)):
@@ -966,7 +957,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
         band = handler.base_band * 2**res_level
 
         # The undersample_rate for band = R/2 is => sample_rate (passthrough)
-        orig_rate = 2 * handler.base_band
+        orig_rate = 2 * band
         undersamp_rate = 2 * band / handler.units
 
         print "Undersampling rate for level %d: %f Hz -> %f %s" % (res_level, orig_rate, undersamp_rate, unit)
@@ -999,16 +990,17 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
 
         # Second branch -- duration
         max_samp = int(handler.max_duration*undersamp_rate*handler.units)
+        print max_samp, handler.max_duration, undersamp_rate, handler.units
 
         # If the user requests a maximum DOF, we use that instead
         if handler.max_dof is not None:
             max_samp = handler.max_dof
 
-        if max_samp < 2 and res_level == 0:
+        if max_samp < 2 and res_level == handler.max_level:
             sys.exit("The duration for the largest tile is smaller than a two degree of freedom tile. Try increasing the requested maximum tile duration or maximum DOF requirement.")
-        elif max_samp < 2 and res_level != 0:
-            print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping remaining levels." % handler.max_duration
-            break
+        elif max_samp < 2:
+            print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping this levels." % handler.max_duration
+            continue
         print "Can sum up to %s degress of freedom in powers of two for this resolution level." % max_samp
 
         # samples to sum -- two is min number
