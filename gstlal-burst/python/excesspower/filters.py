@@ -27,6 +27,7 @@ from pylal import datatypes as laltypes
 from glue.ligolw import ligolw, utils, ilwd, lsctables
 
 import gstlal.fftw
+from gstlal.excesspower import utils
 
 #
 # =============================================================================
@@ -425,7 +426,7 @@ def build_fir_sq_adder(nsamp, padding=0):
 	warnings.warn("excesspower.build_fir_sq_adder is deprecated and could be removed soon.", DeprecationWarning)
 	return numpy.hstack((numpy.ones(nsamp), numpy.zeros(padding)))
 
-def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_overlap=0, detector=None):
+def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_overlap=0, detector=None, units=utils.EXCESSPOWER_UNIT_SCALE['Hz']):
 	"""
 	Create a bank of sngl_burst XML entries. This file is then used by the trigger generator to do trigger generation. Takes in the frequency parameters and filter duration and returns an ligolw entity with a sngl_burst Table which can be saved to a file.
 	"""
@@ -447,12 +448,12 @@ def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_over
 		edge = band / 2
 		cfreq = flow + band
 	else: # Tukey windows
-		edge = int(band) >> (level+1)
-		# The sin^2 tapering comes from the Hann windows, so we need to know how far
-		# they extend to account for the overlap at the ends
-		cfreq = flow + edge + (int(band) >> 1)
+		edge = band / 2**(level+1)
+		# The sin^2 tapering comes from the Hann windows, so we need to know 
+		# how far they extend to account for the overlap at the ends
+		cfreq = flow + edge + (band / 2)
 
-	while cfreq + edge + band/2.0 <= fhigh:
+	while cfreq + edge + band/2 <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration * ndof
@@ -465,6 +466,7 @@ def create_bank_xml(flow, fhigh, band, duration, level=0, ndof=1, frequency_over
 		row.fhigh = cfreq + band / 2.0
 		row.ifo = detector
 		row.chisq_dof = 2*band*row.duration
+		row.duration *= units
 
 		# Stuff that doesn't matter, yet
 		row.peak_time_ns = 0
