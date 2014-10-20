@@ -799,9 +799,9 @@ class EPHandler(Handler):
 
 		self.destroy_filter_xml()
 
-def mknxyfdsink(pipeline, src, fd, segment = None):
+def mknxyfdsink(pipeline, src, fd, segment = None, units = utils.EXCESSPOWER_UNIT_SCALE['Hz']):
     if segment is not None:
-        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
+        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns()*units, stop_time = segment[1].ns()*units)
     else:
         elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump")
     return pipeparts.mkgeneric(pipeline, elem, "fdsink", fd=fd, sync=False, async=False)
