@@ -65,6 +65,7 @@ from gstlal.excesspower import parts
 from gstlal.excesspower.scan import EPScan
 
 from glue import gpstime
+from glue.lal import LIGOTimeGPS
 from glue.segments import segment
 
 __author__ = "Chris Pankow <chris.pankow@ligo.org>"
@@ -104,7 +105,7 @@ scan_obj = None
 if options.scan_start and options.scan_end:
     trigger_segment = segment(map(LIGOTimeGPS, (options.scan_start, options.scan_end)))
     scan_obj = EPScan(trigger_segment, low_freq=handler.flow, high_freq=handler.fhigh, base_band=handler.base_band)
-    handler.set_trigger_time_and_action(scan_obj.trigger_segment, action="scan")
+    handler.set_trigger_time_and_action(scan_obj.scan_segment, action="scan")
 
 #
 # =============================================================================
