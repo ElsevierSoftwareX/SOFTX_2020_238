@@ -206,7 +206,7 @@ class StreamThinca(object):
 		# we need to ensure we have a Table subclass, not a DBTable
 		# subclass
 		if self.sngl_inspiral_table is None:
-			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName).columnnames)
+			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.SnglInspiralTable.get_table(xmldoc).columnnames)
 			# so we can watch for it changing
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
@@ -232,7 +232,7 @@ class StreamThinca(object):
 
 		# stay this far away from the boundaries of the available
 		# triggers
-		coincidence_back_off = max(abs(offset) for offset in lsctables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName).getColumnByName("offset"))
+		coincidence_back_off = max(abs(offset) for offset in lsctables.TimeSlideTable.get_table(xmldoc).getColumnByName("offset"))
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
@@ -257,10 +257,10 @@ class StreamThinca(object):
 		coinc_inspiral_table = lsctables.New(lsctables.CoincInspiralTable)
 
 		# replace tables with our versions
-		real_sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-		real_coinc_event_map_table = lsctables.table.get_table(xmldoc, lsctables.CoincMapTable.tableName)
-		real_coinc_event_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)
-		real_coinc_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)
+		real_sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+		real_coinc_event_map_table = lsctables.CoincMapTable.get_table(xmldoc)
+		real_coinc_event_table = lsctables.CoincTable.get_table(xmldoc)
+		real_coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
 		xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
 		xmldoc.childNodes[-1].replaceChild(coinc_event_map_table, real_coinc_event_map_table)
 		xmldoc.childNodes[-1].replaceChild(coinc_event_table, real_coinc_event_table)
