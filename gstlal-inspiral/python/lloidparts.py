@@ -232,24 +232,22 @@ class Handler(simplehandler.Handler):
 		# go into the event database for completeness of that
 		# record, or maybe not because it could result in a lot of
 		# duplication of on-disk data.  who knows.  think about it.
-		#
-		# FIXME:  should one of these be the segments in the
-		# likelihood data file to define the livetime for
-		# predicting event rates?  right now what's used for that
-		# are the segments collected from the trigger buffers,
-		# which maybe aren't the best choice for that purpose.
 		gate_suffix = {
-			# FIXME:  the data segments are provided externally
-			# and could be put straight into the output
-			# document instead of doing it this way
 			"datasegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
 
-		# dictionary mapping segtype to segmentlistdictionaries
-		# mapping instruments to segment lists
-		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in dataclass.seglists)) for segtype in gate_suffix)
+		# dictionary mapping segtype to segmentlist dictionary
+		# mapping instrument to segment list
+		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)) for segtype in gate_suffix)
+		# add a "triggersegments" entry
+		self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+
+		# hook the Data class's livetime record keeping into ours
+		# so that all segments come here
+		# FIXME:  don't do this, get rid of the Data class
+		dataclass.seglistdicts = self.seglistdicts
 
 		# state of segments being collected
 		self.current_segment_start = {}
@@ -386,15 +384,19 @@ class Handler(simplehandler.Handler):
 				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# clear the segment lists in place
-				for seglistdict in self.seglistdicts.values():
+				for segtype, seglistdict in self.seglistdicts.items():
+					# FIXME:  we don't wipe the
+					# triggersegments for now.  the
+					# online pipeline needs these to
+					# accumulate forever, but that
+					# might not be what it should be
+					# doing, nor should these
+					# necessarily be the segments it
+					# uses for livetime.  figure this out
+					if segtype == "triggersegments":
+						continue
 					for seglist in seglistdict.values():
 						del seglist[:]
-				# FIXME:  this is disabled for now.  the
-				# online pipeline needs these to accumulate
-				# forever, but that might not be what it
-				# should be doing.  figure this out
-				#for seglist in self.dataclass.seglists.values():
-				#	del seglist[:]
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
@@ -439,7 +441,6 @@ class Handler(simplehandler.Handler):
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		for segtype, seglistdict in self.seglistdicts.items():
 			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
-		ligolwsegments.insert_from_segmentlistdict(self.dataclass.seglists, name = "triggersegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc

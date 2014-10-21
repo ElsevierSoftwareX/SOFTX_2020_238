@@ -529,11 +529,12 @@ class Data(object):
 		)
 
 		#
-		# setup likelihood ratio book-keeping
+		# setup likelihood ratio book-keeping.  seglistsdicts to be
+		# populated the pipeline handler
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
-		self.seglists = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+		self.seglistdicts = None
 		self.fapfar = None
 
 		#
@@ -558,7 +559,7 @@ class Data(object):
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
-			self.seglists[instrument] |= segments.segmentlist((buf_seg,))
+			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
@@ -675,10 +676,10 @@ class Data(object):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglists.keys(), inseg = self.seglists.extent_all(), outseg = self.seglists.extent_all())
+		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglists)
+		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglistdicts["triggersegments"])
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -740,7 +741,7 @@ class Data(object):
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
-					for instrument in self.seglists:
+					for instrument in self.seglistdicts["triggersegments"]:
 						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
@@ -757,8 +758,8 @@ class Data(object):
 				# fake a filename for end-user convenience
 				#
 
-				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglists)))
-				instruments = "".join(sorted(self.seglists))
+				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
+				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
