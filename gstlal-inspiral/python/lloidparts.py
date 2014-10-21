@@ -398,7 +398,7 @@ class Handler(simplehandler.Handler):
 			# If there is a current_segment_start for this then
 			# the state transition has to be off
 			if state_key in self.current_segment_start:
-				self.seglistdicts[segtype][instrument] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(state_key), timestamp)])
+				self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
 			if new_state == "on":
 				self.current_segment_start[state_key] = timestamp
 			else:
@@ -415,6 +415,7 @@ class Handler(simplehandler.Handler):
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		for segtype, seglistdict in self.seglistdicts.items():
 			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
+		ligolwsegments.optimize()
 		ligolwsegments.insert_from_segmentlistdict(self.dataclass.seglists, name = "triggersegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		ligolw_process.set_process_end_time(process)
