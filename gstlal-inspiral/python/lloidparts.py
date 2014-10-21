@@ -437,11 +437,10 @@ class Handler(simplehandler.Handler):
 		"""
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-		for segtype, seglistdict in self.seglistdicts.items():
-			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
-		ligolwsegments.finalize(process)
+		with ligolw_segments.LigolwSegments(xmldoc, process) as ligolwsegments:
+			for segtype, seglistdict in self.seglistdicts.items():
+				ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
