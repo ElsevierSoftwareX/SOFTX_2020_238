@@ -86,7 +86,6 @@ import gst
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
@@ -96,7 +95,6 @@ from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal import simulation
 from pylal.datatypes import LIGOTimeGPS
 
 
