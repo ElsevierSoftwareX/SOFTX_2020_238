@@ -616,7 +616,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
+	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
 
 
 	if options.verbose:

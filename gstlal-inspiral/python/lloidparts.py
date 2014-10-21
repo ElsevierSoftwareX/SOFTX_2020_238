@@ -204,7 +204,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, tag = "", verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
