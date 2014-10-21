@@ -374,8 +374,7 @@ class CoincsDocument(object):
 		if time_slide_file is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = LIGOLWContentHandler, verbose = verbose)
 		else:
-			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), time_slide_table.get_next_id(), self.process):
-				time_slide_table.append(row)
+			time_slide_table.append_offsetvector(dict.fromkeys(instruments, 0.0), self.process)
 		time_slide_mapping = ligolw_tisi.time_slides_vacuum(time_slide_table.as_dict())
 		iterutils.inplace_filter(lambda row: row.time_slide_id not in time_slide_mapping, time_slide_table)
 		for tbl in self.xmldoc.getElementsByTagName(ligolw.Table.tagName):
