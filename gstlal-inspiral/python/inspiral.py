@@ -324,6 +324,8 @@ def chisq_distribution(df, non_centralities, size):
 
 
 class CoincsDocument(object):
+	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
+
 	def __init__(self, filename, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
 		#
 		# how to make another like us
@@ -349,8 +351,7 @@ class CoincsDocument(object):
 			lal_cvs_tag = None,	# FIXME
 			inseg = seg
 		)
-		# FIXME:  argh, ugly
-		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
@@ -937,11 +938,12 @@ class Data(object):
 				likelihood_file = os.path.join(likelihood_file[0], '%s_SNR_CHI.xml.gz' % likelihood_file[1].split('.')[0])
 		ligolw_utils.write_filename(self.__get_likelihood_file(), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
+		# can't be used anymore
+		del self.coincs_document
+
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		with self.lock:
 			self.__write_output_file(filename = filename, likelihood_file = likelihood_file, verbose = verbose)
-			# can't be used anymore
-			del self.coincs_document
 
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
