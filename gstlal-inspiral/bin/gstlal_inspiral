@@ -171,11 +171,9 @@ import resource
 import sys
 from optparse import OptionParser
 import signal
-import subprocess
 import socket
 import time
 import tempfile
-import itertools
 import math
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -191,18 +189,14 @@ from gstlal import bottle
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from pylal.date import XLALUTCToGPS
-from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
-from gstlal import simplehandler
 from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
@@ -212,8 +206,6 @@ from gstlal import hoftcache
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
 
 #
@@ -485,7 +477,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lalseries.LIGOLWContentHandler))
 else:
 	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
