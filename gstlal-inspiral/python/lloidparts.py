@@ -321,7 +321,41 @@ class Handler(simplehandler.Handler):
 				timestamp = message.structure["timestamp"]
 				self.checkpoint(timestamp)
 				return True
+		elif message.type == gst.MESSAGE_EOS:
+			with self.dataclass.lock:
+				# FIXME:  how to choose correct timestamp?
+				try:
+					timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
+				except ValueError:
+					# no segments
+					return False
+			self.close_segments(timestamp)
+			return False
 		return False
+
+	def _close_segments(self, timestamp):
+		# close out existing segments.  the code in the loop
+		# modifies the iteration target, so iterate over a copy
+		for (segtype, instrument), start_time in list(self.current_segment_start.items()):
+			if timestamp < start_time.ns():
+				continue
+			# By construction these gates should be in the on
+			# state.  We fake a state transition to off in
+			# order to flush the segments
+			self._gatehandler(None, timestamp, (segtype, instrument, "off"))
+			# But we have to remember to put it back
+			self._gatehandler(None, timestamp, (segtype, instrument, "on"))
+
+	def close_segments(self, timestamp):
+		"""!
+		Record stop times for all open segments and start new ones.
+
+		@param timestamp the time in nanoseconds at which to mark
+		the boundary.  If this preceeds and open segment's start
+		time, that segment is not closed.
+		"""
+		with self.dataclass.lock:
+			self._close_segments(timestamp)
 
 	def checkpoint(self, timestamp):
 		"""!
@@ -344,21 +378,8 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			try:
-				# close out existing segments.  the code in
-				# the loop modifies the iteration target,
-				# so iterate over a copy
-				for segtype, instrument in list(self.current_segment_start):
-					# By construction these gates
-					# should be in the on state.  We
-					# fake a state transition to off in
-					# order to flush the segments
-					# FIXME;  why doesn't this lock up?
-					# it tries to re-aquire the lock we
-					# already hold ...
-					self.gatehandler(None, timestamp, (segtype, instrument, "off"))
-					# But we have to remember to put it
-					# back
-					self.gatehandler(None, timestamp, (segtype, instrument, "on"))
+				# close out existing segments.
+				self._close_segments(timestamp)
 				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
 				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
