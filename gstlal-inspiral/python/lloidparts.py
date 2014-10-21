@@ -227,13 +227,13 @@ class Handler(simplehandler.Handler):
 		# configurations, what they are called, etc., somehow needs to live
 		# with the code that constructs the gates
 		#
-		# FIXME:  in the offline pipeline, none of these segments
-		# get recorded.  however, except for the h(t) gate segments
-		# these are all inputs to the pipeline so it probably
-		# doesn't matter.  nevertheless, they maybe should go into
-		# the event database for completeness of that record, or
-		# maybe not because it could result in a lot of duplication
-		# of on-disk data.  who knows.  think about it.
+		# FIXME:  in the offline pipeline, state vector segments
+		# don't get recorded.  however, except for the h(t) gate
+		# segments these are all inputs to the pipeline so it
+		# probably doesn't matter.  nevertheless, they maybe should
+		# go into the event database for completeness of that
+		# record, or maybe not because it could result in a lot of
+		# duplication of on-disk data.  who knows.  think about it.
 		#
 		# FIXME:  should one of these be the segments in the
 		# likelihood data file to define the livetime for
@@ -248,20 +248,40 @@ class Handler(simplehandler.Handler):
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
-		self.seglistdicts = {}
-		for segtype, suffix in gate_suffix.items():
-			self.seglistdicts[segtype] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in dataclass.seglists)
+
+		# dictionary mapping segtype to segmentlistdictionaries
+		# mapping instruments to segment lists
+		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in dataclass.seglists)) for segtype in gate_suffix)
+
+		# state of segments being collected
 		self.current_segment_start = {}
+
+		# iterate over segment types and instruments, look for the
+		# gate element that should provide those segments, and
+		# connect handlers to collect the segments
+		if verbose:
+			print >>sys.stderr, "connecting segment handlers to gates ..."
 		for segtype, seglistdict in self.seglistdicts.items():
 			for instrument in seglistdict:
-				elem = self.pipeline.get_by_name("%s_%s" % (instrument, gate_suffix[segtype]))
-				if elem is None:
-					# silently ignore missing gate
-					# elements
+				try:
+					name = "%s_%s" % (instrument, gate_suffix[segtype])
+				except KeyError:
+					# this segtype doesn't come from
+					# gate elements
 					continue
+				elem = self.pipeline.get_by_name(name)
+				if elem is None:
+					# ignore missing gate elements
+					if verbose:
+						print >>sys.stderr, "\tcould not find %s for %s's %s" % (name, instrument, segtype)
+					continue
+				if verbose:
+					print >>sys.stderr, "\tfound %s for %s's %s" % (name, instrument, segtype)
 				elem.connect("start", self.gatehandler, (segtype, instrument, "on"))
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
+		if verbose:
+			print >>sys.stderr, "... done connecting segment handlers to gates"
 
 		# most recent spectrum reported by each whitener
 		self.psds = {}
@@ -334,6 +354,9 @@ class Handler(simplehandler.Handler):
 					# should be in the on state.  We
 					# fake a state transition to off in
 					# order to flush the segments
+					# FIXME;  why doesn't this lock up?
+					# it tries to re-aquire the lock we
+					# already hold ...
 					self.gatehandler(None, timestamp, (segtype, instrument, "off"))
 					# But we have to remember to put it
 					# back
