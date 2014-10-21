@@ -72,6 +72,7 @@ from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from glue.ligolw.utils import segments as ligolw_segments
 from pylal import datatypes as laltypes
 from pylal import ligolw_tisi
 from pylal import rate
@@ -357,6 +358,9 @@ class CoincsDocument(object):
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentDefTable, columns = ligolw_segments.LigolwSegmentList.segment_def_columns))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentSumTable, columns = ligolw_segments.LigolwSegmentList.segment_sum_columns))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentTable, columns = ligolw_segments.LigolwSegmentList.segment_columns))
 
 		#
 		# optionally insert injection list document
@@ -417,6 +421,7 @@ class CoincsDocument(object):
 		#
 
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
+		self.llwsegments = ligolw_segments.LigolwSegments(self.xmldoc, self.process)
 
 
 	def commit(self):
@@ -455,6 +460,7 @@ class CoincsDocument(object):
 
 
 	def write_output_file(self, verbose = False):
+		self.llwsegments.finalize()
 		ligolw_process.set_process_end_time(self.process)
 
 		if self.connection is not None:
@@ -915,6 +921,11 @@ class Data(object):
 
 	def __write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		self.__flush()
+
+		# FIXME:  should this be done in .flush() somehow?
+		for segtype, seglistdict in self.seglistdicts.items():
+			self.coincs_document.llwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID")
+
 		if filename is not None:
 			self.coincs_document.filename = filename
 		self.coincs_document.write_output_file(verbose = verbose)
