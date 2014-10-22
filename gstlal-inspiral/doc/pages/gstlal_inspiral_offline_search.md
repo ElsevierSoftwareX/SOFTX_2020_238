@@ -73,19 +73,3 @@ The DAG can be submitted via:
 		$ condor_submit_dag trigger_pipe.dag
 
 When the workflow is finished you should see a web page output in the directory specified in the Makefile
-
-\section review Review status
-
-
-See \ref gstlalinspirallowlatencysearchpage here for the modules and programs used by both low and high latency searches. Redundant entries are ommitted here
-
-<table>
-<tr><th> Program                                </th><th> Sub programs or modules       </th><th> Lines </th><th> Review status </th><th> Stability </th></tr>
-<tr><td> gstlal_inspiral_pipe                   </td><td>                               </td><td> 729   </td><td> \notreviewed  </td><td> \stable </td></tr>
-<tr><td>                                        </td><td> dagparts.py                   </td><td> 196   </td><td> \notreviewed  </td><td> \stable </td></tr>
-<tr><td> gstlal_compute_far_from_snr_chisq_histograms </td><td>				</td><td> 249   </td><td> \notreviewed  </td><td> \moddev </td></tr>
-<tr><td> gstlal_inspiral_plot_background	</td><td>				</td><td> 541   </td><td> \notreviewed  </td><td> \moddev </td></tr>
-<tr><td> gstlal_inspiral_plot_sensitivity	</td><td>				</td><td> 587   </td><td> \notreviewed  </td><td> \stable </td></tr>
-<tr><td> gstlal_inspiral_plotsummary		</td><td>				</td><td> 1244  </td><td> \notreviewed  </td><td> \stable </td></tr>
-<tr><td> gstlal_inspiral_summary_page		</td><td>				</td><td> 344	</td><td> \notreviewed  </td><td> \stable </td></tr>
-</table>
