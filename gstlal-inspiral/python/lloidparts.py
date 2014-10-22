@@ -233,7 +233,11 @@ class Handler(simplehandler.Handler):
 		# record, or maybe not because it could result in a lot of
 		# duplication of on-disk data.  who knows.  think about it.
 		gate_suffix = {
-			"datasegments": "frame_segments_gate",
+			# FIXME:  datasegments temporarily disabled until
+			# we decide how to deal with livetime in dag (which
+			# is currently adding its own datasegments lists to
+			# the final database)
+			#"datasegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
