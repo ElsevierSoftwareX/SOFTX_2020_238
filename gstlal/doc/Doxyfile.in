@@ -197,7 +197,7 @@ TAB_SIZE               = 4
 # will result in a user-defined paragraph with heading "Side Effects:".
 # You can put \n's in the value part of an alias to insert newlines.
 
-ALIASES                = gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/
+ALIASES                = gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/ reviewed="\htmlonly &#x2713; \endhtmlonly: YES" notreviewed="\htmlonly &#x2717; \endhtmlonly: NO" stable="\image html go.png" moddev="\image html yellow.png" hidev="\image html stop.png"
 
 # This tag can be used to specify a number of word-keyword mappings (TCL only).
 # A mapping has the form "name=value". For example adding
@@ -1634,8 +1634,9 @@ SKIP_FUNCTION_MACROS   = YES
 # or URLs. Note that each tag file must have a unique name (where the name does
 # NOT include the path). If a tag file is not located in the directory in which
 # doxygen is run, you must also specify the path to the tagfile here.
+# FIXME don't hard code this version number, get it from configure
 
-TAGFILES               = gstlaldoxy.tag=../../gstlal/doc 
+TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.3.2/html
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.
