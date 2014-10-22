@@ -269,10 +269,10 @@ class Handler(simplehandler.Handler):
 				if elem is None:
 					# ignore missing gate elements
 					if verbose:
-						print >>sys.stderr, "\tcould not find %s for %s's %s" % (name, instrument, segtype)
+						print >>sys.stderr, "\tcould not find %s for %s '%s'" % (name, instrument, segtype)
 					continue
 				if verbose:
-					print >>sys.stderr, "\tfound %s for %s's %s" % (name, instrument, segtype)
+					print >>sys.stderr, "\tfound %s for %s '%s'" % (name, instrument, segtype)
 				elem.connect("start", self.gatehandler, (segtype, instrument, "on"))
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
