@@ -439,7 +439,6 @@ class Handler(simplehandler.Handler):
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		for segtype, seglistdict in self.seglistdicts.items():
 			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
-		ligolwsegments.optimize()
 		ligolwsegments.insert_from_segmentlistdict(self.dataclass.seglists, name = "triggersegments", comment = "LLOID snapshot")
 		ligolwsegments.finalize(process)
 		ligolw_process.set_process_end_time(process)
