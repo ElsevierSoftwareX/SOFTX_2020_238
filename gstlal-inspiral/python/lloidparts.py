@@ -377,6 +377,22 @@ class Handler(simplehandler.Handler):
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
+	def _gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
+		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
+		state_key = (segtype, instrument)
+
+		if self.verbose and elem is not None:
+			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
+
+		# if there is a current_segment_start for this then the
+		# state transition has to be off
+		if state_key in self.current_segment_start:
+			self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
+		if new_state == "on":
+			self.current_segment_start[state_key] = timestamp
+		else:
+			assert new_state == "off"
+
 	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		"""!
 		A handler that intercepts gate state transitions. This can set
@@ -388,21 +404,8 @@ class Handler(simplehandler.Handler):
 		@param instrument the instrument this state transtion is to be attributed to, e.g., "H1", etc..
 		@param new_state the state transition, must be either "on" or "off"
 		"""
-		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
-		state_key = (segtype, instrument)
-
-		if self.verbose and elem is not None:
-			print >>sys.stderr, "%s: %s %s state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
-
 		with self.dataclass.lock:
-			# If there is a current_segment_start for this then
-			# the state transition has to be off
-			if state_key in self.current_segment_start:
-				self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
-			if new_state == "on":
-				self.current_segment_start[state_key] = timestamp
-			else:
-				assert new_state == "off"
+			self._gatehandler(elem, timestamp, (segtype, instrument, new_state))
 
 	def gen_segments_xmldoc(self):
 		"""!
