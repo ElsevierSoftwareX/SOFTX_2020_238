@@ -6,11 +6,12 @@
 
 \section agenda Agenda
 
-- Links for telecon:
+- Code review links for telecon:
  - https://ligo-vcs.phys.uwm.edu/cgit/lalsuite/tree/glue/glue/iterutils.py
  - https://ligo-vcs.phys.uwm.edu/cgit/lalsuite/tree/pylal/pylal/rate.py
  - https://ligo-vcs.phys.uwm.edu/cgit/lalsuite/tree/pylal/pylal/snglcoinc.py
  - https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/python/far.py
+- A presentation on modeling the clustered CCDF: https://dcc.ligo.org/G1401247
 
 \section minutes minutes
 
