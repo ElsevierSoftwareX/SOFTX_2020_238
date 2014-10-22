@@ -114,8 +114,8 @@ def load_search_results(filenames, tmp_path = None, verbose = False):
 	if not filenames:
 		return None, None
 
-	background_likelihood_ratios = {}
-	zerolag_likelihood_ratios = {}
+	background_ln_likelihood_ratios = {}
+	zerolag_ln_likelihood_ratios = {}
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -126,7 +126,7 @@ def load_search_results(filenames, tmp_path = None, verbose = False):
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for participating_instruments, likelihood_ratio, is_background in connection.cursor().execute("""
+		for participating_instruments, ln_likelihood_ratio, is_background in connection.cursor().execute("""
 SELECT
 	coinc_inspiral.ifos,
 	coinc_event.likelihood,
@@ -149,14 +149,14 @@ WHERE
 		""", (definer_id,)):
 			participating_instruments = frozenset(lsctables.instrument_set_from_ifos(participating_instruments))
 			if is_background:
-				background_likelihood_ratios.setdefault(participating_instruments, []).append(likelihood_ratio)
+				background_ln_likelihood_ratios.setdefault(participating_instruments, []).append(ln_likelihood_ratio)
 			else:
-				zerolag_likelihood_ratios.setdefault(participating_instruments, []).append(likelihood_ratio)
+				zerolag_ln_likelihood_ratios.setdefault(participating_instruments, []).append(ln_likelihood_ratio)
 
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	return background_likelihood_ratios, zerolag_likelihood_ratios
+	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
 def colour_from_instruments(instruments, colours = {
@@ -249,7 +249,7 @@ def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
 	axes.set_xlim((xlo, xhi))
 	return fig
 
-def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_likelihood_ratios, (xlo, xhi), tag):
+def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_ln_likelihood_ratios, (xlo, xhi), tag):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
@@ -257,9 +257,9 @@ def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_likelihood_ratios, (xl
 	axes.set_position((.15, .13, .82, .77))
 	x = numpy.linspace(xlo, xhi, 10000)
 	axes.semilogy(x, ccdf(x), color = "k")
-	if zerolag_likelihood_ratios is not None:
-		x = numpy.array(sorted(zerolag_likelihood_ratios), dtype = "double")
-		y = numpy.arange(len(zerolag_likelihood_ratios), 0, -1, dtype = "double")
+	if zerolag_ln_likelihood_ratios is not None:
+		x = numpy.array(sorted(zerolag_ln_likelihood_ratios), dtype = "double")
+		y = numpy.arange(len(zerolag_ln_likelihood_ratios), 0, -1, dtype = "double")
 		y *= (1. - 1. / math.e) / y[0]
 		y *= y[0] / y[float(bisect.bisect_left(x, xlo))]
 		axes.semilogy(x, y, color = "k", linestyle = "--")
@@ -379,7 +379,7 @@ if options.database_cache is not None:
 	if options.database is None:
 		options.database = []
 	options.database += [CacheEntry(line).path for line in open(options.database_cache)]
-background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(options.database, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(options.database, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -492,12 +492,12 @@ for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() 
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-	if zerolag_likelihood_ratios is None:
+	if zerolag_ln_likelihood_ratios is None:
 		ranking_stats = None
 	elif instruments is None:
-		ranking_stats = sum(zerolag_likelihood_ratios.values(), [])
-	elif instruments in zerolag_likelihood_ratios:
-		ranking_stats = zerolag_likelihood_ratios[instruments]
+		ranking_stats = sum(zerolag_ln_likelihood_ratios.values(), [])
+	elif instruments in zerolag_ln_likelihood_ratios:
+		ranking_stats = zerolag_ln_likelihood_ratios[instruments]
 	else:
 		ranking_stats = None
 	fig = plot_likelihood_ratio_ccdf(instruments, fapfar.ccdf_interpolator[instruments], ranking_stats, (ranking_data.ln_likelihood_ratio_threshold, options.max_log_lambda), "Noise")
