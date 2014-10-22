@@ -793,7 +793,7 @@ class EPHandler(Handler):
 
 def mknxyfdsink(pipeline, src, fd, segment = None, units = utils.EXCESSPOWER_UNIT_SCALE['Hz']):
     if segment is not None:
-        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns()*units, stop_time = segment[1].ns()*units)
+        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = int(segment[0].ns()*units), stop_time = int(segment[1].ns()*units))
     else:
         elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump")
     return pipeparts.mkgeneric(pipeline, elem, "fdsink", fd=fd, sync=False, async=False)
@@ -1020,7 +1020,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
 
             # Scan piece: Save the summed square NDOF=1 stream
             if handler.trigger_segment:
-                scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time")
+                scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time", handler.units)
 
             if verbose:
                 print "Resolution level %d, DOFs: %d" % (res_level, ndof)
@@ -1034,7 +1034,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             # Scan piece: Save the summed square NDOF=2 stream
             if handler.trigger_segment:
                 durtee = pipeparts.mktee(pipeline, durtee)
-                scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time")
+                scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time", handler.units)
 
             if verbose:
                 durtee = pipeparts.mkprogressreport(pipeline, durtee, "After energy summation resolution level %d, %d DOF" % (res_level, ndof))
