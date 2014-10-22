@@ -1530,7 +1530,7 @@ class RankingData(object):
 	ln_likelihood_ratio_threshold = NegInf
 
 
-	def __init__(self, coinc_params_distributions, instruments = None, process_id = None, nsamples = 1000000, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -1544,14 +1544,8 @@ class RankingData(object):
 		if coinc_params_distributions is None:
 			return
 
-		# get default instruments from whatever we have SNR PDFs for
-		if instruments is None:
-			instruments = set()
-			for key in coinc_params_distributions.snr_joint_pdf_cache:
-				instruments |= set(instrument for instrument, distance in key)
-		instruments = tuple(instruments)
-
 		# initialize binnings
+		instruments = tuple(instruments)
 		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
@@ -1752,7 +1746,7 @@ WHERE
 		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:%s" % (name, cls.ligo_lw_name_suffix)]
 
 		# create a mostly uninitialized instance
-		self = cls(None, {}, process_id = ligolw_param.get_pyvalue(xml, u"process_id"))
+		self = cls(None, (), process_id = ligolw_param.get_pyvalue(xml, u"process_id"))
 
 		# pull out the likelihood count and PDF arrays
 		def reconstruct(xml, prefix, target_dict):
