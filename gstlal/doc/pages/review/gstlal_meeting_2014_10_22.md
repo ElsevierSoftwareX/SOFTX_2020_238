@@ -14,7 +14,7 @@
 
 \section minutes minutes
 
-In attendance: Jolien, Laleigh, Chad, Cody, Florent, Duncan Meacher, Sathya, Steve Privithera, Tom Dent,
+In attendance: Jolien, Laleigh, Chad, Cody, Florent, Duncan Meacher, Sathya, Steve Privithera, Tom Dent, Kipp
 
 1. Eq. (2) of the paper should treat the instrument combinations in a time-dependent way in a
 future release.
