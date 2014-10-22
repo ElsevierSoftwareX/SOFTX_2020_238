@@ -71,7 +71,8 @@ def parse_command_line():
 	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
 	parser.add_option("-c", "--database-cache", metavar = "filename", help = "Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.")
 	parser.add_option("--max-snr", metavar = "SNR", default = 200., type = "float", help = "Plot SNR PDFs up to this value of SNR (default = 200).")
-	parser.add_option("-m", "--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CCDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
+	parser.add_option("--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CCDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
+	parser.add_option("--min-log-lambda", metavar = "value", default = -10., type = "float", help = "Plot ranking statistic CCDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -10).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -246,6 +247,9 @@ def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
 		axes.set_title(r"%s %s Log Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
 	axes.set_xlabel(r"$\ln \Lambda$")
 	axes.set_ylabel(r"$P(\ln \Lambda | \mathrm{%s})$" % tag.lower())
+	ylo = pdf[xlo:xhi,].min()
+	yhi = pdf[xlo:xhi,].max()
+	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
 	return fig
 
@@ -256,17 +260,20 @@ def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_ln_likelihood_ratios, 
 	axes = fig.gca()
 	axes.set_position((.15, .13, .82, .77))
 	x = numpy.linspace(xlo, xhi, 10000)
-	axes.semilogy(x, ccdf(x), color = "k")
+	y = ccdf(x)
+	axes.semilogy(x, y, color = "k")
+	ylo = y.min()
+	yhi = y.max()
 	if zerolag_ln_likelihood_ratios is not None:
 		x = numpy.array(sorted(zerolag_ln_likelihood_ratios), dtype = "double")
 		y = numpy.arange(len(zerolag_ln_likelihood_ratios), 0, -1, dtype = "double")
 		y *= (1. - 1. / math.e) / y[0]
-		y *= y[0] / y[float(bisect.bisect_left(x, xlo))]
 		axes.semilogy(x, y, color = "k", linestyle = "--")
-		axes.set_xlim((x[0], x[-1] + 2.))
-		axes.set_ylim((10**math.floor(math.log10(y[-1]) - 1.5), 1.))
-	else:
-		axes.set_xlim((xlo, xhi))
+		yhi = max(yhi, y.max())
+		ylo = min(ylo, y.min())
+		ylo = max(ylo, yhi * (y.min() / yhi)**1.5)
+	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
+	axes.set_xlim((xlo, xhi))
 	axes.grid(which = "both")
 	if instruments is None:
 		axes.set_title(r"%s Log Likelihood Ratio CCDF" % tag)
@@ -368,9 +375,7 @@ else:
 	fapfar = None
 
 if ranking_data is not None:
-	# FIXME
-	signal_ccdf = None
-	#signal_ccdf = far.FAPFAR(ranking_data, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.ln_likelihood_ratio_threshold).ccdf_interpolator
+	signal_ccdf = far.FAPFAR(ranking_data, dict.fromkeys(ranking_data.signal_likelihood_pdfs, 1.), threshold = far.RankingData.ln_likelihood_ratio_threshold).ccdf_interpolator
 else:
 	signal_ccdf = None
 
@@ -486,7 +491,7 @@ for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items() if coinc
 	fig.savefig(plotname)
 
 for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() if ranking_data is not None else ():
-	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.ln_likelihood_ratio_threshold, options.max_log_lambda), "Noise")
+	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (options.min_log_lambda, options.max_log_lambda), "Noise")
 	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
@@ -500,20 +505,20 @@ for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() 
 		ranking_stats = zerolag_ln_likelihood_ratios[instruments]
 	else:
 		ranking_stats = None
-	fig = plot_likelihood_ratio_ccdf(instruments, fapfar.ccdf_interpolator[instruments], ranking_stats, (ranking_data.ln_likelihood_ratio_threshold, options.max_log_lambda), "Noise")
+	fig = plot_likelihood_ratio_ccdf(instruments, fapfar.ccdf_interpolator[instruments], ranking_stats, (options.min_log_lambda, options.max_log_lambda), "Noise")
 	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_ccdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items() if ranking_data is not None else ():
-	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (ranking_data.ln_likelihood_ratio_threshold, options.max_log_lambda), "Signal")
+	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (options.min_log_lambda, options.max_log_lambda), "Signal")
 	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_likelihood_ratio_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-	fig = plot_likelihood_ratio_ccdf(instruments, signal_ccdf[instruments], None, (ranking_data.ln_likelihood_ratio_threshold, options.max_log_lambda), "Signal")
+	fig = plot_likelihood_ratio_ccdf(instruments, signal_ccdf[instruments], None, (options.min_log_lambda, options.max_log_lambda), "Signal")
 	plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_likelihood_ratio_ccdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
