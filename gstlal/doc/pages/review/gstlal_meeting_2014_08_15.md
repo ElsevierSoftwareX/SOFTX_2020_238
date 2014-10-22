@@ -47,16 +47,19 @@ of SNR/<SNR>.
 
 Codes reviewed and comments
 
-____________________________________gstlal_whiten__________________________
+##gstlal_whiten
 
 - Reviewed with no actions
-____________________________________gstlal_togglecomplex___________________
+
+##gstlal_togglecomplex
 
 - Reviewed with no actions
-____________________________________gstlal_sumsquares______________________
+
+##gstlal_sumsquares
 
 - Reviewed with no actions
-____________________________________gstlal_statevector__________________
+
+##gstlal_statevector
 
 - Reviewed with no actions. Compatibility between what is provided by
 DQ and what is masked or interpreted by gstlal is important as otherwise
@@ -64,7 +67,8 @@ the pipeline might break.
 
 - Action: Reviewers to interact with DQ team to make sure statevectors
 are compatible.
-____________________________________gstlal_simulation__________________
+
+##gstlal_simulation
 
 - There are a number of issues, such as extra padding for injection series,
 simulation series, etc., that need to be sorted out. At the moment it is also
@@ -83,7 +87,7 @@ is being done to help complete the review.
 - Action: Kipp will clean up this code and get it ready for review
 (Perhaps we could take one of the montly telecons to complete this review)
 
-____________________________________gstlal_segmentsrc__________________
+##gstlal_segmentsrc
 
 - Reviewed with actions: Fix hard coded width. There is also a
 *fixme* issue on line 498 that must be looked at.
@@ -95,47 +99,47 @@ segments are hanelded and if logic covers all cases possible.
 should be checked again and we should have a look at it again
 at some point.
 
-____________________________________gstlal_reblock__________________
+##gstlal_reblock
 
 - Reviewed with no actions
 
-____________________________________gstlal_nxydump__________________
+##gstlal_nxydump
 
 - Reviewed with no actions (already before the f2f meeting)
 
-____________________________________gstlal_nofakedisconts__________________
+##gstlal_nofakedisconts
 
 - Reviewed with no actions (minor action: fprintf should be changed to gerr)
 lalchecktimestamps does unit test but it needs to be recorded somewhere.
 
-____________________________________gstlal_matrixmixer__________________
+##gstlal_matrixmixer
 
 - Reviewed with no actions
 
-____________________________________gstlal_gate__________________
+##gstlal_gate
 
 - Reviewed with actions: Set caps seem to have 64 but it is not implemented
 in sink nor is a function available for type casting 64 bits (line 1322).
 
 - Also please write a unit test.
 
-____________________________________gstlal_firbank__________________
+##gstlal_firbank
 
 - Reviewed with no actions: Corrected a bug on line 1113. Please attach
 to the review page outputs of unit tests using points for the plot and
 zoommed in version.
 
-____________________________________gstlal_drop__________________
+##gstlal_drop
 
 - Reviewed with actions: Write some unit tests and show them to reviewers;
 otherwise we are done with this code.
 
-____________________________________gstlal_cachesrc________________________
+##gstlal_cachesrc
 
 - Reviewed with actions: Provide link to lal_cachesrc and other similar
 files on the status page
 
-____________________________________gds_lvshmsrc__________________
+##gds_lvshmsrc
 
 - Reviewed with actions: Please add output of tests that were done at
 the f2f meeting to the review page.
