@@ -1480,7 +1480,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 #
 
 
-def binned_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, samples, nsamples):
+def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, samples, nsamples):
 	"""
 	Populate signal and noise BinnedArray histograms from a sequence of
 	samples (which can be a generator).  The first nsamples elements
@@ -1492,10 +1492,16 @@ def binned_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sample
 	respectively.
 	"""
 	sample_func = iter(samples).next
+	exp = math.exp
+	isnan = math.isnan
 	for i in xrange(nsamples):
-		lamb, lnP_signal, lnP_noise = sample_func()
-		signal_rates[lamb,] += math.exp(lnP_signal)
-		noise_rates[lamb,] += math.exp(lnP_noise)
+		ln_lamb, lnP_signal, lnP_noise = sample_func()
+		if isnan(ln_lamb):
+			raise ValueError("encountered NaN likelihood ratio")
+		if isnan(lnP_signal) or isnan(lnP_noise):
+			raise ValueError("encountered NaN signal or noise model probability densities")
+		signal_rates[ln_lamb,] += exp(lnP_signal)
+		noise_rates[ln_lamb,] += exp(lnP_noise)
 	return signal_rates, noise_rates
 
 
@@ -1539,27 +1545,40 @@ class RankingData(object):
 		self.zero_lag_likelihood_pdfs = {}
 		self.process_id = process_id
 
+		#
 		# bailout out used by .from_xml() class method to get an
 		# uninitialized instance
+		#
+
 		if coinc_params_distributions is None:
 			return
 
+		#
 		# initialize binnings
+		#
+
 		instruments = tuple(instruments)
 		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 
-		# calculate all of the possible ifo combinations with at least
-		# 2 detectors in order to get the joint likelihood pdfs
-		ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+		#
+		# run importance-weighted random sampling to populate
+		# binnings.  one thread per instrument combination
+		#
+
 		threads = []
 		for key in self.background_likelihood_rates:
 			if verbose:
 				print >>sys.stderr, "computing ranking statistic PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_likelihood_ratio_rates_from_samples(self.signal_likelihood_rates[key], self.background_likelihood_rates[key], self.ln_likelihoodratio_samples(iter(coinc_params_distributions.random_params(key)).next, ln_likelihood_ratio_func, coinc_params_distributions.lnP_signal, coinc_params_distributions.lnP_noise), nsamples = nsamples)))
+			p = multiprocessing.Process(target = lambda: q.put(binned_log_likelihood_ratio_rates_from_samples(
+				self.signal_likelihood_rates[key],
+				self.background_likelihood_rates[key],
+				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
+				nsamples = nsamples
+			)))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1653,24 +1672,6 @@ WHERE
 		#
 
 		self._compute_combined_rates()
-
-
-	@staticmethod
-	def ln_likelihoodratio_samples(random_params_func, ln_likelihood_ratio_func, lnP_signal_func, lnP_noise_func):
-		"""
-		Generator that yields an unending sequence of 3-element
-		tuples.  Each tuple's elements are a value of the natural
-		logarithm of the likelihood rato, the natural logarithm of
-		the probability density of that likelihood ratio in the
-		signal population, the natural logarithm of the probability
-		density of that likelihood ratio in the noise population.
-		"""
-		while 1:
-			params, lnP_params = random_params_func()
-			ln_lamb = ln_likelihood_ratio_func(params)
-			if math.isnan(ln_lamb):
-				raise ValueError("encountered NaN likelihood ratio at %s" % repr(params))
-			yield ln_lamb, lnP_signal_func(params) - lnP_params, lnP_noise_func(params) - lnP_params
 
 	def _compute_combined_rates(self):
 		#
