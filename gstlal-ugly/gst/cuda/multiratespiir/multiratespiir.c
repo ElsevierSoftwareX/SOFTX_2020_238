@@ -69,7 +69,8 @@ enum
 {
   PROP_0,
   PROP_IIR_BANK,
-  PROP_BANK_ID
+  PROP_BANK_ID,
+  PROP_GAP_HANDLE
 };
 
 //FIXME: not support width=64 yet
@@ -170,7 +171,7 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
  			g_param_spec_value_array(
 				"spiir-bank",
 				"IIR bank feedback coefficients",
-				"A parallel bank of first order IIR filter feedback coefficients",
+				"A parallel bank of first order IIR filter feedback coefficients.The format is : num_depths, num_templates in highest depth, num_filters in highest depth, a1 for the first template, a1 for the second template, ..., b0, ..., delay, ..., num_templates in second highest depth, ...",
 				g_param_spec_double(
 					"coefficient",
 					"Coefficient",
@@ -192,6 +193,15 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
 				)
 			);
 
+  g_object_class_install_property (gobject_class, PROP_GAP_HANDLE,
+				g_param_spec_int(
+					"gap-handle",
+					"gap handling",
+					"restart after gap (1), or gap is treated as 0 (0)",
+					0, 1, 0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				)
+			);
 
 }
 
@@ -865,14 +875,18 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   num_exe_samples = element->num_exe_samples;
   num_head_cover_samples = element->num_head_cover_samples;
   num_tail_cover_samples = element->num_tail_cover_samples;
+  guint64 history_gap_samples, gap_buffer_len;
+  gint num_zeros, adapter_len, num_filt_samples;
+
+
+  switch (element->gap_handle) {
+
+    case 1: // restart after gap
   
 
   /* 
-   * gap handlingcuda_multirate_spiir_get_available_samples (element)
+   * gap handling cuda_multirate_spiir_get_available_samples (element)
    */
-
-  guint64 history_gap_samples, gap_buffer_len;
-  gint num_zeros, adapter_len, num_filt_samples;
 
   if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP)) {
     history_gap_samples = element->num_gap_samples;
@@ -1010,7 +1024,36 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
         return res;
     }
   }
+  break;
+
+  case 0: // gap is treated as 0; 
+
+    if (GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) 
+        adapter_push_zeros (element, in_samples);
+    else {
+      gst_buffer_ref(inbuf);	/* don't let the adapter free it */
+      gst_adapter_push (element->adapter, inbuf);
+    }
+     /* 
+     * to speed up, number of samples to be filtered is times of num_exe_samples
+     */
+    adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    if (adapter_len >= element->num_exe_samples) {
+      res = cuda_multirate_spiir_process(element, element->num_exe_samples, outbuf);
+      if (res != GST_FLOW_OK)
+        return res;
+    }
+
+    break;
+
+  default:
+
+    GST_ERROR_OBJECT(element, "gap handling not supported");
+    break;
+  }
+
   return GST_FLOW_OK;
+
 }
 
 
@@ -1070,13 +1113,13 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       if (element->need_tail_drain) {
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
           GST_DEBUG_OBJECT(element, "EOS, clear tails by pushing gap, num gap samples %" G_GUINT64_FORMAT, element->num_gap_samples);
-		cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
+  	  cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
 	} else {
 
           GST_DEBUG_OBJECT(element, "EOS, clear tails by pushing drain");
-        adapter_push_zeros (element, element->num_tail_cover_samples);
-	int adapter_len = cuda_multirate_spiir_get_available_samples(element);
-        cuda_multirate_spiir_push_drain (element, adapter_len);
+          adapter_push_zeros (element, element->num_tail_cover_samples);
+ 	  int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+          cuda_multirate_spiir_push_drain (element, adapter_len);
 	}
 
         spiir_state_reset (element->spstate, element->num_depths, element->stream);
@@ -1129,6 +1172,10 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       element->bank_id = g_value_get_int(value);
       break;
 
+    case PROP_GAP_HANDLE:
+      element->gap_handle = g_value_get_int(value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1155,6 +1202,11 @@ cuda_multirate_spiir_get_property (GObject * object, guint prop_id,
     case PROP_BANK_ID:
       g_value_set_int (value, element->bank_id);
       break;
+
+    case PROP_GAP_HANDLE:
+      g_value_set_int (value, element->gap_handle);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
