@@ -833,8 +833,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				if progressbar is not None:
 					progressbar.increment()
 			# zero everything below the search threshold and
-			# normalize what's left to the requested count
-			new_binarr[:self.snr_min,:] = 0.
+			# normalize what's left to the requested count.
+			# need to do the slicing ourselves to avoid zeroing
+			# the at-threshold bin
+			new_binarr.array[:new_binarr.bins[0][self.snr_min],:] = 0.
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] += n
@@ -954,8 +956,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				if progressbar is not None:
 					progressbar.increment()
 			# zero everything below the search threshold and
-			# normalize what's left to the requested count
-			new_binarr[:self.snr_min,:] = 0.
+			# normalize what's left to the requested count.
+			# need to do the slicing ourselves to avoid zeroing
+			# the at-threshold bin
+			new_binarr.array[:new_binarr.bins[0][self.snr_min],:] = 0.
 			new_binarr.array *= n / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
@@ -1032,8 +1036,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# convolve with the bin count data
 		rate.filter_array(binnedarray.array, kernel)
 
-		# zero everything below the SNR cut-off
-		binnedarray[:self.snr_min,:] = 0.
+		# zero everything below the SNR cut-off.  need to do the
+		# slicing ourselves to avoid zeroing the at-threshold bin
+		binnedarray.array[:binnedarray.bins[0][self.snr_min],:] = 0.
 
 		# normalize what remains to be a valid PDF
 		with numpy.errstate(invalid = "ignore"):
@@ -1320,13 +1325,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# protect against round-off in FFT convolution leading to
 		# negative values in the PDF
 		numpy.clip(pdf.array, 0., PosInf, pdf.array)
-		# zero counts in bins that are below the trigger threshold
+		# zero counts in bins that are below the trigger threshold.
+		# have to convert SNRs to indexes ourselves and adjust so
+		# that we don't zero the bin in which the SNR threshold
+		# falls
 		range_all = slice(None, None)
-		range_low = slice(None, cls.snr_min)
+		range_low = slice(None, pdf.bins[0][cls.snr_min])
 		for i in xrange(len(instruments)):
 			slices = [range_all] * len(instruments)
 			slices[i] = range_low
-			pdf[tuple(slices)] = 0.
+			pdf.array[slices] = 0.
 		# convert bin counts to normalized PDF
 		pdf.to_pdf()
 		# done
@@ -1712,10 +1720,10 @@ WHERE
 			# copy counts into pdf array and smooth
 			pdf = binnedarray.copy()
 			rate.filter_array(pdf.array, filt)
-			# zero the counts below the threshold.  need to
-			# make sure the bin @ threshold is also 0'ed
+			# zero the counts below the threshold.  this also
+			# zeros the at-threshold bin.  FIXME:  correct to
+			# zero at-threshold bin?
 			pdf[:ln_likelihood_ratio_threshold,] = 0.
-			pdf[ln_likelihood_ratio_threshold,] = 0.
 			# zero the counts in the infinite-sized high bin so
 			# the final PDF normalization ends up OK
 			pdf.array[-1] = 0.
