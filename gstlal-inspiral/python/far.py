@@ -611,7 +611,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		"H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
 		"H1H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
 		"L1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200)))
+		"V1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"E1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"E2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"E3_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
+		"E0_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200)))
 	}
 
 	def __init__(self, *args, **kwargs):
@@ -624,6 +628,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			"H1H2_snr_chi": self.pdf_from_rates_snrchi2,
 			"L1_snr_chi": self.pdf_from_rates_snrchi2,
 			"V1_snr_chi": self.pdf_from_rates_snrchi2,
+			"E1_snr_chi": self.pdf_from_rates_snrchi2,
+			"E2_snr_chi": self.pdf_from_rates_snrchi2,
+			"E3_snr_chi": self.pdf_from_rates_snrchi2,
+			"E0_snr_chi": self.pdf_from_rates_snrchi2,
 		}
 
 	def __iadd__(self, other):

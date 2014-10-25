@@ -49,7 +49,7 @@ if len(sys.argv) < 3:
 	sys.exit()
 
 outname = sys.argv[1]
-colors = {"H1":"r", "H2":"b", "L1":"g", "V1":"m", "H1H2":"c"}
+colors = {"H1":"r", "H2":"b", "L1":"g", "V1":"m", "H1H2":"c", "E1":"b", "E2":"r", "E3":"g"}
 horizons = dict((k, []) for k in colors)
 times = dict((k, []) for k in colors)
 for f in sys.argv[2:]:
