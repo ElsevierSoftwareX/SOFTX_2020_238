@@ -738,15 +738,18 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def lnP_signal(self, params):
 		if params is None:
 			return None
+
+		lnP_noise = self.lnP_noise(params)
+
 		# (instrument, snr) pairs sorted alphabetically by
 		# instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
 		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
-		lnP = snr_pdf(*tuple(rho for instrument, rho in snrs))
+		lnP_signal = snr_pdf(*tuple(rho for instrument, rho in snrs))
 		try:
-			lnP = math.log(lnP)
+			lnP_signal = math.log(lnP_signal)
 		except ValueError:
 			return NegInf
 
@@ -758,7 +761,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# instruments)
 		params = params.copy()
 		del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).lnP_signal(params) + lnP
+		lnP_signal += super(ThincaCoincParamsDistributions, self).lnP_signal(params)
+
+		# return logarithm of (.99 P(..|signal) + 0.01 P(..|noise))
+		# FIXME:  investigate how to determine correct mixing ratio
+		lnP_signal += math.log(.99)
+		lnP_noise += math.log(0.01)
+		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
 
 	# FIXME:  this is annoying.  probably need a generic way to
 	# indicate to the parent class that some parameter doesn't have a
