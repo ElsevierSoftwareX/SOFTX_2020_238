@@ -1544,7 +1544,7 @@ class RankingData(object):
 	#
 
 	binnings = {
-		"ln_likelihood_ratio": rate.NDBins((rate.ATanBins(0., 80., 5000),))
+		"ln_likelihood_ratio": rate.NDBins((rate.ATanBins(0., 110., 3000),))
 	}
 
 	filters = {
