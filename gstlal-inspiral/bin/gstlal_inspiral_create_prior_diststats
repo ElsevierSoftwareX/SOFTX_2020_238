@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010--2013  Kipp Cannon, Chad Hanna
+# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -46,7 +46,11 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 
 
+from pylal import series as lalseries
+
+
 from gstlal import far
+from gstlal import reference_psd
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -72,11 +76,10 @@ def parse_command_line():
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("--horizon-distances", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is \"instrument=distance,instrument=distance,...\", e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of two or more instruments from the set.  It is an error for an instrument to be named here and not in a --instrument option.")
+	parser.add_option("--horizon-distance-masses", metavar = "m1,m2", action = "append", default = ["1.4,1.4"], help = "When computing pre-cached SNR PDFs from a collection of PSD files, compute horizon distances for these masses in solar mass units (default = 1.4,1.4).  Can be given multiple times.")
+	parser.add_option("--horizon-distance-flow", metavar = "Hz", default = 10., type = "float", help = "When computing pre-cached SNR PDFs from a collection PSD files, start horizon distance integral at this frequency in Hertz (default = 10 Hz).")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
-
-	if filenames:
-		raise ValueError("unrecognized command line options")
 
 	process_params = dict(options.__dict__)
 
@@ -91,6 +94,8 @@ def parse_command_line():
 		all_horizon_instruments = reduce(lambda a, b: a | b, (set(horizon_distances) for horizon_distances in options.horizon_distances))
 		if all_horizon_instruments > options.instrument:
 			raise ValueError("missing %s for instruments named in --horizon-distances options" % ", ".join("--instrument %s" % inst for inst in all_horizon_instruments - options.instrument))
+
+	options.horizon_distance_masses = [map(float, s.split(",")) for s in options.horizon_distance_masses]
 
 	return options, process_params, filenames
 
@@ -141,6 +146,13 @@ if options.synthesize_injection_count > 0:
 # seed SNR PDF cache
 #
 
+
+for n, filename in enumerate(filenames, 1):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(filename, contenthandler = lalseries.LIGOLWContentHandler, verbose = options.verbose))
+	for m1, m2 in options.horizon_distance_masses:
+		options.horizon_distances.append(dict((instrument, reference_psd.horizon_distance(psd[instrument], m1, m2, 8., options.horizon_distance_flow)) for instrument in options.instrument))
 
 for horizon_distances in options.horizon_distances:
 	for n in range(2, len(horizon_distances) + 1):
