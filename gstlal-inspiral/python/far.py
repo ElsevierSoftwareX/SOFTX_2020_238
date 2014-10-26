@@ -599,7 +599,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# horizon distance history, generating joint SNR PDFs, and so on.
 	#
 	# FIXME:  is this choice of distance quantization appropriate?
-	log_distance_tolerance = math.log(1.2)
+	log_distance_tolerance = math.log(1.5)
 
 	# binnings (filter funcs look-up initialized in .__init__()
 	binnings = {
