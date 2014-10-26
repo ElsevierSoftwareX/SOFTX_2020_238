@@ -765,6 +765,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# return logarithm of (.99 P(..|signal) + 0.01 P(..|noise))
 		# FIXME:  investigate how to determine correct mixing ratio
+		if math.isinf(lnP_noise) and math.isinf(lnP_signal):
+			if lnP_noise < 0. and lnP_signal < 0.:
+				return NegInf
+			if lnP_noise > 0. and lnP_signal > 0.:
+				return PosInf
 		lnP_signal += math.log(.99)
 		lnP_noise += math.log(0.01)
 		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
