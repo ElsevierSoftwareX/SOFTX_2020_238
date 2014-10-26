@@ -247,8 +247,8 @@ def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
 		axes.set_title(r"%s %s Log Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
 	axes.set_xlabel(r"$\ln \Lambda$")
 	axes.set_ylabel(r"$P(\ln \Lambda | \mathrm{%s})$" % tag.lower())
-	ylo = pdf[xlo:xhi,].min()
 	yhi = pdf[xlo:xhi,].max()
+	ylo = max(yhi * 1e-40, pdf[xlo:xhi,].min())
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
 	return fig
@@ -262,8 +262,8 @@ def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_ln_likelihood_ratios, 
 	x = numpy.linspace(xlo, xhi, 10000)
 	y = ccdf(x)
 	axes.semilogy(x, y, color = "k")
-	ylo = y.min()
 	yhi = y.max()
+	ylo = max(yhi * 1e-40, y.min())
 	if zerolag_ln_likelihood_ratios is not None:
 		x = numpy.array(sorted(zerolag_ln_likelihood_ratios), dtype = "double")
 		y = numpy.arange(len(zerolag_ln_likelihood_ratios), 0, -1, dtype = "double")
