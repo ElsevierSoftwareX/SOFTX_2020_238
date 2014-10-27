@@ -81,7 +81,7 @@ class SnglInspiral(lsctables.SnglInspiral):
 
 	@property
 	def eta(self):
-		return self.mass1 * self.mass2 / self.mtotal
+		return self.mass1 * self.mass2 / self.mtotal**2.
 
 	@property
 	def mchirp(self):
