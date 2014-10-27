@@ -1066,19 +1066,21 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             if handler.psd_mode == 1:
                 durtee = pipeparts.mknofakedisconts(pipeline, durtee)
 
-            # Trigger generator
-            # Number of tiles to peak over, if necessary
-            peak_samples = max(1, int((peak_fraction or 0) * ndof))
+            # Downsample the SNR stream
+            #durtee = pipeparts.mkresample(pipeline, durtee)
+            #snr_rate = int(undersamp_rate/max(1, ndof*(peak_fraction or 0)))
+            #durtee = pipeparts.mkcapsfilter(pipeline, durtee, "audio/x-raw-float,rate=%d" % snr_rate)
 
+            # Trigger generator
             # Determine the SNR threshold for this trigger generator
             snr_thresh = utils.determine_thresh_from_fap(handler.fap, ndof)**2
             if verbose:
-                print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
-            durtee = pipeparts.mkbursttriggergen(pipeline, durtee, n=peak_samples, bank_filename=handler.build_filter_xml(res_level, ndof, verbose=verbose), snr_thresh=snr_thresh)
+                print "SNR threshold for level %d, ndof %d: %f" % (res_level, ndof, snr_thresh)
+            durtee = pipeparts.mkbursttriggergen(pipeline, durtee, n=int((peak_fraction or 0) * ndof), bank_filename=handler.build_filter_xml(res_level, ndof, verbose=verbose), snr_thresh=snr_thresh)
 
             if verbose:
                 durtee = pipeparts.mkprogressreport(pipeline, durtee, "Trigger generator resolution level %d, %d DOF" % (res_level, ndof))
-
+                
             # Funnel the triggers for this subbranch to the appsink
             # FIXME: Why doesn't this negotiate the caps properly?
             #appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )
