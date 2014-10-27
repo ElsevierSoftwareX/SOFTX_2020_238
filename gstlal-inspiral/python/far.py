@@ -597,12 +597,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	#
 	# then they are considered to be equal for the purpose of recording
 	# horizon distance history, generating joint SNR PDFs, and so on.
+	# if the smaller of the two is < min_ratio * the larger then the
+	# smaller is treated as though it were 0.
 	# FIXME:  is this choice of distance quantization appropriate?
 	@staticmethod
-	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5)):
+	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5), min_ratio = 1.5**-8):
 		horizon_distance_norm = max(horizon_distances.values())
 		assert horizon_distance_norm != 0.
-		return dict((instrument, (0. if horizon_distance == 0. else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
+		return dict((instrument, (0. if horizon_distance / horizon_distance_norm < min_ratio else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
 	# binnings (filter funcs look-up initialized in .__init__()
 	binnings = {
@@ -674,9 +676,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# horizon distances are normalized to fractions of the
 		# largest among them and then the fractions aquantized to
 		# integer powers of a common factor
-		#
-		# FIXME:  if horizon distance discrepancy is too large,
-		# consider a fast-path that just returns an all-0 array
 		#
 
 		key = frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
