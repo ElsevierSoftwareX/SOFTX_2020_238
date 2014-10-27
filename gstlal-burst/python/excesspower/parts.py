@@ -381,6 +381,11 @@ class EPHandler(Handler):
 		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
 		self.filter_xml[output] = self.filter_xml[(res_level, ndof)]
 
+		if self.mmixers.has_key(res_level):
+			mmatrix = self.mmixers[res_level].get_property("matrix")
+			filter_table = lsctables.SnglBurstTable.get_table(self.filter_xml[(res_level, ndof)])
+			assert len(mmatrix[0]) == len(filter_table)
+
 		# Write it
 		self.lock.acquire()
 		ligolw_utils.write_filename(self.filter_xml[output], 
