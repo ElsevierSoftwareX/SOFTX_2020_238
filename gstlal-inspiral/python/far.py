@@ -597,9 +597,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	#
 	# then they are considered to be equal for the purpose of recording
 	# horizon distance history, generating joint SNR PDFs, and so on.
-	#
 	# FIXME:  is this choice of distance quantization appropriate?
-	log_distance_tolerance = math.log(1.5)
+	@staticmethod
+	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5)):
+		horizon_distance_norm = max(horizon_distances.values())
+		assert horizon_distance_norm != 0.
+		return dict((instrument, (0. if horizon_distance == 0. else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
 	# binnings (filter funcs look-up initialized in .__init__()
 	binnings = {
@@ -661,15 +664,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# second element is frozen set of (instrument, horizon
 		# distance) pairs for all instruments in the network.
 		# horizon distances are normalized to fractions of the
-		# largest among them and then are quantized to integer
-		# powers of exp(log_distance_tolerance)
+		# largest among them and then the fractions aquantized to
+		# integer powers of a common factor
 		#
 		# FIXME:  if horizon distance discrepancy is too large,
 		# consider a fast-path that just returns an all-0 array
 		#
 
-		horizon_distance_norm = max(horizon_distances.values())
-		key = frozenset(instruments), frozenset((instrument, math.exp(round(math.log(horizon_distance / horizon_distance_norm) / self.log_distance_tolerance) * self.log_distance_tolerance)) for instrument, horizon_distance in horizon_distances.items())
+		key = frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
 
 		#
 		# retrieve cached PDF, or build new one
