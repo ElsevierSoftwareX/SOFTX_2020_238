@@ -152,7 +152,7 @@ for n, filename in enumerate(filenames, 1):
 		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
 	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(filename, contenthandler = lalseries.LIGOLWContentHandler, verbose = options.verbose))
 	for m1, m2 in options.horizon_distance_masses:
-		options.horizon_distances.append(dict((instrument, reference_psd.horizon_distance(psd[instrument], m1, m2, 8., options.horizon_distance_flow)) for instrument in options.instrument))
+		options.horizon_distances.append(dict((instrument, (0. if instrument not in psd else reference_psd.horizon_distance(psd[instrument], m1, m2, 8., options.horizon_distance_flow))) for instrument in options.instrument))
 
 for horizon_distances in options.horizon_distances:
 	for n in range(2, len(horizon_distances) + 1):
