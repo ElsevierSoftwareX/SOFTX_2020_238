@@ -1171,7 +1171,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			yield params, sum(seq[1::2], log_P_horizons)
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 60000, bins = rate.ATanLogarithmicBins(3.6, 50., 60), progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -1199,7 +1199,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# has infinite size, we remove it from the sequence
 		# (meaning the PDF will be left 0 in that bin).
 		pdf = rate.BinnedArray(rate.NDBins([bins] * len(instruments)))
-		snr_sequence = rate.ATanLogarithmicBins(3.6, 120., 300)
+		snr_sequence = rate.ATanLogarithmicBins(3.6, 50., 180)
 		snr_snrlo_snrhi_sequence = numpy.array(zip(snr_sequence.centres(), snr_sequence.lower(), snr_sequence.upper())[:-1])
 
 		# compute the SNR at which to begin iterations over bins
