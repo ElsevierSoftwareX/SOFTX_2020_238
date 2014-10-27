@@ -292,7 +292,7 @@ class EPHandler(Handler):
 		firbank.set_property("fir-matrix", self.rebuild_filter())
 		# Impose a latency since we've advanced the filter in the 
 		# generation step. See build_filter in the excesspower library
-		firbank.set_property("latency", len(firbank.get_property("fir_matrix")[0])/2)
+		firbank.set_property("latency", self.filter_bank.shape[1]/2)
 		self.firbank = firbank
 
 	def add_matmixer(self, mm, res_level):
@@ -354,7 +354,7 @@ class EPHandler(Handler):
 		if not self.filter_xml.has_key((0,1)):
 			self.build_filter_xml(res_level = 0, ndof = 1)
 
-		self.filter_bank, self.freq_filter_bank = filters.build_filter_from_xml( 
+		self.filter_bank, self.freq_filter_bank = filters.build_filter_from_xml(
 			self.filter_xml[(0,1)],
 			self.psd,
 			self.spec_corr
@@ -998,7 +998,6 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
 
         # Second branch -- duration
         max_samp = int(handler.max_duration*undersamp_rate*handler.units)
-        print max_samp, handler.max_duration, undersamp_rate, handler.units
 
         # If the user requests a maximum DOF, we use that instead
         if handler.max_dof is not None:
