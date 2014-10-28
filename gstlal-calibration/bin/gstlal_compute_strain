@@ -485,6 +485,7 @@ else:
 	else:
 		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100).link(strain)
 	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100).link(strain)
+	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/4000.0)
 	strain = pipeparts.mkprogressreport(pipeline, strain, "%s_progress_hoft" % instrument)
 	
 # Put the units back to strain before writing to frames
