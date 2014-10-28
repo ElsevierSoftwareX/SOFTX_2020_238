@@ -73,8 +73,8 @@ from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import time_slide as ligolw_time_slide
 from pylal import datatypes as laltypes
-from pylal import ligolw_tisi
 from pylal import rate
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
@@ -380,7 +380,7 @@ class CoincsDocument(object):
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = LIGOLWContentHandler, verbose = verbose)
 		else:
 			time_slide_table.append_offsetvector(dict.fromkeys(instruments, 0.0), self.process)
-		time_slide_mapping = ligolw_tisi.time_slides_vacuum(time_slide_table.as_dict())
+		time_slide_mapping = ligolw_time_slide.time_slides_vacuum(time_slide_table.as_dict())
 		iterutils.inplace_filter(lambda row: row.time_slide_id not in time_slide_mapping, time_slide_table)
 		for tbl in self.xmldoc.getElementsByTagName(ligolw.Table.tagName):
 			tbl.applyKeyMapping(time_slide_mapping)
