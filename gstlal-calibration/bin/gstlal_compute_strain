@@ -441,12 +441,17 @@ else:
 	dctrl = pipeparts.mkprogressreport(pipeline, dctrl, "progress_src_dctrl_%s" % instrument)
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
-	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
+	dctrl = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, dctrltee), "audiocheblimit", mode="high-pass", cutoff=20)  
+	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
+
+	dctrltee = pipeparts.mktee(pipeline, dctrl)
+	pipeparts.mknxydumpsink(pipeline, dctrltee, "dctrl_post_awhitening.txt")
+	dctrl = pipeparts.mkqueue(pipeline, dctrltee)
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
@@ -487,6 +492,7 @@ else:
 straintee = pipeparts.mktee(pipeline, strain)
 straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
 strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
+pipeparts.mknxydumpsink(pipeline, straintee, "strain.txt")
 
 #
 # MAKE THE CALIB-STATE_VECTOR
@@ -501,8 +507,8 @@ if not options.no_dq_vector:
 	#
 
 	sciencelocked = pipeparts.mkqueue(pipeline, odcstatevectortee)
-	sciencelocked = pipeparts.mkgeneric(pipeline, sciencelocked, "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 1)
-	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=16384")
+	sciencelocked = pipeparts.mkgeneric(pipeline, sciencelocked, "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 2)
+	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=%d" % sr)
 	sciencelocked = pipeparts.mkprogressreport(pipeline, sciencelocked, "progress_odc_%s" % instrument)
 	sciencelockedtee = pipeparts.mktee(pipeline, sciencelocked)
 	
@@ -511,8 +517,8 @@ if not options.no_dq_vector:
 	# LOCKED BIT BRANCH
 	#
 
-	locked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.locked_mask, status_out = 2)
-	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=16384")
+	locked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.locked_mask, status_out = 4)
+	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=%d" % sr)
 	locked = pipeparts.mkprogressreport(pipeline, locked, "progress_locked_%s" % instrument)
 	lockedtee = pipeparts.mktee(pipeline, locked)
 	
@@ -521,18 +527,22 @@ if not options.no_dq_vector:
 	#
 
 	htproduced = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100)
-	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 32, nongap_is_control = True)
-	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
+	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 8, nongap_is_control = True)
+	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 
 	#
 	# FILTERS-OK BIT BRANCH
 	#
 	
 	# Set the FILTERS-OK bit based on science mode transitions
-	filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 2, attack_length = -options.filter_settle_time * 16384)
-	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234") 
-	# Set the FILTERS-OK bit based on input data available
-	# FIXME: This part needs to be coded up...
+	if not options.recolor:
+		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4, attack_length = -options.filter_settle_time * 16384)
+		filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr) 
+		# Set the FILTERS-OK bit based on input data available
+		# FIXME: This part needs to be coded up...
+	else:
+		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4)
+		filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 
 	#
 	# GAMMA-OK BIT BRANCH
@@ -544,8 +554,8 @@ if not options.no_dq_vector:
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRtee))	
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = -0.2, control = pipeparts.mkqueue(pipeline, gammaItee))
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaItee))
-		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 8, nongap_is_control = True)
-		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
+		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 32, nongap_is_control = True)
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
 
 	#
@@ -553,16 +563,18 @@ if not options.no_dq_vector:
 	#
 	
 	# First combine higher order bits to determine h(t)-OK
-	htprod_and_filtersok = gst.element_factory_make("lal_adder")
-	htprod_and_filtersok.set_property("sync", True)
-	pipeline.add(htprod_and_filtersok)
-	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 100).link(htprod_and_filtersok)
-	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 100).link(htprod_and_filtersok)
-	htprod_and_filtersok_tee = pipeparts.mktee(pipeline, htprod_and_filtersok)
+	higher_bits = gst.element_factory_make("lal_adder")
+	higher_bits.set_property("sync", True)
+	pipeline.add(higher_bits)
+	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 100).link(higher_bits)
+	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 100).link(higher_bits)
+	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(higher_bits)
+	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100).link(higher_bits)
+	higher_bits_tee = pipeparts.mktee(pipeline, higher_bits)
 
 	# Now calculate h(t)-OK bit
-	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 100), bit_vector = 4, threshold = 48)
-	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=16384, endianness=1234")
+	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100), bit_vector = 1, threshold = 30)
+	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 
 	#
 	# COMBINE ALL BITS TO MAKE CALIB-STATE_VECTOR
@@ -571,9 +583,7 @@ if not options.no_dq_vector:
 	calibstatevector = gst.element_factory_make("lal_adder")
 	calibstatevector.set_property("sync", True)
 	pipeline.add(calibstatevector)
-	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, htprod_and_filtersok_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	if not options.no_gamma and not options.recolor:
 		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
