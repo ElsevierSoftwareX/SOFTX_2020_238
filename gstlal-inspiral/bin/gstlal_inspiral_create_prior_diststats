@@ -139,7 +139,7 @@ if options.background_prior > 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = options.instrument, verbose = options.verbose)
 
 if options.synthesize_injection_count > 0:
-	coincparamsdistributions.add_foreground_snrchi_prior(instruments = options.instrument, n = options.synthesize_injection_count, prefactors_range = (0.0, 0.10), df = 40, verbose = options.verbose)
+	coincparamsdistributions.add_foreground_snrchi_prior(instruments = options.instrument, n = options.synthesize_injection_count, prefactors_range = (0.0, 0.20), df = 40, verbose = options.verbose)
 
 
 #
