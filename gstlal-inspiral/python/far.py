@@ -1874,6 +1874,8 @@ class FAPFAR(object):
 			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
 
 			# get the extincted background PDF
+			# FIXME don't extinct the individual detector PDFs,
+			# they are just for diagnostics anyway
 			extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
 
 			# Now compute the CCDF and CDF
@@ -1900,9 +1902,13 @@ class FAPFAR(object):
 			# last checks that the CDF and CCDF are OK
 			assert not numpy.isnan(cdf).any(), "%s log likelihood ratio CDF contains NaNs" % instruments_name
 			assert not numpy.isnan(ccdf).any(), "%s log likelihood ratio CCDF contains NaNs" % instruments_name
-			assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s log likelihood ratio CDF failed to be normalized" % instruments_name
-			assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s log likelihood ratio CCDF failed to be normalized" % instruments_name
-			assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s log likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
+			# Be extremely pedantic about the PDF,CDF,CCDF that
+			# counts, i.e., the joint one specified by instruments
+			# being None.
+			if instruments is None:
+				assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s log likelihood ratio CDF failed to be normalized" % instruments_name
+				assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s log likelihood ratio CCDF failed to be normalized" % instruments_name
+				assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s log likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
 			# build interpolators
 			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
