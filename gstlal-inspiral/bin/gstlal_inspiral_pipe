@@ -331,7 +331,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 	return inspiral_nodes
 
-def adapt_gstlal_inpiral_output(inspiral_nodes, options):
+def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	# first get the previous output in a usable form
 	lloid_output = {}
@@ -360,7 +360,7 @@ def adapt_gstlal_inpiral_output(inspiral_nodes, options):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode):
 
 	likelihood_nodes = {}
 	rankpdf_nodes = []
@@ -372,20 +372,23 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
+		# FIXME we keep this here in case we someday want to have a
+		# mass bin dependent prior, but it really doesn't matter for
+		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = parents,
-				opts = {"instrument":instrument_set},
+				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
-				parent_nodes = [priornode],
-				input_files = {"":diststats + [priornode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
+				parent_nodes = [priornode, snrpdfnode],
+				input_files = {"":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = [priornode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
+				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"likelihood-url":diststats + [priornode.output_files["write-likelihood"]], "":inputs}
+				input_files = {"likelihood-url":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]], "":inputs}
 			)
 		priornodes.append(priornode)
 		rankpdf_nodes.append(calcranknode)
@@ -398,7 +401,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
 			node = inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
-					parent_nodes = parents + [priornodes[n]],
+					parent_nodes = parents + [priornodes[n], snrpdfnode],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_files = {"likelihood-url":diststats + [priornodes[n].output_files["write-likelihood"]], "":inputs}
 				)
@@ -499,7 +502,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	injdbs = []
 	outnodes = [noninjsqlitenode]
 
-	for injections in options.injections:
+	for injections, far_injections in zip(options.injections, options.far_injections):
 
 		# extract only the nodes that were used for injections
 		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
@@ -531,6 +534,11 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		injdbs.append(injdb)
 		injxml = os.path.splitext(injdb)[0] + ".xml.gz"
 
+		# If there are injections that are too far away to be seen in a separate file, add them now. 
+		if far_injections is not None:
+			xml_input = [injxml] + [far_injections]
+		else:
+			xml_input = injxml
 
 		# merge
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
@@ -560,7 +568,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [inspinjnode],
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			output_files = {"database":injdb},
-			input_files = {"":injxml}
+			input_files = {"":xml_input}
 		)
 			
 		outnodes.append(sqlitenode)
@@ -627,6 +635,7 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
+	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	# Override the datasource injection option
@@ -644,6 +653,11 @@ def parse_command_line():
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
+
+	if options.far_injections is not None and len(options.injections) != len(options.far_injections):
+		raise ValueError("number of injection files and far injection files must be equal")
+	if options.far_injections is None:
+		options.far_injections = [None for inj in options.injections]
 
 	#FIXME a hack to find the sql paths
 	share_path = os.path.split(inspiral_pipe.which('gstlal_reference_psd'))[0].replace('bin', 'share/gstlal')
@@ -756,8 +770,27 @@ if options.reference_psd is None:
 	ref_psd = median_psd_node.output_files["output-name"]
 	ref_psd_parent_nodes = [median_psd_node]
 
+
+	# NOTE: compute just the SNR pdf cache here, set other features to 0
+	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+			parent_nodes = ref_psd_parent_nodes,
+			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
+			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+		)
+
 else:
 	ref_psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler)) 
+
+	# NOTE: compute just the SNR pdf cache here, set other features to 0
+	# NOTE: This will likely result in downstream codes needing to compute
+	# more SNR PDFS, since in this codepath only an average spectrum is
+	# used.
+	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
+			input_files = {"":options.reference_psd},
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+		)
 	ref_psd_parent_nodes = []
 
 #
@@ -777,13 +810,13 @@ inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag,
 # Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
 #
 
-lloid_output, lloid_diststats = adapt_gstlal_inpiral_output(inspiral_nodes, options)
+lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
 #
 # Setup likelihood jobs, clustering and merging
 #
 
-rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
+rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
