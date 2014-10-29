@@ -42,7 +42,11 @@ DROP INDEX tmpindex;
 DROP TABLE _idmap_;
 
 --
--- segment_definer clean up
+-- segment_definer clean up.  NOTE;  this assumes no meaningful information
+-- is stored in the version and comment columns, and will scramble it if
+-- there is.  that is, two segment_definer rows are considered to be
+-- equivalent even if their version and comment values differ, and the one
+-- with the higher ID will be discarded.
 --
 
 CREATE TEMPORARY TABLE _idmap_ AS
@@ -54,8 +58,6 @@ CREATE TEMPORARY TABLE _idmap_ AS
 		JOIN segment_definer AS new ON (
 			new.ifos == old.ifos
 			AND new.name == old.name
-			AND new.version == old.version
-			AND new.comment == old.comment
 		)
 	GROUP BY
 		old.segment_def_id;
