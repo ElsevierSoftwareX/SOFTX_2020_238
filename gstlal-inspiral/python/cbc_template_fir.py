@@ -203,6 +203,7 @@ def condition_imr_template(approximant, data, sample_rate_max, max_mass):
 	# sample index where we want the peak to be.  300 M for the max
 	# mass to leave room for ringdown
 	target_index = len(data) - int(sample_rate_max * (300. * max_mass) * lal.MTSUN_SI)
+	assert target_index >= 0, "waveform too short"
 	# cyclically permute the samples so the sample with peak amplitude
 	# has the desired index
 	data = numpy.roll(data, target_index - max_index)
