@@ -202,7 +202,7 @@ def condition_imr_template(approximant, data, sample_rate_max, max_mass):
 	data *= numpy.exp(1.j * phase)
 	# sample index where we want the peak to be.  300 M for the max
 	# mass to leave room for ringdown
-	target_index = len(data) - int(sample_rate_max * max_mass * 300 * 5e-6)
+	target_index = len(data) - int(sample_rate_max * (300. * max_mass) * lal.MTSUN_SI)
 	# cyclically permute the samples so the sample with peak amplitude
 	# has the desired index
 	data = numpy.roll(data, target_index - max_index)
