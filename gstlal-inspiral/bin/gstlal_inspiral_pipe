@@ -403,7 +403,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			node = inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents + [priornodes[n], snrpdfnode],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-					input_files = {"likelihood-url":diststats + [priornodes[n].output_files["write-likelihood"]], "":inputs}
+					input_files = {"likelihood-url":diststats + [priornodes[n].output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]], "":inputs}
 				)
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(node)
 
