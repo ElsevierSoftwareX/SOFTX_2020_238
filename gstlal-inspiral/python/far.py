@@ -700,7 +700,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				progressbar = None
 			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
 			del progressbar
-			pdf = rate.InterpBinnedArray(binnedarray)
+			lnbinnedarray = binnedarray.copy()
+			with numpy.errstate(divide = "ignore"):
+				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
+			pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
 			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
 			# if the cache is full, delete the entry with the
 			# smallest age
@@ -759,10 +762,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
 		# evaluate it (snrs are alphabetical by instrument)
 		lnP_signal = snr_pdf(*tuple(rho for instrument, rho in snrs))
-		try:
-			lnP_signal = math.log(lnP_signal)
-		except ValueError:
-			return NegInf
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
@@ -1020,14 +1019,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		def mkinterp(binnedarray):
-			interp = binnedarray.__getitem__
-			return lambda x: interp((x,))
+			with numpy.errstate(divide = "ignore"):
+				# need to insert an element at the start to
+				# get the binning indexes to map the
+				# correct locations in the array
+				return numpy.hstack(([NaN], numpy.log(binnedarray.array))).__getitem__
 		if "instruments" in self.background_pdf:
-			self.background_pdf_interp["instruments"] = mkinterp(self.background_pdf["instruments"])
+			self.background_lnpdf_interp["instruments"] = mkinterp(self.background_pdf["instruments"])
 		if "instruments" in self.injection_pdf:
-			self.injection_pdf_interp["instruments"] = mkinterp(self.injection_pdf["instruments"])
+			self.injection_lnpdf_interp["instruments"] = mkinterp(self.injection_pdf["instruments"])
 		if "instruments" in self.zero_lag_pdf:
-			self.zero_lag_pdf_interp["instruments"] = mkinterp(self.zero_lag_pdf["instruments"])
+			self.zero_lag_lnpdf_interp["instruments"] = mkinterp(self.zero_lag_pdf["instruments"])
 
 	def pdf_from_rates_instruments(self, key, pdf_dict):
 		# instrument combos are probabilities, not densities.  be
@@ -1091,7 +1093,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
 			else:
 				age = 0
-			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(binnedarray), binnedarray, age
+			lnbinnedarray = binnedarray.copy()
+			with numpy.errstate(divide = "ignore"):
+				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
+			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf), binnedarray, age
 			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
 				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
 		return self
