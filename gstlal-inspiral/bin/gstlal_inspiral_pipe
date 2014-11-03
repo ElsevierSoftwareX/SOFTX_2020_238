@@ -65,6 +65,7 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 # import standard modules and append the lalapps prefix to the python path
 import sys, os, copy, math, stat
 import subprocess, socket, tempfile
+import itertools
 
 ##############################################################################
 # import the modules we need to build the pipeline
@@ -113,6 +114,14 @@ def get_max_length(bank_cache, verbose = False):
 		xmldoc.unlink()
 
 	return max_time
+
+def chunks(l, n):
+	for i in xrange(0, len(l), n):
+		yield l[i:i+n]
+
+def flatten(lst):
+    "Flatten one level of nesting"
+    return list(itertools.chain.from_iterable(lst))
 
 #
 # get a dictionary of all the disjoint 2+ detector combination segments
@@ -213,11 +222,6 @@ def create_svd_bank_strings(svd_nodes, instruments = None):
 		svd_bank_string = svd_bank_string.strip(",")
 		outstrings.append(svd_bank_string)
 	return outstrings
-
-
-def chunks(l, n):
-	for i in xrange(0, len(l), n):
-		yield l[i:i+n]
 
 
 def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict):
@@ -385,14 +389,21 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				input_files = {"":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
-		node = inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
-				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"likelihood-url":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]], "":inputs}
-			)
 		priornodes.append(priornode)
 		rankpdf_nodes.append(calcranknode)
-		likelihood_nodes.setdefault(None,[]).append(node)
+
+		
+		# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
+		likelihood_nodes.setdefault(None,[]).append(
+			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
+				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"likelihood-url":diststats +
+					[priornode.output_files["write-likelihood"],
+					snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+					}
+				) for chunked_inputs in chunks(inputs, 25)]
+			)
 
 	# then injections
 	for inj in options.injections:
@@ -400,19 +411,27 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			inputs = [o[0] for o in outputs]
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
-			node = inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
+			# Break up the likelihood jobs into chunks to process fewer files, e.g., 25
+			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
+				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents + [priornodes[n], snrpdfnode],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-					input_files = {"likelihood-url":diststats + [priornodes[n].output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]], "":inputs}
+					input_files = {"likelihood-url":diststats + 
+						[priornodes[n].output_files["write-likelihood"], 
+						snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+						}
+					) for chunked_inputs in chunks(inputs, 25)]
 				)
-			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(node)
 
 	
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
 	files_to_group = 10
 	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
+		# Flatten the nodes for this sub bank
+		nodes = flatten(nodes)
 		merge_nodes = []
-		inputs = sum([node.input_files[""] for node in nodes], [])
+		# Flatten the input/output files from calc_likelihood
+		inputs = flatten([node.input_files[""] for node in nodes])
 		if inj is None:
 			# 10 at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 			for n in range(0, len(inputs), files_to_group):
