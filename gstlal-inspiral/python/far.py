@@ -1522,11 +1522,9 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 	value of the ranking statistic in the signal and noise populations
 	respectively.
 	"""
-	sample_func = iter(samples).next
 	exp = math.exp
 	isnan = math.isnan
-	for i in xrange(nsamples):
-		ln_lamb, lnP_signal, lnP_noise = sample_func()
+	for ln_lamb, lnP_signal, lnP_noise in itertools.islice(samples, nsamples):
 		if isnan(ln_lamb):
 			raise ValueError("encountered NaN likelihood ratio")
 		if isnan(lnP_signal) or isnan(lnP_noise):
