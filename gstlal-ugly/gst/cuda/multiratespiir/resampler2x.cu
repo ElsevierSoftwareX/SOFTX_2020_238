@@ -124,7 +124,7 @@ __global__ void downsample2x (const float amplifier,
 	}
 }
 
-
+#if 0
 __global__ void reload_queue_spiir (float *queue,
 				 float *queue_spiir,
 				 int num_inchunk,
@@ -143,6 +143,8 @@ __global__ void reload_queue_spiir (float *queue,
 	}
 
 }
+#endif
+
 /*
  * cuda filter kernel
  */
@@ -157,8 +159,8 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 					gint filt_len, gint delay_max,
 					gint len, 
 					guint nb, 
-					gint queue_spiir_last_sample,
-					gint queue_spiir_len)
+					gint queue_first_sample,
+					gint queue_len)
 {
 	unsigned int i,j;
 
@@ -217,7 +219,7 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 			{ 
 				//data = 0.01f;
 				//data = tex1Dfetch(texRef, shift+i+j);		//use texture, abandon now
-				data = cudaData[(shift+i+j+queue_spiir_last_sample)%queue_spiir_len];
+				data = cudaData[(shift+i+j+queue_first_sample)%queue_len];
 //				printf ("channelid %d, data %d %f\n", by, i+j, data);
 				fltrOutptReal[tx] = a1.re * previousSnr.re - a1.im * previousSnr.im + b0.re * data;
 		 
@@ -482,6 +484,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
   i = num_depths - 1;
 
+#if 0
   dim3 block(1, 1, 1);
   dim3 grid(1, 1, 1);
   block.x = MIN (THREADSPERBLOCK, num_inchunk);
@@ -495,22 +498,26 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 				 num_inchunk,
 				 SPSTATE(i)->queue_first_sample,
 				 SPSTATE(i)->queue_len,
-				 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
+				 SPSTATE(i)->delay_max + SPSTATE(i)->queue_spiir_last_sample,
 				 SPSTATE(i)->queue_spiir_len);
 
   gpuErrchk (cudaPeekAtLastError ());
 
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
+#endif
 
   update_nb (spstate, num_inchunk, num_depths-1);
 /*
  *	cuda kernel
  */
+  dim3 block(1, 1, 1);
+  dim3 grid(1, 1, 1);
+
   block.x = SPSTATE(i)->num_filters;
   grid.y = SPSTATE(i)->num_templates;
 //  share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
-  share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+  uint share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
 
   // using mutex to make sure that kernel launch is right after texture binding
   //g_mutex_lock(element->cuTex_lock);
@@ -528,20 +535,21 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
 							SPSTATE(i)->d_y, 
-						 	SPSTATE(i)->d_queue_spiir,
+						 	SPSTATE(i)->d_queue,
 							SPSTATEUP(i)->d_mem, 
 							SPSTATEUP(i)->mem_len,
 							SPSTATEUP(i)->filt_len,
-							SPSTATE(i)->d_max,
+							SPSTATE(i)->delay_max,
 							num_inchunk, 
 							SPSTATE(i)->nb,
-							SPSTATE(i)->queue_spiir_last_sample,
-							SPSTATE(i)->queue_spiir_len);
+							SPSTATE(i)->queue_first_sample,
+							SPSTATE(i)->queue_len);
   //g_mutex_unlock(element->cuTex_lock);
 
   gpuErrchk (cudaPeekAtLastError ());
 
-  SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + num_inchunk) % SPSTATE(i)->queue_spiir_len;
+//  SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + num_inchunk) % SPSTATE(i)->queue_spiir_len;
+  SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
   gint resample_processed, spiir_processed;
 
@@ -550,7 +558,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     resample_processed = num_inchunk - SPSTATEUP(i+1)->last_sample;
     spiir_processed = resample_processed * 2;
 
-
+#if 0
     block.x = MIN (THREADSPERBLOCK, spiir_processed);
     grid.x = 1;
     grid.y = 1;
@@ -565,12 +573,13 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 				 spiir_processed,
 				 SPSTATE(i)->queue_first_sample,
 				 SPSTATE(i)->queue_len,
-				 SPSTATE(i)->d_max + SPSTATE(i)->queue_spiir_last_sample,
+				 SPSTATE(i)->delay_max + SPSTATE(i)->queue_spiir_last_sample,
 				 SPSTATE(i)->queue_spiir_len);
 
     gpuErrchk (cudaPeekAtLastError ());
 
     SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
+#endif
 
     update_nb(spstate, spiir_processed, i);
   /*
@@ -599,24 +608,26 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
 							SPSTATE(i)->d_y, 
-						 	SPSTATE(i)->d_queue_spiir,
+						 	SPSTATE(i)->d_queue,
 							SPSTATEUP(i)->d_mem, 
 							SPSTATEUP(i)->mem_len,
 							SPSTATEUP(i)->filt_len,
-							SPSTATE(i)->d_max,
+							SPSTATE(i)->delay_max,
 							spiir_processed, 
 							SPSTATE(i)->nb,
-							SPSTATE(i)->queue_spiir_last_sample,
-							SPSTATE(i)->queue_spiir_len);
+							SPSTATE(i)->queue_first_sample,
+							SPSTATE(i)->queue_len);
     }
     //g_mutex_unlock(element->cuTex_lock);
 
     gpuErrchk (cudaPeekAtLastError ());
 
-    SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + spiir_processed) % SPSTATE(i)->queue_spiir_len;
+//    SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + spiir_processed) % SPSTATE(i)->queue_spiir_len;
+
+    SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
 
     block.x = MIN(THREADSPERBLOCK, resample_processed);
-    nb = resample_processed % block.x == 0 ? resample_processed/block.x : (int)resample_processed/block.x + 1;
+//    int step = resample_processed % block.x == 0 ? resample_processed/block.x : (int)resample_processed/block.x + 1;
     grid.y = SPSTATEUP(i)->channels;
     share_mem_sz = SPSTATEUP(i)->sinc_len * sizeof(float);
 
