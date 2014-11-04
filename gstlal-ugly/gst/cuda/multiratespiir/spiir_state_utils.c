@@ -124,7 +124,7 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 			tmp_max = tmp_d[i] > tmp_max ? tmp_d[i] : tmp_max;
 		}
 
-		SPSTATE(depth)->d_max = tmp_max;
+		SPSTATE(depth)->delay_max = tmp_max;
 		cudaMalloc((void **) &(SPSTATE(depth)->d_d), d_eff_len * sizeof (int));
 
 		cudaMemcpyAsync(SPSTATE(depth)->d_d, tmp_d, d_eff_len * sizeof(int), cudaMemcpyHostToDevice, stream);
@@ -161,14 +161,6 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 	{
 		SPSTATE(i) = (SpiirState *)malloc(sizeof(SpiirState));
 		SPSTATE(i)->depth = i;
-		SPSTATE(i)->queue_len = (2 * num_head_cover_samples + num_exe_samples) / pow (2, i) + 1; 
-		SPSTATE(i)->queue_first_sample = 0;
-		SPSTATE(i)->queue_last_sample = 0;
-		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
-		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
-		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
-
-        gpuErrchk (cudaPeekAtLastError ());
 		inrate = rate/pow(2, i);
 		outrate = inrate / 2;
 
@@ -179,13 +171,18 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 
 	}
 	spiir_state_load_bank (spstate, num_depths, bank, bank_len, stream);
+
 	for(i=0; i<num_depths; i++) {
+
 		SPSTATE(i)->nb = 0;
 		SPSTATE(i)->pre_out_spiir_len = 0;
-		SPSTATE(i)->queue_spiir_last_sample = 0;
-		SPSTATE(i)->queue_spiir_len = SPSTATE(i)->queue_len + SPSTATE(i)->d_max;
-		cudaMalloc((void **) &(SPSTATE(i)->d_queue_spiir), SPSTATE(i)->queue_spiir_len * sizeof(float));
-		cudaMemsetAsync(SPSTATE(i)->d_queue_spiir, 0, SPSTATE(i)->queue_spiir_len * sizeof(float), stream);
+		SPSTATE(i)->queue_len = (2 * num_head_cover_samples + num_exe_samples) / pow (2, i) + 1 + SPSTATE(i)->delay_max; 
+		SPSTATE(i)->queue_first_sample = 0;
+		SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
+		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
+		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
+		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
+
 	}
 
 	return spstate;
@@ -214,11 +211,11 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
   for(i=0; i<num_depths; i++)
   {
     SPSTATE(i)->pre_out_spiir_len = 0;
-    SPSTATE(i)->queue_spiir_last_sample = 0;
 
-    cudaMemsetAsync(SPSTATE(i)->d_queue_spiir, 0, SPSTATE(i)->queue_spiir_len * sizeof(float), stream);
+    cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
 
-    SPSTATE(i)->queue_first_sample = SPSTATE(i)->queue_last_sample;
+    SPSTATE(i)->queue_first_sample = 0;
+    SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);

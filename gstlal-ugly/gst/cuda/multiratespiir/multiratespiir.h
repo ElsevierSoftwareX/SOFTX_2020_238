@@ -69,12 +69,14 @@ typedef struct _SpiirState {
   COMPLEX_F *d_a1;
   COMPLEX_F *d_b0;
   int *d_d;
-  gint d_max;
+  gint delay_max;
   COMPLEX_F *d_y;
+
+#if 0
   float *d_queue_spiir; // circular buffer (or ring buffer) for downsampler, it stores history samples
   gint queue_spiir_last_sample;
   gint queue_spiir_len;
-  gint pre_out_spiir_len;
+#endif
   guint nb;
   gint num_filters;
   gint num_templates;
@@ -85,6 +87,7 @@ typedef struct _SpiirState {
   gint queue_len;
   gint queue_first_sample;  // start position
   gint queue_last_sample;  // end position
+  gint pre_out_spiir_len;
 } SpiirState;
 
 /**
