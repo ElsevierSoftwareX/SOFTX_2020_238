@@ -21,11 +21,14 @@
 #
 # ### Command line interface
 #
-#	+ `--base` [base]: Set the prefix for output filenames (default = \"cbc_plotsummary_\").
 #	+ `--database` [filename]: Retrieve search results from this database (optional).  Can be given multiple times.
 #	+ `--database-cache` [filename]: Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.
+#	+ `--max-snr` [value] (float): Plot SNR PDFs up to this value of SNR (default = 200).
 #	+ `--max-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).
+#	+ `--min-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -10).
+#	+ `--output-dir` [path]: Write output to this directory (default = ".").
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
 #	+ `--verbose`: Be verbose.
 
 import bisect
@@ -66,14 +69,14 @@ golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
-	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
 	parser.add_option("-c", "--database-cache", metavar = "filename", help = "Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.")
 	parser.add_option("--max-snr", metavar = "SNR", default = 200., type = "float", help = "Plot SNR PDFs up to this value of SNR (default = 200).")
 	parser.add_option("--max-log-lambda", metavar = "value", default = 170., type = "float", help = "Plot ranking statistic CCDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 170).")
 	parser.add_option("--min-log-lambda", metavar = "value", default = -10., type = "float", help = "Plot ranking statistic CCDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -10).")
+	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Write output to this directory (default = \".\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
