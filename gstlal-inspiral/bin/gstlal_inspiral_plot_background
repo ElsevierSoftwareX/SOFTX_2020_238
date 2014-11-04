@@ -54,6 +54,7 @@ import sys
 import warnings
 
 
+from glue import iterutils
 from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
@@ -402,11 +403,12 @@ if options.verbose:
 fig.savefig(plotname)
 
 
-for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint_pdf_cache.items():
-	instruments = sorted(key[0])
+for (instruments, horizon_distances), (ignored, binnedarray, ignored) in sorted(coinc_params_distributions.snr_joint_pdf_cache.items(), key = lambda ((a, horizon_distances), b): sorted(horizon_distances)):
 	if len(instruments) > 2:
 		# FIXME:  figure out how to plot 3D PDFs
 		continue
+	instruments = sorted(instruments)
+	horizon_distances = dict(horizon_distances)
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((5, 4))
@@ -415,7 +417,7 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	y = binnedarray.bins[1].centres()
 	z = binnedarray.array
 	if numpy.isnan(z).any():
-		warnings.warn("%s PDF contains NaNs" % sorted(instruments))
+		warnings.warn("%s SNR PDF for %s contains NaNs" % (", ".join(instruments), ", ".join("%s=%g" % instdist for instdist in sorted(horizon_distances.items()))))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 
 	# the range of the plots
@@ -440,7 +442,7 @@ for key, (ignored, binnedarray, ignored) in coinc_params_distributions.snr_joint
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
 	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
 	axes.set_title(r"$P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_snr_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
+	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_snr_pdf_%s" % (options.user_tag, "_".join(iterutils.flatten(sorted(horizon_distances)))), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), ".png", path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -456,6 +458,7 @@ for key, binnedarray in coinc_params_distributions.background_pdf.items() if coi
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
+
 
 for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coinc_params_distributions is not None else ():
 	if "_snr_chi" not in key:
