@@ -427,9 +427,18 @@ for (instruments, horizon_distances), (ignored, binnedarray, ignored) in sorted(
 	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
 	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
 
+	# don't try to plot blank PDFs (it upsets older matplotlibs)
+	if z.max() == 0.:
+		continue
+
 	# these plots only require about 20 orders of magnitude of dynamic
 	# range
 	numpy.clip(z, z.max() * 1e-20, float("+inf"), out = z)
+
+	# one last check for craziness to make error messages more
+	# meaningful
+	assert not numpy.isnan(z).any()
+	assert not (z <= 0.).any()
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
