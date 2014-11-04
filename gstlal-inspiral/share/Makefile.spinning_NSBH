@@ -13,7 +13,7 @@ NUM_SPLIT_TEMPLATES = 200
 OVERLAP = 20
 # The program used to make the template bank. This will be searched for in the
 # process param table in order to extract some metadata
-BANK_PROGRAM = pycbc_geom_nonspinbank
+BANK_PROGRAM = pycbc_geom_aligned_bank
 # The approximant that you wish to filter with
 APPROXIMANT = TaylorF2
 
@@ -30,7 +30,7 @@ STOP =  967384015
 # A user tag for the run
 TAG = test
 # A web directory for output
-WEBDIR = ~/public_html/MDC/NSBH/Summer2014/recolored/nonspin/$(START)-$(STOP)-$(TAG)
+WEBDIR = ~/public_html/MDC/NSBH/Summer2014/recolored/spin/$(START)-$(STOP)-$(TAG)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
 NUMBANKS = 4
 # The control peak time for the composite detection statistic.  If set to 0 the
@@ -88,8 +88,8 @@ include Makefile.offline_analysis_rules
 
 all : dag
 
-bank_no_spin.xml.gz :
-	gsiscp h2.atlas.aei.uni-hannover.de:/home/tito/projects/spin_search/nsbh_mdc1/bank_no_spin/bank_no_spin.xml.gz .
+bank_aligned_spin.xml.gz :
+	gsiscp h2.atlas.aei.uni-hannover.de:/home/tito/projects/spin_search/nsbh_mdc1/bank_aligned_spin/bank_aligned_spin.xml.gz .
 
 $(INJECTIONS):
 	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(INJECTION_REGEX)}" .
@@ -97,7 +97,7 @@ $(INJECTIONS):
 $(FAR_INJECTIONS):
 	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(FAR_INJECTION_REGEX)}" .
 
-%_split_bank.cache : bank_no_spin.xml.gz
+%_split_bank.cache : bank_aligned_spin.xml.gz
 	mkdir -p $*_split_bank
 	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 

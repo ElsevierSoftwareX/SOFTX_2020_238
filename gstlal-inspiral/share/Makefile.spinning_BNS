@@ -13,7 +13,7 @@ NUM_SPLIT_TEMPLATES = 200
 OVERLAP = 20
 # The program used to make the template bank. This will be searched for in the
 # process param table in order to extract some metadata
-BANK_PROGRAM = pycbc_geom_nonspinbank
+BANK_PROGRAM = pycbc_aligned_bank_cat
 # The approximant that you wish to filter with
 APPROXIMANT = TaylorF2
 
@@ -30,7 +30,7 @@ STOP =  967384015
 # A user tag for the run
 TAG = test
 # A web directory for output
-WEBDIR = ~/public_html/MDC/NSBH/Summer2014/recolored/nonspin/$(START)-$(STOP)-$(TAG)
+WEBDIR = ~/public_html/MDC/BNS/Summer2014/recolored/spin/$(START)-$(STOP)-$(TAG)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
 NUMBANKS = 4
 # The control peak time for the composite detection statistic.  If set to 0 the
@@ -55,12 +55,10 @@ SAMPLES_MAX_256 = 512
 
 # The seed is the string before the suffix _injections.xml
 # Change as appropriate, whitespace is important
-INJECTIONS := HL-INJECTIONS_976731_NSBHMDCINJ_SET1_T4-966384015-5184000.xml HL-INJECTIONS_976765_NSBHMDCINJ_SET1_T2-966384015-5184000.xml
-FAR_INJECTIONS := HL-FAR_INJECTIONS_976731_NSBHMDCINJ_SET1_T4-966384015-5184000.xml HL-FAR_INJECTIONS_976765_NSBHMDCINJ_SET1_T2-966384015-5184000.xml
-# NOTE you shouldn't need to change these next three lines
+INJECTIONS := BNS-SpinMDC-ISOTROPIC.xml BNS-SpinMDC-ALIGNED.xml
+# NOTE you shouldn't need to change these next two lines
 comma:=,
 INJECTION_REGEX = $(subst $(space),$(comma),$(INJECTIONS))
-FAR_INJECTION_REGEX = $(subst $(space),$(comma),$(FAR_INJECTIONS))
 
 #
 # Segment and frame type info
@@ -88,16 +86,13 @@ include Makefile.offline_analysis_rules
 
 all : dag
 
-bank_no_spin.xml.gz :
-	gsiscp h2.atlas.aei.uni-hannover.de:/home/tito/projects/spin_search/nsbh_mdc1/bank_no_spin/bank_no_spin.xml.gz .
+BNS_Spin0.4_30Hz_earlyaLIGO.xml:
+	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/tmpltbank/BNS_Spin0.4_30Hz_earlyaLIGO.xml .
 
 $(INJECTIONS):
-	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(INJECTION_REGEX)}" .
+	gsiscp sugar-dev1.phy.syr.edu:/home/jveitch/public_html/bns/mdc/spin/"{$(INJECTION_REGEX)}" .
 
-$(FAR_INJECTIONS):
-	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(FAR_INJECTION_REGEX)}" .
-
-%_split_bank.cache : bank_no_spin.xml.gz
+%_split_bank.cache : BNS_Spin0.4_30Hz_earlyaLIGO.xml
 	mkdir -p $*_split_bank
 	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 
@@ -112,8 +107,8 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
-dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) $(FAR_INJECTIONS)
-	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS) $(FAR_INJECTION_LIST)
+dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS)
 
 V1_frame.cache:
 	# FIXME force the observatory column to actually be instrument
@@ -131,7 +126,7 @@ frame.cache: $(FRAME_CACHE_FILES)
 	cat $(FRAME_CACHE_FILES) > frame.cache
 
 segments.xml.gz: frame.cache
-	# These segments come from the MDC set	
+	# These segments come from the MDC set
 	gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/SELECTED_SEGS.xml.gz $@
 	gstlal_cache_to_segments frame.cache nogaps.xml
 	gstlal_segments_operations --segment-file1 $@ --segment-file2 nogaps.xml --intersection --output-file $@
@@ -149,5 +144,5 @@ clean:
 	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
 	-rm -vf tisi0.xml tisi1.xml
 	-rm -rf *_split_bank
-	-rm -rf bank_no_spin.xml.gz
-	-rm -rf $(INJECTIONS) $(FAR_INJECTIONS)
+	-rm -rf BNS_Spin0.4_30Hz_earlyaLIGO.xml
+	-rm -rf $(INJECTIONS)
