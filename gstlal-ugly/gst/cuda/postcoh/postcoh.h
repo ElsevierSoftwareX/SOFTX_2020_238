@@ -18,8 +18,8 @@
  */
 
 
-#ifndef __CUDA_MULTIRATE_SPIIR_H__
-#define __CUDA_MULTIRATE_SPIIR_H__
+#ifndef __CUDA_POSTCOH_H__
+#define __CUDA_POSTCOH_H__
 
 #include <glib.h>
 #include <gst/gst.h>
@@ -31,19 +31,19 @@
 
 G_BEGIN_DECLS
 
-#define CUDA_TYPE_MULTIRATE_SPIIR \
-  (cuda_multirate_spiir_get_type())
-#define CUDA_MULTIRATE_SPIIR(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),CUDA_TYPE_MULTIRATE_SPIIR,CudaMultirateSPIIR))
-#define CUDA_MULTIRATE_SPIIR_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),CUDA_TYPE_MULTIRATE_SPIIR,CudaMultirateSPIIRClass))
-#define GST_IS_CUDA_MULTIRATE_SPIIR(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),CUDA_TYPE_MULTIRATE_SPIIR))
-#define GST_IS_CUDA_MULTIRATE_SPIIR_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_MULTIRATE_SPIIR))
+#define CUDA_TYPE_POSTCOH \
+  (cuda_postcoh_get_type())
+#define CUDA_POSTCOH(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),CUDA_TYPE_POSTCOH,CudaPostCoh))
+#define CUDA_POSTCOH_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),CUDA_TYPE_POSTCOH,CudaPostCohClass))
+#define GST_IS_CUDA_POSTCOH(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),CUDA_TYPE_POSTCOH))
+#define GST_IS_CUDA_POSTCOH_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_POSTCOH))
 
-typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
-typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
+typedef struct _CudaPostCoh CudaPostCoh;
+typedef struct _CudaPostCohClass CudaPostCohClass;
 
 typedef struct _Complex_F
 {
@@ -62,7 +62,7 @@ typedef struct _ResamplerState{
   gint sinc_len;
   gint inrate;
   gint outrate;
-  float amplifier; // correction factor for resampling
+  float amplifier;
 } ResamplerState;
 
 typedef struct _SpiirState {
@@ -81,18 +81,18 @@ typedef struct _SpiirState {
 
   gint depth; // 0-6
   ResamplerState *downstate, *upstate;
-  float *d_queue; // circular buffer (or ring buffer) for downsampler and spiir 
+  float *d_queue; // circular buffer (or ring buffer) for downsampler
   gint queue_len;
   gint queue_first_sample;  // start position
   gint queue_last_sample;  // end position
 } SpiirState;
 
 /**
- * CudaMultirateSPIIR:
+ * CudaPostCoh:
  *
  * Opaque data structure.
  */
-struct _CudaMultirateSPIIR {
+struct _CudaPostCoh {
   GstBaseTransform element;
 
   /* <private> */
@@ -130,12 +130,12 @@ struct _CudaMultirateSPIIR {
   cudaStream_t stream;
 };
 
-struct _CudaMultirateSPIIRClass {
+struct _CudaPostCohClass {
   GstBaseTransformClass parent_class;
 };
 
-GType cuda_multirate_spiir_get_type(void);
+GType cuda_postcoh_get_type(void);
 
 G_END_DECLS
 
-#endif /* __CUDA_MULTIRATE_SPIIR_H__ */
+#endif /* __CUDA_POSTCOH_H__ */
