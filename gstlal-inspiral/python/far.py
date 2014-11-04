@@ -699,13 +699,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			else:
 				progressbar = None
 			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
+			del progressbar
 			pdf = rate.InterpBinnedArray(binnedarray)
 			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
 			# if the cache is full, delete the entry with the
 			# smallest age
 			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
 				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
-			del progressbar
+			if verbose:
+				print >>sys.stderr, "%d/%d slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
 		return pdf
 
 	def coinc_params(self, events, offsetvector):
