@@ -650,7 +650,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# class-level cache of pre-computed SNR joint PDFs.  structure is like
 	#
 	# 	= {
-	#		frozenset([("H1", horiz_dist), ("L1", horiz_dist)]): (InterpBinnedArray, BinnedArray, age),
+	#		frozenset(("H1", ...)), frozenset([("H1", horiz_dist), ("L1", horiz_dist), ...]): (InterpBinnedArray, BinnedArray, age),
 	#		...
 	#	}
 	#
