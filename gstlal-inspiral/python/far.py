@@ -601,10 +601,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# smaller is treated as though it were 0.
 	# FIXME:  is this choice of distance quantization appropriate?
 	@staticmethod
-	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5), min_ratio = 1.5**-8):
+	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5), min_ratio = 0.1):
 		horizon_distance_norm = max(horizon_distances.values())
 		assert horizon_distance_norm != 0.
-		return dict((instrument, (0. if horizon_distance / horizon_distance_norm < min_ratio else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
+		if math.isinf(log_distance_tolerance):
+			return dict((instrument, 1.) for instrument in horizon_distances)
+		min_distance = min_ratio * horizon_distance_norm
+		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
 	# binnings (filter funcs look-up initialized in .__init__()
 	binnings = {
