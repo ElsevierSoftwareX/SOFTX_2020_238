@@ -49,6 +49,7 @@
 #	+ `--ht-gate-threshold [float]: set a threshold on whitened h(t) to veto glitches
 #	+ `--inspiral-executable [str]: Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
 #	+ `--blind-injections [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
+#	+ `--far-injections` [filename]: Injection files with injections too far away to be seen that are not filtered. Must be 1:1 with --injections if given at all. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.
 #	+ `--verbose: Be verbose
 #
 # ### Diagram of the HTCondor workfow produced
