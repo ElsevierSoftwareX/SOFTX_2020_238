@@ -1168,7 +1168,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
 		>>> x.next()
 		"""
-		snr_slope = 0.5
+		snr_slope = 0.8 / len(instruments)**3
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
