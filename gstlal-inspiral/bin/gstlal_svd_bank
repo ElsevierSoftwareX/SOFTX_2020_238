@@ -39,6 +39,7 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from pylal import series as lalseries
 from gstlal import svd_bank
+from gstlal.far import ThincaCoincParamsDistributions
 
 ## @file gstlal_svd_bank
 # This program will create svd bank files; see gstlal_svd_bank for more information
@@ -59,7 +60,7 @@ from gstlal import svd_bank
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
 #	+ `--ortho-gate-fap` [probability]: Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).
-#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 4.0).
+#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 4.0).  Currently this cannot be changed. 
 #	+ `--write-svd-bank` [filename]: Set the filename in which to save the template bank (required).
 #	+ `--verbose`: Be verbose (optional).
 #	+ `--clipleft` [int]: Remove poorly reconstructable templates from the left edge of each sub-bank.
@@ -114,7 +115,7 @@ parser.add_option("--svd-tolerance", metavar = "match", type = "float", default 
 parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
-parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0).")
+parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0). Currently this cannot be changed.")
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--clipleft", type = "int", metavar = "N", action = "append", help = "Remove N poorly reconstructable templates from the left edge of each sub-bank. Required")
@@ -144,6 +145,8 @@ if not (len(options.template_bank) == len(options.clipleft) == len(options.clipr
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
 
+if options.snr_threshold != ThincaCoincParamsDistributions.snr_min:
+	raise ValueError("--snr-threshold must be %f" % ThincaCoincParamsDistributions.snr_min)
 
 
 #
