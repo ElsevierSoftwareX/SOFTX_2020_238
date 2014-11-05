@@ -751,17 +751,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return params
 
 	def lnP_noise(self, params):
-		if params is not None:
-			params = params.copy()
-			del params["horizons"]
+		params = params.copy()
+		del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).lnP_noise(params)
 
 	def lnP_signal(self, params):
-		if params is None:
-			return None
-
-		lnP_noise = self.lnP_noise(params)
-
 		# (instrument, snr) pairs sorted alphabetically by
 		# instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
@@ -782,6 +776,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# return logarithm of (.99 P(..|signal) + 0.01 P(..|noise))
 		# FIXME:  investigate how to determine correct mixing ratio
+		lnP_noise = self.lnP_noise(params)
 		if math.isinf(lnP_noise) and math.isinf(lnP_signal):
 			if lnP_noise < 0. and lnP_signal < 0.:
 				return NegInf
@@ -795,19 +790,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# indicate to the parent class that some parameter doesn't have a
 	# corresponding rate array
 	def add_zero_lag(self, params, *args, **kwargs):
-		if params is not None:
-			params = params.copy()
-			del params["horizons"]
+		params = params.copy()
+		del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).add_zero_lag(params, *args, **kwargs)
 	def add_injection(self, params, *args, **kwargs):
-		if params is not None:
-			params = params.copy()
-			del params["horizons"]
+		params = params.copy()
+		del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).add_injection(params, *args, **kwargs)
 	def add_background(self, params, *args, **kwargs):
-		if params is not None:
-			params = params.copy()
-			del params["horizons"]
+		params = params.copy()
+		del params["horizons"]
 		return super(ThincaCoincParamsDistributions, self).add_background(params, *args, **kwargs)
 
 	def add_background_prior(self, instruments, n = 1., transition = 23., verbose = False):
