@@ -59,6 +59,9 @@ from gstlal import inspiral_pipe
 #	+ `--instrument` [ifo]: Override the instrument, required
 #	+ `--bank-program` [name]: Select name of the program used to generate the template bank (default: tmpltbank).
 #	+ `--verbose`: Be verbose.
+#	+ `--approximant` [string]: Must specify an approximant
+#	+ `--f-low` [frequency] (floate): Lower frequency cutoff
+#	+ `--group-by-chi`: group templates into chi bins 0.1 in chi - helps with SVD.
 #
 # ### Review status
 #
