@@ -2165,15 +2165,16 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 
 	where X is a numpy array of length n_dim.
 
-	The generator yields a total of n_walkers * n_samples_per_walker
-	samples drawn from the n_dim-dimensional parameter space.  Each
-	sample is returned as a numpy array.
+	The generator yields a total of n_samples_per_walker arrays each of
+	which is n_walkers by n_dim in size.  Each row is a sample drawn
+	from the n_dim-dimensional parameter space.
 
-	pos0 is an n_walker by n_dim array giving the initial positions of
+	pos0 is an n_walkers by n_dim array giving the initial positions of
 	the walkers (this parameter is currently not optional).  n_burn
 	iterations of the MCMC sampler will be executed and discarded to
 	allow the system to stabilize before samples are yielded to the
-	calling code.
+	calling code.  A chain can be continued by passing the last return
+	value as pos0 and setting n_burn = 0.
 
 	NOTE:  the samples yielded by this generator are not drawn from the
 	PDF independently of one another.  The correlation length is not
@@ -2183,7 +2184,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 	# construct a sampler
 	#
 
-	sampler = emcee.EnsembleSampler(n_walkers, n_dim, lnprobfunc, args = args, threads = 2)
+	sampler = emcee.EnsembleSampler(n_walkers, n_dim, lnprobfunc, args = args)
 
 	#
 	# set walkers at initial positions
@@ -2193,13 +2194,16 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 	assert pos0 is not None, "auto-selection of initial positions not implemented"
 
 	#
-	# burn-in:  run for a while to get better initial positions
+	# burn-in:  run for a while to get better initial positions.
+	# run_mcmc() doesn't like being asked for 0 iterations, so need to
+	# check for that
 	#
 
-	pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
+	if n_burn:
+		pos0, ignored, ignored = sampler.run_mcmc(pos0, n_burn, storechain = False)
 	if progressbar is not None:
 		progressbar.increment(delta = n_burn)
-	if sampler.acceptance_fraction.min() < 0.4:
+	if n_burn and sampler.acceptance_fraction.min() < 0.4:
 		print >>sys.stderr, "\nwarning:  low burn-in acceptance fraction (min = %g)" % sampler.acceptance_fraction.min()
 
 	#
@@ -2209,8 +2213,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 
 	sampler.reset()
 	for coordslist, ignored, ignored in sampler.sample(pos0, iterations = n_samples_per_walker, storechain = False):
-		for coords in coordslist:
-			yield coords
+		yield coordslist
 		if progressbar is not None:
 			progressbar.increment()
 	if sampler.acceptance_fraction.min() < 0.5:
@@ -2236,7 +2239,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None, chain_file = None):
 	"""
 	FIXME:  document this
 	"""
@@ -2285,24 +2288,45 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	nsample = 400000
 	nburn = 1000
 
+	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+	samples = numpy.empty((nsample, nwalkers, ndim), dtype = "double")
+
 	if progressbar is not None:
 		progressbar.max = nsample + nburn
 		progressbar.show()
 
-	if True:
-		pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+	if chain_file is not None:
+		if "chain" in chain_file:
+			# load chain from HDF file
+			for i in sorted(chain_file["chain"]):
+				samples[int(i),:,:] = chain_file["chain/%s" % i]
+				if progressbar is not None:
+					progressbar.max = nsample
+					progressbar.increment()
+		try:
+			i = int(i)
+		except NameError:
+			# loop did no iterations, file contains no chain
+			# samples
+			i = 0
+		else:
+			# skip burn-in, restart chain from last position
+			pos0 = samples[i,:,:]
+			i += 1
+			nburn = 0
+	if nburn:
+		# no HDF file or file was empty, still need burn-in.  seed
+		# signal rate walkers from exponential distribution,
+		# background rate walkers from poisson distribution
 		pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
 		pos0[:,1] = numpy.random.poisson(lam = len(ln_likelihood_ratios), size = (nwalkers,))
-		samples = numpy.empty((nwalkers * nsample, ndim), dtype = "double")
-		for i, sample in enumerate(run_mcmc(nwalkers, ndim, nsample, RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar)):
-			samples[i] = sample
-		import pickle
-		pickle.dump(samples, open("rate_posterior_samples.pickle", "w"))
-	else:
-		import pickle
-		samples = pickle.load(open("rate_posterior_samples.pickle"))
-		if progressbar is not None:
-			progressbar.update(progressbar.max)
+		i = 0
+
+	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, nsample - i, RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar), i):
+		# coordslist is nwalkers x ndim
+		samples[i,:,:] = coordslist
+		if chain_file is not None:
+			chain_file["chain/%08d" % i] = coordslist
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
@@ -2322,11 +2346,11 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# this assumes small bin sizes.
 	#
 
-	Rf_pdf = binned_rates_from_samples(samples[:,0])
+	Rf_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
 	Rf_pdf.array = Rf_pdf.array**2. / (Rf_pdf.bins[0].upper() - Rf_pdf.bins[0].lower())
 	Rf_pdf.to_pdf()
 
-	Rb_pdf = binned_rates_from_samples(samples[:,1])
+	Rb_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
 	Rb_pdf.array = Rb_pdf.array**2. / (Rb_pdf.bins[0].upper() - Rb_pdf.bins[0].lower())
 	Rb_pdf.to_pdf()
 
