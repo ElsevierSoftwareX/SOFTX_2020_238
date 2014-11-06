@@ -1019,78 +1019,62 @@ def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
 
-def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
-	if not zerolag_stats:
-		# no data
-		return None, None
-
-	zerolag_stats.sort(reverse = True)
-
-	fig, axes = create_plot(None, r"Number of Events")
-
-	zerolag_stats = numpy.array(zerolag_stats)
-
+def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None), max_events = 1000):
 	#
-	# determine the horizontal and vertical extent of the plot
+	# isolate relevent data
 	#
 
-	minX, maxX = min(zerolag_stats), max(zerolag_stats)
-	minN, maxN = 1, len(zerolag_stats)
+	zerolag_stats = zerolag_stats[:max_events]
 
 	#
-	# background
+	# background.  uncomment the two lines to make the background
+	# stair-step-style like the observed counts
 	#
 
-	N = numpy.logspace(-2, numpy.log10(len(zerolag_stats)), 1000)
-	x = farlivetime / N
-	line1, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k--', linewidth = 1)
+	#expected_count_x = expected_count_x.repeat(2)[1:]
+	#expected_count_y = expected_count_y.repeat(2)[:-1]
+	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
 	# error bands
 	#
 
-	x = x.repeat(2)[1:]
-	x = numpy.concatenate((x, x[::-1]))
-	N = N.repeat(2)[:-1]
-	line2, = axes.fill(x, sigma_region(N, 3.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
-	line3, = axes.fill(x, sigma_region(N, 2.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
-	line4, = axes.fill(x, sigma_region(N, 1.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
+	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
+	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
+	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
+	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
 
 	#
 	# zero-lag
 	#
 
-	N = numpy.arange(len(zerolag_stats), dtype = "double") + 1.0
-	x = numpy.array(zerolag_stats, dtype = "double")
-	line5, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
-		
+	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
+	line5, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
+
 	#
-	# done
+	# legend
 	#
 
 	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 
-	maxN = min(maxN, 100)
-	minX = float(farlivetime / maxN)
-	axes.set_xlim(minX, maxX)
-	axes.set_ylim(0.9 * min(N), maxN)
-	
-	lo, hi = axes.get_xlim()
-	hi = 10**math.ceil(math.log10(hi))
-	axes.set_xlim(lo, hi)
-	
-	return fig, axes
+	#
+	# adjust bounds of plot
+	#
+
+	xlim = max(zerolag_stats.min(), xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	axes.set_xlim(xlim)
+	axes.set_ylim((0.001, 10.**math.ceil(math.log10(max_events))))
 
 
 class RateVsThreshold(object):
 	def __init__(self):
 		self.background_ln_likelihood_ratio = []
 		self.zerolag_ln_likelihood_ratio = []
-		self.background_ifar = []
-		self.zerolag_ifar = []
+		self.background_far = []
+		self.zerolag_far = []
 		self.background_fap = []
 		self.zerolag_fap = []
 		self.background_snr = []
@@ -1125,41 +1109,43 @@ FROM
 		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
 	)
 WHERE
-	coinc_inspiral.combined_far is not NULL
+	coinc_event.likelihood >= 0.
 		"""):
-			try:
-				ifar = 1. / far
-			except ZeroDivisionError:
-				ifar = float("+inf")
 			if is_background:
 				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
-				self.background_ifar.append(ifar)
+				self.background_far.append(far)
 				self.background_fap.append(fap)
 				self.background_snr.append(snr)
 			else:
 				self.zerolag_ln_likelihood_ratio.append(ln_likelihood_ratio)
-				self.zerolag_ifar.append(ifar)
+				self.zerolag_far.append(far)
 				self.zerolag_fap.append(fap)
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
 		livetime = far.get_live_time(self.farsegs)
 
-		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
-		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
 		yield fig, "lr_vs_snr", False
-		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
-		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
-		axes.semilogx(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		axes.loglog(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
 		yield fig, "lr_vs_snr", True
 
-		for ln_likelihood_ratio, ifars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_ifar, True), (self.background_ln_likelihood_ratio, self.background_ifar, False)]:
-			fig, axes = create_farplot(ifars, livetime, is_open_box)
-			if fig is not None:
+		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
+			if fars:
+				fig, axes = create_plot(None, r"Number of Events")
+				axes.loglog()
+				# fars in ascending order --> ifars in descending order
+				zerolag_stats = 1. / numpy.array(sorted(fars))
+				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
+				expected_count_x = livetime / expected_count_y
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1167,12 +1153,37 @@ WHERE
 				axes.set_xlabel(r"Inverse False-Alarm Rate (s)")
 				yield fig, "count_vs_ifar", is_open_box
 
-			fig, axes = create_farplot(ln_likelihood_ratio, livetime, is_open_box)
-			if fig is not None:
+			if ln_likelihood_ratio:
+				fig, axes = create_plot(None, r"Number of Events")
+				axes.semilogy()
+
+				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
+
+				# we want to plot FAR(ln L) * livetime vs.
+				# ln L, but we don't have access to the
+				# ranking statistic data file where that
+				# function is encoded.  instead, we rely on
+				# the FARs stored in each coinc, together
+				# with the ln L assigned to each coinc, to
+				# provide us with a collection of samples
+				# of that function.  to get more points, we
+				# combine data from the zero-lag and
+				# background coincs.  in the future,
+				# perhaps this program could be provided
+				# with the marginalized ranking statistic
+				# PDF data file
+
+				expected_count_x = self.zerolag_ln_likelihood_ratio + self.background_ln_likelihood_ratio
+				order = range(len(expected_count_x))
+				order.sort(key = lambda i: expected_count_x[i], reverse = True)
+				expected_count_x = numpy.array(expected_count_x)[order]
+				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
+
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
 				if is_open_box:
-					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold")
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
-					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold (Closed Box)")
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				axes.set_xlabel(r"$\ln \Lambda$")
 				yield fig, "count_vs_lr", is_open_box
 
