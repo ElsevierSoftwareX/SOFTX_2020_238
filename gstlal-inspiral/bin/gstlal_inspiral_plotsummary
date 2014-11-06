@@ -132,7 +132,7 @@ def parse_command_line():
  5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
  6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
-	parser.add_option("--far-thresh", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
+	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -145,9 +145,9 @@ def parse_command_line():
 	if not filenames:
 		filenames = []
 	if options.input_cache:
-		filenames.extend([lal.CacheEntry(l).path for l in open(options.input_cache).readlines()])
+		filenames.extend(c.path for c in map(lal.CacheEntry, open(options.input_cache)))
 
-	return options, (filenames or [])
+	return options, filenames
 
 
 #
@@ -613,7 +613,7 @@ SELECT
 	)
 FROM
 	sim_inspiral
-			""", (self.far_thresh,)):
+			""", (self.far_thresh if self.far_thresh is not None else float("+inf"),)):
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
@@ -1202,10 +1202,11 @@ options, filenames = parse_command_line()
 # how many there could be, so we know how many digits for the filenames
 max_plot_groups = None
 
-def new_plots(plots = None):
+def new_plots(plots = None, far_thresh = None):
+	global max_plot_groups
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh = options.far_thresh),
+		MissedFoundPlots(far_thresh = far_thresh),
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
@@ -1217,7 +1218,7 @@ def new_plots(plots = None):
 		plots = range(len(l))
 	return [l[i] for i in plots]
 
-plots = new_plots(options.plot_group)
+plots = new_plots(options.plot_group, options.far_threshold)
 if options.plot_group is None:
 	options.plot_group = range(len(plots))
 
