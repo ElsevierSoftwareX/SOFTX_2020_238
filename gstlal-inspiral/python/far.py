@@ -717,18 +717,37 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return pdf
 
 	def coinc_params(self, events, offsetvector):
+		#
+		# NOTE:  unlike the burst codes, this function is expected
+		# to work with single-instrument event lists as well, as
+		# it's output is used to populate the single-instrument
+		# background bin counts.
+		#
+
+		#
+		# 2D (snr, \chi^2) values.  don't allow both H1 and H2 to
+		# both contribute parameters to the same coinc.  if both
+		# have participated favour H1
+		#
+
 		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
-		# don't allow both H1 and H2 to participate in the same
-		# coinc.  if both have participated favour H1
 		if "H2_snr_chi" in params and "H1_snr_chi" in params:
 			del params["H2_snr_chi"]
+
+		#
+		# instrument combination
+		#
+
 		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
 
-		# pick one trigger at random to provide a timestamp and
-		# pull the horizon distances from our horizon distance
-		# history at that time.  the horizon history is keyed by
-		# floating-point values (don't need nanosecond precision
-		# for this)
+		#
+		# record the horizon distances.  pick one trigger at random
+		# to provide a timestamp and pull the horizon distances
+		# from our horizon distance history at that time.  the
+		# horizon history is keyed by floating-point values (don't
+		# need nanosecond precision for this)
+		#
+
 		horizons = self.horizon_history.getdict(float(events[0].get_end()))
 		# for instruments that provided triggers,
 		# use the trigger effective distance and
@@ -743,6 +762,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#horizons.update(dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events))
 
 		params["horizons"] = horizons
+
+		#
+		# done
+		#
 
 		return params
 
