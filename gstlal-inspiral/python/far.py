@@ -1941,8 +1941,8 @@ class FAPFAR(object):
 		# the distribution.  Only do the fit above 10 counts and below
 		# 10000, unless that can't be met and trigger a warning
 		fit_min_rank = 1.
-		fit_min_counts = min(10., zero_lag_total_count[instruments] / 10.)
-		fit_max_counts = min(10000., zero_lag_total_count[instruments] / 10.)
+		fit_min_counts = min(10., zero_lag_total_count[instruments] / 10. + 1)
+		fit_max_counts = min(10000., zero_lag_total_count[instruments] / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
 		if fit_min_counts < 100.:
 			warnings.warn("There are less than 100 %s coincidences, extinction effects on %s background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation." % (instruments_name, instruments_name))
