@@ -38,15 +38,18 @@
 
 import sys
 from optparse import OptionParser
+import numpy
 
 
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
+from glue.text_progress_bar import ProgressBar
 
 
 from pylal import series as lalseries
+from pylal import rate
 
 
 from gstlal import far
@@ -94,6 +97,9 @@ def parse_command_line():
 		all_horizon_instruments = reduce(lambda a, b: a | b, (set(horizon_distances) for horizon_distances in options.horizon_distances))
 		if all_horizon_instruments > options.instrument:
 			raise ValueError("missing %s for instruments named in --horizon-distances options" % ", ".join("--instrument %s" % inst for inst in all_horizon_instruments - options.instrument))
+
+	if len(filenames) > 1:
+		raise ValueError("At this point only one PSD file is supported on the command line")
 
 	options.horizon_distance_masses = [map(float, s.split(",")) for s in options.horizon_distance_masses]
 
@@ -160,7 +166,21 @@ for n, filename in enumerate(filenames, 1):
 for horizon_distances in options.horizon_distances:
 	for n in range(2, len(horizon_distances) + 1):
 		for instruments in iterutils.choices(horizon_distances.keys(), n):
-			coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
+			# FIXME get_snr_joint_pdf() should be called in the
+			# future, but for now we just make pdfs for the actual
+			# horizon distances requested not the quantized ones.
+			# coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
+
+			# Force the SNR pdf to be generated to be at the actual horizon distance values not the quantized ones
+			key = frozenset(instruments), frozenset(coincparamsdistributions.quantize_horizon_distances(horizon_distances).items())
+			if options.verbose:
+				print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
+				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
+			else:
+				progressbar = None
+			binnedarray = coincparamsdistributions.joint_pdf_of_snrs(key[0], horizon_distances, progressbar = progressbar)
+			del progressbar
+			coincparamsdistributions.snr_joint_pdf_cache[key] = None, binnedarray, 0
 
 
 #
