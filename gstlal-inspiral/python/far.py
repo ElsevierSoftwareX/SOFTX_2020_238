@@ -607,7 +607,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# smaller is treated as though it were 0.
 	# FIXME:  is this choice of distance quantization appropriate?
 	@staticmethod
-	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = math.log(1.5), min_ratio = 0.1):
+	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = PosInf, min_ratio = 0.1):
 		horizon_distance_norm = max(horizon_distances.values())
 		assert horizon_distance_norm != 0.
 		if math.isinf(log_distance_tolerance):
