@@ -795,7 +795,7 @@ if options.reference_psd is None:
 	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 			parent_nodes = ref_psd_parent_nodes,
 			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
-			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+			input_files = {"":ref_psd},
 			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 		)
 
