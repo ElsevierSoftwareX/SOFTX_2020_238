@@ -582,6 +582,12 @@ class HorizonHistories(dict):
 #
 
 
+class CoincParams(dict):
+	# place-holder class to allow params dictionaries to carry
+	# attributes as well
+	__slots__ = ("horizons",)
+
+
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
@@ -730,7 +736,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# have participated favour H1
 		#
 
-		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
+		params = CoincParams(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		if "H2_snr_chi" in params and "H1_snr_chi" in params:
 			del params["H2_snr_chi"]
 
@@ -745,10 +751,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# to provide a timestamp and pull the horizon distances
 		# from our horizon distance history at that time.  the
 		# horizon history is keyed by floating-point values (don't
-		# need nanosecond precision for this)
+		# need nanosecond precision for this).  NOTE:  this is
+		# attached as a property instead of going into the
+		# dictionary to not confuse the stock lnP_noise(),
+		# lnP_signal(), and friends methods.
 		#
 
-		horizons = self.horizon_history.getdict(float(events[0].get_end()))
+		params.horizons = self.horizon_history.getdict(float(events[0].get_end()))
 		# for instruments that provided triggers,
 		# use the trigger effective distance and
 		# SNR to provide the horizon distance.
@@ -759,9 +768,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# FIXME:  for now this is disabled until
 		# we figure out how to get itac's sigmasq
 		# property updated from the whitener
-		#horizons.update(dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events))
-
-		params["horizons"] = horizons
+		#params.horizons.update(dict((event.ifo, event.eff_distance * event.snr / 8.) for event in events))
 
 		#
 		# done
@@ -769,17 +776,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		return params
 
-	def lnP_noise(self, params):
-		params = params.copy()
-		del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).lnP_noise(params)
-
 	def lnP_signal(self, params):
 		# (instrument, snr) pairs sorted alphabetically by
 		# instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# retrieve the SNR PDF
-		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params["horizons"])
+		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params.horizons)
 		# evaluate it (snrs are alphabetical by instrument)
 		lnP_signal = snr_pdf(*tuple(rho for instrument, rho in snrs))
 
@@ -789,8 +791,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		params = params.copy()
-		del params["horizons"]
 		lnP_signal += super(ThincaCoincParamsDistributions, self).lnP_signal(params)
 
 		# return logarithm of (.99 P(..|signal) + 0.01 P(..|noise))
@@ -804,22 +804,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		lnP_signal += math.log(.99)
 		lnP_noise += math.log(0.01)
 		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
-
-	# FIXME:  this is annoying.  probably need a generic way to
-	# indicate to the parent class that some parameter doesn't have a
-	# corresponding rate array
-	def add_zero_lag(self, params, *args, **kwargs):
-		params = params.copy()
-		del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).add_zero_lag(params, *args, **kwargs)
-	def add_injection(self, params, *args, **kwargs):
-		params = params.copy()
-		del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).add_injection(params, *args, **kwargs)
-	def add_background(self, params, *args, **kwargs):
-		params = params.copy()
-		del params["horizons"]
-		return super(ThincaCoincParamsDistributions, self).add_background(params, *args, **kwargs)
 
 	def add_background_prior(self, instruments, n = 1., transition = 23., verbose = False):
 		#
@@ -1194,9 +1178,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
-			params = dict(zip(keys, seq[0::2]))
-			params["horizons"] = horizongen()
+			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
+			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
