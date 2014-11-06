@@ -717,13 +717,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return pdf
 
 	def coinc_params(self, events, offsetvector):
-		#
-		# check for a coinc that has had too many triggers vetoed
-		#
-
-		if len(events) < 2:
-			return None
-
 		params = dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
 		# don't allow both H1 and H2 to participate in the same
 		# coinc.  if both have participated favour H1
