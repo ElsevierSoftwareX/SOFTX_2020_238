@@ -4,22 +4,14 @@
 coh_sky_map(coh_snr, /* OUTPUT */
 	coh_nullstream, /* OUTPUT */
 	snr_all, /* INPUT, 2*data_points*/
-	detector_turn, /* INPUT, which detector we are considering */
+	det_label, /* INPUT, which detector we are considering */
+	detectors, /* INPUT, all the detectors that are in this coherent analysis */
 	offset0, /* INPUT place where the location of the trigger */
-	need_update,
-	sky_map) /* INPUT, map to get the sky direction */
+	float *u_map, /* INPUT u matrix map, each u matrix corresponds to one sky direction  */
+	float *toa_diff_map, ) /* INPUT, time of arrival difference map*/
 
-
-	if need_update
-	  for all sky directions in sky_map
-	    update u matrix(index) = u(theta, phi, current_time);
-	    update time_delay_ij matrix(index) (1 <= i, j <= num_detectors);
-	else 
-	    do nothing;
-		
 	get u(index); /* matrix 2*2, 3*3 */
-	get time_delay_ij(index);
-	interploate offset_ij;
+	get toa_diff(ij, index);
 
 	calc coh_snr, coh_nullstream;
 
