@@ -52,7 +52,7 @@ typedef struct _Complex_F
 } COMPLEX_F;
 
 
-typedef struct _ResamplerState{
+typedef struct {
   float *d_sinc_table;
   float *d_mem; // fixed length to store input
   gint channels;
