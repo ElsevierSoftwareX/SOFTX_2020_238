@@ -34,3 +34,11 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
 
 		$ condor_submit_dag trigger_pipe.dag
 
+\section programs Programs used
+
+- \ref gstlal_bank_splitter
+- \ref gstlal_inspiral_pipe
+- \ref gstlal_cache_to_segments
+- \ref gstlal_segments_operations
+- \ref gstlal_segments_trim
+
