@@ -59,6 +59,7 @@ from pylal import ligolw_thinca
 
 
 from gstlal import far
+from gstlal import rate_estimation
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
@@ -280,7 +281,7 @@ if options.verbose:
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
 del progressbar
 
 
@@ -292,11 +293,11 @@ del progressbar
 if options.confidence_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining confidence intervals ..."
-	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
+	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
 else:
 	confidence_intervals = None
 if options.verbose and confidence_intervals is not None:
-	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % far.mean_from_pdf(signal_rate_pdf)
+	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal_rate_pdf)
 	# all modes are the same, pick one and report it
 	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % confidence_intervals.values()[0][0]
 	for conf, (mode, lo, hi) in sorted(confidence_intervals.items()):

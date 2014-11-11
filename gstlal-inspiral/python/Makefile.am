@@ -16,8 +16,9 @@ pkgpython_PYTHON = \
 	inspiral_pipe.py \
 	inspiral.py \
 	lloidparts.py \
-	spiirparts.py \
 	lloidplots.py \
+	rate_estimation.py \
+	spiirparts.py \
 	streamthinca.py \
 	svd_bank.py \
 	templates.py
