@@ -40,8 +40,11 @@ import sys
 
 
 from glue.text_progress_bar import ProgressBar
-from gstlal import emcee
 from pylal import rate
+
+
+from gstlal import emcee
+from gstlal._rate_estimation import *
 
 
 #
@@ -51,30 +54,6 @@ from pylal import rate
 #
 # =============================================================================
 #
-
-
-def RatesLnPDF((Rf, Rb), f_over_b, lnpriorfunc = lambda Rf, Rb: -0.5 * math.log(Rf * Rb)):
-	"""
-	Compute the log probability density of the foreground and
-	background rates given by equation (21) in Farr et al., "Counting
-	and Confusion:  Bayesian Rate Estimation With Multiple
-	Populations", arXiv:1302.5341.  The default prior is that specified
-	in the paper but it can be overridden with the lnpriorfunc keyword
-	argument (giving a function that returns the natural log of the
-	prior given Rf, Rb).
-	"""
-	if Rf <= 0. or Rb <= 0.:
-		return NegInf
-	return numpy.log1p((Rf / Rb) * f_over_b).sum() + len(f_over_b) * math.log(Rb) - (Rf + Rb) + lnpriorfunc(Rf, Rb)
-
-
-def RatesLnSqrtPDF(*args, **kwargs):
-	"""
-	Compute RatesLnPDF() / 2.  To improve the measurement of the tails
-	of the PDF using the MCMC sampler, we draw from the square root of
-	the PDF and then correct the histogram of the samples.
-	"""
-	return RatesLnPDF(*args, **kwargs) / 2.
 
 
 def maximum_likelihood_rates(f_over_b):
@@ -184,18 +163,10 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	#
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
-	# PDF.  since order is irrelevant in what follows, construct the
-	# array in ascending order for better numerical behaviour in the
-	# cost function.  the sort order is stored in a look-up table in
-	# case we want to do something with it later (the Farr et al.
-	# paper provides a technique for assessing the probability that
-	# each event individually is a signal and if we ever implement that
-	# here then we need to have not lost the original event order).
+	# PDF.
 	#
 
-	order = range(len(ln_likelihood_ratios))
-	order.sort(key = ln_likelihood_ratios.__getitem__)
-	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][ln_likelihood_ratios[index],] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][ln_likelihood_ratios[index],] for index in order])
+	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][ln_lr,] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][ln_lr,] for ln_lr in ln_likelihood_ratios])
 
 	# remove NaNs.  these occur because the ranking statistic PDFs have
 	# been zeroed at the cut-off and some events get pulled out of the
@@ -256,7 +227,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# samples.
 	#
 
-	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar), i):
+	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
 		samples[i,:,:] = coordslist
 		if chain_file is not None:
