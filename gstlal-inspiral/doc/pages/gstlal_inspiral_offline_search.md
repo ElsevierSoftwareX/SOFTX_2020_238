@@ -21,9 +21,9 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
 -# Get two makefiles to set up the analysis dag.  One defines standard rules that should not need to be modified by the user, the other is use-case specific.  The examples 
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.offline_analysis_rules>Makefile.offline_analysis_rules</a> This makefile is required by all analysis
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_BNS>Makefile.non_spinning_BNS:</a>  Suitable for the 2014 BNS MDC with a nonspinning bank.
- -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_BNS>Makefile.spinning_BNS:</a>  Suitable for the 2014 BNS MDC with a spinning bank.
- -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_BNS>Makefile.non_spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a nonspinning bank.
- -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_BNS>Makefile.spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a spinning bank.
+ -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.spinning_BNS>Makefile.spinning_BNS:</a>  Suitable for the 2014 BNS MDC with a spinning bank.
+ -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_NSBH>Makefile.non_spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a nonspinning bank.
+ -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.spinning_NSBH>Makefile.spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a spinning bank.
 -# put the Makefiles in the analysis directory you made. 
 -# Modify the Makefile to suit your analysis
 -# run, e.g.,
