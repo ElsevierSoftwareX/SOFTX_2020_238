@@ -2241,7 +2241,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None, chain_file = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None, chain_file = None, nsample = None):
 	"""
 	FIXME:  document this
 	"""
@@ -2281,54 +2281,59 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 		raise ValueError("infinity encountered in ranking statistic PDF ratios")
 
 	#
-	# run MCMC sampler to generate (foreground rate, background rate)
-	# samples.
+	# initializer MCMC chain.  try loading a chain from a chain file if
+	# provided, otherwise seed the walkers for a burn-in period
 	#
 
 	ndim = 2
 	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
-	nsample = 400000
+	if nsample is None:
+		nsample = 400000
 	nburn = 1000
 
 	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
-	samples = numpy.empty((nsample, nwalkers, ndim), dtype = "double")
 
 	if progressbar is not None:
 		progressbar.max = nsample + nburn
 		progressbar.show()
 
-	if chain_file is not None:
-		if "chain" in chain_file:
-			# load chain from HDF file
-			for i in sorted(chain_file["chain"]):
-				samples[int(i),:,:] = chain_file["chain/%s" % i]
-				if progressbar is not None:
-					progressbar.max = nsample
-					progressbar.increment()
-		try:
-			i = int(i)
-		except NameError:
-			# loop did no iterations, file contains no chain
-			# samples
-			i = 0
-		else:
+	i = None
+	if chain_file is not None and "chain" in chain_file:
+		chain = chain_file["chain"].items()
+		samples = numpy.empty((max(nsample, len(chain)), nwalkers, ndim), dtype = "double")
+		# load chain from HDF file
+		for i, (sample_id, sample) in enumerate(chain):
+			samples[i,:,:] = sample
+			if progressbar is not None:
+				progressbar.max = samples.shape[0]
+				progressbar.increment()
+		if i is not None:
 			# skip burn-in, restart chain from last position
+			nburn = 0
 			pos0 = samples[i,:,:]
 			i += 1
-			nburn = 0
-	if nburn:
-		# no HDF file or file was empty, still need burn-in.  seed
-		# signal rate walkers from exponential distribution,
+	if i is None:
+		# no chain file provided, or file does not contain sample
+		# chain or sample chain is empty.  still need burn-in.
+		# seed signal rate walkers from exponential distribution,
 		# background rate walkers from poisson distribution
+		samples = numpy.empty((nsample, nwalkers, ndim), dtype = "double")
 		pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
 		pos0[:,1] = numpy.random.poisson(lam = len(ln_likelihood_ratios), size = (nwalkers,))
 		i = 0
 
-	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, nsample - i, RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar), i):
+	#
+	# run MCMC sampler to generate (foreground rate, background rate)
+	# samples.
+	#
+
+	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), RatesLnSqrtPDF, n_burn = nburn, args = (f_over_b,), pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
 		samples[i,:,:] = coordslist
 		if chain_file is not None:
 			chain_file["chain/%08d" % i] = coordslist
+			if not i % 2048:
+				chain_file.flush()
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 

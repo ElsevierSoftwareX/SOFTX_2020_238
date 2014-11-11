@@ -90,6 +90,7 @@ def parse_command_line():
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
 	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
+	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -100,7 +101,7 @@ def parse_command_line():
 		options.likelihood_filenames += [CacheEntry(line).path for line in open(options.likelihood_cache)]
 	if options.likelihood_file is not None:
 		options.likelihood_filenames += options.likelihood_file
-	if not options.likelihood_filenames:
+	if not options.likelihood_filenames and options.samples > 0:
 		raise ValueError("must provide --likelihood-cache and/or one or more --likelihood-file options")
 
 	if options.input_cache:
@@ -255,7 +256,10 @@ options, filenames = parse_command_line()
 #
 
 
-ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+if options.likelihood_filenames:
+	ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+else:
+	ranking_data = None
 
 
 #
@@ -263,7 +267,7 @@ ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ranking_data.ln_likelihood_ratio_threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 5.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
