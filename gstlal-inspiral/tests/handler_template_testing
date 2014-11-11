@@ -1,0 +1,268 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2012  Shaun Hooper
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import sys
+import scipy
+import numpy
+import gc
+from optparse import OptionParser
+from multiprocessing import Pool
+
+#import template_testing
+import test_iir_templates as template_testing
+
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from pylal.series import read_psd_xmldoc
+from glue.ligolw import utils, lsctables
+
+
+parser = OptionParser(description = __doc__)
+
+
+parser.add_option("--type", metavar = "string", help = "Which type of test/comparison to perform. Allowed values are \n VPC - Variable parameter comparison. Given a single parameter (alpha, beta or epsilon) compute, over the given range, the overlap between a template and associated SPIIR response of fixed mass (1.4-1.4) \n PC - Parameter comparison. Takes a single parameter and value (e.g. eps=0.02). Generates a random spin wave and computes the overlap with SPIIR responses from templates in the supplied bank until a match of 0.97 or above is found. Repeat for a specified number of signals. \n CC - Construction comparison. Testing function for the new template generation method. Given a random mass pair, generate a wave and from that the SPIIR coefficients. Compute the overlap between these \n SC - Spin comparison. Similar to parameter comparison but instead of a fixed parameter generates waves with a spin components up to a given value.")
+
+
+#Universal options
+parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).", type="string")
+parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).",type="string")
+parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).",type="string")
+
+#Options for types
+parser.add_option("--param", metavar = "string", help = "VPC/PC: Which parameter to change/vary. Used in VPC (alpha, beta, epsilon or spin) and PC (alpha, beta, epsilon) can also use short hands a, b, e, eps and s",type="string")
+parser.add_option("--param-lower", metavar = "float", help = "VPC: Lower value of the parameter variation.",type="float")
+parser.add_option("--param-upper", metavar = "float", help = "VPC: Upper value of the parameter variation.",type="float")
+parser.add_option("--param-num", metavar = "float", help = "VPC: The number of steps to take between upper and lower value of the parameter variation.",type="float")
+parser.add_option("--param-value", metavar = "float", help = "PC: The value to set the specified parameter to.",type="float")
+parser.add_option("--mass1", metavar = "float", help = "VPC: The mass of the first body",type="float",default=1.4)
+parser.add_option("--mass2", metavar = "float", help = "VPC: The mass of the second body",type="float",default=1.4)
+parser.add_option("--min-mass", metavar = "float", help = "PC/CC/SC: The minimum mass (mass pair is randomly chosen between min and max)",type="float",default=1)
+parser.add_option("--max-mass", metavar = "float", help = "PC/CC/SC: The maximum mass (mass pair is randomly chosen between min and max)",type="float",default=3)
+parser.add_option("--num-signals", metavar = "int", help = "PC/CC/SC: The number of signals to test",type="int",default=2)
+parser.add_option("--spin-max", metavar = "float", help = "SC: Spin components are randomly chosen between -spin_max < x < spin_max",type="float",default=0.05)
+
+
+options, filenames = parser.parse_args()
+
+required_options = ("template_bank", "type")
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+
+# read bank file
+bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+
+# read psd file
+if options.reference_psd:
+	ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd,contenthandler=ligolw.LIGOLWContentHandler))
+	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+	psd = ALLpsd[bank_sngl_table[0].ifo]
+	# smooth and create an interp object
+	psd = template_testing.smooth_and_interp(psd)
+else:
+	psd = None
+	print("Error: No PSD file given!")
+
+
+
+if(options.type == "VPC"):
+    if(options.param == None):
+	print("Parameter not given but required. Please use --param to specify");
+	exit();
+    if(options.param_lower == None or options.param_upper == None):
+	print("Parameter range not completely specified. Please use BOTH --param-lower and --param-upper");
+	exit();
+
+    if(options.output == None):
+	outfile = "VPC_" + str(options.param) + "_" + str(options.param_lower) + "_to_" + str(options.param_upper) + ".dat"
+    else:
+	outfile = options.output
+    template_testing.variable_parameter_comparison( bank_xmldoc,
+						    psd,
+						    outfile,
+						    options.param,
+						    options.param_lower,
+						    options.param_upper,
+						    param_num = options.param_num,
+						    input_mass1 = options.mass1,
+						    input_mass2 = options.mass2)
+elif(options.type == "PC"):
+    if(options.param == None):
+	print("Parameter not given but required. Please use --param to specify");
+	exit();
+    if(options.param_value == None):
+	print("Parameter value not given by required. Please use --param-value to specify");
+    if(options.output == None):
+	outfile = "PC_" + str(options.param) + "_" + str(options.param_value) + ".dat"
+    else:
+	outfile = options.output
+    template_testing.parameter_comparison(  bank_xmldoc,
+					    psd,
+					    outfile,
+					    options.param,
+					    options.param_value,
+					    input_minMass = options.min_mass,
+					    input_maxMass = options.max_mass,
+					    input_numSignals = options.num_signals)
+elif(options.type == "CC"):
+    if(options.output == None):
+	outfile = "CC_minmass_" + str(options.min_mass) + "_maxmass_" + str(options.max_mass) + ".dat"
+    else:
+	outfile = options.output
+    template_testing.construction_comparison(	bank_xmldoc,
+						psd,
+						outfile,
+						input_minMass = options.min_mass,
+						input_maxMass = options.max_mass,
+						input_numSignals = options.num_signals)
+elif(options.type == "SC"):
+    if(options.spin_max == None):
+	print("Spin max must not be none. Use --spin-max to specify")
+	exit()
+    if(options.output == None):
+	outfile = "SC_spin_" + str(options.spin_max) + ".dat"
+    else:
+	outfile = options.output
+    template_testing.spin_comparison(	bank_xmldoc,
+					psd,
+					outfile,
+					input_spinMax = options.spin_max,
+					input_numSignals = options.num_signals)
+if(options.type == "C2"):
+
+    signal_m1 = 1.4;
+    signal_m2 = 1.4;
+
+    template_m1 = 1.4;
+    template_m2 = 1.4;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+
+    signal_m1 = 1.366739;
+    signal_m2 = 1.593624;
+
+    template_m1 = 1.502962;
+    template_m2 = 1.447757;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+
+    signal_m1 = 1.427502;
+    signal_m2 = 1.411858;
+
+    template_m1 = 1.480557;
+    template_m2 = 1.356720;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.481233;
+    template_m2 = 1.357322;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+     
+    template_m1 = 1.588402;
+    template_m2 = 1.259266;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.482673;
+    template_m2 = 1.358543;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.483337;
+    template_m2 = 1.359166;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.655264;
+    template_m2 = 1.223511;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.48473;
+    template_m2 = 1.36043;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.485423;
+    template_m2 = 1.361036;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.710362;
+    template_m2 = 1.89433;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.549983;
+    template_m2 = 1.307968;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    signal_m1 = 1.422111;
+    signal_m2 = 1.41618;
+
+    template_m1 = 1.480557;
+    template_m2 = 1.356720;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.481233;
+    template_m2 = 1.357322;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+     
+    template_m1 = 1.588402;
+    template_m2 = 1.259266;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.482673;
+    template_m2 = 1.358543;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.483337;
+    template_m2 = 1.359166;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.655264;
+    template_m2 = 1.223511;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.48473;
+    template_m2 = 1.36043;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.485423;
+    template_m2 = 1.361036;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.710362;
+    template_m2 = 1.89433;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+    
+    template_m1 = 1.549983;
+    template_m2 = 1.307968;
+    template_testing.compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+     
+## There is potential to easily multithread the program but currently the memory useage is too high for even one instance in some cases
+## This is a major issue that is still being resolved but is difficult due to the very long waveforms
+
+#def startJob(multi_id):
+#    template_testing.makeiirbank_spincomp(bank_xmldoc, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon,multiNum=multi_id,multiAmount=options.multiAmount,spinMaximum=options.spinMax)
+
+#mN = int(options.multiNum)
+#pool = Pool(processes=4);
+#pool.map(startJob,[0+mN,1+mN,2+mN,3+mN]);
+
+
+

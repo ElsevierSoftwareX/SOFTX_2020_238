@@ -65,15 +65,15 @@ def cleanFreq(f,fLower):
     if(fStartFix != 0):
 	f[0:fStartFix+1] = fLower
 
-    i=-100;
+    i=-30;
     while(i<0):
 	#require monotonicity
-	if(f[i]>f[i+1]):
-	    f[i+1:]=10; #effectively throw away the end
+	if(f[i]<f[i+1]):
+	    f[i+1:]=fLower; #effectively throw away the end
 	    break;
 	else:
 	    i=i+1;
-#    print "fStartFix: %d fEndFix: %d" %(fStartFix,fEndFix)
+#    print "fStartFix: %d " % (fStartFix)
 
 def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_lower, param_upper, param_num = 100,  input_mass1 = 1.4, input_mass2 = 1.4):
 
@@ -603,5 +603,76 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
+def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
+        '''Compares a given template and signal'''
+
+
+	fFinal = 2047; #We only go as high as the waveform anyway
+	fLower = 15 
+
+
+	#### Initialise constants ####
+	sampleRate = 4096; padding=1.1; epsilon=0.02; alpha=.99; beta=0.25;
+
+	dist=1
+	incl = 0;
+	
+	length = 2**23;
+
+	h = numpy.zeros(length, dtype=numpy.cdouble)
+	u = numpy.zeros(length, dtype=numpy.cdouble)
+	
+
+	signalChirp = (signal_m1*signal_m2)**(0.6)/(signal_m1+signal_m2)**(0.2);
+	templateChirp = (template_m1*template_m2)**(0.6)/(template_m1+template_m2)**(0.2);
+
+
+	#### Set up the template waveform
+	ampTemplate,phaseTemplate=waveHandler.genwave(template_m1,template_m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0)
+	fTemplate = numpy.gradient(phaseTemplate)/(2.0*numpy.pi * (1.0/sampleRate))
+
+	cleanFreq(fTemplate,fLower)
+
+	#if((fs<0).any()):
+	#    print("fs broke for masses %f %f" % (m1,m2))
+	#    continue
+	if psd_interp is not None:
+	    ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate[0:len(fTemplate)])**0.5
+
+	ampTemplate = ampTemplate / numpy.sqrt(numpy.dot(ampTemplate,numpy.conj(ampTemplate)));
+	u[-len(ampTemplate):] = ampTemplate * numpy.exp(1j*phaseTemplate);
+	u *= 1/numpy.sqrt(numpy.dot(u,numpy.conj(u)))
+	u = numpy.conj(numpy.fft.fft(u))
+   
+	#Set up the signal waveform
+	ampSignal,phaseSignal=waveHandler.genwave(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0)
+	fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi * (1.0/sampleRate))
+
+	cleanFreq(fSignal,fLower)
+	#if((fs<0).any()):
+	#    print("fs broke for masses %f %f" % (m1,m2))
+	#    continue
+	if psd_interp is not None:
+	    ampSignal[0:len(fSignal)] /= psd_interp(fSignal[0:len(fSignal)])**0.5
+
+	ampSignal = ampSignal / numpy.sqrt(numpy.dot(ampSignal,numpy.conj(ampSignal)));
+	h[-len(ampSignal):] = ampSignal * numpy.exp(1j*phaseSignal);
+	h *= 1/numpy.sqrt(numpy.dot(h,numpy.conj(h)))
+	h = numpy.conj(numpy.fft.fft(h))
+
+	#### Get the IIR coefficients and response from the new signal####
+	a1, b0, delay = spawaveform.iir(ampTemplate, phaseTemplate, epsilon, alpha, beta, padding)
+	outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
+	outTemplate = outTemplate[::-1]
+	u[-len(outTemplate):] = outTemplate;
+	u *= 1/numpy.sqrt(numpy.dot(u,numpy.conj(u)))
+
+	#### u -> filters, h -> signal ####
+
+	#### Overlap for new signal vs new filters ####
+	crossCorr = numpy.fft.ifft(numpy.fft.fft(u)*h);
+	snr = numpy.abs(crossCorr).max();
+
+	print("Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
 
 
