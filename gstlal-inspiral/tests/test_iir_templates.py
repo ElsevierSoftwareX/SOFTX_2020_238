@@ -65,14 +65,14 @@ def cleanFreq(f,fLower):
 	f[0:fStartFix+1] = fLower
 
     i=-30;
-    while(i<0):
+    while(i<-1):
 	#require monotonicity
-	if(f[i]<f[i+1]):
+	if(f[i]>f[i+1]):
 	    f[i+1:]=fLower; #effectively throw away the end
 	    break;
 	else:
 	    i=i+1;
-#    print "fStartFix: %d " % (fStartFix)
+#    print "fStartFix: %d i: %d " % (fStartFix, i)
 
 def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_lower, param_upper, param_num = 100,  input_mass1 = 1.4, input_mass2 = 1.4):
 
