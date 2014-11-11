@@ -115,7 +115,7 @@ def cleanFreq(f,fLower):
     i=-100;
     while(i<0):
 	#require monotonicity
-	if(f[i]>f[i+1]):
+	if(f[i]<f[i+1]):
 	    f[i+1:]=10; #effectively throw away the end
 	    break;
 	else:
