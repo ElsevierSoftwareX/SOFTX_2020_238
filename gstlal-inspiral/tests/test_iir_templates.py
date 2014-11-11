@@ -33,7 +33,6 @@ import pdb
 from subprocess import call
 import waveHandler
 import random
-import cbc_template_iir
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
