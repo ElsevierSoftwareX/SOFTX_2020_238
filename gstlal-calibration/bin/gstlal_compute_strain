@@ -54,7 +54,7 @@ $ gstlal_compute_strain --data-source frames --frame-cache L1_frames.cache --fra
 
 The above command requires the filters file called ER6_filters.npz.  This file can be found at LLO in /home/wademc/calibration/calibrate/. This will write four second frame files containing 1 second frames for a just a short, 100 second chunk of time.  You can also write to shared memory by specifying --write-to-shm-partition=PARTITION-NAME.
 
-Note: There seems to be some delay in accessing the necessary frame files from disk for the above times, so there may be a delay in when frames begin to be written.
+NOTE: For these early lock stretches, DARM_ERR was not whitened.  However, DARM_ERR is now being whitened.  To appropriately calibrate the early lock stretches, you must comment out the dewhitener in the DARM_ERR branch below.
 
 Type gstlal_compute_strain --help to see the full list of command line options.
 """
@@ -362,18 +362,15 @@ if options.data_source == "frames" and frame_segments is not None:
 	if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkgate(pipeline, odcstatevector, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 
-# RECOLORING OR FAKE-CALIBRATE MODE: Make sure the data is in the right format and resample it to the desired sample rate
-if options.recolor:
-	rawdata = pipeparts.mkprogressreport(pipeline, rawdata, "progress_src_%s" % instrument)
-	rawdata = pipeparts.mkresample(pipeline, rawdata, quality = 9)
-	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, rate=%d" % sr)
-	rawdata = pipeparts.mkaudiorate(pipeline, rawdata, skip_to_first = True, silent = False) # This audiorate works around a bug in the resampler
-
 #
 # RECOLORING BRANCH
 #
 
 if options.recolor:
+	rawdata = pipeparts.mkprogressreport(pipeline, rawdata, "progress_src_%s" % instrument)
+	rawdata = pipeparts.mkresample(pipeline, rawdata, quality = 9)
+	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, "audio/x-raw-float, rate=%d" % sr)
+	rawdata = pipeparts.mkaudiorate(pipeline, rawdata, skip_to_first = True, silent = False) # This audiorate works around a bug in the resampler
 	rawdata = pipeparts.mkaudioconvert(pipeline, rawdata)
 	rawdata = pipeparts.mkcapsfilter(pipeline, rawdata, caps)	
 	# Whiten the raw data channel and apply recoloring kernel
@@ -433,7 +430,9 @@ else:
 	derr = pipeparts.mkaudioconvert(pipeline, derr)
 	derr = pipeparts.mkcapsfilter(pipeline, derr, caps)
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
+
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1, fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_delay"])-1, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
 
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudioconvert(pipeline, dctrl)
@@ -441,13 +440,12 @@ else:
 	dctrl = pipeparts.mkprogressreport(pipeline, dctrl, "progress_src_dctrl_%s" % instrument)
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
-	dctrl = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, dctrltee), "audiocheblimit", mode="high-pass", cutoff=20)  
-	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
+	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])-1, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_delay"])-1, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
@@ -489,6 +487,7 @@ else:
 straintee = pipeparts.mktee(pipeline, strain)
 straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
 strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
+strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 
 #
 # MAKE THE CALIB-STATE_VECTOR
@@ -534,8 +533,6 @@ if not options.no_dq_vector:
 	if not options.recolor:
 		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4, attack_length = -options.filter_settle_time * 16384)
 		filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr) 
-		# Set the FILTERS-OK bit based on input data available
-		# FIXME: This part needs to be coded up...
 	else:
 		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4)
 		filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
@@ -564,12 +561,11 @@ if not options.no_dq_vector:
 	pipeline.add(higher_bits)
 	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 100).link(higher_bits)
 	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 100).link(higher_bits)
-	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(higher_bits)
 	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100).link(higher_bits)
 	higher_bits_tee = pipeparts.mktee(pipeline, higher_bits)
 
 	# Now calculate h(t)-OK bit
-	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100), bit_vector = 1, threshold = 30)
+	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100), bit_vector = 1, threshold = 28)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 
 	#
@@ -580,6 +576,7 @@ if not options.no_dq_vector:
 	calibstatevector.set_property("sync", True)
 	pipeline.add(calibstatevector)
 	pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	if not options.no_gamma and not options.recolor:
 		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
@@ -587,6 +584,7 @@ if not options.no_dq_vector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:CALIB-STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
+	calibstatevector = pipeparts.mkaudiorate(pipeline, calibstatevector, skip_to_first = True, silent = False)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -599,9 +597,10 @@ if options.frame_duration is not None:
 if options.frames_per_file is not None:
         mux.set_property("frames-per-file", options.frames_per_file)
 
-# Link the output DQ vector up to the muxer, if applicable
+# Link the output DQ vectors up to the muxer, if applicable
 if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:CALIB-STATE_VECTOR" % instrument))
+	pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
 pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
