@@ -422,11 +422,14 @@ else:
 
 	# EXC branch
 	if not options.no_gamma:
+		exc = pipeparts.mkaudiorate(pipeline, exc, skip_to_first = True, silent = False)
 		exc = pipeparts.mkaudioconvert(pipeline, exc)
 		exc = pipeparts.mkcapsfilter(pipeline, exc, caps)
 		exc = pipeparts.mkprogressreport(pipeline, exc, "progress_src_exc_%s" % instrument)
 
 	# DARM_ERR branch
+
+	derr = pipeparts.mkaudiorate(pipeline, derr, skip_to_first = True, silent = False)
 	derr = pipeparts.mkaudioconvert(pipeline, derr)
 	derr = pipeparts.mkcapsfilter(pipeline, derr, caps)
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
@@ -435,6 +438,7 @@ else:
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_delay"])-1, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
 
 	# DARM_CTRL branch
+	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
 	dctrl = pipeparts.mkaudioconvert(pipeline, dctrl)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, caps)
 	dctrl = pipeparts.mkprogressreport(pipeline, dctrl, "progress_src_dctrl_%s" % instrument)
