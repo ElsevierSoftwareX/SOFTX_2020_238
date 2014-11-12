@@ -97,14 +97,14 @@ from gstlal import datasource
 #
 
 
-class lvalert_listen_job(inspiral_pipe.generic_node):
+class lvalert_listen_job(inspiral_pipe.generic_job):
 	"""
 	A lvalert_listen_job
 	"""
 	def __init__(self, program, gracedb_group = "CBC", gracedb_type = "LowMass", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb")):
 		"""
 		"""
-		inspiral_pipe.generic_node.__init__(self, program)
+		inspiral_pipe.generic_job.__init__(self, program)
 
 		# produce the lvalert processor
 
@@ -164,9 +164,10 @@ def parse_command_line():
 	parser.add_option("--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
 	parser.add_option("--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
 	parser.add_option("--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
-	
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+
 	options, filenames = parser.parse_args()
-	options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
 	fail = ""
 	for option in ("bank_cache", "gracedb_far_threshold"):
@@ -205,9 +206,9 @@ dag = dagparts.CondorDAG("trigger_pipe")
 
 # Figure out if it is iir or not
 if options.do_iir_pipeline is not None:
-	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", 'Requirements', '(TARGET.Online_CBC_SVD =?= True)'})
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
 else:
-	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", 'Requirements', '(TARGET.Online_CBC_SVD =?= True)'})
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
 # A local universe job that will run in a loop marginalizing all of the likelihoods
 margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online')
 # an lvalert_listen job
@@ -223,25 +224,23 @@ urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls")
 
 listenNode = lvalert_listen_node(listenJob, dag)
 
-for num_insp_nodes, svd_bank_strings in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs)):
+for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs)):
 
 	# make a new likelihood file
 	likefile = os.path.split(options.likelihood_file)[1]
 	path = os.getcwd()
-	likefile = "%s/%04d_%s" % (path, job.number, likefile)
-	if copy_likelihoods:
-		shutil.copyfile(likelihood_file, likefile)
+	likefile = "%s/%04d_%s" % (path, num_insp_nodes, likefile)
+	if options.copy_likelihoods:
+		shutil.copyfile(options.likelihood_file, likefile)
+	svd_bank_string = "".join([",".join([k, v[0]]) for k,v in svd_banks.items()])
 
 	#FIXME add support for injections too
-	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, []
+	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
 		opts = {"psd-fft-length":options.psd_fft_length,
 			"ht-gate-threshold":options.ht_gate_threshold,
-			"frame-segments-name":options.frame_segments_name,
-			"gps-start-time":seg[0].seconds,
-			"gps-end-time":seg[1].seconds,
 			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
 			"state_vector_on_off_dict":datasource.state_vector_on_off_list_from_bits_dict(options.state_vector_on_off_dict),
-			"svd-bank":svd_bank_strings,
+			"svd-bank":svd_bank_string,
 			"tmp-space":inspiral_pipe.condor_scratch_space(),
 			"track-psd":"",
 			"control-peak-time":options.control_peak_time,
@@ -252,22 +251,14 @@ for num_insp_nodes, svd_bank_strings in enumerate(inspiral_pipe.build_bank_group
 			"gracedb-group":options.gracedb_group,
 			"gracedb-type":options.gracedb_type,
 			"thinca-interval":options.thinca_interval,
-			"likelihood_snapshot_interval" = options.likelihood_snapshot_interval
+			"likelihood_snapshot_interval":options.likelihood_snapshot_interval
 			},
-		input_files = {	"time-slide-file":options.time_slide_file,
-				"frame-cache":options.frame_cache,
-				"frame-segments-file":options.frame_segments_file,
-				"reference-psd":options.reference_psd,
-				"blind-injections":options.blind_injections,
-				"marginalized-likelihood-file":options.marginalized_likelihood_file,
-				"veto-segments-file":options.veto_segments_file,
-				"veto-segments-name":options.veto_segments_name,
-			},
-		output_files = {
-				"output":"not_used.xml.gz",
+		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
+		output_files = {"output":"not_used.xml.gz",
 				"likelihood-file":likefile
 			}
 		)
+	print likefile
 
 urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {"":". 0001,%04d 25" % (num_insp_nodes+1)}, input_files = {}, output_files = {})
 
