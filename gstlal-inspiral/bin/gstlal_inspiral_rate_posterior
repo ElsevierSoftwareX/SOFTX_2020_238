@@ -267,7 +267,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 5.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 0.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
