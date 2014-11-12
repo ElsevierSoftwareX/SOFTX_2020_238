@@ -67,9 +67,7 @@ static void condition(double *f_over_b, int n)
  * compute the log probability density of the foreground and background
  * rates given by equation (21) in Farr et al., "Counting and Confusion:
  * Bayesian Rate Estimation With Multiple Populations", arXiv:1302.5341.
- * The default prior is that specified in the paper but it can be
- * overridden with the lnpriorfunc keyword argument (giving a function that
- * returns the natural log of the prior given Rf, Rb).
+ * the prior is that specified in the paper.
  */
 
 
