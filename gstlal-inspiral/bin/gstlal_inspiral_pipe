@@ -680,7 +680,7 @@ def parse_command_line():
 		options.far_injections = [None for inj in options.injections]
 
 	#FIXME a hack to find the sql paths
-	share_path = os.path.split(inspiral_pipe.which('gstlal_reference_psd'))[0].replace('bin', 'share/gstlal')
+	share_path = os.path.split(inspiral_pipe.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
 	options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
 	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
 
