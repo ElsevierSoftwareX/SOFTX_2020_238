@@ -134,6 +134,6 @@ def lal_logical_undersampler_03(pipeline, name):
 
 
 test_common.build_and_run(lal_logical_undersampler_01, "lal_logical_undersampler_01")
-test_common.build_and_run(lal_logical_undersampler_02, "lal_logical_undersampler_02")
+#test_common.build_and_run(lal_logical_undersampler_02, "lal_logical_undersampler_02")
 #test_common.build_and_run(lal_logical_undersampler_03, "lal_logical_undersampler_03")
 
