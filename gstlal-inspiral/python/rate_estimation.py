@@ -166,7 +166,9 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# PDF.
 	#
 
-	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][ln_lr,] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][ln_lr,] for ln_lr in ln_likelihood_ratios])
+	b = ranking_data.background_likelihood_pdfs[restrict_to_instruments]
+	f = ranking_data.signal_likelihood_pdfs[restrict_to_instruments]
+	f_over_b = numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios])
 
 	# remove NaNs.  these occur because the ranking statistic PDFs have
 	# been zeroed at the cut-off and some events get pulled out of the
@@ -254,11 +256,11 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	#
 
 	Rf_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
-	Rf_pdf.array = Rf_pdf.array**2. / (Rf_pdf.bins[0].upper() - Rf_pdf.bins[0].lower())
+	Rf_pdf.array = Rf_pdf.array**2. / Rf_pdf.bins.volumes()
 	Rf_pdf.to_pdf()
 
 	Rb_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
-	Rb_pdf.array = Rb_pdf.array**2. / (Rb_pdf.bins[0].upper() - Rb_pdf.bins[0].lower())
+	Rb_pdf.array = Rb_pdf.array**2. / Rb_pdf.bins.volumes()
 	Rb_pdf.to_pdf()
 
 	#
