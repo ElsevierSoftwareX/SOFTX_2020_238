@@ -56,9 +56,9 @@ from gstlal._rate_estimation import *
 #
 
 
-def maximum_likelihood_rates(f_over_b):
+def maximum_likelihood_rates(ln_f_over_b):
 	# the upper bound is chosen to include N + \sqrt{N}
-	return optimize.fmin((lambda x: -RatesLnPDF(x, f_over_b)), (1.0, len(f_over_b) + len(f_over_b)**.5), disp = True)
+	return optimize.fmin((lambda x: -RatesLnPDF(x, ln_f_over_b)), (1.0, len(ln_f_over_b) + len(ln_f_over_b)**.5), disp = True)
 
 
 def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, args = (), n_burn = 100, progressbar = None):
@@ -168,7 +168,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 
 	b = ranking_data.background_likelihood_pdfs[restrict_to_instruments]
 	f = ranking_data.signal_likelihood_pdfs[restrict_to_instruments]
-	f_over_b = numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios])
+	ln_f_over_b = numpy.array([math.log(f[ln_lr,] / b[ln_lr,]) for ln_lr in ln_likelihood_ratios])
 
 	# remove NaNs.  these occur because the ranking statistic PDFs have
 	# been zeroed at the cut-off and some events get pulled out of the
@@ -177,9 +177,9 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# FIXME:  re-investigate the decision to zero the bin at threshold.
 	# the original motivation for doing it might not be there any
 	# longer
-	f_over_b = f_over_b[~numpy.isnan(f_over_b)]
+	ln_f_over_b = ln_f_over_b[~numpy.isnan(ln_f_over_b)]
 	# safety check
-	if numpy.isinf(f_over_b).any():
+	if numpy.isinf(ln_f_over_b).any():
 		raise ValueError("infinity encountered in ranking statistic PDF ratios")
 
 	#
@@ -229,7 +229,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# samples.
 	#
 
-	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(ln_f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
 		samples[i,:,:] = coordslist
 		if chain_file is not None:

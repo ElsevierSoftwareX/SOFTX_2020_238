@@ -44,7 +44,7 @@
 
 
 /*
- * input conditioning.  sort f_over_b array in descending order to allow
+ * input conditioning.  sort ln_f_over_b array in descending order to allow
  * for early bail-out
  */
 
@@ -57,9 +57,9 @@ static int conditioning_compare(const void *a, const void *b)
 }
 
 
-static void condition(double *f_over_b, int n)
+static void condition(double *ln_f_over_b, int n)
 {
-	qsort(f_over_b, n, sizeof(*f_over_b), conditioning_compare);
+	qsort(ln_f_over_b, n, sizeof(*ln_f_over_b), conditioning_compare);
 }
 
 
@@ -77,9 +77,9 @@ static double compute_log_prior(double Rf, double Rb)
 }
 
 
-static double compute_log_posterior(const double *f_over_b, int n, double Rf, double Rb)
+static double compute_log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
 {
-	double Rf_over_Rb = Rf / Rb;
+	double ln_Rf_over_Rb = log(Rf / Rb);
 	int i;
 	double ln_P;
 
@@ -87,8 +87,25 @@ static double compute_log_posterior(const double *f_over_b, int n, double Rf, do
 		return atof("-inf");
 
 	ln_P = 0.;
-	for(i = 0; i < n; i++)
-		ln_P += log1p(Rf_over_Rb * f_over_b[i]);
+	for(i = 0; i < n; i++) {
+		/*
+		 * need to add log(Rf f / (Rb b) + 1) to sum.  if Rf f /
+		 * (Rb b) is large, we approximate ln(x + 1) with
+		 *
+		 *	ln(x + 1) = ln x + 1 / x
+		 *
+		 * for x > 1000 this gives 7 correct digits or more.  for x
+		 * > 10^15, the 1/x correction becomes irrelevant.
+		 */
+
+		double ln_x = ln_Rf_over_Rb + ln_f_over_b[i];
+		if(ln_x > 35.)	/* ~= log(10^15) */
+			ln_P += ln_x;
+		else if(ln_x > 6.9)	/* ~= log(1000) */
+			ln_P += ln_x + exp(-ln_x);
+		else
+			ln_P += log1p(exp(ln_x));
+	}
 	ln_P += n * log(Rb) - (Rf + Rb);
 
 	return ln_P + compute_log_prior(Rf, Rb);
@@ -102,9 +119,9 @@ static double compute_log_posterior(const double *f_over_b, int n, double Rf, do
  */
 
 
-static double compute_log_sqrt_posterior(const double *f_over_b, int n, double Rf, double Rb)
+static double compute_log_sqrt_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
 {
-	return compute_log_posterior(f_over_b, n, Rf, Rb) / 2.;
+	return compute_log_posterior(ln_f_over_b, n, Rf, Rb) / 2.;
 }
 
 
@@ -130,8 +147,8 @@ struct posterior {
 	 * in the experiment's results
 	 */
 
-	double *f_over_b;
-	int f_over_b_len;
+	double *ln_f_over_b;
+	int ln_f_over_b_len;
 };
 
 
@@ -144,9 +161,9 @@ static void __del__(PyObject *self)
 {
 	struct posterior *posterior = (struct posterior *) self;
 
-	free(posterior->f_over_b);
-	posterior->f_over_b = NULL;
-	posterior->f_over_b_len = 0;
+	free(posterior->ln_f_over_b);
+	posterior->ln_f_over_b = NULL;
+	posterior->ln_f_over_b_len = 0;
 
 	self->ob_type->tp_free(self);
 }
@@ -175,18 +192,13 @@ static int __init__(PyObject *self, PyObject *args, PyObject *kwds)
 		return -1;
 	}
 
-	posterior->f_over_b_len = *PyArray_DIMS(arr);
-	posterior->f_over_b = malloc(posterior->f_over_b_len * sizeof(*posterior->f_over_b));
+	posterior->ln_f_over_b_len = *PyArray_DIMS(arr);
+	posterior->ln_f_over_b = malloc(posterior->ln_f_over_b_len * sizeof(*posterior->ln_f_over_b));
 
-	for(i = 0; i < posterior->f_over_b_len; i++) {
-		posterior->f_over_b[i] = *(double *) PyArray_GETPTR1(arr, i);
-		if(posterior->f_over_b[i] < 0.) {
-			PyErr_SetString(PyExc_ValueError, "negative probability density encountered");
-			return -1;
-		}
-	}
+	for(i = 0; i < posterior->ln_f_over_b_len; i++)
+		posterior->ln_f_over_b[i] = *(double *) PyArray_GETPTR1(arr, i);
 
-	condition(posterior->f_over_b, posterior->f_over_b_len);
+	condition(posterior->ln_f_over_b, posterior->ln_f_over_b_len);
 
 	return 0;
 }
@@ -209,7 +221,7 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 	if(!PyArg_ParseTuple(args, "(dd)", &Rf, &Rb))
 		return NULL;
 
-	return PyFloat_FromDouble(compute_log_sqrt_posterior(posterior->f_over_b, posterior->f_over_b_len, Rf, Rb));
+	return PyFloat_FromDouble(compute_log_sqrt_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb));
 }
 
 
