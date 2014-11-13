@@ -95,6 +95,7 @@ from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
+from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
 
 
