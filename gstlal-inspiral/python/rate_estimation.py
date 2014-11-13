@@ -199,22 +199,24 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 		progressbar.max = nsample + nburn
 		progressbar.show()
 
-	i = None
+	i = 0
 	if chain_file is not None and "chain" in chain_file:
-		chain = chain_file["chain"].items()
-		samples = numpy.empty((max(nsample, len(chain)), nwalkers, ndim), dtype = "double")
+		chain = chain_file["chain"].values()
+		length = sum(sample.shape[0] for sample in chain)
+		samples = numpy.empty((max(nsample, length), nwalkers, ndim), dtype = "double")
+		if progressbar is not None:
+			progressbar.max = samples.shape[0]
 		# load chain from HDF file
-		for i, (sample_id, sample) in enumerate(chain):
-			samples[i,:,:] = sample
+		for sample in chain:
+			samples[i:i+sample.shape[0],:,:] = sample
+			i += sample.shape[0]
 			if progressbar is not None:
-				progressbar.max = samples.shape[0]
-				progressbar.increment()
-		if i is not None:
+				progressbar.update(i)
+		if i:
 			# skip burn-in, restart chain from last position
 			nburn = 0
-			pos0 = samples[i,:,:]
-			i += 1
-	if i is None:
+			pos0 = samples[i - 1,:,:]
+	if not i:
 		# no chain file provided, or file does not contain sample
 		# chain or sample chain is empty.  still need burn-in.
 		# seed signal rate walkers from exponential distribution,
@@ -229,13 +231,23 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# samples.
 	#
 
-	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(ln_f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(ln_f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
-		samples[i,:,:] = coordslist
-		if chain_file is not None:
-			chain_file["chain/%08d" % i] = coordslist
-			if not i % 2048:
-				chain_file.flush()
+		samples[j,:,:] = coordslist
+		# dump samples to the chain file every 2048 steps
+		if j + 1 >= i + 2048 and chain_file is not None:
+			chain_file["chain/%08d" % i] = samples[i:j+1,:,:]
+			chain_file.flush()
+			i = j + 1
+	# dump any remaining samples to chain file
+	if chain_file is not None and i < samples.shape[0]:
+		chain_file["chain/%08d" % i] = samples[i:,:,:]
+		chain_file.flush()
+
+	#
+	# safety check
+	#
+
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
