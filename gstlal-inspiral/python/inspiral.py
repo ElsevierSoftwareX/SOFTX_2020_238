@@ -959,5 +959,6 @@ class Data(object):
 
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
+			coincs_document = self.coincs_document.get_another()
 			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
-			self.coincs_document = self.coincs_document.get_another()
+			self.coincs_document = coincs_document
