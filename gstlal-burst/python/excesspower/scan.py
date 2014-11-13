@@ -32,6 +32,8 @@ from glue.segments import segment
 from glue.lal import LIGOTimeGPS, Cache, CacheEntry
 
 from gstlal import pipeparts
+from gstlal.excesspower.utils import EXCESSPOWER_UNIT_SCALE
+from gstlal.excesspower.parts import mknxyfdsink
 
 #
 # =============================================================================
@@ -48,11 +50,12 @@ class EPScan(object):
 		self.bandwidth = segment(low_freq, high_freq)
 		self.base_band = base_band
 
-	def add_data_sink(self, pipeline, head, name, type):
+	def add_data_sink(self, pipeline, head, name, type, units=EXCESSPOWER_UNIT_SCALE['Hz']):
 		mknxyfdsink(pipeline,
 			pipeparts.mkqueue(pipeline, head),
 			self.get_tmp_fd(name, type),
-			self.scan_segment
+			self.scan_segment,
+			units
 		)
 
 	def get_tmp_fd(self, name, type):
