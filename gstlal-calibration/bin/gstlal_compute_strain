@@ -288,7 +288,7 @@ elif options.data_source == "white":
 
 	if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkaudiotestsrc(pipeline, wave = 4, samplesperbuffer=sr, blocksize = sr * 4 * 1)
-		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=%d" % sr)
+		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=32768")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
 
@@ -499,6 +499,7 @@ strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = 
 
 if not options.no_dq_vector:
 
+	odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
 	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	# 
