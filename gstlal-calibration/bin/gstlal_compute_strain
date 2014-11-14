@@ -141,6 +141,7 @@ parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, h
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
 parser.add_option("--compression-scheme", metavar = "scheme", type = "int", default = 256, help = "Set the compression scheme for the framecpp_channelmux element. (Default=256, no compression)")
+parser.add_option("--compression-level", metavar = "level", type = "int", default = 0, help = "Set the compression level for the framecpp_channelmux element. (Default=0)")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, frames will be written to a file.")
 parser.add_option("--buffer-mode", metavar = "number", type = "int", default = 2, help = "Set the buffer mode for the lvshmsink element. (Default=2)")
 parser.add_option("--frame-type", metavar = "name", default = "GSTLAL_CAL", help = "Set the frame type as input to the frame writing element. (Default=GSTLAL_CAL)")
@@ -292,6 +293,7 @@ elif options.data_source == "white":
 		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-float, width=32, rate=32768")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "exp")
 		odcstatevector = pipeparts.mkgeneric(pipeline, odcstatevector, "lal_fixodc")
+
 
 if options.data_source != "white":
 	if options.recolor:
@@ -603,11 +605,13 @@ if options.frame_duration is not None:
 if options.frames_per_file is not None:
         mux.set_property("frames-per-file", options.frames_per_file)
 mux.set_property("compression-scheme", options.compression_scheme)
+mux.set_property("compression-level", options.compression_level)
 
 # Link the output DQ vectors up to the muxer, if applicable
 if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STATE_VECTOR" % instrument))
-	pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
+	if options.data_source != "white":
+		pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
 pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
