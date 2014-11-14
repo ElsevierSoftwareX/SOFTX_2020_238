@@ -354,72 +354,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
-else:
-	psd = dict((instrument, None) for instrument in detectors.channel_dict)
-
-
-#
-# Get IIR banks
-#
-
-banks = {}
-banks = inspiral.parse_iirbank_files(iir_banks, verbose = options.verbose)
-for instrument in banks:
-	for n, bank in enumerate(banks[instrument]):
-		bank.logname = "%sbank%d" % (instrument,n)
-@bottle.route("/bank.txt")
-def get_name(banks = banks):
-	bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
-	yield '%.14g %.4g ' % (float(now()), bank.template_bank_filename)
-
-
-#
-# Build pipeline
-#
-
-
-if options.verbose:
-	print >>sys.stderr, "assembling pipeline ...",
-
-pipeline = gst.Pipeline("gstlal_iir_inspiral")
-mainloop = gobject.MainLoop()
-
-triggersrc = spiirparts.mkSPIIRmulti(
-	pipeline,
-	detectors = detectors,
-	banks = banks,
-	psd = psd,
-	psd_fft_length = options.psd_fft_length,
-	ht_gate_threshold = options.ht_gate_threshold,
-	veto_segments = veto_segments,
-	verbose = options.verbose,
-	nxydump_segment = options.nxydump_segment,
-	chisq_type = options.chisq_type,
-	track_psd = options.track_psd,
-	blind_injections = options.blind_injections
-)
-
-
-if options.verbose:
-	print >>sys.stderr, "done"
-
-
-#
-# Load likelihood ratio data, assume injections are present
-#
-
-#if options.likelihood_file is not None:
-#	FAR, proc_id = far.LocalRankingData.from_xml(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
-#else:
-#	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
-	# initialize an empty trials table with the combinations of detectors
-	# that this job will analyze
-#	FAR.trials_table.initialize_from_sngl_ifos(detectors.channel_dict.keys())
-if options.data_source in ("lvshm", "framexmit"):
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-	if coinc_params_distributions is None:
-		raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
+  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -512,124 +447,105 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   else:
 	coinc_params_distributions = far.ThincaCoincParamsDistributions()
 
-#
-# build output document
-#
+  #
+  # build output document
+  #
 
 
-if options.verbose:
-	print >>sys.stderr, "initializing output document ..."
-output = inspiral.Data(
-	filename = options.output or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
-	process_params = process_params,
-	pipeline = pipeline,
-	instruments = set(detectors.channel_dict),
-	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-	coincidence_threshold = options.coincidence_threshold,
-	coinc_params_distributions = coinc_params_distributions,
-	marginalized_likelihood_file = options.marginalized_likelihood_file,
-	injection_filename = options.injections,
-	time_slide_file = options.time_slide_file,
-	comment = options.comment,
-	tmp_path = options.tmp_space,
-	likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
-	thinca_interval = options.thinca_interval,
-	gracedb_far_threshold = options.gracedb_far_threshold,
-	gracedb_group = options.gracedb_group,
-	gracedb_type = options.gracedb_type,
-	verbose = options.verbose
-)
-if options.verbose:
-	print >>sys.stderr, "... output document initialized"
+  if options.verbose:
+    print >>sys.stderr, "initializing output document ..."
+  output = inspiral.Data(
+    filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+    process_params = process_params,
+    pipeline = pipeline,
+    instruments = set(detectors.channel_dict),
+    seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
+    coincidence_threshold = options.coincidence_threshold,
+    coinc_params_distributions = coinc_params_distributions,
+    marginalized_likelihood_file = options.marginalized_likelihood_file,
+    injection_filename = options.injections,
+    time_slide_file = options.time_slide_file,
+    comment = options.comment,
+    tmp_path = options.tmp_space,
+    likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
+    thinca_interval = options.thinca_interval,
+    gracedb_far_threshold = options.gracedb_far_threshold,
+    gracedb_group = options.gracedb_group,
+    gracedb_type = options.gracedb_type,
+    verbose = options.verbose
+  )
+  if options.verbose:
+    print >>sys.stderr, "... output document initialized"
+  
+  handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
 
-handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
-
-if options.verbose:
-	print >>sys.stderr, "attaching appsinks to pipeline ...",
-appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
-appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
-if options.verbose:
-	print >>sys.stderr, "attached %d, done" % len(appsinks)
-
-
-#
-# if we request a dot graph of the pipeline, set it up
-#
+  if options.verbose:
+    print >>sys.stderr, "attaching appsinks to pipeline ...",
+  
+  appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
+  appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
+  
+  if options.verbose:
+    print >>sys.stderr, "attached %d, done" % len(appsinks)
 
 
-if options.write_pipeline is not None:
-	pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+  #
+  # if we request a dot graph of the pipeline, set it up
+  #
+  if options.write_pipeline is not None:
+    pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
 
-#
-# Run pipeline
-#
+  #
+  # Run pipeline
+  #
+  if options.data_source in ("lvshm", "framexmit"):
+
+    # setup sigint handler to shutdown pipeline. This is
+    # how the program stops gracefully.
+    # Otherwise it runs forever.
+    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+    
+  if options.verbose:
+    print >>sys.stderr, "setting pipeline state to playing ..."
+  if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError, "pipeline did not enter playing state"
+
+  if options.write_pipeline is not None:
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+  if options.verbose:
+    print >>sys.stderr, "running pipeline ..."
+  mainloop.run()
 
 
-if options.data_source not in ("lvshm", "framexmit"):
-	if options.verbose:
-		print >>sys.stderr, "setting pipeline state to paused ..."
-	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline did not enter paused state"
-	httpservers = None
-else:
-	#
-	# start http interface
-	#
+  #
+  # write output file
+  #
+  output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
 
-	# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
-	httpservers = httpinterface.HTTPServers(16953, verbose = options.verbose)
-	#
-	# setup sigint handler to shutdown pipeline.  this is how the program stops
-	# gracefully, it is the only way to stop it.  Otherwise it runs forever
-	# man.
-	#
+  # Cleanup teamplate bank temp files
+  for ifo in banks:
+    for bank in banks[ifo]:
+      if options.verbose:
+	print >> sys.stderr, "removing file:", bank.template_bank_filename
+	os.remove(bank.template_bank_filename)
 
+  # Shutdown the web interface servers
+  del httpservers
+  bottle.default_app.pop()
 
-	class OneTimeSignalHandler(object):
-		def __init__(self, pipeline):
-			self.pipeline = pipeline
-			self.count = 0
+  if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError("pipeline could not be set to NULL")
 
-		def __call__(self, signum, frame):
-			self.count += 1
-			if self.count == 1:
-				print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
-				try:
-					#FIXME how do I choose a timestamp?
-					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-					if not self.pipeline.send_event(gst.event_new_eos()):
-						raise Exception("pipeline.send_event(EOS) returned failure")
-				except Exception, e:
-					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
-					os._exit(1)
-			else:
-				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
-
-	signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
-	signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
-	# FIXME get rid of this someday: Repair the shared memory just in case before starting
-	for partition in ("LHO_Data", "LLO_Data", "VIRGO_Data"):
-		subprocess.call(["smrepair", partition])
-
-if options.verbose:
-	print >>sys.stderr, "setting pipeline state to playing ..."
-if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "pipeline did not enter playing state"
-
-if options.write_pipeline is not None:
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
-
-if options.verbose:
-	print >>sys.stderr, "running pipeline ..."
-mainloop.run()
-
-
-#
-# write output file
-#
-
+  del handler.pipeline
+  del output.pipeline
+  del handler
+  del bank
+  del banks
+>>>>>>> 798ee02ebd0af03e39e3a17fda84281261ff9d34
 
 
 

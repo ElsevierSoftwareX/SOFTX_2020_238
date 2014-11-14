@@ -5,7 +5,6 @@ SpiirState **
 spiir_state_create (gdouble *bank, gint bank_len, guint num_cover_samples,
 		guint num_exe_samples, gint width, guint rate, cudaStream_t stream);
 
-
 void 
 spiir_state_destroy (SpiirState ** spstate, guint num_depths);
 
