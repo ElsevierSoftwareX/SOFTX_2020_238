@@ -140,6 +140,7 @@ parser.add_option("--science-locked-mask", metavar = "bit", type = "int", defaul
 parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, help = "Set the bit mask for bits that must be on for the instrument/subsystem to be locked. (Default = 0x2)")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
+parser.add_option("--compression-scheme", metavar = "scheme", type = "int", default = 256, help = "Set the compression scheme for the framecpp_channelmux element. (Default=256, no compression)")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, frames will be written to a file.")
 parser.add_option("--buffer-mode", metavar = "number", type = "int", default = 2, help = "Set the buffer mode for the lvshmsink element. (Default=2)")
 parser.add_option("--frame-type", metavar = "name", default = "GSTLAL_CAL", help = "Set the frame type as input to the frame writing element. (Default=GSTLAL_CAL)")
@@ -494,7 +495,7 @@ strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 
 #
-# MAKE THE CALIB-STATE_VECTOR
+# MAKE THE GDS-CALIB_STATE_VECTOR
 #
 
 if not options.no_dq_vector:
@@ -574,7 +575,7 @@ if not options.no_dq_vector:
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 
 	#
-	# COMBINE ALL BITS TO MAKE CALIB-STATE_VECTOR
+	# COMBINE ALL BITS TO MAKE GDS-CALIB_STATE_VECTOR
 	#
 
 	calibstatevector = gst.element_factory_make("lal_adder")
@@ -587,7 +588,7 @@ if not options.no_dq_vector:
 		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
-	dqtagstr = "channel-name=%s:CALIB-STATE_VECTOR, instrument=%s" % (instrument, instrument)
+	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
 	calibstatevector = pipeparts.mkaudiorate(pipeline, calibstatevector, skip_to_first = True, silent = False)
 
@@ -601,10 +602,11 @@ if options.frame_duration is not None:
         mux.set_property("frame-duration", options.frame_duration)
 if options.frames_per_file is not None:
         mux.set_property("frames-per-file", options.frames_per_file)
+mux.set_property("compression-scheme", options.compression_scheme)
 
 # Link the output DQ vectors up to the muxer, if applicable
 if not options.no_dq_vector:
-	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:CALIB-STATE_VECTOR" % instrument))
+	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STATE_VECTOR" % instrument))
 	pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
