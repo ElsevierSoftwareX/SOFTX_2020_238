@@ -626,9 +626,8 @@ class Data(object):
 					# we're using the class attribute
 					# elsewhere so make sure these two
 					# match
-					assert ranking_data.ln_likelihood_ratio_threshold == far.RankingData.ln_likelihood_ratio_threshold
 					ranking_data.finish(verbose = self.verbose)
-					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+					self.fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in

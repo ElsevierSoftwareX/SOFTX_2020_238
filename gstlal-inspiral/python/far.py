@@ -239,47 +239,6 @@ def trials_from_faps(p0, p1):
 
 
 #
-# FAR normalization helper
-#
-
-
-class CountAboveThreshold(dict):
-	"""
-	Device for counting the number of zero-lag coincs above threshold
-	as a function of the instruments that participated.
-	"""
-	def update(self, connection, coinc_def_id, threshold):
-		for instruments, count in connection.cursor().execute("""
-SELECT
-	coinc_inspiral.ifos,
-	COUNT(*)
-FROM
-	coinc_inspiral
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-WHERE
-	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?
-	AND NOT EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
-GROUP BY
-	coinc_inspiral.ifos
-""", (coinc_def_id, threshold)):
-			try:
-				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] += count
-			except KeyError:
-				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] = count
-
-
-#
 # Horizon distance record keeping
 #
 
@@ -1125,7 +1084,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		to number of zero-lag coincs observed.  An additional entry
 		with key None stores the total.
 		"""
-		count_above_threshold = CountAboveThreshold((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
+		count_above_threshold = dict((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
 		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
 		return count_above_threshold
 
@@ -1865,14 +1824,10 @@ WHERE
 		self.background_likelihood_pdfs.clear()
 		self.signal_likelihood_pdfs.clear()
 		self.zero_lag_likelihood_pdfs.clear()
-		def build_pdf(binnedarray, ln_likelihood_ratio_threshold, filt):
+		def build_pdf(binnedarray, filt):
 			# copy counts into pdf array and smooth
 			pdf = binnedarray.copy()
 			rate.filter_array(pdf.array, filt)
-			# zero the counts below the threshold.  this also
-			# zeros the at-threshold bin.  FIXME:  correct to
-			# zero at-threshold bin?
-			pdf[:ln_likelihood_ratio_threshold,] = 0.
 			# zero the counts in the infinite-sized high bin so
 			# the final PDF normalization ends up OK
 			pdf.array[-1] = 0.
@@ -1886,17 +1841,17 @@ WHERE
 			progressbar = None
 		for key, binnedarray in self.background_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s noise model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.signal_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s signal model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.zero_lag_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s zero lag log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 
@@ -1962,7 +1917,7 @@ WHERE
 
 
 class FAPFAR(object):
-	def __init__(self, ranking_stats, count_above_threshold, threshold, livetime = None):
+	def __init__(self, ranking_stats, livetime = None):
 		# None is OK, but then can only compute FAPs, not FARs
 		self.livetime = livetime
 

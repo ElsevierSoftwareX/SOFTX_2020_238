@@ -124,7 +124,6 @@ if ranking_data is None:
 if options.verbose:
 	print >>sys.stderr, "beginning count of above-threshold events"
 
-count_above_threshold = far.CountAboveThreshold()
 for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
 	binnedarray.array[:] = 0.
 
@@ -146,7 +145,6 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	xmldoc = dbtables.get_xml(connection)
 	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	xmldoc.unlink()
-	count_above_threshold.update(connection, coinc_def_id, ranking_data.ln_likelihood_ratio_threshold)
 	ranking_data.collect_zero_lag_rates(connection, coinc_def_id)
 
 	#
@@ -155,13 +153,6 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 
 	connection.close()
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
-
-coinc_params_distributions.count_above_threshold = count_above_threshold
-# make sure instrument combination probabilities reflect new counts
-coinc_params_distributions.finish(verbose = options.verbose)
-
-if options.verbose:
-	print >>sys.stderr, "number of above-threshold events:  %s" % ", ".join("%s=%d" % (",".join(sorted(instruments)), count) for instruments, count in count_above_threshold.items())
 
 
 # FIXME:  need to do this to get the combined PDFs populated.  the XML file
@@ -181,7 +172,7 @@ ranking_data.finish(verbose = options.verbose)
 #
 
 
-fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = ranking_data.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 
 
 #
