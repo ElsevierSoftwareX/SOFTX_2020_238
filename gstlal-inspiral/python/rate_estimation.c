@@ -87,6 +87,7 @@ static double compute_log_posterior(const double *ln_f_over_b, int n, double Rf,
 		return atof("-inf");
 
 	ln_P = 0.;
+	#pragma omp parallel for reduction(+:ln_P)
 	for(i = 0; i < n; i++) {
 		/*
 		 * need to add log(Rf f / (Rb b) + 1) to sum.  if Rf f /
