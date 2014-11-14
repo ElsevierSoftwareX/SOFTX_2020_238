@@ -27,10 +27,12 @@ import csv
 import logging
 
 import lal
+import lalsimulation
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import random
 
+import pdb
 # will be DEPRECATED once the C SPIIR coefficient code be swig binded
 from pylal import spawaveform
 
@@ -217,22 +219,23 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 # generate the waveform
 		
 		
-		hc,hp = lalsimulation.SimChooseTDWaveform(  0,					# reference phase, phi ref
+		hc,hp = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
 			    				    1./sampleRate,			# delta T
 							    m1*lal.MSUN_SI,			# mass 1 in kg
 							    m2*lal.MSUN_SI,			# mass 2 in kg
 							    0,0,0,				# Spin 1 x, y, z
 							    0,0,0,				# Spin 2 x, y, z
 							    flower,				# Lower frequency
-							    40,					# Reference frequency
-							    dist*lal.PC_SI,			# r - distance in M (convert to MPc)
+							    0,					# Reference frequency 40?
+							    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
 							    0,					# inclination
 							    0,0,				# Lambda1, lambda2
 							    None,				# Waveflags
 							    None,				# Non GR parameters
-							    7,7,				# Amplitude and phase order 2N+1
+							    0,7,				# Amplitude and phase order 2N+1
 							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-		amp,phase=calc_amp_phase(hc,hp)
+		pdb.set_trace()
+		amp,phase = calc_amp_phase(hc.data.data,hp.data.data)
 		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
 		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
@@ -282,7 +285,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-		autocorrelation_bank[tmp,:] = crosscorr(h, h, autocorrelation_length)/2.0
+		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)/2.0
 
 		# compute the SNR
 		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
@@ -371,10 +374,12 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 	
         return A, B, D, snrvec
 
-def crosscorr(a, b, autocorrelation_length = 201):
+def normalized_crosscorr(a, b, autocorrelation_length = 201):
 	af = scipy.fft(a)
 	bf = scipy.fft(b)
 	corr = scipy.ifft( af * numpy.conj( bf ))
+	tmp_corr = corr
+	corr = tmp_corr / tmp_corr[0]
 	return numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
 
 def innerproduct(a,b):
