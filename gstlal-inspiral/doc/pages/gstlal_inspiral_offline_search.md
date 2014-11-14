@@ -24,6 +24,7 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.spinning_BNS>Makefile.spinning_BNS:</a>  Suitable for the 2014 BNS MDC with a spinning bank.
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.non_spinning_NSBH>Makefile.non_spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a nonspinning bank.
  -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.spinning_NSBH>Makefile.spinning_NSBH:</a>  Suitable for the 2014 NSBH MDC with a spinning bank.
+ -# <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.spinning_BBH>Makefile.spinning_BBH:</a>  Suitable for the 2014 BBH MDC with a spinning bank.
 -# put the Makefiles in the analysis directory you made. 
 -# Modify the Makefile to suit your analysis
 -# run, e.g.,
