@@ -958,7 +958,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
 					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
 					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
-						v = stats.ncx2.pdf(chi2, df, pfs * snr**2)
+						v = stats.ncx2.pdf(chi2, df, pfs * snr2)
 					# remove nans and infs, and barf if
 					# we got a negative number
 					v = v[numpy.isfinite(v)]
