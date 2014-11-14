@@ -37,6 +37,8 @@ except ImportError:
 	PosInf = float("+inf")
 import itertools
 import math
+import multiprocessing
+import multiprocessing.queues
 import numpy
 import random
 import warnings
@@ -54,20 +56,14 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
-from glue import segments
+from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
 from pylal import inject
 from pylal import rate
-
-
-class DefaultContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(DefaultContentHandler)
-ligolw_param.use_in(DefaultContentHandler)
-lsctables.use_in(DefaultContentHandler)
+from pylal import snglcoinc
 
 
 #
@@ -125,6 +121,9 @@ def fap_after_trials(p, m):
 	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
 	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
 	#
+	# as an alternative, the standard library provides log1p(),
+	# which evalutes ln(1 + p) accurately for small p.
+	#
 	# if p is close to 1, ln(1 - p) suffers a domain error
 	#
 
@@ -147,6 +146,12 @@ def fap_after_trials(p, m):
 	if p < .125:
 		#
 		# compute result from Taylor expansion of ln(1 - p)
+		#
+
+		return 1.0 - math.exp(m * math.log1p(-p))
+
+		#
+		# original implementation in case log1p() gives us problems
 		#
 
 		s = p_powers = 1.0
@@ -220,100 +225,52 @@ def trials_from_faps(p0, p1):
 #
 # =============================================================================
 #
-#                             Trials Table Object
+#                 Parameter Distributions Book-Keeping Object
 #
 # =============================================================================
 #
 
 
 #
-# Trials table
+# FAR normalization helper
 #
 
 
-class Trials(object):
-	def __init__(self, count = 0, count_below_thresh = 0, thresh = None):
-		self.count = count
-		self.count_below_thresh = count_below_thresh
-		self.thresh = thresh
-
-	def __add__(self, other):
-		out = type(self)(self.count, self.count_below_thresh, self.thresh)
-		out.count +=  other.count
-		out.count_below_thresh += other.count_below_thresh
-		assert(out.thresh == other.thresh)
-		return out
-
-
-class TrialsTable(dict):
+class CountAboveThreshold(dict):
 	"""
-	A class to store the trials table from a coincident inspiral search
-	with the intention of computing the false alarm probabiliy of an event after N
-	trials.  This is a subclass of dict.  The trials table is keyed by the
-	detectors that partcipated in the coincidence.
+	Device for counting the number of zero-lag coincs above threshold
+	as a function of the instruments that participated.
 	"""
-	class TrialsTableTable(lsctables.table.Table):
-		tableName = "gstlal_trials:table"
-		validcolumns = {
-			"ifos": "lstring",
-			"count": "int_8s",
-			"count_below_thresh": "int_8s",
-			"thresh": "real_8"
-		}
-		class RowType(object):
-			__slots__ = ("ifos", "count", "count_below_thresh", "thresh")
-
-			def get_ifos(self):
-				return lsctables.instrument_set_from_ifos(self.ifos)
-
-			def set_ifos(self, ifos):
-				self.ifos = lsctables.ifos_from_instrument_set(ifos)
-
-			@property
-			def key(self):
-				return frozenset(self.get_ifos())
-
-			@classmethod
-			def from_item(cls, (ifos, trials)):
-				self = cls()
-				self.set_ifos(ifos)
-				self.count = trials.count
-				self.count_below_thresh = trials.count_below_thresh
-				self.thresh = trials.thresh
-				return self
-
-	def initialize_from_sngl_ifos(self, ifos, count = 0, count_below_thresh = 0, thresh = None):
-		"""
-		for all possible combinations of 2 or more from ifos initialize ourself to provided values
-		"""
-		for n in range(2, len(ifos) +	1):
-			for ifo in iterutils.choices(ifos, n):
-				self[frozenset(ifo)] = Trials(count, count_below_thresh, thresh)
-
-	def get_sngl_ifos(self):
-		out = set()
-		for ifos in self:
-			for ifo in ifos:
-				out.add(ifo)
-		return tuple(out)
-
-	def __add__(self, other):
-		out = type(self)()
-		for k in self:
-			out[k] = type(self[k])(self[k].count, self[k].count_below_thresh, self[k].thresh)
-		for k in other:
+	def update(self, connection, coinc_def_id, threshold):
+		for instruments, count in connection.cursor().execute("""
+SELECT
+	coinc_inspiral.ifos,
+	COUNT(*)
+FROM
+	coinc_inspiral
+	JOIN coinc_event ON (
+		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND coinc_event.likelihood >= ?
+	AND NOT EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+GROUP BY
+	coinc_inspiral.ifos
+""", (coinc_def_id, threshold)):
 			try:
-				out[k] += other[k]
+				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] += count
 			except KeyError:
-				out[k] = type(other[k])(other[k].count, other[k].count_below_thresh, other[k].thresh)
-		return out
+				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] = count
 
-	def increment_count(self, n):
-		"""
-		Increment all keys by n
-		"""
-		for k in self:
-			self[k].count += n
 
 #
 # Horizon distance record keeping
@@ -623,9 +580,6 @@ class HorizonHistories(dict):
 # Inspiral-specific CoincParamsDistributions sub-class
 #
 
-	def set_thresh(self, thresh = None):
-		for k in self:
-			self[k].thresh = thresh
 
 class CoincParams(dict):
 	# place-holder class to allow params dictionaries to carry
@@ -636,15 +590,7 @@ class CoincParams(dict):
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
-	def to_xml(self):
-		"""
-		A method to write this instance of a trials table to an xml
-		representation.
-		"""
-		xml = lsctables.New(self.TrialsTableTable)
-		for item in self.items():
-			xml.append(xml.RowType.from_item(item))
-		return xml
+	instrument_categories = snglcoinc.InstrumentCategories()
 
 	# range of SNRs covered by this object
 	# FIXME:  must ensure lower boundary matches search threshold
@@ -742,9 +688,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		key = frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
 
-#
-# Paramter Distributions
-#
+		#
+		# retrieve cached PDF, or build new one
+		#
 
 		try:
 			pdf = self.snr_joint_pdf_cache[key][0]
@@ -981,6 +927,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# coincidence rates
 		for instruments, count in coincsynth.mean_coinc_count.items():
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
+
 
 	def add_foreground_snrchi_prior(self, instruments, n, prefactors_range, df, verbose = False):
 		if verbose:
@@ -1596,9 +1543,16 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 
 
 #
-# Class to handle the computation of FAPs/FARs
+# Class to compute ranking statistic PDFs for background-like and
+# signal-like populations
+#
+# FIXME:  this is really close to just being another subclass of
+# CoincParamsDistributions.  consider the wisdom of rewriting it to be such
 #
 
+
+class RankingData(object):
+	ligo_lw_name_suffix = u"gstlal_inspiral_rankingdata"
 
 	#
 	# likelihood ratio binning
@@ -1612,26 +1566,12 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 		"ln_likelihood_ratio": rate.gaussian_window(8.)
 	}
 
-		return self
+	#
+	# Threshold at which FAP & FAR normalization will occur
+	#
 
 	ln_likelihood_ratio_threshold = NegInf
 
-	@classmethod
-	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", contenthandler = DefaultContentHandler, verbose = False):
-		self, process_id = LocalRankingData.from_xml(utils.load_filename(filenames[0], contenthandler = contenthandler, verbose = verbose), name = name)
-		for f in filenames[1:]:
-			s, p = LocalRankingData.from_xml(utils.load_filename(f, contenthandler = contenthandler, verbose = verbose), name = name)
-			self += s
-		return self
-		
-	def to_xml(self, process, name = u"gstlal_inspiral_likelihood"):
-		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
-		xml.appendChild(self.trials_table.to_xml())
-		xml.appendChild(self.distribution_stats.to_xml(process, name))
-		for key in self.joint_likelihood_pdfs:
-			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
-			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], "%s_joint_likelihood" % (ifostr,)))
-		return xml
 
 	def __init__(self, coinc_params_distributions, instruments, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
@@ -1703,39 +1643,34 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 			if binnedarray.array.any():
 				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
 
-				if verbose:
-					print >>sys.stderr, "computing joint likelihood background for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
+		#
+		# propogate instrument combination priors through to
+		# ranking statistic histograms so that
+		# ._compute_combined_rates() and .__iadd__() combine the
+		# histograms with the correct weights.
+		#
+		# FIXME:  need to also apply a weight that reflects the
+		# probability of recovering a signal in the interval
+		# spanned by the data these histograms reflect so that when
+		# combining statistics from different intervals they are
+		# summed with the correct weights.
+		#
 
-				# only recompute if necessary, some choices
-				# may not be if a certain remap set is
-				# provided
-				if remap_set not in self.joint_likelihood_pdfs:
-					self.joint_likelihood_pdfs[remap_set] = possible_ranks_array(likelihood_pdfs, remap_set, self.target_length)
+		for instruments, binnedarray in self.signal_likelihood_rates.items():
+			if binnedarray.array.any():
+				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
 
-				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
+		#
+		# compute combined rates
+		#
 
+		self._compute_combined_rates()
 
-class RankingData(object):
-	def __init__(self, local_ranking_data):
-		# ensure the trials tables' keys match the likelihood
-		# histograms' keys
-		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table)
+		#
+		# populate the ranking statistic PDF arrays from the counts
+		#
 
-		# copy likelihood ratio PDFs
-		self.joint_likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.joint_likelihood_pdfs.items())
-
-		# copy trials table counts
-		self.trials_table = TrialsTable()
-		self.trials_table += local_ranking_data.trials_table
-		self.scale = dict([(k, 1.) for k in self.trials_table])
-		
-		# copy livetime segment
-		self.livetime_seg = local_ranking_data.livetime_seg
-
-		self.cdf_interpolator = {}
-		self.ccdf_interpolator = {}
-		self.minrank = {}
-		self.maxrank = {}
+		self.finish()
 
 
 	def collect_zero_lag_rates(self, connection, coinc_def_id):
@@ -1871,8 +1806,7 @@ WHERE
 
 		self._compute_combined_rates()
 
-		# PDFs that only we have are unmodified
-		pass
+		return self
 
 	def to_xml(self, name):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
@@ -1889,22 +1823,14 @@ WHERE
 		store(xml, u"zero_lag_likelihood_rate", self.zero_lag_likelihood_rates)
 		store(xml, u"zero_lag_likelihood_pdf", self.zero_lag_likelihood_pdfs)
 
-		# PDFs that we have and are in the new data get replaced
-		# with the weighted sum, re-binned
-		for k in our_keys & other_keys:
-			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
-			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
-			new_joint_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
+		return xml
 
-			for x in self.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
-			for x in other.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += other.joint_likelihood_pdfs[k][x,] * float(other_trials[k].count or 1) / ((our_trials[k].count + other_trials[k].count) or 1)
 
-			self.joint_likelihood_pdfs[k] = new_joint_likelihood_pdf
+#
+# Class to compute false-alarm probabilities and false-alarm rates from
+# ranking statistic PDFs
+#
 
-		# combined trials counts
-		self.trials_table += other.trials_table
 
 class FAPFAR(object):
 	def __init__(self, ranking_stats, count_above_threshold, threshold, livetime = None):
@@ -2067,24 +1993,9 @@ class FAPFAR(object):
 		# probability, the integral in equation (B4)
 		tdp = float(self.cdf_interpolator[None](rank))
 		try:
-			trials = max(int(self.trials_table[ifos].count), 1)
-		except KeyError:
-			trials = 1
-		# multiply by a scale factor if available, assume scale is
-		# 1 if not available.
-		if ifos in self.scale:
-			trials *= self.scale[ifos]
-		return fap_after_trials(fap, trials)
-
-	def far_from_rank(self, rank, ifos, scale = False):
-		ifos = frozenset(ifos)
-		# true-dismissal probability = 1 - false-alarm probability
-		if rank >= self.maxrank[ifos]:
-			rank = self.maxrank[ifos]
-		elif rank <= self.minrank[ifos]:
-			rank = self.minrank[ifos]
-		tdp = float(self.cdf_interpolator[ifos](rank))
-		if tdp == 0.:
+			log_tdp = math.log(tdp)
+		except ValueError:
+			# TDP = 0 --> FAR = +inf
 			return PosInf
 		if log_tdp >= -1e-9:
 			# rare event:  avoid underflow by using log1p(-FAP)

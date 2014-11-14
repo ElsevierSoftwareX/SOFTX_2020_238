@@ -196,7 +196,6 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 		fltrOutptImag[numFilters+i] = 0.0f;
 	}
 	__syncthreads();
-	
 
 
 	if( tx < numFilters ) 
@@ -274,7 +273,6 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 #endif
 }
 
-extern __shared__ char sharedMem[];
 
 
 __global__ void upsample2x_and_add (
@@ -651,8 +649,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     num_inchunk = spiir_processed; 
 
   }
-  num_remains = SPSTATE(0)->queue_eff_len - num_inchunk;
-  cudaMemcpy(SPSTATE(0)->d_queue, SPSTATE(0)->d_queue + num_inchunk, num_remains * sizeof(float), cudaMemcpyDeviceToDevice);
 
  
   cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream);
