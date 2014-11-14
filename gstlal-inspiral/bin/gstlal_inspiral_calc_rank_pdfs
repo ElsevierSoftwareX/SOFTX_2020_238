@@ -73,6 +73,8 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
 
+	paramdict = options.__dict__.copy()
+
 	if options.likelihood_cache is not None:
 		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
 	if not urls:
@@ -81,7 +83,7 @@ def parse_command_line():
 	if options.output is None:
 		raise ValueError("must set --output")
 
-	return options, urls
+	return options, urls, paramdict
 
 
 #
@@ -98,7 +100,7 @@ def parse_command_line():
 #
 
 
-options, urls = parse_command_line()
+options, urls, paramdict = parse_command_line()
 
 
 #
@@ -168,7 +170,7 @@ ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = {})
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = paramdict)
 search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
 ligolw_process.set_process_end_time(process)
