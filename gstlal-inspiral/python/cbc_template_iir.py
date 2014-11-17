@@ -564,6 +564,8 @@ class Bank(object):
 	                b0dict = {}
 	                delaydict = {}
 
+
+
 	                if downsample:
 				# iterate over the frequencies and put them in the right downsampled bin
 				for i, f in enumerate(fs):
@@ -573,17 +575,16 @@ class Bank(object):
 					b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
 					delaydict.setdefault(sampleRate/M, []).append(newdelay)
 				#logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
-
 			else:
 				a1dict[int(sampleRate)] = a1
 				b0dict[int(sampleRate)] = b0
 				delaydict[int(sampleRate)] = delay
 
-		# store the coeffs
-		for k in a1dict.keys():
-			Amat.setdefault(k, []).append(a1dict[k])
-			Bmat.setdefault(k, []).append(b0dict[k])
-			Dmat.setdefault(k, []).append(delaydict[k])
+			# store the coeffs
+			for k in a1dict.keys():
+				Amat.setdefault(k, []).append(a1dict[k])
+				Bmat.setdefault(k, []).append(b0dict[k])
+				Dmat.setdefault(k, []).append(delaydict[k])
 
 
 		max_rows = max([len(Amat[rate]) for rate in Amat.keys()])
