@@ -82,6 +82,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
+	parser.add_option("-f", "--force", action = "store_true", help = "Force recomputation of likelihood values.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
 	options, filenames = parser.parse_args()
@@ -168,7 +169,7 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 
 coincparamsdistributions.finish(verbose = options.verbose)
-likelihood_ratio_func = snglcoinc.LikelihoodRatio(coincparamsdistributions)
+ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 
 #
@@ -197,7 +198,7 @@ for n, filename in enumerate(filenames, 1):
 		failed.append(filename)
 		continue
 
-	if ligolw_process.doc_includes_process(xmldoc, u"gstlal_inspiral_calc_likelihood"):
+	if not options.force and ligolw_process.doc_includes_process(xmldoc, u"gstlal_inspiral_calc_likelihood"):
 		if options.verbose:
 			print >>sys.stderr, "already processed, skipping"
 		xmldoc.unlink()
@@ -248,7 +249,7 @@ for n, filename in enumerate(filenames, 1):
 		vetoseglists = vetoseglists,
 		events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
 		veto_func = sngl_inspiral_veto_func,
-		likelihood_ratio_func = likelihood_ratio_func,
+		ln_likelihood_ratio_func = ln_likelihood_ratio_func,
 		likelihood_params_func = coincparamsdistributions.coinc_params,
 		verbose = options.verbose
 	)
@@ -258,7 +259,7 @@ for n, filename in enumerate(filenames, 1):
 	#
 
 	if options.trim_database:
-		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.likelihood_ratio_threshold)
+		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.ln_likelihood_ratio_threshold)
 		# FIXME:  don't hard-code program and parameter names
 		sngls_snr_threshold, = ligolw_process.get_process_params(xmldoc, u"gstlal_inspiral", u"--singles-threshold")
 		sngl_ids_to_delete = set(sngl.event_id for coinc_event_id in coinc_ids_to_delete for sngl in coinc_event_map_index[coinc_event_id] if sngl.snr < sngls_snr_threshold)

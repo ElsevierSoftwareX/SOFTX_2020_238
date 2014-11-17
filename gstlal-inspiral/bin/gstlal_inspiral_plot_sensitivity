@@ -36,6 +36,8 @@ import sys
 import copy
 from optparse import OptionParser
 
+from gstlal import inspiral_pipe
+
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -572,20 +574,20 @@ for bin_type in opts.bin_types:
             ax.set_title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
 
         # save and close figures
-        tag = "%s_%s_VOLUME_VS_FAR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        fig_far_vol.savefig("%s/%s.png"%(opts.output_dir,tag))
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_far_vol.savefig(tag)
 
-        tag = "%s_%s_VOLUME_VS_SNR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        fig_snr_vol.savefig("%s/%s.png"%(opts.output_dir,tag))
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_snr_vol.savefig(tag)
 
-        tag = "%s_%s_RANGE_VS_FAR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        fig_far_range.savefig("%s/%s.png"%(opts.output_dir,tag))
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_far_range.savefig(tag)
 
-        tag = "%s_%s_RANGE_VS_SNR_BINNED_BY_%s-%d-%d" % (opts.user_tag.strip("_"),"".join(sorted(list(instr))),bin_type.upper(),UL.start_time,UL.end_time-UL.start_time)
-        fig_snr_range.savefig("%s/%s.png"%(opts.output_dir,tag))
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_snr_range.savefig(tag)
 
-        #for fig in figs:
-        #    fig.close()
+        for fig in figs:
+            pyplot.close(fig)
 
 # write a cache file describing the files generated during by this program
 if opts.output_cache:

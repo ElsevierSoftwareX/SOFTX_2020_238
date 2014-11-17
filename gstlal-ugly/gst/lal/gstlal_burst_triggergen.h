@@ -81,7 +81,9 @@ typedef struct {
 	double *datad;
 	enum {
 		GSTLAL_BURSTTRIGGEN_DOUBLE,
-		GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE
+		GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE,
+		GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK,
+		GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE_NO_PEAK
 	} data_type;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;

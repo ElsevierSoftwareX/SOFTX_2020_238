@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2013  Kipp Cannon, Chad Hanna, Jacob Peoples
+# Copyright (C) 2013,2014  Kipp Cannon, Chad Hanna, Jacob Peoples
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -19,6 +19,7 @@
 ## @file
 # A program to comput the signal and noise rate posteriors of a gstlal inspiral analysis
 
+
 #
 # =============================================================================
 #
@@ -28,6 +29,7 @@
 #
 
 
+import h5py
 import math
 import matplotlib
 matplotlib.rcParams.update({
@@ -57,6 +59,7 @@ from pylal import ligolw_thinca
 
 
 from gstlal import far
+from gstlal import rate_estimation
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
@@ -82,11 +85,13 @@ def parse_command_line():
 	)
 	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".95,.999999\", clear to disable).")
 	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("--chain-file", metavar = "filename", help = "Read chain from this file, save chain to this file.")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Load ranking statistic PDFs from this file.  Can be given multiple times.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
 	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
+	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -97,7 +102,7 @@ def parse_command_line():
 		options.likelihood_filenames += [CacheEntry(line).path for line in open(options.likelihood_cache)]
 	if options.likelihood_file is not None:
 		options.likelihood_filenames += options.likelihood_file
-	if not options.likelihood_filenames:
+	if not options.likelihood_filenames and options.samples > 0:
 		raise ValueError("must provide --likelihood-cache and/or one or more --likelihood-file options")
 
 	if options.input_cache:
@@ -141,9 +146,9 @@ def load_ranking_data(filenames, verbose = False):
 	return ranking_data
 
 
-def load_search_results(filenames, likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
-	background_likelihood_ratios = []
-	zerolag_likelihood_ratios = []
+def load_search_results(filenames, ln_likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
+	background_ln_likelihood_ratios = []
+	zerolag_ln_likelihood_ratios = []
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -154,7 +159,7 @@ def load_search_results(filenames, likelihood_ratio_threshold, restrict_to_instr
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for likelihood_ratio, is_background in connection.cursor().execute("""
+		for ln_likelihood_ratio, is_background in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
 	EXISTS (
@@ -175,16 +180,16 @@ WHERE
 	coinc_event.coinc_def_id == ?
 	AND coinc_event.likelihood >= ?""" + ("""
 	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
-	, (definer_id, likelihood_ratio_threshold)):
+	, (definer_id, ln_likelihood_ratio_threshold)):
 			if is_background:
-				background_likelihood_ratios.append(likelihood_ratio)
+				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
 			else:
-				zerolag_likelihood_ratios.append(likelihood_ratio)
+				zerolag_ln_likelihood_ratios.append(ln_likelihood_ratio)
 
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	return background_likelihood_ratios, zerolag_likelihood_ratios
+	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
 def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, restrict_to_instruments = None):
@@ -192,9 +197,9 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	FigureCanvas(fig)
 	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
 	if restrict_to_instruments is None:
-		fig.suptitle("Rate Posterior")
+		fig.suptitle("Event Rate Posterior")
 	else:
-		fig.suptitle("Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
+		fig.suptitle("Event Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
 	if noise_rate is None:
 		signal_axes = fig.gca()
 	else:
@@ -203,11 +208,14 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 	x = signal_rate.bins[0].centres()
 	y = signal_rate.array
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
-	signal_axes.set_xlabel("$\mathrm{Signals} / \mathrm{Experiment}$")
-	signal_axes.set_ylabel(r"$P(\mathrm{signal\ count})$")
+	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
+	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
+	#signal_axes.loglog()
+
+	#signal_axes.set_ylim((1e-8, 1.))
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signal\ count} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
+		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (mode, lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
 		for cell in table.get_celld().values():
 			cell.set_edgecolor("w")
 
@@ -249,7 +257,10 @@ options, filenames = parse_command_line()
 #
 
 
-ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+if options.likelihood_filenames:
+	ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+else:
+	ranking_data = None
 
 
 #
@@ -257,7 +268,7 @@ ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options
 #
 
 
-background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(filenames, ranking_data.likelihood_ratio_threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 0.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -266,11 +277,11 @@ background_likelihood_ratios, zerolag_likelihood_ratios = load_search_results(fi
 
 
 if options.verbose:
-	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_likelihood_ratios)
+	print >>sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_ln_likelihood_ratios)
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = far.calculate_rate_posteriors(ranking_data, zerolag_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar)
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
 del progressbar
 
 
@@ -280,12 +291,17 @@ del progressbar
 
 
 if options.confidence_intervals:
-	confidence_intervals = dict((conf, far.confidence_interval_from_binnedarray(signal_rate_pdf, conf)[1:]) for conf in (0.95, 0.999999))
+	if options.verbose:
+		print >>sys.stderr, "determining confidence intervals ..."
+	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
 else:
 	confidence_intervals = None
 if options.verbose and confidence_intervals is not None:
-	for conf, (lo, hi) in sorted(confidence_intervals.items()):
-		print >>sys.stderr, "%g%% confidence interval = [%g, %g] signal events" % (conf * 100., lo, hi)
+	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal_rate_pdf)
+	# all modes are the same, pick one and report it
+	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % confidence_intervals.values()[0][0]
+	for conf, (mode, lo, hi) in sorted(confidence_intervals.items()):
+		print >>sys.stderr, "%g%% confidence interval = [%g, %g] signals/experiment" % (conf * 100., lo, hi)
 
 
 #

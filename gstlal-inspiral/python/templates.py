@@ -297,8 +297,11 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in sngl_inspiral_rows)
-
+		try:
+			longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in sngl_inspiral_rows)
+		except ValueError as e:
+			print "Continuing decomposition by moving to next slice despite:\n\t", e
+			continue
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
 		# If not, we can skip this sampling rate and move on to the next lower one.

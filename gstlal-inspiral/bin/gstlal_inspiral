@@ -132,7 +132,7 @@
 #	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets.
 #	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
 #	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds, default = 8.
-#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal).
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity.
 #	+ `--chisq-type" [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
 #	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
 #	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
@@ -171,11 +171,9 @@ import resource
 import sys
 from optparse import OptionParser
 import signal
-import subprocess
 import socket
 import time
 import tempfile
-import itertools
 import math
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -191,18 +189,14 @@ from gstlal import bottle
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from pylal.date import XLALUTCToGPS
-from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
-from gstlal import simplehandler
 from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
@@ -212,8 +206,6 @@ from gstlal import hoftcache
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
 
 #
@@ -268,7 +260,7 @@ def parse_command_line():
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
-	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -485,7 +477,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lalseries.LIGOLWContentHandler))
 else:
 	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -624,7 +616,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, tag = options.job_tag, verbose = options.verbose)
+	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
 
 
 	if options.verbose:

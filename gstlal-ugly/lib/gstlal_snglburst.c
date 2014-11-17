@@ -174,3 +174,67 @@ GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, 
 
 	return srcbuf;
 }
+
+SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
+{
+	/* advance the pointer if we have one */
+	guint channel, sample;
+
+	/* FIXME do error checking */
+	for (channel = 0; channel < channels; channel++) {
+	    for (sample = 0; sample < samples; sample++) {
+		    if (input[channels*sample+channel] > threshold) {
+			    SnglBurst *new_event = XLALCreateSnglBurst();
+			    memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
+			    LIGOTimeGPS peak_time;
+			    XLALINT8NSToGPS(&peak_time, time);
+			    XLALGPSAdd(&peak_time, (double) sample / rate);
+			    XLALGPSAdd(&peak_time, -new_event->duration/2);
+			    // Center the tile
+			    XLALGPSAdd(&peak_time, 1.0/(2.0*rate));
+			    LIGOTimeGPS start_time = peak_time;
+			    XLALGPSAdd(&start_time, -new_event->duration/2);
+			    new_event->snr = fabs(input[channels*sample+channel]);
+			    new_event->start_time = start_time;
+			    new_event->peak_time = peak_time;
+			    new_event->next = output;
+			    output = new_event;
+		    }
+        }
+	}
+
+	return output;
+}
+
+SnglBurst *gstlal_snglburst_new_list_from_complex_double_buffer(complex double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
+{
+	/* advance the pointer if we have one */
+	guint channel, sample;
+
+	/* FIXME do error checking */
+	for (channel = 0; channel < channels; channel++) {
+	    for (sample = 0; sample < samples; sample++) {
+	        /* FIXME Which are we thresholding on. the EP version uses the 
+             * squared value, so we make this consistent */
+		    if (cabs(input[channels*sample+channel]) > sqrt(threshold)) {
+			    SnglBurst *new_event = XLALCreateSnglBurst();
+			    memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
+			    LIGOTimeGPS peak_time;
+			    XLALINT8NSToGPS(&peak_time, time);
+			    XLALGPSAdd(&peak_time, (double) sample / rate);
+			    XLALGPSAdd(&peak_time, -new_event->duration/2);
+			    // Center the tile
+			    XLALGPSAdd(&peak_time, 1.0/(2.0*rate));
+			    LIGOTimeGPS start_time = peak_time;
+			    XLALGPSAdd(&start_time, -new_event->duration/2);
+			    new_event->snr = cabs(input[channels*sample+channel]);
+			    new_event->start_time = start_time;
+			    new_event->peak_time = peak_time;
+			    new_event->next = output;
+			    output = new_event;
+		    }
+        }
+	}
+
+	return output;
+}

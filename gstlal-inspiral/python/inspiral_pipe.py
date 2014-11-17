@@ -298,7 +298,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	ifos = sorted(cachedict.keys())
 	files = zip(*[[lal.CacheEntry(f).path for f in open(cachedict[ifo],'r').readlines()] for ifo in ifos])
 	for n, bank_group in enumerate(group(files, numbanks)):
-		if maxjobs is not None and n > maxJobs:
+		if maxjobs is not None and n > maxjobs:
 			break
 		c = dict(zip(ifos, zip(*bank_group)))
 		outstrs.append(c)

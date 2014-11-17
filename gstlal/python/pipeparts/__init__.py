@@ -282,8 +282,8 @@ def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output
 
 
 ## Adds a <a href="@gstlalgtkdoc/GstLALCacheSrc.html">lal_cachesrc</a> element to a pipeline with useful default properties
-def mklalcachesrc(pipeline, location, **properties):
-	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, **properties)
+def mklalcachesrc(pipeline, location, use_mmap = True, **properties):
+	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, use_mmap = use_mmap, **properties)
 
 
 def mklvshmsrc(pipeline, shm_name, **properties):

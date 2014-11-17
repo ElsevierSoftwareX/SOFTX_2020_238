@@ -37,6 +37,36 @@ DELETE FROM coinc_definer WHERE coinc_def_id IN (SELECT old FROM _idmap_ WHERE o
 
 DROP INDEX tmpindex;
 DROP TABLE _idmap_;
+
+--
+-- segment_definer clean up.  NOTE;  this assumes no meaningful information
+-- is stored in the version and comment columns, and will scramble it if
+-- there is.  that is, two segment_definer rows are considered to be
+-- equivalent even if their version and comment values differ, and the one
+-- with the higher ID will be discarded.
+--
+
+CREATE TEMPORARY TABLE _idmap_ AS
+	SELECT
+		old.segment_def_id AS old,
+		MIN(new.segment_def_id) AS new
+	FROM
+		segment_definer AS old
+		JOIN segment_definer AS new ON (
+			new.ifos == old.ifos
+			AND new.name == old.name
+		)
+	GROUP BY
+		old.segment_def_id;
+CREATE INDEX tmpindex ON _idmap_ (old);
+
+UPDATE segment_summary SET segment_def_id = (SELECT new FROM _idmap_ WHERE old == segment_def_id);
+UPDATE segment SET segment_def_id = (SELECT new FROM _idmap_ WHERE old == segment_def_id);
+DELETE FROM segment_definer WHERE segment_def_id IN (SELECT old FROM _idmap_ WHERE old != new);
+
+DROP INDEX tmpindex;
+DROP TABLE _idmap_;
+
 --
 -- time_slide clean up
 --
@@ -61,6 +91,13 @@ DELETE FROM time_slide WHERE time_slide_id IN (SELECT old FROM _idmap_ WHERE old
 
 DROP INDEX tmpindex;
 DROP TABLE _idmap_;
+
+
+--
+-- begin clustering
+--
+
+
 SELECT
 	"Number of coincs before clustering: " || count(*)
 FROM

@@ -36,7 +36,6 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal import date
-from pylal import ligolw_tisi
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
@@ -128,9 +127,7 @@ sim_burst_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimB
 
 process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_glitch_population", {"gps_start_time": options.gps_start_time, "gps_end_time": options.gps_end_time, "time_slide_instruments": options.time_slide_instruments, "rate": options.rate, "slope": options.slope})
 
-time_slide_id = time_slide_table.get_next_id()
-for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(options.instruments, 0.0), time_slide_id, process):
-	time_slide_table.append(row)
+time_slide_table.append_offsetvector(dict.fromkeys(options.instruments, 0.0), process)
 
 
 #

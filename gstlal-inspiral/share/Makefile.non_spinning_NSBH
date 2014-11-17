@@ -1,0 +1,153 @@
+#
+# Template bank parameters
+#
+
+# The filtering start frequency
+LOW_FREQUENCY_CUTOFF = 30.0
+# The maximum frequency to filter to
+HIGH_FREQUENCY_CUTOFF = 2048.0
+# Controls the number of templates in each SVD sub bank
+NUM_SPLIT_TEMPLATES = 200
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP = 20
+# The program used to make the template bank. This will be searched for in the
+# process param table in order to extract some metadata
+BANK_PROGRAM = pycbc_geom_nonspinbank
+# The approximant that you wish to filter with
+APPROXIMANT = TaylorF2
+
+#
+# Triggering parameters
+#
+
+# The detectors to analyze
+IFOS = H1 L1 V1
+# The GPS start time
+START = 966384015
+# The GPS end time
+STOP =  967384015
+# A user tag for the run
+TAG = test
+# A web directory for output
+WEBDIR = ~/public_html/MDC/NSBH/Summer2014/recolored/nonspin/$(START)-$(STOP)-$(TAG)
+# The number of sub banks to process in parallel for each gstlal_inspiral job
+NUMBANKS = 4
+# The control peak time for the composite detection statistic.  If set to 0 the
+# statistic is disabled
+PEAK = 0
+# The length of autocorrelation chi-squared in sample points
+AC_LENGTH = 351
+# The minimum number of samples to include in a given time slice
+SAMPLES_MIN = 512
+# The maximum number of samples to include in the 256 Hz or above time slices
+SAMPLES_MAX_256 = 512
+
+#
+# additional options, e.g.,
+#
+
+#ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
+
+#
+# Injections
+#
+
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+INJECTIONS := HL-INJECTIONS_976731_NSBHMDCINJ_SET1_T4-966384015-5184000.xml HL-INJECTIONS_976765_NSBHMDCINJ_SET1_T2-966384015-5184000.xml
+FAR_INJECTIONS := HL-FAR_INJECTIONS_976731_NSBHMDCINJ_SET1_T4-966384015-5184000.xml HL-FAR_INJECTIONS_976765_NSBHMDCINJ_SET1_T2-966384015-5184000.xml
+# NOTE you shouldn't need to change these next three lines
+comma:=,
+INJECTION_REGEX = $(subst $(space),$(comma),$(INJECTIONS))
+FAR_INJECTION_REGEX = $(subst $(space),$(comma),$(FAR_INJECTIONS))
+
+#
+# Segment and frame type info
+#
+
+# The LIGO and Virgo frame types
+LIGO_FRAME_TYPE='T1200307_V4_EARLY_RECOLORED_V2'
+VIRGO_FRAME_TYPE='T1300121_V1_EARLY_RECOLORED_V2'
+# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+# you want to analyze a different set of IFOS
+H1_CHANNEL=LDAS-STRAIN
+L1_CHANNEL=LDAS-STRAIN
+V1_CHANNEL=h_16384Hz
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL) --channel-name=V1=$(V1_CHANNEL)
+
+#
+# Get some basic definitions.  NOTE this comes from the share directory probably.
+#
+
+include Makefile.offline_analysis_rules
+
+#
+# Workflow
+#
+
+all : dag
+
+bank_no_spin.xml.gz :
+	gsiscp h2.atlas.aei.uni-hannover.de:/home/tito/projects/spin_search/nsbh_mdc1/bank_no_spin/bank_no_spin.xml.gz .
+
+$(INJECTIONS):
+	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(INJECTION_REGEX)}" .
+
+$(FAR_INJECTIONS):
+	gsiscp ldas-pcdev1.ligo-wa.caltech.edu:/home/spxiwh/aLIGO/MDC/MDC1/inj_sets/inj_set_1/"{$(FAR_INJECTION_REGEX)}" .
+
+%_split_bank.cache : bank_no_spin.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+plots :
+	mkdir plots
+
+$(WEBDIR) : 
+	mkdir -p $(WEBDIR)
+
+tisi.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+	ligolw_add --output $@ tisi0.xml tisi1.xml
+
+dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) $(FAR_INJECTIONS)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS) $(FAR_INJECTION_LIST)
+
+V1_frame.cache:
+	# FIXME force the observatory column to actually be instrument
+	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" V1_"$$2" "$$3" "$$4" "$$5}' > $@
+
+%_frame.cache:
+	# FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	# FIXME force the observatory column to actually be instrument
+	ligo_data_find -o $(OBS) -t $(LIGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+
+segments.xml.gz: frame.cache
+	# These segments come from the MDC set	
+	gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/SELECTED_SEGS.xml.gz $@
+	gstlal_cache_to_segments frame.cache nogaps.xml
+	gstlal_segments_operations --segment-file1 $@ --segment-file2 nogaps.xml --intersection --output-file $@
+	-rm -vf nogaps.xml
+	gstlal_segments_trim --trim 8 --gps-start-time $(START) --gps-end-time $(STOP) --min-length 2048 --output $@ $@
+
+vetoes.xml.gz:
+	gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/COMBINED_CAT_4_VETO_SEGS.xml.gz $@
+	gstlal_segments_trim --gps-start-time $(START) --gps-end-time $(STOP) --segment-name vetoes --output $@ $@
+
+clean:
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml.gz tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rf *_split_bank
+	-rm -rf bank_no_spin.xml.gz
+	-rm -rf $(INJECTIONS) $(FAR_INJECTIONS)

@@ -310,6 +310,22 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					char *dest = (char *) g_malloc0(buffer_list_length * appdata->unit_size);
 
 					/*
+					 * absorb up to 1 ns of rounding
+					 * noise in the buffer list's start
+					 * and end times.  the process of
+					 * chopping up the input stream
+					 * into this list can introduce 1
+					 * ns of rounding noise because
+					 * that code has no internal,
+					 * global, count of elapsed time.
+					 */
+
+					if(buffer_list_t_start == frame_t_start - 1)
+						buffer_list_t_start++;
+					if(buffer_list_t_end == frame_t_end + 1)
+						buffer_list_t_end--;
+
+					/*
 					 * safety checks
 					 */
 
@@ -325,13 +341,17 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
 
 						/*
-						 * safety checks
+						 * safety checks.  again, 1
+						 * ns of rounding noise in
+						 * the buffer's start and
+						 * end times is permitted
+						 * (see above).
 						 */
 
 						g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
 						g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
-						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer), >=, frame_t_start);
-						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), <=, frame_t_end);
+						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer) + 1, >=, frame_t_start);
+						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer) - 1, <=, frame_t_end);
 						g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
 
 						/* FIXME:  how to indicate gaps in frame file? */

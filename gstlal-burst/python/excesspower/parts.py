@@ -243,11 +243,14 @@ class EPHandler(Handler):
 				print >>sys.stderr, "Got latency message, ignoring for now."
 			return
 		elif message.type == gst.MESSAGE_TAG:
-			if self.psd_mode == 1 and self.psd is not None:
+			if self.psd_mode == 1 and self.psd is not None and not self.whitener.get_property("mean-psd"):
 				if self.verbose:
 					print >>sys.stderr, "Got tags message, fixing current PSD to whitener."
 				self.whitener.set_property("mean-psd", self.psd.data)
 				self.whitener.set_property("psd-mode", self.psd_mode) # GSTLAL_PSDMODE_FIXED
+			elif self.psd_mode == 1 and self.psd is not None:
+				if self.verbose:
+					print >>sys.stderr, "Got tags message, but already fxed current PSD to whitener."
 			else:
 				if self.verbose:
 					print >>sys.stderr, "Got tags message, but no fixed spectrum to set, so ignoring for now."
@@ -289,7 +292,7 @@ class EPHandler(Handler):
 		firbank.set_property("fir-matrix", self.rebuild_filter())
 		# Impose a latency since we've advanced the filter in the 
 		# generation step. See build_filter in the excesspower library
-		firbank.set_property("latency", len(firbank.get_property("fir_matrix")[0])/2)
+		firbank.set_property("latency", self.filter_bank.shape[1]/2)
 		self.firbank = firbank
 
 	def add_matmixer(self, mm, res_level):
@@ -351,7 +354,7 @@ class EPHandler(Handler):
 		if not self.filter_xml.has_key((0,1)):
 			self.build_filter_xml(res_level = 0, ndof = 1)
 
-		self.filter_bank, self.freq_filter_bank = filters.build_filter_from_xml( 
+		self.filter_bank, self.freq_filter_bank = filters.build_filter_from_xml(
 			self.filter_xml[(0,1)],
 			self.psd,
 			self.spec_corr
@@ -370,12 +373,18 @@ class EPHandler(Handler):
 			res_level,
 			ndof,
 			self.frequency_overlap,
-			self.inst
+			self.inst,
+			1 if ndof == 1 else self.units,
 		)
 
 		# Store the filter name so we can destroy it later
 		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
 		self.filter_xml[output] = self.filter_xml[(res_level, ndof)]
+
+		if self.mmixers.has_key(res_level):
+			mmatrix = self.mmixers[res_level].get_property("matrix")
+			filter_table = lsctables.SnglBurstTable.get_table(self.filter_xml[(res_level, ndof)])
+			assert len(mmatrix[0]) == len(filter_table)
 
 		# Write it
 		self.lock.acquire()
@@ -497,9 +506,6 @@ class EPHandler(Handler):
 			del buffer
 			return # We don't want event information
 
-		# TODO: Can I set units here on the buffer fields, avoid changing the 
-		# triggers themslves and *not* screw up the underlying framework?
-
 		# What comes out of the sngl_bursts_from_buffer is a
 		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
 		# all the trappings of its glue.ligolw.lsctables cousin, so we
@@ -521,25 +527,16 @@ class EPHandler(Handler):
 			self.event_number += 1
 
 			# If we're using a different units system, adjust back to SI
-			event.duration *= self.units
 			# Readjust start time for units
-			# FIXME: Is self.start already in the 'new' unit system?
-			# If so, we can delete these comments, otherwise, uncomment
-			#event.start_time -= self.start
-			event.start_time /= self.units
-			event.peak_time /= self.units
-			#event.start_time += self.start
-			# FIXME: Readjust frequencies? I don't think so, the filter tables are
-			# created 'independently and thus don't see the new units
-			#event.bandwidth /= self.units
+			event.set_start(event.get_start() / self.units)
+			event.set_peak(event.get_peak() / self.units)
+			event.duration /= self.units
 
 			self.triggers.append(event)
 
 		# Update the timestamps which tell us how far along in the trigger
 		# streams we are
-		# TODO: Why does the buf_dur need unit conversion, but not the timestamp
-		#buf_ts = (buffer.timestamp*1e-9 - self.start) / self.units + self.start
-		buf_ts = buffer.timestamp*1e-9 
+		buf_ts = buffer.timestamp*1e-9 / self.units
 		buf_dur = buffer.duration*1e-9 / self.units
 		self.stop = (buf_ts + buf_dur)
 
@@ -619,7 +616,8 @@ class EPHandler(Handler):
 				break
 		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
 
-	def write_triggers(self, filename, flush=True, seg=None):
+	# FIXME: Remove flush argument, it serves no purpose
+	def write_triggers(self, filename, flush=False, seg=None):
 
 		if not self.output:
 			return
@@ -711,6 +709,7 @@ class EPHandler(Handler):
 			)
 
 		# Keeping statistics about event rates
+		# FIXME: This needs to be moved up before the trigger dumping
 		if self.channel_monitoring:
 			self.stats.add_events(self.triggers, cur_seg)
 			self.stats.normalize()
@@ -797,9 +796,9 @@ class EPHandler(Handler):
 
 		self.destroy_filter_xml()
 
-def mknxyfdsink(pipeline, src, fd, segment = None):
+def mknxyfdsink(pipeline, src, fd, segment = None, units = utils.EXCESSPOWER_UNIT_SCALE['Hz']):
     if segment is not None:
-        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = segment[0].ns(), stop_time = segment[1].ns())
+        elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump", start_time = int(segment[0].ns()*units), stop_time = int(segment[1].ns()*units))
     else:
         elem = pipeparts.mkgeneric(pipeline, src, "lal_nxydump")
     return pipeparts.mkgeneric(pipeline, elem, "fdsink", fd=fd, sync=False, async=False)
@@ -915,10 +914,9 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
     if verbose:
         head = pipeparts.mkprogressreport(pipeline, head, "FIR bank stream")
 
-    postfirtee = pipeparts.mktee(pipeline, head)
-
     # Scan piece: Save the filtered time series
     if handler.trigger_segment:
+        postfirtee = head = pipeparts.mktee(pipeline, head)
         scan_obj.add_data_sink(pipeline, postfirtee, "filter_series", "time")
 
     # object to handle the synchronization of the appsinks
@@ -957,6 +955,9 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             head = pipeparts.mkgeneric(pipeline, head, "audioratefaker")
             head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=%d,channels=%d,width=64" % (handler.rate/handler.units, nchannels))
 
+    postfirtee = pipeparts.mktee(pipeline, head)
+
+
     # First branch -- send fully sampled data to wider channels for processing
     nlevels = int(numpy.ceil(numpy.log2(nchannels))) 
     for res_level in range(0, min(handler.max_level, nlevels)):
@@ -964,7 +965,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
         band = handler.base_band * 2**res_level
 
         # The undersample_rate for band = R/2 is => sample_rate (passthrough)
-        orig_rate = 2 * handler.base_band
+        orig_rate = 2 * band
         undersamp_rate = 2 * band / handler.units
 
         print "Undersampling rate for level %d: %f Hz -> %f %s" % (res_level, orig_rate, undersamp_rate, unit)
@@ -1002,11 +1003,11 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
         if handler.max_dof is not None:
             max_samp = handler.max_dof
 
-        if max_samp < 2 and res_level == 0:
+        if max_samp < 2 and res_level == handler.max_level:
             sys.exit("The duration for the largest tile is smaller than a two degree of freedom tile. Try increasing the requested maximum tile duration or maximum DOF requirement.")
-        elif max_samp < 2 and res_level != 0:
-            print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping remaining levels." % handler.max_duration
-            break
+        elif max_samp < 2:
+            print "Further resolution levels would result in tiles for which the maximum duration (%f) would not have enough DOF (2). Skipping this levels." % handler.max_duration
+            continue
         print "Can sum up to %s degress of freedom in powers of two for this resolution level." % max_samp
 
         # samples to sum -- two is min number
@@ -1023,7 +1024,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
 
             # Scan piece: Save the summed square NDOF=1 stream
             if handler.trigger_segment:
-                scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time")
+                scan_obj.add_data_sink(pipeline, head, "sq_sum_series_level_%d_dof_1" % res_level, "time", handler.units)
 
             if verbose:
                 print "Resolution level %d, DOFs: %d" % (res_level, ndof)
@@ -1037,7 +1038,7 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             # Scan piece: Save the summed square NDOF=2 stream
             if handler.trigger_segment:
                 durtee = pipeparts.mktee(pipeline, durtee)
-                scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time")
+                scan_obj.add_data_sink(pipeline, durtee, "sq_sum_series_level_%d_dof_%d" % (res_level, ndof), "time", handler.units)
 
             if verbose:
                 durtee = pipeparts.mkprogressreport(pipeline, durtee, "After energy summation resolution level %d, %d DOF" % (res_level, ndof))
@@ -1065,19 +1066,21 @@ def construct_excesspower_pipeline(pipeline, head, handler, scan_obj=None, drop_
             if handler.psd_mode == 1:
                 durtee = pipeparts.mknofakedisconts(pipeline, durtee)
 
-            # Trigger generator
-            # Number of tiles to peak over, if necessary
-            peak_samples = max(1, int((peak_fraction or 0) * ndof))
+            # Downsample the SNR stream
+            #durtee = pipeparts.mkresample(pipeline, durtee)
+            #snr_rate = int(undersamp_rate/max(1, ndof*(peak_fraction or 0)))
+            #durtee = pipeparts.mkcapsfilter(pipeline, durtee, "audio/x-raw-float,rate=%d" % snr_rate)
 
+            # Trigger generator
             # Determine the SNR threshold for this trigger generator
             snr_thresh = utils.determine_thresh_from_fap(handler.fap, ndof)**2
             if verbose:
-                print "SNR threshold for level %d, ndof %d: %f, will take peak over %d samples for this branch." % (res_level, ndof, snr_thresh, peak_samples)
-            durtee = pipeparts.mkbursttriggergen(pipeline, durtee, n=peak_samples, bank_filename=handler.build_filter_xml(res_level, ndof, verbose=verbose), snr_thresh=snr_thresh)
+                print "SNR threshold for level %d, ndof %d: %f" % (res_level, ndof, snr_thresh)
+            durtee = pipeparts.mkbursttriggergen(pipeline, durtee, n=int((peak_fraction or 0) * ndof), bank_filename=handler.build_filter_xml(res_level, ndof, verbose=verbose), snr_thresh=snr_thresh)
 
             if verbose:
                 durtee = pipeparts.mkprogressreport(pipeline, durtee, "Trigger generator resolution level %d, %d DOF" % (res_level, ndof))
-
+                
             # Funnel the triggers for this subbranch to the appsink
             # FIXME: Why doesn't this negotiate the caps properly?
             #appsync.add_sink( pipeline, pipeparts.mkqueue(pipeline, durtee), caps = gst.Caps("application/x-lal-snglburst") )

@@ -72,8 +72,9 @@ from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import time_slide as ligolw_time_slide
 from pylal import datatypes as laltypes
-from pylal import ligolw_tisi
 from pylal import rate
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
@@ -324,6 +325,8 @@ def chisq_distribution(df, non_centralities, size):
 
 
 class CoincsDocument(object):
+	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
+
 	def __init__(self, filename, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
 		#
 		# how to make another like us
@@ -349,13 +352,15 @@ class CoincsDocument(object):
 			lal_cvs_tag = None,	# FIXME
 			inseg = seg
 		)
-		# FIXME:  argh, ugly
-		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentDefTable, columns = ligolw_segments.LigolwSegmentList.segment_def_columns))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentSumTable, columns = ligolw_segments.LigolwSegmentList.segment_sum_columns))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentTable, columns = ligolw_segments.LigolwSegmentList.segment_columns))
 
 		#
 		# optionally insert injection list document
@@ -374,9 +379,8 @@ class CoincsDocument(object):
 		if time_slide_file is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = LIGOLWContentHandler, verbose = verbose)
 		else:
-			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), time_slide_table.get_next_id(), self.process):
-				time_slide_table.append(row)
-		time_slide_mapping = ligolw_tisi.time_slides_vacuum(time_slide_table.as_dict())
+			time_slide_table.append_offsetvector(dict.fromkeys(instruments, 0.0), self.process)
+		time_slide_mapping = ligolw_time_slide.time_slides_vacuum(time_slide_table.as_dict())
 		iterutils.inplace_filter(lambda row: row.time_slide_id not in time_slide_mapping, time_slide_table)
 		for tbl in self.xmldoc.getElementsByTagName(ligolw.Table.tagName):
 			tbl.applyKeyMapping(time_slide_mapping)
@@ -417,6 +421,7 @@ class CoincsDocument(object):
 		#
 
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
+		self.llwsegments = ligolw_segments.LigolwSegments(self.xmldoc, self.process)
 
 
 	def commit(self):
@@ -455,6 +460,7 @@ class CoincsDocument(object):
 
 
 	def write_output_file(self, verbose = False):
+		self.llwsegments.finalize()
 		ligolw_process.set_process_end_time(self.process)
 
 		if self.connection is not None:
@@ -529,11 +535,12 @@ class Data(object):
 		)
 
 		#
-		# setup likelihood ratio book-keeping
+		# setup likelihood ratio book-keeping.  seglistsdicts to be
+		# populated the pipeline handler
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
-		self.seglists = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+		self.seglistdicts = None
 		self.fapfar = None
 
 		#
@@ -558,7 +565,7 @@ class Data(object):
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
-			self.seglists[instrument] |= segments.segmentlist((buf_seg,))
+			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
@@ -615,8 +622,8 @@ class Data(object):
 					# we're using the class attribute
 					# elsewhere so make sure these two
 					# match
-					assert ranking_data.likelihood_ratio_threshold == far.RankingData.likelihood_ratio_threshold
-					self.fapfar = far.FAPFAR(ranking_data.background_likelihood_pdfs, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+					assert ranking_data.ln_likelihood_ratio_threshold == far.RankingData.ln_likelihood_ratio_threshold
+					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
@@ -632,8 +639,9 @@ class Data(object):
 			# window. This can also go wrong if there are multiple
 			# events with an identical likelihood.  It will just
 			# choose the event with the highest event id
-			if self.stream_thinca.last_coincs:
-				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+			# FIXME uncomment for clustering
+			#if self.stream_thinca.last_coincs:
+			#	self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
 			# update zero-lag coinc bin counts in
 			# coinc_params_distributions.  NOTE:  if likelihood
@@ -646,7 +654,7 @@ class Data(object):
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-					if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+					if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 			# do GraceDB alerts
@@ -674,10 +682,10 @@ class Data(object):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglists.keys(), inseg = self.seglists.extent_all(), outseg = self.seglists.extent_all())
+		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglists)
+		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglistdicts["triggersegments"])
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -700,7 +708,7 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				if (coinc_event.likelihood >= far.RankingData.likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+				if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 		# do GraceDB alerts
@@ -739,7 +747,7 @@ class Data(object):
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
-					for instrument in self.seglists:
+					for instrument in self.seglistdicts["triggersegments"]:
 						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
@@ -756,8 +764,8 @@ class Data(object):
 				# fake a filename for end-user convenience
 				#
 
-				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglists)))
-				instruments = "".join(sorted(self.seglists))
+				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
+				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
@@ -776,7 +784,19 @@ class Data(object):
 				if self.verbose:
 					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
-				ligolw_utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event.coinc_event_id], message, gz = False, trap_signals = None)
+				xmldoc = self.stream_thinca.last_coincs[coinc_event.coinc_event_id]
+				# give the alert all the standard inspiral
+				# columns (attributes should all be
+				# populated).  FIXME:  ugly.
+				sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+				for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
+					try:
+						sngl_inspiral_table.appendColumn(bonus_column)
+					except ValueError:
+						# already has it
+						pass
+				ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
+				xmldoc.unlink()
 				# FIXME: make this optional from command line?
 				if True:
 					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
@@ -901,6 +921,11 @@ class Data(object):
 
 	def __write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		self.__flush()
+
+		# FIXME:  should this be done in .flush() somehow?
+		for segtype, seglistdict in self.seglistdicts.items():
+			self.coincs_document.llwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID")
+
 		if filename is not None:
 			self.coincs_document.filename = filename
 		self.coincs_document.write_output_file(verbose = verbose)
@@ -925,13 +950,15 @@ class Data(object):
 				likelihood_file = os.path.join(likelihood_file[0], '%s_SNR_CHI.xml.gz' % likelihood_file[1].split('.')[0])
 		ligolw_utils.write_filename(self.__get_likelihood_file(), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
+		# can't be used anymore
+		del self.coincs_document
+
 	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
 		with self.lock:
 			self.__write_output_file(filename = filename, likelihood_file = likelihood_file, verbose = verbose)
-			# can't be used anymore
-			del self.coincs_document
 
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
+			coincs_document = self.coincs_document.get_another()
 			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
-			self.coincs_document = self.coincs_document.get_another()
+			self.coincs_document = coincs_document

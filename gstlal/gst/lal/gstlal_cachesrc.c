@@ -1,7 +1,7 @@
 /*
  * GstLALCacheSrc
  *
- * Copyright (C) 2012--2013  Kipp Cannon
+ * Copyright (C) 2012--2014  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -344,6 +344,50 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
+static char *cache_entry_src(GstLALCacheSrc *element, guint i)
+{
+	return element->cache->list[i].src;
+}
+
+
+static char *cache_entry_dsc(GstLALCacheSrc *element, guint i)
+{
+	return element->cache->list[i].dsc;
+}
+
+
+/*
+ * return TRUE if element j is a fail-over copy of i, FALSE if not.
+ * returns FALSE if either i or j is beyond the end of the cache, if i ==
+ * j, or if one or both of the cache entries has incomplete metadata.
+ */
+
+
+static gboolean cache_entry_is_failover(GstLALCacheSrc *element, guint i, guint j)
+{
+	if(i != j && i < element->cache->length && j < element->cache->length) {
+		const char *src_i = cache_entry_src(element, i);
+		const char *src_j = cache_entry_src(element, j);
+		const char *dsc_i = cache_entry_dsc(element, i);
+		const char *dsc_j = cache_entry_dsc(element, j);
+		GstClockTime t0_i = cache_entry_start_time(element, i);
+		GstClockTime t0_j = cache_entry_start_time(element, j);
+		GstClockTime dt_i = cache_entry_duration(element, i);
+		GstClockTime dt_j = cache_entry_duration(element, j);
+
+		/*
+		 * NOTE: LAL's cache reading code translates undefined
+		 * start times and durations to 0 and undefined source and
+		 * description fields to NULL.
+		 */
+
+		return src_i && src_j && dsc_i && dsc_j && t0_i && t0_j && dt_i && dt_j && !g_strcmp0(src_i, src_j) && !g_strcmp0(dsc_i, dsc_j) && t0_i == t0_j && dt_i == dt_j;
+	}
+
+	return FALSE;
+}
+
+
 static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
 {
 	guint i;
@@ -413,6 +457,7 @@ static gboolean start(GstBaseSrc *basesrc)
 	}
 
 	basesrc->offset = 0;
+	element->last_index = 0;
 	element->index = 0;
 	element->need_discont = TRUE;
 
@@ -469,10 +514,34 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	*buf = NULL;	/* just in case */
 
+	/*
+	 * skip entries in cache that are fail-over copies of the last file
+	 * successfully loaded.  this is the first part of the machinery
+	 * that allows caches to provide redundant fail-over entries.
+	 * NOTE:  cache_entry_is_failover() includes bounds check and also
+	 * a check that the two indexes are actually different (i.e., that
+	 * we have already loaded a file previously), so we don't need any
+	 * extra checks here.
+	 */
+
+next:
+	while(cache_entry_is_failover(element, element->last_index, element->index)) {
+		GST_WARNING_OBJECT(element, "skipping cache entry '%s': fail-over copy of '%s'.", element->cache->list[element->index].url, element->cache->list[element->last_index].url);
+		element->index++;
+	}
+
+	/*
+	 * check for EOS
+	 */
+
 	if(element->index >= element->cache->length || (GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) && cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)) {
 		GST_DEBUG_OBJECT(element, "EOS");
 		return GST_FLOW_UNEXPECTED;
 	}
+
+	/*
+	 * load the file
+	 */
 
 	GST_DEBUG_OBJECT(element, "loading '%s'", element->cache->list[element->index].url);
 	path = g_filename_from_uri(element->cache->list[element->index].url, &host, &error);
@@ -486,7 +555,21 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	fd = open(path, O_RDONLY);
 	if(fd < 0) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s", path, strerror(errno)));
+		/*
+		 * failed to open file.  if the next entry in the cache has
+		 * the same observatory, description, and spans exactly the
+		 * same time interval, try openning it instead.  this is
+		 * the second part of the machinery that allows caches to
+		 * provide redundant fail-over copies.
+		 */
+
+		if(cache_entry_is_failover(element, element->index, element->index + 1)) {
+			GST_WARNING_OBJECT(element, "open('%s') failed: %s.  trying fail-over to next cache entry", path, strerror(errno));
+			element->index++;
+			g_free(path);
+			goto next;
+		}
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("open('%s') failed: %s.  no fail-over copies available.", path, strerror(errno)));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -508,20 +591,21 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	/*
 	 * finish setting buffer metadata.  need_discont is TRUE for the
-	 * first buffer, so cache_entry_end_time() won't be invoked with an
-	 * index of -1
+	 * first buffer, after which ->last_index will be meaningful, so no
+	 * need to check for nonsensical ->last_index value.
 	 */
 
 	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
 	basesrc->offset = GST_BUFFER_OFFSET_END(*buf);
-	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->index - 1)) {
+	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->last_index)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
 
 	GST_DEBUG_OBJECT(element, "pushing '%s' spanning %" GST_BUFFER_BOUNDARIES_FORMAT, path, GST_BUFFER_BOUNDARIES_ARGS(*buf));
 
+	element->last_index = element->index;
 	element->index++;
 done:
 	g_free(path);

@@ -79,6 +79,7 @@ def whiten_test_01a(pipeline, name):
 	#
 
 	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 9)
+	head = pipeparts.mkgeneric(pipeline, head, "audiocheblimit", mode = 1, cutoff = 0.25)
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
 	head.connect_after("notify::f-nyquist", psd_resolution_changed, None)

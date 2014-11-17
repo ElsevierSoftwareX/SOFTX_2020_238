@@ -49,11 +49,11 @@ from optparse import OptionParser
 import sqlite3
 import sys
 
+import os
 
 from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue.ligolw import table
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import lal
 from pylal import db_thinca_rings
@@ -61,12 +61,42 @@ from pylal import git_version
 from pylal import SimBurstUtils
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from gstlal import far
+from gstlal import inspiral_pipe
+
+
+class SimInspiral(lsctables.SimInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+
+class SnglInspiral(lsctables.SnglInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def eta(self):
+		return self.mass1 * self.mass2 / self.mtotal**2.
+
+	@property
+	def mchirp(self):
+		return self.mtotal * self.eta**0.6
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+	def get_effective_snr(self, fac):
+		return self.snr / (self.chisq / self.chisq_dof)**.5
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
-
-def get_effective_snr(self, fac):
-	return self.snr / (self.chisq / self.chisq_dof)**.5
-lsctables.SnglInspiral.get_effective_snr = get_effective_snr
+lsctables.SimInspiralTable.RowType = SimInspiral
+lsctables.SnglInspiralTable.RowType = SnglInspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
@@ -88,7 +118,8 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % git_version.verbose_msg
 	)
 	parser.add_option("","--input-cache", help = "Also get the list of databases to process from this LAL cache.")
-	parser.add_option("-b", "--base", metavar = "base", default = "cbc_plotsummary_", help = "Set the prefix for output filenames (default = \"cbc_plotsummary_\").")
+	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
@@ -101,7 +132,7 @@ def parse_command_line():
  5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
  6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
-	parser.add_option("--far-thresh", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
+	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -114,9 +145,9 @@ def parse_command_line():
 	if not filenames:
 		filenames = []
 	if options.input_cache:
-		filenames.extend([lal.CacheEntry(l).path for l in open(options.input_cache).readlines()])
+		filenames.extend(c.path for c in map(lal.CacheEntry, open(options.input_cache)))
 
-	return options, (filenames or [])
+	return options, filenames
 
 
 #
@@ -298,13 +329,13 @@ def create_sim_coinc_view(connection):
 	table.
 	"""
 	#
-	# the likelihood ratio stored in the likelihood column of the
+	# the log likelihood ratio stored in the likelihood column of the
 	# coinc_event table is the ranking statistic.  the "best match" is
 	# the coinc with the highest value in this column.  although it has
 	# not been true in the past, there is now a one-to-one relationship
 	# between the value of this ranking statistic and false-alarm rate,
-	# therefore it is OK to order by likelihood ratio and then, later,
-	# impose a "detection" threshold based on false-alarm rate.
+	# therefore it is OK to order by log likelihood ratio and then,
+	# later, impose a "detection" threshold based on false-alarm rate.
 	#
 
 	connection.cursor().execute("""
@@ -360,12 +391,11 @@ class SummaryTable(object):
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
-		contents.connection.create_function("log", 1, lambda x: math.log(x) if x > 0 else float("-inf"))
 		self.candidates += contents.connection.cursor().execute("""
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	log(coinc_event.likelihood),
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
@@ -405,7 +435,7 @@ LIMIT 10
 SELECT
 	coinc_inspiral.combined_far,
 	coinc_inspiral.false_alarm_rate,
-	log(coinc_event.likelihood),
+	coinc_event.likelihood,
 	coinc_inspiral.snr,
 	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
 	coinc_inspiral.mass,
@@ -583,7 +613,7 @@ SELECT
 	)
 FROM
 	sim_inspiral
-			""", (self.far_thresh,)):
+			""", (self.far_thresh if self.far_thresh is not None else float("+inf"),)):
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
@@ -600,11 +630,11 @@ FROM
 			missed = self.found_in.pop(None, [])
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
 				(r"Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
-				(r"Effective Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mchirp"),
-				(r"Chirp Effective Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1], "chirpdist_vs_mchirp"),
-				(r"Effective Distance vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mtotal"),
-				(r"Effective Distance vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_chi"),
-				(r"Effective Distance vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_t")
+				(r"Decisive Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mchirp"),
+				(r"Chirp Decisive Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1], "chirpdist_vs_mchirp"),
+				(r"Decisive Distance vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mtotal"),
+				(r"Decisive Distance vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_chi"),
+				(r"Decisive Distance vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_t")
 			)):
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
@@ -684,7 +714,7 @@ FROM
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
 			del sim.process_id, sim.source, sim.simulation_id
-			del sngl.process_id, sngl.search, sngl.channel, sngl.event_id
+			del sngl.process_id, sngl.event_id
 			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl))
 
 	def finish(self):
@@ -721,7 +751,7 @@ FROM
 
 			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([(sim.mass1*sim.spin1z + sim.mass2*sim.spin2z)/(sim.mass1+sim.mass2) for sim, sngl in pairs], [(sngl.mass1*sngl.spin1z + sngl.mass2*sngl.spin2z)/(sngl.mass1+sngl.mass2) for sim, sngl in pairs], "kx")
+			axes.plot([sim.chi for sim, sngl in pairs], [sngl.chi for sim, sngl in pairs], "kx")
 			yield fig, "chi_acc_%s_%s" % (waveform, instrument), False
 
 
@@ -739,7 +769,6 @@ class BackgroundVsInjectionPlots(object):
 		def __init__(self):
 			self.snr = []
 			self.chi2 = []
-			self.r2 = []
 			self.bankveto = []
 
 	def __init__(self):
@@ -750,12 +779,11 @@ class BackgroundVsInjectionPlots(object):
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
 			# non-injections file
-			for instrument, snr, chi2, r2, bankveto, is_background in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, bankveto, is_background in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
-	sngl_inspiral.rsqveto_duration,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
 	EXISTS (
 		SELECT
@@ -783,23 +811,20 @@ WHERE
 						self.background[instrument] = BackgroundVsInjectionPlots.Points()
 					self.background[instrument].snr.append(snr)
 					self.background[instrument].chi2.append(chi2)
-					self.background[instrument].r2.append(r2)
 					self.background[instrument].bankveto.append(bankveto)
 				else:
 					if instrument not in self.zerolag:
 						self.zerolag[instrument] = BackgroundVsInjectionPlots.Points()
 					self.zerolag[instrument].snr.append(snr)
 					self.zerolag[instrument].chi2.append(chi2)
-					self.zerolag[instrument].r2.append(r2)
 					self.zerolag[instrument].bankveto.append(bankveto)
 		else:
 			# injections file
-			for instrument, snr, chi2, r2, bankveto, end_time in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, bankveto, end_time in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
-	sngl_inspiral.rsqveto_duration,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
 	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9
 FROM
@@ -817,7 +842,6 @@ FROM
 						self.injections[instrument] = BackgroundVsInjectionPlots.Points()
 					self.injections[instrument].snr.append(snr)
 					self.injections[instrument].chi2.append(chi2)
-					self.injections[instrument].r2.append(r2)
 					self.injections[instrument].bankveto.append(bankveto)
 
 	def finish(self):
@@ -995,78 +1019,62 @@ def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
 
-def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
-	if not zerolag_stats:
-		# no data
-		return None, None
-
-	zerolag_stats.sort(reverse = True)
-
-	fig, axes = create_plot(None, r"Number of Events")
-
-	zerolag_stats = numpy.array(zerolag_stats)
-
+def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None), max_events = 1000):
 	#
-	# determine the horizontal and vertical extent of the plot
+	# isolate relevent data
 	#
 
-	minX, maxX = min(zerolag_stats), max(zerolag_stats)
-	minN, maxN = 1, len(zerolag_stats)
+	zerolag_stats = zerolag_stats[:max_events]
 
 	#
-	# background
+	# background.  uncomment the two lines to make the background
+	# stair-step-style like the observed counts
 	#
 
-	N = numpy.logspace(-2, numpy.log10(len(zerolag_stats)), 1000)
-	x = farlivetime / N
-	line1, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k--', linewidth = 1)
+	#expected_count_x = expected_count_x.repeat(2)[1:]
+	#expected_count_y = expected_count_y.repeat(2)[:-1]
+	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
 	# error bands
 	#
 
-	x = x.repeat(2)[1:]
-	x = numpy.concatenate((x, x[::-1]))
-	N = N.repeat(2)[:-1]
-	line2, = axes.fill(x, sigma_region(N, 3.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
-	line3, = axes.fill(x, sigma_region(N, 2.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
-	line4, = axes.fill(x, sigma_region(N, 1.0).clip(minN, maxN), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
+	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
+	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
+	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
+	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
 
 	#
 	# zero-lag
 	#
 
-	N = numpy.arange(len(zerolag_stats), dtype = "double") + 1.0
-	x = numpy.array(zerolag_stats, dtype = "double")
-	line5, = axes.loglog(x.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
-		
+	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
+	line5, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
+
 	#
-	# done
+	# legend
 	#
 
 	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 
-	maxN = min(maxN, 100)
-	minX = float(farlivetime / maxN)
-	axes.set_xlim(minX, maxX)
-	axes.set_ylim(0.9 * min(N), maxN)
-	
-	lo, hi = axes.get_xlim()
-	hi = 10**math.ceil(math.log10(hi))
-	axes.set_xlim(lo, hi)
-	
-	return fig, axes
+	#
+	# adjust bounds of plot
+	#
+
+	xlim = max(zerolag_stats.min(), xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	axes.set_xlim(xlim)
+	axes.set_ylim((0.001, 10.**math.ceil(math.log10(max_events))))
 
 
 class RateVsThreshold(object):
 	def __init__(self):
 		self.background_ln_likelihood_ratio = []
 		self.zerolag_ln_likelihood_ratio = []
-		self.background_ifar = []
-		self.zerolag_ifar = []
+		self.background_far = []
+		self.zerolag_far = []
 		self.background_fap = []
 		self.zerolag_fap = []
 		self.background_snr = []
@@ -1080,7 +1088,7 @@ class RateVsThreshold(object):
 
 		self.farsegs |= contents.farsegs
 
-		for likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
+		for ln_likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
 	coinc_inspiral.combined_far,
@@ -1101,45 +1109,43 @@ FROM
 		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
 	)
 WHERE
-	coinc_inspiral.combined_far is not NULL
+	coinc_event.likelihood >= 0.
 		"""):
-			try:
-				ifar = 1. / far
-			except ZeroDivisionError:
-				ifar = float("+inf")
-			try:
-				ln_lr = math.log(likelihood_ratio)
-			except ValueError:
-				ln_lr = float("-inf")
 			if is_background:
-				self.background_ln_likelihood_ratio.append(ln_lr)
-				self.background_ifar.append(ifar)
+				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
+				self.background_far.append(far)
 				self.background_fap.append(fap)
 				self.background_snr.append(snr)
 			else:
-				self.zerolag_ln_likelihood_ratio.append(ln_lr)
-				self.zerolag_ifar.append(ifar)
+				self.zerolag_ln_likelihood_ratio.append(ln_likelihood_ratio)
+				self.zerolag_far.append(far)
 				self.zerolag_fap.append(fap)
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
 		livetime = far.get_live_time(self.farsegs)
 
-		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
-		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
 		yield fig, "lr_vs_snr", False
-		fig, axes = create_plot(x_label = "SNR", y_label = r"$\ln \Lambda$")
-		axes.semilogx(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
-		axes.semilogx(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		axes.loglog(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
 		yield fig, "lr_vs_snr", True
 
-		for ln_likelihood_ratio, ifars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_ifar, True), (self.background_ln_likelihood_ratio, self.background_ifar, False)]:
-			fig, axes = create_farplot(ifars, livetime, is_open_box)
-			if fig is not None:
+		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
+			if fars:
+				fig, axes = create_plot(None, r"Number of Events")
+				axes.loglog()
+				# fars in ascending order --> ifars in descending order
+				zerolag_stats = 1. / numpy.array(sorted(fars))
+				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
+				expected_count_x = livetime / expected_count_y
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1147,12 +1153,37 @@ WHERE
 				axes.set_xlabel(r"Inverse False-Alarm Rate (s)")
 				yield fig, "count_vs_ifar", is_open_box
 
-			fig, axes = create_farplot(ln_likelihood_ratio, livetime, is_open_box)
-			if fig is not None:
+			if ln_likelihood_ratio:
+				fig, axes = create_plot(None, r"Number of Events")
+				axes.semilogy()
+
+				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
+
+				# we want to plot FAR(ln L) * livetime vs.
+				# ln L, but we don't have access to the
+				# ranking statistic data file where that
+				# function is encoded.  instead, we rely on
+				# the FARs stored in each coinc, together
+				# with the ln L assigned to each coinc, to
+				# provide us with a collection of samples
+				# of that function.  to get more points, we
+				# combine data from the zero-lag and
+				# background coincs.  in the future,
+				# perhaps this program could be provided
+				# with the marginalized ranking statistic
+				# PDF data file
+
+				expected_count_x = self.zerolag_ln_likelihood_ratio + self.background_ln_likelihood_ratio
+				order = range(len(expected_count_x))
+				order.sort(key = lambda i: expected_count_x[i], reverse = True)
+				expected_count_x = numpy.array(expected_count_x)[order]
+				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
+
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
 				if is_open_box:
-					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold")
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
-					axes.set_title(r"Event Count vs.\ Likelihood Ratio Threshold (Closed Box)")
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				axes.set_xlabel(r"$\ln \Lambda$")
 				yield fig, "count_vs_lr", is_open_box
 
@@ -1182,10 +1213,11 @@ options, filenames = parse_command_line()
 # how many there could be, so we know how many digits for the filenames
 max_plot_groups = None
 
-def new_plots(plots = None):
+def new_plots(plots = None, far_thresh = None):
+	global max_plot_groups
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh = options.far_thresh),
+		MissedFoundPlots(far_thresh = far_thresh),
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
@@ -1197,7 +1229,7 @@ def new_plots(plots = None):
 		plots = range(len(l))
 	return [l[i] for i in plots]
 
-plots = new_plots(options.plot_group)
+plots = new_plots(options.plot_group, options.far_threshold)
 if options.plot_group is None:
 	options.plot_group = range(len(plots))
 
@@ -1207,7 +1239,7 @@ if options.plot_group is None:
 #
 
 
-wiki = open(options.base+"plotsummary.txt","w")
+wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
 
 for n, filename in enumerate(filenames):
 	if options.verbose:
@@ -1215,7 +1247,7 @@ for n, filename in enumerate(filenames):
 	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = options.base)
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = os.path.join(options.output_dir, options.user_tag))
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
@@ -1232,12 +1264,12 @@ for n, filename in enumerate(filenames):
 
 
 n = 0
-filename_template = "%%s%%0%dd_%%s%%s.%%s" % (int(math.log10(max_plot_groups or 1)) + 1)
+filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
 while len(plots):
 	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
 		for format in options.format:
 			if filename_fragment and fig:
-				filename = filename_template % (options.base, options.plot_group[n], filename_fragment, ("_openbox" if is_open_box else "_closedbox"), format)
+				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
 				if options.verbose:
 					print >>sys.stderr, "writing %s ..." % filename
 				fig.savefig(filename)

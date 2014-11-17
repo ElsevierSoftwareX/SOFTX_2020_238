@@ -1,4 +1,4 @@
-\page gstlalinspiralcontrolpeaktimestudy Study of the composite detection statistic, (i.e., control-peak-time)
+\page gstlalinspiralcontrolpeaktimestudypage Study of the composite detection statistic, (i.e., control-peak-time)
 
 \section intro Introduction
 

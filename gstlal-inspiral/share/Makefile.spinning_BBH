@@ -1,0 +1,202 @@
+#
+# Template bank parameters
+#
+
+# The filtering start frequency
+LOW_FREQUENCY_CUTOFF = 30.0
+# The maximum frequency to filter to
+HIGH_FREQUENCY_CUTOFF = 4096.0
+# Controls the number of templates in each SVD sub bank
+NUM_SPLIT_TEMPLATES = 200
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP = 30
+# The program used to make the template bank. This will be searched for in the
+# process param table in order to extract some metadata
+BANK_PROGRAM = lalapps_cbc_sbank
+# The approximant that you wish to filter with
+APPROXIMANT = IMRPhenomB
+
+#
+# Triggering parameters
+#
+
+# The detectors to analyze
+IFOS = H1 L1 
+# The GPS start time for MDC2 Studies
+START = 966384015
+# The GPS end time for MDC2 Studies
+#STOP =  967384015
+STOP =  $(shell echo $(START) + 24*3600 | bc -l)
+# A user tag for the run
+TAG = test_Kent_TestI_1Day
+# A web directory for output
+WEBDIR = ~/public_html/test/MDC/BBH/Nov2014/recolored/spin/$(START)-$(STOP)-$(TAG)
+# The number of sub banks to process in parallel for each gstlal_inspiral job
+NUMBANKS = 4
+# The control peak time for the composite detection statistic.  If set to 0 the
+# statistic is disabled
+PEAK = 0
+# The length of autocorrelation chi-squared in sample points
+AC_LENGTH = 151
+# The minimum number of samples to include in a given time slice
+SAMPLES_MIN = 512
+# The maximum number of samples to include in the 256 Hz or above time slices
+SAMPLES_MAX_256 = 512
+
+#
+# additional options, e.g.,
+#
+
+#ADDITIONAL_DAG_OPTIONS = "--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) --blind-injections BNS-MDC1-WIDE.xml"
+#ADDITIONAL_DAG_OPTIONS = "--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256)"
+
+# GSTLAL_SEGMENTS Options
+SEG_SERVER=https://segdb.ligo.caltech.edu
+LIGO_SEGMENTS="$*:CBC-MDC1_SCIENCE_EARLY_RECOLORED:2"
+SEGMENT_TRIM = 16
+SEGMENT_MIN_LENGTH = 512
+
+#GSTLAL VETO Options
+
+# Vetoes file names
+vetoes_suffix := _vetoes.xml
+VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
+
+LIGO_VETOES="$*:DMT-INJECTION"
+
+#
+# Injections
+#
+
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+# Taken from the MDC2 BBH Injections Wiki Page:
+# https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/StellarMassBBH/Mdc2Injections
+
+#
+# Low Mass BBH MDC2 Injections
+#
+
+LOWMASSBBHSTT4A := HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Aligned_0.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Aligned_1.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Aligned_2.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Aligned_3.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Aligned_4.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Aligned_5.xml.gz
+
+LOWMASSBBHSTT4P := HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Precessing_0.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Precessing_1.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Precessing_2.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Precessing_3.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT4_Precessing_4.xml.gz HL-INJECTIONS_BBH_SpinMDC_SpinTaylorT2_Precessing_5.xml.gz
+
+LOWMASSBBHSEOBV2 := HL-INJECTIONS_BBH_SpinMDC_lowmass_SEOBNRv2_Aligned_0.xml.gz HL-INJECTIONS_BBH_SpinMDC_lowmass_SEOBNRv2_Aligned_2.xml.gz HL-INJECTIONS_BBH_SpinMDC_lowmass_SEOBNRv2_Aligned_4.xml.gz
+
+#
+# High Mass BBH MDC2 Injections
+#
+
+HIGHMASSBBH := HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_0.xml.gz HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_1.xml.gz HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_2.xml.gz HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_3.xml.gz HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_4.xml.gz HL-INJECTIONS_BBH_SpinMDC_SEOBNRv2_Aligned_5.xml.gz
+
+INJECTIONS := $(HIGHMASSBBH)
+
+# NOTE you shouldn't need to change these next three lines
+comma:=,
+INJECTION_REGEX = $(subst $(space),$(comma),$(INJECTIONS))
+
+#
+# Segment and frame type info
+#
+
+# The LIGO and Virgo frame types
+LIGO_FRAME_TYPE='T1200307_V4_EARLY_RECOLORED_V2'
+VIRGO_FRAME_TYPE='T1300121_V1_EARLY_RECOLORED_V2'
+# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+# you want to analyze a different set of IFOS
+H1_CHANNEL=LDAS-STRAIN
+L1_CHANNEL=LDAS-STRAIN
+V1_CHANNEL=h_16384Hz
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL) --channel-name=V1=$(V1_CHANNEL)
+
+#
+# Get some basic definitions.  NOTE this comes from the share directory probably.
+#
+
+include Makefile.offline_analysis_rules
+
+#
+# Workflow
+#
+
+all : dag
+
+bank_aligned_spin.xml.gz :
+	gsiscp pcdev1.cgca.uwm.edu:/home/kent/testGSTLAL/SBankTestIII/H1-SBANK_3to110-1000000000-50000.xml.gz $@
+
+$(INJECTIONS):
+	gsiscp pcdev1.cgca.uwm.edu:/home/kent/SVN/cbc/bbh/mdcs/early_recolored/spin/"{$(INJECTION_REGEX)}" .
+
+
+%_split_bank.cache : bank_aligned_spin.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+plots :
+	mkdir plots
+
+$(WEBDIR) : 
+	mkdir -p $(WEBDIR)
+
+tisi.xml :
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=6.28319:6.28319:6.28319 tisi1.xml
+	ligolw_add --output $@ tisi0.xml tisi1.xml
+
+dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS) 
+
+V1_frame.cache:
+	# FIXME force the observatory column to actually be instrument
+	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" V1_"$$2" "$$3" "$$4" "$$5}' > $@
+
+%_frame.cache:
+	# FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	# FIXME force the observatory column to actually be instrument
+	ligo_data_find -o $(OBS) -t $(LIGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+	#FIXME: since these frame types were made incorrectly, make sure ligolw_path_to_cache
+	#       reads ifo names properly
+	sed -i s/H\ $(LIGO_FRAME_TYPE)/H\ H1_$(LIGO_FRAME_TYPE)/g frame.cache
+	sed -i s/L\ $(LIGO_FRAME_TYPE)/L\ L1_$(LIGO_FRAME_TYPE)/g frame.cache
+	sed -i s/V\ $(VIRGO_FRAME_TYPE)/V\ V1_$(VIRGO_FRAME_TYPE)/g frame.cache
+
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+	ligolw_segments_compat $@
+
+segments.xml.gz: $(SEGMENTS_FILES) frame.cache
+	# These segments come from the MDC set	
+	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
+	gstlal_cache_to_segments frame.cache nogaps.xml
+	gstlal_segments_operations --segment-file1 segdb.xml --segment-file2 nogaps.xml --intersection --output-file $@
+	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
+
+
+%_vetoes.xml:
+	ligolw_segment_query --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_VETOES) --result-name=vetoes > $@
+	ligolw_segments_compat $@
+
+vetoes.xml.gz: $(VETOES_FILES)
+	ligolw_add --output $@ $(VETOES_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	gzip $@
+
+
+clean:
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml.gz tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rf *_split_bank
+	-rm -rf $(INJECTIONS) $(FAR_INJECTIONS)
+	-rm -rf nogaps.xml segdb.xml
+	-rm -rf bank_aligned_spin.xml.gz

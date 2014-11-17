@@ -51,7 +51,7 @@ import time
 #
 
 
-allowed_instrument_combos = frozenset([frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1"))])
+allowed_instrument_combos = frozenset([frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1")), frozenset(("E1", "E2")), frozenset(("E1", "E3")), frozenset(("E2", "E3")), frozenset(("E1", "E2", "E3"))])
 
 
 #
@@ -171,8 +171,8 @@ class StreamThinca(object):
 		self.last_coincs = {}
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
-		self.likelihood_func = None
-		self.likelihood_params_func = None
+		self.ln_likelihood_func = None
+		self.ln_likelihood_params_func = None
 
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
@@ -186,11 +186,11 @@ class StreamThinca(object):
 
 
 	def set_coinc_params_distributions(self, coinc_params_distributions):
-		self.likelihood_func = snglcoinc.LikelihoodRatio(coinc_params_distributions)
-		self.likelihood_params_func = coinc_params_distributions.coinc_params
+		self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+		self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
 	def del_coinc_params_distributions(self):
-		self.likelihood_func = None
-		self.likelihood_params_func = None
+		self.ln_likelihood_func = None
+		self.ln_likelihood_params_func = None
 	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
 
 
@@ -206,7 +206,7 @@ class StreamThinca(object):
 		# we need to ensure we have a Table subclass, not a DBTable
 		# subclass
 		if self.sngl_inspiral_table is None:
-			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName).columnnames)
+			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.SnglInspiralTable.get_table(xmldoc).columnnames)
 			# so we can watch for it changing
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
@@ -232,7 +232,7 @@ class StreamThinca(object):
 
 		# stay this far away from the boundaries of the available
 		# triggers
-		coincidence_back_off = max(abs(offset) for offset in lsctables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName).getColumnByName("offset"))
+		coincidence_back_off = max(abs(offset) for offset in lsctables.TimeSlideTable.get_table(xmldoc).getColumnByName("offset"))
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
@@ -257,10 +257,10 @@ class StreamThinca(object):
 		coinc_inspiral_table = lsctables.New(lsctables.CoincInspiralTable)
 
 		# replace tables with our versions
-		real_sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-		real_coinc_event_map_table = lsctables.table.get_table(xmldoc, lsctables.CoincMapTable.tableName)
-		real_coinc_event_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)
-		real_coinc_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)
+		real_sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+		real_coinc_event_map_table = lsctables.CoincMapTable.get_table(xmldoc)
+		real_coinc_event_table = lsctables.CoincTable.get_table(xmldoc)
+		real_coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
 		xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
 		xmldoc.childNodes[-1].replaceChild(coinc_event_map_table, real_coinc_event_map_table)
 		xmldoc.childNodes[-1].replaceChild(coinc_event_table, real_coinc_event_table)
@@ -287,8 +287,8 @@ class StreamThinca(object):
 			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
-			likelihood_func = self.likelihood_func,
-			likelihood_params_func = self.likelihood_params_func,
+			likelihood_func = self.ln_likelihood_func,
+			likelihood_params_func = self.ln_likelihood_params_func,
 			# add 10% to coincidence window for safety + the
 			# light-crossing time for the Earth
 			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI

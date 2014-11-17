@@ -86,7 +86,6 @@ import gst
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
@@ -96,7 +95,7 @@ from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal import simulation
+from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
 
 
@@ -206,7 +205,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, tag = "", verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -227,41 +226,63 @@ class Handler(simplehandler.Handler):
 		# configurations, what they are called, etc., somehow needs to live
 		# with the code that constructs the gates
 		#
-		# FIXME:  in the offline pipeline, none of these segments
-		# get recorded.  however, except for the h(t) gate segments
-		# these are all inputs to the pipeline so it probably
-		# doesn't matter.  nevertheless, they maybe should go into
-		# the event database for completeness of that record, or
-		# maybe not because it could result in a lot of duplication
-		# of on-disk data.  who knows.  think about it.
-		#
-		# FIXME:  should one of these be the segments in the
-		# likelihood data file to define the livetime for
-		# predicting event rates?  right now what's used for that
-		# are the segments collected from the trigger buffers,
-		# which maybe aren't the best choice for that purpose.
+		# FIXME:  in the offline pipeline, state vector segments
+		# don't get recorded.  however, except for the h(t) gate
+		# segments these are all inputs to the pipeline so it
+		# probably doesn't matter.  nevertheless, they maybe should
+		# go into the event database for completeness of that
+		# record, or maybe not because it could result in a lot of
+		# duplication of on-disk data.  who knows.  think about it.
 		gate_suffix = {
-			# FIXME:  the data segments are provided externally
-			# and could be put straight into the output
-			# document instead of doing it this way
-			"datasegments": "frame_segments_gate",
+			# FIXME:  datasegments temporarily disabled until
+			# we decide how to deal with livetime in dag (which
+			# is currently adding its own datasegments lists to
+			# the final database)
+			#"datasegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
-		self.seglistdicts = {}
-		for segtype, suffix in gate_suffix.items():
-			self.seglistdicts[segtype] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in dataclass.seglists)
+
+		# dictionary mapping segtype to segmentlist dictionary
+		# mapping instrument to segment list
+		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)) for segtype in gate_suffix)
+		# add a "triggersegments" entry
+		self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+
+		# hook the Data class's livetime record keeping into ours
+		# so that all segments come here
+		# FIXME:  don't do this, get rid of the Data class
+		dataclass.seglistdicts = self.seglistdicts
+
+		# state of segments being collected
 		self.current_segment_start = {}
+
+		# iterate over segment types and instruments, look for the
+		# gate element that should provide those segments, and
+		# connect handlers to collect the segments
+		if verbose:
+			print >>sys.stderr, "connecting segment handlers to gates ..."
 		for segtype, seglistdict in self.seglistdicts.items():
 			for instrument in seglistdict:
-				elem = self.pipeline.get_by_name("%s_%s" % (instrument, gate_suffix[segtype]))
-				if elem is None:
-					# silently ignore missing gate
-					# elements
+				try:
+					name = "%s_%s" % (instrument, gate_suffix[segtype])
+				except KeyError:
+					# this segtype doesn't come from
+					# gate elements
 					continue
+				elem = self.pipeline.get_by_name(name)
+				if elem is None:
+					# ignore missing gate elements
+					if verbose:
+						print >>sys.stderr, "\tcould not find %s for %s '%s'" % (name, instrument, segtype)
+					continue
+				if verbose:
+					print >>sys.stderr, "\tfound %s for %s '%s'" % (name, instrument, segtype)
 				elem.connect("start", self.gatehandler, (segtype, instrument, "on"))
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
+		if verbose:
+			print >>sys.stderr, "... done connecting segment handlers to gates"
 
 		# most recent spectrum reported by each whitener
 		self.psds = {}
@@ -303,7 +324,41 @@ class Handler(simplehandler.Handler):
 				timestamp = message.structure["timestamp"]
 				self.checkpoint(timestamp)
 				return True
+		elif message.type == gst.MESSAGE_EOS:
+			with self.dataclass.lock:
+				# FIXME:  how to choose correct timestamp?
+				try:
+					timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
+				except ValueError:
+					# no segments
+					return False
+			self.close_segments(timestamp)
+			return False
 		return False
+
+	def _close_segments(self, timestamp):
+		# close out existing segments.  the code in the loop
+		# modifies the iteration target, so iterate over a copy
+		for (segtype, instrument), start_time in list(self.current_segment_start.items()):
+			if timestamp < start_time.ns():
+				continue
+			# By construction these gates should be in the on
+			# state.  We fake a state transition to off in
+			# order to flush the segments
+			self._gatehandler(None, timestamp, (segtype, instrument, "off"))
+			# But we have to remember to put it back
+			self._gatehandler(None, timestamp, (segtype, instrument, "on"))
+
+	def close_segments(self, timestamp):
+		"""!
+		Record stop times for all open segments and start new ones.
+
+		@param timestamp the time in nanoseconds at which to mark
+		the boundary.  If this preceeds and open segment's start
+		time, that segment is not closed.
+		"""
+		with self.dataclass.lock:
+			self._close_segments(timestamp)
 
 	def checkpoint(self, timestamp):
 		"""!
@@ -326,35 +381,45 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			try:
-				# close out existing segments.  the code in
-				# the loop modifies the iteration target,
-				# so iterate over a copy
-				for segtype, instrument in list(self.current_segment_start):
-					# By construction these gates
-					# should be in the on state.  We
-					# fake a state transition to off in
-					# order to flush the segments
-					self.gatehandler(None, timestamp, (segtype, instrument, "off"))
-					# But we have to remember to put it
-					# back
-					self.gatehandler(None, timestamp, (segtype, instrument, "on"))
+				# close out existing segments.
+				self._close_segments(timestamp)
 				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
 				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
 				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# clear the segment lists in place
-				for seglistdict in self.seglistdicts.values():
+				for segtype, seglistdict in self.seglistdicts.items():
+					# FIXME:  we don't wipe the
+					# triggersegments for now.  the
+					# online pipeline needs these to
+					# accumulate forever, but that
+					# might not be what it should be
+					# doing, nor should these
+					# necessarily be the segments it
+					# uses for livetime.  figure this out
+					if segtype == "triggersegments":
+						continue
 					for seglist in seglistdict.values():
 						del seglist[:]
-				# FIXME:  this is disabled for now.  the
-				# online pipeline needs these to accumulate
-				# forever, but that might not be what it
-				# should be doing.  figure this out
-				#for seglist in self.dataclass.seglists.values():
-				#	del seglist[:]
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
+
+	def _gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
+		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
+		state_key = (segtype, instrument)
+
+		if self.verbose and elem is not None:
+			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
+
+		# if there is a current_segment_start for this then the
+		# state transition has to be off
+		if state_key in self.current_segment_start:
+			self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
+		if new_state == "on":
+			self.current_segment_start[state_key] = timestamp
+		else:
+			assert new_state == "off"
 
 	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		"""!
@@ -367,21 +432,8 @@ class Handler(simplehandler.Handler):
 		@param instrument the instrument this state transtion is to be attributed to, e.g., "H1", etc..
 		@param new_state the state transition, must be either "on" or "off"
 		"""
-		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
-		state_key = (segtype, instrument)
-
-		if self.verbose and elem is not None:
-			print >>sys.stderr, "%s: %s %s state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
-
 		with self.dataclass.lock:
-			# If there is a current_segment_start for this then
-			# the state transition has to be off
-			if state_key in self.current_segment_start:
-				self.seglistdicts[segtype][instrument] |= segments.segmentlist([segments.segment(self.current_segment_start.pop(state_key), timestamp)])
-			if new_state == "on":
-				self.current_segment_start[state_key] = timestamp
-			else:
-				assert new_state == "off"
+			self._gatehandler(elem, timestamp, (segtype, instrument, new_state))
 
 	def gen_segments_xmldoc(self):
 		"""!
@@ -390,12 +442,10 @@ class Handler(simplehandler.Handler):
 		"""
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		ligolwsegments = ligolw_segments.LigolwSegments(xmldoc)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-		for segtype, seglistdict in self.seglistdicts.items():
-			ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
-		ligolwsegments.insert_from_segmentlistdict(self.dataclass.seglists, name = "triggersegments", comment = "LLOID snapshot")
-		ligolwsegments.finalize(process)
+		with ligolw_segments.LigolwSegments(xmldoc, process) as ligolwsegments:
+			for segtype, seglistdict in self.seglistdicts.items():
+				ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -849,7 +899,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
 	"""!
 	The multiple instrument, multiple bank LLOID algorithm
 	"""
@@ -941,3 +991,121 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	assert any(triggersrcs.values())
 	return triggersrcs
 
+#
+# SPIIR many instruments, many template banks
+#
+
+
+def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None):
+	#
+	# check for recognized value of chisq_type
+	#
+
+	if chisq_type not in ['autochisq']:
+		raise ValueError("chisq_type must be either 'autochisq', given %s" % chisq_type)
+
+	#
+	# extract segments from the injection file for selected reconstruction
+	#
+
+	if detectors.injection_filename is not None:
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
+	else:
+		inj_seg_list = None
+		#
+		# Check to see if we are specifying blind injections now that we know
+		# we don't want real injections. Setting this
+		# detectors.injection_filename will ensure that injections are added
+		# but won't only reconstruct injection segments.
+		#
+		detectors.injection_filename = blind_injections
+
+	#
+	# construct dictionaries of whitened, conditioned, down-sampled
+	# h(t) streams
+	#
+
+	hoftdicts = {}
+	for instrument in detectors.channel_dict:
+		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
+		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		if veto_segments is not None:
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+		else:
+			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+
+	#
+	# construct trigger generators
+	#
+
+	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
+	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+
+		snr = mkSPIIRhoftToSnrSlices(
+			pipeline,
+			hoftdicts[instrument],
+			bank,
+			instrument,
+			verbose = verbose,
+			nxydump_segment = nxydump_segment,
+			quality = 4
+		)
+		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+
+		snr = pipeparts.mktogglecomplex(pipeline, snr)
+		snr = pipeparts.mktee(pipeline, snr)
+		# FIXME you get a different trigger generator depending on the chisq calculation :/
+		if chisq_type == 'autochisq':
+			# FIXME don't hardcode
+			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			triggersrcs[instrument].add(head)
+		# FIXME:  find a way to use less memory without this hack
+		del bank.autocorrelation_bank
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+
+	#
+	# done
+	#
+
+	assert any(triggersrcs.values())
+	return triggersrcs
+
+
+def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4, sample_rates = None, max_rate = None):
+	if sample_rates is None:
+		sample_rates = sorted(bank.get_rates())
+	else:
+		sample_rates = sorted(sample_rates)
+	#FIXME don't upsample everything to a common rate
+	if max_rate is None:
+		max_rate = max(sample_rates)
+	prehead = None
+
+	for sr in sample_rates:
+		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		head = pipeparts.mkreblock(pipeline, head)
+		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%d_%s_%s" % (sr, instrument, bank.logname))
+		head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		if prehead is not None:
+			adder = gst.element_factory_make("lal_adder")
+			adder.set_property("sync", True)
+			pipeline.add(adder)
+			head.link(adder)
+			prehead.link(adder)
+			head = adder
+		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
+		head = pipeparts.mkresample(pipeline, head, quality = quality)
+		if sr == max_rate:
+			head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
+		else:
+			head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % (2 * sr))
+		prehead = head
+
+	return head
+
+>>>>>>> Fixed a bug where the detectors variable is missing.

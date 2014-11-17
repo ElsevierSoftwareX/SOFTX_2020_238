@@ -80,13 +80,13 @@ __date__ = "FIXME"
 
 def tukeywindow(data, samps = 200.):
 	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = samps / len(data)
+	tp = float(samps) / len(data)
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
 
 
 def lefttukeywindow(data, samps = 200.):
 	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = samps / len(data)
+	tp = float(samps) / len(data)
 	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
 	wn[len(wn)//2:] = 1.0
 	return wn
@@ -195,14 +195,24 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	)
 
 def condition_imr_template(approximant, data, sample_rate_max, max_mass):
-
+	# sample index of peak amplitude
 	max_index = numpy.argmax(numpy.abs(data))
+	# rotate phase so that sample with peak amplitude is real
 	phase = numpy.arctan2(data[max_index].real, data[max_index].imag)
 	data *= numpy.exp(1.j * phase)
-	target_index = len(data) - int(sample_rate_max * max_mass * 300 * 5e-6) # 300 M for the max mass to leave room for ringdown
+	# sample index where we want the peak to be.  300 M for the max
+	# mass to leave room for ringdown
+	target_index = len(data) - int(sample_rate_max * (300. * max_mass) * lal.MTSUN_SI)
+	assert target_index >= 0, "waveform too short"
+	# cyclically permute the samples so the sample with peak amplitude
+	# has the desired index
 	data = numpy.roll(data, target_index - max_index)
-	target_tukey_percentage = 2 * (1. - float(target_index) / len(data))
-	data *= lal.CreateTukeyREAL8Window(len(data), target_tukey_percentage).data.data
+	# re-taper the ends of the waveform that got cyclically permuted
+	# around the ring
+	tukey_beta = 2. * abs(target_index - max_index) / float(len(data))
+	assert 0. <= tukey_beta <= 1., "waveform got rolled WAY too much"
+	data *= lal.CreateTukeyREAL8Window(len(data), tukey_beta).data.data
+	# done
 	return data
 
 

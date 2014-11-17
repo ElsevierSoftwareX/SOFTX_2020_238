@@ -10,3 +10,6 @@ resampler_state_reset (ResamplerState *state, cudaStream_t stream);
 void 
 resampler_state_destroy (ResamplerState *state);
 
+void 
+resampler_state_destroy (ResamplerState *state);
+

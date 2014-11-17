@@ -10,7 +10,7 @@ libcuda_plugin_la_SOURCES = \
 	multiratespiir/resampler_state_utils.c \
 	multiratespiir/spiir_state_utils.c \
 	multiratespiir/multiratespiir_utils.c \
-	multiratespiir/multiratespiir.c
+	multiratespiir/multiratespiir.c 
 
 #	audioresample folder not working, seg fault
 #	audioresample/cuda_gstaudioresample.c \

@@ -164,7 +164,7 @@ def process_options(options, gw_data_source_opts, pipeline, mainloop):
     # Number of resolutions levels. Can't be less than 1, and can't be greater
     # than log_2((fhigh-flow)/base_band)
     handler.max_bandwidth = cfg.getfloat("tf_parameters", "max-bandwidth")
-    handler.max_level = int(round(math.log(handler.max_bandwidth / handler.base_band, 2)))
+    handler.max_level = int(math.floor(math.log(handler.max_bandwidth / handler.base_band, 2)))+1
     # Frequency band overlap -- in our case, handler uses 1 - frequency overlap
     if options.frequency_overlap > 1 or options.frequency_overlap < 0:
         sys.exit("Frequency overlap must be between 0 and 1.")

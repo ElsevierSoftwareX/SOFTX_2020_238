@@ -81,32 +81,6 @@ static void counter(jmp_buf env, int *count, int lim)
 
 
 /*
- * if (first) log(1 + x) ; else  log(1 + x) - x
- */
-
-
-static double log1(double x, int first)
-{
-	if(fabs(x) > 0.1) {
-		return first ? log(1 + x) : (log(1 + x) - x);
-	} else {
-		double s, s1, term, y, k;
-		y = x / (2 + x);
-		term = 2 * pow(y, 3);
-		k = 3;
-		s = (first ? 2 : -x) * y;
-		y = pow(y, 2);
-		for(s1 = s + term / k; s1 != s; s1 = s + term / k) {
-			k += 2;
-			term *= y;
-			s = s1;
-		}
-		return s;
-	}
-}
-
-
-/*
  * find bound on tail probability using mgf, cutoff point returned to *xconst
  */
 
@@ -125,7 +99,7 @@ static double errbd(double u, double *xconst, jmp_buf env, int *count, int lim, 
 		double x = u * A[j];
 		double y = (noncent[j] / (1 - x) + dof[j]) / (1 - x);
 		*xconst += A[j] * y;
-		sum += pow(x, 2) * y + dof[j] * log1(-x, FALSE);
+		sum += pow(x, 2) * y + dof[j] * (log1p(-x) - x);
 	}
 
 	return exp(-sum / 2);
@@ -187,10 +161,10 @@ static double truncation(double u, double var_plus_tausq, jmp_buf env, int *coun
 		sum1 += noncent[j] * x / (1 + x);
 		if(x > 1) {
 			prod2 += dof[j] * log(x);
-			prod3 += dof[j] * log1(x, TRUE);
+			prod3 += dof[j] * log1p(x);
 			s += dof[j];
 		} else
-			prod1 += dof[j] * log1(x, TRUE);
+			prod1 += dof[j] * log1p(x);
 	}
 	sum1 /= 2;
 	prod2 += prod1;
@@ -270,7 +244,7 @@ static double integrate(int nterm, double delta_u, double var, double tausq, int
 			double z;
 			x = 2 * u * A[index[j]];
 			y = pow(x, 2);
-			sum3 -= 0.5 * dof[index[j]] * log1(y, TRUE);
+			sum3 -= 0.5 * dof[index[j]] * log1p(y);
 			y = noncent[index[j]] * x / (1 + y);
 			z = dof[index[j]] * atan(x) + y;
 			sum1 += z;

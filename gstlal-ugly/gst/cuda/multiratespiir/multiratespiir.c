@@ -256,6 +256,9 @@ cuda_multirate_spiir_stop (GstBaseTransform * base)
   g_mutex_free (element->iir_bank_lock);
   g_cond_free (element->iir_bank_available);
 
+  g_mutex_free (element->iir_bank_lock);
+  g_cond_free (element->iir_bank_available);
+
   if (element->spstate) {
     spiir_state_destroy (element->spstate, element->num_depths);
   }
@@ -833,6 +836,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
     element->spstate_initialised = TRUE;
   }
+
 
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event

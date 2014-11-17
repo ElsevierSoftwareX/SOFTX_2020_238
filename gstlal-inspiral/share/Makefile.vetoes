@@ -1,0 +1,31 @@
+# USER DEFINED INPUT - CHANGE AS APPROPRIATE
+START = 966384015 
+STOP = 971568015
+
+IFOS = H1 L1 V1
+vetoes_suffix := _vetoes.xml
+VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
+SEG_SERVER=https://segdb.ligo.caltech.edu
+
+VETODEFREMOTE="https://www.lsc-group.phys.uwm.edu/ligovirgo/cbc/public/segments/S6/H1L1V1-S6_CBC_LOWMASS_D_OFFLINE-961545543-0.xml"
+VETODEF=$(nodir $VETODEFREMOTE)
+
+# GET VETO-DEFINER FILE
+$(VETODEF):
+	wget $(VETODEFREMOTE) -O $@
+
+# GET VETOES PER DETECTOR
+%_vetoes.xml: $(VETODEF)
+	ligolw_segments_from_cats --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
+	ligolw_segments_compat $*-VETOTIME_CAT*.xml
+	# cat2 for giant glitches
+	# cat3 for HW injections
+	gstlal_segments_operations --union --segment-file1 $*-VETOTIME_CAT3-*.xml --segment-name1 VETO_CAT3_CUMULATIVE --segment-file2 $*-VETOTIME_CAT3-*.xml --segment-name2 VETO_CAT3_CUMULATIVE  --output-file $@ --output-segment-name vetoes
+
+# COMBINE ALL VETOES ACROSS DETECTORS
+vetoes.xml: $(VETOES_FILES)
+	ligolw_add $(VETOES_FILES) -o vetoes.xml
+
+clean:
+	rm -rf *_vetoes.xml
+	rm -rf vetoes.xml
