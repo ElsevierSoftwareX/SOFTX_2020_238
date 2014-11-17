@@ -191,8 +191,10 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
 	if verbose: 
-		logging.basicConfig(format='%(asctime)s %(message)s', level = logging.debug)
-		logging.info("f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate))
+		print "logging"
+		logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
+		logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
+		print "after logging"
 
         Amat = {}
         Bmat = {}
@@ -236,7 +238,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 							    0,7,				# Amplitude and phase order 2N+1
 							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
 
-		amp,phase = calc_amp_phase(hc.data.data,hp.data.data)
+		amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
 		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
 		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
@@ -286,7 +288,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)/2.0
+		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, u, autocorrelation_length)/2.0
 
 		# compute the SNR
 		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
