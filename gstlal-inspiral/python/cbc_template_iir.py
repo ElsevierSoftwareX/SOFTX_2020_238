@@ -32,7 +32,6 @@ from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import random
 
-import pdb
 # will be DEPRECATED once the C SPIIR coefficient code be swig binded
 from pylal import spawaveform
 
@@ -134,26 +133,28 @@ def calc_amp_phase(hc,hp):
     #Unwind the phase
     #Based on the unwinding codes in pycbc
     #and the old LALSimulation interface
-    index = 0
     count=0
     prevval = None
+    phaseUW = phase 
 
     #Pycbc uses 2*PI*0.7 for some reason
     #We use the more conventional PI (more in line with MATLAB)
     thresh = lal.PI;
-    for val in phase:
+    for index, val in enumerate(phase):
 	if prevval is None:
 	    pass
-	elif val-prevval >= thresh:
-	    count = count+1
 	elif prevval - val >= thresh:
+	    count = count+1
+	elif val - prevval >= thresh:
 	    count = count-1
 
-	phase[index] += count*lal.TWOPI
-	
+	phaseUW[index] = phase[index] + count*lal.TWOPI
 	prevval = val
-	index += 1
 
+    for index, val in enumerate(phase):
+	    phaseUW[index] = phaseUW[index] - phaseUW[0]
+
+    phase = phaseUW
     return amp,phase
 
 def sigmasq2(mchirp, fLow, fhigh, psd_interp):
@@ -218,8 +219,8 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
                 # generate the waveform
 		
-		
-		hc,hp = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
+		# FIXME: waveform approximant should not be fixed.	
+		hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
 			    				    1./sampleRate,			# delta T
 							    m1*lal.MSUN_SI,			# mass 1 in kg
 							    m2*lal.MSUN_SI,			# mass 2 in kg
@@ -234,7 +235,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 							    None,				# Non GR parameters
 							    0,7,				# Amplitude and phase order 2N+1
 							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-		pdb.set_trace()
+
 		amp,phase = calc_amp_phase(hc.data.data,hp.data.data)
 		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
