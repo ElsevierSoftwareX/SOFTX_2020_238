@@ -73,11 +73,6 @@ from gstlal import cbc_template_iir
 from pylal.series import read_psd_xmldoc
 from glue.ligolw import utils, lsctables
 
-# read bank file
-bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
-sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
-fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
-
 # read psd file
 if options.reference_psd:
 	ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=ligolw.LIGOLWContentHandler))
@@ -90,9 +85,11 @@ else:
 
 
 # get the iir coefficients
-A, B, D, snrs = cbc_template_iir.makeiirbank(bank_xmldoc, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon)
+bank = Bank()
 
-utils.write_filename(bank_xmldoc, options.output, gz=options.output.endswith('.gz'))
+bank.build_from_tmpltbank(options.template_bank, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon)
+
+bank.write_to_xml(options.output)
 
 #import pylab
 #pylab.hist(snrs)
