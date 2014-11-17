@@ -1,5 +1,5 @@
 
-# Copyright (C) 2010-2012 Shaun Hooper, David Mckenzie, Qi Chu
+# Copyright (C) 2010-2012 Shaun Hooper, David Mckenzie, Qi Chu, Kipp Cannon, Chad Hanna, Leo Singer
 # Copyright (C) 2013-2014 David Mckenzie, Qi Chu
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -32,10 +32,20 @@ from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import random
 
+Attributes = ligolw.sax.xmlreader.AttributesImpl
+
 # will be DEPRECATED once the C SPIIR coefficient code be swig binded
 from pylal import spawaveform
 
-# DEPRECATED: The following code is used to generate the amplitude and phase 
+
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+# DEPRECATED: The following code is ued to generate the amplitude and phase 
 # 	      information of a waveform. NOW we use the standard lalsimulation
 #             to obtain amp and phase.
 
@@ -413,8 +423,9 @@ def smooth_and_interp(psd, width=1, length = 10):
         return interpolate.interp1d(f, out)
 
 class Bank(object):
-	def __init__(self, logname = None, verbose = False):
+	def __init__(self, logname = None):
 		self.template_bank_filename = None
+		self.bank_filename = None
 		self.snr_threshold = None
 		self.logname = logname
 		self.sngl_inspiral_table = None
@@ -426,12 +437,19 @@ class Bank(object):
 		self.autocorrelation_mask = None
 		self.sigmasq = []
 		self.matches = []
+		self.flower = None
+		self.epsilon = None
 
-	def build_from_tmpltbank(filename, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, autocorrelation_length = 201, downsample = False, verbose = False):
+	def build_from_tmpltbank(self, filename, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, all_psd = None, autocorrelation_length = 201, downsample = False, verbose = False, contenthandler = DefaultContentHandler):
 		# Open template bank file
-		bank_xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-	        sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		self.template_bank_filename = filename
+		tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	        sngl_inspiral_table = lsctables.table.get_table(tmpltbank_xmldoc, lsctables.SnglInspiralTable.tableName)
 		fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+		self.flower = flower
+		self.epsilon = epsilon
+		self.alpha = alpha
+		self.beta = beta
 
 		if sampleRate is None:
 			sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
@@ -449,11 +467,14 @@ class Bank(object):
 			if not (autocorrelation_length % 2):
 				raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
 			self.autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
-			self.autocorrelation_mask = compute_autocorrelation_mask( autocorrelation_bank )
+			self.autocorrelation_mask = compute_autocorrelation_mask( self.autocorrelation_bank )
 		else:
 			self.autocorrelation_bank = None
 			self.autocorrelation_mask = None
 
+		psd = all_psd[sngl_inspiral_table[0].ifo]
+		# smooth and create an interp object
+		psd_interp = smooth_and_interp(psd)
 
 	        for tmp, row in enumerate(sngl_inspiral_table):
 
@@ -486,6 +507,7 @@ class Bank(object):
 			f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
 			cleanFreq(f,flower)
 
+	
 			if psd_interp is not None:
 				amp[0:len(f)] /= psd_interp(f[0:len(f)])**0.5
 
@@ -506,7 +528,7 @@ class Bank(object):
 	                out = out[::-1]
 	                spiir_response = numpy.zeros(length * 1, dtype=numpy.cdouble)
 	                spiir_response[-len(out):] = out
-	                norm1 = 1.0/numpy.sqrt(2.0)*((u * numpy.conj(u)).sum()**0.5)
+	                norm1 = 1.0/numpy.sqrt(2.0)*((spiir_response * numpy.conj(spiir_response)).sum()**0.5)
 	                spiir_response /= norm1
 
 	                # normalize the iir coefficients
@@ -519,14 +541,14 @@ class Bank(object):
 
 			norm2 = abs(numpy.dot(h, numpy.conj(h)))
 	                h *= numpy.sqrt(2 / norm2)
-			self.sigmasq = 1.0 * norm2 / sampleRate
+			self.sigmasq.append(1.0 * norm2 / sampleRate)
 
 			if verbose:
 				newsigma = sigmasq2(row.mchirp, flower, fFinal, psd_interp)
 				logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
 
-                #FIXME this is actually the cross correlation between the original waveform and this approximation
-			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, spiir_response, autocorrelation_length)/2.0
+	                #FIXME this is actually the cross correlation between the original waveform and this approximation
+			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)/2.0
 			# compute the SNR
 			spiir_match = abs(numpy.dot(spiir_response, numpy.conj(h)))/2.0
 			self.matches.append(spiir_match)
@@ -582,19 +604,9 @@ class Bank(object):
 			for i, Am in enumerate(Amat[rate]): self.A[rate][i,:len(Am)] = Am
 			for i, Bm in enumerate(Bmat[rate]): self.B[rate][i,:len(Bm)] = Bm
 			for i, Dm in enumerate(Dmat[rate]): self.D[rate][i,:len(Dm)] = Dm
-		if output_to_xml:
-			#print 'a_%d' % (rate)
-			#print A[rate], type(A[rate])
-			#print repack_complex_array_to_real(A[rate])
-			#print array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate]))
-			root = xmldoc.childNodes[0]
-			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate])))
-			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(B[rate])))
-			root.appendChild(array.from_array('d_%d' % (rate), D[rate]))
 
 
-
-	def write_to_xml(filename, contenthandler = DefaultContentHandler, write_psd = False, verbose = False):
+	def write_to_xml(self, filename, contenthandler = DefaultContentHandler, write_psd = False, verbose = False):
 		"""Write SPIIR banks to a LIGO_LW xml file."""
 		# FIXME: does not support clipping and write psd.
 
@@ -607,10 +619,10 @@ class Bank(object):
 		lw.appendChild(root)
 
 		# Open template bank file
-		bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+		tmpltbank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
 
 		# Get sngl inspiral table
-		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
 
 		# put the bank table into the output document
 		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
@@ -619,43 +631,51 @@ class Bank(object):
 
 		root.appendChild(new_sngl_table)
 
-		root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
+		root.appendChild(param.new_param('template_bank_filename', types.FromPyType[str], self.template_bank_filename))
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(self.sample_rates)))
-		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(param.new_param('epsilon', types.FromPyType[float], epsilon))
+		root.appendChild(param.new_param('flower', types.FromPyType[float], self.flower))
+		root.appendChild(param.new_param('epsilon', types.FromPyType[float], self.epsilon))
+		root.appendChild(param.new_param('alpha', types.FromPyType[float], self.alpha))
+		root.appendChild(param.new_param('beta', types.FromPyType[float], self.beta))
 
 		# FIXME:  ligolw format now supports complex-valued data
 		root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
 		root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
-		root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(self.sigmasq)))
-		root.appendChild(ligolw_array.from_array('matches', numpy.array(self.matches)))
+		root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
+		root.appendChild(array.from_array('matches', numpy.array(self.matches)))
 
 		# put the SPIIR coeffs in
 		for rate in self.A.keys():
-			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate])))
-			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(B[rate])))
-			root.appendChild(array.from_array('d_%d' % (rate), D[rate]))
+			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(self.A[rate])))
+			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(self.B[rate])))
+			root.appendChild(array.from_array('d_%d' % (rate), self.D[rate]))
 
-	def read_from_xml(filename)
+		# add top level LIGO_LW to document
+		xmldoc.appendChild(lw)
+
+		# Write to file
+		utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
+
+
+	def read_from_xml(self, filename, contenthandler = DefaultContentHandler):
 
 		# Load document
-		xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+		xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
-#			self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(bank_xmldoc)
+#			self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(tmpltbank_xmldoc)
 		# Read sngl inspiral table
 #			bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 
 			# Read root-level scalar parameters
-			self.logname = ligolw_param.get_pyvalue(root, 'logname')
-			self.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
-			self.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
-			self.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
+			self.logname = param.get_pyvalue(root, 'logname')
+			self.snr_threshold = param.get_pyvalue(root, 'snr_threshold')
+			self.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
 
-			self.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
-			self.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
-			self.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
+			self.autocorrelation_bank = array.get_array(root, 'autocorrelation_bank_real').array + 1j * array.get_array(root, 'autocorrelation_bank_imag').array
+			self.autocorrelation_mask = array.get_array(root, 'autocorrelation_mask').array
+			self.sigmasq = array.get_array(root, 'sigmasq').array
 
 			# Read the SPIIR coeffs
 			self.sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
@@ -667,25 +687,25 @@ class Bank(object):
 
 
 	def get_rates(self, verbose = False):
-		bank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = XMLContentHandler, verbose = verbose)
-		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
+		tmpltbank_xmldoc = utils.load_filename(self.bank_filename, contenthandler = XMLContentHandler, verbose = verbose)
+		return [int(r) for r in param.get_pyvalue(tmpltbank_xmldoc, 'sample_rate').split(',')]
 
 	# FIXME: remove set_template_bank_filename when no longer needed
 	# by trigger generator element
-	def set_template_bank_filename(self,name):
-		self.template_bank_filename = name
+	def set_bank_filename(self,name):
+		self.bank_filename = name
 
 def load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, verbose = False):
-	bank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 	bank = Bank.__new__(Bank)
 	bank = Bank(
-		bank_xmldoc,
+		tmpltbank_xmldoc,
 		snr_threshold,
 		verbose = verbose
 	)
 
-	bank.set_template_bank_filename(filename)
+	bank.set_bank_filename(filename)
 	return bank
 
 
