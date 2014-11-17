@@ -545,7 +545,6 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   del handler
   del bank
   del banks
->>>>>>> 798ee02ebd0af03e39e3a17fda84281261ff9d34
 
 
 

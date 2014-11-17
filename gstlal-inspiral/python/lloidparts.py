@@ -1108,4 +1108,3 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
->>>>>>> Fixed a bug where the detectors variable is missing.
