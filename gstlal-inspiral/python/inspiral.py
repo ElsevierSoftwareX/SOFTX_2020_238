@@ -252,11 +252,12 @@ def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 		for n, filename in enumerate(files):
 			# FIXME over ride the file name stored in the bank file with
 			# this file name this bank I/O code needs to be fixed
-			bank = cbc_template_iir.load_iirbank(filename, snr_threshold, contenthandler = LIGOLWContentHandler, verbose = verbose)
-			bank.template_bank_filename = filename
+			bank = cbc_template_iir.Bank()
+			bank.read_from_xml(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)
+			if snr_threshold is not None:
+				bank.snr_threshold = snr_threshold
 			bank.logname = "%sbank%d" % (instrument,n)
 			banks.setdefault(instrument,[]).append(bank)
-
 	return banks
 
 

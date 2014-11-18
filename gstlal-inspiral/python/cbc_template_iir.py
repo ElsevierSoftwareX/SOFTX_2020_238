@@ -426,7 +426,6 @@ class Bank(object):
 	def __init__(self, logname = None):
 		self.template_bank_filename = None
 		self.bank_filename = None
-		self.snr_threshold = None
 		self.logname = logname
 		self.sngl_inspiral_table = None
 		self.sample_rates = []
@@ -659,19 +658,18 @@ class Bank(object):
 		utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-	def read_from_xml(self, filename, contenthandler = DefaultContentHandler):
+	def read_from_xml(self, filename, contenthandler = DefaultContentHandler, verbose = False):
 
+		self.set_bank_filename(filename)
 		# Load document
 		xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
 #			self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(tmpltbank_xmldoc)
-		# Read sngl inspiral table
-#			bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
+			# FIXME: not Read sngl inspiral table
+			#bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 
 			# Read root-level scalar parameters
-			self.logname = param.get_pyvalue(root, 'logname')
-			self.snr_threshold = param.get_pyvalue(root, 'snr_threshold')
 			self.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
 
 			self.autocorrelation_bank = array.get_array(root, 'autocorrelation_bank_real').array + 1j * array.get_array(root, 'autocorrelation_bank_imag').array
@@ -680,20 +678,20 @@ class Bank(object):
 
 			# Read the SPIIR coeffs
 			self.sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
-			for sr in sample_rates:
+			for sr in self.sample_rates:
 				self.A[sr] = repack_real_array_to_complex(array.get_array(root, 'a_%d' % (sr,)).array)
 				self.B[sr] = repack_real_array_to_complex(array.get_array(root, 'b_%d' % (sr,)).array)
 				self.D[sr] = array.get_array(root, 'd_%d' % (sr,)).array
 
 
 
-	def get_rates(self, verbose = False):
-		tmpltbank_xmldoc = utils.load_filename(self.bank_filename, contenthandler = XMLContentHandler, verbose = verbose)
-		return [int(r) for r in param.get_pyvalue(tmpltbank_xmldoc, 'sample_rate').split(',')]
+	def get_rates(self, contenthandler = DefaultContentHandler, verbose = False):
+		bank_xmldoc = utils.load_filename(self.bank_filename, contenthandler = contenthandler, verbose = verbose)
+		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
 
 	# FIXME: remove set_template_bank_filename when no longer needed
 	# by trigger generator element
-	def set_bank_filename(self,name):
+	def set_bank_filename(self, name):
 		self.bank_filename = name
 
 def load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, verbose = False):

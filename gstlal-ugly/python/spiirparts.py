@@ -131,6 +131,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			# FIXME: bank.snr_thresh is removed, use peak_thresh instead
 			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
@@ -218,7 +219,7 @@ def build_bank_struct(bank):
 	return bank_struct
 
 
-def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None):
+def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -281,7 +282,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
