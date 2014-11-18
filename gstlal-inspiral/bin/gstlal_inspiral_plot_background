@@ -237,13 +237,15 @@ def plot_snr_chi_pdf(instrument, binnedarray, snr_max, tag, denom_binnedarray = 
 		raise ValueError(tag)
 	return fig
 
-def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
+def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag, zerolag_pdf = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
 	axes = fig.gca()
 	axes.set_position((.15, .14, .84, .76))
 	axes.semilogy(pdf.bins[0].centres(), pdf.array, color = "k")
+	if zerolag_pdf is not None:
+		axes.semilogy(zerolag_pdf.bins[0].centres(), zerolag_pdf.array, color = "k", linestyle = "--")
 	axes.grid(which = "both")
 	if instruments is None:
 		axes.set_title(r"%s Log Likelihood Ratio PDF" % tag)
@@ -252,7 +254,11 @@ def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag):
 	axes.set_xlabel(r"$\ln \Lambda$")
 	axes.set_ylabel(r"$P(\ln \Lambda | \mathrm{%s})$" % tag.lower())
 	yhi = pdf[xlo:xhi,].max()
-	ylo = max(yhi * 1e-40, pdf[xlo:xhi,].min())
+	ylo = pdf[xlo:xhi,].min()
+	if zerolag_pdf is not None:
+		yhi = max(yhi, zerolag_pdf[xlo:xhi,].max())
+		ylo = min(ylo, zerolag_pdf[xlo:xhi,].min())
+	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
 	return fig
