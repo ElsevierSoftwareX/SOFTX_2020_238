@@ -64,4 +64,13 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
-#%{_libdir}/gstreamer-0.10/python/*
+%{_libdir}/gstreamer-0.10/*.so
+%{_libdir}/*.so.*
+
+%files devel
+%defattr(-,root,root)
+%{_libdir}/*.a
+%{_libdir}/*.so
+%{_libdir}/pkgconfig/*
+%{_libdir}/gstreamer-0.10/*.a
+%{_includedir}/*
