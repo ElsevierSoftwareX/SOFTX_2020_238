@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.6.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[0.7.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) 2008--2014 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -170,7 +170,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 #
 
 
-AC_SUBST([MIN_NDS_VERSION], [0.10.4])
+AC_SUBST([MIN_NDS_VERSION], [0.11.2])
 AC_ARG_WITH(
 	[nds],
 	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
@@ -274,7 +274,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.37])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.0.4])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -317,7 +317,7 @@ AC_SUBST([framecpp_VERSION])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.16.10])
+AC_SUBST([MIN_GDS_VERSION], [2.16.16])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -352,7 +352,7 @@ AS_IF([test "x${HAVE_GDS}" == "xyes"], [
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.12.0])
+AC_SUBST([MIN_LAL_VERSION], [6.13.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
@@ -364,8 +364,8 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.46])
-AC_SUBST([MIN_PYLAL_VERSION], [0.5.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.47])
+AC_SUBST([MIN_PYLAL_VERSION], [0.6.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
@@ -375,7 +375,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.7.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.8.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

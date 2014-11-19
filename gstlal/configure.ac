@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.7.1],[gstlal-discuss@ligo.org],[gstlal])
+AC_INIT([gstlal],[0.8.0],[gstlal-discuss@ligo.org],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2014 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -238,11 +238,11 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.12.0])
+AC_SUBST([MIN_LAL_VERSION], [6.13.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.0])
-AC_SUBST([MIN_LALSIMULATION_VERSION], [1.1.0])
+AC_SUBST([MIN_LALSIMULATION_VERSION], [1.2.0])
 AC_SUBST([MIN_LALBURST_VERSION], [1.2.2])
-AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.5.2])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.6.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalsimulation >= ${MIN_LALSIMULATION_VERSION} lalburst >= ${MIN_LALBURST_VERSION} lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -260,8 +260,8 @@ CPPFLAGS="$old_CPPFLAGS"
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.46])
-AC_SUBST([MIN_PYLAL_VERSION], [0.5.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.47])
+AC_SUBST([MIN_PYLAL_VERSION], [0.6.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
