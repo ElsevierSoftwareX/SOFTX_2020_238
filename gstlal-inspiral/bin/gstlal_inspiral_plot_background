@@ -171,6 +171,55 @@ WHERE
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
+class SnrChiColourNorm(matplotlib.colors.Normalize):
+	def __call__(self, value, clip = None):
+		value, is_scalar = self.process_value(value)
+		numpy.clip(value, 1e-200, 1e+200, value)
+
+		self.autoscale_None(value)
+
+		vmin = math.log(self.vmin)
+		vmax = math.log(self.vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		pi_2 = math.pi / 2.
+
+		value = (numpy.arctan((numpy.log(value) - xbar) * pi_2 / delta) + pi_2) / math.pi
+		return value[0] if is_scalar else value
+
+	def inverse(self, value):
+		vmin = math.log(self.vmin)
+		vmax = math.log(self.vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		pi_2 = math.pi / 2.
+
+		value = numpy.exp(numpy.tan(value * math.pi - pi_2) * delta / pi_2 + xbar)
+		numpy.clip(value, 1e-200, 1e+200, value)
+		return value
+
+	def _autoscale(self, vmin, vmax):
+		vmin = math.log(vmin)
+		vmax = math.log(vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		xbar += 2. * delta / 3.
+		delta /= 4.
+		vmin = math.exp(xbar - delta)
+		vmax = math.exp(xbar + delta)
+		return vmin, vmax
+
+	def autoscale(self, A):
+		self.vmin, self.vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
+
+	def autoscale_None(self, A):
+		vmin, vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
+		if self.vmin is None:
+			self.vmin = vmin
+		if self.vmax is None:
+			self.vmax = vmax
+
+
 #
 # command line
 #
