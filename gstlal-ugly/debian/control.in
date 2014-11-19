@@ -13,7 +13,6 @@ Build-Depends:
  python-numpy,
  lal-dev (>= @MIN_LAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
- lalburst-dev (>= @MIN_LALBURST_VERSION@),
  libgsl0-dev (>= 1.9),
  ldas-tools-framecpp-dev (>= @MIN_FRAMECPP_VERSION@),
  gds-dev (>= @MIN_GDS_VERSION@),
@@ -42,7 +41,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-scipy,
  lal (>= @MIN_LAL_VERSION@),
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
- lalburst (>= @MIN_LALBURST_VERSION@),
  libgsl0ldbl (>= 1.9),
  ldas-tools-framecpp (>= @MIN_FRAMECPP_VERSION@),
  gds-core (>= @MIN_GDS_VERSION@),
@@ -71,8 +69,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  libreadline-dev,
  python-gobject-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
- lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
- lalburst-dev (>= @MIN_LALBURST_VERSION@)
+ lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@)
 Description: Files and documentation needed for compiling gstlal-ugly based plugins and programs.
  This package contains the files needed for building gstlal-ugly based
  plugins ands programs.
