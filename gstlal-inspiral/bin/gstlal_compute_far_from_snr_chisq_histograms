@@ -71,7 +71,7 @@ def parse_command_line():
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite.")
 	parser.add_option("--non-injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from a non-injection run.  Can be given multiple times.")
 	parser.add_option("--injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from an injection run.  Can be given multiple times.  Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
-	parser.add_option("--force", "-f", action = "store_true", help = "Force script to reevaluate FARs and FAPs")
+	parser.add_option("--force", "-f", action = "store_true", help = "Force script to reevaluate FARs and FAPs.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -135,7 +135,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.non_injection_db)),
+		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
@@ -198,7 +198,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.non_injection_db + options.injection_db)),
+		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db + options.injection_db), filename)
 	if not options.force and sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_compute_far_from_snr_chisq_histograms",)).fetchone()[0]:
 		if options.verbose:
 			print >>sys.stderr, "already processed, skipping"
