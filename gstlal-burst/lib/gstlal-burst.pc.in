@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libgstlalburst
+Description: LAL/Gstreamer Library (the bursty bits)
+Version: @VERSION@
+Requires: lal lalmetaio lalburst gstlal
+Libs: -L${libdir} -lgstlalburst
+Cflags: -I${includedir}

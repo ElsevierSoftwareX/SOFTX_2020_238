@@ -17,8 +17,6 @@ AC_CONFIG_FILES([ \
 	gstlal-ugly.spec \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal-ugly.pc \
-	lib/Makefile \
 	python/Makefile \
 	share/Makefile \
 	gst/Makefile \
