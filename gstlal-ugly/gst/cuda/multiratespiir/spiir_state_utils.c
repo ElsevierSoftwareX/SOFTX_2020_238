@@ -154,7 +154,6 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 	gint i, inrate, outrate, queue_alloc_size;
 	gint num_depths = (gint) bank[0];
 	gint outchannels = (gint) bank[1] * 2;
-
 	SpiirState ** spstate = (SpiirState **)malloc(num_depths * sizeof(SpiirState*));
 
 	for(i=0; i<num_depths; i++)
