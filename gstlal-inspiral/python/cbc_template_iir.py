@@ -16,8 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
-import time
+import os
 import numpy
 import scipy
 from scipy import integrate
@@ -25,12 +24,14 @@ from scipy import interpolate
 import math
 import csv
 import logging
+import tempfile
 
 import lal
 import lalsimulation
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import random
+import pdb
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -443,7 +444,7 @@ class Bank(object):
 		# Open template bank file
 		self.template_bank_filename = filename
 		tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-	        sngl_inspiral_table = lsctables.table.get_table(tmpltbank_xmldoc, lsctables.SnglInspiralTable.tableName)
+	        sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
 		fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 		self.flower = flower
 		self.epsilon = epsilon
@@ -481,7 +482,7 @@ class Bank(object):
 			m2 = row.mass2
 			fFinal = row.f_final
 
-                # generate the waveform
+                	# generate the waveform
 		
 			# FIXME: waveform approximant should not be fixed.	
 			hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
@@ -640,7 +641,7 @@ class Bank(object):
 
 		# FIXME:  ligolw format now supports complex-valued data
 		root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', -self.autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
 		root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
 		root.appendChild(array.from_array('matches', numpy.array(self.matches)))
@@ -667,10 +668,22 @@ class Bank(object):
 		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
 #			self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(tmpltbank_xmldoc)
 			# FIXME: not Read sngl inspiral table
-			#bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 
 			# Read root-level scalar parameters
 			self.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
+			if os.path.isfile(self.template_bank_filename):
+				pass
+			else:
+
+				# FIXME teach the trigger generator to get this information a better way
+				self.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
+
+				self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
+				tmpxmldoc = ligolw.Document()
+				tmpxmldoc.appendChild(ligolw.LIGO_LW()).appendChild(self.sngl_inspiral_table)
+				utils.write_filename(tmpxmldoc, self.template_bank_filename, gz = True, verbose = verbose)
+				tmpxmldoc.unlink()	# help garbage collector
+
 
 			self.autocorrelation_bank = array.get_array(root, 'autocorrelation_bank_real').array + 1j * array.get_array(root, 'autocorrelation_bank_imag').array
 			self.autocorrelation_mask = array.get_array(root, 'autocorrelation_mask').array
@@ -689,7 +702,7 @@ class Bank(object):
 		bank_xmldoc = utils.load_filename(self.bank_filename, contenthandler = contenthandler, verbose = verbose)
 		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
 
-	# FIXME: remove set_template_bank_filename when no longer needed
+	# FIXME: remove set_bank_filename when no longer needed
 	# by trigger generator element
 	def set_bank_filename(self, name):
 		self.bank_filename = name
