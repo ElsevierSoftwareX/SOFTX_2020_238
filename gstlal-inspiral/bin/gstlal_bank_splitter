@@ -53,7 +53,7 @@ from gstlal import inspiral_pipe
 #	+ `--output-cache` [file]: Set the file name for the output cache.
 #	+ `--n` [count] (int): Set the number of templates per output file (required).  It will be rounded to make all sub banks approximately the same size.
 #	+ `--overlap` [count] (int): Overlap the templates in each file by this amount, must be even.
-#	+ `--sort-by` [mchirp|mtotal|ffinal|chirptime]: Select the template sort order (required).
+#	+ `--sort-by` [column]: Select the template sort order column (required).
 #	+ `--add-f-final`: Select whether to add f_final to the bank.
 #	+ `--max-f-final` [max final freq] (float): Max f_final to populate table with; if f_final > max, use max.
 #	+ `--instrument` [ifo]: Override the instrument, required
