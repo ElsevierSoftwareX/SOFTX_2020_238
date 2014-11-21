@@ -45,6 +45,7 @@ matplotlib.rcParams.update({
 })
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import numpy
 from optparse import OptionParser
 import sqlite3
 import sys
@@ -126,7 +127,7 @@ def parse_command_line():
 #
 
 
-def load_ranking_data(filenames, verbose = False):
+def load_ranking_data(filenames, ln_likelihood_ratio_threshold, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
 	ranking_data = None
@@ -142,7 +143,18 @@ def load_ranking_data(filenames, verbose = False):
 			ranking_data = this_ranking_data
 		else:
 			ranking_data += this_ranking_data
+	# affect the zeroing of the PDFs below threshold by hacking the
+	# histograms before running .finish().  do the indexing ourselves
+	# to not 0 the bin @ threshold
+	for binnedarray in ranking_data.background_likelihood_rates.values():
+		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+	for binnedarray in ranking_data.signal_likelihood_rates.values():
+		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+	for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
+		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+
 	ranking_data.finish(verbose = verbose)
+
 	return ranking_data
 
 
@@ -258,7 +270,7 @@ options, filenames = parse_command_line()
 
 
 if options.likelihood_filenames:
-	ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+	ranking_data = load_ranking_data(options.likelihood_filenames, 0.0, verbose = options.verbose)
 else:
 	ranking_data = None
 
