@@ -30,6 +30,8 @@ import lal
 import lalsimulation
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
+from gstlal import cbc_template_fir
+from gstlal import templates
 import random
 import pdb
 
@@ -474,7 +476,30 @@ class Bank(object):
 
 		psd = all_psd[sngl_inspiral_table[0].ifo]
 		# smooth and create an interp object
-		psd_interp = smooth_and_interp(psd)
+		#psd_interp = smooth_and_interp(psd)
+
+
+		# working f_low to actually use for generating the waveform
+		working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(flower, sngl_inspiral_table)
+
+		# FIXME: This is a hack to calculate the maximum length of given table, we 
+		# know that working_f_low_extra_time is about 1/10 of the maximum duration
+		length_max = working_f_low_extra_time * 10 * sampleRate
+
+		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+		working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+		working_duration = float(working_length) / sampleRate
+
+		# Smooth the PSD and interpolate to required resolution
+		if psd is not None:
+			psd = cbc_template_fir.condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, flower), maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0))
+			tmppsd = psd.data
+			tmppsd[numpy.isinf(tmppsd)] = 1.0
+			psd.data = tmppsd
+
+		if verbose:
+			logging.info("condition of psd finished")
+
 
 	        for tmp, row in enumerate(sngl_inspiral_table):
 
@@ -507,22 +532,32 @@ class Bank(object):
 			f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
 			cleanFreq(f,flower)
 
-	
-			if psd_interp is not None:
-				amp[0:len(f)] /= psd_interp(f[0:len(f)])**0.5
+
+			# This is the key of SPIIR method. The whitening in
+			# frequency domain
+			# can be achieved in time domain
+
+
+			if psd is not None:
+        			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
+				# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
+				#psd_interp = interpolate.splrep(fsampling, psd.data)
+				#newpsd = interpolate.splev(f, psd_interp)
+				#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
+				psd_interp = interpolate.interp1d(fsampling, psd.data)
+				newpsd = psd_interp(f)
+				if tmp == 49 or tmp == 50 or tmp == 51:
+					pdb.set_trace()
+				amp[0:len(f)] /= newpsd ** 0.5
 
                 	# make the iir filter coeffs
                 	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-			if verbose:
-				logging.info("SPIIR coefficients generated")
 
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
 
                 	# get the IIR response
                 	out = spawaveform.iirresponse(length, a1, b0, delay)
-			if verbose:
-				logging.info("SPIIR response generated")
 
 			# FIXME: very ugly, rename the variables
 	                out = out[::-1]
@@ -543,10 +578,6 @@ class Bank(object):
 	                h *= numpy.sqrt(2 / norm2)
 			self.sigmasq.append(1.0 * norm2 / sampleRate)
 
-			if verbose:
-				newsigma = sigmasq2(row.mchirp, flower, fFinal, psd_interp)
-				logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
-
 	                #FIXME this is actually the cross correlation between the original waveform and this approximation
 			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)/2.0
 			# compute the SNR
@@ -554,17 +585,12 @@ class Bank(object):
 			self.matches.append(spiir_match)
 
 			if verbose:
-				logging.info("row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), spiir_match))	
-
-
-
+				logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2,len(a1), spiir_match))	
 	                # get the filter frequencies
 	                fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
 	                a1dict = {}
 	                b0dict = {}
 	                delaydict = {}
-
-
 
 	                if downsample:
 				# iterate over the frequencies and put them in the right downsampled bin
@@ -641,7 +667,7 @@ class Bank(object):
 
 		# FIXME:  ligolw format now supports complex-valued data
 		root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', -self.autocorrelation_bank.imag))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
 		root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
 		root.appendChild(array.from_array('matches', numpy.array(self.matches)))
