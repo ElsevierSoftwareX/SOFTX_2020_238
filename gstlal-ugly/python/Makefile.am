@@ -10,7 +10,7 @@ pkgpython_PYTHON = \
 	gviz_api.py \
 	httpinterface.py \
 	servicediscovery.py \
-	vetosrc.py
+	idq_vetosrc.py
 
 pkgpyexec_LTLIBRARIES =
 
