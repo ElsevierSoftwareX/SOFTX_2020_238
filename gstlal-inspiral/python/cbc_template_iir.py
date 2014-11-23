@@ -425,6 +425,56 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
+def lalwhiten(psd, amp, phase, working_length, working_duration)
+
+	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
+	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
+	tseries = laltypes.COMPLEX16TimeSeries(
+		data = numpy.zeros((working_length,), dtype = "cdouble")
+	)
+	fworkspace = laltypes.COMPLEX16FrequencySeries(
+		name = "template",
+		epoch = laltypes.LIGOTimeGPS(0),
+		f0 = 0.0,
+		deltaF = 1.0 / working_duration,
+		data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
+	)
+	tseries[-amp.shape[0]:] = amp * numpy.exp(1j * phase)
+
+	lalfft.XLALREAL8TimeFreqFFT(fworkspace, tseries, fwdplan)
+	fdata = numpy.copy(fworkspace.data)
+
+
+
+	fseries = laltypes.COMPLEX16FrequencySeries(
+		name = "template",
+		epoch = laltypes.LIGOTimeGPS(0),
+		f0 = 0.0,
+		deltaF = 1.0 / working_duration,
+		sampleUnits = laltypes.LALUnit("strain"),
+		data = fdata 
+	)
+
+
+	if psd is not None:
+		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+		tmppsd = psd.data
+		tmppsd[numpy.isinf(tmppsd)] = 1.0
+		psd.data = tmppsd
+
+
+	#
+	# transform template to time domain
+	#
+
+	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+
+
+	data = tseries.data[-length_max:]
+	whitened_amp, whitened_phase = calc_amp_phase(real(data), imag(data))
+
+
+
 class Bank(object):
 	def __init__(self, logname = None):
 		self.template_bank_filename = None
@@ -493,13 +543,16 @@ class Bank(object):
 		# Smooth the PSD and interpolate to required resolution
 		if psd is not None:
 			psd = cbc_template_fir.condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, flower), maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0))
-			tmppsd = psd.data
-			tmppsd[numpy.isinf(tmppsd)] = 1.0
-			psd.data = tmppsd
 
 		if verbose:
 			logging.info("condition of psd finished")
 
+		#
+		# condition the template if necessary (e.g. line up IMR
+		# waveforms by peak amplitude)
+		#
+
+	
 
 	        for tmp, row in enumerate(sngl_inspiral_table):
 
