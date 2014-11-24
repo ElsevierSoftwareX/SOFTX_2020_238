@@ -300,7 +300,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, u, autocorrelation_length)/2.0
+		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, u, autocorrelation_length)
 
 		# compute the SNR
 		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
@@ -425,7 +425,28 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
-def lalwhiten(psd, amp, phase, working_length, working_duration)
+
+
+
+def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_max):
+
+	"""	
+	This function can be called to calculate a whitened waveform using lalwhiten.
+	This is for comparison of whitening the waveform using lalwhiten in frequency domain
+	and our own whitening in time domain. 
+	and use this waveform to calculate a autocorrelation function.
+
+
+	from pylal import datatypes as laltypes
+	from pylal import lalfft
+	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+	lalwhiten_wave = lalwhiten_amp * numpy.exp(1j * lalwhiten_phase)
+        auto_h = numpy.zeros(length_max * 1, dtype=numpy.cdouble)
+        auto_h[-len(lalwhiten_wave):] = lalwhiten_wave
+	auto_bank_new = normalized_crosscorr(auto_h, auto_h, autocorrelation_length)
+	"""
+
+
 
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
@@ -439,12 +460,24 @@ def lalwhiten(psd, amp, phase, working_length, working_duration)
 		deltaF = 1.0 / working_duration,
 		data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
 	)
-	tseries[-amp.shape[0]:] = amp * numpy.exp(1j * phase)
-
-	lalfft.XLALREAL8TimeFreqFFT(fworkspace, tseries, fwdplan)
-	fdata = numpy.copy(fworkspace.data)
 
 
+	data = numpy.zeros((sampleRate * working_duration,))
+	norm = numpy.sqrt(numpy.dot(hplus.data.data, numpy.conj(hplus.data.data)))
+	data[-hplus.data.length:] = hplus.data.data / norm
+
+
+	tmptseries = laltypes.REAL8TimeSeries(
+		name = "template",
+		epoch = laltypes.LIGOTimeGPS(0),
+		f0 = 0.0,
+		deltaT = 1.0 / sampleRate,
+		sampleUnits = laltypes.LALUnit("strain"),
+		data = data
+	)
+		
+	lalfft.XLALREAL8TimeFreqFFT(fworkspace, tmptseries, fwdplan)
+	tmpfseries = numpy.copy(fworkspace.data)
 
 	fseries = laltypes.COMPLEX16FrequencySeries(
 		name = "template",
@@ -452,28 +485,33 @@ def lalwhiten(psd, amp, phase, working_length, working_duration)
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
 		sampleUnits = laltypes.LALUnit("strain"),
-		data = fdata 
+		data = tmpfseries 
 	)
 
 
+
+	#
+	# whiten and add quadrature phase ("sine" component)
+	#
+
 	if psd is not None:
 		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
-		tmppsd = psd.data
-		tmppsd[numpy.isinf(tmppsd)] = 1.0
-		psd.data = tmppsd
+	fseries = templates.add_quadrature_phase(fseries, working_length)
 
-
-	#
-	# transform template to time domain
-	#
+		#
+		# transform template to time domain
+		#
 
 	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
+		#
+		# extract the portion to be used for filtering
+		#
 
 	data = tseries.data[-length_max:]
-	whitened_amp, whitened_phase = calc_amp_phase(real(data), imag(data))
 
-
+	amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
+	return amp, phase
 
 class Bank(object):
 	def __init__(self, logname = None):
@@ -543,6 +581,10 @@ class Bank(object):
 		# Smooth the PSD and interpolate to required resolution
 		if psd is not None:
 			psd = cbc_template_fir.condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, flower), maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0))
+			# This is to avoid nan amp when whitening the amp 
+			tmppsd = psd.data
+			tmppsd[numpy.isinf(tmppsd)] = 1.0
+			psd.data = tmppsd
 
 		if verbose:
 			logging.info("condition of psd finished")
@@ -590,7 +632,6 @@ class Bank(object):
 			# frequency domain
 			# can be achieved in time domain
 
-
 			if psd is not None:
         			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
 				# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
@@ -599,8 +640,6 @@ class Bank(object):
 				#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
 				psd_interp = interpolate.interp1d(fsampling, psd.data)
 				newpsd = psd_interp(f)
-				if tmp == 49 or tmp == 50 or tmp == 51:
-					pdb.set_trace()
 				amp[0:len(f)] /= newpsd ** 0.5
 
                 	# make the iir filter coeffs
@@ -632,7 +671,7 @@ class Bank(object):
 			self.sigmasq.append(1.0 * norm2 / sampleRate)
 
 	                #FIXME this is actually the cross correlation between the original waveform and this approximation
-			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)/2.0
+			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)
 			# compute the SNR
 			spiir_match = abs(numpy.dot(spiir_response, numpy.conj(h)))/2.0
 			self.matches.append(spiir_match)
