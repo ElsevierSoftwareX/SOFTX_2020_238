@@ -1548,6 +1548,14 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 	return signal_rates, noise_rates
 
 
+def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwargs):
+	try:
+		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
+	except:
+		queue.put(None)
+		raise
+
+
 #
 # Class to compute ranking statistic PDFs for background-like and
 # signal-like populations
@@ -1616,12 +1624,13 @@ class RankingData(object):
 			if verbose:
 				print >>sys.stderr, "computing ranking statistic PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_log_likelihood_ratio_rates_from_samples(
+			p = multiprocessing.Process(target = lambda: binned_log_likelihood_ratio_rates_from_samples_wrapper(
+				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
 				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
 				nsamples = nsamples
-			)))
+			))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
