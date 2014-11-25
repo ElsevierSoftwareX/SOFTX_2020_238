@@ -227,7 +227,8 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			# FIXME teach the trigger generator to get this information a better way
 			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			xmldoc = ligolw.Document()
-			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table)
+			# FIXME if this table reference is from a DB this is a problem (but it almost certainly isn't)
+			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table.copy()).extend(bank.sngl_inspiral_table)
 			ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
 			xmldoc.unlink()	# help garbage collector
 			bank.logname = "%sbank%d" % (instrument, n)
@@ -485,7 +486,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -540,6 +541,7 @@ class Data(object):
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
+		self.ranking_data = ranking_data
 		self.seglistdicts = None
 		self.fapfar = None
 
@@ -623,6 +625,7 @@ class Data(object):
 					# elsewhere so make sure these two
 					# match
 					assert ranking_data.ln_likelihood_ratio_threshold == far.RankingData.ln_likelihood_ratio_threshold
+					ranking_data.finish(verbose = self.verbose)
 					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
@@ -631,17 +634,6 @@ class Data(object):
 			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
 				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
-
-			# Cluster last coincs before recording number of zero
-			# lag events or sending alerts to gracedb
-			# FIXME Do proper clustering that saves states between
-			# thinca intervals and uses an independent clustering
-			# window. This can also go wrong if there are multiple
-			# events with an identical likelihood.  It will just
-			# choose the event with the highest event id
-			# FIXME uncomment for clustering
-			#if self.stream_thinca.last_coincs:
-			#	self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
 			# update zero-lag coinc bin counts in
 			# coinc_params_distributions.  NOTE:  if likelihood
@@ -657,6 +649,26 @@ class Data(object):
 					if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
+			# Cluster last coincs before recording number of zero
+			# lag events or sending alerts to gracedb
+			# FIXME Do proper clustering that saves states between
+			# thinca intervals and uses an independent clustering
+			# window. This can also go wrong if there are multiple
+			# events with an identical likelihood.  It will just
+			# choose the event with the highest event id
+			if self.stream_thinca.last_coincs:
+				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+
+			# Add events to the observed likelihood histogram post "clustering"
+			# FIXME proper clustering is really needed (see above)
+			if self.stream_thinca.last_coincs:
+				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
+					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
+					#IFOS come from coinc_inspiral not coinc_event
+					ifos = self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].ifos
+					if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
+						self.ranking_data.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(ifos))][coinc_event.likelihood,] += 1
+
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
 				self.__do_gracedb_alerts()
@@ -664,7 +676,8 @@ class Data(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		with self.lock:
-			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0)
+			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0, f_max = 0.85 * (psd.f0 + (len(psd.data) - 1) * psd.deltaF))
+			assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
 			# NOTE:  timestamp is cast to float.  should be
 			# safe, whitener should be reporting PSDs with
 			# integer timestamps.  anyway, we don't need
@@ -678,14 +691,15 @@ class Data(object):
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
-		# likelihood ratio PDFs are *not* included.
+		# likelihood ratio PDFs *are* included if they were present in
+		# the --likelihood-file that was loaded.
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
 		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglistdicts["triggersegments"])
+		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, self.ranking_data, self.seglistdicts["triggersegments"])
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -736,7 +750,7 @@ class Data(object):
 				# enough, or is nan.
 				#
 
-				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
+				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
 					continue
 
 				#
@@ -933,8 +947,7 @@ class Data(object):
 		# write the parameter PDF file.  NOTE;  this file contains
 		# raw bin counts, and might or might not contain smoothed,
 		# normalized, PDF arrays but if it does they will not
-		# necessarily correspond to the bin counts, and it
-		# certainly does not include likelihood ratio PDF data.
+		# necessarily correspond to the bin counts. 
 		#
 		# the parameter PDF arrays cannot be re-computed here
 		# because it would interfer with their use by stream
