@@ -402,9 +402,10 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+	coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+	assert set(seglists) == set(detectors.channel_dict)
 else:
-	coinc_params_distributions = far.ThincaCoincParamsDistributions()
+	coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
 
 
 #
@@ -422,6 +423,7 @@ output = inspiral.Data(
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
 	coinc_params_distributions = coinc_params_distributions,
+	ranking_data = ranking_data,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
@@ -437,7 +439,7 @@ output = inspiral.Data(
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
-handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
