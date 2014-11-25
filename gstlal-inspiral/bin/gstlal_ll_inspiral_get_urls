@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env bash
 #
-# Copyright (C) 2011  Chad Hanna
+# Copyright (C) 2014  Chad Hanna, Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -16,82 +16,15 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
-import os
-import urllib
-from urlparse import urlparse
-from multiprocessing import Pool
-import time
+while true ; do
+	for f in $@; do
+		wget -nH -P ${f} -r  $(cat ${f}_registry.txt);
+	done
+	sleep 180
+done
 
-## @file
-# A program to get urls from running gstlal inspiral jobs
 #
-# ### Usage:
-# gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop poolnum
+# Always end on an error so that condor will restart it
 #
-# Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153 10
 
-directory = sys.argv[1]
-idrange = [int(n) for n in sys.argv[2].split(",")]
-poolnum = int(sys.argv[3])
-
-def fileage(fname):
-	try:
-		stat = os.stat(fname)
-		fileage = stat.st_mtime
-		now = time.time()
-		return now - fileage
-	except OSError:
-		return float('inf') #File doesn't exist so it is infinitely old
-
-
-#FIXME a service registry would be nice
-def read_registry(dir, dataurl, idrange):
-	nodedict = {}
-	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
-	for id in ids:
-		url = '%s/%s%s' % (dir, id, dataurl)
-		# FIXME relies on 4 digit id
-		try:
-			tmp = open(url,"r")
-			tag, node = tmp.readline().replace("#","").split()[0:2]
-			nodedict[(id, node)] = tmp.readlines()
-			tmp.close()
-		except IOError:
-			#FIXME what should be done?
-			pass
-	return nodedict
-
-def geturl(idnodeurls):
-	idnode = idnodeurls[0]
-	urls = idnodeurls[1]
-	id = idnode[0]
-	node = idnode[1]
-	print >> sys.stderr, "requesting data from %s..." % node
-	for url in urls:
-		url = url.strip()
-		path = urlparse(url).path
-		fname = "%s_%s" % (id, path.replace("/",""))
-		tmp = fname+".tmp"
-		age = fileage(fname)
-		if age < 120: #FIXME do not hard code, this is the maximum age of the file for which we won't try to retrieve it again (s)
-			continue
-		try:
-			urllib.urlretrieve(url, tmp)
-		except IOError as (errno, strerror):
-			print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
-			continue
-		os.rename(tmp, fname)
-		try:
-			os.remove(tmp) # do this first to help nfs register the new file
-		except OSError:
-			pass  # File not present is not a problem here
-
-
-if __name__ == "__main__":
-
-	while True:
-		reg = read_registry(directory, "_registry.txt", idrange)
-		pool = Pool(poolnum)
-		pool.map(geturl, reg.items())
-		time.sleep(300)
+exit 1
