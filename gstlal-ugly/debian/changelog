@@ -1,3 +1,9 @@
+gstlal-ugly (0.7.2-1) unstable; urgency=low
+
+  * new version 0.7.2
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Tue, 25 Nov 2014 17:33:04 -0500
+
 gstlal-ugly (0.7.1-1) unstable; urgency=low
 
   * new version 0.7.1
