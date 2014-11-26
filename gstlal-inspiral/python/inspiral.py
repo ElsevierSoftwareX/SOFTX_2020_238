@@ -486,7 +486,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -496,6 +496,7 @@ class Data(object):
 		self.verbose = verbose
 		# None to disable likelihood ratio assignment, otherwise a filename
 		self.marginalized_likelihood_file = marginalized_likelihood_file
+		self.likelihood_file = likelihood_file
 		# None to disable periodic snapshots, otherwise seconds
 		# set to 1.0 to disable background data decay
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
@@ -503,7 +504,8 @@ class Data(object):
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
 		self.gracedb_group = gracedb_group
-		self.gracedb_type = gracedb_type
+		self.gracedb_search = gracedb_search
+		self.gracedb_pipeline = gracedb_pipeline
 
 		#
 		# setup bottle routes
@@ -780,7 +782,7 @@ class Data(object):
 
 				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
 				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
 				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
@@ -805,7 +807,7 @@ class Data(object):
 				sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 				for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
 					try:
-						sngl_inspiral_table.appendColumn(bonus_column)
+						sngl_inspiral_table.appendColumn(standard_column)
 					except ValueError:
 						# already has it
 						pass
@@ -813,7 +815,7 @@ class Data(object):
 				xmldoc.unlink()
 				# FIXME: make this optional from command line?
 				if True:
-					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of %s failed" % filename
@@ -973,5 +975,8 @@ class Data(object):
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
-			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
+			# We require the likelihood file to have the same name
+			# as the input to this program to accumulate statistics
+			# as we go 
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), likelihood_file = self.likelihood_file, verbose = verbose)
 			self.coincs_document = coincs_document
