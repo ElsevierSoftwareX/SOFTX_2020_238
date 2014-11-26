@@ -146,8 +146,9 @@
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#	+ `--gracedb-type`: gracedb type, default is LowMass.
-#	+ `--gracedb-group`: gracedb group, default is Test.
+#	+ `--gracedb-search`: gracedb type (default is LowMass).
+#	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
 #
@@ -277,7 +278,8 @@ def parse_command_line():
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
-	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
+	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
@@ -603,6 +605,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		coinc_params_distributions = coinc_params_distributions,
 		ranking_data = ranking_data,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
+		likelihood_file = likelihood_file,
 		injection_filename = options.injections,
 		time_slide_file = options.time_slide_file,
 		comment = options.comment,
@@ -612,7 +615,8 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
 		gracedb_group = options.gracedb_group,
-		gracedb_type = options.gracedb_type,
+		gracedb_search = options.gracedb_search,
+		gracedb_pipeline = options.gracedb_pipeline,
 		verbose = options.verbose
 	)
 	if options.verbose:
