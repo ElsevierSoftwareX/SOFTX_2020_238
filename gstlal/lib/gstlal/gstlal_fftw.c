@@ -59,9 +59,7 @@
  */
 
 
-#ifdef HAVE_LAL_FFTWMUTEX_H
 #include <lal/FFTWMutex.h>
-#endif
 
 
 /*
