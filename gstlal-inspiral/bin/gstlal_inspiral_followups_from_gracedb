@@ -71,17 +71,20 @@ for r in sngl_inspiral_table:
 for r in params:
 	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
 		path = r.value
+	if r.program == "gstlal_inspiral" and r.param == "--job-tag":
+		tag = r.value
 for r in process:
 	if r.program == "gstlal_inspiral":
 		node = r.node
 
+url = open("%s_registry.txt" % tag).readline().strip()
 
 #
 # SNR / Time plot
 #
 
 #FIXME don't hardcode port number
-t,snr = numpy.loadtxt(urllib.urlopen("http://%s:16953/snr_history.txt" % node), unpack = True)
+t,snr = numpy.loadtxt(urllib.urlopen("%ssnr_history.txt" % url), unpack = True)
 t -= coinc_inspiral_row.get_end()
 pylab.figure()
 pylab.semilogy(t, snr)
@@ -98,10 +101,10 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 # SNR / Chisq plots
 #
 
-likelihood_data = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+likelihood_data = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
 
-counts = likelihood_data.distributions.background_rates
-inj = likelihood_data.distributions.injection_rates
+counts = likelihood_data.background_rates
+inj = likelihood_data.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
@@ -129,17 +132,19 @@ for i, ifo in enumerate(['H1', 'L1', 'V1']):
 		pylab.colorbar()
 		pylab.xlabel('SNR')
 		pylab.ylabel('reduced chi^2 / SNR^2')
-		pylab.ylim([chi[1], chi[-1]])
-		pylab.xlim([snr[1],snr[-1]])
+		pylab.ylim([0.001, 1])
+		pylab.xlim([4, 200])
 		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
 		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
 		fname = '%s/%s_%s_snrchi.png' % (gid, gid, ifo)
 		pylab.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = "background")
 
+sys.exit()
 
 #
 # QScans
+# FIXME currently broken
 #
 
 for r in sngl_inspiral_table:
