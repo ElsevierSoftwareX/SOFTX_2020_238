@@ -4,3 +4,4 @@ This folder contains GPU accelerated gstlal elements written in cuda language
 
  * iirfilter: cudarized Summed Parallel Infinite Impulse Response (SPIIR) filtering element
  * audioresample: cudarized gstreamer audioresample element 
+ * multiratespiir: implemented multidownsample + SPIIR + multiupsample in one element

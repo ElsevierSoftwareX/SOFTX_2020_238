@@ -1,3 +1,5 @@
 TODO list:
 ==========
- * cudarize audioresample element (replace most time-consuming functions in cuda code)
+* Optimize multiratespiir SPIIR kernel part
+* New postcoh element
+* The whole folder should be ported to gstreamer-1.0 where data in buffers can be created in GPU memory using GstMemory and GstAllocator. In this way we do not need the data copy in/ out of GPU memory.
