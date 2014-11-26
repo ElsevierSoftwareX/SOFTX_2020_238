@@ -210,6 +210,11 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	dt = livetimedata[2]
 	lt = livetimedata[1]
 	discont = discontdata[1]
+	# FIXME Hack to adjust for high sample rate L1 and H1 state vector
+	if "V1" not in title:
+		dt /= 16384
+		lt /= 16384
+		discont /= 16384
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
 	labels = ["OFF : %g (s)" % dt, "ON : %g (s)" % lt, "MIA : %g (s)" % discont]
