@@ -5,7 +5,7 @@
 
 #include <chealpix.h>
 
-void create_coherent_skymap(unsigned char order) {
+void create_skylocs(unsigned char order) {
 	unsigned long nside = (unsigned long) 1 << order;
 	unsigned long npix = nside2npix(nside);
 }
@@ -24,15 +24,16 @@ LALDector *detectors create_detectors_from_name(
 	return detectors;
 }
 
-void create_det_response_skymap(
+void create_detresponse_skymap(
 		LALDector *detectors,
 		)
 {
 
 	for (gmst; gmst<gmst_end; gmst+=gsmt_step) {
-		for (sky_index; sky_index<sky_index_end; sky_index++) {
+		for (ipix; ipix<ipix_end; ipix++) {
 			for (i=0; i<num_detectors; i++) {
 	
+			pix2ang_nest(nside, ipix, &theta, &phi)
 		
 			/* get fplus, fcross from lalsuite DetResponse.c */
 
@@ -43,7 +44,7 @@ void create_det_response_skymap(
 			}
 				
 			u_matrix = svd(A_matrix);
-			u_map[gmst_index][sky_index] = u_matrix;
+			u_map[gmst_index][ipix] = u_matrix;
 
 		}
 	}
