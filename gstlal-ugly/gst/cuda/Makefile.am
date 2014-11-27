@@ -6,8 +6,7 @@ libcuda_plugin_la_SOURCES = \
 	cuda_plugin.c \
 	iirfilter/iirfilter_kernel.cu \
 	iirfilter/cuda_gstlal_iirbank.c \
-	multiratespiir/resampler2x.cu \
-	multiratespiir/resampler_state_utils.c \
+	multiratespiir/multiratespiir_kernel.cu \
 	multiratespiir/spiir_state_utils.c \
 	multiratespiir/multiratespiir_utils.c \
 	multiratespiir/multiratespiir.c 
@@ -34,6 +33,5 @@ noinst_HEADERS = \
 	iirfilter/iirfilter_kernel.h \
 	iirfilter/cuda_gstlal_iirbank.h \
 	multiratespiir/multiratespiir.h \
-	multiratespiir/spiir_state_macro.h \
-	multiratespiir/resampler_state_macro.h
+	multiratespiir/spiir_state_macro.h
 

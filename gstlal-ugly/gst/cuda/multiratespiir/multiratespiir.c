@@ -41,7 +41,6 @@
 
 #include "multiratespiir.h"
 #include "multiratespiir_utils.h"
-#include "resampler_state_macro.h"
 #include "spiir_state_macro.h"
 #include "spiir_state_utils.h"
 
