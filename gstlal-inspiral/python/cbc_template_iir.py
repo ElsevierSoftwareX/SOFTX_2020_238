@@ -194,201 +194,6 @@ def compute_autocorrelation_mask( autocorrelation ):
 	'''
 	return numpy.ones( autocorrelation.shape, dtype="int" )
 
-
-def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length = 201, downsample = False, verbose = False):
-
-        sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
-
-	if sampleRate is None:
-		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-
-	if verbose: 
-		logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
-		logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
-		print "after logging"
-
-        Amat = {}
-        Bmat = {}
-        Dmat = {}
-        snrvec = []
-
-
-	# Check parity of autocorrelation length
-	if autocorrelation_length is not None:
-		if not (autocorrelation_length % 2):
-			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
-		autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
-		autocorrelation_mask = compute_autocorrelation_mask( autocorrelation_bank )
-	else:
-		autocorrelation_bank = None
-		autocorrelation_mask = None
-
-
-        for tmp, row in enumerate(sngl_inspiral_table):
-
-		m1 = row.mass1
-		m2 = row.mass2
-		fFinal = row.f_final
-
-                # generate the waveform
-		
-		# FIXME: waveform approximant should not be fixed.	
-		hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
-			    				    1./sampleRate,			# delta T
-							    m1*lal.MSUN_SI,			# mass 1 in kg
-							    m2*lal.MSUN_SI,			# mass 2 in kg
-							    0,0,0,				# Spin 1 x, y, z
-							    0,0,0,				# Spin 2 x, y, z
-							    flower,				# Lower frequency
-							    0,					# Reference frequency 40?
-							    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
-							    0,					# inclination
-							    0,0,				# Lambda1, lambda2
-							    None,				# Waveflags
-							    None,				# Non GR parameters
-							    0,7,				# Amplitude and phase order 2N+1
-							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-
-		amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
-		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
-
-		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
-		cleanFreq(f,flower)
-
-		if psd_interp is not None:
-			amp[0:len(f)] /= psd_interp(f[0:len(f)])**0.5
-
-                # make the iir filter coeffs
-                a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-		if verbose:
-			logging.info("SPIIR coefficients generated")
-
-                # get the chirptime (nearest power of two)
-                length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
-
-                # get the IIR response
-                out = spawaveform.iirresponse(length, a1, b0, delay)
-		if verbose:
-			logging.info("SPIIR response generated")
-
-		# FIXME: very ugly, rename the variables
-                out = out[::-1]
-                u = numpy.zeros(length * 1, dtype=numpy.cdouble)
-                u[-len(out):] = out
-                norm1 = 1.0/numpy.sqrt(2.0)*((u * numpy.conj(u)).sum()**0.5)
-                u /= norm1
-
-                # normalize the iir coefficients
-                b0 /= norm1
-
-                # get the original waveform
-                out2 = amp * numpy.exp(1j * phase)
-                h = numpy.zeros(length * 1, dtype=numpy.cdouble)
-                h[-len(out2):] = out2
-		#norm2 = 1.0/numpy.sqrt(2.0)*((h * numpy.conj(h)).sum()**0.5)
-                #h /= norm2
-		#if output_to_xml: row.sigmasq = norm2**2*2.0*1e46/sampleRate/9.5214e+48
-
-		norm2 = abs(numpy.dot(h, numpy.conj(h)))
-                h *= numpy.sqrt(2 / norm2)
-		if output_to_xml: 
-			row.sigmasq = 1.0 * norm2 / sampleRate
-
-		if verbose:
-			newsigma = sigmasq2(row.mchirp, flower, fFinal, psd_interp)
-			logging.info( "norm2 = %e, sigma = %f, %f, %f" % (norm2, numpy.sqrt(row.sigmasq), newsigma, (numpy.sqrt(row.sigmasq)- newsigma)/newsigma))
-
-                #FIXME this is actually the cross correlation between the original waveform and this approximation
-		autocorrelation_bank[tmp,:] = normalized_crosscorr(h, u, autocorrelation_length)
-
-		# compute the SNR
-		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
-		if verbose:
-			logging.info("row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr))	
-
-		snrvec.append(snr)
-
-
-                # store the match for later
-                if output_to_xml: row.snr = snr
-
-                # get the filter frequencies
-                fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
-                a1dict = {}
-                b0dict = {}
-                delaydict = {}
-
-                if downsample:
-			# iterate over the frequencies and put them in the right downsampled bin
-			for i, f in enumerate(fs):
-				M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
-				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
-				newdelay = numpy.ceil((delay[i]+1)/(float(M)))
-				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
-				delaydict.setdefault(sampleRate/M, []).append(newdelay)
-				#logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
-
-		else:
-			a1dict[int(sampleRate)] = a1
-			b0dict[int(sampleRate)] = b0
-			delaydict[int(sampleRate)] = delay
-
-		# store the coeffs
-		for k in a1dict.keys():
-			Amat.setdefault(k, []).append(a1dict[k])
-			Bmat.setdefault(k, []).append(b0dict[k])
-			Dmat.setdefault(k, []).append(delaydict[k])
-
-
-
-
-	A = {}
-	B = {}
-	D = {}
-	sample_rates = []
-
-	max_rows = max([len(Amat[rate]) for rate in Amat.keys()])
-	for rate in Amat.keys():
-		sample_rates.append(rate)
-		# get ready to store the coefficients
-		max_len = max([len(i) for i in Amat[rate]])
-		DmatMin = min([min(elem) for elem in Dmat[rate]])
-		DmatMax = max([max(elem) for elem in Dmat[rate]])
-		if verbose:
-			logging.info("rate %d, dmin %d, dmax %d, max_row %d, max_len %d" % (rate, DmatMin, DmatMax, max_rows, max_len))
-
-		A[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
-		B[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
-		D[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.int)
-		D[rate].fill(DmatMin)
-
-		for i, Am in enumerate(Amat[rate]): A[rate][i,:len(Am)] = Am
-		for i, Bm in enumerate(Bmat[rate]): B[rate][i,:len(Bm)] = Bm
-		for i, Dm in enumerate(Dmat[rate]): D[rate][i,:len(Dm)] = Dm
-		if output_to_xml:
-			#print 'a_%d' % (rate)
-			#print A[rate], type(A[rate])
-			#print repack_complex_array_to_real(A[rate])
-			#print array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate]))
-			root = xmldoc.childNodes[0]
-			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate])))
-			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(B[rate])))
-			root.appendChild(array.from_array('d_%d' % (rate), D[rate]))
-
-
-
-	if output_to_xml: # Create new document and add them together
-		root = xmldoc.childNodes[0]
-		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(sample_rates)))
-		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(param.new_param('epsilon', types.FromPyType[float], epsilon))
-		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', -autocorrelation_bank.imag))
-		root.appendChild(array.from_array('autocorrelation_mask', autocorrelation_mask))
-	
-        return A, B, D, snrvec
-
 def normalized_crosscorr(a, b, autocorrelation_length = 201):
 	af = scipy.fft(a)
 	bf = scipy.fft(b)
@@ -425,8 +230,51 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
+def gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding):
+
+        # generate the waveform
+	# FIXME: waveform approximant should not be fixed.	
+	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
+		    				    1./sampleRate,			# delta T
+						    m1*lal.MSUN_SI,			# mass 1 in kg
+						    m2*lal.MSUN_SI,			# mass 2 in kg
+						    0,0,0,				# Spin 1 x, y, z
+						    0,0,0,				# Spin 2 x, y, z
+						    flower,				# Lower frequency
+						    0,					# Reference frequency 40?
+						    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
+						    0,					# inclination
+						    0,0,				# Lambda1, lambda2
+						    None,				# Waveflags
+						    None,				# Non GR parameters
+						    0,7,				# Amplitude and phase order 2N+1
+						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+
+	amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
+	amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
+
+	f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
+	cleanFreq(f,flower)
 
 
+	# This is the key of SPIIR method. The whitening in
+	# frequency domain
+	# can be achieved in time domain
+
+	if psd is not None:
+       		fsampling = numpy.arange(len(psd.data)) * psd.deltaF
+		# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
+		#psd_interp = interpolate.splrep(fsampling, psd.data)
+		#newpsd = interpolate.splev(f, psd_interp)
+		#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
+		psd_interp = interpolate.interp1d(fsampling, psd.data)
+		newpsd = psd_interp(f)
+		amp[0:len(f)] /= newpsd ** 0.5
+
+              	# make the iir filter coeffs
+               	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
+	
+	return a1, b0, delay
 
 def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_max):
 
@@ -602,48 +450,7 @@ class Bank(object):
 			m2 = row.mass2
 			fFinal = row.f_final
 
-                	# generate the waveform
-		
-			# FIXME: waveform approximant should not be fixed.	
-			hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
-			    				    1./sampleRate,			# delta T
-							    m1*lal.MSUN_SI,			# mass 1 in kg
-							    m2*lal.MSUN_SI,			# mass 2 in kg
-							    0,0,0,				# Spin 1 x, y, z
-							    0,0,0,				# Spin 2 x, y, z
-							    flower,				# Lower frequency
-							    0,					# Reference frequency 40?
-							    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
-							    0,					# inclination
-							    0,0,				# Lambda1, lambda2
-							    None,				# Waveflags
-							    None,				# Non GR parameters
-							    0,7,				# Amplitude and phase order 2N+1
-							    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-
-			amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
-			amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
-
-			f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
-			cleanFreq(f,flower)
-
-
-			# This is the key of SPIIR method. The whitening in
-			# frequency domain
-			# can be achieved in time domain
-
-			if psd is not None:
-        			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
-				# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
-				#psd_interp = interpolate.splrep(fsampling, psd.data)
-				#newpsd = interpolate.splev(f, psd_interp)
-				#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
-				psd_interp = interpolate.interp1d(fsampling, psd.data)
-				newpsd = psd_interp(f)
-				amp[0:len(f)] /= newpsd ** 0.5
-
-                	# make the iir filter coeffs
-                	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
+			a1, b0, delay = gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding)
 
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
