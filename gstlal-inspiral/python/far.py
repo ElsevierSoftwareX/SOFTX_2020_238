@@ -1711,14 +1711,6 @@ class RankingData(object):
 		self.process_id = process_id
 
 		#
-		# bailout out used by .from_xml() class method to get an
-		# uninitialized instance
-		#
-
-		if coinc_params_distributions is None:
-			return
-
-		#
 		# initialize binnings
 		#
 
@@ -1727,6 +1719,14 @@ class RankingData(object):
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+
+		#
+		# bailout out used by .from_xml() class method to get an
+		# uninitialized instance
+		#
+
+		if coinc_params_distributions is None:
+			return
 
 		#
 		# run importance-weighted random sampling to populate
