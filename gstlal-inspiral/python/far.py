@@ -67,6 +67,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
+from pylal import date
 from pylal import inject
 from pylal import rate
 from pylal import snglcoinc
@@ -1172,6 +1173,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
 		>>> x.next()
+
+		See also:
+
+		random_sim_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
 		"""
 		snr_slope = 0.8 / len(instruments)**3
 
@@ -1192,6 +1201,111 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
 			yield params, sum(seq[1::2], log_P_horizons)
+
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None):
+		"""
+		Generator that yields an endless sequence of randomly
+		generated parameter dictionaries drawn from the
+		distribution of parameters expected for the given
+		injection, which is an instance of a SimInspiral table row
+		object (see glue.ligolw.lsctables.SimInspiral for more
+		information).  The return value is a tuple, the first
+		element of which is the random parameter dictionary and the
+		second is 0.
+
+		See also:
+
+		random_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
+
+		Bugs:
+
+		The second element in each tuple in the sequence is merely
+		a placeholder, not the natural logarithm of the PDF from
+		which the sample has been drawn, as in the case of
+		random_params().  Therefore, when used in combination with
+		pylal.snglcoinc.LnLikelihoodRatio.samples(), the two
+		probability densities computed and returned by that
+		generator along with each log likelihood ratio value will
+		simply be the probability densities of the signal and noise
+		populations at that point in parameter space.  They cannot
+		be used to form an importance weighted sampler of the log
+		likeklihood ratios.
+		"""
+		#
+		# retrieve horizon distance from history if not given
+		# explicitly.  retrieve SNR threshold from class attribute
+		# if not given explicitly
+		#
+
+		if horizon_distance is None:
+			horizon_distance = self.horizon_history[float(sim.get_time_geocent())]
+		if snr_min is None:
+			snr_min = self.snr_min
+
+		#
+		# compute nominal SNRs
+		#
+
+		cosi2 = math.cos(sim.inclination)**2.
+		gmst = date.XLALGreenwichMeanSiderealTime(sim.get_time_geocent())
+		snr_0 = {}
+		for instrument, DH in horizon_distance.items():
+			fp, fc = inject.XLALComputeDetAMResponse(inject.cached_detector[inject.prefix_to_name[instrument]].response, sim.longitude, sim.latitude, sim.polarization, gmst)
+			snr_0[instrument] = 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
+
+		#
+		# construct SNR generators, and approximating the SNRs to
+		# be fixed at the nominal SNRs construct \chi^2 generators
+		#
+
+		def snr_gen(snr):
+			rvs = stats.ncx2(2., snr**2.).rvs
+			math_sqrt = math.sqrt
+			while 1:
+				yield math_sqrt(rvs())
+
+		def chi2_over_snr2_gen(instrument, snr):
+			rates_lnx = numpy.log(self.injection_rates["%s_snr_chi" % instrument].bins[1].centres())
+			# FIXME:  kinda broken for SNRs below self.snr_min
+			rates_cdf = self.injection_rates["%s_snr_chi" % instrument][max(snr, self.snr_min),:].cumsum()
+			# add a small tilt to break degeneracies then
+			# normalize
+			rates_cdf += numpy.linspace(0., 0.001 * rates_cdf[-1], len(rates_cdf))
+			rates_cdf /= rates_cdf[-1]
+			assert not numpy.isnan(rates_cdf).any()
+
+			interp = interpolate.interp1d(rates_cdf, rates_lnx)
+			math_exp = math.exp
+			random_uniform = random.uniform
+			while 1:
+				yield math_exp(float(interp(random_uniform(0., 1.))))
+
+		gens = dict((instrument, (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
+
+		#
+		# yield a sequence of randomly generated parameters for
+		# this sim.
+		#
+
+		while 1:
+			params = CoincParams()
+			instruments = []
+			for instrument, (snr, chi2_over_snr2) in gens.items():
+				snr = snr()
+				if snr < snr_min:
+					continue
+				params["%s_snr_chi" % instrument] = snr, chi2_over_snr2()
+				instruments.append(instrument)
+			if len(instruments) < 2:
+				continue
+			params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(instruments),)
+			params.horizons = horizon_distance
+			yield params, 0.
+
 
 	@classmethod
 	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
