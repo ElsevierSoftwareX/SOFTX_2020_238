@@ -90,6 +90,18 @@ typedef struct _SpiirState {
   gint pre_out_spiir_len;
 } SpiirState;
 
+typedef struct _SpiirBank_s {
+  float *a1_s;
+  float *b0_s;
+  int *d_s;
+
+  unsigned int num_templates;
+  unsigned int num_filters;
+  unsigned int rate;
+  unsigned int depth;
+} SpiirBank_s;
+
+
 /**
  * CudaMultirateSPIIR:
  *
@@ -120,8 +132,7 @@ struct _CudaMultirateSPIIR {
   gint outchannels; // equals number of templates
   gint rate;
   gint width;
-  gdouble *bank;
-  gint bank_len;
+  SpiirBank **bank;
   GMutex *iir_bank_lock;
   GCond *iir_bank_available;
   SpiirState **spstate;
