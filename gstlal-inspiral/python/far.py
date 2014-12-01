@@ -2011,7 +2011,19 @@ class FAPFAR(object):
 			# get the extincted background PDF
 			# FIXME don't extinct the individual detector PDFs,
 			# they are just for diagnostics anyway
-			extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
+			# FIXME FIXME this try except is to catch the case
+			# where not all instrument combinations have seen
+			# triggers, .e.g, when an online dag has recently
+			# started and one of the participating detectors has
+			# not seen data yet.  It should not be this way, but
+			# for the time being we have to work around it.
+			try:
+				extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
+			except ValueError as e:
+				if instruments is None:
+					raise e
+				else:
+					continue
 
 			# Now compute the CCDF and CDF
 			weights = extinct_bf_pdf * drank
@@ -2074,7 +2086,8 @@ class FAPFAR(object):
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
 		if fit_min_counts < 100.:
 			warnings.warn("There are less than 100 %s coincidences, extinction effects on %s background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation." % (instruments_name, instruments_name))
-		assert zero_lag_compcumcount.compress(rank_range).size > 0, "Not enough zero lag data for %s to fit background"  % instruments_name
+		if zero_lag_compcumcount.compress(rank_range).size < 1:
+			raise ValueError("Not enough zero lag data for %s to fit background"  % instruments_name)
 
 		# Use curve fit to find the predicted total preclustering
 		# count. First we need an interpolator of the counts
