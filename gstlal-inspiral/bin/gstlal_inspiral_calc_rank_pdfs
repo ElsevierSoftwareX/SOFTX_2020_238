@@ -120,7 +120,7 @@ old_ranking_data = None
 for n, filename in enumerate(options.samples_file, start = 1):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(options.samples_file)),
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	xmldoc = ligolw_utils.load_url(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
 	ignored, this_ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
 	xmldoc.unlink()
 	if this_ranking_data is None:
