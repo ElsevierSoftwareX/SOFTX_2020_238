@@ -1,9 +1,0 @@
-This is a brief documentation for the test_iir_templates and handler_template_testing files.
-
-
-The test_iir_template commanders are called via the handler files. The handler deals with interpolation of the PSD and organising the template XML files. It is pretty well documented except for the last method, compare_two.
-
-Due to the ongoing problem with the SWIG'd lalsuite waveforms, still using waveHandler.c to generate waveform. To get this working run
-
-> python setupwaveHandler build
-copy build/lib.linux etc/waveHandler.so into the same directory as test_iir_templates.py
