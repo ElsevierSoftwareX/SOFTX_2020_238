@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # Copyright (c) 2013-2014 David McKenzie 
 #
@@ -33,6 +34,22 @@ import pdb
 from subprocess import call
 import waveHandler
 import random
+import lalsimulation
+import lal
+import gc
+from optparse import OptionParser
+from multiprocessing import Pool
+
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from pylal.series import read_psd_xmldoc
+from glue.ligolw import utils, lsctables
+
+
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -48,6 +65,37 @@ def sigmasq2(mchirp, fLow, fhigh, psd_interp):
 	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
 	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
 
+
+def calc_amp_phase(hc,hp):
+    amp = numpy.sqrt(hc*hc + hp*hp)
+    phase = numpy.arctan2(hc,hp)
+    
+    #Unwind the phase
+    #Based on the unwinding codes in pycbc
+    #and the old LALSimulation interface
+    count=0
+    prevval = None
+    phaseUW = phase 
+
+    #Pycbc uses 2*PI*0.7 for some reason
+    #We use the more conventional PI (more in line with MATLAB)
+    thresh = lal.PI;
+    for index, val in enumerate(phase):
+	if prevval is None:
+	    pass
+	elif prevval - val >= thresh:
+	    count = count+1
+	elif val - prevval >= thresh:
+	    count = count-1
+
+	phaseUW[index] = phase[index] + count*lal.TWOPI
+	prevval = val
+
+    for index, val in enumerate(phase):
+	    phaseUW[index] = phaseUW[index] - phaseUW[0]
+
+    phase = phaseUW
+    return amp,phase
 
 ### Sometimes there will be negative or very low (~~0) frequencies ###
 ### at the start or the end of f. Clean them up ###
@@ -73,6 +121,26 @@ def cleanFreq(f,fLower):
 	else:
 	    i=i+1;
 #    print "fStartFix: %d i: %d " % (fStartFix, i)
+
+def generate_waveform(m1,m2,dist,incl,fLower,fFinal,fRef,s1x,s1y,s1z,s2x,s2y,s2z):
+	sampleRate = 4096 #Should pass this but its a nontrivial find and replace
+	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
+		    				    1./sampleRate,			# delta T
+						    m1*lal.MSUN_SI,			# mass 1 in kg
+						    m2*lal.MSUN_SI,			# mass 2 in kg
+						    s1x,s1y,s1z,			# Spin 1 x, y, z
+						    s2x,s2y,s2z,			# Spin 2 x, y, z
+						    fLower,				# Lower frequency
+						    fRef,				# Reference frequency 40?
+						    dist*1.e6*lal.PC_SI,		# r - distance in M (convert to MPc)
+						    incl,				# inclination
+						    0,0,				# Lambda1, lambda2
+						    None,				# Waveflags
+						    None,				# Non GR parameters
+						    0,7,				# Amplitude and phase order 2N+1
+						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+
+	return calc_amp_phase(hc.data.data, hp.data.data)
 
 def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_lower, param_upper, param_num = 100,  input_mass1 = 1.4, input_mass2 = 1.4):
 
@@ -137,7 +205,7 @@ def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_
 		u.fill(0);
 
 		#### Generate signal, weight by PSD, normalise, take FFT ####
-		amps,phis=waveHandler.genwave(m1,m2,dist,incl,fLower,fFinal,0,0,0,spin,0,0,0)
+		amps,phis=generate_waveform(m1,m2,dist,incl,fLower,fFinal,0,0,0,spin,0,0,0)
 		fs = numpy.gradient(phis)/(2.0*numpy.pi * (1.0/sampleRate))
 
 		cleanFreq(fs,fLower)
@@ -151,7 +219,7 @@ def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_
 	   
 		#### Now do the IIR filter for the exact mass match ####
 
-		amp,phase=waveHandler.genwave(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0);
+		amp,phase=generate_waveform(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0);
 		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
 
 		cleanFreq(f,fLower)
@@ -236,7 +304,7 @@ def parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_value, in
 		h.fill(0);
 		u.fill(0);
 		#### Generate signal, weight by PSD, normalise, take FFT ####
-		amps,phis=waveHandler.genwave(s_m1,s_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
+		amps,phis=generate_waveform(s_m1,s_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
 		fs = numpy.gradient(phis)/(2.0*numpy.pi * (1.0/sampleRate))
 		
 		cleanFreq(fs,fLower)
@@ -252,7 +320,7 @@ def parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_value, in
 		m1 = s_m1 
 		m2 = s_m2
 
-		amp,phase=waveHandler.genwave(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0);
+		amp,phase=generate_waveform(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0);
 		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
 		cleanFreq(f,fLower)
 		if psd_interp is not None:
@@ -328,7 +396,7 @@ def construction_comparison(xmldoc,psd_interp, outfile, input_minMass = 1, input
 		uOld.fill(0);
 
 		#### Generate signal, weight by PSD, normalise, take FFT ####
-		ampNew,phaseNew=waveHandler.genwave(m1,m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0)
+		ampNew,phaseNew=generate_waveform(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
 		fs = numpy.gradient(phaseNew)/(2.0*numpy.pi * (1.0/sampleRate))
 		negs = numpy.nonzero(fs<fLower)
 	
@@ -420,7 +488,7 @@ def spin_comparison(xmldoc, psd_interp, outfile, input_spinMax = 0.05, input_num
 
 	    spin = generate_spin_mag(spinMax);
 	    #0 and 7 are the reference frequency (0 = maximum) and the phase nPN
-	    amps,phis=waveHandler.genwave(s_m1,s_m2,dist,incl,fLower,fFinal,0,7,spin[0],spin[1],spin[2],spin[3],spin[4],spin[5])
+	    amps,phis=generate_waveform(s_m1,s_m2,dist,incl,fLower,fFinal,0,spin[0],spin[1],spin[2],spin[3],spin[4],spin[5])
 
 	    ##### Apply the PSD to the signal waveform ######
 
@@ -482,7 +550,7 @@ def spin_comparison(xmldoc, psd_interp, outfile, input_spinMax = 0.05, input_num
 			    
 
 			    ##### Generate template waveform #####
-			    amp,phase=waveHandler.genwave(m1,m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0);
+			    amp,phase=generate_waveform(m1,m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0);
 			    #Apply the PSD to the waveform and normalise
 
 			    f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
@@ -627,7 +695,7 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
 
 
 	#### Set up the template waveform
-	ampTemplate,phaseTemplate=waveHandler.genwave(template_m1,template_m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0)
+	ampTemplate,phaseTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
 	fTemplate = numpy.gradient(phaseTemplate)/(2.0*numpy.pi * (1.0/sampleRate))
 
 	cleanFreq(fTemplate,fLower)
@@ -644,7 +712,7 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
 	u = numpy.conj(numpy.fft.fft(u))
    
 	#Set up the signal waveform
-	ampSignal,phaseSignal=waveHandler.genwave(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,7,0,0,0,0,0,0)
+	ampSignal,phaseSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
 	fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi * (1.0/sampleRate))
 
 	cleanFreq(fSignal,fLower)
@@ -674,4 +742,234 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
 
 	print("Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
 
+def main():
 
+	parser = OptionParser(description = __doc__)
+
+
+	parser.add_option("--type", metavar = "string", help = "Which type of test/comparison to perform. Allowed values are \n VPC - Variable parameter comparison. Given a single parameter (alpha, beta or epsilon) compute, over the given range, the overlap between a template and associated SPIIR response of fixed mass (1.4-1.4) \n PC - Parameter comparison. Takes a single parameter and value (e.g. eps=0.02). Generates a random spin wave and computes the overlap with SPIIR responses from templates in the supplied bank until a match of 0.97 or above is found. Repeat for a specified number of signals. \n CC - Construction comparison. Testing function for the new template generation method. Given a random mass pair, generate a wave and from that the SPIIR coefficients. Compute the overlap between these \n SC - Spin comparison. Similar to parameter comparison but instead of a fixed parameter generates waves with a spin components up to a given value.")
+
+
+	#Universal options
+	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).", type="string")
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).",type="string")
+	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).",type="string")
+
+	#Options for types
+	parser.add_option("--param", metavar = "string", help = "VPC/PC: Which parameter to change/vary. Used in VPC (alpha, beta, epsilon or spin) and PC (alpha, beta, epsilon) can also use short hands a, b, e, eps and s",type="string")
+	parser.add_option("--param-lower", metavar = "float", help = "VPC: Lower value of the parameter variation.",type="float")
+	parser.add_option("--param-upper", metavar = "float", help = "VPC: Upper value of the parameter variation.",type="float")
+	parser.add_option("--param-num", metavar = "float", help = "VPC: The number of steps to take between upper and lower value of the parameter variation.",type="float")
+	parser.add_option("--param-value", metavar = "float", help = "PC: The value to set the specified parameter to.",type="float")
+	parser.add_option("--mass1", metavar = "float", help = "VPC: The mass of the first body",type="float",default=1.4)
+	parser.add_option("--mass2", metavar = "float", help = "VPC: The mass of the second body",type="float",default=1.4)
+	parser.add_option("--min-mass", metavar = "float", help = "PC/CC/SC: The minimum mass (mass pair is randomly chosen between min and max)",type="float",default=1)
+	parser.add_option("--max-mass", metavar = "float", help = "PC/CC/SC: The maximum mass (mass pair is randomly chosen between min and max)",type="float",default=3)
+	parser.add_option("--num-signals", metavar = "int", help = "PC/CC/SC: The number of signals to test",type="int",default=2)
+	parser.add_option("--spin-max", metavar = "float", help = "SC: Spin components are randomly chosen between -spin_max < x < spin_max",type="float",default=0.05)
+
+
+	options, filenames = parser.parse_args()
+
+	required_options = ("template_bank", "type")
+
+	missing_options = [option for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+
+	# read bank file
+	bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+
+	# read psd file
+	if options.reference_psd:
+		ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd,contenthandler=ligolw.LIGOLWContentHandler))
+		bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+		psd = ALLpsd[bank_sngl_table[0].ifo]
+		# smooth and create an interp object
+		psd = smooth_and_interp(psd)
+	else:
+		psd = None
+		print("Error: No PSD file given!")
+
+
+
+	if(options.type == "VPC"):
+	    if(options.param == None):
+		print("Parameter not given but required. Please use --param to specify");
+		exit();
+	    if(options.param_lower == None or options.param_upper == None):
+		print("Parameter range not completely specified. Please use BOTH --param-lower and --param-upper");
+		exit();
+
+	    if(options.output == None):
+		outfile = "VPC_" + str(options.param) + "_" + str(options.param_lower) + "_to_" + str(options.param_upper) + ".dat"
+	    else:
+		outfile = options.output
+	    variable_parameter_comparison( bank_xmldoc,
+							    psd,
+							    outfile,
+							    options.param,
+							    options.param_lower,
+							    options.param_upper,
+							    param_num = options.param_num,
+							    input_mass1 = options.mass1,
+							    input_mass2 = options.mass2)
+	elif(options.type == "PC"):
+	    if(options.param == None):
+		print("Parameter not given but required. Please use --param to specify");
+		exit();
+	    if(options.param_value == None):
+		print("Parameter value not given by required. Please use --param-value to specify");
+	    if(options.output == None):
+		outfile = "PC_" + str(options.param) + "_" + str(options.param_value) + ".dat"
+	    else:
+		outfile = options.output
+	    parameter_comparison(  bank_xmldoc,
+						    psd,
+						    outfile,
+						    options.param,
+						    options.param_value,
+						    input_minMass = options.min_mass,
+						    input_maxMass = options.max_mass,
+						    input_numSignals = options.num_signals)
+	elif(options.type == "CC"):
+	    if(options.output == None):
+		outfile = "CC_minmass_" + str(options.min_mass) + "_maxmass_" + str(options.max_mass) + ".dat"
+	    else:
+		outfile = options.output
+	    construction_comparison(	bank_xmldoc,
+							psd,
+							outfile,
+							input_minMass = options.min_mass,
+							input_maxMass = options.max_mass,
+							input_numSignals = options.num_signals)
+	elif(options.type == "SC"):
+	    if(options.spin_max == None):
+		print("Spin max must not be none. Use --spin-max to specify")
+		exit()
+	    if(options.output == None):
+		outfile = "SC_spin_" + str(options.spin_max) + ".dat"
+	    else:
+		outfile = options.output
+	    spin_comparison(	bank_xmldoc,
+						psd,
+						outfile,
+						input_spinMax = options.spin_max,
+						input_numSignals = options.num_signals)
+	if(options.type == "C2"):
+
+	    signal_m1 = 1.4;
+	    signal_m2 = 1.4;
+
+	    template_m1 = 1.4;
+	    template_m2 = 1.4;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+
+	    signal_m1 = 1.366739;
+	    signal_m2 = 1.593624;
+
+	    template_m1 = 1.502962;
+	    template_m2 = 1.447757;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+
+	    signal_m1 = 1.427502;
+	    signal_m2 = 1.411858;
+
+	    template_m1 = 1.480557;
+	    template_m2 = 1.356720;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.481233;
+	    template_m2 = 1.357322;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	     
+	    template_m1 = 1.588402;
+	    template_m2 = 1.259266;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.482673;
+	    template_m2 = 1.358543;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.483337;
+	    template_m2 = 1.359166;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.655264;
+	    template_m2 = 1.223511;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.48473;
+	    template_m2 = 1.36043;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.485423;
+	    template_m2 = 1.361036;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.710362;
+	    template_m2 = 1.89433;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.549983;
+	    template_m2 = 1.307968;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    signal_m1 = 1.422111;
+	    signal_m2 = 1.41618;
+
+	    template_m1 = 1.480557;
+	    template_m2 = 1.356720;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.481233;
+	    template_m2 = 1.357322;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	     
+	    template_m1 = 1.588402;
+	    template_m2 = 1.259266;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.482673;
+	    template_m2 = 1.358543;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.483337;
+	    template_m2 = 1.359166;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.655264;
+	    template_m2 = 1.223511;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.48473;
+	    template_m2 = 1.36043;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.485423;
+	    template_m2 = 1.361036;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.710362;
+	    template_m2 = 1.89433;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	    
+	    template_m1 = 1.549983;
+	    template_m2 = 1.307968;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
+	     
+	## There is potential to easily multithread the program but currently the memory useage is too high for even one instance in some cases
+	## This is a major issue that is still being resolved but is difficult due to the very long waveforms
+
+	#def startJob(multi_id):
+	#    makeiirbank_spincomp(bank_xmldoc, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon,multiNum=multi_id,multiAmount=options.multiAmount,spinMaximum=options.spinMax)
+
+	#mN = int(options.multiNum)
+	#pool = Pool(processes=4);
+	#pool.map(startJob,[0+mN,1+mN,2+mN,3+mN]);
+
+if __name__ == "__main__":
+    main()
