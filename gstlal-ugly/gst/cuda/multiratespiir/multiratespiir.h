@@ -54,7 +54,7 @@ typedef struct _Complex_F
 
 typedef struct _ResamplerState{
   float *d_sinc_table;
-  float *d_mem; // fixed length to store input
+  float *d_mem; 		/* fixed length to store input */
   gint channels;
   gint mem_len;
   gint last_sample;
@@ -62,7 +62,7 @@ typedef struct _ResamplerState{
   gint sinc_len;
   gint inrate;
   gint outrate;
-  float amplifier; // correction factor for resampling
+  float amplifier; 		/* correction factor for resampling */
 } ResamplerState;
 
 typedef struct _SpiirState {
@@ -72,24 +72,20 @@ typedef struct _SpiirState {
   gint delay_max;
   COMPLEX_F *d_y;
 
-#if 0
-  float *d_queue_spiir; // circular buffer (or ring buffer) for downsampler, it stores history samples
-  gint queue_spiir_last_sample;
-  gint queue_spiir_len;
-#endif
   guint nb;
   gint num_filters;
   gint num_templates;
 
-  gint depth; // 0-6
+  gint depth; 			/* supposed to be 0-6 */
   ResamplerState *downstate, *upstate;
-  float *d_queue; // circular buffer (or ring buffer) for downsampler and spiir 
+  float *d_queue; 		/* circular buffer (or ring buffer) for downsampler and spiir */
   gint queue_len;
-  gint queue_first_sample;  // start position
-  gint queue_last_sample;  // end position
+  gint queue_first_sample;  	/* queue start position */
+  gint queue_last_sample;  	/* queue end position */
   gint pre_out_spiir_len;
 } SpiirState;
 
+/* single-precision bank */
 typedef struct _SpiirBank_s {
   float *a1_s;
   float *b0_s;
@@ -116,9 +112,9 @@ struct _CudaMultirateSPIIR {
 
   gboolean need_discont;
   guint num_depths;
-  guint num_head_cover_samples; // number of samples needed to produce the first buffer
-  guint num_tail_cover_samples; // number of samples needed to produce the last buffer
-  guint num_exe_samples; // number of samples executed every time
+  guint num_head_cover_samples; /* number of samples needed to produce the first buffer */
+  guint num_tail_cover_samples; /* number of samples needed to produce the last buffer */
+  guint num_exe_samples; 	/* number of samples executed every time after first buffer */
 
   GstClockTime t0;
   guint64 offset0;
@@ -129,10 +125,10 @@ struct _CudaMultirateSPIIR {
   guint64 num_gap_samples;
   gboolean need_tail_drain;
 
-  gint outchannels; // equals number of templates
+  gint outchannels; 		/* = number of templates */
   gint rate;
   gint width;
-  SpiirBank **bank;
+  SpiirBank_s **bank;
   GMutex *iir_bank_lock;
   GCond *iir_bank_available;
   SpiirState **spstate;
