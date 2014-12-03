@@ -324,6 +324,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 						buffer_list_t_start++;
 					if(buffer_list_t_end == frame_t_end + 1)
 						buffer_list_t_end--;
+					g_assert_cmpuint(buffer_list_t_start, <=, buffer_list_t_end);
 
 					/*
 					 * safety checks
@@ -339,6 +340,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
 						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+						GstClockTime buffer_t_start = GST_BUFFER_TIMESTAMP(buffer);
+						GstClockTime buffer_t_end = buffer_t_start + GST_BUFFER_DURATION(buffer);
 
 						/*
 						 * safety checks.  again, 1
@@ -350,13 +353,20 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 						g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
 						g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
-						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer) + 1, >=, frame_t_start);
-						g_assert_cmpuint(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer) - 1, <=, frame_t_end);
+						if(buffer_t_start + 1 == buffer_list_t_start)
+							buffer_t_start++;
+						if(buffer_t_end - 1 == buffer_list_t_end)
+							buffer_t_end--;
+						g_assert_cmpuint(buffer_t_start, <=, buffer_t_end);
+						g_assert_cmpuint(buffer_list_t_start, <=, buffer_t_start);
+						g_assert_cmpuint(buffer_t_end, <=, buffer_list_t_end);
 						g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
 
-						/* FIXME:  how to indicate gaps in frame file? */
 						if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
-							memcpy(dest + gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buffer) - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+							memcpy(dest + gst_util_uint64_scale_int_round(buffer_t_start - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+						else {
+							/* FIXME:  how to indicate gaps in frame file? */
+						}
 						gst_buffer_unref(buffer);
 					}
 
@@ -372,6 +382,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					case GST_FRPAD_TYPE_FRADCDATA: {
 						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate);
 						adc_data.AppendComment(frpad->comment);
+					/* FrAdc objects cannot encode an offsset */
+						g_assert_cmpuint(buffer_list_t_start, ==, frame_t_start);
 						GST_LOG_OBJECT(data->pad, "appending FrAdcData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
 						adc_data.RefData().append(vect);
 						if(!frame->GetRawData()) {
