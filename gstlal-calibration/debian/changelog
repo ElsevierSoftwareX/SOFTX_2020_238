@@ -1,4 +1,14 @@
+gstlal-calibration (0.2.0-1) unstable; urgency=low
+
+  * ER6 release
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 27 Nov 2014 21:15:34 -0500
+
 gstlal-calibration (0.1.1-1) unstable; urgency=low
+
+  * initial release
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 30 Jan 2014 14:02:06 -0500
 
   * initial release
 

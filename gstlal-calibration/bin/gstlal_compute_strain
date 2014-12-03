@@ -242,6 +242,8 @@ if options.frame_segments_file is not None:
 	if seg is not None:
 		# clip frame segments to seek segment if it exists (not required, just saves some meory and I/O overhead)
 		frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in frame_segments.items())
+else:
+	frame_segments = None
 
 # Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps
 sr = options.sample_rate
@@ -356,7 +358,7 @@ if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
 
 # When reading from disk, clip the incoming data stream(s) to segment list
-if options.data_source == "frames" and options.frame_segments_file is not None and options.frame_segments is not None:
+if options.data_source == "frames" and frame_segments is not None:
 	if options.recolor:
 		rawdata = pipeparts.mkgate(pipeline, rawdata, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 	else:
