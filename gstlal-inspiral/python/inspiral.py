@@ -677,7 +677,8 @@ class Data(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		with self.lock:
-			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0, f_max = 0.85 * (psd.f0 + (len(psd.data) - 1) * psd.deltaF))
+			# FIXME get frequency bounds from templates
+			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 40.0, f_max = 0.85 * (psd.f0 + (len(psd.data) - 1) * psd.deltaF))
 			assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
 			# NOTE:  timestamp is cast to float.  should be
 			# safe, whitener should be reporting PSDs with
