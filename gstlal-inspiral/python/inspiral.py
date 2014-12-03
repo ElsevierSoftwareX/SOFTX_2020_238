@@ -727,6 +727,26 @@ class Data(object):
 				if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
+		# Cluster last coincs before recording number of zero
+		# lag events or sending alerts to gracedb
+		# FIXME Do proper clustering that saves states between
+		# thinca intervals and uses an independent clustering
+		# window. This can also go wrong if there are multiple
+		# events with an identical likelihood.  It will just
+		# choose the event with the highest event id
+		if self.stream_thinca.last_coincs:
+			self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+
+		# Add events to the observed likelihood histogram post "clustering"
+		# FIXME proper clustering is really needed (see above)
+		if self.stream_thinca.last_coincs:
+			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
+				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
+				#IFOS come from coinc_inspiral not coinc_event
+				ifos = self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].ifos
+				if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
+					self.ranking_data.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(ifos))][coinc_event.likelihood,] += 1
+
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
 			self.__do_gracedb_alerts()
