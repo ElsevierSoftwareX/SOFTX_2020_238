@@ -8,6 +8,8 @@
 
   - https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/python/inspiral.py
   - https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/python/streamthinca.py
+
+We could only review the two codes above. The following items will be looked at the next (f2f) review.
   - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/doc/gstlal-inspiral-0.4.1/html/gstlalinspiralautochisqlenstudypage.html
   - https://ldas-jobs.phys.uwm.edu/~gstlalcbc/MDC/
 
