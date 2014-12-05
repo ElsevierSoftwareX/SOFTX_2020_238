@@ -399,7 +399,7 @@ if options.recolor:
 	# Recoloring kernel
 	max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
 	# Truncate to requested output sample rate, if it is higher than the PSD, provides an assert will fail later
-	rpsd.data = 1. / rpsd.data[:max_sample]
+	rpsd.data = rpsd.data[:max_sample]
 	fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 	# Add latency to fix the time stamps
 	latency -= 1# FIXME: Remove this if reference_psd.psd_to_fir_kernel() is adjusted
