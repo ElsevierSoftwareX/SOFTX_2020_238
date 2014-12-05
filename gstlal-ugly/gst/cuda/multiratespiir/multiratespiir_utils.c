@@ -82,7 +82,6 @@ guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element)
 	return gst_adapter_available(element->adapter) / ( element->width / 8 );
 }
 
-cuda_multirate_spiir_parse_bank(CudaMultirateSPIIR *element, const char *filename)
 
 
 
