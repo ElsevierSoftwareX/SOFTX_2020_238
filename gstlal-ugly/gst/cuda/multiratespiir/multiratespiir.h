@@ -128,7 +128,9 @@ struct _CudaMultirateSPIIR {
   gint outchannels; 		/* = number of templates */
   gint rate;
   gint width;
-  SpiirBank_s **bank;
+  // SpiirBank_s **bank;
+  gdouble *bank;
+  gint bank_len;
   GMutex *iir_bank_lock;
   GCond *iir_bank_available;
   SpiirState **spstate;
