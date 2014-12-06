@@ -442,8 +442,9 @@ else:
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
 
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1, fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_delay"])-1, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
-
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])-1, fir_matrix = [filters["dewhiten_err"]], time_domain = True, block_stride = sr)
+	derr = pipeparts.mkshift(pipeline, derr, shift = -len(filters["inv_sensing"])/float(sr)*gst.SECOND - len(filters["dewhiten_err"])/float(sr)*gst.SECOND)
+	
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
 	dctrl = pipeparts.mkaudioconvert(pipeline, dctrl)
@@ -454,9 +455,10 @@ else:
 	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])-1, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])-1, fir_matrix = [filters["dewhiten_ctrl"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_delay"])-1, fir_matrix = [filters["awhitening"]], time_domain = True, block_stride = sr)
+	dctrl = pipeparts.mkshift(pipeline, dctrl, shift = -len(filters["actuation"])/float(actuationsr)*gst.SECOND - len(filters["dewhiten_ctrl"])/float(actuationsr)*gst.SECOND)
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
@@ -490,7 +492,7 @@ else:
 	else:
 		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100).link(strain)
 	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100).link(strain)
-	strain = pipeparts.mkaudioamplify(pipeline, strain, 4.0*3.14*3.14/3995.1)
+	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3995.1)
 	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 	strain = pipeparts.mkprogressreport(pipeline, strain, "%s_progress_hoft" % instrument)
 	
