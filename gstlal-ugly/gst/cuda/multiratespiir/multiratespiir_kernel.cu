@@ -539,13 +539,16 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 /*
  *	cuda kernel
  */
+
   dim3 block(1, 1, 1);
   dim3 grid(1, 1, 1);
+  uint share_mem_sz;
 
+  if (SPSTATE(i)->num_templates > 0) {
   block.x = SPSTATE(i)->num_filters;
   grid.y = SPSTATE(i)->num_templates;
 //  share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
-  uint share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
+  share_mem_sz = (block.x+32 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
 
   // using mutex to make sure that kernel launch is right after texture binding
   //g_mutex_lock(element->cuTex_lock);
@@ -576,6 +579,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
   gpuErrchk (cudaPeekAtLastError ());
 
+  }
 //  SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + num_inchunk) % SPSTATE(i)->queue_spiir_len;
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 

@@ -230,7 +230,7 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
-def gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding):
+def gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding, sampleRate, flower):
 
         # generate the waveform
 	# FIXME: waveform approximant should not be fixed.	
@@ -274,7 +274,7 @@ def gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding):
               	# make the iir filter coeffs
                	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 	
-	return a1, b0, delay
+	return amp, phase, a1, b0, delay
 
 def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_max):
 
@@ -450,7 +450,7 @@ class Bank(object):
 			m2 = row.mass2
 			fFinal = row.f_final
 
-			a1, b0, delay = gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding)
+			amp, phase, a1, b0, delay = gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding, sampleRate, flower)
 
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
@@ -566,7 +566,7 @@ class Bank(object):
 
 		# FIXME:  ligolw format now supports complex-valued data
 		root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', -self.autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
 		root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
 		root.appendChild(array.from_array('matches', numpy.array(self.matches)))

@@ -452,6 +452,7 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 		/* 
 		 * initiate coefficient a1
 		 */
+		if (SPSTATE(depth)->num_templates > 0) {
 		a1_eff_len = (gint) bank[pos] * bank[pos+1]/2;	
 		pos = pos + 2;
 		spiir_state_workspace_realloc_complex (&tmp_a1, &a1_len, a1_eff_len);
@@ -507,11 +508,12 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 		cudaMalloc((void **) &(SPSTATE(depth)->d_y), a1_eff_len * sizeof (COMPLEX_F));
 
 		cudaMemsetAsync(SPSTATE(depth)->d_y, 0, a1_eff_len * sizeof(COMPLEX_F), stream);
+		}
 	}
 	free (tmp_a1);
 	free (tmp_b0);
 	free (tmp_d);
-	g_assert (pos == bank_len);
+//	g_assert (pos == bank_len);
         gpuErrchk (cudaPeekAtLastError ());
 
 

@@ -184,7 +184,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def build_bank_struct(bank):
+def build_bank_struct(bank, max_rate):
 	#FIXME: sanity check about the bank dimention of each sampling rate
 	# build a bank struct
 	sample_rates = sorted(bank.get_rates())
@@ -193,7 +193,12 @@ def build_bank_struct(bank):
 	itemsize = bank.A[max(sample_rates)].dtype.itemsize/2
 	datatype = np.dtype("f%d" % itemsize)
 	tmparray = []
-	tmparray = np.array([len(sample_rates)], datatype)
+
+	if sample_rates[-1] == max_rate:
+		tmparray = np.array([len(sample_rates)], datatype)
+	else:
+		tmparray = np.array([len(sample_rates)+1], datatype)
+
 	bank_struct = np.append(bank_struct, tmparray)
 	for sr in sample_rates:
 		tmparray = []
@@ -216,6 +221,11 @@ def build_bank_struct(bank):
 		tmparray_shape = np.array(tmparray.shape, datatype)
 		bank_struct = np.append(bank_struct, tmparray_shape)
 		bank_struct = np.append(bank_struct, tmparray)
+
+	if sample_rates[-1] != max_rate:
+		tmparray_shape = []
+		tmparray_shape = np.array([0.0, 0.0], datatype)
+		bank_struct = np.append(bank_struct, tmparray_shape)
 	return bank_struct
 
 
@@ -249,6 +259,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	#
 
 	hoftdicts = {}
+	max_rates ={}
 	for instrument in detectors.channel_dict:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
@@ -256,6 +267,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
 			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+		max_rates[instrument] = max(rates)
 
 	#
 	# construct trigger generators
@@ -273,7 +285,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		snr = pipeparts.mkreblock(pipeline, head)
 
-		bank_struct = build_bank_struct(bank)
+		bank_struct = build_bank_struct(bank, max_rates[instrument])
 		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank_struct, bank_id = bank_count, gap_handle = 0) # treat gap as zeros
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
