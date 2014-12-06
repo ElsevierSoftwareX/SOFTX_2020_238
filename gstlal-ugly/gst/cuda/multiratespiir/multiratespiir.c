@@ -1042,7 +1042,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       if (res != GST_FLOW_OK)
         return res;
     } else {
-        GST_INFO_OBJECT(element, "inbuf absorbed %d zero samples", num_zeros);
+        GST_INFO_OBJECT(element, "inbuf absorbed %d samples", in_samples);
         return GST_BASE_TRANSFORM_FLOW_DROPPED;
     }
     break;
