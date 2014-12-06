@@ -444,7 +444,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 						    SPSTATE(i+1)->queue_len
 						    );
 
-    gpuErrchk (cudaPeekAtLastError ());
+    //gpuErrchk (cudaPeekAtLastError ());
 
     /* 
      * FIXME: the only possible situation to discard some samples is 
@@ -577,7 +577,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->queue_len);
   //g_mutex_unlock(element->cuTex_lock);
 
-  gpuErrchk (cudaPeekAtLastError ());
+  //gpuErrchk (cudaPeekAtLastError ());
 
   }
 //  SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + num_inchunk) % SPSTATE(i)->queue_spiir_len;
@@ -614,9 +614,13 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 #endif
 
     update_nb(spstate, spiir_processed, i);
+    if (SPSTATE(i)->num_filters > 0) 
+    {
+
   /*
    *	cuda kernel
    */
+
     block.x = SPSTATE(i)->num_filters;
     grid.y =  SPSTATE(i)->num_templates;
    // share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
@@ -632,10 +636,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     texRef.normalized	= false;
     cudaBindTexture(0, texRef, SPSTATE(i)->d_input_s, channelDesc, available_length * sizeof(float));
     */
-#if 0
-    if (SPSTATE(i)->num_filters > 3) 
-#endif
-    {
     cuda_iir_filter_kernel<<<grid, block, share_mem_sz, stream>>>(SPSTATE(i)->d_a1,
 							SPSTATE(i)->d_b0, 
 							SPSTATE(i)->d_d, 
@@ -652,7 +652,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     }
     //g_mutex_unlock(element->cuTex_lock);
 
-    gpuErrchk (cudaPeekAtLastError ());
+    //gpuErrchk (cudaPeekAtLastError ());
 
 //    SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + spiir_processed) % SPSTATE(i)->queue_spiir_len;
 
@@ -676,7 +676,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 					SPSTATEUP(i+1)->mem_len, 
 					SPSTATEUP(i)->mem_len);
 
-    gpuErrchk (cudaPeekAtLastError ());
+    //gpuErrchk (cudaPeekAtLastError ());
     SPSTATEUP(i+1)->last_sample = 0;
     num_inchunk = spiir_processed; 
 
@@ -684,6 +684,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
  
   cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream);
-  gpuErrchk (cudaPeekAtLastError ());
+  //gpuErrchk (cudaPeekAtLastError ());
   return spiir_processed;
 }

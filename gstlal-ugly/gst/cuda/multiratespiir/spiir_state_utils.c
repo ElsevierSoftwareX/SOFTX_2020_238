@@ -448,11 +448,13 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 	for (depth = num_depths - 1; depth >= 0; depth--) {
 		SPSTATE(depth)->num_templates = (gint) bank[pos];
 		SPSTATE(depth)->num_filters = (gint) bank[pos+1]/2;
+		//printf("depth %d, ntemplates %d, nfilters %d\n", depth, SPSTATE(depth)->num_templates, SPSTATE(depth)->num_filters);
 
 		/* 
 		 * initiate coefficient a1
 		 */
 		if (SPSTATE(depth)->num_templates > 0) {
+			//printf("dpt %d\n",depth);
 		a1_eff_len = (gint) bank[pos] * bank[pos+1]/2;	
 		pos = pos + 2;
 		spiir_state_workspace_realloc_complex (&tmp_a1, &a1_len, a1_eff_len);
@@ -508,13 +510,22 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 		cudaMalloc((void **) &(SPSTATE(depth)->d_y), a1_eff_len * sizeof (COMPLEX_F));
 
 		cudaMemsetAsync(SPSTATE(depth)->d_y, 0, a1_eff_len * sizeof(COMPLEX_F), stream);
+		} else {
+			SPSTATE(depth)->d_a1 = NULL;
+			SPSTATE(depth)->d_b0 = NULL;
+			SPSTATE(depth)->d_d = NULL;
+			SPSTATE(depth)->d_y = NULL;
+			SPSTATE(depth)->delay_max = 0;
 		}
 	}
-	free (tmp_a1);
-	free (tmp_b0);
-	free (tmp_d);
+	if (tmp_a1)
+		free (tmp_a1);
+	if (tmp_b0)
+		free (tmp_b0);
+	if (tmp_d)
+		free (tmp_d);
 //	g_assert (pos == bank_len);
-        gpuErrchk (cudaPeekAtLastError ());
+        //gpuErrchk (cudaPeekAtLastError ());
 
 
 }
@@ -524,7 +535,7 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 		guint num_exe_samples, gint width, guint rate, cudaStream_t stream)
 {
 
-	printf("init spstate\n");
+	//printf("init spstate\n");
 	gint i, inrate, outrate, queue_alloc_size;
 	gint num_depths = (gint) bank[0];
 	gint outchannels = (gint) bank[1] * 2;
