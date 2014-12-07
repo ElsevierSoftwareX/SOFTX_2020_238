@@ -199,8 +199,6 @@ def parse_command_line():
 
 options, filenames, bank_cache, channel_dict, dq_channel_dict = parse_command_line()
 
-print dq_channel_dict
-
 try: os.mkdir("logs")
 except: pass
 dag = dagparts.CondorDAG("trigger_pipe")
@@ -232,8 +230,7 @@ urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "
 listenNode = lvalert_listen_node(listenJob, dag)
 
 jobTags = []
-
-for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs)):
+for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1)):
 
 	# make a new likelihood file
 	likefile = os.path.split(options.likelihood_file)[1]
@@ -250,7 +247,8 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 			"ht-gate-threshold":options.ht_gate_threshold,
 			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
 			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
-			"state-vector-on-bits":datasource.state_vector_on_off_list_from_bits_dict(options.state_vector_on_off_dict),
+			"state-vector-on-bits":options.state_vector_on_bits,
+			"state-vector-off-bits":options.state_vector_off_bits,
 			"svd-bank":svd_bank_string,
 			"tmp-space":inspiral_pipe.condor_scratch_space(),
 			"track-psd":"",
@@ -271,7 +269,6 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 				"likelihood-file":likefile
 			}
 		)
-	print likefile
 
 urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags)}, output_files = {})
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
