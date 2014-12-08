@@ -1,6 +1,6 @@
 gstlal-calibration (0.2.2-1) unstable; urgency=low
 
-  * ER6 bug fix and offline feature release
+  * ER6 bug fix and offline feature release with packaging fixes
 
  -- Madeline Wade <madeline.wade@ligo.org>  Mon, 8 Dec 2014 09:49:50 -0500
 
