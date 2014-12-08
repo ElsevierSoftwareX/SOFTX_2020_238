@@ -1,3 +1,9 @@
+gstlal-burst (0.0.2-1) unstable; urgency=low
+
+  * intial release -- packaging updates
+
+ -- Chris Pankow <chris.pankow@ligo.org>  Mon, 8 Dec 2014 10:32:00 -0500
+
 gstlal-burst (0.0.1-1) unstable; urgency=low
 
   * initial release
