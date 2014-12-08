@@ -211,40 +211,34 @@ WHERE
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
-def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, restrict_to_instruments = None):
+def plot_rates(signal_rate, confidence_intervals = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
-	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
-	if restrict_to_instruments is None:
-		fig.suptitle("Event Rate Posterior")
-	else:
-		fig.suptitle("Event Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
-	if noise_rate is None:
-		signal_axes = fig.gca()
-	else:
-		signal_axes = fig.add_subplot(2, 1, 2)
+	fig.set_size_inches((4., 4. / golden_ratio))
+	signal_axes = fig.gca()
 
 	x = signal_rate.bins[0].centres()
 	y = signal_rate.array
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
+	signal_axes.set_title("Event Rate Posterior")
 	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
 	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
-	#signal_axes.loglog()
+	signal_axes.loglog()
 
-	#signal_axes.set_ylim((1e-8, 1.))
+	signal_axes.set_ylim((1e-8, 1.))
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (mode, lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
-		for cell in table.get_celld().values():
-			cell.set_edgecolor("w")
+		alphas = dict(zip(sorted(confidence_intervals), [.6, .4, .2]))
 
-	if noise_rate is not None:
-		background_axes = fig.add_subplot(2, 1, 1)
-		x = noise_rate.bins[0].centres()
-		y = noise_rate.array
-		line2, = background_axes.plot(x, y, color = "r", linestyle = "-", label = "Background")
-		background_axes.set_ylabel(r"$P(\mathrm{background\ count})$")
-		fig.legend((line1, line2), (line1.get_label(), line2.get_label()), loc = "upper right")
+		# convert lo and hi bounds to co-ordinate index segments
+		confidence_intervals = sorted((conf, segments.segmentlist([segments.segment(bisect.bisect_left(x, lo), bisect.bisect_right(x, hi))])) for conf, (mode, lo, hi) in confidence_intervals.items())
+
+		# remove from each the indexes spanned by lower confidence regions
+		confidence_intervals = [(conf, indexes - sum((segs for conf, segs in confidence_intervals[:i]), segments.segmentlist())) for i, (conf, indexes) in enumerate(confidence_intervals)]
+
+		for conf, segs in confidence_intervals:
+			for lo, hi in segs:
+				signal_axes.fill_between(x[lo:hi], y[lo:hi], 1e-8, color = "k", alpha = alphas[conf])
 
 	try:
 		fig.tight_layout()
@@ -337,10 +331,11 @@ xmldoc.childNodes[-1].appendChild(noise_rate_pdf.to_xml(u"%s:noise_pdf" % proces
 ligolw_utils.write_filename(xmldoc, filename, gz = (filename or stdout).endswith(".gz"), verbose = options.verbose)
 
 
-filename = "rate_posteriors.png"
-if options.verbose:
-	print >>sys.stderr, "writing %s ..." % filename
-plot_rates(signal_rate_pdf, noise_rate = noise_rate_pdf if options.with_background else None, confidence_intervals = confidence_intervals, restrict_to_instruments = options.restrict_to_instruments).savefig(filename)
+fig = plot_rates(signal_rate_pdf, confidence_intervals = confidence_intervals)
+for filename in ("rate_posteriors.png", "rate_posteriors.pdf"):
+	if options.verbose:
+		print >>sys.stderr, "writing %s ..." % filename
+	fig.savefig(filename)
 
 if options.verbose:
 	print >>sys.stderr, "done"
