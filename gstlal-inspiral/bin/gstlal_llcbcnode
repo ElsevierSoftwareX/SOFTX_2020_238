@@ -178,14 +178,15 @@ def psdplot(instrument, psd, fmin = 10., fmax = 2048.):
 
 	h.loglog(f, y, 'w', alpha=0.75, linewidth=2)
 
-	plt.figtext(0.5, 0.2, "Horizon %.0f Mpc" % reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8., f_min = 10.), color="w")
+	plt.figtext(0.5, 0.2, "Horizon %.0f Mpc" % reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8., f_min = 30.), color="w")
 
 	imin = bisect.bisect_left(f, fmin)
 	imax = bisect.bisect_right(f, fmax)
 	ymax = ceil10(y[imin:imax].max())
 	ymin = max(floor10(y[imin:imax].min()), ymax / 1e6)
 	plt.xlim((fmin, fmax))
-	plt.ylim((ymin, ymax))
+	#plt.ylim((ymin, ymax))
+	plt.ylim((1e-50, 1e-40))
 
 	plt.xlabel("Frequency (Hz)")
 	plt.ylabel("Power (strain^2/Hz)")
@@ -212,9 +213,9 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	discont = discontdata[1]
 	# FIXME Hack to adjust for high sample rate L1 and H1 state vector
 	if "V1" not in title:
-		dt /= 16384
-		lt /= 16384
-		discont /= 16384
+		dt /= 16
+		lt /= 16
+		discont /= 16
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
 	labels = ["OFF : %g (s)" % dt, "ON : %g (s)" % lt, "MIA : %g (s)" % discont]
