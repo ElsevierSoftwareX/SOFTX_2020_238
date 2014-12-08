@@ -128,6 +128,7 @@ parser.add_option("--data-source", metavar = "source", help = "Set the data sour
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files (optional).  This is required iff --data-source=frames")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required for --data-source=frames")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required for --data-source=frames")
+parser.add_option("--wings", metavar = "seconds", type = "int", help = "Number of seconds to trim off of the beginning and end of the output")
 parser.add_option("--dq-channel-name", metavar = "name", help = "Set the name of the data quality (or state vector) channel.")
 parser.add_option("--ifo", metavar = "name", help = "Name of the IFO to be calibrated.")
 parser.add_option("--shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition.")
@@ -136,7 +137,6 @@ parser.add_option("--frame-segments-name", metavar = "name", help = "Set the nam
 parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
 parser.add_option("--dq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for the outgoing DQ vector GDS-CALIB_STATE_VECTOR. (Default = 1 Hz)")
-parser.add_option("--odc-float", action = "store_true", help = "Set this if the data quality vector (ODC) is broadcasted as a float.")
 parser.add_option("--science-locked-mask", metavar = "bit", type = "int", default = 3, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be both locked and in science mode. (Default = 0x1)")
 parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, help = "Set the bit mask for bits that must be on for the instrument/subsystem to be locked. (Default = 0x2)")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
@@ -183,6 +183,9 @@ if options.data_source not in data_sources:
 
 if options.data_source == "frames" and options.frame_cache is None:
 	raise ValueError("--frame-cache must be specified when using --data-source=frames")
+
+if options.wings is not None and options.data_source != "frames":
+	raise ValueError("--wings can only be set when --data-source=frames")
 
 if options.ifo is None:
 	raise ValueError("must specify --ifo")
@@ -324,10 +327,7 @@ if options.data_source != "white":
 		if not options.no_gamma:
 			exc = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	if not options.no_dq_vector:
-		if options.odc_float:
-			odcstatevector = pipeparts.mkgeneric(pipeline, None, "lal_fixodc")
-		else:
-			odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
+		odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
 
 	# Hook up each branch to the appropriate channel in the demuxer
 	if options.recolor:
@@ -349,13 +349,9 @@ else:
 	if not options.no_gamma:
 		exc = pipeparts.mkreblock(pipeline, exc, block_duration = gst.SECOND)
 if not options.no_dq_vector:
-	if options.odc_float:
-		odcstatevector = pipeparts.mkreblock(pipeline, odcstatevector, block_duration = gst.SECOND)
-	else:
-		# If the ODC is ints, change the caps to ensure they are unsigned ints
-		# FIXME: When the ODC is written as unsigned ints, this piece can be removed
-		odcstatevector = pipeparts.mkaudioconvert(pipeline, odcstatevector)
-		odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
+	# FIXME: When the ODC is written as unsigned ints, this piece can be removed
+	odcstatevector = pipeparts.mkaudioconvert(pipeline, odcstatevector)
+	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
 
 # When reading from disk, clip the incoming data stream(s) to segment list
 if options.data_source == "frames" and frame_segments is not None:
@@ -443,7 +439,7 @@ else:
 
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1, fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])-1, fir_matrix = [filters["dewhiten_err"]], time_domain = True, block_stride = sr)
-	derr = pipeparts.mkshift(pipeline, derr, shift = -len(filters["inv_sensing"])/float(sr)*gst.SECOND - len(filters["dewhiten_err"])/float(sr)*gst.SECOND)
+	derr = pipeparts.mkshift(pipeline, derr, shift = -len(filters["inv_sensing"])/float(sr)*gst.SECOND - len(filters["dewhiten_err"])/float(sr)*gst.SECOND) # This fixes an off-by-length-of-filter timestamp bug
 	
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
@@ -458,7 +454,7 @@ else:
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])-1, fir_matrix = [filters["dewhiten_ctrl"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
-	dctrl = pipeparts.mkshift(pipeline, dctrl, shift = -len(filters["actuation"])/float(actuationsr)*gst.SECOND - len(filters["dewhiten_ctrl"])/float(actuationsr)*gst.SECOND)
+	dctrl = pipeparts.mkshift(pipeline, dctrl, shift = -len(filters["actuation"])/float(actuationsr)*gst.SECOND - len(filters["dewhiten_ctrl"])/float(actuationsr)*gst.SECOND) # This fixes an off-by-length-of-filter timestamp bug
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
@@ -502,6 +498,10 @@ straintee = pipeparts.mktee(pipeline, strain)
 straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, instrument)
 strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 
+if options.wings is not None:
+	strain = pipeparts.mkgeneric(pipeline, strain, "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
+	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False) # This audiorate fixes a segfault that results from lal_wings
+
 #
 # MAKE THE GDS-CALIB_STATE_VECTOR
 #
@@ -509,6 +509,8 @@ strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 if not options.no_dq_vector:
 
 	odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
+	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
+	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
 	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	# 
@@ -600,7 +602,23 @@ if not options.no_dq_vector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
+
+	if options.wings is not None:
+		calibstatevector = pipeparts.mkgeneric(pipeline, calibstatevector, "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
+		odcstatevector_out = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) + options.wings) * gst.SECOND, timestamp = True)
+		odcstatevector_out = pipeparts.mkaudiorate(pipeline, odcstatevector_out, skip_to_first = True, silent = False)
+	else:
+		odcstatevector_out = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100)
+
 	calibstatevector = pipeparts.mkaudiorate(pipeline, calibstatevector, skip_to_first = True, silent = False)
+
+	# Drop the gaps in data if wings are given so they don't get written to frames
+	if options.wings is not None:
+		calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND), threshold = 0, leaky = True)
+		odcstatevector_out = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector_out, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -619,7 +637,7 @@ mux.set_property("compression-level", options.compression_level)
 if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STATE_VECTOR" % instrument))
 	if options.data_source != "white":
-		pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 1000).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
+		odcstatevector_out.get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
 pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.output_channel_name)))
