@@ -292,17 +292,16 @@ print"</div>"
 # likelihoods
 path = form.getlist("url")[0]
 
-likelihood_data = far.LocalRankingData.from_xml(ligolw_utils.load_url(path, contenthandler = LIGOLWContentHandler))
+coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 
 if "smooth" in form:
-	likelihood_data.smooth_distribution_stats()
-	counts = likelihood_data.distributions.background_pdf
-	inj = likelihood_data.distributions.injection_pdf
+	counts = coinc_params_distributions.background_pdf
+	inj = coinc_params_distributions.injection_pdf
 else:
-	counts = likelihood_data.distributions.background_rates
-	inj = likelihood_data.distributions.injection_rates
+	counts = coinc_params_distributions.background_rates
+	inj = coinc_params_distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
