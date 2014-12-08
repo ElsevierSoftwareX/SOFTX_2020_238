@@ -437,9 +437,8 @@ else:
 	derr = pipeparts.mkcapsfilter(pipeline, derr, caps)
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
 
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1, fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])-1, fir_matrix = [filters["dewhiten_err"]], time_domain = True, block_stride = sr)
-	derr = pipeparts.mkshift(pipeline, derr, shift = -len(filters["inv_sensing"])/float(sr)*gst.SECOND - len(filters["dewhiten_err"])/float(sr)*gst.SECOND) # This fixes an off-by-length-of-filter timestamp bug
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1 + len(filters["inv_sensing"]), fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])-1+len(filters["dewhiten_err"]), fir_matrix = [filters["dewhiten_err"]], time_domain = True, block_stride = sr)
 	
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
@@ -450,11 +449,10 @@ else:
 
 	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])-1, fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])-1, fir_matrix = [filters["dewhiten_ctrl"]], time_domain = True, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])-1+len(filters["actuation"]), fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])-1+len(filters["dewhiten_ctrl"]), fir_matrix = [filters["dewhiten_ctrl"]], time_domain = True, block_stride = actuationsr)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
-	dctrl = pipeparts.mkshift(pipeline, dctrl, shift = -len(filters["actuation"])/float(actuationsr)*gst.SECOND - len(filters["dewhiten_ctrl"])/float(actuationsr)*gst.SECOND) # This fixes an off-by-length-of-filter timestamp bug
 
 	# Compute the gamma factors, if applicable
 	if not options.no_gamma:
