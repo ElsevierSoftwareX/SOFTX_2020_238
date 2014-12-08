@@ -1202,7 +1202,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# so the documentation doesn't promise that it is.
 			yield params, sum(seq[1::2], log_P_horizons)
 
-	def random_sim_params(self, sim, horizon_distance = None, snr_min = None):
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0):
 		"""
 		Generator that yields an endless sequence of randomly
 		generated parameter dictionaries drawn from the
@@ -1255,7 +1255,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		snr_0 = {}
 		for instrument, DH in horizon_distance.items():
 			fp, fc = inject.XLALComputeDetAMResponse(inject.cached_detector[inject.prefix_to_name[instrument]].response, sim.longitude, sim.latitude, sim.polarization, gmst)
-			snr_0[instrument] = 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
+			snr_0[instrument] = snr_efficiency * 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
 
 		#
 		# construct SNR generators, and approximating the SNRs to
