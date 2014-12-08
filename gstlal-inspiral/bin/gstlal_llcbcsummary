@@ -235,9 +235,9 @@ def plot_livetime(found, missed, ids, registry, ifo):
 	gap_y = numpy.log10(numpy.array([max(found[k][0][3],1) for k in found_x]))
 	# FIXME Hack to adjust for high sample rate L1 and V1 state vector
 	if ifo != "V1":
-		on_y -= numpy.log10(16384)
-		off_y -= numpy.log10(16384)
-		gap_y -= numpy.log10(16384)
+		on_y -= numpy.log10(16)
+		off_y -= numpy.log10(16)
+		gap_y -= numpy.log10(16)
 		
 	if len(found_x) > 0:
 		max_y = max(on_y.max(), off_y.max(), gap_y.max())
