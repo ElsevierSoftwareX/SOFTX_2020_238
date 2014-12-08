@@ -147,11 +147,11 @@ def load_ranking_data(filenames, ln_likelihood_ratio_threshold, verbose = False)
 	# histograms before running .finish().  do the indexing ourselves
 	# to not 0 the bin @ threshold
 	for binnedarray in ranking_data.background_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
 	for binnedarray in ranking_data.signal_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
 	for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][threshold],] = 0.
+		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
 
 	ranking_data.finish(verbose = verbose)
 
