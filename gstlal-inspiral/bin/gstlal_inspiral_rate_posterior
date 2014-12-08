@@ -84,7 +84,7 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
-	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".95,.999999\", clear to disable).")
+	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.68,0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".68,.95,.999999\", clear to disable).")
 	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("--chain-file", metavar = "filename", help = "Read chain from this file, save chain to this file.")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Load ranking statistic PDFs from this file.  Can be given multiple times.")
@@ -305,7 +305,7 @@ del progressbar
 if options.confidence_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining confidence intervals ..."
-	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
+	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in options.confidence_intervals)
 else:
 	confidence_intervals = None
 if options.verbose and confidence_intervals is not None:
