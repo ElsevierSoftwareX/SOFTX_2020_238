@@ -126,7 +126,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		yield coordslist
 		if progressbar is not None:
 			progressbar.increment()
-	if sampler.acceptance_fraction.min() < 0.5:
+	if n_samples_per_walker and sampler.acceptance_fraction.min() < 0.5:
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
 
 
@@ -166,21 +166,28 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# PDF.
 	#
 
-	b = ranking_data.background_likelihood_pdfs[restrict_to_instruments]
-	f = ranking_data.signal_likelihood_pdfs[restrict_to_instruments]
-	ln_f_over_b = numpy.array([math.log(f[ln_lr,] / b[ln_lr,]) for ln_lr in ln_likelihood_ratios])
+	if ranking_data is not None:
+		f = ranking_data.signal_likelihood_pdfs[restrict_to_instruments]
+		b = ranking_data.background_likelihood_pdfs[restrict_to_instruments]
+		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
 
-	# remove NaNs.  these occur because the ranking statistic PDFs have
-	# been zeroed at the cut-off and some events get pulled out of the
-	# database with ranking statistic values in that bin
-	#
-	# FIXME:  re-investigate the decision to zero the bin at threshold.
-	# the original motivation for doing it might not be there any
-	# longer
-	ln_f_over_b = ln_f_over_b[~numpy.isnan(ln_f_over_b)]
-	# safety check
-	if numpy.isinf(ln_f_over_b).any():
-		raise ValueError("infinity encountered in ranking statistic PDF ratios")
+		# remove NaNs.  these occur because the ranking statistic
+		# PDFs have been zeroed at the cut-off and some events get
+		# pulled out of the database with ranking statistic values
+		# in that bin
+		#
+		# FIXME:  re-investigate the decision to zero the bin at
+		# threshold.  the original motivation for doing it might
+		# not be there any longer
+		ln_f_over_b = ln_f_over_b[~numpy.isnan(ln_f_over_b)]
+		# safety check
+		if numpy.isinf(ln_f_over_b).any():
+			raise ValueError("infinity encountered in ranking statistic PDF ratios")
+	elif nsample > 0:
+		raise ValueError("must supply ranking data to run MCMC sampler")
+	else:
+		# no-op path
+		ln_f_over_b = numpy.array([])
 
 	#
 	# initializer MCMC chain.  try loading a chain from a chain file if
@@ -216,6 +223,8 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 			# skip burn-in, restart chain from last position
 			nburn = 0
 			pos0 = samples[i - 1,:,:]
+	elif nsample <= 0:
+		raise ValueError("no chain file to load or invalid chain file, and no new samples requested")
 	if not i:
 		# no chain file provided, or file does not contain sample
 		# chain or sample chain is empty.  still need burn-in.
