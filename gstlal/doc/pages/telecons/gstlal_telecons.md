@@ -13,4 +13,5 @@
 - \ref gstlaltelecons20141015page
 - \ref gstlaltelecons20141029page
 - \ref gstlaltelecons20141112page
+- \ref gstlaltelecons20141210page
 - \ref gstlaltelecons20150107page
