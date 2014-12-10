@@ -43,6 +43,8 @@ from collections import deque
 import numpy as np
 from glue import gpstime
 
+from laldetchar.idq import idq
+
 #
 # =============================================================================
 #
@@ -85,7 +87,8 @@ def probeBufferHandler(pad,gst_buffer):
 # A class for handling the veto timeseries files.
 
 class vetoSource:
-    def __init__(self, inputPath, inputPre, inputExt, waitTime, initTime=None, dirDigits=5, log_file=None):
+    def __init__(self, inputPath, inputPre, inputExt, waitTime, initTime=None, dirDigits=5, 
+        log_file=None, idq_log_file=None):
         self.inputPath  = inputPath
         self.inputPre   = inputPre
         self.inputExt   = inputExt
@@ -101,6 +104,12 @@ class vetoSource:
             fh = logging.FileHandler(log_file)
             self.logger.addHandler(fh)
             fh.setFormatter(logging.Formatter('%(message)s'))
+
+        # This is the log file of the running iDQ realtime process.
+        # We will use it to see which stride iDQ is currently working on.
+        self.idq_log = None
+        if idq_log_file:
+            self.idq_log = open(idq_log_file, "r")
 
         # Initialize the list of files.
         if not initTime:
@@ -159,25 +168,71 @@ class vetoSource:
         self.fileQueue = deque(filePathList)
         return
 
+    # 
+    # Push a gap into the given appsrc element, given a duration in seconds.
+    # The beginning of the gap period is assumed to be self.next_output_timestamp
+    # Notice that next_output_timestamp is reset according to the duration of the
+    # gap. We also write a line of JSON in a log indicating that a gap has been pushed.
+    #
+    def push_gap(self, src, gap_duration_s):
+        gap_start = self.next_output_timestamp / gst.SECOND
+        gap_duration = gap_duration_s * gst.SECOND
+        gap_samples = gap_duration_s * self.rate
+        gap_end = gap_start + self.waitTime
+        # FIXME
+        # For a real gap buffer, you would want zero samples. (I think.)
+        #gap_samples = 0
+        gap_vals = np.zeros(gap_samples)
+        gap_vals = gap_vals.astype(np.float32)
+        buffer_len = gap_vals.nbytes
+        buf = gst.buffer_new_and_alloc(buffer_len)
+        buf[:buffer_len-1] = np.getbuffer(gap_vals)
+        # Again, for a real gap buffer, you'd want to set this flag.
+        #buf.flag_set(gst.BUFFER_FLAG_GAP)
+        buf.timestamp = self.next_output_timestamp
+        buf.duration = gap_duration
+        buf.offset = self.current_offset
+        buf.offset_end = self.current_offset + gap_samples
+        src.emit("push-buffer", buf)
+        src.info("gst clock = %d" % int(src.get_clock().get_time()))
+        src.info("No files! Pushed gap with start=%d, duration=%d latency=%d" %
+            (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end)))
+
+        if self.logger:
+            outDict = {}
+            outDict['type'] = 'buffer'
+            outDict['time'] = datetime.datetime.now().isoformat()
+            outDict['is_gap'] = True
+            outDict['gpsstart'] = buf.timestamp/gst.SECOND
+            outDict['duration'] = gap_duration/gst.SECOND
+            outDict['latency'] = gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end
+            self.logger.info(json.dumps(outDict))
+        self.next_output_timestamp += buf.duration
+        self.current_offset = buf.offset_end
+        return
+
+    #
+    # Respond to the need_data signal from the appsrc. 
+    # 
     def need_data(self, src, need_bytes=None):
         src.info("----------------------------------------------------")
         src.info("Received need-data signal, %s." % time.asctime())
-#        # Keep circling until you find a file.
-#        noFile = True
-#        while noFile:
-#            # Check if new data has arrived on disk.
-#            self.check_for_new_files(self.next_output_timestamp)
-#            try:
-#                filePath = self.fileQueue.popleft()
-#                noFile = False
-#            except IndexError:
-#                time.sleep(self.waitTime)
 
-        # Instead, will press on after the wait time and push a gap.
         self.check_for_new_files(self.next_output_timestamp)
         try:
             filePath = self.fileQueue.popleft()
         except IndexError:
+            if self.idq_log:
+                # Check to see what is the latest stride that iDQ is working on.
+                stride_start, stride_end = idq.most_recent_realtime_stride(self.idq_log)
+
+                if stride_start * gst.SECOND > self.next_output_timestamp:
+                    # The iDQ process has moved on. Push a gap.
+                    gap_duration_s = stride_start - self.next_output_timestamp / gst.SECOND
+                    self.push_gap(src, gap_duration_s)
+            
+            # If no iDQ log file is available, or if the stride we want is still being 
+            # worked on by iDQ, we wait.
             time.sleep(self.waitTime)
             # Try it again.
             self.check_for_new_files(self.next_output_timestamp)
@@ -185,36 +240,7 @@ class vetoSource:
                 filePath = self.fileQueue.popleft()
             except IndexError: 
                 # Push gap equivalent to the wait time and return.
-                # FIXME The gap should be a real gap, not a buffer full of zeros.
-                gap_start = self.next_output_timestamp / gst.SECOND
-                gap_duration = self.waitTime * gst.SECOND
-                gap_samples = self.waitTime * self.rate
-                gap_end = gap_start + self.waitTime
-                #gap_samples = 0
-                gap_vals = np.zeros(gap_samples)
-                gap_vals = gap_vals.astype(np.float32)
-                buffer_len = gap_vals.nbytes
-                buf = gst.buffer_new_and_alloc(buffer_len)
-                buf[:buffer_len-1] = np.getbuffer(gap_vals)
-                #buf.flag_set(gst.BUFFER_FLAG_GAP)
-                buf.timestamp = self.next_output_timestamp
-                buf.duration = gap_duration
-                buf.offset = self.current_offset
-                buf.offset_end = self.current_offset + gap_samples
-                src.emit("push-buffer", buf)
-                src.info("No files! Pushed gap with start=%d, duration=%d latency=%d" %
-                    (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND,(gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end)))
-                if self.logger:
-                    outDict = {}
-                    outDict['type'] = 'buffer'
-                    outDict['time'] = datetime.datetime.now().isoformat()
-                    outDict['is_gap'] = True
-                    outDict['gpsstart'] = buf.timestamp/gst.SECOND
-                    outDict['duration'] = gap_duration/gst.SECOND
-                    outDict['latency'] = gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end
-                    self.logger.info(json.dumps(outDict))
-                self.next_output_timestamp += buf.duration
-                self.current_offset = buf.offset_end
+                self.push_gap(src, self.waitTime)
                 return True
                     
         # Ah, we have a file.
@@ -230,38 +256,11 @@ class vetoSource:
         # We might as well push a gap and then continue to process
         # the file that we have available.
         if gpsstart * gst.SECOND > self.next_output_timestamp:
-            # FIXME The gap should be a real gap, not a buffer full of zeros.
-            gap_duration = gpsstart * gst.SECOND - self.next_output_timestamp
-            gap_samples = int ((gap_duration / gst.SECOND) * self.rate)
-            #gap_samples = 0
-            gap_vals = np.zeros(gap_samples)
-            gap_vals = gap_vals.astype(np.float32)
-            gap_end = gap_duration/gst.SECOND + gpsstart
-            buffer_len = gap_vals.nbytes
-            buf = gst.buffer_new_and_alloc(buffer_len)
-            buf[:buffer_len-1] = np.getbuffer(gap_vals)
-            #buf.flag_set(gst.BUFFER_FLAG_GAP)
-            buf.timestamp = self.next_output_timestamp
-            buf.duration = gap_duration
-            buf.offset = self.current_offset
-            buf.offset_end = self.current_offset + gap_samples
-            src.emit("push-buffer", buf)
-            src.info("gst clock = %d" % int(src.get_clock().get_time()))
-            src.info("pushed gap with start=%d, duration=%d, latency=%d" %
-                (buf.timestamp/gst.SECOND,gap_duration/gst.SECOND, (gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end)))
-            if self.logger:
-                outDict = {}
-                outDict['type'] = 'buffer'
-                outDict['time'] = datetime.datetime.now().isoformat()
-                outDict['is_gap'] = True
-                outDict['gpsstart'] = buf.timestamp/gst.SECOND
-                outDict['duration'] = gap_duration/gst.SECOND
-                outDict['latency'] = gpstime.GpsSecondsFromPyUTC(time.time()) - gap_end
-                self.logger.info(json.dumps(outDict))
-            self.next_output_timestamp += buf.duration
-            self.current_offset = buf.offset_end
+            gap_duration_s = gpsstart - self.next_output_timestamp / gst.SECOND
+            self.push_gap(src, gap_duration_s)
 
-        # Load the numpy array.
+        # Down to business. We must read in data from the npy file in order to
+        # create the buffer. First load the numpy array.
         src.info("processing %s" % filePath)
         veto_vals = wrapNpLoad(filePath)
         veto_vals = veto_vals.astype(np.float32)

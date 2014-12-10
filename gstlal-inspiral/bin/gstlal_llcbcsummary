@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 import time
 import StringIO
 import base64
+from urlparse import urlparse
 cgitb.enable()
 form = cgi.FieldStorage()
 
@@ -141,27 +142,22 @@ def to_png_image():
 
 def read_registry(dir, dataurl, ids):
 	nodedict = {}
-	ifos = set()
 	for id in ids:
 		url = '%s/%s%s' % (dir, id, dataurl)
 		try:
 			tmp = open(url,"r")
-			firstline = tmp.readline().replace("#","").split()
-			tag, node = firstline[0], firstline[1]
-			for ifo in firstline[2:]:
-				ifos.add(ifo)
-			nodedict[id] = node
+			nodedict[id] = urlparse(tmp.readline()).netloc
 			tmp.close()
 		except IOError:
 			nodedict[id] = ""
-	return nodedict, ifos
+	return nodedict
 
 	
 def load_data(directory, idrange, type):
 	found = {}
 	missed = {}
 	for i, id in enumerate(idrange):
-		fname = "%s/%s_%s.txt" % (directory, id, type)
+		fname = "%s/%s/%s.txt" % (directory, id, type)
 		try:
 			found[i] = numpy.loadtxt(fname)
 			if len(found[i].shape) == 1:
@@ -237,7 +233,12 @@ def plot_livetime(found, missed, ids, registry, ifo):
 	on_y = numpy.log10(numpy.array([max(found[k][0][1],1) for k in found_x]))
 	off_y = numpy.log10(numpy.array([max(found[k][0][2],1) for k in found_x]))
 	gap_y = numpy.log10(numpy.array([max(found[k][0][3],1) for k in found_x]))
-
+	# FIXME Hack to adjust for high sample rate L1 and V1 state vector
+	if ifo != "V1":
+		on_y -= numpy.log10(16)
+		off_y -= numpy.log10(16)
+		gap_y -= numpy.log10(16)
+		
 	if len(found_x) > 0:
 		max_y = max(on_y.max(), off_y.max(), gap_y.max())
 		min_y = min(on_y.min(), off_y.min(), gap_y.min())
@@ -288,37 +289,6 @@ def plot_single_col(found, missed, ids, registry, col = 0, title = ''):
 	h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
 	finish_plot(ids, registry, [0.9 * min_y, max_y], title)
 
-def plot_state(form):
-	files = form.getlist("statefile")
-	lookback = 3600
-	lookahead = 0
-	bgcol = (224/255.,224/255.,224/255.)
-	for file in files:
-		gps = now()
-		segs = numpy.loadtxt(file)
-		times = segs[-int(lookback):,0]
-		states = numpy.array(segs[-int(lookback):,1], dtype = numpy.int64)
-		print "<div>"
-		fig = plt.figure(figsize=(20,6), facecolor = 'g')
-		fig.patch.set_alpha(0.0)
-		h = fig.add_subplot(111, axisbg = bgcol)
-		plt.subplots_adjust(bottom = 0.2, top = 0.85)
-		bit_array = numpy.empty((12, len(states)))
-		bits = numpy.arange(bit_array.shape[0])
-		for bit in bits:
-			bit_array[bit,:] =  numpy.bitwise_and(states, 2**(bit)) // 2**bit
-	
-		t = numpy.array(times) - gps
-		plt.gray()
-		plt.pcolormesh(t, numpy.array(list(bits) + [len(bits)]), bit_array)
-		plt.yticks(numpy.arange(12) + 0.5, ('Sci', 'Lock', 'h(t)', '(reserved)', 'CBC Inj', 'CBC CAT1', 'CBC CAT2', 'CBC CAT3', 'Burst Inj', 'Burst CAT1', 'Burst CAT2', 'Burst CAT3'))
-		plt.xlim([-float(lookback), float(lookahead)])
-		plt.ylabel('state')
-		plt.xlabel('time from ' + str(gps))
-		plt.title(file)
-		plt.grid(color=(0.1,0.4,0.5), linewidth=2)
-		to_png_image()
-		print "</div>"
 
 def get_ids(form):
 	idrange = [int(n) for n in form.getvalue("id").split(",")]
@@ -333,7 +303,8 @@ if "id" not in form:
 
 ids = get_ids(form)
 directory = form.getvalue("dir")
-reg, ifos = read_registry(form.getvalue("dir"), "_registry.txt", ids)
+ifos = form.getvalue("ifos").split(",")
+reg = read_registry(form.getvalue("dir"), "_registry.txt", ids)
 
 # Header
 print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
@@ -388,22 +359,13 @@ plot_snr(found, missed, ids, reg)
 print "</div>"
 
 #
-# state history
-#
-
-#print "<h1>State</h1>"
-#print "<div id='canvasstate'>"
-#plot_state(form)
-#print "</div>"
-	
-#
 # live time by ifo
 #
 
 for ifo in ifos:
 	print "<h1>Livetime for %s</h1>" % ifo
 	print "<div id='%scanvastime'>" % (ifo,)
-	found, missed = load_data(directory, ids, "%sstate_vector_on_off_gap" % (ifo,))
+	found, missed = load_data(directory, ids, "%s/state_vector_on_off_gap" % (ifo,))
 	plot_livetime(found, missed, ids, reg, ifo)
 	print "</div>"
 
@@ -443,7 +405,7 @@ print "</div>"
 # links at bottom
 print "<h3>Node summary info:</h3><hr>"
 for id in ids:
-	url = os.path.join(form.getvalue("dir"), "%s_likelihood.xml" % (id,))
+	url = os.path.join(form.getvalue("dir"), "%s/likelihood.xml" % (id,))
 	print '<font size=5><a target="_blank" href="gstlal_llcbcnode?dir=%s&id=%s&url=%s"> %s </a></font>' % (form.getvalue("dir"), id, url, id)
 
 print "</body>"

@@ -227,7 +227,8 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			# FIXME teach the trigger generator to get this information a better way
 			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			xmldoc = ligolw.Document()
-			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table)
+			# FIXME if this table reference is from a DB this is a problem (but it almost certainly isn't)
+			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table.copy()).extend(bank.sngl_inspiral_table)
 			ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
 			xmldoc.unlink()	# help garbage collector
 			bank.logname = "%sbank%d" % (instrument, n)
@@ -485,7 +486,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -495,6 +496,7 @@ class Data(object):
 		self.verbose = verbose
 		# None to disable likelihood ratio assignment, otherwise a filename
 		self.marginalized_likelihood_file = marginalized_likelihood_file
+		self.likelihood_file = likelihood_file
 		# None to disable periodic snapshots, otherwise seconds
 		# set to 1.0 to disable background data decay
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
@@ -502,7 +504,8 @@ class Data(object):
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
 		self.gracedb_group = gracedb_group
-		self.gracedb_type = gracedb_type
+		self.gracedb_search = gracedb_search
+		self.gracedb_pipeline = gracedb_pipeline
 
 		#
 		# setup bottle routes
@@ -540,6 +543,7 @@ class Data(object):
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
+		self.ranking_data = ranking_data
 		self.seglistdicts = None
 		self.fapfar = None
 
@@ -623,6 +627,7 @@ class Data(object):
 					# elsewhere so make sure these two
 					# match
 					assert ranking_data.ln_likelihood_ratio_threshold == far.RankingData.ln_likelihood_ratio_threshold
+					ranking_data.finish(verbose = self.verbose)
 					self.fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = far.RankingData.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
@@ -631,17 +636,6 @@ class Data(object):
 			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
 				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
-
-			# Cluster last coincs before recording number of zero
-			# lag events or sending alerts to gracedb
-			# FIXME Do proper clustering that saves states between
-			# thinca intervals and uses an independent clustering
-			# window. This can also go wrong if there are multiple
-			# events with an identical likelihood.  It will just
-			# choose the event with the highest event id
-			# FIXME uncomment for clustering
-			#if self.stream_thinca.last_coincs:
-			#	self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
 			# update zero-lag coinc bin counts in
 			# coinc_params_distributions.  NOTE:  if likelihood
@@ -657,6 +651,26 @@ class Data(object):
 					if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
 						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
+			# Cluster last coincs before recording number of zero
+			# lag events or sending alerts to gracedb
+			# FIXME Do proper clustering that saves states between
+			# thinca intervals and uses an independent clustering
+			# window. This can also go wrong if there are multiple
+			# events with an identical likelihood.  It will just
+			# choose the event with the highest event id
+			if self.stream_thinca.last_coincs:
+				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+
+			# Add events to the observed likelihood histogram post "clustering"
+			# FIXME proper clustering is really needed (see above)
+			if self.stream_thinca.last_coincs:
+				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
+					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
+					#IFOS come from coinc_inspiral not coinc_event
+					ifos = self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].ifos
+					if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
+						self.ranking_data.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(ifos))][coinc_event.likelihood,] += 1
+
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
 				self.__do_gracedb_alerts()
@@ -664,7 +678,8 @@ class Data(object):
 
 	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
 		with self.lock:
-			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0)
+			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 10.0, f_max = 0.85 * (psd.f0 + (len(psd.data) - 1) * psd.deltaF))
+			assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
 			# NOTE:  timestamp is cast to float.  should be
 			# safe, whitener should be reporting PSDs with
 			# integer timestamps.  anyway, we don't need
@@ -678,14 +693,15 @@ class Data(object):
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
-		# likelihood ratio PDFs are *not* included.
+		# likelihood ratio PDFs *are* included if they were present in
+		# the --likelihood-file that was loaded.
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
 		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, None, self.seglistdicts["triggersegments"])
+		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, self.ranking_data, self.seglistdicts["triggersegments"])
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -736,7 +752,7 @@ class Data(object):
 				# enough, or is nan.
 				#
 
-				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
+				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
 					continue
 
 				#
@@ -766,7 +782,7 @@ class Data(object):
 
 				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
 				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
 				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
@@ -791,7 +807,7 @@ class Data(object):
 				sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 				for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
 					try:
-						sngl_inspiral_table.appendColumn(bonus_column)
+						sngl_inspiral_table.appendColumn(standard_column)
 					except ValueError:
 						# already has it
 						pass
@@ -799,7 +815,7 @@ class Data(object):
 				xmldoc.unlink()
 				# FIXME: make this optional from command line?
 				if True:
-					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of %s failed" % filename
@@ -933,8 +949,7 @@ class Data(object):
 		# write the parameter PDF file.  NOTE;  this file contains
 		# raw bin counts, and might or might not contain smoothed,
 		# normalized, PDF arrays but if it does they will not
-		# necessarily correspond to the bin counts, and it
-		# certainly does not include likelihood ratio PDF data.
+		# necessarily correspond to the bin counts. 
 		#
 		# the parameter PDF arrays cannot be re-computed here
 		# because it would interfer with their use by stream
@@ -960,5 +975,8 @@ class Data(object):
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
-			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
+			# We require the likelihood file to have the same name
+			# as the input to this program to accumulate statistics
+			# as we go 
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), likelihood_file = self.likelihood_file, verbose = verbose)
 			self.coincs_document = coincs_document

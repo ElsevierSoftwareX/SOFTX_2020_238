@@ -85,4 +85,6 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 
 %files devel
 %defattr(-,root,root)
+%{_libdir}/*.a
+%{_libdir}/*.so
 %{_libdir}/gstreamer-0.10/*.a

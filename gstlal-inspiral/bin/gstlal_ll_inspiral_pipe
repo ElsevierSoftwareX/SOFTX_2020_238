@@ -76,6 +76,7 @@ from gstlal import datasource
 #	+ `--reference-psd` [filename]: Set the reference psd file
 #	+ `--bank-cache` [filenames]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc
 #	+ `--channel` [IFO=CHANNEL-NAME]: Set the name of the channel to process (optional).  The default is "LSC-STRAIN" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times
+#	+ `--dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (required).
 #	+ `--ht-gate-threshold` [float]: Set the h(t) gate threshold to reject glitches
 #	+ `--do-iir-pipeline`: Run the iir pipeline instead of lloid")
 #	+ `--max-jobs` [num]: Stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool
@@ -85,7 +86,8 @@ from gstlal import datasource
 #	+ `--fir-stride` [int] (s): Set the fir bank stride, default 4
 #	+ `--thinca-interval` [int] (s): Set the thinca interval, default 10
 #	+ `--gracedb-far-threshold` [float] (Hz): False alarm rate threshold for gracedb (Hz). Set to -1 to disable uploads
-#	+ `--gracedb-type` [str]: Set the gracedb type, default LowMass
+#	+ `--gracedb-search` [str]: Set the gracedb type, default LowMass
+#	+ `--gracedb-pipeline` [str]: Set the gracedb group, default gstlal
 #	+ `--gracedb-group` [str]: Set the gracedb group, default Test
 #	+ `--data-source` [lvshm|framexmit]: Where to get the data from. Default lvshm
 #	+ `--copy-likelihoods`: Copy the likelihood files from a seed, must give --likelihood-file: WARNING overwrites existing files
@@ -101,10 +103,10 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 	"""
 	A lvalert_listen_job
 	"""
-	def __init__(self, program, gracedb_group = "CBC", gracedb_type = "LowMass", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb")):
+	def __init__(self, program, gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb")):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program)
+		inspiral_pipe.generic_job.__init__(self, program, universe = "local")
 
 		# produce the lvalert processor
 
@@ -118,7 +120,7 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 
 		f = open("lvalert.ini", "w")
 		#FIXME gracedb server code sets up nodes based on this convention
-		f.write("[%s_%s]\n" % (gracedb_group.lower(), gracedb_type.lower()))
+		f.write("[%s_%s_%s]\n" % (gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
 		f.write("executable=./lvalert.sh")
 		f.close()
 
@@ -146,6 +148,7 @@ def parse_command_line():
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--channel", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
@@ -155,7 +158,8 @@ def parse_command_line():
 	parser.add_option("--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
 	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default LowMass")
+	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
+	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
 	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
 	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file: : WARNING overwrites existing files")
@@ -181,10 +185,11 @@ def parse_command_line():
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
 	channel_dict = datasource.channel_dict_from_channel_list(options.channel)
+	dq_channel_dict = datasource.channel_dict_from_channel_list(options.dq_channel_name)
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 	
-	return options, filenames, bankcache, channel_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict
 
 
 #
@@ -192,7 +197,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -210,11 +215,11 @@ if options.do_iir_pipeline is not None:
 else:
 	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
 # A local universe job that will run in a loop marginalizing all of the likelihoods
-margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online')
+margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local")
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, progs = options.lvalert_listener_program)
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program)
 # get urls job 
-urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls")
+urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local")
 
 
 #
@@ -224,7 +229,8 @@ urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls")
 
 listenNode = lvalert_listen_node(listenJob, dag)
 
-for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs)):
+jobTags = []
+for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1)):
 
 	# make a new likelihood file
 	likefile = os.path.split(options.likelihood_file)[1]
@@ -233,13 +239,16 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 	if options.copy_likelihoods:
 		shutil.copyfile(options.likelihood_file, likefile)
 	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
+	jobTags.append("%04d" % num_insp_nodes)
 
 	#FIXME add support for injections too
 	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
 		opts = {"psd-fft-length":options.psd_fft_length,
 			"ht-gate-threshold":options.ht_gate_threshold,
 			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
-			"state-vector-on-bits":datasource.state_vector_on_off_list_from_bits_dict(options.state_vector_on_off_dict),
+			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
+			"state-vector-on-bits":options.state_vector_on_bits,
+			"state-vector-off-bits":options.state_vector_off_bits,
 			"svd-bank":svd_bank_string,
 			"tmp-space":inspiral_pipe.condor_scratch_space(),
 			"track-psd":"",
@@ -249,20 +258,20 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 			"data-source":options.data_source,
 			"gracedb-far-threshold":options.gracedb_far_threshold,
 			"gracedb-group":options.gracedb_group,
-			"gracedb-type":options.gracedb_type,
+			"gracedb-pipeline":options.gracedb_pipeline,
+			"gracedb-search":options.gracedb_search,
 			"thinca-interval":options.thinca_interval,
-			"job-tag":"%04d" % num_insp_nodes,
-			"likelihood_snapshot_interval":options.likelihood_snapshot_interval
+			"job-tag":jobTags[-1],
+			"likelihood-snapshot-interval":options.likelihood_snapshot_interval
 			},
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
 				"likelihood-file":likefile
 			}
 		)
-	print likefile
 
-urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {"":". 0001,%04d 25" % (num_insp_nodes+1)}, input_files = {}, output_files = {})
-margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {"":os.getcwd()}, input_files = {"":options.marginalized_likelihood_file}, output_files = {})
+urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags)}, output_files = {})
+margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
 
 #
@@ -289,4 +298,4 @@ dag.write_cache()
 
 shutil.copy2(dagparts.which('gstlal_llcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
 shutil.copy2(dagparts.which('gstlal_llcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
-print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=0001,%04d&dir=%s \n\n" % (os.environ['USER'], num_insp_nodes+1, os.getcwd())
+print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (os.environ['USER'], jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
