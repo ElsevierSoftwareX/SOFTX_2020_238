@@ -205,7 +205,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -247,8 +247,10 @@ class Handler(simplehandler.Handler):
 		# mapping instrument to segment list
 		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)) for segtype in gate_suffix)
 		# add a "triggersegments" entry
-		self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
-
+		if seglistdict is None:
+			self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+		else:
+			self.seglistdicts["triggersegments"] = seglistdict
 		# hook the Data class's livetime record keeping into ours
 		# so that all segments come here
 		# FIXME:  don't do this, get rid of the Data class

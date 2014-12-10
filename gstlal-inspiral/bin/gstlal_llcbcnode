@@ -16,6 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import math
 import bisect
 import cgi
 import cgitb
@@ -171,18 +172,21 @@ def psdplot(instrument, psd, fmin = 10., fmax = 2048.):
 	plt.grid(color=(0.1,0.4,0.5), linewidth=2)
 
 	y = psd.data
-	f = numpy.arange(0., len(y), psd.deltaF) + psd.f0
+	f = numpy.linspace(psd.f0, len(y) * psd.deltaF, len(y)) + psd.f0
+
+	print len(y), len(f)
 
 	h.loglog(f, y, 'w', alpha=0.75, linewidth=2)
 
-	plt.figtext(0.5, 0.2, "Horizon %.0f Mpc" % reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8., f_min = 10.), color="w")
+	plt.figtext(0.5, 0.2, "Horizon %.0f Mpc" % reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8., f_min = 30.), color="w")
 
 	imin = bisect.bisect_left(f, fmin)
 	imax = bisect.bisect_right(f, fmax)
 	ymax = ceil10(y[imin:imax].max())
 	ymin = max(floor10(y[imin:imax].min()), ymax / 1e6)
-	plt.set_xlim((fmin, fmax)))
-	plt.set_ylim((ymin, ymax))
+	plt.xlim((fmin, fmax))
+	#plt.ylim((ymin, ymax))
+	plt.ylim((1e-50, 1e-40))
 
 	plt.xlabel("Frequency (Hz)")
 	plt.ylabel("Power (strain^2/Hz)")
@@ -207,6 +211,11 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	dt = livetimedata[2]
 	lt = livetimedata[1]
 	discont = discontdata[1]
+	# FIXME Hack to adjust for high sample rate L1 and H1 state vector
+	if "V1" not in title:
+		dt /= 16
+		lt /= 16
+		discont /= 16
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
 	labels = ["OFF : %g (s)" % dt, "ON : %g (s)" % lt, "MIA : %g (s)" % discont]
@@ -253,17 +262,17 @@ print """
 print '<div id="accordion">'
 
 print '<h1>Trigger stats</h1><div>'
-plot(baseurl+'_latency_history.txt', "history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")
-plot(baseurl+'_latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
-plot(baseurl+'_snr_history.txt', "history", ylabel = "SNR", xlabel = "Time since last trigger (s)")
-plot(baseurl+'_ram_history.txt', "history", ylabel = "RAM (GB)", xlabel = "Time before now (s)")
+plot(baseurl+'/latency_history.txt', "history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")
+plot(baseurl+'/latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
+plot(baseurl+'/snr_history.txt', "history", ylabel = "SNR", xlabel = "Time since last trigger (s)")
+plot(baseurl+'/ram_history.txt', "history", ylabel = "RAM (GB)", xlabel = "Time before now (s)")
 print "</div>"
 
 # Pie table
 print "<h1> Live time </h1><div>"
 for ifo in ("H1", "L1", "V1"):
 	try:
-		livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+		livetime_plot(baseurl+'/%s/strain_add_drop.txt' % ifo, baseurl+'/%s/state_vector_on_off_gap.txt' % ifo, title = ifo)
 	except:
 		print "could not get livetime data for ", ifo 
 print"</div>"
@@ -284,17 +293,16 @@ print"</div>"
 # likelihoods
 path = form.getlist("url")[0]
 
-likelihood_data = far.LocalRankingData.from_xml(ligolw_utils.load_url(path, contenthandler = LIGOLWContentHandler))
+coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 
 print >> sys.stderr, "smooth" in form
 
 if "smooth" in form:
-	likelihood_data.smooth_distribution_stats()
-	counts = likelihood_data.distributions.background_pdf
-	inj = likelihood_data.distributions.injection_pdf
+	counts = coinc_params_distributions.background_pdf
+	inj = coinc_params_distributions.injection_pdf
 else:
-	counts = likelihood_data.distributions.background_rates
-	inj = likelihood_data.distributions.injection_rates
+	counts = coinc_params_distributions.background_rates
+	inj = coinc_params_distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 

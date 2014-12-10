@@ -16,6 +16,7 @@ Build-Depends:
  fakeroot,
  pkg-config,
  gstlal-dev (>= @MIN_GSTLAL_VERSION@)
+ gstlal-ugly-dev (>= @MIN_GSTLAL_UGLY_VERSION@)
 
 Package: gstlal-burst
 Architecture: any

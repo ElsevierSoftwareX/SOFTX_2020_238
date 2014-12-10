@@ -47,8 +47,9 @@
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#	+ `--gracedb-type`: gracedb type (default is LowMass).
+#	+ `--gracedb-search`: gracedb type (default is LowMass).
 #	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal-spiir).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval (default = 30s).
 
 #
@@ -189,7 +190,8 @@ def parse_command_line():
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
-	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
+	parser.add_option("--gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 
@@ -402,9 +404,10 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+	coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+	assert set(seglists) == set(detectors.channel_dict)
 else:
-	coinc_params_distributions = far.ThincaCoincParamsDistributions()
+	coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
 
 
 #
@@ -422,7 +425,9 @@ output = inspiral.Data(
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
 	coinc_params_distributions = coinc_params_distributions,
+	ranking_data = ranking_data,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
+	likelihood_file = options.likelihood_file,
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	comment = options.comment,
@@ -431,13 +436,14 @@ output = inspiral.Data(
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
 	gracedb_group = options.gracedb_group,
-	gracedb_type = options.gracedb_type,
+	gracedb_search = options.gracedb_search,
+	gracedb_pipeline = options.gracedb_pipeline,
 	verbose = options.verbose
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
-handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",

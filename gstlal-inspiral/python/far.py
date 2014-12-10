@@ -44,6 +44,12 @@ import random
 import warnings
 from scipy import interpolate
 from scipy import optimize
+# FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
+# systems are already fine
+try:
+	from scipy.optimize import curve_fit
+except ImportError:
+	from gstlal.curve_fit import curve_fit
 from scipy import stats
 import sqlite3
 sqlite3.enable_callback_tracebacks(True)
@@ -61,6 +67,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
+from pylal import date
 from pylal import inject
 from pylal import rate
 from pylal import snglcoinc
@@ -1166,6 +1173,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
 		>>> x.next()
+
+		See also:
+
+		random_sim_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
 		"""
 		snr_slope = 0.8 / len(instruments)**3
 
@@ -1186,6 +1201,111 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
 			yield params, sum(seq[1::2], log_P_horizons)
+
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None):
+		"""
+		Generator that yields an endless sequence of randomly
+		generated parameter dictionaries drawn from the
+		distribution of parameters expected for the given
+		injection, which is an instance of a SimInspiral table row
+		object (see glue.ligolw.lsctables.SimInspiral for more
+		information).  The return value is a tuple, the first
+		element of which is the random parameter dictionary and the
+		second is 0.
+
+		See also:
+
+		random_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
+
+		Bugs:
+
+		The second element in each tuple in the sequence is merely
+		a placeholder, not the natural logarithm of the PDF from
+		which the sample has been drawn, as in the case of
+		random_params().  Therefore, when used in combination with
+		pylal.snglcoinc.LnLikelihoodRatio.samples(), the two
+		probability densities computed and returned by that
+		generator along with each log likelihood ratio value will
+		simply be the probability densities of the signal and noise
+		populations at that point in parameter space.  They cannot
+		be used to form an importance weighted sampler of the log
+		likeklihood ratios.
+		"""
+		#
+		# retrieve horizon distance from history if not given
+		# explicitly.  retrieve SNR threshold from class attribute
+		# if not given explicitly
+		#
+
+		if horizon_distance is None:
+			horizon_distance = self.horizon_history[float(sim.get_time_geocent())]
+		if snr_min is None:
+			snr_min = self.snr_min
+
+		#
+		# compute nominal SNRs
+		#
+
+		cosi2 = math.cos(sim.inclination)**2.
+		gmst = date.XLALGreenwichMeanSiderealTime(sim.get_time_geocent())
+		snr_0 = {}
+		for instrument, DH in horizon_distance.items():
+			fp, fc = inject.XLALComputeDetAMResponse(inject.cached_detector[inject.prefix_to_name[instrument]].response, sim.longitude, sim.latitude, sim.polarization, gmst)
+			snr_0[instrument] = 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
+
+		#
+		# construct SNR generators, and approximating the SNRs to
+		# be fixed at the nominal SNRs construct \chi^2 generators
+		#
+
+		def snr_gen(snr):
+			rvs = stats.ncx2(2., snr**2.).rvs
+			math_sqrt = math.sqrt
+			while 1:
+				yield math_sqrt(rvs())
+
+		def chi2_over_snr2_gen(instrument, snr):
+			rates_lnx = numpy.log(self.injection_rates["%s_snr_chi" % instrument].bins[1].centres())
+			# FIXME:  kinda broken for SNRs below self.snr_min
+			rates_cdf = self.injection_rates["%s_snr_chi" % instrument][max(snr, self.snr_min),:].cumsum()
+			# add a small tilt to break degeneracies then
+			# normalize
+			rates_cdf += numpy.linspace(0., 0.001 * rates_cdf[-1], len(rates_cdf))
+			rates_cdf /= rates_cdf[-1]
+			assert not numpy.isnan(rates_cdf).any()
+
+			interp = interpolate.interp1d(rates_cdf, rates_lnx)
+			math_exp = math.exp
+			random_uniform = random.uniform
+			while 1:
+				yield math_exp(float(interp(random_uniform(0., 1.))))
+
+		gens = dict((instrument, (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
+
+		#
+		# yield a sequence of randomly generated parameters for
+		# this sim.
+		#
+
+		while 1:
+			params = CoincParams()
+			instruments = []
+			for instrument, (snr, chi2_over_snr2) in gens.items():
+				snr = snr()
+				if snr < snr_min:
+					continue
+				params["%s_snr_chi" % instrument] = snr, chi2_over_snr2()
+				instruments.append(instrument)
+			if len(instruments) < 2:
+				continue
+			params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(instruments),)
+			params.horizons = horizon_distance
+			yield params, 0.
+
 
 	@classmethod
 	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
@@ -1542,6 +1662,14 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 	return signal_rates, noise_rates
 
 
+def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwargs):
+	try:
+		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
+	except:
+		queue.put(None)
+		raise
+
+
 #
 # Class to compute ranking statistic PDFs for background-like and
 # signal-like populations
@@ -1610,12 +1738,13 @@ class RankingData(object):
 			if verbose:
 				print >>sys.stderr, "computing ranking statistic PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_log_likelihood_ratio_rates_from_samples(
+			p = multiprocessing.Process(target = lambda: binned_log_likelihood_ratio_rates_from_samples_wrapper(
+				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
 				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
 				nsamples = nsamples
-			)))
+			))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1882,7 +2011,19 @@ class FAPFAR(object):
 			# get the extincted background PDF
 			# FIXME don't extinct the individual detector PDFs,
 			# they are just for diagnostics anyway
-			extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
+			# FIXME FIXME this try except is to catch the case
+			# where not all instrument combinations have seen
+			# triggers, .e.g, when an online dag has recently
+			# started and one of the participating detectors has
+			# not seen data yet.  It should not be this way, but
+			# for the time being we have to work around it.
+			try:
+				extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
+			except ValueError as e:
+				if instruments is None:
+					raise e
+				else:
+					continue
 
 			# Now compute the CCDF and CDF
 			weights = extinct_bf_pdf * drank
@@ -1945,7 +2086,8 @@ class FAPFAR(object):
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
 		if fit_min_counts < 100.:
 			warnings.warn("There are less than 100 %s coincidences, extinction effects on %s background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation." % (instruments_name, instruments_name))
-		assert zero_lag_compcumcount.compress(rank_range).size > 0, "Not enough zero lag data for %s to fit background"  % instruments_name
+		if zero_lag_compcumcount.compress(rank_range).size < 1:
+			raise ValueError("Not enough zero lag data for %s to fit background"  % instruments_name)
 
 		# Use curve fit to find the predicted total preclustering
 		# count. First we need an interpolator of the counts
@@ -1964,7 +2106,7 @@ class FAPFAR(object):
 
 		# Fit for the ratio of unclustered to clustered triggers.
 		# Only fit N_ratio over the range of ranks decided above
-		precluster_normalization, precluster_covariance_matrix = optimize.curve_fit(
+		precluster_normalization, precluster_covariance_matrix = curve_fit(
 			extincted_counts,
 			ranks[rank_range],
 			zero_lag_compcumcount.compress(rank_range),

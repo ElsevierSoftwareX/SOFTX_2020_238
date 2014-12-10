@@ -69,10 +69,11 @@ while true ; do
 	echo "... sleeping for ${SLEEP} seconds ..."
 	sleep ${SLEEP}
 	RANKING_PDF_FILES=
-	for SERVER in "$@" ; do
+	for REG in "$@" ; do
+		SERVER=$(cat ${REG})
 		RANKING_PDF_FILE=$(mktemp)
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
-		gstlal_inspiral_calc_rank_pdfs --verbose --output ${RANKING_PDF_FILE} ${SERVER}/${LIKELIHOOD_PATH} || break
+		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} --samples-file ${SERVER}${LIKELIHOOD_PATH} ${SERVER}${LIKELIHOOD_PATH} || break
 	done || break
 	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${RANKING_PDF_FILES} || break 
 	rm -vf ${RANKING_PDF_FILES}

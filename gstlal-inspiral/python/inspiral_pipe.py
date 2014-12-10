@@ -145,10 +145,10 @@ class InspiralJob(pipeline.CondorDAGJob):
 	A job class that subclasses pipeline.CondorDAGJob and adds some extra
 	boiler plate items for gstlal inspiral jobs
 	"""
-	def __init__(self, executable, tag_base):
+	def __init__(self, executable, tag_base, universe = "vanilla"):
 		self.__prog__ = tag_base
 		self.__executable = executable
-		self.__universe = 'vanilla'
+		self.__universe = universe
 		pipeline.CondorDAGJob.__init__(self, self.__universe, self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('environment',"GST_REGISTRY_UPDATE=no;")
@@ -188,7 +188,7 @@ class generic_job(InspiralJob):
 	"""
 	def __init__(self, program, tag_base = None, condor_commands = {}, **kwargs):
 		executable = which(program)
-		InspiralJob.__init__(self, executable, tag_base or os.path.split(executable)[1])
+		InspiralJob.__init__(self, executable, tag_base or os.path.split(executable)[1], **kwargs)
 		for cmd,val in condor_commands.items():
 			self.add_condor_cmd(cmd, val)
 

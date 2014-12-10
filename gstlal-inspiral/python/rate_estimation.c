@@ -44,8 +44,7 @@
 
 
 /*
- * input conditioning.  sort ln_f_over_b array in descending order to allow
- * for early bail-out
+ * input conditioning.  sort ln_f_over_b array in ascending order.
  */
 
 
@@ -53,7 +52,7 @@ static int conditioning_compare(const void *a, const void *b)
 {
 	double A = *(double *) a, B = *(double *) b;
 
-	return A > B ? -1 : A < B ? +1 : 0;
+	return A > B ? +1 : A < B ? -1 : 0;
 }
 
 
@@ -90,8 +89,8 @@ static double compute_log_posterior(const double *ln_f_over_b, int n, double Rf,
 	#pragma omp parallel for reduction(+:ln_P)
 	for(i = 0; i < n; i++) {
 		/*
-		 * need to add log(Rf f / (Rb b) + 1) to sum.  if Rf f /
-		 * (Rb b) is large, we approximate ln(x + 1) with
+		 * need to add log(Rf f / (Rb b) + 1) to sum.  if x = Rf f
+		 * / (Rb b) is large, we approximate ln(x + 1) with
 		 *
 		 *	ln(x + 1) = ln x + 1 / x
 		 *
