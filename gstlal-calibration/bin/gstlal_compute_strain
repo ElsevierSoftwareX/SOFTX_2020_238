@@ -603,9 +603,10 @@ if not options.no_dq_vector:
 
 	if options.wings is not None:
 		calibstatevector = pipeparts.mkgeneric(pipeline, calibstatevector, "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
-		odcstatevector_out = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) + options.wings) * gst.SECOND, timestamp = True)
-		odcstatevector_out = pipeparts.mkaudiorate(pipeline, odcstatevector_out, skip_to_first = True, silent = False)
-	else:
+		if options.data_source != "white":
+			odcstatevector_out = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) + options.wings) * gst.SECOND, timestamp = True)
+			odcstatevector_out = pipeparts.mkaudiorate(pipeline, odcstatevector_out, skip_to_first = True, silent = False)
+	elif options.wings is None and options.data_source != "white":
 		odcstatevector_out = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100)
 
 	calibstatevector = pipeparts.mkaudiorate(pipeline, calibstatevector, skip_to_first = True, silent = False)
@@ -614,7 +615,8 @@ if not options.no_dq_vector:
 	if options.wings is not None:
 		calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
 		calibstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND), threshold = 0, leaky = True)
-		odcstatevector_out = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector_out, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+		if options.data_source != "white":
+			odcstatevector_out = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector_out, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 
 
