@@ -1,3 +1,9 @@
+gstlal-calibration (0.2.3-1) unstable; urgency=low
+
+  * ER6 bug fix for recoloring gaussian noise
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 11 Dec 2014 15:14:08 -0500
+
 gstlal-calibration (0.2.2-1) unstable; urgency=low
 
   * ER6 bug fix and offline feature release with packaging fixes
