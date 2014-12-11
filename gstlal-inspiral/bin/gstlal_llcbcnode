@@ -25,6 +25,8 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 import sys
 import matplotlib
 matplotlib.use('Agg')
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
 import numpy
 cgitb.enable()
@@ -109,9 +111,15 @@ lsctables.use_in(LIGOLWContentHandler)
 #
 
 
-def to_png_image():
+def to_png_image(matplotlib_figure = None):
+	# matplotlib_figure is needed because plot_likelihood_ratio_pdf
+	# generates plots using matplotlib.figure while other plotting
+	# functions use matplotlib.pyplot
 	f = StringIO.StringIO()
-	plt.savefig(f, format="png")
+	if matplotlib_figure is None:
+		plt.savefig(f, format="png")
+	else: 
+		matplotlib_figure.savefig(f, format="png")
 	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
 	f.close()
 
@@ -227,6 +235,44 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	plt.title(title)
 	plt.savefig(sys.stdout, format="svg")
 
+# FIXME plot_likelihood_ratio_pdf is copied (with slight modifications) from
+# gstlal_inspiral_plot_background. We considered moving plotting functions from
+# gstlal_inspiral_plot_background to a python package plot_background.py and
+# importing it instead of repeating the function definitions, but this is the
+# only function we're using in here (for now) so making a seperate file doesn't
+# make sense at the moment
+def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag, zerolag_pdf, size_inches):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches(size_inches)
+	axes = fig.gca()
+	axes.set_position((.15, .14, .84, .76))
+	axes.semilogy(pdf.bins[0].centres(), pdf.array, color = "k", label="Background")
+	if zerolag_pdf is not None:
+		axes.semilogy(zerolag_pdf.bins[0].centres(), zerolag_pdf.array, color = "k", linestyle = "--", label="Zero-lag")
+	axes.grid(which = "both")
+	if instruments is None:
+		axes.set_title(r"%s Log Likelihood Ratio PDF" % tag)
+	else:
+		axes.set_title(r"%s %s Log Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
+	# FIXME latex text throws a warning about matplotlib missing fonts and
+	# then doesn't display latex symbols correctly
+	#axes.set_xlabel(r"$\ln \Lambda$")
+	#axes.set_ylabel(r"$P(\ln \Lambda | \mathrm{%s})$" % tag.lower())
+	# FIXME ylabel assumes all plots have noise tag
+	axes.set_xlabel("ln Lambda")
+	axes.set_ylabel("P(ln Lambda | n)")
+	yhi = pdf[xlo:xhi,].max()
+	ylo = pdf[xlo:xhi,].min()
+	if zerolag_pdf is not None:
+		yhi = max(yhi, zerolag_pdf[xlo:xhi,].max())
+		ylo = min(ylo, zerolag_pdf[xlo:xhi,].min())
+	ylo = max(yhi * 1e-40, ylo)
+	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
+	axes.set_xlim((xlo, xhi))
+	axes.legend()
+	return fig
+
 
 if "dir" not in form:
 	raise ValueError("must specify dir")
@@ -333,6 +379,16 @@ for i, ifo in enumerate(['H1','L1', 'V1']):
 		to_png_image()
 	print "</div>"
 
+print "<h1> Likelihood Ratio PDFs </h1>"
+print "<div>"
+
+# Calculuate combined pdfs
+ranking_data.finish()
+for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() if ranking_data is not None else ():
+	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (-5.,100.), "Noise", ranking_data.zero_lag_likelihood_pdfs[instruments], (6,5))
+	to_png_image(matplotlib_figure = fig)
+
+print "</div>"
 
 print"</div>"
 print "</body>"

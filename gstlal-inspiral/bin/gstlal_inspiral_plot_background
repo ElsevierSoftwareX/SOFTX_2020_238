@@ -25,7 +25,7 @@
 #	+ `--database-cache` [filename]: Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.
 #	+ `--max-snr` [value] (float): Plot SNR PDFs up to this value of SNR (default = 200).
 #	+ `--max-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 100).
-#	+ `--min-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -10).
+#	+ `--min-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -5).
 #	+ `--output-dir` [path]: Write output to this directory (default = ".").
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
@@ -179,6 +179,10 @@ def colour_from_instruments(instruments, colours = {
 	return colour / colour.max()
 
 
+# FIXME We plan on eventually moving these plotting functions to a package,
+# plot_inspiral.py, in the gstlal module so they can be easily used in other
+# code. For now, only plot_likelihood_ratio_pdf is used by gstlal_llcbcnode, so
+# it was simply copied over. That should change in the future though
 def plot_snr_chi_pdf(instrument, binnedarray, snr_max, tag, denom_binnedarray = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
