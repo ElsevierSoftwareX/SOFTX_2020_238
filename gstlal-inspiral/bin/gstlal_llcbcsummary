@@ -400,6 +400,11 @@ found, missed = load_data(directory, ids, "ram_history")
 plot_ram(found, missed, ids, reg)
 print "</div>"
 
+print "<h1>SNR History</h1>"
+print "<div id='canvassnrhistory'>"
+print "<img src=gstlal_llsnrhistory?dir=%s&id=%s,%s></img>" % (form.getvalue("dir"), ids[0], ids[-1])
+print "</div>"
+
 print "</div>"
 
 # links at bottom
