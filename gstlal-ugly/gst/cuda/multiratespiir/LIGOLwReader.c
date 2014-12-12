@@ -14,7 +14,8 @@
 #include <stdio.h>
 #include <libxml/xmlreader.h>
 #include <string.h>
-#include "xyHeader.h"
+// #include "xyHeader.h"
+#include "LIGOLwHeader.h"
 
 #define PROCESSLEN  3
 XmlNodeTag xnt[PROCESSLEN]; 
