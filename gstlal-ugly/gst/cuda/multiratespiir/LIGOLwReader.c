@@ -17,15 +17,8 @@
 // #include "xyHeader.h"
 #include "LIGOLwHeader.h"
 
-#define PROCESSLEN  3
-XmlNodeTag xnt[PROCESSLEN]; 
-
-XmlArray xarray = {0, {1, 1, 1}, NULL};
-XmlParam xparam = {0, NULL};
-XmlTable xtable = {NULL, NULL};
-
 // In Array Node, No Dim sub node should appear after Stream sub node
-void processArray(xmlTextReaderPtr reader, void *data)
+extern void processArray(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Array\n");
     int i, rows, ntoken, ret, nodeType;
@@ -138,7 +131,7 @@ void processArray(xmlTextReaderPtr reader, void *data)
     }
 }
 
-void processParam(xmlTextReaderPtr reader, void *data)
+extern void processParam(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Param\n");
 
@@ -196,7 +189,7 @@ void processParam(xmlTextReaderPtr reader, void *data)
     }
 }
 
-void processTable(xmlTextReaderPtr reader, void *data)
+extern void processTable(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Table\n");
 
@@ -353,8 +346,8 @@ void processTable(xmlTextReaderPtr reader, void *data)
  *
  * Dump information about the current node
  */
-static void
-processNode(xmlTextReaderPtr reader) {
+void
+processNode(xmlTextReaderPtr reader, XmlNodeTag *xnt, int len) {
     const xmlChar *name, *value;
 
     name = xmlTextReaderConstName(reader);
@@ -371,7 +364,7 @@ processNode(xmlTextReaderPtr reader) {
 
     // Could be optimized by using HashMap
     int i, ret;
-    for (i = 0; i < PROCESSLEN; ++i)
+    for (i = 0; i < len; ++i)
     {
         ret = xmlStrcmp(tag, xnt[i].tag);
         if (ret == 0)
@@ -388,8 +381,8 @@ processNode(xmlTextReaderPtr reader) {
  *
  * Parse and print information about an XML file.
  */
-static void
-streamFile(const char *filename) {
+extern void
+streamFile(const char *filename, XmlNodeTag *xnt, int len) {
     xmlTextReaderPtr reader;
     int ret;
 
@@ -397,7 +390,7 @@ streamFile(const char *filename) {
     if (reader != NULL) {
         ret = xmlTextReaderRead(reader);
         while (ret == 1) {
-            processNode(reader);
+            processNode(reader, xnt, len);
             ret = xmlTextReaderRead(reader);
         }
         xmlFreeTextReader(reader);

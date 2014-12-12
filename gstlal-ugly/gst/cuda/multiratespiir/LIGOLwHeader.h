@@ -106,16 +106,10 @@ typedef struct _XmlHashVal
 } XmlHashVal;
 
 // must be called before manipulating XmlTable
-void ligoxml_init_XmlTable(XmlTable *table)
-{
-    // GArray of GStrings
-    table->names = g_array_sized_new(FALSE, FALSE, sizeof(GString), 128);
-    // HashTable (key: GString, val: XmlHashVal)
-    table->hashContent = g_hash_table_new((GHashFunc)g_string_hash, (GEqualFunc)g_string_equal);
-}
+extern void ligoxml_init_XmlTable(XmlTable *table);
 
 #define MAPSIZE 4
-XmlTypeMap typeMap[MAPSIZE] =
+static XmlTypeMap typeMap[MAPSIZE] =
 {
     {"lstring", "char*",    "%s",   sizeof(char),   0},
     {"real_8",  "double",   "%lf",  sizeof(double), 1},
@@ -124,31 +118,9 @@ XmlTypeMap typeMap[MAPSIZE] =
 };
 
 // get the number of bytes this type requires
-size_t ligoxml_get_type_size(const xmlChar *type)
-{
-    int i;
-    for (i = 0; i < MAPSIZE; ++i)
-    {
-        if (xmlStrcmp(type, typeMap[i].xml_type) == 0)
-            return typeMap[i].bytes;
-    }
-
-    // Wrong Type
-    return -1;
-}
+extern size_t ligoxml_get_type_size(const xmlChar *type);
 
 // get the format string of this type for printing
-const xmlChar* ligoxml_get_type_format(const xmlChar *type)
-{
-    int i;
-    for (i = 0; i < MAPSIZE; ++i)
-    {
-        if (xmlStrcmp(type, typeMap[i].xml_type) == 0)
-            return typeMap[i].format;
-    }
-
-    // Wrong Type
-    return "";
-}
+extern const xmlChar* ligoxml_get_type_format(const xmlChar *type);
 
 #endif

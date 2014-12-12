@@ -1,3 +1,21 @@
+#include "../LIGOLwHeader.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+extern void processArray(xmlTextReaderPtr reader, void *data);
+extern void processParam(xmlTextReaderPtr reader, void *data);
+extern void processTable(xmlTextReaderPtr reader, void *data);
+
+extern void
+streamFile(const char *filename, XmlNodeTag *xnt, int len); 
+
+#define PROCESSLEN  3
+XmlNodeTag xnt[PROCESSLEN]; 
+
+XmlArray xarray = {0, {1, 1, 1}, NULL};
+XmlParam xparam = {0, NULL};
+XmlTable xtable = {NULL, NULL};
 
 int main(int argc, char **argv) {
     if (argc != 2)
@@ -23,7 +41,7 @@ int main(int argc, char **argv) {
     xnt[2].processPtr = processTable;
     xnt[2].data = &xtable;
 
-    streamFile(argv[1]);
+    streamFile(argv[1], xnt, PROCESSLEN);
 
     /*
      * Cleanup function for the XML library.
