@@ -43,6 +43,7 @@ from gstlal import reference_psd
 import copy
 import StringIO
 import base64
+import urlparse
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -387,9 +388,13 @@ ranking_data.finish()
 for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (-5.,100.), "Noise", ranking_data.zero_lag_likelihood_pdfs[instruments], (6,5))
 	to_png_image(matplotlib_figure = fig)
-
 print "</div>"
 
+#FIXME don't hard code CIT values
+node = urlparse.urlparse(open("%s_registry.txt" % baseurl).readline()).netloc.split(":")[0]
+print "<h1> Cluster node health<h1>"
+print "<div>"
+print "<img src=https://ldas-gridmon.ligo.caltech.edu/ganglia/graph.php?r=hour&z=xlarge&h=%s.cluster.ldas.cit&m=load_one&s=by+name&mc=2&g=cpu_report&c=Nodes/>" % node
+print "<img src=https://ldas-gridmon.ligo.caltech.edu/ganglia/graph.php?r=hour&z=xlarge&h=%s.cluster.ldas.cit&m=load_one&s=by+name&mc=2&g=mem_report&c=Nodes/>" %node
 print"</div>"
 print "</body>"
-
