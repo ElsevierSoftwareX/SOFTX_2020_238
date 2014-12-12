@@ -1,0 +1,254 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011  Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import cgi
+import cgitb
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import matplotlib
+matplotlib.use('Agg')
+import numpy
+import matplotlib.pyplot as plt
+import time
+import StringIO
+import base64
+from urlparse import urlparse
+cgitb.enable()
+form = cgi.FieldStorage()
+import pylab
+from pylal.date import XLALUTCToGPS
+from pylal import rate
+
+## @file gstlal_llcbcsummary
+# This program will monitor the output of a gstlal inspiral low latency
+# analysis; See gstlal_llcbcsummary for help and usage.
+
+## @package gstlal_llcbcsummary
+#
+# This program is designed to be placed in the cgi-bin directory of the user's
+# public_html directory on the cluster that is running the gstlal inspiral low
+# latency analysis
+#
+# ## USAGE:
+# This program is never meant to be executed by a user, but rather on a
+# webserver via a url such as:
+# 
+#	 	https://hostname.domain/path/to/cgi-bin/gstlal_llcbcsummary?id=<start>,<stop>&dir=/path/to/analysis/directory
+#
+# e.g.,
+#
+# 		https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0010&dir=/home/gstlalcbc/engineering/5/bns_trigs_40Hz
+#
+# <start> and <stop> are the 4 digit id numbers corresponding to the first and
+# last job, respectively.  
+# 
+# ## Interpretation of the output page
+#
+# General remarks.  Red bars indicate that no data is available for the job in
+# question.  If you are sure the url is correct, this could mean that a job has
+# failed.  Each bar contains the node and job number.
+# 
+# ### Header information
+#
+# \image html gstlal_llcbcsummary01.png
+#
+# This displays the current ifos involved ("H1L1V1") as well as the current GPS
+# time and local time
+#
+# ### Latency
+#
+# \image html gstlal_llcbcsummary02.png
+#
+# This plot indicates the time since the last event (gray) as well as the
+# latency of the last event (white).  If things are behaving well the latency
+# should be ~60 seconds and the time since last event should be no more than
+# ~300 seconds. 
+#
+# #### Reasons that this might not be the case:
+#  
+# -# At least two detectors are not functioning
+# -# The gstlal inspiral jobs are in a period "update" mode where they pause to
+# update background statistics.  This should only last for a few minutes every
+# 4 hours and should not cause more than a few hundred seconds of delay
+# -# Something more serious is wrong, e.g. the jobs are not able to keep up with the data.
+#
+# ### SNR
+#
+# \image html gstlal_llcbcsummary03.png
+#
+# This plot indicates the coincident SNR (root-sum-squares) of the last 1000
+# events.  The median SNR is white and the maximum SNR is gray.  The median SNR
+# should typically be small (< 8), however the maximum SNR might be large due
+# to the presence of a glitch or a signal.
+#
+# 
+# ### Livetime plots
+# 
+# \image html gstlal_llcbcsummary04.png
+#
+# These IFO specific plots can be used to infer the ammount of up-time,
+# down-time and periods of lost data for a given job.  This is *only* since the
+# job has been running.  Thus it is an indicator of how long the job has been
+# running without crashing.  Ideally jobs would only be restarted during
+# maintenance periods.  If the livetime is low for one or more jobs it could
+# indicate instability that is causing crashes
+# 
+# ### Template Parameters
+#
+# \image html gstlal_llcbcsummary05.png
+# 
+# \image html gstlal_llcbcsummary06.png
+#
+# These plots give the chirp mass and template duration bins of the given job.
+# 
+# ### RAM usage
+#
+# \image html gstlal_llcbcsummary07.png
+#
+# This plot gives the maximum RAM usage seen over the duration of the job. If
+# it is near the limit of the resource it might indicate that the jobs are
+# "swapping" and could be related to problems such as falling behind.
+# 
+# ### Links to more information about a given job
+# 
+# \image html gstlal_llcbcsummary08.png
+#
+# To drill down into specific information of a job click on the links at the
+# bottom of the screen.  These will bring up pages created by gstlal_llcbcnode.
+# Please see gstlal_llcbcnode for more information
+
+def now():
+	return float(XLALUTCToGPS(time.gmtime()))
+
+def to_png_image():
+	f = StringIO.StringIO()
+	plt.savefig(f, format="png")
+	#print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	#print f.getvalue()
+	sys.stdout.write( "Content-type: image/png\r\n\r\n" + f.getvalue() )
+	f.close()
+
+def read_registry(dir, dataurl, ids):
+	nodedict = {}
+	for id in ids:
+		url = '%s/%s%s' % (dir, id, dataurl)
+		try:
+			tmp = open(url,"r")
+			nodedict[id] = urlparse(tmp.readline()).netloc
+			tmp.close()
+		except IOError:
+			nodedict[id] = ""
+	return nodedict
+	
+def setup_plot():
+	fig = plt.figure(figsize=(20,5),)
+	fig.patch.set_alpha(0.0)
+	h = fig.add_subplot(111, axisbg = 'k')
+	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
+	return fig, h
+
+def finish_plot(ids, registry, ylim, title=''):
+	plt.grid(color=(0.1,0.4,0.5), linewidth=2)	
+	ticks = ["%s : %s " % (id, registry[id]) for id in ids]
+	plt.xticks(numpy.arange(len(ids))+.3, ticks, rotation=90, fontsize = 10)
+	plt.xlim([0, len(ids)])
+	plt.ylim(ylim)
+	tickpoints = numpy.linspace(ylim[0], ylim[1], 8)
+	ticks = ["%.1e" % (10.**t,) for t in tickpoints]
+	plt.yticks(tickpoints, ticks, fontsize = 14)
+	plt.title(title, fontsize = 18)
+	to_png_image()
+	#plt.savefig(sys.stdout, format = "svg")
+
+
+def get_ids(form):
+	idrange = [int(n) for n in form.getvalue("id").split(",")]
+	#FIXME relies on 4 digit ids
+	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+	return ids
+
+if "dir" not in form:
+	raise ValueError("must specify dir")
+if "id" not in form:
+	raise ValueError("must specify id")
+
+ids = get_ids(form)
+directory = form.getvalue("dir")
+#ifo = form.getvalue("ifo")
+start = form.getvalue("start")
+stop = form.getvalue("stop")
+reg = read_registry(form.getvalue("dir"), "_registry.txt", ids)
+
+time_now = now()
+yaxis = []
+
+for i, id in enumerate(ids):
+	try:
+		fname = "%s/%s/%s.txt" % (directory, id, "snr_history")
+		yaxis.append(float(open("%s/%s/%s.txt" % (directory, id, "bank")).readline().split()[2]))
+			
+	except IOError as e:
+		print>>sys.stderr, "couldn't open ", fname
+
+yaxis = numpy.array(sorted(set(yaxis)))
+
+
+if start is not None and stop is not None:
+	ba = rate.BinnedArray(rate.NDBins((rate.LinearBins(float(start) - time_now, float(stop) - time_now, 900), rate.IrregularBins(yaxis))))
+else:
+	ba = rate.BinnedArray(rate.NDBins((rate.LinearBins(-4500,-900,900), rate.IrregularBins(yaxis))))
+
+print >>sys.stderr, min(yaxis), max(yaxis)
+
+window = rate.gaussian_window(10, 1, sigma = 3)
+print >> sys.stderr, ba.array.shape
+ba.array[:] = 1.
+
+for i, id in enumerate(ids):
+	try:
+		#fname = "%s/%s/%s.txt" % (directory, id, "sngl_snr_history")
+		fname = "%s/%s/%s.txt" % (directory, id, "snr_history")
+		dur = float(open("%s/%s/%s.txt" % (directory, id, "bank")).readline().split()[2])
+		for line in open(fname):
+			#thisifo, thist, thissnr = line.split()
+			thist, thissnr = line.split()
+			#if thisifo != ifo:
+			#	continue
+			t = float(thist)-time_now
+			try:
+				if ba[t,dur] < thissnr:
+					ba[t,dur] = thissnr
+			except IndexError:
+				pass
+			
+	except IOError as e:
+		print>>sys.stderr, "couldn't open ", fname
+
+matplotlib.rcParams.update({"text.usetex": True})
+
+rate.filter_array(ba.array, window)
+fig = pylab.figure(figsize=(20,4.0))
+pylab.title('max $\\rho_c$ in coincidence')
+pylab.xlabel("time since %d (s)" % (int(time_now),))
+pylab.ylabel("$\mathcal{M} (M_\odot)$")
+pylab.xlim([ba.centres()[0][0], ba.centres()[0][-1]])
+pylab.ylim([ba.centres()[1][0], ba.centres()[1][-1]])
+pylab.pcolormesh(ba.centres()[0], ba.centres()[1], ba.array.T, norm = matplotlib.colors.LogNorm())
+pylab.colorbar()
+to_png_image()
