@@ -1,0 +1,16 @@
+unset GST_PLUGIN_PATH PYTHONPATH
+
+LAL_PATH=/home/gstlalcbc/intel_haswell_profiling/optimized_software/release
+DEPENDENCIES_PATH=/home/gstlalcbc/intel_haswell_profiling/optimized_software/dependencies
+INSTALL_FILES_PATH=/home/gstlalcbc/intel_haswell_profiling/optimized_software/install_files
+
+export CFLAGS="-fPIC -O3 -march=native"
+
+# These are environment variables that do get exported
+PATH=${LAL_PATH}/bin:${DEPENDENCIES_PATH}/bin:$PATH
+PKG_CONFIG_PATH=${LAL_PATH}/lib/pkgconfig:${LAL_PATH}/lib64/pkgconfig:${DEPENDENCIES_PATH}/lib/pkgconfig:${DEPENDENCIES_PATH}/lib64/pkgconfig:$PKG_CONFIG_PATH
+PYTHONPATH=${LAL_PATH}/lib/python2.7/site-packages:${LAL_PATH}/lib64/python2.7/site-packages:${DEPENDENCIES_PATH}/lib/python2.7/site-packages:${DEPENDENCIES_PATH}/lib64/python2.7/site-packages
+GST_PLUGIN_PATH=${LAL_PATH}/lib/gstreamer-0.10:${LAL_PATH}/lib64/gstreamer-0.10:${DEPENDENCIES_PATH}/lib/gstreamer-0.10:${DEPENDENCIES_PATH}/lib64/gstreamer-0.10
+GST_REGISTRY=${LAL_PATH}/registry.$(uname -m).bin
+
+export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH
