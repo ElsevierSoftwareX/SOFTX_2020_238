@@ -1,3 +1,4 @@
+#include <lal/Date.h>
 #include <lal/Detectors.h>
 #include <lal/DetResponse.h>
 #include <lal/TimeDelay.h>
@@ -13,7 +14,7 @@ void create_skylocs(unsigned char order) {
 /* get u matirx for each sky direction from detector response for each sky 
  * direction at every minute
  */
-LALDector *detectors create_detectors_from_name(
+LALDector* create_detectors_from_name(
 		char **detectors_name,
 		int num_detectors,
 		)
@@ -26,11 +27,20 @@ LALDector *detectors create_detectors_from_name(
 
 void create_detresponse_skymap(
 		LALDector *detectors,
+		int num_detectors;
+		double *horizons,
 		)
-{
+{	// since 0h UTC 6 Jan 1980
+	LIGOTimeGPS gpstime_start = {0, 0}; 
 
-	for (gmst; gmst<gmst_end; gmst+=gsmt_step) {
-		for (ipix; ipix<ipix_end; ipix++) {
+	LIGOTimeGPS gpstime_end = {24*3600, 0}; 
+
+	double gmst_start = XLALGreenwichMeanSiderealTime(&gpstime_start);
+	double gmst_end = XLALGreenwichMeanSiderealTime(&gpstime_end);
+	double gmst_step = 60;
+
+	for (double gmst=gmst_start; gmst<gmst_end; gmst+=gmst_step) {
+		for (ipix; ipix<npix; ipix++) {
 			for (i=0; i<num_detectors; i++) {
 	
 			pix2ang_nest(nside, ipix, &theta, &phi)
