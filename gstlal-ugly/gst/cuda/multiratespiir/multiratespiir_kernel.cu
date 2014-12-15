@@ -152,27 +152,6 @@ __global__ void downsample2x (const float amplifier,
 	}
 }
 
-#if 0
-__global__ void reload_queue_spiir (float *queue,
-				 float *queue_spiir,
-				 int num_inchunk,
-				 gint queue_first_sample,
-				 gint queue_len,
-				 gint queue_spiir_start,
-				 gint queue_spiir_len)
-{
-	unsigned int tx = threadIdx.x, tdx = blockDim.x;
-	int i, queue_index, queue_spiir_index;
-
-	for (i=tx; i< num_inchunk; i+=tdx) {
-	  queue_spiir_index = (queue_spiir_start + i) % queue_spiir_len;
-	  queue_index = (queue_first_sample + i) % queue_len;
-	  queue_spiir[queue_spiir_index] = queue[queue_index];
-	}
-
-}
-#endif
-
 /*
  * cuda filter kernel
  */
@@ -409,10 +388,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 
     /* make sure lower depth mem is large enough to store queue data. */
     g_assert (num_inchunk <= SPSTATEDOWN(i)->mem_len - SPSTATEDOWN(i)->filt_len + 1 );
-    /* make sure current depth queue is large enough to store output data */
-    //g_assert (out_processed <= SPSTATE(i+1)->queue_len - SPSTATE(i+1)->queue_last_sample);
 
-    //printf("downsample: depth %d, queue_last_sample %d\n", i, SPSTATE(i)->queue_eff_len);
     pos_inqueue = SPSTATE(i)->d_queue; 
     pos_outqueue = SPSTATE(i+1)->d_queue;
 
@@ -512,29 +488,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
   i = num_depths - 1;
 
-#if 0
-  dim3 block(1, 1, 1);
-  dim3 grid(1, 1, 1);
-  block.x = MIN (THREADSPERBLOCK, num_inchunk);
-  guint nb = num_inchunk % block.x == 0 ? num_inchunk/block.x : (int)num_inchunk/block.x + 1;
-
-  GST_LOG ("reload: depth %d. block.size (%d, %d, %d), grid.size (%d, %d, %d), nb %d", i, block.x, block.y, block.z, grid.x, grid.y, grid.z, nb);
-
-  uint share_mem_sz = 0;
-  reload_queue_spiir <<<grid, block, share_mem_sz, stream>>> (SPSTATE(i)->d_queue,
-				 SPSTATE(i)->d_queue_spiir,
-				 num_inchunk,
-				 SPSTATE(i)->queue_first_sample,
-				 SPSTATE(i)->queue_len,
-				 SPSTATE(i)->delay_max + SPSTATE(i)->queue_spiir_last_sample,
-				 SPSTATE(i)->queue_spiir_len);
-
-  gpuErrchk (cudaPeekAtLastError ());
-
-  SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
-
-#endif
-
   update_nb (spstate, num_inchunk, num_depths-1);
 /*
  *	cuda kernel
@@ -580,7 +533,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   //gpuErrchk (cudaPeekAtLastError ());
 
   }
-//  SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + num_inchunk) % SPSTATE(i)->queue_spiir_len;
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
   gint resample_processed, spiir_processed;
@@ -589,29 +541,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
     resample_processed = num_inchunk - SPSTATEUP(i+1)->last_sample;
     spiir_processed = resample_processed * 2;
-
-#if 0
-    block.x = MIN (THREADSPERBLOCK, spiir_processed);
-    grid.x = 1;
-    grid.y = 1;
-
-    nb = spiir_processed % block.x == 0 ? spiir_processed/block.x : (int)spiir_processed/block.x + 1;
-
-    GST_LOG ("reload: depth %d. block.size (%d, %d, %d), grid.size (%d, %d, %d), nb %d", i, block.x, block.y, block.z, grid.x, grid.y, grid.z, nb);
-
-    share_mem_sz = 0;
-    reload_queue_spiir <<<grid, block, share_mem_sz, stream>>> (SPSTATE(i)->d_queue,
-				 SPSTATE(i)->d_queue_spiir,
-				 spiir_processed,
-				 SPSTATE(i)->queue_first_sample,
-				 SPSTATE(i)->queue_len,
-				 SPSTATE(i)->delay_max + SPSTATE(i)->queue_spiir_last_sample,
-				 SPSTATE(i)->queue_spiir_len);
-
-    gpuErrchk (cudaPeekAtLastError ());
-
-    SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
-#endif
 
     update_nb(spstate, spiir_processed, i);
     if (SPSTATE(i)->num_filters > 0) 
@@ -654,12 +583,10 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
     //gpuErrchk (cudaPeekAtLastError ());
 
-//    SPSTATE(i)->queue_spiir_last_sample = (SPSTATE(i)->queue_spiir_last_sample + spiir_processed) % SPSTATE(i)->queue_spiir_len;
 
     SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
 
     block.x = MIN(THREADSPERBLOCK, resample_processed);
-//    int step = resample_processed % block.x == 0 ? resample_processed/block.x : (int)resample_processed/block.x + 1;
     grid.y = SPSTATEUP(i)->channels;
     share_mem_sz = SPSTATEUP(i)->sinc_len * sizeof(float);
 
