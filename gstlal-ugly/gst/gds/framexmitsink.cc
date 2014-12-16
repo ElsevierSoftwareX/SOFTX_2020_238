@@ -464,7 +464,7 @@ static void gds_framexmitsink_class_init(GstGDSFramexmitSinkClass *klass)
 		g_param_spec_string(
 			"multicast-iface",
 			"IP address",
-			"The network interface on which to join the multicast group.  If the interface is omitted, the default interface will be used.  In general, one can use the subnet address as the interface address.  The transmitter will go through the list of all local interfaces and determine the closest match.",
+			"The interface on which to join the multicast group.  If the interface is omitted, the default interface will be used.  In general, one can use the subnet address as the interface address.  The transmitter will go through the list of all local interfaces and determine the closest match.",
 			DEFAULT_MULTICAST_IFACE,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
