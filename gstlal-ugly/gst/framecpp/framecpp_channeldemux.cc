@@ -286,7 +286,7 @@ static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect>
 	 * set timestamp and duration
 	 */
 
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp + (GstClockTime) round(vect->GetDim(0).GetStartX() * GST_SECOND);
 	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
 	GST_BUFFER_OFFSET(buffer) = offset;
 	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
