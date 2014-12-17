@@ -171,11 +171,7 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, gint *rate, guint *unit_size)
-#else
-static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gint *rate, guint *unit_size)
-#endif
 {
 	GstCaps *caps;
 	gint width = vect->GetTypeSize() * 8;
@@ -248,11 +244,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
-#else
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
-#endif
 {
 	GstBuffer *buffer;
 
@@ -575,11 +567,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp)
-#else
-static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
-#endif
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
