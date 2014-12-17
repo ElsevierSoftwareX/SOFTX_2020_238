@@ -189,6 +189,9 @@ def fap_after_trials(p, m):
 		return 1.0
 
 
+fap_after_trials_arr = numpy.frompyfunc(fap_after_trials, 2, 1)
+
+
 def trials_from_faps(p0, p1):
 	"""
 	Given the probabiity, p0, of an event occuring, and the
