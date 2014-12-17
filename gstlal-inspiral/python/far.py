@@ -1284,7 +1284,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			while 1:
 				yield math_exp(float(interp(random_uniform(0., 1.))))
 
-		gens = dict((instrument, (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
+		gens = dict(((instrument, "%s_snr_chi" % instrument), (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
 
 		#
 		# yield a sequence of randomly generated parameters for
@@ -1294,11 +1294,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		while 1:
 			params = CoincParams()
 			instruments = []
-			for instrument, (snr, chi2_over_snr2) in gens.items():
+			for (instrument, key), (snr, chi2_over_snr2) in gens.items():
 				snr = snr()
 				if snr < snr_min:
 					continue
-				params["%s_snr_chi" % instrument] = snr, chi2_over_snr2()
+				params[key] = snr, chi2_over_snr2()
 				instruments.append(instrument)
 			if len(instruments) < 2:
 				continue
