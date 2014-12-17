@@ -424,7 +424,7 @@ def append_options(parser):
 -	--dq-channel-name [string]
 		Set the name of the data quality (or state vector) channel.
 		This channel will be used to control the flow of data via the on/off bits.
-		Can be given multiple times as --channel-nameIFOCHANNEL-NAME)
+		Can be given multiple times as --dq-channel-name=IFO=DQ-CHANNEL-NAME
 
 -	--shared-memory-partition [string]
 		Set the name of the shared memory partition for a given instrument.
