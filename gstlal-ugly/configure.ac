@@ -446,6 +446,16 @@ AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
 
 
 #
+# Check for Chealpix
+#
+
+
+PKG_CHECK_MODULES([CHEALPIX], [chealpix], [true], [false])
+AC_SUBST([CHEALPIX_CFLAGS])
+AC_SUBST([CHEALPIX_LIBS])
+
+
+#
 # Output configure information
 #
 
