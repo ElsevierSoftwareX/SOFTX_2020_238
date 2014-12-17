@@ -384,7 +384,7 @@ def append_options(parser):
 	for applications that read GW data.
 	
 -	--data-source [string]
-		Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
+		Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
 
 -	--block-size [int] (bytes)
 		Data block size to read in bytes. Default 16384 * 8 * 512 which is 512 seconds of double
@@ -465,7 +465,7 @@ def append_options(parser):
 	-# Many other combinations possible, please add some!
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence, AdvVirgo, LIGO, AdvLIGO, nds.")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
@@ -552,7 +552,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #      }
 #	subgraph clusteronline {
 #		color=black;
-#		online_0 [label="lvshmsrc|framexmitsrc", URL="\ref pipeparts.mklvshmsrc()"];
+#		online_0 [label="lvshmsrc|framexmit", URL="\ref pipeparts.mklvshmsrc()"];
 #		online_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
 #		online_2a [label ="strain queue", URL="\ref pipeparts.mkqueue()"];
 #		online_2b [label ="statevector queue", URL="\ref pipeparts.mkqueue()"];
