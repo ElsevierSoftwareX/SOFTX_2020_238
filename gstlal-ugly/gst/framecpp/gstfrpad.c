@@ -1,7 +1,7 @@
 /*
  * GstFrPad
  *
- * Copyright (C) 2012,2013  Kipp Cannon
+ * Copyright (C) 2012--2014  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,6 +85,8 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 #define DEFAULT_CHANNEL_NUMBER 0
 #define DEFAULT_NBITS 1	/* FIXME:  is there a "not set" value?  -1? */
 #define DEFAULT_UNITS ""
+#define DEFAULT_BIAS 0.0
+#define DEFAULT_SLOPE 1.0
 
 
 /*
@@ -167,7 +169,12 @@ static gboolean update_tag_list(GstFrPad *pad)
 		GST_ERROR_OBJECT(pad, "failed to update tags");
 		g_assert_not_reached();	/* can be compiled out */
 		return FALSE;
-	} else if(bitrate >= 0)
+	}
+
+	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, NULL);
+
+	if(bitrate >= 0)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 
 	gst_tag_list_free(pad->tags);
@@ -231,6 +238,8 @@ enum property {
 	PROP_UNITS,
 	PROP_TAGS,
 	PROP_HISTORY,
+	PROP_BIAS,
+	PROP_SLOPE,
 };
 
 
@@ -284,6 +293,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_HISTORY:
 		g_value_array_free(pad->history);
 		pad->history = g_value_array_copy(g_value_get_boxed(value));
+		break;
+
+	case PROP_BIAS:
+		pad->bias = g_value_get_float(value);
+		got_new_tags = update_tag_list(pad);
+		break;
+
+	case PROP_SLOPE:
+		pad->slope = g_value_get_float(value);
+		got_new_tags = update_tag_list(pad);
 		break;
 
 	default:
@@ -343,6 +362,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_HISTORY:
 		g_value_set_boxed(value, pad->history);
+		break;
+
+	case PROP_BIAS:
+		g_value_set_float(value, pad->bias);
+		break;
+
+	case PROP_SLOPE:
+		g_value_set_float(value, pad->slope);
 		break;
 
 	default:
@@ -464,6 +491,28 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Number of bits",
 			"Number of bits in A/D output.  Validity:  FrAdcData.",
 			1, G_MAXUINT, DEFAULT_NBITS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_BIAS,
+		g_param_spec_float(
+			"bias",
+			"Bias",
+			"DC bias on channel (units @ count = 0).  Validity:  FrAdcData.",
+			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_BIAS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_SLOPE,
+		g_param_spec_float(
+			"slope",
+			"Slope",
+			"ADC calibration (units/count).  Validity:  FrAdcData.",
+			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_SLOPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
