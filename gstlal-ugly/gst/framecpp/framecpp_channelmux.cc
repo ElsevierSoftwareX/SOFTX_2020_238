@@ -205,16 +205,13 @@ typedef struct _framecpp_channelmux_appdata {
 	FrameCPP::Dimension *dims;
 	gint rate;
 	guint unit_size;
-	gchar *unitY;
 } framecpp_channelmux_appdata;
 
 
 static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
 {
-	if(appdata) {
+	if(appdata)
 		delete[] appdata->dims;
-		g_free(appdata->unitY);
-	}
 	g_free(appdata);
 }
 
@@ -373,10 +370,10 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 					appdata->dims[0].SetNx(buffer_list_length);
 					appdata->dims[0].SetStartX(0.0);
-					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, appdata->unitY);
+					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, frpad->units);
 					switch(frpad->pad_type) {
 					case GST_FRPAD_TYPE_FRADCDATA: {
-						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope);
+						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units);
 						adc_data.AppendComment(frpad->comment);
 					/* FrAdc objects cannot encode an offsset */
 						g_assert_cmpuint(buffer_list_t_start, ==, frame_t_start);
@@ -769,8 +766,6 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
-	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
-	framecpp_channelmux_appdata *appdata = get_appdata(data);
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -790,8 +785,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value_s)) {
 			g_strstrip(value_s);
 			g_object_set(pad, "units", value_s, NULL);
-			g_free(appdata->unitY);
-			appdata->unitY = value_s;
 		} else
 			g_free(value_s);
 		value_s = NULL;
@@ -891,7 +884,6 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 		goto could_not_create_appdata;
 	get_appdata(data)->nDims = 1;
 	get_appdata(data)->dims = new FrameCPP::Dimension[get_appdata(data)->nDims];
-	get_appdata(data)->unitY = strdup("");
 	if(!gst_element_add_pad(element, GST_PAD(pad)))
 		goto could_not_add_to_element;
 	GST_OBJECT_UNLOCK(mux->collect);
