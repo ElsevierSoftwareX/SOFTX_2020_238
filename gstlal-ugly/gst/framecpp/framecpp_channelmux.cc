@@ -373,10 +373,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, frpad->units);
 					switch(frpad->pad_type) {
 					case GST_FRPAD_TYPE_FRADCDATA: {
-						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units);
+						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND);
 						adc_data.AppendComment(frpad->comment);
-					/* FrAdc objects cannot encode an offsset */
-						g_assert_cmpuint(buffer_list_t_start, ==, frame_t_start);
 						GST_LOG_OBJECT(data->pad, "appending FrAdcData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
 						adc_data.RefData().append(vect);
 						if(!frame->GetRawData()) {
