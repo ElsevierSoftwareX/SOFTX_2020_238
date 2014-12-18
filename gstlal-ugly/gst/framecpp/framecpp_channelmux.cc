@@ -1,7 +1,7 @@
 /*
  * framecpp channel multiplexor
  *
- * Copyright (C) 2012,2013  Kipp Cannon, Ed Maros
+ * Copyright (C) 2012--2014  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -784,29 +784,34 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	case GST_EVENT_TAG: {
 		GstTagList *tag_list;
-		gchar *value = NULL;
+		gchar *value_s = NULL;
 
 		/* FIXME:  should the GstFrPad's tags property be writable,
 		 * instead? */
 		gst_event_parse_tag(event, &tag_list);
-		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value)) {
-			g_strstrip(value);
-			g_object_set(pad, "units", value, NULL);
+
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_UNITS, &value_s)) {
+			g_strstrip(value_s);
+			g_object_set(pad, "units", value_s, NULL);
 			g_free(appdata->unitY);
-			appdata->unitY = value;
+			appdata->unitY = value_s;
 		} else
-			g_free(value);
-		value = NULL;
-		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value))
-			g_strstrip(value);
-			g_object_set(pad, "instrument", value, NULL);
-		g_free(value);
-		value = NULL;
-		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_CHANNEL_NAME, &value))
-			g_strstrip(value);
-			g_object_set(pad, "channel-name", value, NULL);
-		g_free(value);
-		value = NULL;
+			g_free(value_s);
+		value_s = NULL;
+
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_INSTRUMENT, &value_s)) {
+			g_strstrip(value_s);
+			g_object_set(pad, "instrument", value_s, NULL);
+		}
+		g_free(value_s);
+		value_s = NULL;
+
+		if(gst_tag_list_get_string(tag_list, GSTLAL_TAG_CHANNEL_NAME, &value_s)) {
+			g_strstrip(value_s);
+			g_object_set(pad, "channel-name", value_s, NULL);
+		}
+		g_free(value_s);
+		value_s = NULL;
 
 		gst_event_unref(event);
 		goto done;
