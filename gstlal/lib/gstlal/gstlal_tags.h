@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2000,2001,2008  Kipp C. Cannon
+ * Copyright (C) 2000,2001,2008--2011,2013,2014  Kipp C. Cannon
  * Copyrigth (C) 2010  Leo Singer
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -47,6 +47,26 @@ G_BEGIN_DECLS
 
 
 #define GSTLAL_TAG_CHANNEL_NAME "channel-name"
+
+
+/**
+ * GSTLAL_TAG_BIAS:
+ *
+ * DC bias on channel:  units @ count = 0.
+ */
+
+
+#define GSTLAL_TAG_BIAS "adc-dc-bias"
+
+
+/**
+ * GSTLAL_TAG_SLOPE:
+ *
+ * ADC calibration:  units/count.
+ */
+
+
+#define GSTLAL_TAG_SLOPE "adc-slope"
 
 
 /**

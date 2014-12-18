@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008,2011,2013,2014  Kipp Cannon, Chad Hanna
  * Copyrigth (C) 2010  Leo Singer
  *
  * This program is free software; you can redistribute it and/or modify
@@ -57,6 +57,8 @@ static gpointer register_tags(gpointer unused)
 {
 	gst_tag_register(GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where these data were recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma);
 	gst_tag_register(GSTLAL_TAG_CHANNEL_NAME, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma);
+	gst_tag_register(GSTLAL_TAG_BIAS, GST_TAG_FLAG_META, G_TYPE_FLOAT, "bias", "DC bias on channel:  units @ count = 0.", NULL);
+	gst_tag_register(GSTLAL_TAG_SLOPE, GST_TAG_FLAG_META, G_TYPE_FLOAT, "slope", "ADC calibration:  units/count.", NULL);
 	gst_tag_register(GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"strain\".", NULL);
 	return NULL;
 }
