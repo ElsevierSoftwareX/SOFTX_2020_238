@@ -311,6 +311,8 @@ AC_SUBST([framecpp_CXXFLAGS])
 AC_SUBST([framecpp_LIBS])
 AC_SUBST([framecpp_VERSION])
 
+AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
+
 
 #
 # Check for GDS
