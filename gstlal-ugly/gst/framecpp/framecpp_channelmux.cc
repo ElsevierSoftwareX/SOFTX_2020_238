@@ -372,6 +372,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					 */
 
 					appdata->dims[0].SetNx(buffer_list_length);
+					appdata->dims[0].SetStartX(0.0);
 					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, appdata->unitY);
 					switch(frpad->pad_type) {
 					case GST_FRPAD_TYPE_FRADCDATA: {
