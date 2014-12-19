@@ -13,7 +13,7 @@ size_t ligoxml_get_type_size(const xmlChar *type)
     return -1;
 }
 
-const xmlChar* ligoxml_get_type_format(const xmlChar *type)
+const char* ligoxml_get_type_format(const xmlChar *type)
 {
     int i;
     for (i = 0; i < MAPSIZE; ++i)

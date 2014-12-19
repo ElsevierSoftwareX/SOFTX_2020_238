@@ -3,19 +3,14 @@
 #include <string.h>
 #include <stdio.h>
 
-extern void processArray(xmlTextReaderPtr reader, void *data);
-extern void processParam(xmlTextReaderPtr reader, void *data);
-extern void processTable(xmlTextReaderPtr reader, void *data);
+extern void readArray(xmlTextReaderPtr reader, void *data);
+extern void readParam(xmlTextReaderPtr reader, void *data);
+extern void readTable(xmlTextReaderPtr reader, void *data);
 
 extern void
 streamFile(const char *filename, XmlNodeTag *xnt, int len); 
 
 #define PROCESSLEN  3
-XmlNodeTag xnt[PROCESSLEN]; 
-
-XmlArray xarray = {0, {1, 1, 1}, NULL};
-XmlParam xparam = {0, NULL};
-XmlTable xtable = {NULL, NULL};
 
 int main(int argc, char **argv) {
     if (argc != 2)
@@ -31,14 +26,19 @@ int main(int argc, char **argv) {
     /*
      * this initialize the process functions
      */
-    strncpy(xnt[0].tag, "Array-b:array", XMLSTRMAXLEN);
-    xnt[0].processPtr = processArray;
+	XmlNodeTag *xnt = (XmlNodeTag *)malloc(sizeof(XmlNodeTag) * PROCESSLEN);
+	XmlArray xarray = {0, {1, 1, 1}, NULL};
+	XmlParam xparam = {0, NULL};
+	XmlTable xtable = {NULL, NULL};
+
+    strncpy((char *)xnt[0].tag, "Array-b:array", XMLSTRMAXLEN);
+    xnt[0].processPtr = readArray;
     xnt[0].data = &xarray;
-    strncpy(xnt[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
-    xnt[1].processPtr = processParam;
+    strncpy((char *)xnt[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
+    xnt[1].processPtr = readParam;
     xnt[1].data = &xparam;
-    strncpy(xnt[2].tag, "Table-sngl_inspiral:table", XMLSTRMAXLEN);
-    xnt[2].processPtr = processTable;
+    strncpy((char *)xnt[2].tag, "Table-sngl_inspiral:table", XMLSTRMAXLEN);
+    xnt[2].processPtr = readTable;
     xnt[2].data = &xtable;
 
     streamFile(argv[1], xnt, PROCESSLEN);

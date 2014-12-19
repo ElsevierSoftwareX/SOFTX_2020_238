@@ -18,7 +18,7 @@
 #include "LIGOLwHeader.h"
 
 // In Array Node, No Dim sub node should appear after Stream sub node
-extern void processArray(xmlTextReaderPtr reader, void *data)
+extern void readArray(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Array\n");
     int i, rows, ntoken, ret, nodeType;
@@ -29,10 +29,9 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
     char *saveLinePtr, *saveTokenPtr;
     XmlArray *xArrayPtr = (XmlArray*)data;
 
-    type = xmlTextReaderGetAttribute(reader, "Type");
+    type = xmlTextReaderGetAttribute(reader, BAD_CAST "Type");
     #ifdef __DEBUG__
-    printf("type = %s\n", type);
-    // xmlDocDump(stdout, node->doc);
+    printf("type = %s\n", (char *) type);
     #endif
 
     while (1)
@@ -47,11 +46,11 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
         name = xmlTextReaderConstName(reader);
         nodeType = xmlTextReaderNodeType(reader);
         #ifdef __DEBUG__
-        printf("name = %s\n", name);
+        printf("name = %s\n", (char *) name);
         #endif
 
         // make sure this is not the end node
-        if (xmlStrcmp(name, "Dim") == 0 && nodeType != 15)
+        if (xmlStrcmp(name, BAD_CAST "Dim") == 0 && nodeType != 15)
         {
             // get the #text node of <Dim>
             ret = xmlTextReaderRead(reader);
@@ -61,15 +60,15 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
                 break;
             }
             #ifdef __DEBUG__
-            printf("Dim %d\n", atoi(xmlTextReaderConstValue(reader)));
+            printf("Dim %d\n", atoi((const char *)xmlTextReaderConstValue(reader)));
             #endif
             // get and set the dim value
-            xArrayPtr->dim[xArrayPtr->ndim++] = atoi(xmlTextReaderConstValue(reader));
+            xArrayPtr->dim[xArrayPtr->ndim++] = atoi((const char*)xmlTextReaderConstValue(reader));
         }
 
-        if (xmlStrcmp(name, "Stream") == 0 && nodeType != 15)
+        if (xmlStrcmp(name, BAD_CAST "Stream") == 0 && nodeType != 15)
         {
-            delimiter = xmlTextReaderGetAttribute(reader, "Delimiter");
+            delimiter = xmlTextReaderGetAttribute(reader, BAD_CAST "Delimiter");
             // get the #text node of <Stream>
             ret = xmlTextReaderRead(reader);
             if (ret != 1)
@@ -78,7 +77,7 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
                 break;
             }
             #ifdef __DEBUG__
-            printf("Stream %s\n", xmlTextReaderConstValue(reader));
+            printf("Stream %s\n", (char *) xmlTextReaderConstValue(reader));
             #endif
 
             xmlChar* copy = xmlStrdup(xmlTextReaderConstValue(reader));
@@ -93,7 +92,7 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
             xArrayPtr->data = malloc(bytes);  
 
             // read each line
-            line = strtok_r(copy, "\n", &saveLinePtr);   
+            line = (xmlChar *)strtok_r((char *)copy, "\n", &saveLinePtr);   
             for (i = 0; i < rows; ++i)
             {
                 #ifdef __DEBUG__
@@ -102,28 +101,28 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
 
                 xmlChar* copyline = xmlStrdup(line);
                 // token = strtok_r(copyline, " ", &saveTokenPtr);
-                token = strtok_r(copyline, delimiter, &saveTokenPtr);
+                token = (xmlChar*)strtok_r((char *)copyline, (char *)delimiter, &saveTokenPtr);
                 ntoken = 0;
                 while (token != NULL)
                 {
                     #ifdef __DEBUG__
-                    printf("token: %s (%d * %d + %d = %d)\n", token, i, 
+                    printf("token: %s (%d * %d + %d = %d)\n", (char *)token, i, 
                             xArrayPtr->dim[xArrayPtr->ndim-1], ntoken, i * xArrayPtr->dim[xArrayPtr->ndim - 1] + ntoken);
                     #endif
-                    sscanf(token, ligoxml_get_type_format(type), xArrayPtr->data + (i * xArrayPtr->dim[xArrayPtr->ndim - 1] + ntoken) * ligoxml_get_type_size(type));
+                    sscanf((char *)token, (char *)ligoxml_get_type_format(type), xArrayPtr->data + (i * xArrayPtr->dim[xArrayPtr->ndim - 1] + ntoken) * ligoxml_get_type_size(type));
                     // token = strtok_r(NULL, " ", &saveTokenPtr);
-                    token = strtok_r(NULL, delimiter, &saveTokenPtr);
+                    token = (xmlChar*)strtok_r(NULL, (char *)delimiter, &saveTokenPtr);
                     ++ntoken;
                 }
 
-                line = strtok_r(NULL, "\n", &saveLinePtr);
+                line = (xmlChar*)strtok_r(NULL, "\n", &saveLinePtr);
                 free(copyline);
             }
             free(copy);
         }
 
         // 15 stands for end node
-        if (xmlStrcmp(name, "Array") == 0 && nodeType == 15)
+        if (xmlStrcmp(name, BAD_CAST "Array") == 0 && nodeType == 15)
         {
             // Work Done. Break out of the while loop
             break;
@@ -131,7 +130,12 @@ extern void processArray(xmlTextReaderPtr reader, void *data)
     }
 }
 
-extern void processParam(xmlTextReaderPtr reader, void *data)
+extern void freeArray(XmlArray *array)
+{
+	free(array->data);
+}
+
+extern int readParam(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Param\n");
 
@@ -141,7 +145,7 @@ extern void processParam(xmlTextReaderPtr reader, void *data)
     int ret;
     XmlParam *xmlParamPtr = (XmlParam*)data;
 
-    type = xmlTextReaderGetAttribute(reader, "Type");
+    type = xmlTextReaderGetAttribute(reader, BAD_CAST "Type");
 
     while (1)
     {
@@ -156,14 +160,14 @@ extern void processParam(xmlTextReaderPtr reader, void *data)
         nodeType = xmlTextReaderNodeType(reader);
         content = xmlTextReaderConstValue(reader); 
 
-        if (xmlStrcmp(name, "#text") == 0)
+        if (xmlStrcmp(name, BAD_CAST "#text") == 0)
         {
             #ifdef __DEBUG__
             printf("content = %s\n", content);
             #endif
 
             // allocate memory 
-            if (xmlStrcmp(type, "lstring") == 0) {
+            if (xmlStrcmp(type, BAD_CAST "lstring") == 0) {
 
                 // string like type needs special care
                 xmlParamPtr->bytes = xmlStrlen(content) + 1;
@@ -178,18 +182,25 @@ extern void processParam(xmlTextReaderPtr reader, void *data)
             }
 
             // save content
-            sscanf(content, ligoxml_get_type_format(type), xmlParamPtr->data);
+            sscanf((char *)content, ligoxml_get_type_format(type), xmlParamPtr->data);
         }
          
         // Meet node </Param>, just break out the loop
-        if (xmlStrcmp(name, "Param") == 0 && nodeType == 15)
+        if (xmlStrcmp(name, BAD_CAST "Param") == 0 && nodeType == 15)
         {
             break;
         }
     }
+
+	return ret;
 }
 
-extern void processTable(xmlTextReaderPtr reader, void *data)
+extern void freeParam(XmlParam *param)
+{
+	free(param->data);	
+}
+
+extern void readTable(xmlTextReaderPtr reader, void *data)
 {
     printf("I'm Table\n");
 
@@ -203,14 +214,11 @@ extern void processTable(xmlTextReaderPtr reader, void *data)
     const xmlChar *columnName, *columnType;
     const xmlChar *delimiter;
 
-    xmlChar *line, *token;
-    char *saveLinePtr, *saveTokenPtr;
-
     int i, j, numLine;
     GString *colName;
 
-    tableName = xmlTextReaderGetAttribute(reader, "Name");
-    xmlTable->tableName = g_string_new(tableName);
+    tableName = xmlTextReaderGetAttribute(reader, BAD_CAST "Name");
+    xmlTable->tableName = g_string_new((const gchar*)tableName);
 
     numCol = 0;
     while (1)
@@ -225,47 +233,47 @@ extern void processTable(xmlTextReaderPtr reader, void *data)
         nodeName = xmlTextReaderConstName(reader);
         nodeType = xmlTextReaderNodeType(reader);
 
-        if (xmlStrcmp(nodeName, "Column") == 0)
+        if (xmlStrcmp(nodeName, BAD_CAST "Column") == 0)
         {
             // number of column increase
             ++numCol;
 
-            columnName = xmlTextReaderGetAttribute(reader, "Name");
-            columnType = xmlTextReaderGetAttribute(reader, "Type");
+            columnName = xmlTextReaderGetAttribute(reader, BAD_CAST "Name");
+            columnType = xmlTextReaderGetAttribute(reader, BAD_CAST "Type");
             #ifdef __DEBUG__
             printf("Column: %s Type: %s\n", columnName, columnType);
             #endif
 
-            g_array_append_val(xmlTable->names, *g_string_new(columnName));
+            g_array_append_val(xmlTable->names, *g_string_new((const gchar*)columnName));
 
             // a wierd bug, doesn't work if I use "XmlHashVal val"
             XmlHashVal *val = (XmlHashVal*)malloc(sizeof(XmlHashVal));
-            val->type = g_string_new(columnType); 
-            val->name = g_string_new(columnName);
-            if (xmlStrcmp(columnType, "real_4") == 0) {
+            val->type = g_string_new((const gchar*)columnType); 
+            val->name = g_string_new((const gchar*)columnName);
+            if (xmlStrcmp(columnType, BAD_CAST "real_4") == 0) {
                 val->data = g_array_new(FALSE, FALSE, sizeof(float)); 
-            } else if (xmlStrcmp(columnType, "real_8") == 0) {
+            } else if (xmlStrcmp(columnType, BAD_CAST "real_8") == 0) {
                 val->data = g_array_new(FALSE, FALSE, sizeof(double));
-            } else if (xmlStrcmp(columnType, "int_4s") == 0) {
+            } else if (xmlStrcmp(columnType, BAD_CAST "int_4s") == 0) {
                 val->data = g_array_new(FALSE, FALSE, sizeof(int));
             } else {
                 // arry of string
                 val->data = g_array_new(FALSE, FALSE, sizeof(GString));
             }
-            g_hash_table_insert(xmlTable->hashContent, g_string_new(columnName), (gpointer)(val));
+            g_hash_table_insert(xmlTable->hashContent, g_string_new((const gchar*)columnName), (gpointer)(val));
         }
 
-        if (xmlStrcmp(nodeName, "Stream") == 0 && nodeType != 15)
+        if (xmlStrcmp(nodeName, BAD_CAST "Stream") == 0 && nodeType != 15)
         {
-            delimiter = xmlTextReaderGetAttribute(reader, "Delimiter");
+            delimiter = xmlTextReaderGetAttribute(reader, BAD_CAST "Delimiter");
             
             // save delimiter
-            xmlTable->delimiter = g_string_new(delimiter);
+            xmlTable->delimiter = g_string_new((const gchar*)delimiter);
 
             // get the #text node of <Stream>
             ret = xmlTextReaderRead(reader);
 
-            GString *content = g_string_new(xmlTextReaderConstValue(reader));
+            GString *content = g_string_new((const gchar*)xmlTextReaderConstValue(reader));
             gchar **lines = g_strsplit(content->str, "\n", 0);
             gchar **tokens;
             
@@ -278,16 +286,16 @@ extern void processTable(xmlTextReaderPtr reader, void *data)
             for (i = 1; i <= numLine; ++i)
             {
                 #ifdef __DEBUG__
-                printf("line len: %d line %d: %s\n", strlen(lines[i]), i, lines[i]);
+                printf("line len: %zu line %d: %s\n", strlen(lines[i]), i, (const char*)lines[i]);
                 #endif
 
                 // split the line by delimiter
-                tokens = g_strsplit(lines[i], delimiter, 0);
+                tokens = g_strsplit(lines[i], (const gchar*)delimiter, 0);
 
                 for (j = 0; j < numCol; ++j)
                 {
                     #ifdef __DEBUG__
-                    printf("len: %d, token %d: %s\n", strlen(tokens[j]), j, tokens[j]);
+                    printf("len: %zu, token %d: %s\n", strlen(tokens[j]), j, (const char*)tokens[j]);
                     #endif
 
                     colName = &g_array_index(xmlTable->names, GString, j);
@@ -328,7 +336,7 @@ extern void processTable(xmlTextReaderPtr reader, void *data)
         }
 
         // Meet node </Table>, just break out of the loop
-        if (xmlStrcmp(nodeName, "Table") == 0 && nodeType == 15)
+        if (xmlStrcmp(nodeName, BAD_CAST "Table") == 0 && nodeType == 15)
         {
             #ifdef __DEBUG__
             g_print("hash table size: %d\n", g_hash_table_size(xmlTable->hashContent));
@@ -336,6 +344,11 @@ extern void processTable(xmlTextReaderPtr reader, void *data)
             break;
         }
     }
+}
+
+extern void freeTable(XmlTable *table)
+{
+	// to be updated
 }
 
 #ifdef LIBXML_READER_ENABLED
@@ -354,9 +367,9 @@ processNode(xmlTextReaderPtr reader, XmlNodeTag *xnt, int len) {
     if (name == NULL)
 	name = BAD_CAST "--";
 
-    value = xmlTextReaderGetAttribute(reader, "Name");
+    value = xmlTextReaderGetAttribute(reader, BAD_CAST "Name");
     
-    xmlChar *tag = xmlStrncatNew(name, "-", -1);
+    xmlChar *tag = xmlStrncatNew(name, BAD_CAST "-", -1);
     xmlStrcat(tag, value);
 
     if (xmlTextReaderNodeType(reader) == 15)

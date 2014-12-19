@@ -32,6 +32,7 @@ xmlChar *ConvertInput(const char *in, const char *encoding);
 int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlChar* xml_type,
                         const xmlChar* Name)
 {
+/*
     int rc;
 
     // Add the Param Node
@@ -62,11 +63,13 @@ int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlC
     free(param);
 
     rc = xmlTextWriterEndElement(writer);
+*/
 }
 
 int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, 
                         const xmlChar* delimiter, const xmlChar* Name)
 {
+/*
     int rc;
 
     // Add the Array Node
@@ -130,10 +133,12 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     rc = xmlTextWriterEndElement(writer);
 
     return rc;
+*/
 }
 
 int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
 {
+/*
     int rc;
 
     // Add the Table Node
@@ -208,10 +213,12 @@ int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
 
     // End Table Node
     xmlTextWriterEndElement(writer);
+*/
 }
 
 void xy_table_init(XmlTable *table)
 {
+/*
     table->tableName = g_string_new("sngl_inspiral:table");
 
     table->delimiter = g_string_new(",");
@@ -293,6 +300,7 @@ void xy_table_init(XmlTable *table)
     #ifdef __DEBUG__
     printf("hash table size: %u\n", g_hash_table_size(table->hashContent));
     #endif
+*/
 }
 
 

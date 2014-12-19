@@ -1,7 +1,7 @@
 #ifndef __XY_XMLHEADER__
 #define __XY_XMLHEADER__
 
-#define XMLSTRMAXLEN    128 
+#define XMLSTRMAXLEN    1024
 
 #include <stdio.h>
 #include <libxml/xmlreader.h>
@@ -58,7 +58,7 @@ typedef struct _XmlTypeMap
     const xmlChar* c_type;
 
     // Format String
-    const xmlChar* format;
+    const char* format;
 
     // Size in bytes
     size_t bytes;
@@ -108,19 +108,20 @@ typedef struct _XmlHashVal
 // must be called before manipulating XmlTable
 extern void ligoxml_init_XmlTable(XmlTable *table);
 
-#define MAPSIZE 4
-static XmlTypeMap typeMap[MAPSIZE] =
+#define MAPSIZE 5
+static const XmlTypeMap typeMap[MAPSIZE] =
 {
-    {"lstring", "char*",    "%s",   sizeof(char),   0},
-    {"real_8",  "double",   "%lf",  sizeof(double), 1},
-    {"real_4",  "float",    "%f",   sizeof(float),  2},
-    {"int_4s",  "int",      "%d",   sizeof(int),    3},
+    {BAD_CAST "lstring",	BAD_CAST "char*",	"%s",   sizeof(char),   0},
+    {BAD_CAST "real_8",		BAD_CAST "double",  "%lf",  sizeof(double), 1},
+    {BAD_CAST "real_4",		BAD_CAST "float",   "%f",   sizeof(float),  2},
+    {BAD_CAST "int_4s",		BAD_CAST "int",		"%d",   sizeof(int),    3},
+	{BAD_CAST "int_8s",		BAD_CAST "long",	"%ld",	sizeof(long),	4}
 };
 
 // get the number of bytes this type requires
 extern size_t ligoxml_get_type_size(const xmlChar *type);
 
 // get the format string of this type for printing
-extern const xmlChar* ligoxml_get_type_format(const xmlChar *type);
+extern const char* ligoxml_get_type_format(const xmlChar *type);
 
 #endif
