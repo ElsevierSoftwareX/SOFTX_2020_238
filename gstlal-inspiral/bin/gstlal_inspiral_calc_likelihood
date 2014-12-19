@@ -320,5 +320,5 @@ if options.write_rates is not None:
 	xmldoc.appendChild(ligolw.LIGO_LW())
 	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
 	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
-	gen_likelihood_control_doc(xmldoc, process, coinc_params_distributions, ranking_data, seglists)
+	far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
 	ligolw_utils.write_filename(xmldoc, options.write_rates, gz = (options.write_rates or "stdout").endswith(".gz"), verbose = options.verbose)
