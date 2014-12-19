@@ -18,6 +18,11 @@ XmlArray xarray =
 XmlParam xparams[4]; 
 XmlTable xtable;
 
+int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlChar* xml_type, const xmlChar* Name);
+int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, const xmlChar* delimiter, const xmlChar* Name);
+int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr);
+void xy_table_init(XmlTable *table);
+
 /**
  * testXmlwriterFilename:
  * @uri: the output URI
@@ -39,7 +44,7 @@ testXmlwriterFilename(const char *uri)
     }
 
     rc = xmlTextWriterSetIndent(writer, 1);
-    rc = xmlTextWriterSetIndentString(writer, "\t");
+    rc = xmlTextWriterSetIndentString(writer, BAD_CAST "\t");
 
     /* Start the document with the xml default for the version,
      * encoding utf-8 and the default for the standalone
@@ -51,7 +56,7 @@ testXmlwriterFilename(const char *uri)
         return;
     }
 
-    rc = xmlTextWriterWriteDTD(writer, "LIGO_LW", NULL, "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt", NULL);
+    rc = xmlTextWriterWriteDTD(writer, BAD_CAST "LIGO_LW", NULL, BAD_CAST "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt", NULL);
     if (rc < 0) {
         printf
             ("testXmlwriterFilename: Error at xmlTextWriterWriteDTD\n");
@@ -84,12 +89,12 @@ testXmlwriterFilename(const char *uri)
         return;
     }
 
-    ligoxml_write_Array(writer, &xarray, "real_8", " ", "e:array");
+    ligoxml_write_Array(writer, &xarray, BAD_CAST "real_8", BAD_CAST " ", BAD_CAST "e:array");
 
-    ligoxml_write_Param(writer, xparams + 0, "real_4", "FLOAT");
-    ligoxml_write_Param(writer, xparams + 1, "real_8", "DOUBLE");
-    ligoxml_write_Param(writer, xparams + 2, "int_4s", "INT");
-    ligoxml_write_Param(writer, xparams + 3, "lstring", "STRING");
+    ligoxml_write_Param(writer, xparams + 0, BAD_CAST "real_4", BAD_CAST "FLOAT");
+    ligoxml_write_Param(writer, xparams + 1, BAD_CAST "real_8", BAD_CAST "DOUBLE");
+    ligoxml_write_Param(writer, xparams + 2, BAD_CAST "int_4s", BAD_CAST "INT");
+    ligoxml_write_Param(writer, xparams + 3, BAD_CAST "lstring", BAD_CAST "STRING");
 
     ligoxml_write_Table(writer, &xtable);
 
@@ -350,10 +355,10 @@ main(int argc, char *argv[])
     xparams[1].data = malloc(sizeof(double));
     xparams[2].data = malloc(sizeof(int));
     xparams[3].data = malloc(sizeof(char) * 6);
-    sscanf("1.2", "%f", xparams[0].data);
-    sscanf("2.3", "%lf", xparams[1].data);
-    sscanf("7", "%d", xparams[2].data);
-    sscanf("Hello", "%s", xparams[3].data);
+    sscanf("1.2", "%f", (float*)xparams[0].data);
+    sscanf("2.3", "%lf", (double*)xparams[1].data);
+    sscanf("7", "%d", (int*)xparams[2].data);
+    sscanf("Hello", "%s", (char*)xparams[3].data);
 
     /* initialize table data */
     xy_table_init(&xtable);

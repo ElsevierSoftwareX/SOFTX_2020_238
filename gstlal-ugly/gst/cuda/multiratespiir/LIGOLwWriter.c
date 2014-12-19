@@ -32,11 +32,10 @@ xmlChar *ConvertInput(const char *in, const char *encoding);
 int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlChar* xml_type,
                         const xmlChar* Name)
 {
-/*
     int rc;
 
     // Add the Param Node
-    rc = xmlTextWriterStartElement(writer, "Param");
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "Param");
 
     // Add attributes to it
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Type", BAD_CAST xml_type);
@@ -44,17 +43,20 @@ int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlC
 
     xmlChar *param = malloc(PARAMBUFSIZE);
     memset(param, 0, PARAMBUFSIZE);
-    if (xmlStrcmp(xml_type, "real_4") == 0) {
-        sprintf(param, "%.3f", *((float*)xparamPtr->data));
+    if (xmlStrcmp(xml_type, BAD_CAST"real_4") == 0) {
+        sprintf((char*)param, "%.3f", *((float*)xparamPtr->data));
         rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, "real_8") == 0) {
-        sprintf(param, "%.3lf", *((double*)xparamPtr->data));
+    } else if (xmlStrcmp(xml_type, BAD_CAST "real_8") == 0) {
+        sprintf((char*)param, "%.3lf", *((double*)xparamPtr->data));
         rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, "int_4s") == 0) {
-        sprintf(param, "%d", *((int*)xparamPtr->data));
+    } else if (xmlStrcmp(xml_type, BAD_CAST "int_4s") == 0) {
+        sprintf((char*)param, "%d", *((int*)xparamPtr->data));
         rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, "lstring") == 0) {
-        sprintf(param, "%s", (xmlChar*)xparamPtr->data);
+    } else if (xmlStrcmp(xml_type, BAD_CAST "int_8s") == 0) {
+        sprintf((char*)param, "%ld", *((long*)xparamPtr->data));
+        rc = xmlTextWriterWriteString(writer, param);
+    } else if (xmlStrcmp(xml_type, BAD_CAST "lstring") == 0) {
+        sprintf((char*)param, "%s", (xmlChar*)xparamPtr->data);
         rc = xmlTextWriterWriteString(writer, param);
     } else {
         fprintf(stderr, "ERROR: UNKNOWN WRITING TYPE\n");
@@ -63,17 +65,17 @@ int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlC
     free(param);
 
     rc = xmlTextWriterEndElement(writer);
-*/
+
+	return rc;
 }
 
 int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, 
                         const xmlChar* delimiter, const xmlChar* Name)
 {
-/*
     int rc;
 
     // Add the Array Node
-    rc = xmlTextWriterStartElement(writer, "Array");
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "Array");
 
     // Add attributes to it
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Type", BAD_CAST xml_type);
@@ -96,7 +98,7 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     xmlChar token[CHARBUFSIZE];
 
     // Write Stream Node
-    rc = xmlTextWriterStartElement(writer, "Stream");
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "Stream");
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Type", BAD_CAST "Local");
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Delimiter", BAD_CAST delimiter);
     int numInLine = xarrayPtr->dim[xarrayPtr->ndim - 1];
@@ -105,40 +107,40 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
         printf("rows = %d\n", rows);
         for (i = 0; i < numInLine; ++i)
         {
-            if (xmlStrcmp(xml_type, "real_4") == 0) {
-                sprintf(token, "%.3f", ((float*)xarrayPtr->data)[j * numInLine + i]);
-            } else if (xmlStrcmp(xml_type, "real_8") == 0) {
-                sprintf(token, "%.3lf", ((double*)xarrayPtr->data)[j * numInLine + i]);
-            } else if (xmlStrcmp(xml_type, "int_4s") == 0) {
-                sprintf(token, "%d", ((int*)xarrayPtr->data)[j * numInLine + i]);
+            if (xmlStrcmp(xml_type, BAD_CAST "real_4") == 0) {
+                sprintf((char *)token, "%.3f", ((float*)xarrayPtr->data)[j * numInLine + i]);
+            } else if (xmlStrcmp(xml_type, BAD_CAST "real_8") == 0) {
+                sprintf((char *)token, "%.3lf", ((double*)xarrayPtr->data)[j * numInLine + i]);
+            } else if (xmlStrcmp(xml_type, BAD_CAST "int_4s") == 0) {
+                sprintf((char *)token, "%d", ((int*)xarrayPtr->data)[j * numInLine + i]);
+            } else if (xmlStrcmp(xml_type, BAD_CAST "int_8s") == 0) {
+                sprintf((char *)token, "%ld", ((long*)xarrayPtr->data)[j * numInLine + i]);
             } else {
                 fprintf(stderr, "ERROR: UNKNOWN WRITING TYPE\n");
                 return -1;
             }
-            printf("token %s\n", token);
-            strcat(token, delimiter);
-            strcat(line, token);
+            printf("token %s\n", (const char *)token);
+            strcat((char *)token, (const char *)delimiter);
+            strcat((char *)line, (const char *)token);
         }
-        printf("line = %s\n", line);
-        rc = xmlTextWriterWriteString(writer, "\n\t\t\t\t");
+        printf("line = %s\n", (char *)line);
+        rc = xmlTextWriterWriteString(writer, BAD_CAST "\n\t\t\t\t");
         rc = xmlTextWriterWriteString(writer, line);
         line[0] = '\0';
     }
     free(line);
     // End the Stream Node
-    rc = xmlTextWriterWriteString(writer, "\n\t\t\t");
+    rc = xmlTextWriterWriteString(writer, BAD_CAST "\n\t\t\t");
     rc = xmlTextWriterEndElement(writer);
 
     // End the Array Node
     rc = xmlTextWriterEndElement(writer);
 
     return rc;
-*/
 }
 
 int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
 {
-/*
     int rc;
 
     // Add the Table Node
@@ -169,16 +171,16 @@ int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
 
     // Write Stream Nodes
     rc = xmlTextWriterStartElement(writer, BAD_CAST "Stream"); 
-    rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Delimiter", xtablePtr->delimiter->str);
+    rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Delimiter", BAD_CAST xtablePtr->delimiter->str);
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Type", BAD_CAST "Local");
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Name", BAD_CAST xtablePtr->tableName->str);
     
-    rc = xmlTextWriterWriteString(writer, "\n");
+    rc = xmlTextWriterWriteString(writer, BAD_CAST "\n");
     for (i = 0; i < rows; ++i)
     {
         // read each line
         GString *line = g_string_new("\t\t\t\t");
-        GString *type, *content;
+        GString *type; //, *content;
         XmlHashVal *hashVal;
 
         for (j = 0; j < xtablePtr->names->len; ++j)
@@ -207,18 +209,18 @@ int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
         rc = xmlTextWriterWriteFormatRaw(writer, line->str);
         g_string_free(line, TRUE);
     }
-    rc = xmlTextWriterWriteString(writer, "\t\t\t");
+    rc = xmlTextWriterWriteString(writer, BAD_CAST "\t\t\t");
 
     rc = xmlTextWriterEndElement(writer);
 
     // End Table Node
     xmlTextWriterEndElement(writer);
-*/
+
+	return rc;
 }
 
 void xy_table_init(XmlTable *table)
 {
-/*
     table->tableName = g_string_new("sngl_inspiral:table");
 
     table->delimiter = g_string_new(",");
@@ -300,7 +302,6 @@ void xy_table_init(XmlTable *table)
     #ifdef __DEBUG__
     printf("hash table size: %u\n", g_hash_table_size(table->hashContent));
     #endif
-*/
 }
 
 
