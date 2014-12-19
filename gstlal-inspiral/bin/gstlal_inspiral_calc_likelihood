@@ -245,7 +245,7 @@ for n, filename in enumerate(filenames, 1):
 			continue
 		coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
 	del sngl_inspiral_table_index
-	coinc_inspiral_index = dict((row.coinc_event_id, row) for row in lsctables.CoincInspiral.get_table(xmldoc))
+	coinc_inspiral_index = dict((row.coinc_event_id, row) for row in lsctables.CoincInspiralTable.get_table(xmldoc))
 
 	offset_vectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
 
