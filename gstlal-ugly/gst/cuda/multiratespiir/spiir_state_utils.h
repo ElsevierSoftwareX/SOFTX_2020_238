@@ -10,10 +10,9 @@ resampler_state_reset (ResamplerState *state, cudaStream_t stream);
 void 
 resampler_state_destroy (ResamplerState *state);
 
-
-SpiirState ** 
-spiir_state_create (gdouble *bank, gint bank_len, guint num_cover_samples,
-		guint num_exe_samples, gint width, guint rate, cudaStream_t stream);
+SpiirState **
+spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num_head_cover_samples,
+		gint num_exe_samples, cudaStream_t stream);
 
 void 
 spiir_state_destroy (SpiirState ** spstate, guint num_depths);

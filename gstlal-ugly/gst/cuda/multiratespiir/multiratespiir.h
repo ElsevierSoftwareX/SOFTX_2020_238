@@ -45,11 +45,16 @@ G_BEGIN_DECLS
 typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
 typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
 
-typedef struct _Complex_F
-{
+#ifndef DEFINED_COMPLEX_F
+#define DEFINED_COMPLEX_F 
+
+typedef struct _Complex_F{
 	float re;
 	float im;
 } COMPLEX_F;
+
+#else
+#endif
 
 
 typedef struct _ResamplerState{
@@ -114,7 +119,7 @@ struct _CudaMultirateSPIIR {
   guint num_depths;
   guint num_head_cover_samples; /* number of samples needed to produce the first buffer */
   guint num_tail_cover_samples; /* number of samples needed to produce the last buffer */
-  guint num_exe_samples; 	/* number of samples executed every time after first buffer */
+  gint num_exe_samples; 	/* number of samples executed every time after first buffer */
 
   GstClockTime t0;
   guint64 offset0;
@@ -129,8 +134,9 @@ struct _CudaMultirateSPIIR {
   gint rate;
   gint width;
   // SpiirBank_s **bank;
-  gdouble *bank;
-  gint bank_len;
+  //gdouble *bank;
+  //gint bank_len;
+  gchar *bank_fname;
   GMutex *iir_bank_lock;
   GCond *iir_bank_available;
   SpiirState **spstate;

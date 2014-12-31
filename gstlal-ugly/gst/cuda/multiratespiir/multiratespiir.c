@@ -67,8 +67,7 @@ GST_BOILERPLATE_FULL(
 enum
 {
   PROP_0,
-  PROP_IIR_BANK,
-  PROP_BANK_ID,
+  PROP_IIRBANK_FNAME,
   PROP_GAP_HANDLE
 };
 
@@ -166,31 +165,15 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
   gobject_class->set_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_set_property);
   gobject_class->get_property = GST_DEBUG_FUNCPTR (cuda_multirate_spiir_get_property);
 
-  g_object_class_install_property (gobject_class, PROP_IIR_BANK,
- 			g_param_spec_value_array(
-				"spiir-bank",
-				"IIR bank feedback coefficients",
-				"A parallel bank of first order IIR filter feedback coefficients.The format is : num_depths, num_templates in highest depth, num_filters in highest depth, a1 for the first template, a1 for the second template, ..., b0, ..., delay, ..., num_templates in second highest depth, ...",
-				g_param_spec_double(
-					"coefficient",
-					"Coefficient",
-					"Feedback coefficient",
-					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				),
+  g_object_class_install_property (gobject_class, PROP_IIRBANK_FNAME,
+ 			g_param_spec_string(
+				"bank-fname",
+				"The file of IIR bank feedback coefficients",
+				"A parallel bank of first order IIR filter feedback coefficients.",
+				NULL,
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			)
 		  );
-
-  g_object_class_install_property (gobject_class, PROP_BANK_ID,
-				g_param_spec_int(
-					"bank-id",
-					"Bank ID",
-					"bank ID",
-					0, 1000, 0,
-					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				)
-			);
 
   g_object_class_install_property (gobject_class, PROP_GAP_HANDLE,
 				g_param_spec_int(
@@ -211,8 +194,7 @@ cuda_multirate_spiir_init (CudaMultirateSPIIR * element,
 //  GstBaseTransform *trans = GST_BASE_TRANSFORM (element);
   element->iir_bank_lock = g_mutex_new();
   element->iir_bank_available = g_cond_new();
-  element->bank = NULL;
-  element->bank_len = 0;
+  element->bank_fname = NULL;
   element->num_depths = 0;
   element->outchannels = 0;
 
@@ -314,7 +296,7 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
     g_mutex_lock (element->iir_bank_lock);
-    if (!element->bank) 	
+    if (!element->spstate) 	
       g_cond_wait (element->iir_bank_available, element->iir_bank_lock);
 
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_outchannels(element), NULL);
@@ -395,7 +377,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
 
   if (!success) 
     GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
-  if (element->bank!=NULL && (channels != (gint) cuda_multirate_spiir_get_outchannels(element)))
+  if (element->spstate != NULL && (channels != (gint) cuda_multirate_spiir_get_outchannels(element)))
     /* impossible to happen */
     GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, cuda_multirate_spiir_get_outchannels(element), outcaps);
   if (width != (gint) element->width) {
@@ -416,11 +398,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
       element->rate = rate; }
 
   /* transform_caps already done, num_depths already set */
-  if (!element->spstate_initialised) {
-    cuda_multirate_spiir_init_cover_samples(&element->num_head_cover_samples, &element->num_tail_cover_samples, rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
-    cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, element->num_head_cover_samples);
-    GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_head_cover_samples, element->num_exe_samples);
-  }
+
   return success;
 }
 
@@ -809,29 +787,10 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
       GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
 
   /*
-   * initialise spiir state
+   * set device context
    */
 
-
-  if (!element->spstate_initialised) {
-
-    int deviceCount;
-    cudaGetDeviceCount(&deviceCount);
-    element->deviceID = (element->bank_id + 1) % deviceCount ;
-    cudaSetDevice(element->deviceID);
-    cudaStreamCreate(&element->stream);
-
-    element->spstate = spiir_state_create (element->bank, element->bank_len,
-		    element->num_head_cover_samples, element->num_exe_samples,
-		    element->width, element->rate, element->stream);
-
-    if (!element->spstate) {
-      GST_ERROR_OBJECT(element, "spsate could not be initialised");
-      return GST_FLOW_ERROR;
-    }
-
-    element->spstate_initialised = TRUE;
-  }
+  cudaSetDevice(element->deviceID);
 
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event
@@ -1147,30 +1106,43 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
   GST_OBJECT_LOCK (element);
   switch (prop_id) {
 
-    case PROP_IIR_BANK:
+    case PROP_IIRBANK_FNAME:
       g_mutex_lock(element->iir_bank_lock);
-      if (element->bank)
-	      free(element->bank);
 
       GST_LOG_OBJECT (element, "obtaining bank");
-      element->bank = gstlal_doubles_from_g_value_array (g_value_get_boxed(value), element->bank, &element->bank_len);
-      if (!element->bank)
-         GST_ERROR_OBJECT (element, "bank could not be initialized");
+      element->bank_fname = g_value_dup_string(value);
+      cuda_multirate_spiir_load_bank_id(element->bank_fname, &element->bank_id);
+ 
+      int deviceCount;
+      cudaGetDeviceCount(&deviceCount);
+      element->deviceID = (element->bank_id + 1) % deviceCount ;
+      cudaSetDevice(element->deviceID);
+      cudaStreamCreate(&element->stream);
 
-      success = cuda_multirate_spiir_parse_bank(element->bank, &element->num_depths, &element->outchannels);
-      if (!success)
-         GST_ERROR_OBJECT (element, "bank could not be parsed");
+      cuda_multirate_spiir_load_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
+
+      cuda_multirate_spiir_init_cover_samples(&element->num_head_cover_samples, &element->num_tail_cover_samples, element->rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
+      cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, (gint)element->num_head_cover_samples);
+      GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_head_cover_samples, element->num_exe_samples);
+
+      element->spstate = spiir_state_create (element->bank_fname, element->num_depths, element->rate,
+		    element->num_head_cover_samples, element->num_exe_samples,
+		    element->stream);
+
+      if (!element->spstate) {
+        GST_ERROR_OBJECT(element, "spsate could not be initialised");
+      }
+
+      element->spstate_initialised = TRUE;
+
       /*
        * signal ready of the bank
        */
       g_cond_broadcast(element->iir_bank_available);
-      GST_DEBUG_OBJECT (element, "spiir bank available, bank length %d, number of depths %d, outchannels %d", element->bank_len, element->num_depths, element->outchannels);
+      element->outchannels = element->spstate[0]->num_templates * 2;
+      GST_DEBUG_OBJECT (element, "spiir bank available, number of depths %d, outchannels %d", element->num_depths, element->outchannels);
 
       g_mutex_unlock(element->iir_bank_lock);
-      break;
-
-    case PROP_BANK_ID:
-      element->bank_id = g_value_get_int(value);
       break;
 
     case PROP_GAP_HANDLE:
@@ -1194,14 +1166,10 @@ cuda_multirate_spiir_get_property (GObject * object, guint prop_id,
   GST_OBJECT_LOCK (element);
 
   switch (prop_id) {
-    case PROP_IIR_BANK:
+    case PROP_IIRBANK_FNAME:
       g_mutex_lock(element->iir_bank_lock);
-      if (element->bank)
-	      g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->bank, element->bank_len));
+      g_value_set_string(value, element->bank_fname);
       g_mutex_unlock(element->iir_bank_lock);
-      break;
-    case PROP_BANK_ID:
-      g_value_set_int (value, element->bank_id);
       break;
 
     case PROP_GAP_HANDLE:

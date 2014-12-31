@@ -27,9 +27,66 @@
  */
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "multiratespiir_utils.h"
 #include <math.h>
+#include <string.h>
+#include <LIGOLw_xmllib/LIGOLwHeader.h>
+
+#ifdef __cplusplus
+}
+#endif
+
+void
+cuda_multirate_spiir_load_bank_id(const char *fname, gint *bank_id)
+{
+	XmlNodeStruct	xns;
+	XmlParam	xparam = {0, NULL};
+	strncpy((char *)xns.tag, "Param-bank_id:param", XMLSTRMAXLEN);
+	xns.processPtr = readParam;
+	xns.data = &xparam;
+
+	// start parsing, get the information of depth
+	parseFile(fname, &xns, 1);
+
+	*bank_id = atoi((const gchar*)xparam.data);
+	xmlCleanupParser();
+	xmlMemoryDump();
+
+}
+void
+cuda_multirate_spiir_load_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate)
+{
+	XmlNodeStruct	xns;
+	XmlParam	xparam = {0, NULL};
+	strncpy((char *)xns.tag, "Param-sample_rate:param", XMLSTRMAXLEN);
+	xns.processPtr = readParam;
+	xns.data = &xparam;
+
+	// start parsing, get the information of depth
+	parseFile(fname, &xns, 1);
+
+	int ndepth = 0;
+	int maxrate = 1;
+	int temp;
+	gchar **rates = g_strsplit((const gchar*)xparam.data, (const gchar*)",", 16);
+	while (rates[ndepth])
+	{
+		temp = atoi((const char*)rates[ndepth]);
+		maxrate = maxrate > temp ? maxrate : temp;
+		++ndepth;	
+	}
+	g_strfreev(rates);
+	freeParam(&xparam);
+	*num_depths = (guint)ndepth;
+	*rate = (gint)maxrate;
+
+	xmlCleanupParser();
+	xmlMemoryDump();
+}
 
 
 void cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, guint *num_tail_cover_samples, gint rate, guint num_depths, gint down_filtlen, gint up_filtlen)
@@ -46,7 +103,7 @@ void cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, gui
 
 }
 
-void cuda_multirate_spiir_update_exe_samples (guint *num_exe_samples, guint new_value)
+void cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value)
 {
 	*num_exe_samples = new_value;
 }

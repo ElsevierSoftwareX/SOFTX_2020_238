@@ -14,13 +14,19 @@
 // guint get_num_outsamples(SpiirState **pspstate, guint insamples
 //
 
+void
+cuda_multirate_spiir_load_bank_id(const char *fname, gint *bank_id);
+
+void
+cuda_multirate_spiir_load_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate);
+
 void 
 cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, 
 		guint *num_tail_cover_samples, gint rate, guint num_depths, 
 		gint down_filtlen, gint up_filtlen);
 
 void 
-cuda_multirate_spiir_update_exe_samples (guint *num_exe_samples, guint new_value);
+cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value);
 
 gboolean 
 cuda_multirate_spiir_parse_bank (gdouble *bank, guint *num_depths, gint *

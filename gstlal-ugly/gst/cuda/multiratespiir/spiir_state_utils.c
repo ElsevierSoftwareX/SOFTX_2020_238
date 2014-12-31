@@ -37,6 +37,7 @@ extern "C" {
 #include "multiratespiir.h"
 #include "spiir_state_utils.h"
 #include "spiir_state_macro.h"
+#include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <cuda_runtime.h>
 
 #ifdef __cplusplus
@@ -219,6 +220,7 @@ int sinc_function (float *sinc_table, gint filt_len, float cutoff, gint den_rate
 //	    printf("%s init sinc[%d] = %e\n", quality > 1 ? "down" : "up", i * filt_len + j, sinc_table[i * filt_len + j]);
       		}
 	}
+	return 0;
 
 }
 
@@ -435,6 +437,148 @@ spiir_state_workspace_realloc_int (int ** workspace, int * len,
 }
 
 void
+spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth, gint maxrate, cudaStream_t stream)
+{
+
+	XmlNodeStruct	*inxns		= (XmlNodeStruct*)malloc(sizeof(XmlNodeStruct)*ndepth*3);
+	XmlArray	*d_array	= (XmlArray*)malloc(sizeof(XmlArray)*ndepth);
+	XmlArray	*a_array	= (XmlArray*)malloc(sizeof(XmlArray)*ndepth);
+	XmlArray	*b_array	= (XmlArray*)malloc(sizeof(XmlArray)*ndepth);
+	guint i;
+	for (i = 0; i < ndepth; ++i)
+	{
+		// configure d_array 
+		d_array[i].ndim = 0;
+		sprintf((char *)inxns[i + 0 * ndepth].tag, "Array-d_%d:array", maxrate >> i);
+		inxns[i + 0 * ndepth].processPtr = readArray;
+		inxns[i + 0 * ndepth].data = d_array + i;
+
+		// configure a_array
+		a_array[i].ndim = 0;
+		sprintf((char *)inxns[i + 1 * ndepth].tag, "Array-a_%d:array", maxrate >> i);
+		inxns[i + 1 * ndepth].processPtr = readArray;
+		inxns[i + 1 * ndepth].data = a_array + i;	
+
+		// configure b_array
+		b_array[i].ndim = 0;
+		sprintf((char *)inxns[i + 2 * ndepth].tag, "Array-b_%d:array", maxrate >> i);
+		inxns[i + 2 * ndepth].processPtr = readArray;
+		inxns[i + 2 * ndepth].data = b_array + i;	
+	}
+
+	// start parsing xml file, get the requested array
+	parseFile(filename, inxns, ndepth * 3);
+
+
+	// free array memory 
+	int num_filters, num_templates;
+	COMPLEX_F *tmp_a1 = NULL, *tmp_b0 = NULL;
+       	int *tmp_d = NULL, tmp_max = 0, cur_d = 0;
+	int a1_len = 0, b0_len = 0, d_len = 0;
+	int eff_len = 0;
+
+	int j, k;
+	for (i = 0; i < ndepth; ++i)
+	{
+		num_filters		= (gint)d_array[i].dim[0];
+		num_templates	= (gint)d_array[i].dim[1];
+		eff_len = num_filters * num_templates;
+		spiir_state_workspace_realloc_complex (&tmp_a1, &a1_len, eff_len);
+		spiir_state_workspace_realloc_complex (&tmp_b0, &b0_len, eff_len);
+		spiir_state_workspace_realloc_int (&tmp_d, &d_len, eff_len);
+
+		// spstate[i]->d_d = (long*)inxns[i].data;
+		printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
+				a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
+
+		spstate[i]->num_filters		= num_filters;
+		spstate[i]->num_templates	= num_templates;
+
+		for (j = 0; j < num_filters; ++j)
+		{
+			for (k = 0; k < num_templates; ++k)
+			{
+				tmp_d[j * num_templates + k] = (int)(((long*)(d_array[i].data))[j * num_templates + k]);
+				cur_d = tmp_d[j * num_templates + k] ;
+				tmp_max = cur_d > tmp_max ? cur_d : tmp_max;
+				tmp_a1[j * num_templates + k].re = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + k]);
+				tmp_a1[j * num_templates + k].im = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + num_templates + k]);
+				tmp_b0[j * num_templates + k].re = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + k]);
+				tmp_b0[j * num_templates + k].im = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + num_templates + k]);
+			}
+		}
+		spstate[i]->delay_max = tmp_max;
+		cudaMalloc((void **) &(spstate[i]->d_a1), eff_len * sizeof (COMPLEX_F));
+		cudaMemcpyAsync(spstate[i]->d_a1, tmp_a1, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
+		cudaMalloc((void **) &(spstate[i]->d_b0), eff_len * sizeof (COMPLEX_F));
+		cudaMemcpyAsync(spstate[i]->d_b0, tmp_b0, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
+		cudaMalloc((void **) &(spstate[i]->d_d), eff_len * sizeof (int));
+		cudaMemcpyAsync(spstate[i]->d_d, tmp_d, eff_len * sizeof(int), cudaMemcpyHostToDevice, stream);
+
+		freeArray(d_array + i);
+		freeArray(a_array + i);
+		freeArray(b_array + i);
+
+//		printf("1st a: (%.3f + %.3fi) 1st b: (%.3f + %.3fi) 1st d: %d\n", spstate[i]->d_a1[0].re, spstate[i]->d_a1[0].im,
+//				spstate[i]->d_b0[0].re, spstate[i]->d_b0[0].im, spstate[i]->d_d[0]);
+	}
+	
+	free(inxns);
+
+    xmlCleanupParser();
+    xmlMemoryDump();
+}
+
+SpiirState **
+spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num_head_cover_samples,
+		gint num_exe_samples, cudaStream_t stream)
+{
+
+	//printf("init spstate\n");
+	guint i;	
+	gint inrate, outrate, queue_alloc_size;
+	SpiirState ** spstate = (SpiirState **)malloc(ndepth * sizeof(SpiirState*));
+
+	for(i=0; i<ndepth; i++)
+	{
+		SPSTATE(i) = (SpiirState *)malloc(sizeof(SpiirState));
+		SPSTATE(i)->depth = i;
+
+	}
+
+	spiir_state_load_bank( spstate, bank_fname, ndepth, rate, stream);
+
+	gint outchannels = spstate[0]->num_templates * 2;
+	for(i=0; i<ndepth; i++)
+	{
+		inrate = rate/pow(2, i);
+		outrate = inrate / 2;
+
+		SPSTATEDOWN(i) = resampler_state_create (inrate, outrate, 1, num_exe_samples, num_head_cover_samples, i, stream);
+		SPSTATEUP(i) = resampler_state_create (outrate, inrate, outchannels, num_exe_samples, num_head_cover_samples, i, stream);
+		g_assert (SPSTATEDOWN(i) != NULL);
+	       	g_assert (SPSTATEUP(i) != NULL);
+
+	}
+
+	for(i=0; i<ndepth; i++) {
+
+		SPSTATE(i)->nb = 0;
+		SPSTATE(i)->pre_out_spiir_len = 0;
+		SPSTATE(i)->queue_len = (2 * num_head_cover_samples + num_exe_samples) / pow (2, i) + 1 + SPSTATE(i)->delay_max; 
+		SPSTATE(i)->queue_first_sample = 0;
+		SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
+		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
+		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
+		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
+
+	}
+
+	return spstate;
+}
+/* DEPRECATED */
+#if 0
+void
 spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gint bank_len, cudaStream_t stream)
 {
 
@@ -572,10 +716,11 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 	return spstate;
 }
 
+#endif
 void 
 spiir_state_destroy (SpiirState ** spstate, guint num_depths)
 {
-	gint i;
+	guint i;
        	for(i=0; i<num_depths; i++)
 	{
 		resampler_state_destroy (SPSTATEDOWN(i));
@@ -591,7 +736,7 @@ spiir_state_destroy (SpiirState ** spstate, guint num_depths)
 void
 spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 {
-  int i;
+  guint i;
   for(i=0; i<num_depths; i++)
   {
     SPSTATE(i)->pre_out_spiir_len = 0;
@@ -608,7 +753,7 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 
 gint
 spiir_state_get_outlen (SpiirState **spstate, gint in_len, guint num_depths) {
-  int i;
+  guint i;
   for (i=0; i<num_depths-1; i++) 
    in_len = (in_len - SPSTATEDOWN(i)->last_sample)/2; 
 

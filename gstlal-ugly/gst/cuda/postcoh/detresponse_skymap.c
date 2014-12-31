@@ -127,6 +127,8 @@ create_detresponse_skymap(
 				A[i*2] = fplus;
 				A[i*2 + 1] = fcross;
 			}
+			for (i=0; i<6; i++)
+				printf("ipix %d, ra %f, dec %f, A[%d] %f\n", ipix, phi, M_PI_2-theta, i, A[i]);
 				
 			info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR, 'A', 'A', nifo, 2, A, lda, S, U, ldu, VT, ldvt, superb);
 
@@ -143,8 +145,8 @@ create_detresponse_skymap(
 			for (i=0; i<nifo*nifo; i++) {
 
 				U_map[index] = (float) U[i];
-//				printf("index %d U %f\n", index, U[i]);
 				diff_map[index] = (float) diff[i];
+				printf("index %d diff %f\n", index, diff[i]);
 				index = index + 1;
 			}
 
