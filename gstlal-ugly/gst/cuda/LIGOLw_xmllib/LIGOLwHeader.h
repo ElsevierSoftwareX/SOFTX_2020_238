@@ -4,8 +4,11 @@
 #define XMLSTRMAXLEN    1024
 
 #include <stdio.h>
-#include <libxml/xmlreader.h>
+#include <string.h>
 #include <glib.h>
+#include <libxml/encoding.h>
+#include <libxml/xmlreader.h>
+#include <libxml/xmlwriter.h>
 
 typedef struct _XmlNodeStruct
 {
@@ -141,5 +144,16 @@ processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len);
 
 void
 parseFile(const char *filename, XmlNodeStruct *xns, int len);
+
+void testXmlwriterFilename(const char *uri);
+xmlChar *ConvertInput(const char *in, const char *encoding);
+
+int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlChar* xml_type,
+                        const xmlChar* Name);
+
+int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, 
+                        const xmlChar* delimiter, const xmlChar* Name);
+
+int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr);
 
 #endif

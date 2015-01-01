@@ -18,9 +18,6 @@ XmlArray xarray =
 XmlParam xparams[4]; 
 XmlTable xtable;
 
-int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlChar* xml_type, const xmlChar* Name);
-int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, const xmlChar* delimiter, const xmlChar* Name);
-int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr);
 void xy_table_init(XmlTable *table);
 
 /**
