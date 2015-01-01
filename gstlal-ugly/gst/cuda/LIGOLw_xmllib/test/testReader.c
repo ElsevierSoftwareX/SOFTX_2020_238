@@ -3,13 +3,6 @@
 #include <string.h>
 #include <stdio.h>
 
-extern void readArray(xmlTextReaderPtr reader, void *data);
-extern void readParam(xmlTextReaderPtr reader, void *data);
-extern void readTable(xmlTextReaderPtr reader, void *data);
-
-extern void
-streamFile(const char *filename, XmlNodeTag *xnt, int len); 
-
 #define PROCESSLEN  3
 
 int main(int argc, char **argv) {
@@ -26,22 +19,22 @@ int main(int argc, char **argv) {
     /*
      * this initialize the process functions
      */
-	XmlNodeTag *xnt = (XmlNodeTag *)malloc(sizeof(XmlNodeTag) * PROCESSLEN);
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * PROCESSLEN);
 	XmlArray xarray = {0, {1, 1, 1}, NULL};
 	XmlParam xparam = {0, NULL};
 	XmlTable xtable = {NULL, NULL};
 
-    strncpy((char *)xnt[0].tag, "Array-b:array", XMLSTRMAXLEN);
-    xnt[0].processPtr = readArray;
-    xnt[0].data = &xarray;
-    strncpy((char *)xnt[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
-    xnt[1].processPtr = readParam;
-    xnt[1].data = &xparam;
-    strncpy((char *)xnt[2].tag, "Table-sngl_inspiral:table", XMLSTRMAXLEN);
-    xnt[2].processPtr = readTable;
-    xnt[2].data = &xtable;
+    strncpy((char *)xns[0].tag, "Array-b:array", XMLSTRMAXLEN);
+    xns[0].processPtr = readArray;
+    xns[0].data = &xarray;
+    strncpy((char *)xns[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
+    xns[1].processPtr = readParam;
+    xns[1].data = &xparam;
+    strncpy((char *)xns[2].tag, "Table-sngl_inspiral:table", XMLSTRMAXLEN);
+    xns[2].processPtr = readTable;
+    xns[2].data = &xtable;
 
-    streamFile(argv[1], xnt, PROCESSLEN);
+    parseFile(argv[1], xns, PROCESSLEN);
 
     /*
      * Cleanup function for the XML library.
@@ -66,7 +59,7 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
-    printf("%s --> %d\n", xnt[1].tag, *((int*)xparam.data));
+    printf("%s --> %d\n", xns[1].tag, *((int*)xparam.data));
 
     printf("\nTable Name: %s; Columns: %u;\n", (xtable.tableName)->str, (xtable.names)->len);
     GHashTable *hash = xtable.hashContent;

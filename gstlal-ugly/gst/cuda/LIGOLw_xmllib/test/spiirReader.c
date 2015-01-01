@@ -2,30 +2,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "multiratespiir.h"
+#include "../../multiratespiir/multiratespiir.h"
 
-extern void readArray(xmlTextReaderPtr reader, void *data);
-extern void readParam(xmlTextReaderPtr reader, void *data);
-
-extern void freeArray(XmlArray *array);
-extern void freeParam(XmlParam *param);
-
-extern void
-streamFile(const char *filename, XmlNodeTag *xnt, int len); 
 
 void
 spiir_state_load_bank(SpiirState **spstate, const char *filename, cudaStream_t stream)
 {
     LIBXML_TEST_VERSION
 
-	XmlNodeTag	prexnt;
+	XmlNodeStruct	prexns;
 	XmlParam	xparam = {0, NULL};
-	strncpy((char *)prexnt.tag, "Param-sample_rate:param", XMLSTRMAXLEN);
-	prexnt.processPtr = readParam;
-	prexnt.data = &xparam;
+	strncpy((char *)prexns.tag, "Param-sample_rate:param", XMLSTRMAXLEN);
+	prexns.processPtr = readParam;
+	prexns.data = &xparam;
 
 	// start parsing, get the information of depth
-    streamFile(filename, &prexnt, 1);
+    parseFile(filename, &prexns, 1);
 
 	int depth = 0;
 	int maxrate = 1;
@@ -41,7 +33,7 @@ spiir_state_load_bank(SpiirState **spstate, const char *filename, cudaStream_t s
 	g_strfreev(rates);
 	freeParam(&xparam);
 
-	XmlNodeTag	*inxnt		= (XmlNodeTag*)malloc(sizeof(XmlNodeTag)*depth*3);
+	XmlNodeStruct	*inxns		= (XmlNodeStruct*)malloc(sizeof(XmlNodeStruct)*depth*3);
 	XmlArray	*d_array	= (XmlArray*)malloc(sizeof(XmlArray)*depth);
 	XmlArray	*a_array	= (XmlArray*)malloc(sizeof(XmlArray)*depth);
 	XmlArray	*b_array	= (XmlArray*)malloc(sizeof(XmlArray)*depth);
@@ -49,25 +41,25 @@ spiir_state_load_bank(SpiirState **spstate, const char *filename, cudaStream_t s
 	{
 		// configure d_array 
 		d_array[i].ndim = 0;
-		sprintf((char *)inxnt[i + 0 * depth].tag, "Array-d_%d:array", maxrate >> i);
-		inxnt[i + 0 * depth].processPtr = readArray;
-		inxnt[i + 0 * depth].data = d_array + i;
+		sprintf((char *)inxns[i + 0 * depth].tag, "Array-d_%d:array", maxrate >> i);
+		inxns[i + 0 * depth].processPtr = readArray;
+		inxns[i + 0 * depth].data = d_array + i;
 
 		// configure a_array
 		a_array[i].ndim = 0;
-		sprintf((char *)inxnt[i + 1 * depth].tag, "Array-a_%d:array", maxrate >> i);
-		inxnt[i + 1 * depth].processPtr = readArray;
-		inxnt[i + 1 * depth].data = a_array + i;	
+		sprintf((char *)inxns[i + 1 * depth].tag, "Array-a_%d:array", maxrate >> i);
+		inxns[i + 1 * depth].processPtr = readArray;
+		inxns[i + 1 * depth].data = a_array + i;	
 
 		// configure b_array
 		b_array[i].ndim = 0;
-		sprintf((char *)inxnt[i + 2 * depth].tag, "Array-b_%d:array", maxrate >> i);
-		inxnt[i + 2 * depth].processPtr = readArray;
-		inxnt[i + 2 * depth].data = b_array + i;	
+		sprintf((char *)inxns[i + 2 * depth].tag, "Array-b_%d:array", maxrate >> i);
+		inxns[i + 2 * depth].processPtr = readArray;
+		inxns[i + 2 * depth].data = b_array + i;	
 	}
 
 	// start parsing xml file, get the requested array
-    streamFile(filename, inxnt, depth * 3);
+    parseFile(filename, inxns, depth * 3);
 
 	// free array memory 
 	int num_filters, num_templates;
@@ -76,7 +68,7 @@ spiir_state_load_bank(SpiirState **spstate, const char *filename, cudaStream_t s
 	{
 		num_filters		= (gint)d_array[i].dim[0];
 		num_templates	= (gint)d_array[i].dim[1];
-		// spstate[i]->d_d = (long*)inxnt[i].data;
+		// spstate[i]->d_d = (long*)inxns[i].data;
 		spstate[i]->d_d = (int*)malloc(sizeof(int)*num_filters*num_templates);
 		printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
 				a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
@@ -105,7 +97,7 @@ spiir_state_load_bank(SpiirState **spstate, const char *filename, cudaStream_t s
 				spstate[i]->d_b0[0].re, spstate[i]->d_b0[0].im, spstate[i]->d_d[0]);
 	}
 	
-	free(inxnt);
+	free(inxns);
 
     xmlCleanupParser();
     xmlMemoryDump();
@@ -117,17 +109,17 @@ int main(int argc, char **argv) {
 
 
 /*
-	XmlNodeTag *xnt = (XmlNodeTag *)malloc(sizeof(XmlNodeTag) * PROCESSLEN);
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * PROCESSLEN);
 	XmlArray xarray = {0, {1, 1, 1}, NULL};
 	XmlParam xparam = {0, NULL};
 	XmlTable xtable = {NULL, NULL};
 
-    strncpy((char *)xnt[0].tag, "Array-b:array", XMLSTRMAXLEN);
-    xnt[0].processPtr = readArray;
-    xnt[0].data = &xarray;
-    strncpy((char *)xnt[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
-    xnt[1].processPtr = readParam;
-    xnt[1].data = &xparam;
+    strncpy((char *)xns[0].tag, "Array-b:array", XMLSTRMAXLEN);
+    xns[0].processPtr = readArray;
+    xns[0].data = &xarray;
+    strncpy((char *)xns[1].tag, "Param-helmet:param", XMLSTRMAXLEN);
+    xns[1].processPtr = readParam;
+    xns[1].data = &xparam;
 */
 
 	SpiirState *spstates[7];
@@ -148,7 +140,7 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
-    printf("%s --> %d\n", xnt[1].tag, *((int*)xparam.data));
+    printf("%s --> %d\n", xns[1].tag, *((int*)xparam.data));
 
     printf("\nTable Name: %s; Columns: %u;\n", (xtable.tableName)->str, (xtable.names)->len);
     GHashTable *hash = xtable.hashContent;
