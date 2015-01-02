@@ -43,24 +43,15 @@ int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlC
 
     xmlChar *param = malloc(PARAMBUFSIZE);
     memset(param, 0, PARAMBUFSIZE);
-    if (xmlStrcmp(xml_type, BAD_CAST"real_4") == 0) {
-        sprintf((char*)param, "%.3f", *((float*)xparamPtr->data));
-        rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, BAD_CAST "real_8") == 0) {
-        sprintf((char*)param, "%.3lf", *((double*)xparamPtr->data));
-        rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, BAD_CAST "int_4s") == 0) {
-        sprintf((char*)param, "%d", *((int*)xparamPtr->data));
-        rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, BAD_CAST "int_8s") == 0) {
-        sprintf((char*)param, "%ld", *((long*)xparamPtr->data));
-        rc = xmlTextWriterWriteString(writer, param);
-    } else if (xmlStrcmp(xml_type, BAD_CAST "lstring") == 0) {
-        sprintf((char*)param, "%s", (xmlChar*)xparamPtr->data);
-        rc = xmlTextWriterWriteString(writer, param);
-    } else {
-        fprintf(stderr, "ERROR: UNKNOWN WRITING TYPE\n");
-        return -1;
+    int index;
+    index = ligoxml_get_type_index(xml_type);
+
+    typeMap[index].dts_func(param, xml_type, xparamPtr->data, 0);
+
+    rc = xmlTextWriterWriteString(writer, param);
+    if (rc < 0) {
+	    fprintf(stderr, "Error writing param");
+	    return -1;
     }
     free(param);
 
@@ -96,6 +87,9 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     line = malloc(MAXLINESIZE);
     memset(line, 0, MAXLINESIZE);
     xmlChar token[CHARBUFSIZE];
+    int index;
+    index = ligoxml_get_type_index(xml_type);
+
 
     // Write Stream Node
     rc = xmlTextWriterStartElement(writer, BAD_CAST "Stream");
@@ -107,23 +101,12 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
         printf("rows = %d\n", rows);
         for (i = 0; i < numInLine; ++i)
         {
-            if (xmlStrcmp(xml_type, BAD_CAST "real_4") == 0) {
-                sprintf((char *)token, "%.3f", ((float*)xarrayPtr->data)[j * numInLine + i]);
-            } else if (xmlStrcmp(xml_type, BAD_CAST "real_8") == 0) {
-                sprintf((char *)token, "%.3lf", ((double*)xarrayPtr->data)[j * numInLine + i]);
-            } else if (xmlStrcmp(xml_type, BAD_CAST "int_4s") == 0) {
-                sprintf((char *)token, "%d", ((int*)xarrayPtr->data)[j * numInLine + i]);
-            } else if (xmlStrcmp(xml_type, BAD_CAST "int_8s") == 0) {
-                sprintf((char *)token, "%ld", ((long*)xarrayPtr->data)[j * numInLine + i]);
-            } else {
-                fprintf(stderr, "ERROR: UNKNOWN WRITING TYPE\n");
-                return -1;
-            }
+            typeMap[index].dts_func((char *)token, xml_type, xarrayPtr->data, j * numInLine + i);
             printf("token %s\n", (const char *)token);
             strcat((char *)token, (const char *)delimiter);
             strcat((char *)line, (const char *)token);
         }
-        printf("line = %s\n", (char *)line);
+        //printf("line = %s\n", (char *)line);
         rc = xmlTextWriterWriteString(writer, BAD_CAST "\n\t\t\t\t");
         rc = xmlTextWriterWriteString(writer, line);
         line[0] = '\0';

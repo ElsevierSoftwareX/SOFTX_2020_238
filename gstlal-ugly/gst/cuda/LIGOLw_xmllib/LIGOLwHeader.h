@@ -52,13 +52,22 @@ typedef struct _XmlParam
 
 } XmlParam;
 
+typedef void (*DataToString) (void* des, const xmlChar *xml_type, void* data, int pos);
+
+void data_to_string_char (void* des, const xmlChar *xml_type, void* data, int pos);
+void data_to_string_double (void* des, const xmlChar *xml_type, void* data, int pos);
+void data_to_string_float (void* des, const xmlChar *xml_type, void* data, int pos);
+void data_to_string_int (void* des, const xmlChar *xml_type, void* data, int pos);
+void data_to_string_long (void* des, const xmlChar *xml_type, void* data, int pos);
+
 typedef struct _XmlTypeMap
 {
     // Type in XML
     const xmlChar* xml_type;
 
     // Type in C
-    const xmlChar* c_type;
+    //const xmlChar* c_type;
+    DataToString dts_func;
 
     // Format String
     const char* format;
@@ -114,12 +123,13 @@ void ligoxml_init_XmlTable(XmlTable *table);
 #define MAPSIZE 5
 static const XmlTypeMap typeMap[MAPSIZE] =
 {
-    {BAD_CAST "lstring",	BAD_CAST "char*",	"%s",   sizeof(char),   0},
-    {BAD_CAST "real_8",		BAD_CAST "double",  "%lf",  sizeof(double), 1},
-    {BAD_CAST "real_4",		BAD_CAST "float",   "%f",   sizeof(float),  2},
-    {BAD_CAST "int_4s",		BAD_CAST "int",		"%d",   sizeof(int),    3},
-    {BAD_CAST "int_8s",		BAD_CAST "long",	"%ld",	sizeof(long),	4}
+    {BAD_CAST "lstring",	data_to_string_char,	"%s",   sizeof(char),   0},
+    {BAD_CAST "real_8",		data_to_string_double,    "%lf",  sizeof(double), 1},
+    {BAD_CAST "real_4",		data_to_string_float,     "%f",   sizeof(float),  2},
+    {BAD_CAST "int_4s",		data_to_string_int,	"%d",   sizeof(int),    3},
+    {BAD_CAST "int_8s",		data_to_string_long,	"%ld",	sizeof(long),	4}
 };
+int ligoxml_get_type_index(const xmlChar *type);
 
 // get the number of bytes this type requires
 size_t ligoxml_get_type_size(const xmlChar *type);
