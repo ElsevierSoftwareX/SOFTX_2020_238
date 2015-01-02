@@ -546,7 +546,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 
 	}
 
-	spiir_state_load_bank( spstate, bank_fname, ndepth, rate, stream);
+	spiir_state_load_bank(spstate, bank_fname, ndepth, rate, stream);
 
 	gint outchannels = spstate[0]->num_templates * 2;
 	for(i=0; i<ndepth; i++)
@@ -574,6 +574,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 
 	}
 
+	printf("init spstate\n");
 	return spstate;
 }
 /* DEPRECATED */

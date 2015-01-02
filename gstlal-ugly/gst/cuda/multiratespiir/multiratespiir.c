@@ -301,6 +301,7 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
 
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_outchannels(element), NULL);
   
+    GST_LOG("setting channels to %d\n", cuda_multirate_spiir_get_outchannels(element));
     g_mutex_unlock (element->iir_bank_lock);
     break;
 	  
@@ -367,7 +368,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   gint width;
   gboolean success = TRUE;
 
-  GST_LOG ("incaps %" GST_PTR_FORMAT ", outcaps %"
+  GST_LOG_OBJECT (element, "incaps %" GST_PTR_FORMAT ", outcaps %"
       GST_PTR_FORMAT, incaps, outcaps);
 
   s = gst_caps_get_structure(outcaps, 0);
@@ -1122,12 +1123,13 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       cuda_multirate_spiir_load_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
 
       cuda_multirate_spiir_init_cover_samples(&element->num_head_cover_samples, &element->num_tail_cover_samples, element->rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
-      cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, (gint)element->num_head_cover_samples);
-      GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_head_cover_samples, element->num_exe_samples);
+      cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, (gint)element->rate);
 
       element->spstate = spiir_state_create (element->bank_fname, element->num_depths, element->rate,
 		    element->num_head_cover_samples, element->num_exe_samples,
 		    element->stream);
+
+      GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_head_cover_samples, element->num_exe_samples);
 
       if (!element->spstate) {
         GST_ERROR_OBJECT(element, "spsate could not be initialised");
@@ -1141,8 +1143,8 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       g_cond_broadcast(element->iir_bank_available);
       element->outchannels = element->spstate[0]->num_templates * 2;
       GST_DEBUG_OBJECT (element, "spiir bank available, number of depths %d, outchannels %d", element->num_depths, element->outchannels);
-
       g_mutex_unlock(element->iir_bank_lock);
+
       break;
 
     case PROP_GAP_HANDLE:

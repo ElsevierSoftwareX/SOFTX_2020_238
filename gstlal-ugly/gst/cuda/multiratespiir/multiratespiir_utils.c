@@ -41,7 +41,7 @@ extern "C" {
 #endif
 
 void
-cuda_multirate_spiir_load_bank_id(const char *fname, gint *bank_id)
+cuda_multirate_spiir_read_bank_id(const char *fname, gint *bank_id)
 {
 	XmlNodeStruct	xns;
 	XmlParam	xparam = {0, NULL};
@@ -58,7 +58,7 @@ cuda_multirate_spiir_load_bank_id(const char *fname, gint *bank_id)
 
 }
 void
-cuda_multirate_spiir_load_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate)
+cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate)
 {
 	XmlNodeStruct	xns;
 	XmlParam	xparam = {0, NULL};
