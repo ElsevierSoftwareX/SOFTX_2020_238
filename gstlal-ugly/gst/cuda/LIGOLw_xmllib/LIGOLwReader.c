@@ -16,6 +16,7 @@
 #include <string.h>
 #include "LIGOLwHeader.h"
 
+//#define __DEBUG__ 1
 // In Array Node, No Dim sub node should appear after Stream sub node
 void readArray(xmlTextReaderPtr reader, void *data)
 {
@@ -367,17 +368,21 @@ processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len) {
 
     value = xmlTextReaderGetAttribute(reader, BAD_CAST "Name");
     
-    xmlChar *tag = xmlStrncatNew(name, BAD_CAST "-", -1);
-    xmlStrcat(tag, value);
+    //xmlChar *tag = xmlStrncatNew(name, BAD_CAST "-", -1);
+    //xmlStrcat(tag, value);
 
     if (xmlTextReaderNodeType(reader) == 15)
         return;
 
     // Could be optimized by using HashMap
     int i, ret;
+
     for (i = 0; i < len; ++i)
     {
-        ret = xmlStrcmp(tag, xns[i].tag);
+        ret = xmlStrcmp(value, xns[i].tag);
+	#ifdef __DEBUG__
+	printf("current value:%s, search tag %s\n", value, xns[i].tag);
+	#endif
         if (ret == 0)
         {
             xns[i].processPtr(reader, xns[i].data);

@@ -155,6 +155,8 @@ processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len);
 void
 parseFile(const char *filename, XmlNodeStruct *xns, int len);
 
+
+#define MY_ENCODING "utf-8"
 void testXmlwriterFilename(const char *uri);
 xmlChar *ConvertInput(const char *in, const char *encoding);
 
