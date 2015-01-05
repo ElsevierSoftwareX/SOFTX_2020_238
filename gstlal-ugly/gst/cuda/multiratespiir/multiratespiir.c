@@ -1112,7 +1112,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
       GST_LOG_OBJECT (element, "obtaining bank");
       element->bank_fname = g_value_dup_string(value);
-      cuda_multirate_spiir_load_bank_id(element->bank_fname, &element->bank_id);
+      cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
  
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
@@ -1120,10 +1120,10 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       cudaSetDevice(element->deviceID);
       cudaStreamCreate(&element->stream);
 
-      cuda_multirate_spiir_load_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
+      cuda_multirate_spiir_read_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
 
       cuda_multirate_spiir_init_cover_samples(&element->num_head_cover_samples, &element->num_tail_cover_samples, element->rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
-      cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, (gint)element->rate);
+      cuda_multirate_spiir_update_exe_samples(&element->num_exe_samples, (gint)element->num_head_cover_samples);
 
       element->spstate = spiir_state_create (element->bank_fname, element->num_depths, element->rate,
 		    element->num_head_cover_samples, element->num_exe_samples,
