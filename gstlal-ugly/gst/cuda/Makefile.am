@@ -12,6 +12,8 @@ libcuda_plugin_la_SOURCES = \
 	multiratespiir/spiir_state_utils.c \
 	multiratespiir/multiratespiir_utils.c \
 	multiratespiir/multiratespiir.c \
+	postcoh/postcoh_kernel.cu \
+	postcoh/postcoh_utils.c \
 	postcoh/postcoh.c
 
 #	postcoh/detresponse_skymap.c
@@ -39,5 +41,6 @@ noinst_HEADERS = \
 	iirfilter/cuda_gstlal_iirbank.h \
 	multiratespiir/multiratespiir.h \
 	multiratespiir/spiir_state_macro.h \
+	postcoh/postcoh_utils.h \
 	postcoh/postcoh.h
 

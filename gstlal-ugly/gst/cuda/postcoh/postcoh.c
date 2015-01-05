@@ -28,6 +28,7 @@
 
 #include <string.h>
 #include "postcoh.h"
+#include "postcoh_utils.h"
 
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
@@ -94,6 +95,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 	switch(id) {
 		case PROP_DETRSP_FNAME:
 			element->detrsp_fname = g_value_dup_string(value);
+			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state);
 			break;
 
 		case PROP_AUTOCORRELATION_FNAME: 
@@ -128,6 +130,7 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 	}
 	GST_OBJECT_UNLOCK(element);
 }
+
 static void set_offset_per_nanosecond(GstPostcohCollectData *data, double offset_per_nanosecond)
 {
 	data->offset_per_nanosecond = offset_per_nanosecond;
@@ -197,12 +200,20 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	postcoh->bps = (postcoh->width/8) * postcoh->channels;	
 	postcoh->offset_per_nanosecond = postcoh->bps / 1e9 * (postcoh->rate);	
 
-	postcoh->nifo = GST_ELEMENT(postcoh)->numsinkpads;
-	postcoh->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *)* postcoh->nifo);
-	postcoh->ifo_mapping = (gint8 *)malloc(sizeof(gint8));
+	PostcohState *state = postcoh->state;
+	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
+	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *)* state->nifo);
+	state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
+	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
+	state->npeak = (int *)malloc(sizeof(int) * state->nifo);
+
 	/* need to cover head and tail */
 	postcoh->preserved_size = 2 * postcoh->autocorrelation_len * postcoh->bps; 
 	postcoh->exe_size = postcoh->rate * postcoh->bps;
+
+	state->ntmplt = postcoh->channels/2;
+	state->head_len = postcoh->autocorrelation_len;
+	state->exe_len = postcoh->rate;
 
 	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
 	gint8 i = 0, j = 0;
@@ -212,13 +223,21 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		data = gst_pad_get_element_private(pad);
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
-		for (j=0; j<postcoh->nifo; j++) {
+		for (j=0; j<state->nifo; j++) {
 			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 )
-				postcoh->ifo_mapping[i] = j;
+				state->ifo_mapping[i] = j;
 		}
 		guint mem_alloc_size = postcoh->preserved_size + postcoh->exe_size;
-		cudaMalloc((void **) & (postcoh->d_snglsnr[i]), mem_alloc_size);
-		cudaMemset(postcoh->d_snglsnr[i], 0, mem_alloc_size);
+		cudaMalloc((void **) & (state->d_snglsnr[i]), mem_alloc_size);
+		cudaMemset(state->d_snglsnr[i], 0, mem_alloc_size);
+
+		cudaMalloc((void **) &(state->peak_list[i]->sample_index), sizeof(int) * postcoh->rate);
+		cudaMemset(state->peak_list[i]->sample_index, 0, sizeof(int) * postcoh->rate);
+		cudaMalloc((void **) &(state->peak_list[i]->tmplt_index), sizeof(int) * postcoh->rate);
+		cudaMemset(state->peak_list[i]->tmplt_index, 0, sizeof(int) * postcoh->rate);
+		cudaMalloc((void **) &(state->peak_list[i]->maxsnr), sizeof(float) * postcoh->rate);
+		cudaMemset(state->peak_list[i]->maxsnr, 0, sizeof(float) * postcoh->rate);
+
 	}
 	GST_OBJECT_UNLOCK(postcoh->collect);
 	return TRUE;
@@ -496,14 +515,17 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint one_take_size, gint 
 	COMPLEX_F *snglsnr, *one_d_snglsnr;
 
 	int i = 0;
+	PostcohState *state = postcoh->state;
 	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 		data = collectlist->data;
 		snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
-		one_d_snglsnr = postcoh->d_snglsnr[postcoh->ifo_mapping[i]];
+		one_d_snglsnr = state->d_snglsnr[state->ifo_mapping[i]];
 		cudaMemcpy(one_d_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice);
+		peakfinder(one_d_snglsnr, i, state);
 		/* move along */
 		gst_adapter_flush(data->adapter, exe_size);
 	}
+
 
 
 	gint out_len = exe_size / postcoh->bps;
@@ -579,12 +601,19 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 static void cuda_postcoh_dispose(GObject *object)
 {
-	CudaPostcoh *postcoh = CUDA_POSTCOH(object);
+	CudaPostcoh *element = CUDA_POSTCOH(object);
+	if(element->collect)
+		gst_object_unref(GST_OBJECT(element->collect));
+	element->collect = NULL;
 
-	if (postcoh->collect) {
-		gst_object_unref(postcoh->collect);
-		postcoh->collect = NULL;
+	if(element->state->d_snglsnr[0]){
+		for(int i=0; i<element->state->nifo; i++)
+			cudaFree(element->state->d_snglsnr[i]);
 	}
+	if(element->srcpad)
+		gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
+
 	/* destroy hashtable and its contents */
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -685,6 +714,7 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->autocorrelation_len = 100;
 	postcoh->samples_in = 0;
 	postcoh->samples_out = 0;
+	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
 
 }
 

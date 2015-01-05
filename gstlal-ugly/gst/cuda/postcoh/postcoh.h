@@ -71,6 +71,27 @@ struct _GstPostcohCollectData {
 	GstCollectDataDestroyNotify destroy_notify;
 };
 
+typedef struct _PeakList {
+	int *sample_index;
+	int *tmplt_index;
+	float *maxsnr;
+} PeakList;
+
+typedef struct _PostcohState {
+  COMPLEX_F **d_snglsnr;
+  gint nifo;
+  gint8 *ifo_mapping;
+  float **d_U_map;
+  float **d_diff_map;
+  int gps_step;
+  int order;
+  PeakList **peak_list;
+  int *npeak;
+  int head_len;
+  int exe_len;
+  int ntmplt;
+} PostcohState;
+
 /**
  * CudaPostcoh:
  *
@@ -88,8 +109,8 @@ struct _CudaPostcoh {
   gint width;
   gint bps;
 
-  gchar *detrsp_fname;
-  gchar *autocorrelation_fname;
+  char *detrsp_fname;
+  char *autocorrelation_fname;
   gint autocorrelation_len;
   gint exe_size;
   gint preserved_size;
@@ -103,11 +124,7 @@ struct _CudaPostcoh {
   guint64 samples_in;
   guint64 samples_out;
 
-  COMPLEX_F **d_snglsnr;
-  gint nifo;
-  gint8 *ifo_mapping;
-  CudaPostcohPeakfinder peakfinder_func;
-  
+  PostcohState *state;
 };
 
 struct _CudaPostcohClass {

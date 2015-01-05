@@ -30,13 +30,15 @@
 
 #include <chealpix.h>
 
+//#include <LIGOLw_xmllib/LIGOLwHeader.h>
+#include "../LIGOLw_xmllib/LIGOLwHeader.h"
 #include <math.h>
 #define min(a,b) ((a)>(b)?(b):(a))
 
 typedef struct _DetSkymap {
 	char **ifos;
 	int nifo;
-	double gps_step;
+	int gps_step;
 	unsigned order;
 	float *U_map;
 	float *diff_map;
@@ -71,7 +73,7 @@ create_detresponse_skymap(
 		char **ifos,
 		int nifo,
 		double *horizons,
-		double ingps_step,
+		int ingps_step,
 		unsigned order
 		)
 {
@@ -112,6 +114,7 @@ create_detresponse_skymap(
 
 
 	unsigned long index = 0;
+
 	for (gps_cur.gpsSeconds=gps_start.gpsSeconds; gps_cur.gpsSeconds<gps_end.gpsSeconds; XLALGPSAdd(&gps_cur, ingps_step)) {
 		for (ipix=0; ipix<npix; ipix++) {
 			for (i=0; i<nifo; i++) {
@@ -124,11 +127,13 @@ create_detresponse_skymap(
 				gmst = XLALGreenwichMeanSiderealTime(&gps_cur);
 				XLALComputeDetAMResponse(&fplus, &fcross, detectors[i]->response, phi, M_PI_2-theta, 0, gmst);
 	
-				A[i*2] = fplus;
-				A[i*2 + 1] = fcross;
+				A[i*2] = fplus*horizons[i];
+				A[i*2 + 1] = fcross*horizons[i];
 			}
+#if 0
 			for (i=0; i<6; i++)
 				printf("ipix %d, ra %f, dec %f, A[%d] %f\n", ipix, phi, M_PI_2-theta, i, A[i]);
+#endif
 				
 			info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR, 'A', 'A', nifo, 2, A, lda, S, U, ldu, VT, ldvt, superb);
 
@@ -146,7 +151,7 @@ create_detresponse_skymap(
 
 				U_map[index] = (float) U[i];
 				diff_map[index] = (float) diff[i];
-				printf("index %d diff %f\n", index, diff[i]);
+				//printf("index %d diff %f\n", index, diff[i]);
 				index = index + 1;
 			}
 
@@ -156,8 +161,110 @@ create_detresponse_skymap(
 	return det_map;
 }
 
-static int to_xml(DetSkymap *det_map) 
+static int to_xml(DetSkymap *det_map, const char *detrsp_fname, const char *detrsp_header_string, int compression) 
 {
+    int rc;
+    xmlTextWriterPtr writer;
+    xmlChar *tmp;
 
-return 0;
+    XmlArray *tmp_array = (XmlArray *)malloc(sizeof(XmlArray));
+
+    tmp_array->ndim = 2;
+    tmp_array->dim[0] = det_map->matrix_size[1];
+    tmp_array->dim[1] = det_map->matrix_size[2];
+    int array_len = tmp_array->dim[0] * tmp_array->dim[1];
+    int array_size = sizeof(float) * array_len;
+
+    tmp_array->data = (float*) malloc(array_size);
+    /* Create a new XmlWriter for uri, with no compression. */
+    writer = xmlNewTextWriterFilename(detrsp_fname, compression);
+    if (writer == NULL) {
+        printf("Error creating the xml writer\n");
+        return;
+    }
+
+    rc = xmlTextWriterSetIndent(writer, 1);
+    rc = xmlTextWriterSetIndentString(writer, BAD_CAST "\t");
+
+    /* Start the document with the xml default for the version,
+     * encoding utf-8 and the default for the standalone
+     * declaration. */
+    rc = xmlTextWriterStartDocument(writer, NULL, MY_ENCODING, NULL);
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterStartDocument\n");
+        return;
+    }
+
+    rc = xmlTextWriterWriteDTD(writer, BAD_CAST "LIGO_LW", NULL, BAD_CAST "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt", NULL);
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterWriteDTD\n");
+        return;
+    }
+
+    /* Start an element named "LIGO_LW". Since thist is the first
+     * element, this will be the root element of the document. */
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "LIGO_LW");
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
+        return;
+    }
+
+    /* Start an element named "LIGO_LW" as child of EXAMPLE. */
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "LIGO_LW");
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
+        return;
+    }
+
+    /* Add an attribute with name "Name" and value detrsp_header_string to LIGO_LW. */
+    rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Name",
+                                     BAD_CAST detrsp_header_string);
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterWriteAttribute\n");
+        return;
+    }
+
+    XmlParam tmp_param;
+    tmp_param.data = malloc(sizeof(int));
+    *((int *)tmp_param.data) = det_map->gps_step;
+    ligoxml_write_Param(writer, &tmp_param, BAD_CAST "int_4s", BAD_CAST "gps_step:param");
+
+    free(tmp_param.data);
+    tmp_param.data = NULL;
+
+    tmp_param.data = malloc(sizeof(int));
+    *((int *)tmp_param.data) = det_map->order;
+    ligoxml_write_Param(writer, &tmp_param, BAD_CAST "int_4s", BAD_CAST "chealpix_order:param");
+
+    free(tmp_param.data);
+    tmp_param.data = NULL;
+
+    gchar gps_name[40];
+    int i;
+    for(i=0; i<det_map->matrix_size[0]; i++) {
+
+	memcpy(tmp_array->data, det_map->U_map + i*array_len, array_size);
+	sprintf(gps_name, "U_map_gps_%d:array", det_map->gps_step*i);
+    	ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+	memcpy(tmp_array->data, det_map->diff_map + i*array_len, array_size);
+	sprintf(gps_name, "diff_map_gps_%d:array", det_map->gps_step*i);
+    	ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+
+    }
+
+    rc = xmlTextWriterEndDocument(writer);
+    if (rc < 0) {
+        printf
+            ("testXmlwriterFilename: Error at xmlTextWriterEndDocument\n");
+        return;
+    }
+
+    xmlFreeTextWriter(writer);
+
+	return 0;
 }
