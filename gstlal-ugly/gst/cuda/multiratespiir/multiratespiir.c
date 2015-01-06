@@ -296,12 +296,10 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
     g_mutex_lock (element->iir_bank_lock);
-    if (!element->spstate) 	
-      g_cond_wait (element->iir_bank_available, element->iir_bank_lock);
 
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_outchannels(element), NULL);
-  
     GST_LOG("setting channels to %d\n", cuda_multirate_spiir_get_outchannels(element));
+
     g_mutex_unlock (element->iir_bank_lock);
     break;
 	  
@@ -799,8 +797,10 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   if (G_UNLIKELY (GST_BUFFER_IS_DISCONT (inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
     GST_DEBUG_OBJECT (element, "reset spstate");
-    spiir_state_reset (element->spstate, element->num_depths, element->stream);
+    //spiir_state_reset (element->spstate, element->num_depths, element->stream);
     gst_adapter_clear (element->adapter);
+    
+    GST_DEBUG_OBJECT (element, "reset spstate2");
     element->need_discont = TRUE;
 
     /*
@@ -814,6 +814,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->samples_in = 0;
     element->samples_out = 0;
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_head_cover_samples);
+    GST_DEBUG_OBJECT (element, "reset spstate2");
     
   }
 
@@ -1042,13 +1043,12 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
 #endif
     case GST_EVENT_NEWSEGMENT:
       
-      GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT");
-      if (element->need_tail_drain) {
+    GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT");
+    if (element->need_tail_drain) {
         GST_DEBUG_OBJECT(element, "NEWSEGMENT, clear tails.");
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
 		cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
 	} else {
-
         adapter_push_zeros (element, element->num_tail_cover_samples);
 	int adapter_len = cuda_multirate_spiir_get_available_samples(element);
         cuda_multirate_spiir_push_drain (element, adapter_len);
@@ -1140,7 +1140,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       /*
        * signal ready of the bank
        */
-      g_cond_broadcast(element->iir_bank_available);
+//      g_cond_broadcast(element->iir_bank_available);
       element->outchannels = element->spstate[0]->num_templates * 2;
       GST_DEBUG_OBJECT (element, "spiir bank available, number of depths %d, outchannels %d", element->num_depths, element->outchannels);
       g_mutex_unlock(element->iir_bank_lock);

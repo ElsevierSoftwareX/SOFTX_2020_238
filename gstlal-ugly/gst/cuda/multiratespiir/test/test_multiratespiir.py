@@ -43,17 +43,17 @@ nxydump_segment, = segmentsUtils.from_range_strings([nxydump_segment], boundtype
 src = pipeparts.mkaudiotestsrc(pipeline, volume = 1, wave = "sine", freq = 10)
 
 # the flowing data rate is determined by the max rate of SPIIR bank
-bank_fname = "H1bank.xml.gz"
+bank_fname = "H1bank.xml"
 maxrate = get_maxrate_from_xml(bank_fname)
 src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, width=32, channels=1, rate=%d" % maxrate)
 
 src = pipeparts.mkcudamultiratespiir(pipeline, src, bank_fname)
-sink = gst.element_factory_make("fakesink")
-pipeline.add(sink)
-src.link(sink)
+#sink = gst.element_factory_make("fakesink")
+#pipeline.add(sink)
+#src.link(sink)
 
 
-#pipeparts.mknxydumpsink(pipeline, src, "snr_gpu_%d_%s.dump" % (nxydump_segment[0], bank_fname[1:5]), segment = nxydump_segment)
+pipeparts.mknxydumpsink(pipeline, src, "snr_gpu_%d_%s.dump" % (nxydump_segment[0], bank_fname[1:5]), segment = nxydump_segment)
 
 if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
 	raise RuntimeError, "pipeline did not enter playing state"

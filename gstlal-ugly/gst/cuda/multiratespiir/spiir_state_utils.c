@@ -449,19 +449,19 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 	{
 		// configure d_array 
 		d_array[i].ndim = 0;
-		sprintf((char *)inxns[i + 0 * ndepth].tag, "Array-d_%d:array", maxrate >> i);
+		sprintf((char *)inxns[i + 0 * ndepth].tag, "d_%d:array", maxrate >> i);
 		inxns[i + 0 * ndepth].processPtr = readArray;
 		inxns[i + 0 * ndepth].data = d_array + i;
 
 		// configure a_array
 		a_array[i].ndim = 0;
-		sprintf((char *)inxns[i + 1 * ndepth].tag, "Array-a_%d:array", maxrate >> i);
+		sprintf((char *)inxns[i + 1 * ndepth].tag, "a_%d:array", maxrate >> i);
 		inxns[i + 1 * ndepth].processPtr = readArray;
 		inxns[i + 1 * ndepth].data = a_array + i;	
 
 		// configure b_array
 		b_array[i].ndim = 0;
-		sprintf((char *)inxns[i + 2 * ndepth].tag, "Array-b_%d:array", maxrate >> i);
+		sprintf((char *)inxns[i + 2 * ndepth].tag, "b_%d:array", maxrate >> i);
 		inxns[i + 2 * ndepth].processPtr = readArray;
 		inxns[i + 2 * ndepth].data = b_array + i;	
 	}
@@ -557,7 +557,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 		SPSTATEDOWN(i) = resampler_state_create (inrate, outrate, 1, num_exe_samples, num_head_cover_samples, i, stream);
 		SPSTATEUP(i) = resampler_state_create (outrate, inrate, outchannels, num_exe_samples, num_head_cover_samples, i, stream);
 		g_assert (SPSTATEDOWN(i) != NULL);
-	       	g_assert (SPSTATEUP(i) != NULL);
+	    g_assert (SPSTATEUP(i) != NULL);
 
 	}
 
@@ -674,7 +674,8 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 
 
 }
-
+#endif
+#if 0
 SpiirState ** 
 spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 		guint num_exe_samples, gint width, guint rate, cudaStream_t stream)
@@ -696,7 +697,7 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 		SPSTATEDOWN(i) = resampler_state_create (inrate, outrate, 1, num_exe_samples, num_head_cover_samples, i, stream);
 		SPSTATEUP(i) = resampler_state_create (outrate, inrate, outchannels, num_exe_samples, num_head_cover_samples, i, stream);
 		g_assert (SPSTATEDOWN(i) != NULL);
-	       	g_assert (SPSTATEUP(i) != NULL);
+	    g_assert (SPSTATEUP(i) != NULL);
 
 	}
 	spiir_state_load_bank (spstate, num_depths, bank, bank_len, stream);
@@ -716,8 +717,8 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 
 	return spstate;
 }
-
 #endif
+
 void 
 spiir_state_destroy (SpiirState ** spstate, guint num_depths)
 {
@@ -737,18 +738,24 @@ spiir_state_destroy (SpiirState ** spstate, guint num_depths)
 void
 spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 {
-  guint i;
+  guint i = 0;
+  printf("reset inside %d\n", i);
   for(i=0; i<num_depths; i++)
   {
+	g_assert(SPSTATE(i));
     SPSTATE(i)->pre_out_spiir_len = 0;
+    printf("reset1 inside %d\n", i);
 
     cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
+    printf("reset2 inside %d\n", i);
 
     SPSTATE(i)->queue_first_sample = 0;
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 
+    printf("reset3 inside %d\n", i);
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);
+    printf("reset4 inside %d\n", i);
   }
 }
 
