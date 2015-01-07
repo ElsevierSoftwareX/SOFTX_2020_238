@@ -1,3 +1,5 @@
+\page gstlalinspiralprofileXeon_E3-1271_Ubuntu-14_04_page Profiling of gstlal_inspiral on Xeon E3-1271 Ubuntu-14-04
+
 \section Overview
 
 This page benchmarks the following:
@@ -19,9 +21,7 @@ You should make the throughput target have as many unique output files as you do
 
 \section Template per core throughput
 
-\f[
-\mathcal{T}_\text{100 \%} = N_t * T_d / T_w / N_c
-\f]
+\f$ \mathcal{T}_{100 \%} = N_t * T_d / T_w / N_c \f$
 
 Where \f$ N_t 3200 \, T_d = 5000s \, T_w = 740s \, N_c = 4 \f$
 
