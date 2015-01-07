@@ -197,7 +197,11 @@ cuda_multirate_spiir_init (CudaMultirateSPIIR * element,
   element->bank_fname = NULL;
   element->num_depths = 0;
   element->outchannels = 0;
-
+  element->spstate = NULL;
+  element->spstate_initialised = FALSE;
+  element->num_exe_samples = 4096; // assumes the rate=4096Hz
+  element->num_head_cover_samples = 13120; // assumes the rate=4096Hz, down quality = 9
+  element->num_tail_cover_samples = 13104; // assumes the rate=4096Hz
 
 //  gst_base_transform_set_gap_aware (trans, TRUE);
 //  gst_pad_set_query_function (trans->srcpad, cuda_multirate_spiir_query);
@@ -220,12 +224,6 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
   element->next_in_offset = GST_BUFFER_OFFSET_NONE;
   element->samples_in = 0;
   element->samples_out = 0;
-  element->spstate = NULL;
-  element->spstate_initialised = FALSE;
-  element->num_exe_samples = 4096; // assumes the rate=4096Hz
-  element->num_head_cover_samples = 13120; // assumes the rate=4096Hz, down quality = 9
-  element->num_tail_cover_samples = 13104; // assumes the rate=4096Hz
-
   return TRUE;
 }
 
@@ -295,11 +293,13 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
     /*
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
+//    if (!g_mutex_trylock(element->iir_bank_lock))
+//	    printf("lock by another thread");
     g_mutex_lock (element->iir_bank_lock);
+    if(!element->spstate) 
+	    g_cond_wait(element->iir_bank_available, element->iir_bank_lock);
 
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_outchannels(element), NULL);
-    GST_LOG("setting channels to %d\n", cuda_multirate_spiir_get_outchannels(element));
-
     g_mutex_unlock (element->iir_bank_lock);
     break;
 	  
@@ -374,30 +374,39 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   success &= gst_structure_get_int(s, "width", &width);
   success &= gst_structure_get_int(s, "rate", &rate);
 
-  if (!success) 
+  g_mutex_lock(element->iir_bank_lock);
+  if(!element->spstate) 
+	  g_cond_wait(element->iir_bank_available, element->iir_bank_lock);
+
+  if (!success) {
     GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
-  if (element->spstate != NULL && (channels != (gint) cuda_multirate_spiir_get_outchannels(element)))
+  }
+
+  if (channels != (gint) cuda_multirate_spiir_get_outchannels(element)) {
     /* impossible to happen */
     GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, cuda_multirate_spiir_get_outchannels(element), outcaps);
+      success = FALSE;
+  }
+
   if (width != (gint) element->width) {
-    if (element->spstate_initialised)
       /*
        * FIXME :do not support width change at run time
        */
       GST_ERROR_OBJECT(element, "width != %d in %" GST_PTR_FORMAT, element->width, outcaps);
-    else
-      element->width = width; }
+      success = FALSE;
+  }
+
   if (rate != (gint) element->rate) {
-    if (element->spstate_initialised)
       /*
        * FIXME: do not support rate change at run time
        */
       GST_ERROR_OBJECT(element, "rate != %d in %" GST_PTR_FORMAT, element->rate, outcaps);
-    else
-      element->rate = rate; }
+      success = FALSE;
+  }
 
   /* transform_caps already done, num_depths already set */
 
+  g_mutex_unlock(element->iir_bank_lock);
   return success;
 }
 
@@ -789,7 +798,11 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
    * set device context
    */
 
-  cudaSetDevice(element->deviceID);
+  g_mutex_lock(element->iir_bank_lock);
+  if(!element->spstate_initialised) {
+	  g_cond_wait(element->iir_bank_available, element->iir_bank_lock);
+  }
+  g_mutex_unlock(element->iir_bank_lock);
 
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event
@@ -797,7 +810,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   if (G_UNLIKELY (GST_BUFFER_IS_DISCONT (inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
     GST_DEBUG_OBJECT (element, "reset spstate");
-    //spiir_state_reset (element->spstate, element->num_depths, element->stream);
+    spiir_state_reset (element->spstate, element->num_depths, element->stream);
     gst_adapter_clear (element->adapter);
     
     GST_DEBUG_OBJECT (element, "reset spstate2");
@@ -1044,6 +1057,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
     case GST_EVENT_NEWSEGMENT:
       
     GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT");
+    /* implicit assumption: spstate has been inited */
     if (element->need_tail_drain) {
         GST_DEBUG_OBJECT(element, "NEWSEGMENT, clear tails.");
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
@@ -1064,7 +1078,11 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
       element->samples_in = 0;
       element->samples_out = 0;
       element->need_discont = TRUE;
+      g_mutex_lock(element->iir_bank_lock);
+      if(!element->spstate)
+      	g_cond_wait(element->iir_bank_available, element->iir_bank_lock);
       cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_head_cover_samples);
+      g_mutex_unlock(element->iir_bank_lock);
 
       break;
 
@@ -1140,9 +1158,10 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       /*
        * signal ready of the bank
        */
-//      g_cond_broadcast(element->iir_bank_available);
       element->outchannels = element->spstate[0]->num_templates * 2;
+      element->width = 32; //FIXME: only can process float data
       GST_DEBUG_OBJECT (element, "spiir bank available, number of depths %d, outchannels %d", element->num_depths, element->outchannels);
+      g_cond_broadcast(element->iir_bank_available);
       g_mutex_unlock(element->iir_bank_lock);
 
       break;

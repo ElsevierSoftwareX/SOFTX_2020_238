@@ -491,6 +491,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
 				a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
 
+		printf("eff_len %d\n", eff_len);
 		spstate[i]->num_filters		= num_filters;
 		spstate[i]->num_templates	= num_templates;
 
@@ -521,9 +522,13 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 
 //		printf("1st a: (%.3f + %.3fi) 1st b: (%.3f + %.3fi) 1st d: %d\n", spstate[i]->d_a1[0].re, spstate[i]->d_a1[0].im,
 //				spstate[i]->d_b0[0].re, spstate[i]->d_b0[0].im, spstate[i]->d_d[0]);
+		gpuErrchk(cudaPeekAtLastError());
 	}
 	
 	free(inxns);
+	free(tmp_a1);
+	free(tmp_b0);
+	free(tmp_d);
 
     xmlCleanupParser();
     xmlMemoryDump();
@@ -574,7 +579,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 
 	}
 
-	printf("init spstate\n");
+		gpuErrchk(cudaPeekAtLastError());
 	return spstate;
 }
 /* DEPRECATED */
@@ -739,23 +744,17 @@ void
 spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
 {
   guint i = 0;
-  printf("reset inside %d\n", i);
   for(i=0; i<num_depths; i++)
   {
-	g_assert(SPSTATE(i));
     SPSTATE(i)->pre_out_spiir_len = 0;
-    printf("reset1 inside %d\n", i);
 
     cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
-    printf("reset2 inside %d\n", i);
 
     SPSTATE(i)->queue_first_sample = 0;
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 
-    printf("reset3 inside %d\n", i);
     resampler_state_reset(SPSTATEDOWN(i), stream);
     resampler_state_reset(SPSTATEUP(i), stream);
-    printf("reset4 inside %d\n", i);
   }
 }
 
