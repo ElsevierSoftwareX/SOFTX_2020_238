@@ -428,19 +428,18 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		ofs.Close();
 
 		/* FIXME:  can this be done without a memcpy()? */
-		outbuf = gst_buffer_new_and_alloc(obuf->str().length());
-		g_assert(outbuf != NULL);
-		g_assert(GST_BUFFER_DATA(outbuf) != NULL);
+		result = gst_pad_alloc_buffer(mux->srcpad, mux->next_out_offset, obuf->str().length(), GST_PAD_CAPS(mux->srcpad), &outbuf);
+		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_alloc_buffer() failed (%s)", gst_flow_get_name(result)));
+			goto done;
+		}
 		memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
-
-		gst_buffer_set_caps(outbuf, GST_PAD_CAPS(mux->srcpad));
 		if(mux->need_discont) {
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 			mux->need_discont = FALSE;
 		}
 		GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
 		GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
-		GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
 		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
 		mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
 	} catch(const std::exception& Exception) {
