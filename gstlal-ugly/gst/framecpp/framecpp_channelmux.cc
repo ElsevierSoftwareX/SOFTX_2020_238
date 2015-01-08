@@ -282,132 +282,112 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			 */
 
 			for(collectdatalist = mux->collect->pad_list; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
+				FrameCPP::Common::Container<FrameCPP::FrVect> *container;
 				FrameCPPMuxCollectPadsData *data = (FrameCPPMuxCollectPadsData *) collectdatalist->data;
 				framecpp_channelmux_appdata *appdata = get_appdata(data);
 				GstFrPad *frpad = GST_FRPAD(data->pad);
+				gdouble timeOffset = 0.0;
 				/* we own this list and its contents */
 				GList *buffer_list = framecpp_muxcollectpads_take_list(data, frame_t_end);
 
 				/*
 				 * merge contiguous buffers, ignoring gap
 				 * state
+				 *
+				 * FIXME:  the difference between the first
+				 * buffer's start time and the start of the
+				 * frame could be absorbed into timeOffset
+				 * instead of going into startX of the
+				 * FrVect
 				 */
 
 				buffer_list = framecpp_muxcollectpads_buffer_list_join(buffer_list, FALSE);
 
-				if(buffer_list) {
-					GstClockTime buffer_list_t_start;
-					GstClockTime buffer_list_t_end;
-					framecpp_muxcollectpads_buffer_list_boundaries(buffer_list, &buffer_list_t_start, &buffer_list_t_end);
-					guint buffer_list_length = gst_util_uint64_scale_int_round(buffer_list_t_end - buffer_list_t_start, appdata->rate, GST_SECOND);
-					char *dest = (char *) g_malloc0(buffer_list_length * appdata->unit_size);
+				/*
+				 * build Fr{Adc,Proc,Sim}Data, append to
+				 * frame
+				 */
+
+				g_assert_cmpuint(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND), <=, frame_t_end);
+
+				switch(frpad->pad_type) {
+				case GST_FRPAD_TYPE_FRADCDATA: {
+					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset);
+					adc_data.AppendComment(frpad->comment);
+					GST_LOG_OBJECT(data->pad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					if(!frame->GetRawData()) {
+						FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
+						frame->SetRawData(rawData);
+					}
+					frame->GetRawData()->RefFirstAdc().append(adc_data);
+					container = &(frame->GetRawData()->RefFirstAdc().back()->RefData());
+					break;
+				}
+
+				case GST_FRPAD_TYPE_FRPROCDATA: {
+					/* FIXME:  history */
+					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
+					GST_LOG_OBJECT(data->pad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
+					frame->RefProcData().append(proc_data);
+					container = &(frame->RefProcData().back()->RefData());
+					break;
+				}
+
+				case GST_FRPAD_TYPE_FRSIMDATA: {
+					FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
+					GST_LOG_OBJECT(data->pad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					frame->RefSimData().append(sim_data);
+					container = &(frame->RefSimData().back()->RefData());
+					break;
+				}
+
+				default:
+					g_assert_not_reached();
+					break;
+				}
+
+				/*
+				 * build FrVects from buffers, append to
+				 * channel
+				 */
+
+				for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
+					GstBuffer *buffer = GST_BUFFER(buffer_list->data);
+					GstClockTime buffer_t_start = GST_BUFFER_TIMESTAMP(buffer);
+					GstClockTime buffer_t_end = buffer_t_start + GST_BUFFER_DURATION(buffer);
 
 					/*
-					 * absorb up to 1 ns of rounding
-					 * noise in the buffer list's start
-					 * and end times.  the process of
-					 * chopping up the input stream
-					 * into this list can introduce 1
-					 * ns of rounding noise because
-					 * that code has no internal,
-					 * global, count of elapsed time.
+					 * safety checks.  1 ns of rounding
+					 * noise in the buffer's start and
+					 * end times is permitted because
+					 * the process of slicing the input
+					 * stream into chunks for frames
+					 * can lead to off-by-one rounding
+					 * errors since it is performed
+					 * without global state
+					 * information.
 					 */
 
-					if(buffer_list_t_start == frame_t_start - 1)
-						buffer_list_t_start++;
-					if(buffer_list_t_end == frame_t_end + 1)
-						buffer_list_t_end--;
-					g_assert_cmpuint(buffer_list_t_start, <=, buffer_list_t_end);
+					g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+					g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
+					g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
+					if(buffer_t_start + 1 == frame_t_start)
+						buffer_t_start++;
+					if(buffer_t_end - 1 == frame_t_end)
+						buffer_t_end--;
+					g_assert_cmpuint(buffer_t_start, <=, buffer_t_end);
+					g_assert_cmpuint(frame_t_start, <=, buffer_t_start);
+					g_assert_cmpuint(buffer_t_end, <=, frame_t_end);
 
 					/*
-					 * safety checks
+					 * build FrVect, append to channel
 					 */
 
-					g_assert_cmpuint(frame_t_start, <=, buffer_list_t_start);
-					g_assert_cmpuint(buffer_list_t_end, <=, frame_t_end);
-
-					/*
-					 * copy buffer list contents into
-					 * contiguous array
-					 */
-
-					for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
-						GstBuffer *buffer = GST_BUFFER(buffer_list->data);
-						GstClockTime buffer_t_start = GST_BUFFER_TIMESTAMP(buffer);
-						GstClockTime buffer_t_end = buffer_t_start + GST_BUFFER_DURATION(buffer);
-
-						/*
-						 * safety checks.  again, 1
-						 * ns of rounding noise in
-						 * the buffer's start and
-						 * end times is permitted
-						 * (see above).
-						 */
-
-						g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
-						g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
-						if(buffer_t_start + 1 == buffer_list_t_start)
-							buffer_t_start++;
-						if(buffer_t_end - 1 == buffer_list_t_end)
-							buffer_t_end--;
-						g_assert_cmpuint(buffer_t_start, <=, buffer_t_end);
-						g_assert_cmpuint(buffer_list_t_start, <=, buffer_t_start);
-						g_assert_cmpuint(buffer_t_end, <=, buffer_list_t_end);
-						g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
-
-						if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
-							memcpy(dest + gst_util_uint64_scale_int_round(buffer_t_start - buffer_list_t_start, appdata->rate, GST_SECOND) * appdata->unit_size, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-						else {
-							/* FIXME:  how to indicate gaps in frame file? */
-						}
-						gst_buffer_unref(buffer);
-					}
-
-					/*
-					 * build FrVect from data, then
-					 * Fr{Adc,Proc,Sim}Data from FrVect
-					 * and append to frame
-					 */
-
-					appdata->dims[0].SetNx(buffer_list_length);
-					appdata->dims[0].SetStartX(0.0);
-					FrameCPP::FrVect vect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, dest, frpad->units);
-					switch(frpad->pad_type) {
-					case GST_FRPAD_TYPE_FRADCDATA: {
-						FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND);
-						adc_data.AppendComment(frpad->comment);
-						GST_LOG_OBJECT(data->pad, "appending FrAdcData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-						adc_data.RefData().append(vect);
-						if(!frame->GetRawData()) {
-							FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
-							frame->SetRawData(rawData);
-						}
-						frame->GetRawData()->RefFirstAdc().append(adc_data);
-						break;
-					}
-
-					case GST_FRPAD_TYPE_FRPROCDATA: {
-						/* FIXME:  history */
-						FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND, (double) GST_CLOCK_DIFF(buffer_list_t_start, buffer_list_t_end) / GST_SECOND, 0.0, 0.0, 0.0, 0.0);
-						GST_LOG_OBJECT(data->pad, "appending FrProcData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-						proc_data.RefData().append(vect);
-						frame->RefProcData().append(proc_data);
-						break;
-					}
-
-					case GST_FRPAD_TYPE_FRSIMDATA: {
-						FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, (double) GST_CLOCK_DIFF(frame_t_start, buffer_list_t_start) / GST_SECOND);
-						GST_LOG_OBJECT(data->pad, "appending FrSimData [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_list_t_start), GST_TIME_SECONDS_ARGS(buffer_list_t_end));
-						sim_data.RefData().append(vect);
-						frame->RefSimData().append(sim_data);
-						break;
-					}
-
-					default:
-						g_assert_not_reached();
-						break;
-					}
-					g_free(dest);
+					GST_LOG_OBJECT(data->pad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
+					appdata->dims[0].SetNx(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
+					appdata->dims[0].SetStartX((double) GST_CLOCK_DIFF(frame_t_start, buffer_t_start) / GST_SECOND - timeOffset);
+					container->append(FrameCPP::FrVect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, GST_BUFFER_DATA(buffer), frpad->units));
+					gst_buffer_unref(buffer);
 				}
 			}
 
@@ -811,8 +791,9 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		goto done;
 	}
 
-	case GST_EVENT_FLUSH_START:
 	case GST_EVENT_EOS:
+		GST_LOG_OBJECT(mux, "EOS");
+	case GST_EVENT_FLUSH_START:
 		flush(mux);
 		break;
 
