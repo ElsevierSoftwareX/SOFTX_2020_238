@@ -100,6 +100,7 @@ static void additional_initializations(GType type)
 
 GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
 
+
 /*
  * Compression scheme enum type
  */
@@ -414,7 +415,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			 * add frame to file
 			 */
 
-			ofs.WriteFrame(frame, (gushort)mux->compression_scheme, (gushort)mux->compression_level, FrameCPP::Common::CheckSum::CRC);
+			ofs.WriteFrame(frame, (gushort) mux->compression_scheme, (gushort) mux->compression_level, FrameCPP::Common::CheckSum::CRC);
 			mux->frame_number++;
 			g_object_notify(G_OBJECT(mux), "frame-number");
 		}
