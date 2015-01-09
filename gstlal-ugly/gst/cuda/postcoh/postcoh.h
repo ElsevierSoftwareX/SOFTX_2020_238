@@ -91,7 +91,11 @@ typedef struct _PeakList {
 } PeakList;
 
 typedef struct _PostcohState {
+  COMPLEX_F **snglsnr;
   COMPLEX_F **d_snglsnr;
+  int snglsnr_len;
+  int snglsnr_start_load;
+  int snglsnr_start_exe;
   gint nifo;
   gint8 *ifo_mapping;
   float **d_U_map;
@@ -126,8 +130,9 @@ struct _CudaPostcoh {
   char *detrsp_fname;
   char *autocorrelation_fname;
   gint autocorrelation_len;
-  gint exe_size;
-  gint preserved_size;
+  gint exe_len;
+  gint preserved_len;
+  float max_dt;
   gboolean set_starttime;
   gboolean is_all_aligned;
   double offset_per_nanosecond;
@@ -138,6 +143,7 @@ struct _CudaPostcoh {
   guint64 samples_in;
   guint64 samples_out;
 
+  gint hist_trials;
   PostcohState *state;
 };
 

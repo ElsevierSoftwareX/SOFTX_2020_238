@@ -28,7 +28,10 @@ __device__ static inline float atomicMax(float* address, float val)
 
 __global__ void kel_max_snglsnr
 (
-    COMPLEX_F*  snr,        // INPUT: snr
+    COMPLEX_F**  snr,        // INPUT: snr
+    int iifo,
+    int start_len,
+    int len,
     int     templateN,  // INPUT: template number
     int     timeN,      // INPUT: time sample number
     float*  ressnr,     // OUTPUT: maximum snr
@@ -44,15 +47,17 @@ __global__ void kel_max_snglsnr
     int     max_template    = 0; 
     float   temp_snr_sq;
     int     temp_template;
-    int	index = 0;
+    int	index = 0, start_index = 0;
 
     for (int i = wIDg; i < timeN; i += wNg)
     {
+	    start_index = (i + start_len) % len;
         // one warp is used to find the max snr for one time
         for (int j = wIDl; j < templateN; j += WARP_SIZE)
         {
-	    index = i * templateN + j;
-            temp_snr_sq        = snr[index].re * snr[index].re + snr[index].im * snr[index].im;
+	    index = start_index * templateN + j;
+	
+            temp_snr_sq        = snr[iifo][index].re * snr[iifo][index].re + snr[iifo][index].im * snr[iifo][index].im;
 
             max_template    = (j + max_template) + (j - max_template) * (2 * (temp_snr_sq > max_snr_sq) - 1);
             max_template    = max_template >> 1;
@@ -168,20 +173,36 @@ kel_remove_duplicate_scan
     }
 }
 
-void peakfinder(COMPLEX_F *one_d_snglsnr, int iifo, PostcohState *state)
+void peakfinder(PostcohState *state, int iifo)
 {
 
 	printf("start peakfinder\n");
-	COMPLEX_F *d_snglsnr = one_d_snglsnr + state->head_len * state->ntmplt;
     int THREAD_BLOCK    = 256;
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
-	kel_max_snglsnr<<<GRID, THREAD_BLOCK>>>(d_snglsnr, state->ntmplt, state->exe_len, state->peak_list[iifo]->d_maxsnglsnr, state->peak_list[iifo]->d_tmplt_index, state->peak_list[iifo]->d_sample_index);
+	kel_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->d_snglsnr, 
+						iifo,
+						state->snglsnr_start_exe,
+						state->snglsnr_len,
+						state->ntmplt, 
+						state->exe_len, 
+						state->peak_list[iifo]->d_maxsnglsnr, 
+						state->peak_list[iifo]->d_tmplt_index, 
+						state->peak_list[iifo]->d_sample_index);
 	
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
     float *peak_tmplt;
     cudaMalloc((void **)&peak_tmplt, sizeof(float) * state->ntmplt);
-    kel_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(state->peak_list[iifo]->d_maxsnglsnr, state->peak_list[iifo]->tmplt_index, state->exe_len, state->ntmplt, peak_tmplt);
-    kel_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(state->peak_list[iifo]->d_maxsnglsnr, state->peak_list[iifo]->tmplt_index, state->exe_len, state->ntmplt, peak_tmplt);
+    kel_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(	state->peak_list[iifo]->d_maxsnglsnr, 
+		    						state->peak_list[iifo]->tmplt_index, 
+								state->exe_len, 
+								state->ntmplt, 
+								peak_tmplt);
+
+    kel_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	state->peak_list[iifo]->d_maxsnglsnr, 
+		    					state->peak_list[iifo]->tmplt_index, 
+							state->exe_len, 
+							state->ntmplt, 
+							peak_tmplt);
     cudaFree(peak_tmplt);
 }
 

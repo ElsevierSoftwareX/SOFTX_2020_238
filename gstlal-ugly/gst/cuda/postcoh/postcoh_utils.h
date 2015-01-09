@@ -1,6 +1,10 @@
 #include "postcoh.h"
 
+PeakList *create_peak_list(int exe_len);
+
 void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state);
 void
-peakfinder(COMPLEX_F *one_d_snglsnr, int iifo, PostcohState *state);
+peakfinder(PostcohState *state, int iifo);
+void
+state_destroy(PostcohState *state);

@@ -127,3 +127,11 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	}
 }
 
+void
+state_destroy(PostcohState *state)
+{
+	int i;
+	if(state->d_snglsnr)
+		for(i=0; i<state->nifo; i++)
+			cudaFree(state->d_snglsnr[i]);
+}
