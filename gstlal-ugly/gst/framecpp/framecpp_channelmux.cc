@@ -302,6 +302,16 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 				 */
 
 				buffer_list = framecpp_muxcollectpads_buffer_list_join(buffer_list, FALSE);
+				/* FIXME:  the next two tests should be
+				 * removed.  the muxer no longer requires
+				 * the buffer list to contain exactly 1
+				 * buffer.  these checks are here
+				 * temporarily to reproduce old behaviour
+				 * that the code has been generalized to no
+				 * longer require */
+				if(!buffer_list)
+					continue;
+				g_assert_cmpuint(g_list_length(buffer_list), ==, 1);
 
 				/*
 				 * build Fr{Adc,Proc,Sim}Data, append to
