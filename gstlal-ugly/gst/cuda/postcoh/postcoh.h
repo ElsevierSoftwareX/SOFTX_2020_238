@@ -72,6 +72,9 @@ struct _GstPostcohCollectData {
 };
 
 typedef struct _PeakList {
+  int peak_intlen;
+  int peak_floatlen;
+
 	/* data in the same type are allocated together */
 	int *tmplt_idx;
 	int *pix_idx;
@@ -98,6 +101,7 @@ typedef struct _PeakList {
 	float *d_chi2_bg;
 
 	float *d_peak_tmplt;
+
 } PeakList;
 
 typedef struct _PostcohState {

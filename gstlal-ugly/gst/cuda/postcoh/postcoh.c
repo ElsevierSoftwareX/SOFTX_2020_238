@@ -564,6 +564,11 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		}
 
 		peakfinder(state, cur_ifo);
+		cudaMemcpy(	state->peak_list[cur_ifo]->tmplt_idx, 
+				state->peak_list[cur_ifo]->d_tmplt_idx, 
+				sizeof(int) * state->peak_list[cur_ifo]->peak_intlen, 
+				cudaMemcpyHostToDevice);
+
 		cohsnr_and_chi2(state, cur_ifo, gps_idx);
 //		cohsnr_and_chi2_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
 

@@ -6,37 +6,49 @@
 PeakList *create_peak_list(PostcohState *state, gint hist_trials)
 {
 		int exe_len = state->exe_len;
-		PeakList *tmp_peak_list = (PeakList *)malloc(sizeof(PeakList));
+		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
+
+		int peak_intlen = 3 * exe_len + 1;
+		int peak_floatlen = (4 + hist_trials * 3 ) * exe_len;
+		pklist->peak_intlen = peak_intlen;
+		pklist->peak_floatlen = peak_floatlen;
 		
-		cudaMalloc((void **) &(tmp_peak_list->d_tmplt_idx), sizeof(int) * (3 * exe_len + 1 ));
-		cudaMemset(tmp_peak_list->d_tmplt_idx, 0, sizeof(int) * (3 *exe_len + 1));
-		tmp_peak_list->d_pix_idx = tmp_peak_list->d_tmplt_idx + exe_len;
-		tmp_peak_list->d_peak_pos = tmp_peak_list->d_pix_idx + exe_len;
-		tmp_peak_list->d_npeak = tmp_peak_list->d_peak_pos + exe_len;
+		cudaMalloc((void **) &(pklist->d_tmplt_idx), sizeof(int) * peak_intlen );
+		cudaMemset(pklist->d_tmplt_idx, 0, sizeof(int) * peak_intlen);
+		pklist->d_pix_idx = pklist->d_tmplt_idx + exe_len;
+		pklist->d_peak_pos = pklist->d_pix_idx + exe_len;
+		pklist->d_npeak = pklist->d_peak_pos + exe_len;
 
-		cudaMalloc((void **) &(tmp_peak_list->d_maxsnglsnr), sizeof(float) * (4 + 3*hist_trials)* exe_len);
-		cudaMemset(tmp_peak_list->d_maxsnglsnr, 0, sizeof(float) * 4 * exe_len);
+		cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen);
+		cudaMemset(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen);
+		pklist->d_cohsnr = pklist->d_maxsnglsnr + exe_len;
+		pklist->d_nullsnr = pklist->d_cohsnr + exe_len;
+		pklist->d_chi2 = pklist->d_nullsnr + exe_len;
+		pklist->d_cohsnr_bg = pklist->d_chi2 + exe_len;
+		pklist->d_nullsnr_bg = pklist->d_cohsnr_bg + hist_trials * exe_len;
+		pklist->d_chi2_bg = pklist->d_nullsnr_bg + hist_trials * exe_len;
 
-		tmp_peak_list->d_cohsnr = tmp_peak_list->d_maxsnglsnr + exe_len;
-		tmp_peak_list->d_nullsnr = tmp_peak_list->d_cohsnr + exe_len;
-		tmp_peak_list->d_chi2 = tmp_peak_list->d_nullsnr + exe_len;
+		pklist->tmplt_idx = (int *)malloc(sizeof(int) * peak_intlen);
+		memset(pklist->tmplt_idx, 0, sizeof(int) * peak_intlen);
+		pklist->pix_idx = pklist->tmplt_idx + exe_len;
+		pklist->peak_pos = pklist->pix_idx + exe_len;
+		pklist->npeak = pklist->peak_pos + exe_len;
+
+		pklist->maxsnglsnr = (float *)malloc(sizeof(float) * peak_floatlen);
+		memset(pklist->maxsnglsnr, 0, sizeof(float) * peak_floatlen);
+		pklist->cohsnr = pklist->maxsnglsnr + exe_len;
+		pklist->nullsnr = pklist->cohsnr + exe_len;
+		pklist->chi2 = pklist->nullsnr + exe_len;
+		pklist->cohsnr_bg = pklist->chi2 + exe_len;
+		pklist->nullsnr_bg = pklist->cohsnr_bg + hist_trials * exe_len;
+		pklist->chi2_bg = pklist->nullsnr_bg + hist_trials * exe_len;
 
 
-		tmp_peak_list->tmplt_idx = (int *)malloc(sizeof(int) * (3 *exe_len + 1));
-		memset(tmp_peak_list->tmplt_idx, 0, sizeof(int) * (3 * exe_len + 1));
-		tmp_peak_list->pix_idx = tmp_peak_list->tmplt_idx + exe_len;
-		tmp_peak_list->peak_pos = tmp_peak_list->pix_idx + exe_len;
-		tmp_peak_list->npeak = tmp_peak_list->peak_pos + exe_len;
-		tmp_peak_list->maxsnglsnr = (float *)malloc(sizeof(float) * 4 * exe_len);
-		memset(tmp_peak_list->maxsnglsnr, 0, sizeof(float) * (4 + 3*hist_trials) * exe_len);
-		tmp_peak_list->cohsnr = tmp_peak_list->maxsnglsnr + exe_len;
-		tmp_peak_list->nullsnr = tmp_peak_list->cohsnr + exe_len;
-		tmp_peak_list->chi2 = tmp_peak_list->nullsnr + exe_len;
-    		;
-		cudaMalloc((void **)&(tmp_peak_list->d_peak_tmplt), sizeof(float) * state->ntmplt);
+		/* temporary struct to store tmplt max in one exe_len data */
+		cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt);
+		cudaMemset(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt);
 
-		cudaMemset(tmp_peak_list->d_peak_tmplt, 0, sizeof(float) * state->ntmplt);
-		return tmp_peak_list;
+		return pklist;
 }
 
 void
