@@ -1,4 +1,4 @@
-\page gstlalmeeting20140427page F2F Meeting April 27-May 3, 2014
+\page gstlalmeeting20140427page F2F Meeting April 27-May 3, 2014, Cardiff
 
 \ref gstlalmeetingspage
 

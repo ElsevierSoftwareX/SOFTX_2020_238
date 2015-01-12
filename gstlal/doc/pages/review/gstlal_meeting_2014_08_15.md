@@ -1,4 +1,4 @@
-\page gstlalmeeting20140815page Review Meeting August 8-15, 2014 at CITA
+\page gstlalmeeting20140815page F2F Review Meeting August 8-15, 2014 at CITA
 
 \ref gstlalmeetingspage
 

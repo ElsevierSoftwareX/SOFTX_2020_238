@@ -1,4 +1,4 @@
-\page gstlalmeeting20150112page F2F Review Meeting January 12-18, 2015
+\page gstlalmeeting20150112page F2F Review Meeting January 12-18, 2015, Caltech
 
 \ref gstlalmeetingspage
 
