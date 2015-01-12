@@ -32,7 +32,6 @@ from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import pdb
 from subprocess import call
-import waveHandler
 import random
 import lalsimulation
 import lal
@@ -49,7 +48,7 @@ from glue.ligolw import utils
 from pylal.series import read_psd_xmldoc
 from glue.ligolw import utils, lsctables
 
-
+from cbc_template_iir import lalwhiten
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -122,7 +121,7 @@ def cleanFreq(f,fLower):
 	    i=i+1;
 #    print "fStartFix: %d i: %d " % (fStartFix, i)
 
-def generate_waveform(m1,m2,dist,incl,fLower,fFinal,fRef,s1x,s1y,s1z,s2x,s2y,s2z):
+def generate_waveform(m1,m2,dist,incl,fLower,fFinal,fRef,s1x,s1y,s1z,s2x,s2y,s2z,ampphase=1):
 	sampleRate = 4096 #Should pass this but its a nontrivial find and replace
 	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
 		    				    1./sampleRate,			# delta T
@@ -139,8 +138,10 @@ def generate_waveform(m1,m2,dist,incl,fLower,fFinal,fRef,s1x,s1y,s1z,s2x,s2y,s2z
 						    None,				# Non GR parameters
 						    0,7,				# Amplitude and phase order 2N+1
 						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-
-	return calc_amp_phase(hc.data.data, hp.data.data)
+	if(ampphase==1):
+	    return calc_amp_phase(hc.data.data, hp.data.data)
+	else:
+	    return hp,hc
 
 def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_lower, param_upper, param_num = 100,  input_mass1 = 1.4, input_mass2 = 1.4):
 
@@ -670,10 +671,12 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
-def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
-        '''Compares a given template and signal'''
-
-
+def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=None):
+        '''Compares a given template and signal
+	    New: Compare using the freq domain (lalwhiten) vs time domain applied psd
+	
+	'''
+	print("Beginning comptuations")
 	fFinal = 2047; #We only go as high as the waveform anyway
 	fLower = 15 
 
@@ -695,48 +698,47 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2):
 
 
 	#### Set up the template waveform
-	ampTemplate,phaseTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
+	ampTemplate,phaseTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=1)
+
+	#Apply PSD
 	fTemplate = numpy.gradient(phaseTemplate)/(2.0*numpy.pi * (1.0/sampleRate))
-
 	cleanFreq(fTemplate,fLower)
+	ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate[0:len(fTemplate)])**0.5
 
-	#if((fs<0).any()):
-	#    print("fs broke for masses %f %f" % (m1,m2))
-	#    continue
-	if psd_interp is not None:
-	    ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate[0:len(fTemplate)])**0.5
+	#### Get the IIR coefficients and response from the template####
+	a1, b0, delay = spawaveform.iir(ampTemplate, phaseTemplate, epsilon, alpha, beta, padding)
 
-	ampTemplate = ampTemplate / numpy.sqrt(numpy.dot(ampTemplate,numpy.conj(ampTemplate)));
-	u[-len(ampTemplate):] = ampTemplate * numpy.exp(1j*phaseTemplate);
+	outTemplate = spawaveform.iirresponse(length, a1, b0, delay) #
+	outTemplate = outTemplate[::-1] # 
+	u[-len(outTemplate):] = outTemplate; #FIX: These 3 lines are ugly and slow
+
 	u *= 1/numpy.sqrt(numpy.dot(u,numpy.conj(u)))
-	u = numpy.conj(numpy.fft.fft(u))
-   
-	#Set up the signal waveform
+
+
+
+    	#Set up the signal waveform
 	ampSignal,phaseSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
-	fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi * (1.0/sampleRate))
 
-	cleanFreq(fSignal,fLower)
-	#if((fs<0).any()):
-	#    print("fs broke for masses %f %f" % (m1,m2))
-	#    continue
-	if psd_interp is not None:
-	    ampSignal[0:len(fSignal)] /= psd_interp(fSignal[0:len(fSignal)])**0.5
+	##Apply PSD
+	#fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi * (1.0/sampleRate))
+	#cleanFreq(fSignal,fLower)
+	#ampSignal[0:len(fSignal)] /= psd_interp(fSignal[0:len(fSignal)])**0.5
 
-	ampSignal = ampSignal / numpy.sqrt(numpy.dot(ampSignal,numpy.conj(ampSignal)));
-	h[-len(ampSignal):] = ampSignal * numpy.exp(1j*phaseSignal);
+	#ampSignal = ampSignal / numpy.sqrt(numpy.dot(ampSignal,numpy.conj(ampSignal)));
+	#h[-len(ampSignal):] = ampSignal * numpy.exp(1j*phaseSignal);
+	#h *= 1/numpy.sqrt(numpy.dot(h,numpy.conj(h)))
+	#h = numpy.conj(numpy.fft.fft(h))
+
+	hpSignal,hcSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=0)
+	
+	#### u -> filters, h -> signal ####
+#	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hpSignal, len(hpSignal.data.data), len(hpSignal.data.data)/sampleRate, sampleRate, len(hpSignal.data.data))
+	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hpSignal, length, length/sampleRate, sampleRate, length)
+	h = lalwhiten_amp * numpy.exp(1j * lalwhiten_phase)
 	h *= 1/numpy.sqrt(numpy.dot(h,numpy.conj(h)))
 	h = numpy.conj(numpy.fft.fft(h))
 
-	#### Get the IIR coefficients and response from the new signal####
-	a1, b0, delay = spawaveform.iir(ampTemplate, phaseTemplate, epsilon, alpha, beta, padding)
-	outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
-	outTemplate = outTemplate[::-1]
-	u[-len(outTemplate):] = outTemplate;
-	u *= 1/numpy.sqrt(numpy.dot(u,numpy.conj(u)))
-
-	#### u -> filters, h -> signal ####
-
-	#### Overlap for new signal vs new filters ####
+	### Overlap for new signal vs new filters ####
 	crossCorr = numpy.fft.ifft(numpy.fft.fft(u)*h);
 	snr = numpy.abs(crossCorr).max();
 
@@ -752,7 +754,7 @@ def main():
 
 	#Universal options
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).", type="string")
-	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).",type="string")
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required for most).",type="string")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).",type="string")
 
 	#Options for types
@@ -771,7 +773,7 @@ def main():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ("template_bank", "type")
+	required_options = ("template_bank","reference_psd","type")
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
@@ -866,101 +868,8 @@ def main():
 
 	    template_m1 = 1.4;
 	    template_m2 = 1.4;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-
-	    signal_m1 = 1.366739;
-	    signal_m2 = 1.593624;
-
-	    template_m1 = 1.502962;
-	    template_m2 = 1.447757;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-
-	    signal_m1 = 1.427502;
-	    signal_m2 = 1.411858;
-
-	    template_m1 = 1.480557;
-	    template_m2 = 1.356720;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.481233;
-	    template_m2 = 1.357322;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	     
-	    template_m1 = 1.588402;
-	    template_m2 = 1.259266;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.482673;
-	    template_m2 = 1.358543;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.483337;
-	    template_m2 = 1.359166;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.655264;
-	    template_m2 = 1.223511;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.48473;
-	    template_m2 = 1.36043;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.485423;
-	    template_m2 = 1.361036;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.710362;
-	    template_m2 = 1.89433;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.549983;
-	    template_m2 = 1.307968;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    signal_m1 = 1.422111;
-	    signal_m2 = 1.41618;
-
-	    template_m1 = 1.480557;
-	    template_m2 = 1.356720;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.481233;
-	    template_m2 = 1.357322;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	     
-	    template_m1 = 1.588402;
-	    template_m2 = 1.259266;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.482673;
-	    template_m2 = 1.358543;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.483337;
-	    template_m2 = 1.359166;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.655264;
-	    template_m2 = 1.223511;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.48473;
-	    template_m2 = 1.36043;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.485423;
-	    template_m2 = 1.361036;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.710362;
-	    template_m2 = 1.89433;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	    
-	    template_m1 = 1.549983;
-	    template_m2 = 1.307968;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2)
-	     
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=ALLpsd['H1'])
+	
 	## There is potential to easily multithread the program but currently the memory useage is too high for even one instance in some cases
 	## This is a major issue that is still being resolved but is difficult due to the very long waveforms
 
