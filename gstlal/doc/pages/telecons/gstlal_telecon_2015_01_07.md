@@ -6,7 +6,9 @@
 
 \section agenda Agenda
 
-1. <a href=https://dcc.ligo.org/G1500014>Proposed changes to datasource.py and low latency plotting methods</a>
+ -# <a href=https://dcc.ligo.org/G1500014>Proposed changes to datasource.py and low latency plotting methods</a>
+ -# <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/BNS/MDC/MultiplePipelines> Mulitple pipeline notes </a>
+ -# <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/BNS/MDC/SpinMDC/gstlal_pipe_compare> BNS MDC (pipe compare) </a>
 
 \section attendance Attendance
 

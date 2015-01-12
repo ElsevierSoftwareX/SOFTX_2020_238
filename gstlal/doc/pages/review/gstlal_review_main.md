@@ -18,17 +18,14 @@
 Consult the \ref gstlal_review_codes_page for more details about code action
 items.
 
-- Test robustness of fixed bank (start by figuring out the right question!)
- - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
 - Test delta function input to LLOID algorithm (e.g with and without SVD)
-- Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
 - Background estimations should have more informative plots e.g., smoothed likelihood functions
-- Study the dependence of coincidence triggers on SNR threshold
 - Write documentation for autochisq (paper in progress)
 - Explore autocorrelation chisquared mismatch scaling with number of samples e.g., @f$ \nu + \epsilon(\nu) \delta^{2} @f$
 - Make sure capsfilters and other similar elements are well documented within graphs (e.g. put in rates, etc)
 - Add description of arrows in graphs
 - Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
+  - Generate plots of the various segment output and come up with sanity checks.
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
 
 - figure out what the PE people want to present and when;  it should be
@@ -75,6 +72,19 @@ items.
 
 
 \section completed_action Completed action items
+- Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
+ - *Chad this will not be done right now*: The SNR threshold is tied to many
+   histogramming objects.  Currently the value is set at 4 which is at the
+saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
+about once per second.  A user can  change this only after the histograming
+code is generalized. It will be left for a future feature request.  Things to consider:
+   - Change the histogram boundaries
+   - Change the composite detection statistic threshold
+   - Change the peak time on lal_itac
+   - Study the dependence of coincidence triggers on SNR threshold
+- Test robustness of fixed bank (start by figuring out the right question!)
+ - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
+ - *Marcel: Done* His thesis makes conclusions that it is okay: https://dcc.ligo.org/LIGO-L1400140
 
 - Add synopses for all programs in documentation
  - *Chad: Done*
