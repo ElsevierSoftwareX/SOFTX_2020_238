@@ -17,3 +17,5 @@
 - \ref gstlalmeeting20140815page
 - \ref gstlalmeeting20141022page
 - \ref gstlalmeeting20141105page
+- \ref gstlalmeeting20141203page
+- \ref gstlalmeeting20150112page
