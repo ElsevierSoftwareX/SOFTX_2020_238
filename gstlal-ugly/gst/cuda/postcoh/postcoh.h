@@ -73,21 +73,31 @@ struct _GstPostcohCollectData {
 
 typedef struct _PeakList {
 	/* data in the same type are allocated together */
-	int *sample_index;
-	int *tmplt_index;
-	int *pix_index;
+	int *tmplt_idx;
+	int *pix_idx;
+	int *peak_pos;
+	int *npeak;
 	float *maxsnglsnr;
 	float *cohsnr;
 	float *nullsnr;
 	float *chi2;
-	
-	int *d_sample_index;
-	int *d_tmplt_index;
-	int *d_pix_index;
+	float *cohsnr_bg;
+	float *nullsnr_bg;
+	float *chi2_bg;
+
+	int *d_tmplt_idx;
+	int *d_pix_idx;
+	int *d_peak_pos;
+	int *d_npeak;
 	float *d_maxsnglsnr;
 	float *d_cohsnr;
 	float *d_nullsnr;
 	float *d_chi2;
+	float *d_cohsnr_bg;
+	float *d_nullsnr_bg;
+	float *d_chi2_bg;
+
+	float *d_peak_tmplt;
 } PeakList;
 
 typedef struct _PostcohState {
@@ -101,13 +111,13 @@ typedef struct _PostcohState {
   float **d_U_map;
   float **d_diff_map;
   int gps_step;
-  int order;
+  int npix;
   PeakList **peak_list;
-  int *npeak;
   int head_len;
   int exe_len;
   int ntmplt;
-  float *chi2_norm;
+  float *d_chi2_norm;
+  float dt;
 } PostcohState;
 
 /**
@@ -139,6 +149,7 @@ struct _CudaPostcoh {
 
   GstClockTime in_t0;
   GstClockTime out_t0;
+  GstClockTime next_t;
   guint64 out_offset0;
   guint64 samples_in;
   guint64 samples_out;

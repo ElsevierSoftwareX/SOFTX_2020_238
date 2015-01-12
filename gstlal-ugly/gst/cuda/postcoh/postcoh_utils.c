@@ -1,16 +1,20 @@
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
+#include <chealpix.h>
 #include "postcoh_utils.h"
 
-PeakList *create_peak_list(int exe_len)
+
+PeakList *create_peak_list(PostcohState *state, gint hist_trials)
 {
+		int exe_len = state->exe_len;
 		PeakList *tmp_peak_list = (PeakList *)malloc(sizeof(PeakList));
 		
-		cudaMalloc((void **) &(tmp_peak_list->d_sample_index), sizeof(int) * 3 * exe_len);
-		cudaMemset(tmp_peak_list->d_sample_index, 0, sizeof(int) * 3 *exe_len);
-		tmp_peak_list->d_tmplt_index = tmp_peak_list->d_sample_index + exe_len;
-		tmp_peak_list->d_pix_index = tmp_peak_list->d_tmplt_index + exe_len;
+		cudaMalloc((void **) &(tmp_peak_list->d_tmplt_idx), sizeof(int) * (3 * exe_len + 1 ));
+		cudaMemset(tmp_peak_list->d_tmplt_idx, 0, sizeof(int) * (3 *exe_len + 1));
+		tmp_peak_list->d_pix_idx = tmp_peak_list->d_tmplt_idx + exe_len;
+		tmp_peak_list->d_peak_pos = tmp_peak_list->d_pix_idx + exe_len;
+		tmp_peak_list->d_npeak = tmp_peak_list->d_peak_pos + exe_len;
 
-		cudaMalloc((void **) &(tmp_peak_list->d_maxsnglsnr), sizeof(float) * 4 * exe_len);
+		cudaMalloc((void **) &(tmp_peak_list->d_maxsnglsnr), sizeof(float) * (4 + 3*hist_trials)* exe_len);
 		cudaMemset(tmp_peak_list->d_maxsnglsnr, 0, sizeof(float) * 4 * exe_len);
 
 		tmp_peak_list->d_cohsnr = tmp_peak_list->d_maxsnglsnr + exe_len;
@@ -18,16 +22,20 @@ PeakList *create_peak_list(int exe_len)
 		tmp_peak_list->d_chi2 = tmp_peak_list->d_nullsnr + exe_len;
 
 
-		tmp_peak_list->sample_index = (int *)malloc(sizeof(int) * 3 *exe_len);
-		memset(tmp_peak_list->sample_index, 0, sizeof(int) * 3 * exe_len);
-		tmp_peak_list->tmplt_index = tmp_peak_list->sample_index + exe_len;
-		tmp_peak_list->pix_index = tmp_peak_list->tmplt_index + exe_len;
-		tmp_peak_list->maxsnglsnr = (int *)malloc(sizeof(float) * 4 * exe_len);
-		memset(tmp_peak_list->maxsnglsnr, 0, sizeof(float) * 4 * exe_len);
+		tmp_peak_list->tmplt_idx = (int *)malloc(sizeof(int) * (3 *exe_len + 1));
+		memset(tmp_peak_list->tmplt_idx, 0, sizeof(int) * (3 * exe_len + 1));
+		tmp_peak_list->pix_idx = tmp_peak_list->tmplt_idx + exe_len;
+		tmp_peak_list->peak_pos = tmp_peak_list->pix_idx + exe_len;
+		tmp_peak_list->npeak = tmp_peak_list->peak_pos + exe_len;
+		tmp_peak_list->maxsnglsnr = (float *)malloc(sizeof(float) * 4 * exe_len);
+		memset(tmp_peak_list->maxsnglsnr, 0, sizeof(float) * (4 + 3*hist_trials) * exe_len);
 		tmp_peak_list->cohsnr = tmp_peak_list->maxsnglsnr + exe_len;
 		tmp_peak_list->nullsnr = tmp_peak_list->cohsnr + exe_len;
 		tmp_peak_list->chi2 = tmp_peak_list->nullsnr + exe_len;
+    		;
+		cudaMalloc((void **)&(tmp_peak_list->d_peak_tmplt), sizeof(float) * state->ntmplt);
 
+		cudaMemset(tmp_peak_list->d_peak_tmplt, 0, sizeof(float) * state->ntmplt);
 		return tmp_peak_list;
 }
 
@@ -65,7 +73,8 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	printf("%p\n", param_gps.data);
 	state->gps_step = *((int *)param_gps.data);
 	printf("gps_step %d\n", state->gps_step);
-	state->order = *((int *)param_order.data);
+	unsigned long nside = (unsigned long) 1 << *((int *)param_order.data);
+	state->npix = nside2npix(nside);
 	free(param_gps.data);
 	param_gps.data = NULL;
 	printf("test\n");
