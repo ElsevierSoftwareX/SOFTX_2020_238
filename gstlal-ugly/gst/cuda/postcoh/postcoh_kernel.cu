@@ -150,6 +150,8 @@ ker_remove_duplicate_find_peak
 __global__ void
 ker_remove_duplicate_scan
 (
+    int*	npeak,			// Needs to be initialize to 0
+	int*	peak_pos,
     float*  ressnr,
     int*    restemplate,
     int     timeN,
@@ -163,15 +165,22 @@ ker_remove_duplicate_scan
     float   max_snr;
     float   snr;
     int     templ;
+
+	unsigned int index;
     for (int i = tid; i < timeN; i += tn)
     {
         snr     = ressnr[i];
         templ   = restemplate[i];
         max_snr = peak[templ];
 
-        restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
-        ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
-	printf("tmplt %d, snr %f\n", restemplate[i], ressnr[i]);
+		if (fabs(max_snr - snr) < EPISLON )
+		{
+			index = atomicInc((unsigned *)npeak, timeN);
+			peak_pos[index] = i;		
+		}
+        // restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
+        // ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
+		printf("tmplt %d, snr %f\n", restemplate[i], ressnr[i]);
     }
 }
 
