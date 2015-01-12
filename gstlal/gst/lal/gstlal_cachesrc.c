@@ -633,27 +633,17 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	}
 
 	/*
-	 * require a start time
-	 */
-
-	if(!GST_CLOCK_TIME_IS_VALID(segment->start)) {
-		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("start time is required"));
-		success = FALSE;
-		goto done;
-	}
-
-	/*
 	 * do the seek
 	 */
 
-	i = time_to_index(element, segment->start);
+	i = GST_CLOCK_TIME_IS_VALID(segment->start) ? time_to_index(element, segment->start) : 0;
 	if(i >= element->cache->length)
 		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
 	else if(GST_CLOCK_TIME_IS_VALID(segment->stop) && (GstClockTime) segment->stop <= cache_entry_start_time(element, i)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("no data available for segment"));
 		success = FALSE;
 		goto done;
-	} else if((GstClockTime) segment->start < cache_entry_start_time(element, i))
+	} else if(GST_CLOCK_TIME_IS_VALID(segment->start) && (GstClockTime) segment->start < cache_entry_start_time(element, i))
 		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->list[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));
 	else
 		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->list[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));

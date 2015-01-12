@@ -937,8 +937,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 
-			GST_LOG_OBJECT(element, "found frame %d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), GST_TIME_SECONDS_ARGS(frame_timestamp));
-
 			/*
 			 * update element properties
 			 */
@@ -955,6 +953,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			/* assume this changes */
 			element->frame_number = frame->GetFrame();
 			g_object_notify(G_OBJECT(element), "frame-number");
+
+			GST_LOG_OBJECT(element, "frame index %d: #%d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), element->frame_number, GST_TIME_SECONDS_ARGS(frame_timestamp));
 
 			/*
 			 * populate tags from frame metadata.  the tags

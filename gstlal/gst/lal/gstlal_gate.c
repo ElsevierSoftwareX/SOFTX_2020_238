@@ -181,18 +181,6 @@ static gdouble control_sample_uint32(const gpointer data, guint64 offset)
 }
 
 
-static gdouble control_sample_int64(const gpointer data, guint64 offset)
-{
-	return ABS(((const gint64 *) data)[offset]);
-}
-
-
-static gdouble control_sample_uint64(const gpointer data, guint64 offset)
-{
-	return ((const guint64 *) data)[offset];
-}
-
-
 static gdouble control_sample_float32(const gpointer data, guint64 offset)
 {
 	return fabsf(((const float *) data)[offset]);
@@ -678,9 +666,6 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 			break;
 		case 32:
 			control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
-			break;
-		case 64:
-			control_sample_func = is_signed ? control_sample_int64 : control_sample_uint64;
 			break;
 		default:
 			success = FALSE;
@@ -1197,7 +1182,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		g_mutex_lock(element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);
-		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -1333,6 +1317,8 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	);
 
+	/* no 64-bit int support for control because cannot specify
+	 * threshold to that precision */
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
@@ -1344,7 +1330,7 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {8, 16, 32, 64}, " \
+				"width = (int) {8, 16, 32}, " \
 				"signed = (boolean) {true, false} ; " \
 				"audio/x-raw-float, " \
 				"rate = (int) [1, MAX], " \
