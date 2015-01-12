@@ -1182,7 +1182,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		g_mutex_lock(element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);
-		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
 		break;
 
