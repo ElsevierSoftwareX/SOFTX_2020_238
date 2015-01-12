@@ -24,7 +24,7 @@
 
 #define CHARBUFSIZE 32
 #define PARAMBUFSIZE 1024
-#define MAXLINESIZE (1 << 13)
+#define MAXLINESIZE (1 << 16)
 
 void testXmlwriterFilename(const char *uri);
 xmlChar *ConvertInput(const char *in, const char *encoding);
@@ -58,11 +58,13 @@ int ligoxml_write_Param(xmlTextWriterPtr writer, XmlParam *xparamPtr, const xmlC
     rc = xmlTextWriterEndElement(writer);
 
 	return rc;
+
 }
 
 int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlChar* xml_type, 
                         const xmlChar* delimiter, const xmlChar* Name)
 {
+    printf("write array\n");
     int rc;
 
     // Add the Array Node
@@ -83,9 +85,11 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     for (i = 0; i < xarrayPtr->ndim - 1; ++i)
         rows *= xarrayPtr->dim[i];
 
+    int numInLine = xarrayPtr->dim[xarrayPtr->ndim - 1];
     xmlChar *line; 
-    line = malloc(MAXLINESIZE);
-    memset(line, 0, MAXLINESIZE);
+    int line_size = CHARBUFSIZE * rows * numInLine;
+    line = malloc(line_size);
+    memset(line, 0, line_size);
     xmlChar token[CHARBUFSIZE];
     int index;
     index = ligoxml_get_type_index(xml_type);
@@ -95,20 +99,21 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     rc = xmlTextWriterStartElement(writer, BAD_CAST "Stream");
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Type", BAD_CAST "Local");
     rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Delimiter", BAD_CAST delimiter);
-    int numInLine = xarrayPtr->dim[xarrayPtr->ndim - 1];
     for (j = 0; j < rows; ++j)
     {
-        printf("rows = %d\n", rows);
+        //printf("row = %d\n", j);
         for (i = 0; i < numInLine; ++i)
         {
             typeMap[index].dts_func((char *)token, xml_type, xarrayPtr->data, j * numInLine + i);
-            printf("token %s\n", (const char *)token);
+            //printf("i = %d, token %s\n", i, (const char *)token);
             strcat((char *)token, (const char *)delimiter);
             strcat((char *)line, (const char *)token);
         }
         //printf("line = %s\n", (char *)line);
         rc = xmlTextWriterWriteString(writer, BAD_CAST "\n\t\t\t\t");
         rc = xmlTextWriterWriteString(writer, line);
+	if (rc < 0)
+		printf("write string error %d \n", rc);
         line[0] = '\0';
     }
     free(line);

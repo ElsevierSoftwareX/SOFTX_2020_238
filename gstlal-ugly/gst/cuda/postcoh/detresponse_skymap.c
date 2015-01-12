@@ -90,20 +90,23 @@ create_detresponse_skymap(
 	det_map->gps_step = ingps_step;
 	det_map->matrix_size[0] = ngps;
 
-	unsigned long nside = (unsigned long) 1 << order, npix = nside2npix(nside);
-	det_map->order = order;
-	det_map->matrix_size[1] = npix;
-
 	LALDetector* const* detectors = create_detectors_from_name(ifos, nifo);
 	det_map->nifo = nifo;
-	det_map->matrix_size[2] = nifo * nifo;
+	det_map->matrix_size[1] = nifo * nifo;
 
-       	int i, j;
+	unsigned long nside = (unsigned long) 1 << order, npix = nside2npix(nside);
+	det_map->order = order;
+	det_map->matrix_size[2] = npix;
 
-	unsigned long U_len = (unsigned long) det_map->matrix_size[0] * (det_map->matrix_size)[1] * (det_map->matrix_size)[2];
-	printf("u len %lu \n", U_len);
-	det_map->U_map = (float *)malloc(sizeof(float) * U_len);
-	det_map->diff_map = (float *)malloc(sizeof(float) * U_len);
+       	int iifo, jifo;
+
+	unsigned long Umap_len = (unsigned long) det_map->matrix_size[0] * (det_map->matrix_size)[1] * (det_map->matrix_size)[2];
+	unsigned long Umatrix_len = (unsigned long) (det_map->matrix_size)[1] * (det_map->matrix_size)[2];
+	printf("u len %lu \n", Umap_len);
+	det_map->U_map = (float *)malloc(sizeof(float) * Umap_len);
+	memset(det_map->U_map, 0, sizeof(float) * Umap_len);
+	det_map->diff_map = (float *)malloc(sizeof(float) * Umap_len);
+	memset(det_map->diff_map, 0, sizeof(float) * Umap_len);
 
 	double theta, phi, fplus, fcross, gmst;
 	unsigned long ipix;
@@ -113,11 +116,11 @@ create_detresponse_skymap(
 	lapack_int lda = 2, ldu = nifo, ldvt = 2, info;
 
 
-	unsigned long index = 0;
+	unsigned long index = 0, igps = 0;
 
-	for (gps_cur.gpsSeconds=gps_start.gpsSeconds; gps_cur.gpsSeconds<gps_end.gpsSeconds; XLALGPSAdd(&gps_cur, ingps_step)) {
+	for (igps=0, gps_cur.gpsSeconds=gps_start.gpsSeconds; gps_cur.gpsSeconds<gps_end.gpsSeconds; XLALGPSAdd(&gps_cur, ingps_step), igps++) {
 		for (ipix=0; ipix<npix; ipix++) {
-			for (i=0; i<nifo; i++) {
+			for (iifo=0; iifo<nifo; iifo++) {
 
 				/* ra = phi, dec = 2pi - theta */	
 				pix2ang_nest(nside, ipix, &theta, &phi);
@@ -125,10 +128,10 @@ create_detresponse_skymap(
 				/* get fplus, fcross from lalsuite DetResponse.c */
 
 				gmst = XLALGreenwichMeanSiderealTime(&gps_cur);
-				XLALComputeDetAMResponse(&fplus, &fcross, detectors[i]->response, phi, M_PI_2-theta, 0, gmst);
+				XLALComputeDetAMResponse(&fplus, &fcross, detectors[iifo]->response, phi, M_PI_2-theta, 0, gmst);
 	
-				A[i*2] = fplus*horizons[i];
-				A[i*2 + 1] = fcross*horizons[i];
+				A[iifo*2] = fplus*horizons[iifo];
+				A[iifo*2 + 1] = fcross*horizons[iifo];
 			}
 #if 0
 			for (i=0; i<6; i++)
@@ -143,16 +146,16 @@ create_detresponse_skymap(
 			}
 
 			/* TimeDelay.c */
-			for (i=0; i<nifo; i++) 
-				for (j=0; j<nifo; j++) 
-					diff[i*nifo+j] = XLALArrivalTimeDiff(detectors[i]->location, detectors[j]->location, phi, M_PI_2-theta, &gps_cur);
+			for (iifo=0; iifo<nifo; iifo++) 
+				for (jifo=0; jifo<nifo; jifo++) 
+					diff[iifo*nifo+jifo] = XLALArrivalTimeDiff(detectors[iifo]->location, detectors[jifo]->location, phi, M_PI_2-theta, &gps_cur);
 
-			for (i=0; i<nifo*nifo; i++) {
+			for (iifo=0; iifo<nifo*nifo; iifo++) {
 
-				U_map[index] = (float) U[i];
-				diff_map[index] = (float) diff[i];
-				//printf("index %d diff %f\n", index, diff[i]);
-				index = index + 1;
+				index = igps*Umatrix_len + iifo*npix +ipix;
+				U_map[index] = (float) U[iifo];
+				diff_map[index] = (float) diff[iifo];
+		//		printf("index %d diff %f\n", index, diff[i]);
 			}
 
 		}
