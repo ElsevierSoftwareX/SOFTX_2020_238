@@ -18,6 +18,8 @@ const int GAMMA_ITMAX = 50;
 #define WARP_SIZE 		32
 #define LOG_WARP_SIZE	5
 
+#define EPSILON 1e-7
+
 __device__ static inline float atomicMax(float* address, float val)
 {
     int* address_as_i = (int*) address;
@@ -34,7 +36,7 @@ __global__ void ker_max_snglsnr
 (
     COMPLEX_F**  snr,        // INPUT: snr
     int iifo,
-    int start_len,
+    int start_exe,
     int len,
     int     templateN,  // INPUT: template number
     int     timeN,      // INPUT: time sample number
@@ -54,7 +56,7 @@ __global__ void ker_max_snglsnr
 
     for (int i = wIDg; i < timeN; i += wNg)
     {
-	    start_idx = (i + start_len) % len;
+	    start_idx = (i + start_exe) % len;
         // one warp is used to find the max snr for one time
         for (int j = wIDl; j < templateN; j += WARP_SIZE)
         {
@@ -151,12 +153,13 @@ __global__ void
 ker_remove_duplicate_scan
 (
     int*	npeak,			// Needs to be initialize to 0
-	int*	peak_pos,
+    int*	peak_pos,
     float*  ressnr,
     int*    restemplate,
     int     timeN,
     int     templateN,
-    float*  peak
+    float*  peak,
+    float   snglsnr_thresh
 )
 {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -173,14 +176,14 @@ ker_remove_duplicate_scan
         templ   = restemplate[i];
         max_snr = peak[templ];
 
-		if (fabs(max_snr - snr) < EPISLON )
+		if (abs(max_snr - snr) < EPSILON && max_snr > snglsnr_thresh)
 		{
 			index = atomicInc((unsigned *)npeak, timeN);
 			peak_pos[index] = i;		
 		}
         // restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
         // ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
-		printf("tmplt %d, snr %f\n", restemplate[i], ressnr[i]);
+//		printf("tmplt %d, snr %f\n", restemplate[i], ressnr[i]);
     }
 }
 
@@ -427,14 +430,14 @@ __global__ void ker_coh_sky_map_max
 	}
 }
 
-
 void peakfinder(PostcohState *state, int iifo)
 {
 
-	printf("start peakfinder\n");
+//	printf("start peakfinder\n");
     int THREAD_BLOCK    = 256;
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
     PeakList *pklist = state->peak_list[iifo];
+    state_reset_npeak(pklist);
 	ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->d_snglsnr, 
 						iifo,
 						state->snglsnr_start_exe,
@@ -451,11 +454,14 @@ void peakfinder(PostcohState *state, int iifo)
 								state->ntmplt, 
 								pklist->d_peak_tmplt);
 
-    ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_maxsnglsnr, 
+    ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_npeak,
+	    						pklist->d_peak_pos,	    
+		    					pklist->d_maxsnglsnr, 
 		    					pklist->d_tmplt_idx, 
 							state->exe_len, 
 							state->ntmplt, 
-							pklist->d_peak_tmplt);
+							pklist->d_peak_tmplt,
+							state->snglsnr_thresh);
 }
 
 /* calculate cohsnr, null stream, chi2 of a peak list and copy it back */
@@ -464,7 +470,10 @@ void cohsnr_and_chi2(PostcohState *state, int iifo, int gps_idx)
 	int threads = 1024;
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
-	ker_coh_sky_map_max<<<pklist->npeak[0], threads, sharedmem>>>(	pklist->d_cohsnr,
+	printf("num_triggers %d\n", pklist->npeak[0]);
+	int npeak = pklist->npeak[0];
+	if (npeak > 0)
+		ker_coh_sky_map_max<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,
 									pklist->d_pix_idx,
 									pklist->d_chi2,

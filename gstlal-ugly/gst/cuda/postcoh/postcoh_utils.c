@@ -43,6 +43,7 @@ PeakList *create_peak_list(PostcohState *state, gint hist_trials)
 		pklist->nullsnr_bg = pklist->cohsnr_bg + hist_trials * exe_len;
 		pklist->chi2_bg = pklist->nullsnr_bg + hist_trials * exe_len;
 
+		printf("set peak addr %p, npeak addr %p\n", pklist, pklist->npeak);
 
 		/* temporary struct to store tmplt max in one exe_len data */
 		cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt);
@@ -155,4 +156,11 @@ state_destroy(PostcohState *state)
 	if(state->d_snglsnr)
 		for(i=0; i<state->nifo; i++)
 			cudaFree(state->d_snglsnr[i]);
+}
+
+void
+state_reset_npeak(PeakList *pklist)
+{
+	cudaMemset(pklist->d_npeak, 0, sizeof(int));
+	pklist->npeak[0] = 0;
 }

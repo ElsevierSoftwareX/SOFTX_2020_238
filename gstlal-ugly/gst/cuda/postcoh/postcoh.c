@@ -85,7 +85,8 @@ enum
 	PROP_0,
 	PROP_DETRSP_FNAME,
 	PROP_AUTOCORRELATION_FNAME,
-	PROP_HIST_TRIALS
+	PROP_HIST_TRIALS,
+	PROP_SNGLSNR_THRESH
 };
 
 
@@ -106,6 +107,11 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 
 		case PROP_HIST_TRIALS:
 			element->hist_trials = g_value_get_int(value);
+			break;
+
+		case PROP_SNGLSNR_THRESH:
+			element->snglsnr_thresh = g_value_get_float(value);
+			element->state->snglsnr_thresh = element->snglsnr_thresh;
 			break;
 
 		default:
@@ -132,6 +138,10 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 
 		case PROP_HIST_TRIALS:
 			g_value_set_int(value, element->hist_trials);
+			break;
+
+		case PROP_SNGLSNR_THRESH:
+			g_value_set_float(value, element->snglsnr_thresh);
 			break;
 
 		default:
@@ -566,8 +576,8 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		peakfinder(state, cur_ifo);
 		cudaMemcpy(	state->peak_list[cur_ifo]->tmplt_idx, 
 				state->peak_list[cur_ifo]->d_tmplt_idx, 
-				sizeof(int) * state->peak_list[cur_ifo]->peak_intlen, 
-				cudaMemcpyHostToDevice);
+				sizeof(int) * (state->peak_list[cur_ifo]->peak_intlen), 
+				cudaMemcpyDeviceToHost);
 
 		cohsnr_and_chi2(state, cur_ifo, gps_idx);
 //		cohsnr_and_chi2_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
@@ -753,6 +763,18 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"history trials",
 			"history that should be kept in seconds",
 			0, G_MAXINT, 1,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_SNGLSNR_THRESH,
+		g_param_spec_float(
+			"snglsnr-thresh",
+			"single snr threshold",
+			"single snr threshold",
+			0.0, G_MAXFLOAT, 4.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

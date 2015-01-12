@@ -122,6 +122,7 @@ typedef struct _PostcohState {
   int ntmplt;
   float *d_chi2_norm;
   float dt;
+  float snglsnr_thresh;
 } PostcohState;
 
 /**
@@ -160,6 +161,7 @@ struct _CudaPostcoh {
 
   gint hist_trials;
   PostcohState *state;
+  float snglsnr_thresh;
 };
 
 struct _CudaPostcohClass {
