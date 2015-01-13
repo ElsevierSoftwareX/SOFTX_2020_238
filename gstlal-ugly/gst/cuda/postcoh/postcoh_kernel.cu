@@ -442,8 +442,8 @@ __global__ void ker_coh_sky_map_max_and_chi2
 		}
 		__syncthreads();
 
-		COMPLEX_F data;
 		/*
+		COMPLEX_F data;
 		chi2[peak_pos] = 0.0;
 		int autochi2_half_len = autochi2_len /2;
 		for (int j = 0; j < nifo; ++j)
@@ -461,6 +461,7 @@ __global__ void ker_coh_sky_map_max_and_chi2
 		}
 		*/
 
+		COMPLEX_F data, tData;
 		int wID = threadIdx.x >> LOG_WARP_SIZE;		
 		int laneID = threadIdx.x & (WARP_SIZE - 1);
 		float laneChi2 = 0.0f;
@@ -475,7 +476,9 @@ __global__ void ker_coh_sky_map_max_and_chi2
 				for (int ishift = laneID - autochi2_half_len; ishift <= autochi2_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
-					data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochi2_len + ishift + autochi2_half_len]; 	
+					tData = snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochi2_len + ishift + autochi2_half_len]; 	
+					data.re += tData.re;
+					data.im += tData.im;
 				}
 				laneChi2 += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];	
 			}
