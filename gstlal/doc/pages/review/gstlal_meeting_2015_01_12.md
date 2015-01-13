@@ -16,13 +16,21 @@
   - Compute the actual expected SNR (instead of from average PSD) and plot the SNR histograms again
   - We should compare the on-line and off-line results and understand the similarities and differences
   - Figure out why multiple low-SNR events get the same likelihood (these constitute about a quarter of all events)
-  - Summary pages: Zoomed versions for accuracy plots
-  - Summary pages: Histogram of accuracies
-  - Summary pages: Make accuracy plots as a function of FAR 
-  - Summary pages: Plot accuracy as a function of SNR
-  - Summary pages: Injections are found with "pi" time-shift; probably coming from one time-slide (check and fix)
-  - Summary pages: What is the reason for close-by missed injections in missed-found plot (as a function of Mchirp)?
+  - Review of Summary pages at:
+    <https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/MDC/BNS/Summer2014/recolored/nonspin/966384015-971384015-pipe-compare-CAT2/ALL_LLOID_COMBINED_openbox.html?ALL_LLOID_COMBINED_openbox_summary.html>
+  - Make zoomed versions for accuracy plots
+  - Make Histogram of accuracies
+  - Make accuracy plots as a function of FAR 
+  - Plot accuracy as a function of SNR
+  - Injections are found with "pi" time-shift; probably coming from one time-slide (check and fix)
+  - What is the reason for close-by missed injections in missed-found plot (as a function of Mchirp)?
+      - Perpahs the prefactors_range (0.0, 0.10) might be too narrow 
+  - Figure out the reason for the dip in the foreground plot (in SNR-Chisq section)
+  - Make efficiency plots (efficiency as a function of distance, effective distance and chirp distance)
+  - Compute the Range as a function of network for an IDEAL pipeline (T1200458, Figure 2 would be a good example)
+  - Update the online instructions including Makefile
 
 
 \section minutes minutes
 
+  - For online search one can look at dashboard.ligo.org to see if a given detector is producing data
