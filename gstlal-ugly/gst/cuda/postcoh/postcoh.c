@@ -503,11 +503,12 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 {
-	GstBuffer *outbuf;
+	GstBuffer *outbuf = NULL;
 	GstPad *srcpad = postcoh->srcpad;
 	GstCaps *caps = GST_PAD_CAPS(srcpad);
 	GstFlowReturn ret;
-	guint out_size = out_len * postcoh->bps;
+	PostcohState *state = postcoh->state;
+
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
@@ -581,11 +582,21 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 
 		cohsnr_and_chi2(state, cur_ifo, gps_idx);
 //		cohsnr_and_chi2_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
+//
+		/* copy the snr, cohsnr, nullsnr, chi2 out */
+		cudaMemcpy(	state->peak_list[cur_ifo]->maxsnglsnr, 
+				state->peak_list[cur_ifo]->d_maxsnglsnr, 
+				sizeof(float) * (state->peak_list[cur_ifo]->peak_floatlen), 
+				cudaMemcpyDeviceToHost);
+
 
 		/* move along */
 		gst_adapter_flush(data->adapter, exe_size);
 	}
 	common_size -=one_take_size;
+	state->snglsnr_start_load = (state->snglsnr_start_load + state->exe_len) % state->snglsnr_len;
+	state->snglsnr_start_exe = (state->snglsnr_start_exe + state->exe_len) % state->snglsnr_len;
+	postcoh->next_t += postcoh->exe_len / postcoh->rate * GST_SECOND;
 	}
 
 

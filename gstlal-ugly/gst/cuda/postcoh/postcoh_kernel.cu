@@ -19,6 +19,7 @@ const int GAMMA_ITMAX = 50;
 #define LOG_WARP_SIZE	5
 
 #define EPSILON 1e-7
+#define MAXIFOS 6
 
 __device__ static inline float atomicMax(float* address, float val)
 {
@@ -180,6 +181,7 @@ ker_remove_duplicate_scan
 		{
 			index = atomicInc((unsigned *)npeak, timeN);
 			peak_pos[index] = i;		
+			peak[templ] = -1;
 		}
         // restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
         // ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
@@ -291,7 +293,7 @@ __global__ void ker_coh_sky_map
 	}
 }
 
-__global__ void ker_coh_sky_map_max
+__global__ void ker_coh_sky_map_max_and_chi2
 (
 	float		*coh_snr,		/* OUTPUT, only save the max one, of size (num_triggers) */
 	float		*coh_nullstream,	/* OUTPUT, only save the max one, of size (num_triggers) */
@@ -300,6 +302,7 @@ __global__ void ker_coh_sky_map_max
 	COMPLEX_F	**snr,			/* INPUT, (2, 3) * data_points */	
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
+	float		*maxsnglsnr,		/* INPUT, maximum single snr	*/
 	int		*tmplt_idx,		/* INPUT, the tmplt index of triggers	*/
 	int		*peak_pos,	/* INPUT, place the location of the trigger */
 	int		npeak,		/* INPUT, number of triggers */
@@ -309,6 +312,10 @@ __global__ void ker_coh_sky_map_max
 	int		len,				/* INPUT, snglsnr length */
 	int		start_exe,				/* INPUT, snglsnr start exe position */
 	float		dt,			/* INPUT, 1/ sampling rate */
+	int		templateN,		/* INPUT, number of templates */
+	int		autochi_len,		/* INPUT, auto-chisq length */
+	COMPLEX_F	**autocorr_matrix,	/* INPUT, autocorrelation matrix for all templates */
+	float		**autocorr_norm,	/* INPUT, autocorrelation normalization matrix for all templates */
 	int		some_trial		/* INPUT, trial number */
 )
 {
@@ -325,11 +332,11 @@ __global__ void ker_coh_sky_map_max
 
 	// float	*mu;	// matrix u for certain sky direction
 	int		peak_cur, tmplt_cur;
-	COMPLEX_F	dk[6];
+	COMPLEX_F	dk[MAXIFOS];
 	int		NtOff;
 	int		map_idx;
 	float	real, imag;
-	float	utdka[6];
+	float	utdka[MAXIFOS];
 	float	al_all = 0.0f;
 
 	float	snr_max			= 0.0f;
@@ -337,9 +344,9 @@ __global__ void ker_coh_sky_map_max
 	int		sky_idx;	
 	float	snr_tmp;
 
-	for (int l = bid; l < npeak; l += bn)
+	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
 	{
-		peak_cur = peak_pos[l];
+		peak_cur = peak_pos[ipeak];
 		tmplt_cur = tmplt_idx[peak_cur];
 
 		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
@@ -352,7 +359,8 @@ __global__ void ker_coh_sky_map_max
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
-				dk[j] = snr[j][tmplt_cur * len + (start_exe + peak_cur + NtOff) % len]; 	
+				/* NOTE: The snr is stored channel-wise */
+				dk[j] = snr[j][((start_exe + peak_cur + NtOff) % len) * templateN + tmplt_cur ]; 	
 			}
 
 			for (int j = 0; j < nifo; ++j)
@@ -367,7 +375,11 @@ __global__ void ker_coh_sky_map_max
 					imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
 				}
 				utdka[j] = real * real + imag * imag;	
-			}		
+			}	
+			printf("ipix %d, dk[0].re %f, dk[0].im %f," 
+					"dk[1].re %f, dk[1].im %f,\n dk[2].re %f, dk[2].im %f,"
+					"utdka[0] %f, utdka[1] %f\n", ipix, dk[0].re, dk[0].im,
+				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, utdka[0], utdka[1]);
 
 			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
@@ -423,9 +435,28 @@ __global__ void ker_coh_sky_map_max
 
 		if (threadIdx.x == 0)
 		{
-			coh_snr[l]			= snr_shared[0];
-			coh_nullstream[l]	= nullstream_shared[0];
-			pix_idx[l]		= sky_idx_shared[0]; 			
+			coh_snr[ipeak]			= snr_shared[0];
+			coh_nullstream[ipeak]	= nullstream_shared[0];
+			pix_idx[ipeak]		= sky_idx_shared[0]; 			
+			printf("peak %d, cohsnr %f, nullstream %f, ipix %d\n", ipeak, coh_snr[ipeak], coh_nullstream[ipeak], pix_idx[ipeak]);
+		}
+		__syncthreads();
+
+		COMPLEX_F data;
+		chi2[peak_pos] = 0.0;
+		int autochi2_half_len = autochi2_len /2;
+		for (int j = 0; j < nifo; ++j)
+		{	data = 0;
+			/* this is a simplified algorithm to get map_idx */
+			map_idx = iifo * nifo + j;
+			NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
+			for(int ishift=-autochi2_half_len; ishift<=autochi2_half_len; ishift++)
+			{
+
+			/* NOTE: The snr is stored channel-wise */
+			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochi2_len + ishift + autochi2_half_len]; 	
+			}
+			chi2[peak_pos] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
 		}
 	}
 }
@@ -489,6 +520,7 @@ void cohsnr_and_chi2(PostcohState *state, int iifo, int gps_idx)
 									state->snglsnr_len,
 									state->snglsnr_start_exe,
 									state->dt,
+									state->ntmplt,
 									0
 	);
 }
