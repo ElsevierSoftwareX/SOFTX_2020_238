@@ -7,7 +7,7 @@ This page benchmarks the following:
 	- gstlal-0.7.1
 
 The software dependencies stack can be configured from the following makefile
-	- share/profile/Xeon_E3-1271_Ubuntu-14.04/Makefile.ligosoftware_ubuntu14.04
+	- https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/profile/Xeon_E3-1271_Ubuntu-14.04/Makefile.ligosoftware_ubuntu14.04
 
 You can find the evironment script to source here
 	- share/profile/Xeon_E3-1271_Ubuntu-14.04/profilerc
