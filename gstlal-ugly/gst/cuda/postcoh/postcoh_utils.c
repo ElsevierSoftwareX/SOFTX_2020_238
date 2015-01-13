@@ -150,6 +150,91 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 }
 
 void
+cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
+{
+	printf("read autocorr from xml\n");
+	int nifo = state->nifo;
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
+	COMPLEX_F *tmp_autocorr = NULL;
+	COMPLEX_F **autocorr = (COMPLEX_F **)malloc(sizeof(COMPLEX *) * nifo );
+	cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo);
+
+
+	int itoken = 0;
+	XmlArray *array_autocorr = (XmlArray *)malloc(sizeof(XmlArray) * 2);
+
+	char *end_ifo;
+	char *token = strtok_r(fname, ",", &end_ifo);
+	int mem_alloc_size = 0, autocorr_len = 0, ntmplt = 0, match_ifo;
+
+	while (token != NULL) {
+		sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
+		xns[0].processPtr = readArray;
+		/* initialisation , a must */
+		array_autocorr[0].ndim = 0;
+		xns[0].data = &(array_autocorr[0]);
+
+		sprintf((char *)xns[1].tag, "autocorrelation_bank_imag:array");
+		xns[1].processPtr = readArray;
+		/* initialisation , a must */
+		array_autocorr[1].ndim = 0;
+		xns[1].data = &(array_autocorr[1]);
+
+		char *end_token;
+		char *token_bankname = strtok_r(token, ":", &end_token);
+		token_bankname = strtok_r(NULL, ":", &end_token);
+		printf("start parse %s\n", token_bankname);
+
+		parseFile(token_bankname, xns, 2);
+
+		for (i=0; i<nifo; i++) {
+			if (strncmp(token, IFO_MAP[i], 2) == 0) {
+				match_ifo = i;
+				break;
+			}
+		
+		}
+		ntmplt = array_autocorr[0].dim[1];
+		autocorr_len = array_autocorr[0].dim[0];
+		mem_alloc_size = sizeof(COMPLEX_F) * nmplt * autocorr_len;
+		cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size);
+
+		if (tmp_autocorr == NULL)
+			tmp_autocorr = (COMPLEX_F *)malloc(mem_alloc_size);
+
+		for (j=0; j<ntmplt; j++) {
+			for (k=0; k<autocorr_len; k++) {
+				tmp_autocorr[j * autocorr_len + k].re = (float)((double *)(array_autocorr[0].data))[k * ntmplt + j];
+				tmp_autocorr[j * autocorr_len + k].im = (float)((double *)(array_autocorr[1].data))[k * ntmplt + j];
+			}
+		}
+
+		cudaMemcpy(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice);
+		cudaMemcpy(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
+
+		freeArraydata(array_autocorr);
+		freeArraydata(array_autocorr+1);
+		token = strtok_r(NULL, ",", &end_ifo);
+		itoken++;
+		/*
+		 * Cleanup function for the XML library.
+		 */
+		xmlCleanupParser();
+		/*
+		 * this is to debug memory for regression tests
+		 */
+		xmlMemoryDump();
+
+	}
+
+	free(tmp_autocorr);
+	assert(itoken == nifo);
+	state->autochi2_len = autocorr_len;
+}
+
+
+
+void
 state_destroy(PostcohState *state)
 {
 	int i;

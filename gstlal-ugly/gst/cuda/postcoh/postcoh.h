@@ -27,6 +27,7 @@
 #include <gst/base/gstadapter.h>
 #include <cuda_runtime.h>
 
+gchar IFO_MAP[][2] = {"L1", "H1", "V1"};
 
 G_BEGIN_DECLS
 
@@ -106,7 +107,9 @@ typedef struct _PeakList {
 
 typedef struct _PostcohState {
   COMPLEX_F **snglsnr;
-  COMPLEX_F **d_snglsnr;
+  COMPLEX_F **dd_snglsnr;
+  COMPLEX_F **dd_autocorr_matrix;
+  float **dd_autocorr_norm;
   int snglsnr_len;
   int snglsnr_start_load;
   int snglsnr_start_exe;
@@ -123,6 +126,7 @@ typedef struct _PostcohState {
   float *d_chi2_norm;
   float dt;
   float snglsnr_thresh;
+  int autocorr_len;
 } PostcohState;
 
 /**
@@ -143,8 +147,7 @@ struct _CudaPostcoh {
   gint bps;
 
   char *detrsp_fname;
-  char *autocorrelation_fname;
-  gint autocorrelation_len;
+  char *autocorr_fname;
   gint exe_len;
   gint preserved_len;
   float max_dt;

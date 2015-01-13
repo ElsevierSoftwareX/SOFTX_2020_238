@@ -35,7 +35,6 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
-gchar IFO_MAP[][2] = {"L1", "H1", "V1"};
 
 static void additional_initializations(GType type)
 {
@@ -102,7 +101,8 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			break;
 
 		case PROP_AUTOCORRELATION_FNAME: 
-			element->autocorrelation_fname = g_value_dup_string(value);
+			element->autocorr_fname = g_value_dup_string(value);
+			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state);
 			break;
 
 		case PROP_HIST_TRIALS:
@@ -133,7 +133,7 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 			break;
 
 		case PROP_AUTOCORRELATION_FNAME:
-			g_value_set_string(value, element->autocorrelation_fname);
+			g_value_set_string(value, element->autocorr_fname);
 			break;
 
 		case PROP_HIST_TRIALS:
@@ -229,7 +229,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	state->dt = 1/postcoh->rate;
 
 	/* need to cover head and tail */
-	postcoh->preserved_len = 2 * postcoh->autocorrelation_len; 
+	postcoh->preserved_len = 2 * state->autocorr_len + 160; 
 	postcoh->exe_len = postcoh->rate;
 
 	state->head_len = postcoh->preserved_len / 2;
@@ -241,7 +241,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	state->ntmplt = postcoh->channels/2;
 	state->exe_len = postcoh->rate;
-	cudaMalloc((void **)&(state->d_snglsnr), sizeof(COMPLEX_F *) * state->nifo);
+	cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo);
 	state->snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
 	gint8 i = 0, j = 0;
@@ -259,7 +259,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 	       	cudaMalloc((void**) &(state->snglsnr[i]), mem_alloc_size);
 		cudaMemset(state->snglsnr[i], 0, mem_alloc_size);
-		cudaMemcpy(&(state->d_snglsnr[i]), &(state->snglsnr[i]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
+		cudaMemcpy(&(state->dd_snglsnr[i]), &(state->snglsnr[i]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
 
 		state->peak_list[i] = create_peak_list(postcoh->state, i);
 	}
@@ -547,7 +547,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 {
 	GSList *collectlist;
 	GstPostcohCollectData *data;
-	COMPLEX_F *snglsnr, *pos_d_snglsnr, *pos_in_snglsnr;
+	COMPLEX_F *snglsnr, *pos_dd_snglsnr, *pos_in_snglsnr;
 	gint one_take_len = one_take_size / postcoh->bps;
 
 	int i = 0, cur_ifo = 0;
@@ -559,19 +559,19 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		cur_ifo = state->ifo_mapping[i];
 		snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 		printf("cur ifo %d, len %d, start_load %d , ntmplt %d\n", cur_ifo, state->snglsnr_len, state->snglsnr_start_load, state->ntmplt);
-		pos_d_snglsnr = state->snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
+		pos_dd_snglsnr = state->snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 		/* copy the snglsnr to the right cuda memory */
 		if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
 			/* when the snglsnr can be put in as one chunk */
-			cudaMemcpy(pos_d_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice);
+			cudaMemcpy(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice);
 		} else {
 
 			int tail_cpy_size = (state->snglsnr_len - state->snglsnr_start_load) * postcoh->bps;
-			cudaMemcpy(pos_d_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice);
+			cudaMemcpy(pos_dd_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice);
 			int head_cpy_size = one_take_size - tail_cpy_size;
-			pos_d_snglsnr = state->snglsnr[cur_ifo];
+			pos_dd_snglsnr = state->snglsnr[cur_ifo];
 			pos_in_snglsnr = snglsnr + (state->snglsnr_len - state->snglsnr_start_load) * state->ntmplt;
-			cudaMemcpy(pos_d_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice);
+			cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice);
 		}
 
 		peakfinder(state, cur_ifo);
@@ -636,9 +636,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		}
 		postcoh->in_t0 = t_latest_start;
 		postcoh->out_t0 = t_latest_start + gst_util_uint64_scale_int_round(
-				postcoh->autocorrelation_len, GST_SECOND, postcoh->rate);
+				postcoh->preserved_len/2, GST_SECOND, postcoh->rate);
 		postcoh->next_t = postcoh->out_t0;
-		postcoh->out_offset0 = offset_latest_start + postcoh->autocorrelation_len ;
+		postcoh->out_offset0 = offset_latest_start + postcoh->preserved_len/2 ;
 		GST_DEBUG_OBJECT(postcoh, "set the aligned time to %" GST_TIME_FORMAT 
 				", start offset to %" G_GUINT64_FORMAT, GST_TIME_ARGS(postcoh->in_t0),
 				postcoh->out_offset0);
@@ -811,7 +811,6 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	//postcoh->next_in_offset = GST_BUFFER_OFFSET_NONE;
 	postcoh->set_starttime = FALSE;
 	postcoh->is_all_aligned = FALSE;
-	postcoh->autocorrelation_len = 100;
 	postcoh->samples_in = 0;
 	postcoh->samples_out = 0;
 	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
