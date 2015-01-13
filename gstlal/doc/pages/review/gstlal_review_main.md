@@ -34,6 +34,49 @@ items.
 - Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
 
+- figure out what the PE people want to present and when;  it should be
+  related to this subject matter of this review meeting
+
+- ranking statistic:
+	- far.py
+	- gstlal_inspiral_calc_likelihood
+	- gstlal_marginalize_likelihood
+	- gstlal_compute_far_from_snr_chisq_histograms
+
+- bits of gstlal_inspiral:
+	- pipeio.py
+	- inspiral.py
+	- httpinterface.py
+	- hoftcache.py
+	- track down ligolw_thinca validation from ihope
+	- streamthinca.py
+
+- elements:
+	- whiten:
+		- get plots into documentation
+	- lal_cachesrc:
+		- link missing from review status page
+	- lal_drop:
+		- write unit test
+	- lal_simulation:
+		- consider patching lal to remove start/stop parameters from
+		  XML loading functions so that they just load everything
+	- lal_adder
+	- lal_firbank:
+		- impulse tests of filtering code?
+		- pick a PSD, generate template bank, inject an exact
+		  template whitened with that PSD, confirm that SNR stream
+		  is the autocorrelation recorded in the svd bank file with
+		  the correct SNR for the injection
+	- lal_itac
+
+- get documentation generated and installed
+
+- explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with \chi distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
+
+- show histogram of horizon distance history
+
+
 \section completed_action Completed action items
 - Add synopses for all programs in documentation
  - *Chad: Done*
@@ -41,6 +84,67 @@ items.
  - *Chad: Done*, see \ref gstlalinspiralofflinesearchpage
 - Test pipeline with control peak times set to different values
  - *Chad: Done* see \ref gstlalinspiralcontrolpeaktimestudypage
+
+- put iterutils.randindex() test plot into minutes for 2014-11-05 telecon
+
+- added check to svd_bank that the command line option matches snr_min in
+  far.py
+
+- added test of behaviour of sampler generators to glue's test suite
+
+- expanded docstring for NDBins.volumes() so that this method is covered by
+  pylal's test suite
+
+- removed ImportError path for speed of light from snglcoinc.py
+
+- see if P(instruments | signal) can be included in P(snr, ... |
+  instruments):  yes it can be, like the SNR PDFs it depends only on the
+  ratios of the horizon distances;  have not made this improvement yet but
+  have put a FIXME in the code to remind me that this is how to achieve the
+  tracking of the time dependence of the instrument combination factor
+
+- see if the noise coinc rates can be recomputed on the fly by factoring
+  out the rates:  yes, they can be;  have not made this improvement because
+  it would require tinkering with the code a bit and we're about to do a
+  release, but I have added a FIXME to remind me that this performance
+  improvement is possible.
+
+nightly build:
+	- turned off SL6 until it works
+	- got nightly build running on debian:
+		- includes all gstlal-packages, all documentation, all unit tests
+
+elements:
+	- lal_statevector:
+		- added warning messages if required-on/required-off have too many bits for width of input stream
+		- generalized transform_caps() so that sink-->src conversions are complete
+		- added notifications for sample count properties
+		- wrote unit test
+	- lal_sumsquares:
+		- wrote unit test
+	- lal_togglecomplex:
+		- wrote unit test
+	- lal_cachesrc:
+		- are the warnings and errors related to lack of data in
+		  do_seek() correct?  i.e., are warnings and errors needed
+		  for these conditions?  done:  lack of start time is no
+		  longer an error, element seeks to start of cache in this
+		  case
+	- lal_gate:
+		- removed 64-bit support for control stream:  not possible
+		  to specify threshold to that precision
+		- why not signal control_queue_head_changed on receipt of
+		  NEW_SEGMENT?  not needed.
+	- lal_statevector
+		- statevector:  why the mask?  remove?  maybe safer to
+		  remove.  removed
+	- lal_segmentsrc:
+		- wrote a unit test
+	- lvshmsink/src:
+		- wrote pass-through unit test
+	- lal_cachesrc:
+		- wrote a unit test
+
 
 \section studies Studies
 
