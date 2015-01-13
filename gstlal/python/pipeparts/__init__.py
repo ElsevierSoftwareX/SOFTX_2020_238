@@ -184,7 +184,12 @@ class framecpp_channeldemux_check_segments(object):
 		if name in self.probe_handler_ids:
 			pad.remove_data_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
-			self.probe_handler_ids[name] = pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglists[name]), self.jitter))
+			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
+
+	@staticmethod
+	def set_probe(pad, seglist, jitter = LIGOTimeGPS(0, 1)):
+		# use a copy of the segmentlist so the probe can modify it
+		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglist), jitter))
 
 	@staticmethod
 	def probe(pad, obj, (seglist, jitter)):
@@ -193,7 +198,8 @@ class framecpp_channeldemux_check_segments(object):
 				# remove the current buffer from the data
 				# we're expecting to see
 				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
-				# ignore 1 ns holes
+				# ignore missing data intervals unless
+				# they're bigger than the jitter
 				iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			# are we still expecting to see something that
 			# precedes the current buffer?
