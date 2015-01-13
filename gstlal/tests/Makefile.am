@@ -1,4 +1,5 @@
 EXTRA_DIST = \
+	cachesrc_test_01.sh \
 	cmp_nxydumps.py \
 	firbank_test_01.py \
 	framesrc_test_01.py \
@@ -14,7 +15,7 @@ EXTRA_DIST = \
 	whiten_test_01.py \
 	test_common.py
 
-TESTS = firbank_test_01.py gate_test_01.py lal_reblock_test_01.sh matrixmixer_test_01.py resample_test_01.py segmentsrc_test_01.py statevector_test_01.py sumsquares_test_01.py togglecomplex_test_01.py whiten_test_01.py
+TESTS = cachesrc_test_01.sh firbank_test_01.py gate_test_01.py lal_reblock_test_01.sh matrixmixer_test_01.py resample_test_01.py segmentsrc_test_01.py statevector_test_01.py sumsquares_test_01.py togglecomplex_test_01.py whiten_test_01.py
 
 clean-local :
 	rm -vf *.dump
