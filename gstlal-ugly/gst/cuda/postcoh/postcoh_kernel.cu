@@ -443,20 +443,52 @@ __global__ void ker_coh_sky_map_max_and_chi2
 		__syncthreads();
 
 		COMPLEX_F data;
+		/*
 		chi2[peak_pos] = 0.0;
 		int autochi2_half_len = autochi2_len /2;
 		for (int j = 0; j < nifo; ++j)
 		{	data = 0;
-			/* this is a simplified algorithm to get map_idx */
+			// this is a simplified algorithm to get map_idx 
 			map_idx = iifo * nifo + j;
 			NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 			for(int ishift=-autochi2_half_len; ishift<=autochi2_half_len; ishift++)
 			{
 
-			/* NOTE: The snr is stored channel-wise */
+			// NOTE: The snr is stored channel-wise 
 			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochi2_len + ishift + autochi2_half_len]; 	
 			}
 			chi2[peak_pos] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
+		}
+		*/
+
+		int wID = threadIdx.x >> LOG_WARP_SIZE;		
+		int laneID = threadIdx.x & (WARP_SIZE - 1);
+		float laneChi2 = 0.0f;
+		if (wID == 0)
+		{
+			for (int j = 0; j < nifo; ++j)
+			{
+				data.re = data.im = 0.0f; 
+				/* this is a simplified algorithm to get map_idx */
+				map_idx = iifo * nifo + j;
+				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
+				for (int ishift = laneID - autochi2_half_len; ishift <= autochi2_half_len; ishift += WARP_SIZE)
+				{
+					/* NOTE: The snr is stored channel-wise */
+					data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochi2_len + ishift + autochi2_half_len]; 	
+				}
+				laneChi2 += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];	
+			}
+
+			for (int j = WARP_SIZE >> 1; j > 0; j = j >> 1)
+			{
+				laneChi2 += __shfl(laneChi2, laneID + j, 2 * j);
+			}
+
+			if (laneID == 0)
+			{
+				chi2[peak_pos] = laneChi2;
+			}
 		}
 	}
 }
