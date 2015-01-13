@@ -94,9 +94,7 @@ static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
 
 void gstlal_fftw_lock(void)
 {
-#ifdef LAL_FFTW_PTHREAD_MUTEX_LOCK
-	LAL_FFTW_PTHREAD_MUTEX_LOCK;
-#endif
+	LAL_FFTW_WISDOM_LOCK;
 	g_static_mutex_lock(&gstlal_fftw_lock_mutex);
 }
 
@@ -116,9 +114,7 @@ void gstlal_fftw_lock(void)
 void gstlal_fftw_unlock(void)
 {
 	g_static_mutex_unlock(&gstlal_fftw_lock_mutex);
-#ifdef LAL_FFTW_PTHREAD_MUTEX_UNLOCK
-	LAL_FFTW_PTHREAD_MUTEX_UNLOCK;
-#endif
+	LAL_FFTW_WISDOM_UNLOCK;
 }
 
 
