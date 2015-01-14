@@ -27,8 +27,6 @@
 #include <gst/base/gstadapter.h>
 #include <cuda_runtime.h>
 
-gchar IFO_MAP[][2] = {"L1", "H1", "V1"};
-
 G_BEGIN_DECLS
 
 #define CUDA_TYPE_POSTCOH \
@@ -44,6 +42,8 @@ G_BEGIN_DECLS
 
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
+
+extern char* IFO_MAP[];
 
 #ifndef DEFINED_COMPLEX_F
 #define DEFINED_COMPLEX_F 
@@ -84,10 +84,10 @@ typedef struct _PeakList {
 	float *maxsnglsnr;
 	float *cohsnr;
 	float *nullsnr;
-	float *chi2;
+	float *chisq;
 	float *cohsnr_bg;
 	float *nullsnr_bg;
-	float *chi2_bg;
+	float *chisq_bg;
 
 	int *d_tmplt_idx;
 	int *d_pix_idx;
@@ -96,10 +96,10 @@ typedef struct _PeakList {
 	float *d_maxsnglsnr;
 	float *d_cohsnr;
 	float *d_nullsnr;
-	float *d_chi2;
+	float *d_chisq;
 	float *d_cohsnr_bg;
 	float *d_nullsnr_bg;
-	float *d_chi2_bg;
+	float *d_chisq_bg;
 
 	float *d_peak_tmplt;
 
@@ -110,6 +110,7 @@ typedef struct _PostcohState {
   COMPLEX_F **dd_snglsnr;
   COMPLEX_F **dd_autocorr_matrix;
   float **dd_autocorr_norm;
+  int autochisq_len;
   int snglsnr_len;
   int snglsnr_start_load;
   int snglsnr_start_exe;
@@ -123,7 +124,6 @@ typedef struct _PostcohState {
   int head_len;
   int exe_len;
   int ntmplt;
-  float *d_chi2_norm;
   float dt;
   float snglsnr_thresh;
   int autocorr_len;
@@ -165,6 +165,8 @@ struct _CudaPostcoh {
   gint hist_trials;
   PostcohState *state;
   float snglsnr_thresh;
+  GMutex *prop_lock;
+  GCond *prop_avail;
 };
 
 struct _CudaPostcohClass {

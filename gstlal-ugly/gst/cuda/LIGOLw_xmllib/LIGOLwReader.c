@@ -28,6 +28,7 @@ void readArray(xmlTextReaderPtr reader, void *data)
     const xmlChar *name;
     char *saveLinePtr, *saveTokenPtr;
     XmlArray *xArrayPtr = (XmlArray*)data;
+    xArrayPtr->ndim = 0;
 
     type = xmlTextReaderGetAttribute(reader, BAD_CAST "Type");
     #ifdef __DEBUG__
@@ -134,6 +135,15 @@ void freeArray(XmlArray *array)
 {
 	free(array->data);
 }
+
+void freeArraydata(XmlArray *array)
+{
+	if(array->data) {
+		free(array->data);
+		array->data = NULL;
+	}
+}
+
 
 void readParam(xmlTextReaderPtr reader, void *data)
 {

@@ -30,6 +30,7 @@
 #include <math.h>
 #include "postcoh.h"
 #include "postcoh_utils.h"
+#include "postcoh_table_utils.h"
 
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
@@ -96,13 +97,20 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 	GST_OBJECT_LOCK(element);
 	switch(id) {
 		case PROP_DETRSP_FNAME:
+			g_mutex_lock(element->prop_lock);
 			element->detrsp_fname = g_value_dup_string(value);
 			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state);
+			g_cond_broadcast(element->prop_avail);
+			g_mutex_unlock(element->prop_lock);
 			break;
 
 		case PROP_AUTOCORRELATION_FNAME: 
+
+			g_mutex_lock(element->prop_lock);
 			element->autocorr_fname = g_value_dup_string(value);
 			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state);
+			g_cond_broadcast(element->prop_avail);
+			g_mutex_unlock(element->prop_lock);
 			break;
 
 		case PROP_HIST_TRIALS:
@@ -188,6 +196,14 @@ static gboolean
 cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 {
 	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
+	PostcohState *state = postcoh->state;
+	g_mutex_lock(postcoh->prop_lock);
+	while (!state->npix || !state->autochisq_len) {
+		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
+		printf("setcaps have to wait");
+	}
+	g_mutex_unlock(postcoh->prop_lock);
+
 	GList *sinkpads;
 	GstStructure *s;
 	GstPostcohCollectData *data;
@@ -222,7 +238,6 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
 
-	PostcohState *state = postcoh->state;
 	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
 	state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
 	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
@@ -251,9 +266,14 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		data = gst_pad_get_element_private(pad);
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
+		printf("nifo %d\n", state->nifo);
 		for (j=0; j<state->nifo; j++) {
-			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 )
+			printf("IFO_MAP[%d] %s\n", j, IFO_MAP[j]);
+			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 ) {
 				state->ifo_mapping[i] = j;
+				printf("map %d to %d\n", i, j);
+				break;
+			}
 		}
 		
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
@@ -509,6 +529,12 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
 
+	int allpeak = 0, i, nifo = state->nifo;
+	for(i=0; i<nifo; i++)
+		allpeak += state->peak_list[i]->npeak[0];
+
+	int out_size = sizeof(PostcohTable) * allpeak;
+
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
@@ -559,6 +585,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		cur_ifo = state->ifo_mapping[i];
 		snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 		printf("cur ifo %d, len %d, start_load %d , ntmplt %d\n", cur_ifo, state->snglsnr_len, state->snglsnr_start_load, state->ntmplt);
+		printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 		pos_dd_snglsnr = state->snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 		/* copy the snglsnr to the right cuda memory */
 		if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
@@ -580,10 +607,10 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				sizeof(int) * (state->peak_list[cur_ifo]->peak_intlen), 
 				cudaMemcpyDeviceToHost);
 
-		cohsnr_and_chi2(state, cur_ifo, gps_idx);
-//		cohsnr_and_chi2_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
+		cohsnr_and_chisq(state, cur_ifo, gps_idx);
+//		cohsnr_and_chisq_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
 //
-		/* copy the snr, cohsnr, nullsnr, chi2 out */
+		/* copy the snr, cohsnr, nullsnr, chisq out */
 		cudaMemcpy(	state->peak_list[cur_ifo]->maxsnglsnr, 
 				state->peak_list[cur_ifo]->d_maxsnglsnr, 
 				sizeof(float) * (state->peak_list[cur_ifo]->peak_floatlen), 
@@ -613,6 +640,14 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	CudaPostcoh* postcoh = CUDA_POSTCOH(user_data);
+	PostcohState *state = postcoh->state;
+	g_mutex_lock(postcoh->prop_lock);
+	while (!state->npix || !state->autochisq_len) {
+		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
+		printf("collected have to wait");
+	}
+	g_mutex_unlock(postcoh->prop_lock);
+
 	GstElement* element = GST_ELEMENT(postcoh);
 	GstClockTime t_latest_start;
 	GstFlowReturn res;
@@ -688,6 +723,9 @@ static void cuda_postcoh_dispose(GObject *object)
 	if(element->srcpad)
 		gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+
+	g_mutex_free(element->prop_lock);
+	g_cond_free(element->prop_avail);
 
 	/* destroy hashtable and its contents */
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -814,7 +852,10 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->samples_in = 0;
 	postcoh->samples_out = 0;
 	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
-
+	postcoh->state->autochisq_len = 0;
+	postcoh->state->npix = 0;
+	postcoh->prop_lock = g_mutex_new();
+	postcoh->prop_avail = g_cond_new();
 }
 
 
