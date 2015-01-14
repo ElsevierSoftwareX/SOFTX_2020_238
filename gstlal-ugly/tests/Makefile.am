@@ -12,7 +12,7 @@ FRAMECPP_TESTS =
 endif
 
 if COND_GDS
-GDS_TESTS = lvshmsinksrc_test_01.sh
+GDS_TESTS = #lvshmsinksrc_test_01.sh
 else
 GDS_TESTS =
 endif
