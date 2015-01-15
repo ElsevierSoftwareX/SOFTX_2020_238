@@ -19,6 +19,10 @@
 - \ref gstlalinspiralcodeoptimization
   -  \ref gstlalinspiralpatchinformation
 
+### Studies
+
+- \ref gstlal_inspiral_BNS_MDC_study
+
 ### References
 
 - <a href=@gstlaldoc> gstlal documentation</a>
