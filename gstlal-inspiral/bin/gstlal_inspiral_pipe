@@ -315,8 +315,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"data-source":"frames",
 								"local-frame-caching":""
 								},
-							input_files = {	"time-slide-file":options.time_slide_file,
-									"frame-cache":options.frame_cache,
+							input_files = {	"frame-cache":options.frame_cache,
 									"frame-segments-file":options.frame_segments_file,
 									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
 									"veto-segments-file":options.vetoes,
