@@ -61,7 +61,7 @@ from pylal.datatypes import LIGOTimeGPS
 
 from gstlal import uni_datasource
 import pdb
-
+from gstlal import cbc_template_iir
 
 #
 # SPIIR many instruments, many template banks
@@ -184,15 +184,6 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def get_maxrate_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-
-	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
-
-		sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
-	
-	return max(sample_rates)
-
 def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
 	#
 	# check for recognized value of chisq_type
@@ -224,16 +215,16 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 
 	hoftdicts = {}
 	max_instru_rates = {} 
-	tmp_max_rate = 0
+	sngl_max_rate = 0
 	for instrument in detectors.channel_dict:
 		for bank_name in banks[instrument]:
-			tmp_max_rate = max(get_maxrate_from_xml(bank_name), tmp_max_rate)
-		max_instru_rates[instrument] = tmp_max_rate
+			sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_name), sngl_max_rate)
+		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -247,9 +238,9 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 #	pdb.set_trace()
 	bank_count = 0
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		suffix = "%s%s" % (instrument, (bank and "_%s" % bank or ""))
+		suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-		max_bank_rate = get_maxrate_from_xml(bank)
+		max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank)
 		if max_bank_rate < max_instru_rates[instrument]:
 			head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 		snr = pipeparts.mkreblock(pipeline, head)
@@ -260,18 +251,20 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
 		# FIXME you get a different trigger generator depending on the chisq calculation :/
+		bank_struct = cbc_template_iir.Bank()
+		bank_struct.read_from_xml(bank)
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
+			head = pipeparts.mkitac(pipeline, snr, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
-		del bank.autocorrelation_bank
+		del bank_struct.autocorrelation_bank
 		bank_count = bank_count + 1
-#		if nxydump_segment is not None:
-#			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+		if nxydump_segment is not None:
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#

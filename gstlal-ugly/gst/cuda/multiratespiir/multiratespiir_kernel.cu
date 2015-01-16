@@ -47,12 +47,15 @@ extern "C" {
 #define NB_MAX 32
 
 // for gpu debug
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-static void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
+#define gpuErrchk(stream) { gpuAssert(stream, __FILE__, __LINE__); }
+static void gpuAssert(cudaStream_t stream, char *file, int line, bool abort=true)
 {
+    cudaStreamSynchronize(stream);
+    cudaError_t code = cudaPeekAtLastError ();
+
    if (code != cudaSuccess) 
    {
-      GST_LOG ("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      printf ("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
       if (abort) exit(code);
    }
 }
@@ -343,7 +346,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   gint i, out_processed;
   gint num_inchunk = num_in_multidown;
 
-  GST_LOG ("multidownsample: start. in %d samples", num_inchunk);
+  GST_LOG ("multidownsample: start. in %d samples\n", num_inchunk);
   /* make sure that unspiired samples + incoming samples won't exceed the physical queue length */
  // g_assert (SPSTATE(0)->queue_last_sample + num_inchunk <= SPSTATE(0)->queue_len);
 
@@ -367,7 +370,6 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
     pos_inqueue = SPSTATE(0)->d_queue;
     cudaMemcpyAsync(pos_inqueue, in_multidown + num_tail_samples, num_head_samples * sizeof(float), cudaMemcpyHostToDevice, stream);
   }
-
 
   /* the following parameters should be updated each time of downsample :
    * queue_last_sample,
@@ -420,7 +422,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 						    SPSTATE(i+1)->queue_len
 						    );
 
-    //gpuErrchk (cudaPeekAtLastError ());
+ //   gpuErrchk (stream);
 
     /* 
      * FIXME: the only possible situation to discard some samples is 
@@ -484,7 +486,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
    * SPIIR filter for the lowest depth 
    */
 
-  GST_LOG ("spiirup: start. in %d samples", num_inchunk);
+  GST_LOG ("spiirup: start. in %d samples\n", num_inchunk);
 
   i = num_depths - 1;
 
@@ -530,7 +532,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->queue_len);
   //g_mutex_unlock(element->cuTex_lock);
 
-  //gpuErrchk (cudaPeekAtLastError ());
+//  gpuErrchk (stream);
 
   }
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
@@ -581,7 +583,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     }
     //g_mutex_unlock(element->cuTex_lock);
 
-    //gpuErrchk (cudaPeekAtLastError ());
+  //  gpuErrchk (stream);
 
 
     SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
@@ -603,7 +605,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 					SPSTATEUP(i+1)->mem_len, 
 					SPSTATEUP(i)->mem_len);
 
-    //gpuErrchk (cudaPeekAtLastError ());
+  //  gpuErrchk (stream);
     SPSTATEUP(i+1)->last_sample = 0;
     num_inchunk = spiir_processed; 
 
@@ -611,6 +613,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
  
   cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream);
-  //gpuErrchk (cudaPeekAtLastError ());
+//  gpuErrchk (stream);
   return spiir_processed;
 }
