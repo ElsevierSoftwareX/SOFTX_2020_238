@@ -565,14 +565,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# convolution, high-frequency branches use FFT convolution with a
 	# block stride given by fir_stride.
 	#
-	# FIXME:  why the -1?  without it the pieces don't match but I
-	# don't understand where this offset comes from.  it might really
-	# need to be here, or it might be a symptom of a bug elsewhere.
-	# figure this out.
 
-	latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1
+	latency = -int(round(bank_fragment.start * bank_fragment.rate))
 	block_stride = fir_stride * bank_fragment.rate
-	
+
 	# we figure an fft costs ~5 logN flops where N is duration + block
 	# stride.  For each chunk you have to do a forward and a reverse fft.
 	# Time domain costs N * block_stride. So if block stride is less than
