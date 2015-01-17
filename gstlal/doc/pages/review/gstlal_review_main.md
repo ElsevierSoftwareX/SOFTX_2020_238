@@ -161,5 +161,6 @@ elements:
 
 \section studies Studies
 
+- \ref gstlal_inspiral_BNS_MDC_study
 - \ref gstlalinspiralcontrolpeaktimestudypage
 - \ref gstlalinspiralautochisqlenstudypage
