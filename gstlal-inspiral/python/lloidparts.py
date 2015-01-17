@@ -973,6 +973,9 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+		# uncomment this tee if the diagnostic sinks below are
+		# needed
+		#snr = pipeparts.mktee(pipeline, snr)
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is 1 second at max rate, ie max(rates)
