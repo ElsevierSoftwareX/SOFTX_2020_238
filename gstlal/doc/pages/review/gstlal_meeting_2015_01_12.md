@@ -65,6 +65,7 @@ The image below shows the injection of a TaylorF2 into "silence":
 Jan 14
 
   - Discussed program to compare FAR threshold with an equivalent SNR threshold efficiency program.
+   * \ref gstlal_inspiral_BNS_MDC_study
    * Efficiency curves... FAR of 1e-13 ~= min(rho_H1, rho_L1) > 7.25 for *expected* SNRs
    * For *recovered* SNR, FAR of 1e-12 ~= min(rho_H1, rho_L1) > 7.25 * 0.95, i.e., because system
     is spinning, search only recovers 95% of expected SNR.
