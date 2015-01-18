@@ -154,8 +154,9 @@ Jan 18
  - Fixed bug in computing chisq vs. snr likelihood factor for high snr values.
    - Bug was scipy.stats.ncx2.pdf gave nonsense results for large snr and non-central parameter values.
    - Ref: https://github.com/scipy/scipy/blob/v0.14.0/scipy/stats/_distn_infrastructure.py#L593
-     Notice that the log(hyp0f1()) possibly leads to nonsense values.
+     Notice that the `log(hyp0f1())` possibly leads to nonsense values.
    - Better to use the following implementation:  
+       `
 	#!/usr/bin/python
 	
 	from scipy import stats
@@ -175,5 +176,6 @@ Jan 18
 	l = numpy.linspace(0.001,0.5,10) * 400**2
 	print ncxpdf(700, 40, l)
 	print numpy.exp(stats.ncx2.logpdf(700, 40, l))  
+       `
    - With this fix, nearby injections should be recovered.
      Need to rerun S6-recolored BNS spinning MDC as a bug-fix rerun.
