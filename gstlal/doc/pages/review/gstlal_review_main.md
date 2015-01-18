@@ -70,6 +70,7 @@ items.
 
 - show histogram of horizon distance history
 
+- Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 
 \section completed_action Completed action items
 - Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py

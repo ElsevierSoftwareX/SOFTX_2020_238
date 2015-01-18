@@ -86,18 +86,18 @@ Jan 15
    3. Autocorrelation test: now have data correspond to a chirp in the bank.
 
   - Continued investigation of comparison of template vs. impulse response of SVD filter.
-   * Seems to be an off-by-one-sample error; also funny discontinuities at the time slice boundaries.
-   * Not clear if the time slice boundaries are a bug or a feature.
-   * Overlap of template vs. impulse response is 98% w/o correcting the off-by-one sample.
-   * After correcting off-by-one-sample, overlap is 99.9013%.
+    - Seems to be an off-by-one-sample error; also funny discontinuities at the time slice boundaries.
+    - Not clear if the time slice boundaries are a bug or a feature.
+    - Overlap of template vs. impulse response is 98% w/o correcting the off-by-one sample.
+    - After correcting off-by-one-sample, overlap is 99.9013%.
 
   - Tracking down off-by-one-sample error.
-   * Test: use a 3-sample fir matrix to analyze a frame with a delta-impulse
-   * Latency conventions appear the same between firbank and audiofirfilter
+    - Test: use a 3-sample fir matrix to analyze a frame with a delta-impulse
+    - Latency conventions appear the same between firbank and audiofirfilter
      for both "positive" and "negative" filters.
-   * However, firbank's fir_matrix and audiofirfilter's kernel seem to have
+    - However, firbank's fir_matrix and audiofirfilter's kernel seem to have
      different conventions (perhaps just reversed packing order?).
-   * Suspect that off-by-one-sample comes from a latency offset that is included
+    - Suspect that off-by-one-sample comes from a latency offset that is included
      in order for subbanks to overlap.  Discussed alternatives for how this could
      be handled.
 
@@ -105,23 +105,75 @@ Jan 16
 
   - Chad added various histograms in the Injection Accuracy section.
   - Looked at some of the new histograms for the S6-recolored-spinning-BNS MDC.
-   * Stipes in eta accuracy appear to be due to an interaction between the layout of
+    - Stipes in eta accuracy appear to be due to an interaction between the layout of
      templates in the template bank plus the fact that spins tend to bias the pipeline
      to smaller eta.
-   * Appears to be a 10-sample bias in the recovered time.
-     * **Action** figure out what is going on here.
-  - Kipp fixed the off-by-one-sample bug by removing the extra sample of latency
-   and instead changing the stride in the calcultion of the time slices.
-   * Run with SVD off but time slicing on.
-   * Now the reversed template and the impulse response agree.
-   * Errors occur at time slice boundary when those boundaries correspond to
+    - Appears to be a 10-sample bias in the recovered time.
+      - **Action** figure out what is going on here.
+  - Kipp fixed lloydparts.py (function) cbc_template_fir the off-by-one-sample bug by removing the 
+   extra sample of latency and instead changing the stride in the calcultion of the time slices.
+    - Run with SVD off but time slicing on.
+    - Now the reversed template and the impulse response agree.
+    - Errors occur at time slice boundary when those boundaries correspond to
      a change in sample rate.  Indicates that the audioresampler causes features
      at the edges.
-   * Overlap is 99.994% in this case.
-   * **Action**: there appears to be different behaviour when identity transform
-     scrambles template order (perhaps doesn't clip first 10 templates).
-   * For SVD-decomposed templates, overlap is 99.8%
+    - Overlap is 99.994% in this case.
+    - **Action Chad**: there appears to be different behaviour when identity transform
+     scrambles template order (perhaps doesn't clip first 10 templates').
+    - For SVD-decomposed templates, overlap is 99.8%
   - Extra review tasks:
    1. How much data gets dropped at the beginning of a segment (filtering code)?
-      * Claim is it drops one filter length at the beginning.
+      - Claim is it drops one filter length at the beginning.
    2. What happens at the boundaries of two contiguous segments in the offline pipeline?
+
+Jan 17
+  - Suggestions for summary pages. I have borrowed some of the ideas from pyCBC summary pages an example of which can be found at: https://sugar-jobs.phy.syr.edu/~kent/cbc_review1/openbox/970012743-971622087/
+    - For missed found plots report the FAR used in making those plots (1/30 days is what was used for the summary pages linked at the top of this page)
+    - Better still, use a colorbar to show the FAR of found injections over a FAR range of 1e-12 (~ one per 10,000 years) to 1e-5 (~ one per day). It would be better to use different symbols for found found (filled colored circles) and missed (red crosses) injections.
+    - For injections that are expected to be found but missed one normally looks does a follow-up study. Not sure how automated this is. Can we get someone from DETCHAR to take on doing this for gstsvd?
+    - Under Injection Accuracy, plot accuracy (recovered-injected)/injected as a function of recovered SNR/likelihood
+
+
+  - We also looked at the summary pages of the new run with a larger "prefactor" of 0.5.
+    - Larger prefactor seems to have led to fewer found injections. This was unexpected but is it because the Table reports injections at a given FAR
+    - **Action Item** Likelihood plots in Sec 6.1 of summary pages should all be document. It might be best to include them in the new likelihood paper, especially SNR/chi plots, with the equations that were used to produce.
+
+  - Test: Filter a waveform exactly matching a template in the template bank in zero noise
+   and fixed, uniform PSD.
+   - Expect to recover autocorrelation function.
+   - Result is the expected autocorrelation function, but with a one-sample offset.
+     - Not clear if this is a problem with the waveform filtered being off-by-one-sample or if there
+       is a residual off-by-one-sample in the code.
+     - Proposal is to redo test with time-domain waveforms, e.g., TaylorT2, used for both
+       the bank and the data.  Add one template to the bank with the waveform mass parameters
+       and use `lalsim-inspiral` to generate that exact waveform for injection.  This should
+       give an unambiguous determination if there is an off-by-one-sample error in the filtering code.
+
+Jan 18
+
+ - Fixed bug in computing chisq vs. snr likelihood factor for high snr values.
+   - Bug was scipy.stats.ncx2.pdf gave nonsense results for large snr and non-central parameter values.
+   - Ref: https://github.com/scipy/scipy/blob/v0.14.0/scipy/stats/_distn_infrastructure.py#L593
+     Notice that the log(hyp0f1()) possibly leads to nonsense values.
+   - Better to use the following implementation:  
+	#!/usr/bin/python
+	
+	from scipy import stats
+	from scipy.special import ive
+	import numpy
+	import math
+	
+	def logiv(v, z):
+        	return numpy.log(ive(v,z)) + z
+	
+	def ncxlogpdf(x, k, l):
+        	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+	
+	def ncxpdf(x, k, l):
+        	return numpy.exp(ncxlogpdf(x, k, l))
+	
+	l = numpy.linspace(0.001,0.5,10) * 400**2
+	print ncxpdf(700, 40, l)
+	print numpy.exp(stats.ncx2.logpdf(700, 40, l))  
+   - With this fix, nearby injections should be recovered.
+     Need to rerun S6-recolored BNS spinning MDC as a bug-fix rerun.
