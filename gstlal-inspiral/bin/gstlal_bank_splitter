@@ -192,7 +192,7 @@ for filename in filenames:
 
 
 		for rows in group_templates(chirows, options.n, options.overlap):
-			assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
+			assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
 			outputrows.append((rows[0], rows))
 
 
