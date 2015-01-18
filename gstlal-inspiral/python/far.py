@@ -51,6 +51,7 @@ try:
 except ImportError:
 	from gstlal.curve_fit import curve_fit
 from scipy import stats
+from scipy.special import ive
 import sqlite3
 sqlite3.enable_callback_tracebacks(True)
 import sys
@@ -71,6 +72,29 @@ from pylal import date
 from pylal import inject
 from pylal import rate
 from pylal import snglcoinc
+
+#
+# ============================================================================
+#
+#			Non-central chisquared pdf
+#
+# ============================================================================
+#
+
+#
+# FIXME this is to work around a precision issue in scipy
+# See: https://github.com/scipy/scipy/issues/1608
+#
+
+def logiv(v, z):
+	return numpy.log(ive(v,z)) + z
+
+# See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
+def ncx2logpdf(x, k, l):
+	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+
+def ncx2pdf(x, k, l):
+	return numpy.exp(ncx2logpdf(x, k, l))
 
 
 #
@@ -927,7 +951,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
 					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
 					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
-						v = stats.ncx2.pdf(chi2, df, pfs * snr2)
+						v = ncx2pdf(chi2, df, pfs * snr2)
 					# remove nans and infs, and barf if
 					# we got a negative number
 					v = v[numpy.isfinite(v)]
