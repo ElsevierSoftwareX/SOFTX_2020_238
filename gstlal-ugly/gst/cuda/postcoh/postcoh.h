@@ -27,7 +27,6 @@
 #include <gst/base/gstadapter.h>
 #include <cuda_runtime.h>
 
-
 G_BEGIN_DECLS
 
 #define CUDA_TYPE_POSTCOH \
@@ -43,6 +42,8 @@ G_BEGIN_DECLS
 
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
+
+extern char* IFO_MAP[];
 
 #ifndef DEFINED_COMPLEX_F
 #define DEFINED_COMPLEX_F 
@@ -72,27 +73,44 @@ struct _GstPostcohCollectData {
 };
 
 typedef struct _PeakList {
+  int peak_intlen;
+  int peak_floatlen;
+
 	/* data in the same type are allocated together */
-	int *sample_index;
-	int *tmplt_index;
-	int *pix_index;
+	int *tmplt_idx;
+	int *pix_idx;
+	int *peak_pos;
+	int *npeak;
 	float *maxsnglsnr;
 	float *cohsnr;
 	float *nullsnr;
-	float *chi2;
-	
-	int *d_sample_index;
-	int *d_tmplt_index;
-	int *d_pix_index;
+	float *chisq;
+	float *cohsnr_bg;
+	float *nullsnr_bg;
+	float *chisq_bg;
+
+	int *d_tmplt_idx;
+	int *d_pix_idx;
+	int *d_peak_pos;
+	int *d_npeak;
 	float *d_maxsnglsnr;
 	float *d_cohsnr;
 	float *d_nullsnr;
-	float *d_chi2;
+	float *d_chisq;
+	float *d_cohsnr_bg;
+	float *d_nullsnr_bg;
+	float *d_chisq_bg;
+
+	float *d_peak_tmplt;
+
 } PeakList;
 
 typedef struct _PostcohState {
   COMPLEX_F **snglsnr;
-  COMPLEX_F **d_snglsnr;
+  COMPLEX_F **dd_snglsnr;
+  COMPLEX_F **dd_autocorr_matrix;
+  float **dd_autocorr_norm;
+  int autochisq_len;
   int snglsnr_len;
   int snglsnr_start_load;
   int snglsnr_start_exe;
@@ -101,13 +119,14 @@ typedef struct _PostcohState {
   float **d_U_map;
   float **d_diff_map;
   int gps_step;
-  int order;
+  int npix;
   PeakList **peak_list;
-  int *npeak;
   int head_len;
   int exe_len;
   int ntmplt;
-  float *chi2_norm;
+  float dt;
+  float snglsnr_thresh;
+  int autocorr_len;
 } PostcohState;
 
 /**
@@ -128,8 +147,7 @@ struct _CudaPostcoh {
   gint bps;
 
   char *detrsp_fname;
-  char *autocorrelation_fname;
-  gint autocorrelation_len;
+  char *autocorr_fname;
   gint exe_len;
   gint preserved_len;
   float max_dt;
@@ -139,12 +157,16 @@ struct _CudaPostcoh {
 
   GstClockTime in_t0;
   GstClockTime out_t0;
+  GstClockTime next_t;
   guint64 out_offset0;
   guint64 samples_in;
   guint64 samples_out;
 
   gint hist_trials;
   PostcohState *state;
+  float snglsnr_thresh;
+  GMutex *prop_lock;
+  GCond *prop_avail;
 };
 
 struct _CudaPostcohClass {

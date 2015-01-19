@@ -121,13 +121,13 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
 	- pipeline: the gstreamer pipeline to add this to
 	- src: the gstreamer element that will be providing data to this 
-	- rates: a list of the requested sample rates, e.g., [512,1024].
+	- max_rate: the rate that is been set to
 	- instrument: the instrument to process
 	- psd: a psd frequency series
 	- psd_fft_length: length of fft used for whitening
@@ -152,10 +152,10 @@ def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length 
 	#
 
 	quality = 9
-	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % max(rates))
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % max(rates))
+	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % max_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % max_rate)
 	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
-	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max_rate))
 
 	#
 	# add a reblock element.  the whitener's gap support isn't 100% yet
@@ -175,7 +175,7 @@ def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length 
 
 	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max(rates)))
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max_rate))
 
 	# export PSD in ascii text format
 	# FIXME:  also make them available in XML format as a single document
@@ -213,7 +213,7 @@ def mkwhitened_src(pipeline, src, rates, instrument, psd = None, psd_fft_length 
 
 		whiten.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_resolution_changed, psd)
-	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max_rate))
 
 	#
 	# optionally add vetoes

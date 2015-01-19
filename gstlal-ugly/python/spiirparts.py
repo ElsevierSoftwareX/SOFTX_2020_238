@@ -61,7 +61,7 @@ from pylal.datatypes import LIGOTimeGPS
 
 from gstlal import uni_datasource
 import pdb
-
+from gstlal import cbc_template_iir
 
 #
 # SPIIR many instruments, many template banks
@@ -184,51 +184,6 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def build_bank_struct(bank, max_rate):
-	#FIXME: sanity check about the bank dimention of each sampling rate
-	# build a bank struct
-	sample_rates = sorted(bank.get_rates())
-	bank_struct = []
-	#first element is the resample depth
-	itemsize = bank.A[max(sample_rates)].dtype.itemsize/2
-	datatype = np.dtype("f%d" % itemsize)
-	tmparray = []
-
-	if sample_rates[-1] == max_rate:
-		tmparray = np.array([len(sample_rates)], datatype)
-	else:
-		tmparray = np.array([len(sample_rates)+1], datatype)
-
-	bank_struct = np.append(bank_struct, tmparray)
-	for sr in sample_rates:
-		tmparray = []
-		tmparray_shape = []
-		tmparray = repack_complex_array_to_real(bank.A[sr])
-		tmparray_shape = np.array(tmparray.shape, datatype)
-		bank_struct = np.append(bank_struct, tmparray_shape)
-		bank_struct = np.append(bank_struct, tmparray)
-
-		tmparray = []
-		tmparray_shape = []
-		tmparray = repack_complex_array_to_real(bank.B[sr])
-		tmparray_shape = np.array(tmparray.shape, datatype)
-		bank_struct = np.append(bank_struct, tmparray_shape)
-		bank_struct = np.append(bank_struct, tmparray)
-
-		tmparray = []
-		tmparray_shape = []
-		tmparray = bank.D[sr].astype(datatype)
-		tmparray_shape = np.array(tmparray.shape, datatype)
-		bank_struct = np.append(bank_struct, tmparray_shape)
-		bank_struct = np.append(bank_struct, tmparray)
-
-	if sample_rates[-1] != max_rate:
-		tmparray_shape = []
-		tmparray_shape = np.array([0.0, 0.0], datatype)
-		bank_struct = np.append(bank_struct, tmparray_shape)
-	return bank_struct
-
-
 def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
 	#
 	# check for recognized value of chisq_type
@@ -259,15 +214,17 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	#
 
 	hoftdicts = {}
-	max_rates ={}
+	max_instru_rates = {} 
+	sngl_max_rate = 0
 	for instrument in detectors.channel_dict:
-		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
+		for bank_name in banks[instrument]:
+			sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_name), sngl_max_rate)
+		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
-		max_rates[instrument] = max(rates)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -281,25 +238,30 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 #	pdb.set_trace()
 	bank_count = 0
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+		suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank)
+		if max_bank_rate < max_instru_rates[instrument]:
+			head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 		snr = pipeparts.mkreblock(pipeline, head)
 
-		bank_struct = build_bank_struct(bank, max_rates[instrument])
-		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank_struct, bank_id = bank_count, gap_handle = 0) # treat gap as zeros
+#		bank_struct = build_bank_struct(bank, max_rates[instrument])
+		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank, gap_handle = 0) # treat gap as zeros
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
 		# FIXME you get a different trigger generator depending on the chisq calculation :/
+		bank_struct = cbc_template_iir.Bank()
+		bank_struct.read_from_xml(bank)
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
+			head = pipeparts.mkitac(pipeline, snr, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
-		del bank.autocorrelation_bank
+		del bank_struct.autocorrelation_bank
 		bank_count = bank_count + 1
 		if nxydump_segment is not None:
 			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)

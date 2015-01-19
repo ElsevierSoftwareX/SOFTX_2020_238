@@ -42,6 +42,7 @@ parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", help = "Set the sample rate of the IIR template bank (optional).")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
+parser.add_option("--autocorr-len", metavar = "len", type = "float", default = 201, help = "Autocorrelation length for chisq.")
 parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
 # FIXME add this when we know how to (by changing the parameters accoring to a function or optimizing on the fly or something)
 #parser.add_option("--iir-tolerance", metavar = "match", type = "float", default = 0.99, help = "Set the SVD reconstruction tolerance (default = 0.99).")
@@ -83,7 +84,7 @@ else:
 # get the iir coefficients
 bank = Bank()
 
-bank.build_from_tmpltbank(options.template_bank, sampleRate = 4096, all_psd = ALLpsd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, epsilon = options.epsilon)
+bank.build_from_tmpltbank(options.template_bank, sampleRate = 4096, all_psd = ALLpsd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, epsilon = options.epsilon, autocorrelation_length = options.autocorr_len)
 
 bank.write_to_xml(options.output)
 

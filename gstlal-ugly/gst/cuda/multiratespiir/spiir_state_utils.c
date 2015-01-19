@@ -499,13 +499,13 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		{
 			for (k = 0; k < num_templates; ++k)
 			{
-				tmp_d[j * num_templates + k] = (int)(((long*)(d_array[i].data))[j * num_templates + k]);
-				cur_d = tmp_d[j * num_templates + k] ;
+				tmp_d[k * num_filters + j] = (int)(((long*)(d_array[i].data))[j * num_templates + k]);
+				cur_d = tmp_d[k * num_filters + j] ;
 				tmp_max = cur_d > tmp_max ? cur_d : tmp_max;
-				tmp_a1[j * num_templates + k].re = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + k]);
-				tmp_a1[j * num_templates + k].im = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + num_templates + k]);
-				tmp_b0[j * num_templates + k].re = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + k]);
-				tmp_b0[j * num_templates + k].im = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + num_templates + k]);
+				tmp_a1[k * num_filters + j].re = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + k]);
+				tmp_a1[k * num_filters + j].im = (float)(((double*)(a_array[i].data))[j * 2 * num_templates + num_templates + k]);
+				tmp_b0[k * num_filters + j].re = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + k]);
+				tmp_b0[k * num_filters + j].im = (float)(((double*)(b_array[i].data))[j * 2 * num_templates + num_templates + k]);
 			}
 		}
 		spstate[i]->delay_max = tmp_max;
@@ -516,12 +516,16 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		cudaMalloc((void **) &(spstate[i]->d_d), eff_len * sizeof (int));
 		cudaMemcpyAsync(spstate[i]->d_d, tmp_d, eff_len * sizeof(int), cudaMemcpyHostToDevice, stream);
 
+		cudaMalloc((void **) &(spstate[i]->d_y), eff_len * sizeof (COMPLEX_F));
+
+		cudaMemsetAsync(spstate[i]->d_y, 0, eff_len * sizeof(COMPLEX_F), stream);
+	
 		freeArray(d_array + i);
 		freeArray(a_array + i);
 		freeArray(b_array + i);
 
-//		printf("1st a: (%.3f + %.3fi) 1st b: (%.3f + %.3fi) 1st d: %d\n", spstate[i]->d_a1[0].re, spstate[i]->d_a1[0].im,
-//				spstate[i]->d_b0[0].re, spstate[i]->d_b0[0].im, spstate[i]->d_d[0]);
+		printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
+				tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
 		gpuErrchk(cudaPeekAtLastError());
 	}
 	
@@ -754,7 +758,9 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 
     resampler_state_reset(SPSTATEDOWN(i), stream);
+    gpuErrchk(cudaPeekAtLastError());
     resampler_state_reset(SPSTATEUP(i), stream);
+    gpuErrchk(cudaPeekAtLastError());
   }
 }
 

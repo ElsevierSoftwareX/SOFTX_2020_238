@@ -804,6 +804,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   }
   g_mutex_unlock(element->iir_bank_lock);
 
+  cudaSetDevice(element->deviceID);
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event
    * downstream */
@@ -1059,6 +1060,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
     GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT");
     /* implicit assumption: spstate has been inited */
     if (element->need_tail_drain) {
+	cudaSetDevice(element->deviceID);
         GST_DEBUG_OBJECT(element, "NEWSEGMENT, clear tails.");
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
 		cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
@@ -1090,6 +1092,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
  
       GST_DEBUG_OBJECT(element, "EVENT EOS");
       if (element->need_tail_drain) {
+	cudaSetDevice(element->deviceID);
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
           GST_DEBUG_OBJECT(element, "EOS, clear tails by pushing gap, num gap samples %" G_GUINT64_FORMAT, element->num_gap_samples);
   	  cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);

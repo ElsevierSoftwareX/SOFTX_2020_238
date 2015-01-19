@@ -646,4 +646,13 @@ def load_iirbank(filename, snr_threshold, contenthandler = XMLContentHandler, ve
 	return bank
 
 
+def get_maxrate_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
+
+		sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
+	
+	return max(sample_rates)
+
 

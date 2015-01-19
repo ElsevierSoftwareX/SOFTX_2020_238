@@ -78,7 +78,7 @@ int ligoxml_write_Array(xmlTextWriterPtr writer, XmlArray *xarrayPtr, const xmlC
     int i, j;
     for (i = 0; i < xarrayPtr->ndim; ++i)
     {
-        rc = xmlTextWriterWriteFormatElement(writer, BAD_CAST "DIM", "%d", xarrayPtr->dim[i]);
+        rc = xmlTextWriterWriteFormatElement(writer, BAD_CAST "Dim", "%d", xarrayPtr->dim[i]);
     }
 
     int rows = 1;

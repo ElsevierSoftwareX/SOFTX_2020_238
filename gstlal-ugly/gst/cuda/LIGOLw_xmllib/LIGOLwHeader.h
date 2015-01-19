@@ -141,6 +141,8 @@ void readArray(xmlTextReaderPtr reader, void *data);
 
 void freeArray(XmlArray *array);
 
+void freeArraydata(XmlArray *array);
+
 void readParam(xmlTextReaderPtr reader, void *data);
 
 void freeParam(XmlParam *param);
