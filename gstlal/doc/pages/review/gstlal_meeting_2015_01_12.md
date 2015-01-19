@@ -6,11 +6,29 @@
 
 \section agenda Agenda
 
-  - Look at MDC results for BNS
+  - Look at MDC results for BNS (among others, we identified the root cause of why very loud injections were being missed; see below)
     - https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/BNS/MDC/SpinMDC/gstlal_pipe_compare
-  - Look at S6-replay
+  - Look at S6-replay test run
   - Run pipeline tutorial
-  - GRACE-DB: https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online_analysis.html
+  - Review GRACE-DB: https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online_analysis.html
+  - delta function test: Inject delta-function and compare with time-reversed chirp
+  - Inject a chirp waveform into "slience" and compare with signal auto-correlation function
+
+The following images show the delta function test:
+
+@image html gstlal_impulse_response_01.png "Response of gstlal using TaylorF2 to an impulse injected at t=128 s compared to time-reversed TaylorF2: Plot shows high frequency end of the waveform"
+@image html gstlal_impulse_response_02.png "Same as above but 0.25 seconds later; the discontinuity occurs as a result of combining different time slices"
+@image html gstlal_impulse_response_03.png "Zoomed out version of the same"
+@image html gstlal_impulse_response_04.png "Same as above but a second later when another feature is seen: discontinuity could be due to a different sampling rate as well"
+@image html gstlal_impulse_response_05.png "Figure shows how the response changes as one moves from one time-slice to the next"
+@image html gstlal_impulse_response_06.png "Zoomed out version of the previous figure to show transition from one time-slice to the next"
+@image html gstlal_impulse_response_07.png "Within a given time-slice there is very good agreement between svd bank response and the expected response"
+@image html gstlal_impulse_response_08.png "Another time-slice and a new SVD"
+@image html gstlal_impulse_response_09.png "Behaviour towards the end of the waveform"
+
+The image below shows the injection of a TaylorF2 into "silence":
+
+@image html gstlal_impulse_response_10.png "Comparison of SVD output with the auto-correlation function"
 
 \section action Action Items
 
@@ -23,7 +41,7 @@
     - Make Histogram of accuracies
     - Make accuracy plots as a function of FAR 
     - Plot accuracy as a function of SNR
-    - Injections are found with "pi" time-shift; probably coming from one time-slide (check and fix)
+    - Injections are found with `pi` time-shift; probably coming from one time-slide (check and fix)
     - What is the reason for close-by missed injections in missed-found plot (as a function of Mchirp)?
     - Perpahs the prefactors_range (0.0, 0.10) might be too narrow 
     - Figure out the reason for the dip in the foreground plot (in SNR-Chisq section)
@@ -34,7 +52,7 @@
   - Review of GRACE-DB:
     - Check live times.
     - It would be useful to have a Table of CPU usage rather than for individual nodes.
-    - Currently, on-line analysis requests a headroom of 20% CPU. Can this be defended? Explore running some "nice" jobs in the background and see if this affects performace 
+    - Currently, on-line analysis requests a headroom of 20% CPU. Can this be defended? Explore running some `nice` jobs in the background and see if this affects performace 
     - The particular event we saw had a 17 minute latency for producing sky-map: https://gracedb.ligo.org/events/view/T124866
 
 
@@ -58,7 +76,7 @@ Jan 14
 
   - Discussed conventions for tC estimation: there is error in the trigger generator conventions.
    * **Action**: gstlal-inspiral/lib/gstlal_snglinspiral.c needs to get information about template peak time.
-   * **Action**: Les's patch needs to have a *variable* rather than fixed time-before-last-sample.
+   * **Action**: Les's patch needs to have a *variable* rather than fixed time-before-last-sample.'
 
 
   - Impulse response test:
@@ -134,8 +152,8 @@ Jan 17
     - Under Injection Accuracy, plot accuracy (recovered-injected)/injected as a function of recovered SNR/likelihood
 
 
-  - We also looked at the summary pages of the new run with a larger "prefactor" of 0.5.
-    - Larger prefactor seems to have led to fewer found injections. This was unexpected but is it because the Table reports injections at a given FAR
+  - We also looked at the summary pages of the new run with a larger `prefactor` of 0.5.
+    - Larger `prefactor` seems to have led to fewer found injections. This was unexpected but is it because the Table reports injections at a given FAR
     - **Action Item** Likelihood plots in Sec 6.1 of summary pages should all be document. It might be best to include them in the new likelihood paper, especially SNR/chi plots, with the equations that were used to produce.
 
   - Test: Filter a waveform exactly matching a template in the template bank in zero noise
