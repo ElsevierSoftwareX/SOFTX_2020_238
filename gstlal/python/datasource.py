@@ -710,7 +710,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
-		if gw_data_source_info.dq_channel_type == "ODC":
+		if gw_data_source_info.dq_channel_type == "ODC" or gw_data_source_info.dq_channel_dict[instrument] == "Hrec_Flag_Quality":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
