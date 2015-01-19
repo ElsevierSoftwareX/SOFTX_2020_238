@@ -175,25 +175,24 @@ Jan 18
      Notice that the `log(hyp0f1())` possibly leads to nonsense values.
    - Better to use the following implementation:  
        `
-	#!/usr/bin/python
-	
-	from scipy import stats
-	from scipy.special import ive
-	import numpy
-	import math
-	
-	def logiv(v, z):
-        	return numpy.log(ive(v,z)) + z
-	
-	def ncxlogpdf(x, k, l):
-        	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
-	
-	def ncxpdf(x, k, l):
-        	return numpy.exp(ncxlogpdf(x, k, l))
-	
-	l = numpy.linspace(0.001,0.5,10) * 400**2
-	print ncxpdf(700, 40, l)
-	print numpy.exp(stats.ncx2.logpdf(700, 40, l))  
+		#!/usr/bin/python
+			
+		from scipy import stats
+		from scipy.special import ive
+		import numpy
+		import math
+		
+		def logiv(v, z):
+			return numpy.log(ive(v,z)) + z
+		
+		def ncxlogpdf(x, k, l):
+			return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+		
+		def ncxpdf(x, k, l):
+			return numpy.exp(ncxlogpdf(x, k, l))
+		
+		l = numpy.linspace(0.001,0.5,10) * 400**2
+		print ncxpdf(700, 40, l)
+		print numpy.exp(stats.ncx2.logpdf(700, 40, l))  
        `
-   - With this fix, nearby injections should be recovered.
-     Need to rerun S6-recolored BNS spinning MDC as a bug-fix rerun.
+   - With this fix, nearby injections should be recovered.  Need to rerun S6-recolored BNS spinning MDC as a bug-fix rerun.
