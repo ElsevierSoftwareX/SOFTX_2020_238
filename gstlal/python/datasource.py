@@ -236,6 +236,47 @@ framexmit_ports = {
 }
 
 
+def framexmit_dict_from_framexmit_list(framexmit_list):
+	"""!
+	Given a list of framexmit addresses with ports, produce a dictionary keyed by ifo:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+
+		>>> framexmit_dict_from_framexmit_list(["H1=224.3.2.1:7096", "L1=224.3.2.2:7097", "V1=224.3.2.3:7098"])
+		{'V1': ('224.3.2.3', 7098), 'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097)}
+	"""
+	out = []
+	for instrument_addr in framexmit_list:
+		ifo, addr_port = instrument_addr.split("=")
+		addr, port = addr_port.split(':')
+		out.append((ifo, (addr, int(port))))
+	return dict(out)
+
+
+def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "framexmit-addr"):
+	"""!
+	Creates a string of framexmit address options from a dictionary keyed by ifos.
+
+	Examples:
+
+		>>> framexmit_list_from_framexmit_dict({'V1': ('224.3.2.3', 7098), 'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097)})
+		'V1=224.3.2.3:7098 --framexmit-addr=H1=224.3.2.1:7096 --framexmit-addr=L1=224.3.2.2:7097 '
+	"""
+	outstr = ""
+	if ifos is None:
+		ifos = framexmit_dict.keys()
+	for i, ifo in enumerate(ifos):
+		if i == 0:
+			outstr += "%s=%s:%s " % (ifo, framexmit_dict[ifo][0], framexmit_dict[ifo][1])
+		else:
+			outstr += "--%s=%s=%s:%s " % (opt, ifo, framexmit_dict[ifo][0], framexmit_dict[ifo][1])
+
+	return outstr
+
+
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	"""!
 	Create a new seek event, i.e., gst.event_new_seek()  for a given
@@ -299,6 +340,12 @@ class GWDataSourceInfo(object):
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
+
+		## A dictionary of framexmit addresses
+		self.framexmit_addr = framexmit_ports["CIT"]
+		if options.framexmit_addr is not None:
+			self.framexmit_addr.update( framexmit_dict_from_framexmit_list(options.framexmit_addr) )
+		self.framexmit_iface = options.framexmit_iface
 
 		## Seek event. Default is None, i.e., no seek
 		self.seekevent = None
@@ -421,6 +468,13 @@ def append_options(parser):
 -	--nds-channel-type [string] type
 		FIXME please document
 
+-	--framexmit-addr [string]
+		Set the address of the framexmit service.  Can be given
+		multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port
+
+-	--framexmit-iface [string]
+		Set the address of the framexmit interface.
+
 -	--dq-channel-name [string]
 		Set the name of the data quality (or state vector) channel.
 		This channel will be used to control the flow of data via the on/off bits.
@@ -475,6 +529,8 @@ def append_options(parser):
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-port", metavar = "portnumber", type=int, default=31200, help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
+	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
+	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality (or state vector) channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
@@ -639,7 +695,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME make wait_time adjustable through web interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
 		elif gw_data_source_info.data_source == "framexmit":
-			src = pipeparts.mkframexmitsrc(pipeline, multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1], wait_time = 120)
+			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = gw_data_source_info.framexmit_iface, multicast_group = gw_data_source_info.framexmit_addr[instrument][0], port = gw_data_source_info.framexmit_addr[instrument][1], wait_time = 120)
 		else:
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
