@@ -48,8 +48,13 @@ from glue.ligolw import utils
 from pylal.series import read_psd_xmldoc
 from glue.ligolw import utils, lsctables
 
-from cbc_template_iir import lalwhiten
-
+#Should actually be from gstlal import blah
+#but gstlal is not necessarily updated, so just copy these files into the local
+import cbc_template_iir 
+import cbc_template_fir 
+import templates
+import pdb
+import matplotlib.pyplot as pplot
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
@@ -547,7 +552,7 @@ def spin_comparison(xmldoc, psd_interp, outfile, input_spinMax = 0.05, input_num
 			    u.fill(0);
 			    numTmp += 1
 			    if timing:
-				    timePerCompStart = time.time()	
+			        timePerCompStart = time.time()	
 			    
 
 			    ##### Generate template waveform #####
@@ -671,78 +676,151 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
-def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=None):
+def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=None,sngl_inspiral_table=None):
         '''Compares a given template and signal
 	    New: Compare using the freq domain (lalwhiten) vs time domain applied psd
 	
 	'''
 	print("Beginning comptuations")
 	fFinal = 2047; #We only go as high as the waveform anyway
-	fLower = 15 
+	fLower = 25 
 
 
 	#### Initialise constants ####
 	sampleRate = 4096; padding=1.1; epsilon=0.02; alpha=.99; beta=0.25;
 
-	dist=1
+	dist=50
 	incl = 0;
 	
-	length = 2**23;
+	length = 2**20;
 
-	h = numpy.zeros(length, dtype=numpy.cdouble)
-	u = numpy.zeros(length, dtype=numpy.cdouble)
+	signal_TDWhitened = numpy.zeros(length, dtype=numpy.cdouble)
+	template_TDWhitened = numpy.zeros(length, dtype=numpy.cdouble)
+	signal_FDWhitened = numpy.zeros(length, dtype=numpy.cdouble)
+	template_FDWhitened = numpy.zeros(length, dtype=numpy.cdouble)
 	
 
 	signalChirp = (signal_m1*signal_m2)**(0.6)/(signal_m1+signal_m2)**(0.2);
 	templateChirp = (template_m1*template_m2)**(0.6)/(template_m1+template_m2)**(0.2);
 
 
-	#### Set up the template waveform
+	#### Set up the template and signal waveforms
+	# hp = hplus is used for freq domain whitening, amp/phase for TD whitening
+	hpTemplate, hcTemplate = generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=0)
 	ampTemplate,phaseTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=1)
 
-	#Apply PSD
+	hpSignal,hcSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=0)
+	ampSignal,phaseSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=1)
+
+	##########################################################
+	#							 #
+	#   Time Domain Whitening of both signal and templates	 #
+	#							 #
+	##########################################################
+
+
+	#Apply PSD in time domain to template
 	fTemplate = numpy.gradient(phaseTemplate)/(2.0*numpy.pi * (1.0/sampleRate))
 	cleanFreq(fTemplate,fLower)
-	ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate[0:len(fTemplate)])**0.5
+	ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate)**0.5
 
-	#### Get the IIR coefficients and response from the template####
+
+	#Apply PSD in time domain to signal
+	fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi*(1.0/sampleRate))
+	cleanFreq(fSignal,fLower)
+	ampSignal[0:len(fSignal)] /= psd_interp(fSignal)**0.5
+
+	#Get the IIR coefficients and response from the template
 	a1, b0, delay = spawaveform.iir(ampTemplate, phaseTemplate, epsilon, alpha, beta, padding)
-
-	outTemplate = spawaveform.iirresponse(length, a1, b0, delay) #
-	outTemplate = outTemplate[::-1] # 
-	u[-len(outTemplate):] = outTemplate; #FIX: These 3 lines are ugly and slow
-
-	u *= 1/numpy.sqrt(numpy.dot(u,numpy.conj(u)))
+	outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
 
 
-
-    	#Set up the signal waveform
-	ampSignal,phaseSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0)
-
-	##Apply PSD
-	#fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi * (1.0/sampleRate))
-	#cleanFreq(fSignal,fLower)
-	#ampSignal[0:len(fSignal)] /= psd_interp(fSignal[0:len(fSignal)])**0.5
-
-	#ampSignal = ampSignal / numpy.sqrt(numpy.dot(ampSignal,numpy.conj(ampSignal)));
-	#h[-len(ampSignal):] = ampSignal * numpy.exp(1j*phaseSignal);
-	#h *= 1/numpy.sqrt(numpy.dot(h,numpy.conj(h)))
-	#h = numpy.conj(numpy.fft.fft(h))
-
-	hpSignal,hcSignal=generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,0,0,0,0,0,0,ampphase=0)
+	#Finish up
+	template_TDWhitened[-len(outTemplate):] = outTemplate[::-1];
+	template_TDWhitened*= 1/numpy.sqrt(numpy.dot(template_TDWhitened,numpy.conj(template_TDWhitened)))
 	
-	#### u -> filters, h -> signal ####
-#	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hpSignal, len(hpSignal.data.data), len(hpSignal.data.data)/sampleRate, sampleRate, len(hpSignal.data.data))
-	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hpSignal, length, length/sampleRate, sampleRate, length)
-	h = lalwhiten_amp * numpy.exp(1j * lalwhiten_phase)
-	h *= 1/numpy.sqrt(numpy.dot(h,numpy.conj(h)))
-	h = numpy.conj(numpy.fft.fft(h))
+	signal_TDWhitened[-len(ampSignal):] = (ampSignal * numpy.exp(1j*phaseSignal))
+	signal_TDWhitened *= 1/numpy.sqrt(numpy.dot(signal_TDWhitened,numpy.conj(signal_TDWhitened)))
 
-	### Overlap for new signal vs new filters ####
-	crossCorr = numpy.fft.ifft(numpy.fft.fft(u)*h);
+	crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_TDWhitened)*numpy.conj(numpy.fft.fft(template_TDWhitened)));
 	snr = numpy.abs(crossCorr).max();
 
-	print("Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
+	print("TDWT-TDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
+	print("Beginning TD-FD")
+
+	#################################################
+	#						#
+	#   Freq domain signal, time domain template	#
+	#	(reuse template from above)		#
+	#						#
+	#################################################
+
+	timeStart = time.time()
+	### Frequency domain whitening
+	working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(fLower, sngl_inspiral_table)
+
+	# FIXME: This is a hack to calculate the maximum length of given table, we 
+	# know that working_f_low_extra_time is about 1/10 of the maximum duration
+	length_max = working_f_low_extra_time * 10 * sampleRate
+
+	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+	working_duration = float(working_length) / sampleRate
+
+
+	timeFinish = time.time()
+	print("PSD interpolation time " + str(timeFinish-timeStart))
+	timeStart = time.time()
+	lal_signal_whiten_amp, lal_signal_whiten_phase = cbc_template_iir.lalwhiten(psd, hpSignal, working_length, working_duration, sampleRate, length_max) #Breaks here
+	timeFinish = time.time()
+	print("Whitening time " + str(timeFinish - timeStart))
+	#Still need to do some more work here
+	lalSignal = lal_signal_whiten_amp * numpy.exp(1j * lal_signal_whiten_phase)
+	lalSignal *= 1/numpy.sqrt(numpy.dot(lalSignal,numpy.conj(lalSignal)))
+
+	signal_FDWhitened[-len(lalSignal):] = lalSignal
+	signal_FDWhitened *= 1/numpy.sqrt(numpy.dot(signal_FDWhitened,numpy.conj(signal_FDWhitened)))
+
+	crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_FDWhitened)*numpy.conj(numpy.fft.fft(template_TDWhitened)));
+	snr = numpy.abs(crossCorr).max();
+
+	print("TDWT-FDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
+	print("Beginning FD-FD")
+
+	#############################################################
+	#							    #
+	#   Frequency domain whitening of both template and signal  #
+	#		(reuse signal from above)		    #
+	#							    #
+	#############################################################
+
+	### Frequency domain whitening
+	lal_temp_whiten_amp, lal_temp_whiten_phase = cbc_template_iir.lalwhiten(psd, hpTemplate, working_length, working_duration, sampleRate, length_max)
+
+	a1, b0, delay = spawaveform.iir(lal_temp_whiten_amp, lal_temp_whiten_phase, epsilon, alpha, beta, padding)
+	outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
+
+	template_FDWhitened[-len(outTemplate):] = outTemplate[::-1]
+	template_FDWhitened *= 1/numpy.sqrt(numpy.dot(template_FDWhitened,numpy.conj(template_FDWhitened)))
+
+
+	crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_TDWhitened)*numpy.conj(numpy.fft.fft(template_FDWhitened)));
+	snr = numpy.abs(crossCorr).max();
+
+	print("FDWT-TDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
+
+	crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_FDWhitened)*numpy.conj(numpy.fft.fft(template_FDWhitened)));
+	snr = numpy.abs(crossCorr).max();
+
+	print("FDWT-FDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
+#	pplot.figure()
+#	pplot.plot(u)
+#	pplot.plot(h)
+#	pplot.show()
+
+#	pdb.set_trace()
+	#### u -> filters, h -> signal ####
+	### Overlap for new signal vs new filters ####
 
 def main():
 
@@ -862,14 +940,52 @@ def main():
 						input_spinMax = options.spin_max,
 						input_numSignals = options.num_signals)
 	if(options.type == "C2"):
+	    fLower = 25
+	    sampleRate = 4096
+	    working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(fLower, sngl_inspiral_table)
 
+	    # FIXME: This is a hack to calculate the maximum length of given table, we 
+	    # know that working_f_low_extra_time is about 1/10 of the maximum duration
+	    length_max = working_f_low_extra_time * 10 * sampleRate
+
+	    # Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+	    working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+	    working_duration = float(working_length) / sampleRate
+	    # Smooth the PSD and interpolate to required resolution
+	    if psd is not None:
+		    psdConditioned = cbc_template_fir.condition_psd(ALLpsd['H1'], 1.0 / working_duration, minfs = (working_f_low, fLower), maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0))
+				    # This is to avoid nan amp when whitening the amp 
+		    tmppsd = psdConditioned.data
+		    tmppsd[numpy.isinf(tmppsd)] = 1.0
+		    psdConditioned.data = tmppsd
 	    signal_m1 = 1.4;
 	    signal_m2 = 1.4;
 
 	    template_m1 = 1.4;
 	    template_m2 = 1.4;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=ALLpsd['H1'])
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
 	
+	    signal_m1 = 2;
+	    signal_m2 = 2;
+
+	    template_m1 = 2;
+	    template_m2 = 2;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+
+	    signal_m1 = 1.4;
+	    signal_m2 = 1.4;
+
+	    template_m1 = 1.45;
+	    template_m2 = 1.45;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+
+	    template_m1 = 1.5;
+	    template_m2 = 1.5;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+
+	    template_m1 = 1.6;
+	    template_m2 = 1.6;
+	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
 	## There is potential to easily multithread the program but currently the memory useage is too high for even one instance in some cases
 	## This is a major issue that is still being resolved but is difficult due to the very long waveforms
 
