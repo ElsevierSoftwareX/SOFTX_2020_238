@@ -147,7 +147,7 @@ class EPHandler(Handler):
 		self.triggers = None
 		self.process_params = None
 		self.process = None
-		self.outdir = "./"
+		self.outdir = os.getcwd()
 		self.outdirfmt = ""
 		self.triggers = EPHandler.make_output_table()
 		self.output_cache = Cache()
@@ -165,6 +165,8 @@ class EPHandler(Handler):
 
 		# required for file locking
 		self.lock = threading.Lock()
+
+		self.tempdir = None
 
 		self.bus = pipeline.get_bus()
 		self.bus.add_signal_watch()
@@ -361,7 +363,7 @@ class EPHandler(Handler):
 		)
 		return self.filter_bank
 
-	def build_filter_xml(self, res_level, ndof=1, loc="", verbose=False):
+	def build_filter_xml(self, res_level, ndof=1, loc=None, verbose=False):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
@@ -377,8 +379,10 @@ class EPHandler(Handler):
 			1 if ndof == 1 else self.units,
 		)
 
+		if self.tempdir is None:
+			self.tempdir = tempfile.mkdtemp()
 		# Store the filter name so we can destroy it later
-		output = "%sgstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (loc, self.inst, self.channel, res_level, ndof)
+		output = os.path.join(self.tempdir, "gstlal_excesspower_bank_%s_%s_level_%d_%d.xml" % (self.inst, self.channel, res_level, ndof))
 		self.filter_xml[output] = self.filter_xml[(res_level, ndof)]
 
 		if self.mmixers.has_key(res_level):
@@ -795,6 +799,8 @@ class EPHandler(Handler):
 			self.lock.release()
 
 		self.destroy_filter_xml()
+		if os.path.exists(self.tempdir):
+			os.removedirs(self.tempdir)
 
 def mknxyfdsink(pipeline, src, fd, segment = None, units = utils.EXCESSPOWER_UNIT_SCALE['Hz']):
     if segment is not None:
