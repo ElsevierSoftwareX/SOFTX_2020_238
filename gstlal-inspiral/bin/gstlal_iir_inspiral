@@ -200,6 +200,10 @@ def parse_command_line():
   parser.add_option("--singles-threshold-record", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
   parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
 
+  # gpu acceleartion support
+  parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
+
+
 
   options, filenames = parser.parse_args()
 
@@ -401,10 +405,10 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if "GSTLAL_LL_JOB" in os.environ:
     open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
-#  banks = {}
   print iir_bank
   print output_filename
   print likelihood_file
+#  banks = {}
 #  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
 #  for instrument in banks:
 #    for n, bank in enumerate(banks[instrument]):
@@ -424,22 +428,41 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   pipeline = gst.Pipeline("gstlal_iir_inspiral")
   mainloop = gobject.MainLoop()
 
-  triggersrc = spiirparts.mkBuildBossSPIIR(
-  #triggersrc = spiirparts.mkSPIIRmulti(
-    pipeline,
-    detectors = detectors,
-    banks = iir_bank,
-    psd = psd,
-    psd_fft_length = options.psd_fft_length,
-    ht_gate_threshold = options.ht_gate_threshold,
-    veto_segments = veto_segments,
-    verbose = options.verbose,
-    nxydump_segment = options.nxydump_segment,
-    chisq_type = options.chisq_type,
-    track_psd = options.track_psd,
-    blind_injections = options.blind_injections,
-    peak_thresh = options.peak_thresh
-  )
+  if options.gpu_acc is True:
+    triggersrc = spiirparts.mkBuildBossSPIIR(
+      pipeline,
+      detectors = detectors,
+      banks = iir_bank,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh
+    )
+  else:
+    banks = {}
+    banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+    triggersrc = spiirparts.mkSPIIRmulti(
+      pipeline,
+      detectors = detectors,
+      banks = banks,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh
+    )
+
 
 
   if options.verbose:
