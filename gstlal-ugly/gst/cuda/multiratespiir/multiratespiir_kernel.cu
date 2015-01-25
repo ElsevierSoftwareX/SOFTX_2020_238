@@ -46,6 +46,8 @@ extern "C" {
 #define THREADSPERBLOCK 256
 #define NB_MAX 32
 
+// #define ORIGINAL
+
 // for gpu debug
 #define gpuErrchk(stream) { gpuAssert(stream, __FILE__, __LINE__); }
 static void gpuAssert(cudaStream_t stream, char *file, int line, bool abort=true)
@@ -160,6 +162,181 @@ __global__ void downsample2x (const float amplifier,
  */
 
 //texture<float, 1, cudaReadModeElementType> texRef;
+
+#define GRANU       32
+#define LOGGRANU    5
+
+#define WARPSIZE	32
+#define LOGWARPSIZE	5
+
+__global__ void cuda_iir_filter_kernel_coarse
+(
+	COMPLEX_F *cudaA1, 
+	COMPLEX_F *cudaB0, 
+	int *cudaShift,
+	COMPLEX_F *cudaPrevSnr, 
+	float *cudaData, 
+	float *cudaSnr,
+	gint mem_len, 
+	gint filt_len, 
+	gint delay_max,
+	gint len, 
+	gint queue_first_sample, 
+	gint queue_len,
+	gint numFilters,
+	gint numTemplates	
+)
+{
+	// This is a coarse-grained version of the spiir kernel, it's used to calculate SNRs
+	// where number of filters of each template (numFilters) is larger than 32.
+    // 1 block is assigned to calculate 1 template, 1 template has numFilters filters.
+	// There are numTemplate blocks launched, each block has at least numFilters threads,
+	// and block size is a multiple of WARPSIZE
+
+    int tLane = threadIdx.x & (WARPSIZE - 1);
+
+    float fltrOutptReal;
+    float fltrOutptImag;
+    float data;
+    int shift;
+
+    COMPLEX_F a1, b0;
+    COMPLEX_F previousSnr;
+
+    a1.re = 0.0f;
+    a1.im = 0.0f;
+    b0.re = 0.0f;
+    b0.im = 0.0f;
+    shift = 0;
+    previousSnr.re = 0.0f;
+    previousSnr.im = 0.0f;
+    fltrOutptReal = 0.0f;
+    fltrOutptImag = 0.0f;
+
+    if (threadIdx.x < numFilters)
+    {
+        a1 = cudaA1[blockIdx.x * numFilters + threadIdx.x];
+        b0 = cudaB0[blockIdx.x * numFilters + threadIdx.x];
+        shift = delay_max - cudaShift[blockIdx.x * numFilters + threadIdx.x];
+        previousSnr = cudaPrevSnr[blockIdx.x * numFilters + threadIdx.x];
+    }
+
+    for (int i = 0; i < len; ++i)
+    {
+        data = cudaData[(shift + i + queue_first_sample) % queue_len];
+
+        fltrOutptReal = a1.re * previousSnr.re - a1.im * previousSnr.im + b0.re * data;
+        fltrOutptImag = a1.re * previousSnr.im + a1.im * previousSnr.re + b0.im * data;
+
+        previousSnr.re = fltrOutptReal; 
+        previousSnr.im = fltrOutptImag; 
+
+        // Inter-Warp Reduction
+        for (int off = WARPSIZE >> 1; off > 0; off = off >> 1)
+        {
+            fltrOutptReal += __shfl_down(fltrOutptReal, off, 2 * off);
+            fltrOutptImag += __shfl_down(fltrOutptImag, off, 2 * off);
+        }
+
+        if (tLane == 0)
+        {
+            atomicAdd(cudaSnr + (2 * blockIdx.x + 0) * mem_len + filt_len - 1 + i, fltrOutptReal);
+            atomicAdd(cudaSnr + (2 * blockIdx.x + 1) * mem_len + filt_len - 1 + i, fltrOutptImag);
+        }
+    }
+
+    if (threadIdx.x < numFilters)
+        cudaPrevSnr[blockIdx.x * numFilters + threadIdx.x] = previousSnr;
+}
+
+__global__ void cuda_iir_filter_kernel_fine
+(
+	COMPLEX_F *cudaA1, 
+	COMPLEX_F *cudaB0, 
+	int *cudaShift,
+	COMPLEX_F *cudaPrevSnr, 
+	float *cudaData, 
+	float *cudaSnr,
+	gint mem_len, 
+	gint filt_len, 
+	gint delay_max,
+	gint len, 
+	gint queue_first_sample, 
+	gint queue_len,
+	gint numFilters,
+	gint numTemplates,	
+	gint cu,
+	gint logcu
+)
+{
+	// This is a fine-grained version of the spiir kernel, it's used to calculate SNRs
+	// where the number of filters per template is less than or equal to 32.
+	// 1 compute unit (CU) is used to calculate 1 template, the value of CU is specified
+	// by variable "cu", "logcu" is log2(cu)
+
+    int tLane   = threadIdx.x & (WARPSIZE - 1);
+    int cuIdG   = (threadIdx.x + blockIdx.x * blockDim.x) >> logcu;
+    int tIdL    = threadIdx.x & (cu - 1);
+
+    float fltrOutptReal;
+    float fltrOutptImag;
+    int shift;
+    float data;
+
+    COMPLEX_F a1, b0;
+    COMPLEX_F previousSnr;
+
+    a1.re = 0.0f;
+    a1.im = 0.0f;
+    b0.re = 0.0f;
+    b0.im = 0.0f;
+    shift = 0;
+    previousSnr.re = 0.0f;
+    previousSnr.im = 0.0f;
+    fltrOutptReal = 0.0f;
+    fltrOutptImag = 0.0f;
+
+	// Total number of CUs should exceed numTemplates
+    if (cuIdG < numTemplates)
+    {
+        if (tIdL < numFilters)
+        {
+            a1 = cudaA1[cuIdG * numFilters + tIdL]; 
+            b0 = cudaB0[cuIdG * numFilters + tIdL];
+            shift = delay_max - cudaShift[cuIdG * numFilters + tIdL];
+            previousSnr = cudaPrevSnr[cuIdG * numFilters + tIdL];
+        }
+
+        for (int i = 0; i < len; ++i)
+        {
+            data = cudaData[(shift + i + queue_first_sample) % queue_len];
+
+            fltrOutptReal = a1.re * previousSnr.re - a1.im * previousSnr.im + b0.re * data;
+            fltrOutptImag = a1.re * previousSnr.im + a1.im * previousSnr.re + b0.im * data;
+
+            previousSnr.re = fltrOutptReal;
+            previousSnr.im = fltrOutptImag;
+
+            // Inter-CU Reduction
+            for (int off = cu >> 1; off > 0; off = off >> 1)
+            {
+                fltrOutptReal += __shfl(fltrOutptReal, tLane + off, 2 * off);
+                fltrOutptImag += __shfl(fltrOutptImag, tLane + off, 2 * off);
+            }
+
+            if (tIdL == 0)
+            {
+                cudaSnr[(2 * cuIdG + 0) * mem_len + filt_len - 1 + i] = fltrOutptReal;
+                cudaSnr[(2 * cuIdG + 1) * mem_len + filt_len - 1 + i] = fltrOutptImag;
+            }
+        }
+
+        if (tIdL < numFilters)
+        {
+            cudaPrevSnr[cuIdG * numFilters + tIdL] = previousSnr;
+        }
+    }
+}
 
 __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1, 
 					COMPLEX_F *cudaB0, int *cudaShift, 
@@ -500,6 +677,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   uint share_mem_sz;
 
   if (SPSTATE(i)->num_templates > 0) {
+
+  #ifdef ORIGINAL
   block.x = SPSTATE(i)->num_filters;
   grid.y = SPSTATE(i)->num_templates;
 //  share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
@@ -533,6 +712,73 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   //g_mutex_unlock(element->cuTex_lock);
 
 //  gpuErrchk (stream);
+  #else
+    GST_LOG ("spiir_kernel: depth %d. processed %d, nb %d, num of (templates: %d,filters: %d). block.size (%d, %d, %d), grid.size (%d, %d, %d)", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_templates, SPSTATE(i)->num_filters, block.x, block.y, block.z, grid.x, grid.y, grid.z);
+	if (SPSTATE(i)->num_filters > 32)
+	{
+		// Use Coarse-Grained Kernel
+		int numTemplates = SPSTATE(i)->num_templates;
+		int numFilters = SPSTATE(i)->num_filters;
+		int mem_len = SPSTATEUP(i)->mem_len;
+		int spiir_grid	= numTemplates;	
+		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
+        cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates);
+		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
+		(
+			SPSTATE(i)->d_a1,
+			SPSTATE(i)->d_b0,
+			SPSTATE(i)->d_d,
+			SPSTATE(i)->d_y,
+			SPSTATE(i)->d_queue,
+			SPSTATEUP(i)->d_mem,
+			SPSTATEUP(i)->mem_len,
+			SPSTATEUP(i)->filt_len,
+			SPSTATE(i)->delay_max,
+			num_inchunk, 
+			SPSTATE(i)->queue_first_sample,
+			SPSTATE(i)->queue_len,
+			numFilters,
+			numTemplates
+		);
+	}
+	else
+	{
+		// Use Fine-Grained Kernel
+		int numTemplates = SPSTATE(i)->num_templates;
+		int numFilters = SPSTATE(i)->num_filters;
+		int mem_len = SPSTATEUP(i)->mem_len;
+		int t = numFilters - 1;
+		int c = 0;
+		while (t >>= 1)
+		{
+			++c;
+		}
+		int cu = 2 << c;
+		int logcu = c + 1;
+		int spiir_block = 512;
+        int cuPerBlock = spiir_block >> logcu;
+        int spiir_grid = (numTemplates + cuPerBlock - 1) / cuPerBlock;
+		cuda_iir_filter_kernel_fine<<<spiir_grid, spiir_block, 0, stream>>>
+		(
+			SPSTATE(i)->d_a1,
+			SPSTATE(i)->d_b0,
+			SPSTATE(i)->d_d,
+			SPSTATE(i)->d_y,
+			SPSTATE(i)->d_queue,
+			SPSTATEUP(i)->d_mem,
+			SPSTATEUP(i)->mem_len,
+			SPSTATEUP(i)->filt_len,
+			SPSTATE(i)->delay_max,
+			num_inchunk,
+			SPSTATE(i)->queue_first_sample,
+			SPSTATE(i)->queue_len,
+			numFilters,
+			numTemplates,
+			cu,
+			logcu
+		);
+	}	
+  #endif
 
   }
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
@@ -552,6 +798,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
    *	cuda kernel
    */
 
+	#ifdef ORIGINAL 
     block.x = SPSTATE(i)->num_filters;
     grid.y =  SPSTATE(i)->num_templates;
    // share_mem_sz = (block.x+8 + (SPSTATE(i)->num_filters+16-1)/16*SPSTATE(i)->nb) * 2 * sizeof(float);
@@ -580,6 +827,73 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->nb,
 							SPSTATE(i)->queue_first_sample,
 							SPSTATE(i)->queue_len);
+	#else
+    GST_LOG ("spiir_kernel: depth %d. processed %d, nb %d, num of (templates: %d,filters: %d). block.size (%d, %d, %d), grid.size (%d, %d, %d)", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_templates, SPSTATE(i)->num_filters, block.x, block.y, block.z, grid.x, grid.y, grid.z);
+	if (SPSTATE(i)->num_filters > 32)
+	{
+		// Use Coarse-Grained Kernel
+		int numTemplates = SPSTATE(i)->num_templates;
+		int numFilters = SPSTATE(i)->num_filters;
+		int mem_len = SPSTATEUP(i)->mem_len;
+		int spiir_grid	= numTemplates;	
+		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
+        cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates);
+		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
+		(
+			SPSTATE(i)->d_a1,
+			SPSTATE(i)->d_b0,
+			SPSTATE(i)->d_d,
+			SPSTATE(i)->d_y,
+			SPSTATE(i)->d_queue,
+			SPSTATEUP(i)->d_mem,
+			SPSTATEUP(i)->mem_len,
+			SPSTATEUP(i)->filt_len,
+			SPSTATE(i)->delay_max,
+			spiir_processed,
+			SPSTATE(i)->queue_first_sample,
+			SPSTATE(i)->queue_len,
+			numFilters,
+			numTemplates
+		);
+	}
+	else
+	{
+		// Use Fine-Grained Kernel
+		int numTemplates = SPSTATE(i)->num_templates;
+		int numFilters = SPSTATE(i)->num_filters;
+		int mem_len = SPSTATEUP(i)->mem_len;
+		int t = numFilters - 1;
+		int c = 0;
+		while (t >>= 1)
+		{
+			++c;
+		}
+		int cu = 2 << c;
+		int logcu = c + 1;
+		int spiir_block = 512;
+        int cuPerBlock = spiir_block >> logcu;
+        int spiir_grid = (numTemplates + cuPerBlock - 1) / cuPerBlock;
+		cuda_iir_filter_kernel_fine<<<spiir_grid, spiir_block, 0, stream>>>
+		(
+			SPSTATE(i)->d_a1,
+			SPSTATE(i)->d_b0,
+			SPSTATE(i)->d_d,
+			SPSTATE(i)->d_y,
+			SPSTATE(i)->d_queue,
+			SPSTATEUP(i)->d_mem,
+			SPSTATEUP(i)->mem_len,
+			SPSTATEUP(i)->filt_len,
+			SPSTATE(i)->delay_max,
+			spiir_processed,
+			SPSTATE(i)->queue_first_sample,
+			SPSTATE(i)->queue_len,
+			numFilters,
+			numTemplates,
+			cu,
+			logcu
+		);
+	}	
+	#endif
     }
     //g_mutex_unlock(element->cuTex_lock);
 
