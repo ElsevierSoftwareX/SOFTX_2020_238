@@ -359,6 +359,7 @@ AS
 			WHERE
 				a.table_name == 'sim_inspiral'
 				AND a.event_id == sim_inspiral.simulation_id
+				AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0)
 			ORDER BY
 				coinc_event.likelihood DESC
 			LIMIT 1
@@ -564,11 +565,11 @@ FROM
 							([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", 1),
 							([sim.geocent_end_time for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
 							([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"RA (h)", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s",None),
-							([sim.inclination for sim in sims], [sim.polarization for sim in sims], r"Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
+							([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos $Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
 							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
 				fig, axes = create_plot(ax1,ax2, aspect = aspect)
 				axes.set_title(r"Injection Parameter Distribution (%s Injections)" % waveform)
-				axes.plot(col1,col2, "kx")
+				axes.plot(col1,col2, "k,")
 				minx, maxx = axes.get_xlim()
 				miny, maxy = axes.get_ylim()
 				if aspect == 1:
@@ -718,36 +719,77 @@ FROM
 			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl))
 
 	def finish(self):
+
+		def hist(arr, axes):
+			start = numpy.percentile(arr, 1)
+			end = numpy.percentile(arr, 99)
+			axes.hist(arr, numpy.linspace(start, end, 100))
+
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
 			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.mchirp for sim, sngl in pairs], [sngl.mchirp - sim.mchirp for sim, sngl in pairs], "kx")
 			yield fig, "mchirp_acc_abs_%s_%s" % (waveform, instrument), False
 
+			fig, axes = create_plot(r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
+			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([sngl.mchirp - sim.mchirp for sim, sngl in pairs]), axes)
+			yield fig, "mchirp_acc_abs_hist_%s_%s" % (waveform, instrument), False
+
 			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$) / Injected $M_{\mathrm{chirp}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.mchirp for sim, sngl in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl in pairs], "kx")
 			yield fig, "mchirp_acc_frac_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)) / Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
+			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl in pairs]), axes)
+			yield fig, "mchirp_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Injected $\eta$", r"Recovered $\eta$ - Injected $\eta$")
 			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.eta for sim, sngl in pairs], [sngl.eta - sim.eta for sim, sngl in pairs], "kx")
 			yield fig, "eta_acc_abs_%s_%s" % (waveform, instrument), False
 
+			fig, axes = create_plot(r"Recovered $\eta$ - Injected $\eta$", "Number")
+			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([sngl.eta - sim.eta for sim, sngl in pairs]), axes)
+			yield fig, "eta_acc_abs_hist_%s_%s" % (waveform, instrument), False
+
 			fig, axes = create_plot(r"Injected $\eta$", r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.eta for sim, sngl in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl in pairs], "kx")
 			yield fig, "eta_acc_frac_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$", "Number")
+			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl in pairs]), axes)
+			yield fig, "eta_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Recovered End Time - Injection End Time (s)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim_end_time(sim, instrument) for sim, sngl in pairs], [sngl.get_end() - sim_end_time(sim, instrument) for sim, sngl in pairs], "kx")
 			yield fig, "t_acc_%s_%s" % (waveform, instrument), False
 
+			fig, axes = create_plot(r"Recovered End Time - Injection End Time (s)", "Number")
+			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([float(sngl.get_end()) - float(sim_end_time(sim, instrument)) for sim, sngl in pairs]), axes)
+			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
+
 			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs], "kx")
 			yield fig, "deff_acc_frac_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
+			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs]), axes)
+			yield fig, "deff_acc_frac_hist_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Recovered $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
+			axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([(1. / sngl.eff_distance - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, sngl in pairs]), axes)
+			yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
@@ -770,6 +812,7 @@ class BackgroundVsInjectionPlots(object):
 			self.snr = []
 			self.chi2 = []
 			self.bankveto = []
+			self.spin = []
 
 	def __init__(self):
 		self.injections = {}
@@ -820,13 +863,14 @@ WHERE
 					self.zerolag[instrument].bankveto.append(bankveto)
 		else:
 			# injections file
-			for instrument, snr, chi2, bankveto, end_time in contents.connection.cursor().execute("""
+			for instrument, snr, chi2, bankveto, end_time, spin in contents.connection.cursor().execute("""
 SELECT
 	sngl_inspiral.ifo,
 	sngl_inspiral.snr,
 	sngl_inspiral.chisq,
 	sngl_inspiral.bank_chisq / bank_chisq_dof,
-	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9
+	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9,
+	sim.spin1x * sim.spin1x + sim.spin1y * sim.spin1y + sim.spin1z * sim.spin1z + sim.spin2x * sim.spin2x + sim.spin2y * sim.spin2y + sim.spin2z * sim.spin2z
 FROM
 	sim_coinc_map
 	JOIN coinc_event_map ON (
@@ -836,6 +880,7 @@ FROM
 		coinc_event_map.table_name == 'sngl_inspiral'
 		AND coinc_event_map.event_id == sngl_inspiral.event_id
 	)
+	JOIN sim_inspiral AS sim ON sim.simulation_id == sim_coinc_map.simulation_id
 			"""):
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
@@ -843,6 +888,7 @@ FROM
 					self.injections[instrument].snr.append(snr)
 					self.injections[instrument].chi2.append(chi2)
 					self.injections[instrument].bankveto.append(bankveto)
+					self.injections[instrument].spin.append((spin / 2.)**.5)
 
 	def finish(self):
 		for instrument in set(self.injections) | set(self.background) | set(self.zerolag):
@@ -852,14 +898,22 @@ FROM
 		for instrument in self.background:
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
-			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, "rx")
-			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx")
-			axes.legend(("Injections", "Background"), loc = "upper left")
+
+			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
+				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
+				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
+				axes.loglog(injsnr, injchi2, '.', label = "%.1f" % spinstart)
+
+			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
+			axes.legend(loc = "upper left")
 			yield fig, "chi2_vs_rho_%s" % instrument, False
 
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s" % instrument)
-			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, "rx")
+			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
+				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
+				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
+				axes.loglog(injsnr, injchi2, '.', label = "%.1f" % spinstart)
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx")
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "upper left")
