@@ -1945,117 +1945,75 @@ WHERE
 
 class FAPFAR(object):
 	def __init__(self, ranking_stats, livetime = None):
-		# None is OK, but then can only compute FAPs, not FARs
+		# none is OK, but then can only compute FAPs, not FARs
 		self.livetime = livetime
 
-		# dictionary keyed by instrument combination
-		self.cdf_interpolator = {}
-		self.ccdf_interpolator = {}
-		self.zero_lag_total_count = {}
+		# pull out both the bg counts and the pdfs, we need 'em both
+		bgcounts_ba = ranking_stats.background_likelihood_rates[None]
+		bgpdf_ba = ranking_stats.background_likelihood_pdfs[None]
+		# we also need the zero lag counts to build the extinction model
+		zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[None]
 
-		_ranks = None
+		# safety checks
+		assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
+		assert not (bgcounts_ba.array < 0.0).any(), "log likelihood ratio rate contains negative values"
+		assert not numpy.isnan(bgpdf_ba.array).any(), "log likelihood ratio pdf contains NaNs"
+		assert not (bgpdf_ba.array < 0.0).any(), "log likelihood ratio pdf contains negative values"
 
-		# Iterate through instruments in background likelihood rates,
-		# making sure to go through the combined rates (dictionary key
-		# None) last
-		for instruments in sorted(ranking_stats.background_likelihood_rates.keys(), key = lambda k: tuple(k) if k is not None else None, reverse=True):
-			# useful for printing certain messages
-			instruments_name = ", ".join(sorted(instruments)) if instruments is not None else "combined"
+		# grab bins that are not infinite in size
+		finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
+		ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
+		drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
-			# Pull out both the bg counts and the pdfs, we need 'em both
-			bgcounts_ba = ranking_stats.background_likelihood_rates[instruments]
-			bgpdf_ba = ranking_stats.background_likelihood_pdfs[instruments]
-			# We also need the zero lag counts to build the extinction model
-			zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[instruments]
+		# whittle down the arrays of counts and pdfs
+		bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
+		bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
+		zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
 
-			# Check for Nans
-			assert not numpy.isnan(bgcounts_ba.array).any(), "%s log likelihood ratio rates contains NaNs" % instruments_name
-			assert not (bgcounts_ba.array < 0.0).any(), "%s log likelihood ratio rate contains negative values" % instruments_name
-			assert not numpy.isnan(bgpdf_ba.array).any(), "%s log likelihood ratio pdf contains NaNs" % instruments_name
-			assert not (bgpdf_ba.array < 0.0).any(), "%s log likelihood ratio pdf contains negative values" % instruments_name
+		# get the extincted background PDF
+		self.zero_lag_total_count = zlagcounts_ba_array.sum()
+		extinct_bf_pdf = self.extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks)
 
-			# Grab bins that are not infinite in size
-			finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
-			ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
-			drank = bgcounts_ba.bins.volumes().compress(finite_bins)
+		# cumulative distribution function and its complement.
+		# it's numerically better to recompute the ccdf by
+		# reversing the array of weights than trying to subtract
+		# the cdf from 1.
+		weights = extinct_bf_pdf * drank
+		cdf = weights.cumsum()
+		cdf /= cdf[-1]
+		ccdf = weights[::-1].cumsum()[::-1]
+		ccdf /= ccdf[0]
 
-			# Check that the rank binnings we have seen so far are self consistent
-			if _ranks is None:
-				_ranks = ranks
-			elif (_ranks != ranks).any():
-				raise ValueError("incompatible binnings in ranking statistics rates")
+		# cdf boundary condition:  cdf = 1/e at the ranking
+		# statistic threshold so that self.far_from_rank(threshold)
+		# * livetime = observed count of events above threshold.
+		# FIXME this doesn't actually work.
+		# FIXME not doing it doesn't actually work.
+		# ccdf *= 1. - 1. / math.e
+		# cdf *= 1. - 1. / math.e
+		# cdf += 1. / math.e
 
-			# whittle down the arrays of counts and pdfs
-			bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
-			bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
-			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
+		# last checks that the CDF and CCDF are OK
+		assert not numpy.isnan(cdf).any(), "log likelihood ratio CDF contains NaNs"
+		assert not numpy.isnan(ccdf).any(), "log likelihood ratio CCDF contains NaNs"
+		assert ((0. <= cdf) & (cdf <= 1.)).all(), "log likelihood ratio CDF failed to be normalized"
+		assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "log likelihood ratio CCDF failed to be normalized"
+		assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "log likelihood ratio CDF + CCDF != 1 (max error = %g)" % abs(1. - (cdf[:-1] + ccdf[1:])).max()
 
-			# get the extincted background PDF
-			# FIXME don't extinct the individual detector PDFs,
-			# they are just for diagnostics anyway
-			# FIXME FIXME this try except is to catch the case
-			# where not all instrument combinations have seen
-			# triggers, .e.g, when an online dag has recently
-			# started and one of the participating detectors has
-			# not seen data yet.  It should not be this way, but
-			# for the time being we have to work around it.
-			try:
-				extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
-			except ValueError as e:
-				if instruments is None:
-					raise e
-				else:
-					continue
+		# build interpolators
+		self.cdf_interpolator = interpolate.interp1d(ranks, cdf)
+		self.ccdf_interpolator = interpolate.interp1d(ranks, ccdf)
 
-			# Now compute the CCDF and CDF
-			weights = extinct_bf_pdf * drank
-			# cumulative distribution function and its
-			# complement.  it's numerically better to recompute
-			# the ccdf by reversing the array of weights than
-			# trying to subtract the cdf from 1.
-			cdf = weights.cumsum()
-			cdf /= cdf[-1]
-			ccdf = weights[::-1].cumsum()[::-1]
-			ccdf /= ccdf[0]
+		# record min and max ranks so we know which end of the ccdf
+		# to use when we're out of bounds
+		self.minrank = min(ranks)
+		self.maxrank = max(ranks)
 
-			# cdf boundary condition:  cdf = 1/e at the ranking
-			# statistic threshold so that
-			# self.far_from_rank(threshold) * livetime =
-			# observed count of events above threshold.
-			# FIXME this doesn't actually work.
-			# FIXME not doing it doesn't actually work.
-			# ccdf *= 1. - 1. / math.e
-			# cdf *= 1. - 1. / math.e
-			# cdf += 1. / math.e
-
-			# last checks that the CDF and CCDF are OK
-			assert not numpy.isnan(cdf).any(), "%s log likelihood ratio CDF contains NaNs" % instruments_name
-			assert not numpy.isnan(ccdf).any(), "%s log likelihood ratio CCDF contains NaNs" % instruments_name
-			# Be extremely pedantic about the PDF,CDF,CCDF that
-			# counts, i.e., the joint one specified by instruments
-			# being None.
-			if instruments is None:
-				assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s log likelihood ratio CDF failed to be normalized" % instruments_name
-				assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s log likelihood ratio CCDF failed to be normalized" % instruments_name
-				assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s log likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
-			# build interpolators
-			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
-			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
-
-		if _ranks is None:
-			raise ValueError("no ranking statistic rates")
-
-		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-		self.minrank = min(_ranks)
-		self.maxrank = max(_ranks)
-
-	def extinct(self, instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, zero_lag_total_count):
-
+	def extinct(self, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks):
 		# Generate arrays of complementary cumulative counts
 		# for background events (monte carlo, pre clustering)
 		# and zero lag events (observed, post clustering)
 		zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
-		zero_lag_total_count[instruments] = int(zero_lag_compcumcount[0])
 		bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
 
 		# Fit for the number of preclustered, independent coincs by
@@ -2063,13 +2021,13 @@ class FAPFAR(object):
 		# the distribution.  Only do the fit above 10 counts and below
 		# 10000, unless that can't be met and trigger a warning
 		fit_min_rank = 1.
-		fit_min_counts = min(10., zero_lag_total_count[instruments] / 10. + 1)
-		fit_max_counts = min(10000., zero_lag_total_count[instruments] / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
+		fit_min_counts = min(10., self.zero_lag_total_count / 10. + 1)
+		fit_max_counts = min(10000., self.zero_lag_total_count / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
 		if fit_min_counts < 100.:
-			warnings.warn("There are less than 100 %s coincidences, extinction effects on %s background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation." % (instruments_name, instruments_name))
+			warnings.warn("There are less than 100 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
 		if zero_lag_compcumcount.compress(rank_range).size < 1:
-			raise ValueError("Not enough zero lag data for %s to fit background"  % instruments_name)
+			raise ValueError("not enough zero lag data to fit background")
 
 		# Use curve fit to find the predicted total preclustering
 		# count. First we need an interpolator of the counts
@@ -2104,8 +2062,8 @@ class FAPFAR(object):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718
 		rank = max(self.minrank, min(self.maxrank, rank))
-		fap = float(self.ccdf_interpolator[None](rank))
-		return fap_after_trials(fap, self.zero_lag_total_count[None])
+		fap = float(self.ccdf_interpolator(rank))
+		return fap_after_trials(fap, self.zero_lag_total_count)
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
@@ -2115,7 +2073,7 @@ class FAPFAR(object):
 		rank = max(self.minrank, min(self.maxrank, rank))
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		tdp = float(self.cdf_interpolator[None](rank))
+		tdp = float(self.cdf_interpolator(rank))
 		try:
 			log_tdp = math.log(tdp)
 		except ValueError:
@@ -2123,8 +2081,8 @@ class FAPFAR(object):
 			return PosInf
 		if log_tdp >= -1e-9:
 			# rare event:  avoid underflow by using log1p(-FAP)
-			log_tdp = math.log1p(-float(self.ccdf_interpolator[None](rank)))
-		return self.zero_lag_total_count[None] * -log_tdp / self.livetime
+			log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+		return self.zero_lag_total_count * -log_tdp / self.livetime
 
 	def assign_faps(self, connection):
 		# assign false-alarm probabilities
