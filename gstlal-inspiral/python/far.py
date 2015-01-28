@@ -240,20 +240,10 @@ def trials_from_faps(p0, p1):
 		return PosInf
 
 	#
-	# find range of m that contains solution.  the false alarm
-	# probability increases monotonically with the number of trials
+	# m log(1 - p0) = log(1 - p1)
 	#
 
-	lo, hi = 0, 100
-	while fap_after_trials(p0, hi) < p1:
-		hi *= 100
-
-	#
-	# use fap_after_trials() and scipy's Brent root finder to solve for
-	# m
-	#
-
-	return optimize.brentq((lambda m: fap_after_trials(p0, m) - p1), lo, hi)
+	return math.log1p(-p1) / math.log1p(-p0)
 
 
 #
