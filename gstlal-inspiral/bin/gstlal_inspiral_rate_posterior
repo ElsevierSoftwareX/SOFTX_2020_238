@@ -29,6 +29,10 @@
 #
 
 
+try:
+	from fpconst import NegInf
+except ImportError:
+	NegInf = float("-inf")
 import h5py
 import math
 import matplotlib
@@ -98,6 +102,7 @@ def parse_command_line():
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
 	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
 	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
+	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -134,7 +139,7 @@ def parse_command_line():
 #
 
 
-def load_ranking_data(filenames, ln_likelihood_ratio_threshold, verbose = False):
+def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
 	ranking_data = None
@@ -153,19 +158,20 @@ def load_ranking_data(filenames, ln_likelihood_ratio_threshold, verbose = False)
 	# affect the zeroing of the PDFs below threshold by hacking the
 	# histograms before running .finish().  do the indexing ourselves
 	# to not 0 the bin @ threshold
-	for binnedarray in ranking_data.background_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-	for binnedarray in ranking_data.signal_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-	for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
-		binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+	if ln_likelihood_ratio_threshold is not None:
+		for binnedarray in ranking_data.background_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.signal_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
 
 	ranking_data.finish(verbose = verbose)
 
 	return ranking_data
 
 
-def load_search_results(filenames, ln_likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
+def load_search_results(filenames, ln_likelihood_ratio_threshold = None, restrict_to_instruments = None, tmp_path = None, verbose = False):
 	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
 
@@ -199,7 +205,7 @@ WHERE
 	coinc_event.coinc_def_id == ?
 	AND coinc_event.likelihood >= ?""" + ("""
 	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
-	, (definer_id, ln_likelihood_ratio_threshold)):
+	, (definer_id, (ln_likelihood_ratio_threshold if ln_likelihood_ratio_threshold is not None else NegInf))):
 			if is_background:
 				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
 			else:
@@ -271,7 +277,7 @@ options, paramdict, filenames = parse_command_line()
 
 
 if options.likelihood_filenames:
-	ranking_data = load_ranking_data(options.likelihood_filenames, 0.0, verbose = options.verbose)
+	ranking_data = load_ranking_data(options.likelihood_filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 else:
 	ranking_data = None
 
@@ -281,7 +287,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 0.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = options.threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
