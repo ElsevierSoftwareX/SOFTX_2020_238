@@ -149,7 +149,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None, chain_file = None, nsample = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = None):
 	"""
 	FIXME:  document this
 	"""
@@ -167,8 +167,8 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	#
 
 	if ranking_data is not None:
-		f = ranking_data.signal_likelihood_pdfs[restrict_to_instruments]
-		b = ranking_data.background_likelihood_pdfs[restrict_to_instruments]
+		f = ranking_data.signal_likelihood_pdfs[None]
+		b = ranking_data.background_likelihood_pdfs[None]
 		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
 
 		# remove NaNs.  these occur because the ranking statistic
@@ -190,7 +190,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 		ln_f_over_b = numpy.array([])
 
 	#
-	# initializer MCMC chain.  try loading a chain from a chain file if
+	# initialize MCMC chain.  try loading a chain from a chain file if
 	# provided, otherwise seed the walkers for a burn-in period
 	#
 

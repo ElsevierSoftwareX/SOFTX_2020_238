@@ -100,7 +100,6 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
-	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
 	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
@@ -120,12 +119,6 @@ def parse_command_line():
 
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
-
-	if options.restrict_to_instruments is not None:
-		try:
-			options.restrict_to_instruments = frozenset(lsctables.instrument_set_from_ifos(options.restrict_to_instruments))
-		except:
-			ValueError("invalid --restrict-to-instruments '%s'" % options.restrict_to_instruments)
 
 	return options, paramdict, filenames
 
@@ -171,7 +164,7 @@ def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose =
 	return ranking_data
 
 
-def load_search_results(filenames, ln_likelihood_ratio_threshold = None, restrict_to_instruments = None, tmp_path = None, verbose = False):
+def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
 	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
 
@@ -203,8 +196,7 @@ FROM
 	)
 WHERE
 	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?""" + ("""
-	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
+	AND coinc_event.likelihood >= ?"""
 	, (definer_id, (ln_likelihood_ratio_threshold if ln_likelihood_ratio_threshold is not None else NegInf))):
 			if is_background:
 				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
@@ -287,7 +279,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = options.threshold, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -300,7 +292,7 @@ if options.verbose:
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
 del progressbar
 
 
