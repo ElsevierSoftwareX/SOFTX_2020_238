@@ -142,7 +142,7 @@ struct _CudaMultirateSPIIR {
   SpiirState **spstate;
   gboolean spstate_initialised;
 
-  gint bank_id;
+  gint stream_id;
   gint gap_handle;
   gint deviceID;
   cudaStream_t stream;

@@ -68,7 +68,8 @@ enum
 {
   PROP_0,
   PROP_IIRBANK_FNAME,
-  PROP_GAP_HANDLE
+  PROP_GAP_HANDLE,
+  PROP_STREAM_ID
 };
 
 //FIXME: not support width=64 yet
@@ -181,6 +182,16 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
 					"gap handling",
 					"restart after gap (1), or gap is treated as 0 (0)",
 					0, 1, 0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				)
+			);
+
+  g_object_class_install_property (gobject_class, PROP_STREAM_ID,
+				g_param_spec_int(
+					"stream-id",
+					"id for cuda stream",
+					"id for cuda stream",
+					0, G_MAX_INT, 0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				)
 			);
@@ -1133,11 +1144,11 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
       GST_LOG_OBJECT (element, "obtaining bank");
       element->bank_fname = g_value_dup_string(value);
-      cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
+//      cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
  
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
-      element->deviceID = (element->bank_id + 1) % deviceCount ;
+      element->deviceID = (element->stream_id + 1) % deviceCount ;
       cudaSetDevice(element->deviceID);
       cudaStreamCreate(&element->stream);
 
@@ -1173,6 +1184,11 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       element->gap_handle = g_value_get_int(value);
       break;
 
+    case PROP_STREAM_ID:
+      element->stream_id = g_value_get_int(value);
+      break;
+
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1198,6 +1214,10 @@ cuda_multirate_spiir_get_property (GObject * object, guint prop_id,
 
     case PROP_GAP_HANDLE:
       g_value_set_int (value, element->gap_handle);
+      break;
+
+    case PROP_STREAM_ID:
+      g_value_set_int (value, element->stream_id);
       break;
 
     default:

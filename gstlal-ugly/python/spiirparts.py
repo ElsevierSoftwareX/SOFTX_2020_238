@@ -250,7 +250,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		snr = pipeparts.mkreblock(pipeline, head)
 
 #		bank_struct = build_bank_struct(bank, max_rates[instrument])
-		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank, gap_handle = 0) # treat gap as zeros
+		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank, gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)

@@ -511,8 +511,8 @@ def mkcudaiirbank(pipeline, src, a1, b0, delay, name = None):
  	return elem
 
 
-def mkcudamultiratespiir(pipeline, src, bank_fname, gap_handle = 0, name = None):
-	properties = dict((name, value) for name, value in (("name", name), ("bank_fname", bank_fname), ("gap_handle", gap_handle)) if value is not None)
+def mkcudamultiratespiir(pipeline, src, bank_fname, gap_handle = 0, stream_id = 0, name = None):
+	properties = dict((name, value) for name, value in (("name", name), ("bank_fname", bank_fname), ("gap_handle", gap_handle), ("stream_id", stream_id)) if value is not None)
 	elem = mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
 	return elem
 
