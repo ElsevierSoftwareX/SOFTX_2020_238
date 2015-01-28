@@ -5,12 +5,12 @@
 # The filtering start frequency
 LOW_FREQUENCY_CUTOFF = 30.0
 # The maximum frequency to filter to
-HIGH_FREQUENCY_CUTOFF = 4096.0
+HIGH_FREQUENCY_CUTOFF = 2048.0
 # Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 200
+NUM_SPLIT_TEMPLATES = 100
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
 # in the SVD.  Redundant templates will be removed
-OVERLAP = 30
+OVERLAP = 10
 # The program used to make the template bank. This will be searched for in the
 # process param table in order to extract some metadata
 BANK_PROGRAM = lalapps_cbc_sbank
@@ -29,9 +29,9 @@ START = 966384015
 #STOP =  967384015
 STOP =  $(shell echo $(START) + 24*3600 | bc -l)
 # A user tag for the run
-TAG = test_Kent_TestI_1Day
+TAG = test_chad
 # A web directory for output
-WEBDIR = ~/public_html/test/MDC/BBH/Nov2014/recolored/spin/$(START)-$(STOP)-$(TAG)
+WEBDIR = ~/public_html/test/MDC/BBH/recolored/spin/$(START)-$(STOP)-$(TAG)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
 NUMBANKS = 4
 # The control peak time for the composite detection statistic.  If set to 0 the
