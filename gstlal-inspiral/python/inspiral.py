@@ -78,6 +78,7 @@ from pylal import datatypes as laltypes
 from pylal import rate
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
+from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 from gstlal import bottle
@@ -787,7 +788,7 @@ class Data(object):
 						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
-							epoch = LIGOTimeGPS(0, 0),	# FIXME
+							epoch = XLALUTCToGPS(time.gmtime()),
 							f0 = 0.0,
 							deltaF = elem.get_property("delta-f"),
 							sampleUnits = laltypes.LALUnit("s strain^2"),	# FIXME:  don't hard-code this
