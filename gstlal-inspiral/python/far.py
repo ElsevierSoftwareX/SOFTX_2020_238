@@ -115,12 +115,55 @@ def fap_after_trials(p, m):
 	The return value is 1 - (1 - p)^m computed avoiding round-off
 	errors and underflows.  m cannot be negative but need not be an
 	integer.
+
+	Example:
+
+	>>> fap_after_trials(0.5, 1)
+	0.5
+	>>> fap_after_trials(0.066967008463192584, 10)
+	0.5
+	>>> fap_after_trials(0.0069075045629640984, 100)
+	0.5
+	>>> fap_after_trials(0.00069290700954747807, 1000)
+	0.5
+	>>> fap_after_trials(0.000069312315846428086, 10000)
+	0.5
+	>>> fap_after_trials(.000000006931471781576803, 100000000)
+	0.5
+	>>> fap_after_trials(0.000000000000000069314718055994534, 10000000000000000)
+	0.5
+	>>> "%.15g" % fap_after_trials(0.1, 21.854345326782834)
+	'0.9'
+	>>> "%.15g" % fap_after_trials(1e-17, 2.3025850929940458e+17)
+	'0.9'
+	>>> fap_after_trials(0.1, .2)
+	0.020851637639023216
 	"""
+	# when m*p is not >> 1, we can use an expansion in powers of m*p
+	# that allows us to avoid having to compute differences of
+	# probabilities (which would lead to loss of precision when working
+	# with probabilities close to 0 or 1)
+	#
 	# 1 - (1 - p)^m = m p - (m^2 - m) p^2 / 2 +
 	#	(m^3 - 3 m^2 + 2 m) p^3 / 6 -
 	#	(m^4 - 6 m^3 + 11 m^2 - 6 m) p^4 / 24 + ...
 	#
-	# starting at 0, the nth term in the series is
+	# the coefficient of each power of p is a polynomial in m.  if m <<
+	# 1, these polynomials can be approximated by their leading term in
+	# m
+	#
+	# 1 - (1 - p)^m ~= m p + m p^2 / 2 + m p^3 / 3 + m p^4 / 4 + ...
+	#                = -m * log(1 - p)
+	#
+	# NOTE: the ratio of the coefficients of higher-order terms in the
+	# polynomials in m to that of the leading-order term grows with
+	# successive powers of p and eventually the higher-order terms will
+	# dominate.  we assume that this does not happen until the power of
+	# p is sufficiently high that the entire term (polynomial in m and
+	# all) is negligable and the series has been terminated.
+	#
+	# if m is not << 1, then returning to the full expansion, starting
+	# at 0, the nth term in the series is
 	#
 	# -1^n * (m - 0) * (m - 1) * ... * (m - n) * p^(n + 1) / (n + 1)!
 	#
@@ -128,9 +171,9 @@ def fap_after_trials(p, m):
 	#
 	# X * (n - m) * p / (n + 1)
 	#
-	# which allows us to avoid explicit evaluation of each term's
-	# numerator and denominator separately (each of which quickly
-	# overflow).
+	# this recursion relation allows us to compute successive terms
+	# without explicit evaluation of the full numerator and denominator
+	# expressions (each of which quickly overflow).
 	#
 	# for sufficiently large n the denominator dominates and the terms
 	# in the series become small and the sum eventually converges to a
@@ -140,77 +183,100 @@ def fap_after_trials(p, m):
 	# grow large and alternate in sign and an accurate result can only
 	# be obtained through careful cancellation of the large values.
 	#
-	# for large m*p we take a different approach to evaluating the
-	# result.  in this regime the result will be close to 1 so (1 -
-	# p)^m will be small
+	# for large m*p we write the expression as
 	#
-	# (1 - p)^m = exp(m ln(1 - p))
+	# 1 - (1 - p)^m = 1 - exp(m log(1 - p))
 	#
-	# if p is small, ln(1 - p) suffers from loss of precision but the
-	# Taylor expansion of ln(1 - p) converges quickly
+	# if p is small, log(1 - p) suffers from loss of precision but the
+	# Taylor expansion of log(1 - p) converges quickly
 	#
 	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
 	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
 	#
-	# as an alternative, the standard library provides log1p(),
-	# which evalutes ln(1 + p) accurately for small p.
+	# math libraries (including Python's) generally provide log1p(),
+	# which evalutes log(1 + p) accurately for small p.  we rely on
+	# this function to provide results valid both in the small-p and
+	# not small-p regimes.
 	#
-	# if p is close to 1, ln(1 - p) suffers a domain error
+	# if p = 1, log1p() complains about an overflow error.  we trap
+	# these and return the hard-coded answer
 	#
 
-	assert m >= 0, "m = %g cannot be negative" % m
-	assert 0 <= p <= 1, "p = %g must be between 0 and 1 inclusively" % p
+	if m <= 0.:
+		raise ValueError("m = %g must be positive" % m)
+	if not (0. <= p <= 1.):
+		raise ValueError("p = %g must be between 0 and 1 inclusively" % p)
 
-	if m * p < 1.0:
+	if m * p < 4.:
 		#
-		# use direct Taylor expansion of 1 - (1 - p)^m
+		# expansion of 1 - (1 - p)^m in powers of p
 		#
 
-		s = 0.0
-		term = -1.0
+		if m < 1e-8:
+			#
+			# small m approximation
+			#
+
+			try:
+				return -m * math.log1p(-p)
+			except OverflowError:
+				#
+				# p is too close to 1.  result is 1
+				#
+
+				return 1.
+
+		#
+		# general m
+		#
+
+		s = []
+		term = -1.
 		for n in itertools.count():
-			term *= (n - m) * p / (n + 1.0)
-			s += term
-			if abs(term) <= abs(1e-17 * s):
-				return s
+			term *= (n - m) * p / (n + 1.)
+			s.append(term)
+			# 0th term is always positive
+			if abs(term) <= 1e-18 * s[0]:
+				s.reverse()
+				return sum(s)
 
-	if p < .125:
-		#
-		# compute result from Taylor expansion of ln(1 - p)
-		#
-
-		return 1.0 - math.exp(m * math.log1p(-p))
-
-		#
-		# original implementation in case log1p() gives us problems
-		#
-
-		s = p_powers = 1.0
-		for n in itertools.count(2):
-			p_powers *= p
-			term = p_powers / n
-			s += term
-			if term <= 1e-17 * s:
-				return 1.0 - math.exp(-m * p * s)
+	#
+	# compute result as 1 - exp(m * log(1 - p))
+	#
 
 	try:
+		x = m * math.log1p(-p)
+	except OverflowError:
 		#
-		# try direct evaluation of 1 - exp(m ln(1 - p))
-		#
-
-		return 1.0 - math.exp(m * math.log(1.0 - p))
-
-	except ValueError:
-		#
-		# math.log has suffered a domain error, therefore p is very
-		# close to 1.  we know p <= 1 because it's a probability,
-		# and we know that m*p >= 1 otherwise we wouldn't have
-		# followed this code path, therefore m >= 1, and so because
-		# p is close to 1 and m is not small we can safely assume
-		# the anwer is 1.
+		# p is very close to 1.  we know p <= 1 because it's a
+		# probability, and we know that m*p >= 4 otherwise we
+		# wouldn't have followed this code path, and so because p
+		# is close to 1 and m is not small we can safely assume the
+		# anwer is 1.
 		#
 
-		return 1.0
+		return 1.
+
+	if x > -0.69314718055994529:
+		#
+		# result is closer to 0 than to 1.  use Taylor expansion
+		# for exp() with leading term removed to avoid having to
+		# subtract from 1 to get answer.
+		#
+		# 1 - exp x = -(x + x^2/2! + x^3/3! + ...)
+		#
+
+		s = [x]
+		term = x
+		for n in itertools.count(2):
+			term *= x / n
+			s.append(term)
+			# 0th term is always negative
+			if abs(term) <= -1e-18 * s[0]:
+				s.reverse()
+				return -sum(s)
+
+	return 1. - math.exp(x)
 
 
 fap_after_trials_arr = numpy.frompyfunc(fap_after_trials, 2, 1)
