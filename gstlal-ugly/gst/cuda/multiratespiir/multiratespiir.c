@@ -191,7 +191,7 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
 					"stream-id",
 					"id for cuda stream",
 					"id for cuda stream",
-					0, G_MAX_INT, 0,
+					0, G_MAXINT, 0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				)
 			);
