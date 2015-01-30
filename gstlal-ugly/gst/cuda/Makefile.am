@@ -14,7 +14,9 @@ libcuda_plugin_la_SOURCES = \
 	multiratespiir/multiratespiir.c \
 	postcoh/postcoh_kernel.cu \
 	postcoh/postcoh_utils.c \
-	postcoh/postcoh.c
+	postcoh/postcoh.c \
+	postcoh/postcoh_table_utils.c \
+	postcoh/postcoh_filesink.c
 
 #	postcoh/detresponse_skymap.c
 #	audioresample folder not working, seg fault
@@ -42,5 +44,6 @@ noinst_HEADERS = \
 	multiratespiir/multiratespiir.h \
 	multiratespiir/spiir_state_macro.h \
 	postcoh/postcoh_utils.h \
-	postcoh/postcoh.h
+	postcoh/postcoh.h \
+	postcoh/postcoh_table_utils.h
 

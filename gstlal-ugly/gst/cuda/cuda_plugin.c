@@ -47,6 +47,7 @@
 //#include <multidownsample/gstlal_multidownsample.h>
 #include <multiratespiir/multiratespiir.h>
 #include <postcoh/postcoh.h>
+#include <postcoh/postcoh_filesink.h>
 
 
 /*
@@ -69,6 +70,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 //		{"gstlal_multidownsample", GSTLAL_MULTI_DOWNSAMPLE_TYPE},
 		{"cuda_multiratespiir", CUDA_TYPE_MULTIRATE_SPIIR},
 		{"cuda_postcoh", CUDA_TYPE_POSTCOH},
+		{"postcoh_filesink", POSTCOH_TYPE_FILESINK},
 		{NULL, 0},
 	};
 
