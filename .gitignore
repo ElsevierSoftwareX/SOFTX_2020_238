@@ -6,6 +6,8 @@
 *.o
 .deps
 .libs
+*.pyc
+*.swp
 Makefile
 Makefile.in
 aclocal.m4
