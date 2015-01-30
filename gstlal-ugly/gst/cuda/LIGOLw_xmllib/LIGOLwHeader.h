@@ -93,6 +93,9 @@ typedef struct _XmlTable
     // name of each column, of type GString
     GArray  *names;
 
+    // type of each column
+    GArray  *type_names;
+
     // table
     GHashTable *hashContent;;
 
