@@ -36,6 +36,7 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
+#define EPSILON 1  
 
 static void additional_initializations(GType type)
 {
@@ -521,6 +522,31 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 }
 
+static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
+{
+	int iifo, ipeak, npeak, nifo = state->nifo, rm_peaks = 0, itmp = 0, tmp_peak_pos[state->exe_len];
+	for(iifo=0; iifo<nifo; iifo++) {
+		PeakList *pklist = state->peak_list[iifo];
+		npeak = pklist->npeak[0];
+		int *peak_pos = pklist->peak_pos;
+		for(ipeak=0; ipeak<npeak; ipeak++) {
+			/* if the difference of maximum single snr and coherent snr is ignorable,
+			 * it means that only one detector is in action,
+			 * we abandon this peak
+			 * */
+			if (abs(pklist->maxsnglsnr[peak_pos[ipeak]]- pklist->cohsnr[ipeak]) > EPSILON) {
+				tmp_peak_pos[itmp++] = peak_pos[ipeak];
+			}
+
+		}
+
+		npeak = itmp;
+		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
+		pklist->npeak[0] = npeak;
+	}
+
+}
+
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 {
 	GstBuffer *outbuf = NULL;
@@ -529,25 +555,86 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
 
-	int allpeak = 0, i, nifo = state->nifo;
-	for(i=0; i<nifo; i++)
-		allpeak += state->peak_list[i]->npeak[0];
+	cuda_postcoh_rm_invalid_peak(state);
+	int allnpeak = 0, iifo, ipeak, nifo = state->nifo;
+	for(iifo=0; iifo<nifo; iifo++)
+		allnpeak += state->peak_list[iifo]->npeak[0];
 
-	int out_size = sizeof(PostcohTable) * allpeak;
+	int hist_trials = postcoh->hist_trials;
+	int out_size = sizeof(PostcohTable) * allnpeak * (1 + hist_trials);
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
 		return NULL;
 	}
+
         /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(outbuf) = postcoh->out_t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
+	GstClockTime ts = postcoh->out_t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
 		       	postcoh->rate);
-        GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, out_len, postcoh->rate);
+
+        GST_BUFFER_TIMESTAMP(outbuf) = ts;
+	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, out_len, postcoh->rate);
 
 	/* set the offset */
         GST_BUFFER_OFFSET(outbuf) = postcoh->out_offset0 + postcoh->samples_out;
         GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
+
+
+	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
+	char *ifos = (char *) malloc(sizeof(char) * 2 * nifo);
+
+	for(iifo=0; iifo<nifo; iifo++) 
+		strncpy(ifos+2*iifo, IFO_MAP[iifo], 2 * sizeof(char));
+	printf("ifos %s\n", ifos);
+
+	int npeak = 0, itrial = 0, exe_len = state->exe_len;
+	for(iifo=0; iifo<nifo; iifo++) {
+		PeakList *pklist = state->peak_list[iifo];
+		npeak = pklist->npeak[0];
+		LIGOTimeGPS end_time[npeak];
+
+		int peak_cur;
+		for(ipeak=0; ipeak<npeak; ipeak++) {
+			XLALINT8NSToGPS(&(end_time[ipeak]), ts);
+			int *peak_pos = pklist->peak_pos;
+			peak_cur = peak_pos[ipeak];
+			XLALGPSAdd(&(end_time[ipeak]), (double) peak_cur /exe_len);
+			output->end_time = end_time[ipeak];
+			output->is_background = 0;
+			strcpy(output->ifos, ifos);
+		       	strcpy(output->pivotal_ifo, IFO_MAP[iifo]);
+			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
+			output->pix_idx = pklist->pix_idx[peak_cur];
+			output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
+			output->cohsnr = pklist->cohsnr[peak_cur];
+			output->nullsnr = pklist->nullsnr[peak_cur];
+			output->chisq = pklist->chisq[peak_cur];
+			output->skymap_fname[0] ='\0';
+			output++;
+		}
+
+		for(itrial=0; itrial<hist_trials; itrial++) {
+			for(ipeak=0; ipeak<npeak; ipeak++) {
+				int *peak_pos = pklist->peak_pos;
+				peak_cur = peak_pos[ipeak];
+				output->end_time = end_time[ipeak];
+				output->is_background = 1;
+				strcpy(output->ifos, ifos);
+		       		strcpy(output->pivotal_ifo, IFO_MAP[iifo]);
+				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
+				output->pix_idx = pklist->pix_idx[peak_cur];
+				output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
+				output->cohsnr = pklist->cohsnr[itrial*exe_len + peak_cur];
+				output->nullsnr = pklist->nullsnr[itrial*exe_len + peak_cur];
+				output->chisq = pklist->chisq[itrial*exe_len + peak_cur];
+				output->skymap_fname[0] ='\0';
+
+				output++;
+			}
+		}
+	}
+
 
 	GST_LOG_OBJECT (srcpad,
 		"Processed of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"

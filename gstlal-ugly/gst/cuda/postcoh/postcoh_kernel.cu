@@ -435,9 +435,9 @@ __global__ void ker_coh_sky_map_max_and_chisq
 
 		if (threadIdx.x == 0)
 		{
-			coh_snr[ipeak]			= snr_shared[0];
-			coh_nullstream[ipeak]	= nullstream_shared[0];
-			pix_idx[ipeak]		= sky_idx_shared[0]; 			
+			coh_snr[peak_cur]			= snr_shared[0];
+			coh_nullstream[peak_cur]	= nullstream_shared[0];
+			pix_idx[peak_cur]		= sky_idx_shared[0]; 			
 		}
 		__syncthreads();
 
@@ -473,7 +473,7 @@ __global__ void ker_coh_sky_map_max_and_chisq
 				data.re = data.im = 0.0f; 
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
-				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[ipeak]] / dt);
+				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
 				for (int ishift = laneID - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
@@ -493,8 +493,8 @@ __global__ void ker_coh_sky_map_max_and_chisq
 
 			if (laneID == 0)
 			{
-				chisq[ipeak] = laneChi2;
-				printf("peak %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, coh_snr[ipeak], coh_nullstream[ipeak], pix_idx[ipeak], chisq[ipeak]);
+				chisq[peak_cur] = laneChi2;
+				printf("peak %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, coh_snr[peak_cur], coh_nullstream[peak_cur], pix_idx[peak_cur], chisq[peak_cur]);
 			}
 		}
 	}
