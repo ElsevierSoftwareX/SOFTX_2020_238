@@ -100,10 +100,11 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define MAX_CHARS_PER_COLUMN (23 + 1)
 
 /*
- * newline is "CRLF", and two characters.
+ * newline is "CRLF"
  */
 
-#define MAX_EXTRA_BYTES_PER_LINE 2
+#define TSVEOL "\r\n"
+#define MAX_EXTRA_BYTES_PER_LINE strlen(TSVEOL)
 
 
 /*
@@ -235,10 +236,10 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
       location += printsample(location, &samples);
 
     /*
-     * Finish with a CRLF combination.
+     * Finish with an end-of-line.
      */
 
-    location += sprintf(location, "\r\n");
+    location = stpcpy(location, TSVEOL);
   }
 
   /*
