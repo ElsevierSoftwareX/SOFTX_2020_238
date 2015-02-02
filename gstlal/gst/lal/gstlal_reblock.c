@@ -1,7 +1,7 @@
 /*
  * An element to chop up audio buffers into smaller pieces.
  *
- * Copyright (C) 2009,2011,2013  Kipp Cannon
+ * Copyright (C) 2009,2011,2013,2015  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,18 @@
 /**
  * SECTION:gstlal_reblock
  * @short_description:  Chop audio buffers into smaller pieces to enforce a maximum allowed buffer duration.
+ *
+ * Input buffers whose duration is longer than #block-duration are split
+ * into two or more buffers so that no output buffer is longer than
+ * #block-duration.  This element is a no-op for buffers not longer than
+ * #block-duration.
+ *
+ * If the configured #block-duration does not correspond to an integer
+ * number of samples of the stream, the number of samples placed into each
+ * output buffer is the ceiling of the count of samples corresponding to
+ * #block-duration.  In particular this means that when a buffer is split,
+ * each output buffer contains at least 1 sample regardless of the sample
+ * rate or #block-duration.
  *
  * Reviewed:  2affb49291b24e189afd23d1fd56690e223845b6 2014-08-12 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.

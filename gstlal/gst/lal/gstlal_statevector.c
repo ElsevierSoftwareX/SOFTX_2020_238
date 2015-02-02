@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2011--2012,2014,2015 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,20 @@
 /**
  * SECTION:gstlal_statevector
  * @short_description:  Converts a state vector stream into booleans, for example to drive a lal_gate element.
+ *
+ * Each sample of the input stream is interpreted as a bit vector, and
+ * mapped one-to-one to boolean-valued output samples.  Each bit of the
+ * input vectors can be required to be on, required to be off, or ignored.
+ * The bits that must be on are set with the #required-on property;  the
+ * bits that must be off are set with the #required-off property.  For each
+ * input sample that satisfies the on/off requirements the output is a
+ * non-zero sample, all other output samples are 0.  Note that if the
+ * bitwise intersection of the #required-on and #required-off properties is
+ * non-zero it will be impossible for the input stream to satisfy the
+ * conditions and the output will be identically 0.
+ *
+ * Typically this element is used to transform a bit vector-valued stream
+ * into a boolean stream suitable for controling a gate element.
  *
  * Reviewed:  f989b34f43aec056f021f10e5e01866846a3c58d 2014-08-10 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
@@ -327,7 +341,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	g_assert(element->get_input != NULL);
 
-	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+	GST_LOG_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
@@ -503,7 +517,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		g_param_spec_uint(
 			"required-on",
 			"On bits",
-			"Bit mask setting the bits that must be on in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			"Bit mask setting the bits that must be on in the state vector.  Note:  if the mask is wider than the input stream, the high-order bits should be 0 or the on condition will never be met.",
 			0, G_MAXUINT, DEFAULT_REQUIRED_ON,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -514,7 +528,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		g_param_spec_uint(
 			"required-off",
 			"Off bits",
-			"Bit mask setting the bits that must be off in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			"Bit mask setting the bits that must be off in the state vector.",
 			0, G_MAXUINT, DEFAULT_REQUIRED_OFF,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

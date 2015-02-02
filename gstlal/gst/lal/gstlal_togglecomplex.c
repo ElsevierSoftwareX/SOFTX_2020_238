@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2009--2012,2014,2015 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,22 @@
 /**
  * SECTION:gstlal_togglecomplex
  * @short_description:  Toggle complex-valued <--> real-valued format.
+ *
+ * Stock GStreamer elements do not support complex-valued time series data,
+ * but generally do support multi-channel time series data.  This element
+ * enables the use of such elements with complex-valued time series by
+ * changing the caps of complex-valued streams to make them appear to be a
+ * real-valued streams with twice as many channels, and also by doing the
+ * reverse.  For example, a stream containing a single channel of
+ * complex-valued floating point data will be changed into two channels of
+ * real-valued floating point data (the first channel is the real part, the
+ * second channel the complex part).  This two-channel data can be
+ * processed with, say, the stock audiofirfilter element, to apply the same
+ * linear filter to both the real and imaginary components, and then the
+ * stream converted back to a single channel of complex-valued data using a
+ * second lal_togglecomplex element.
+ *
+ * This element is light-weight, it only modifies the buffer metadata.
  *
  * Reviewed:  8d9a33803cbb87f0844001a2207c5e2e55c9340c 2014-08-10 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.

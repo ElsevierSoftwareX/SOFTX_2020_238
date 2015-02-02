@@ -1,7 +1,7 @@
 /*
  * A tab-separated values dumper to produce files for plotting
  *
- * Copyright (C) 2008--2012  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008--2015  Kipp Cannon, Chad Hanna
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,15 @@
 /**
  * SECTION:gstlal_nxydump
  * @short_description:  Converts audio time-series to tab-separated ascii text, a format compatible with most plotting utilities.
+ *
+ * The output is multi-column tab-separated ASCII text.  The first column
+ * is the time, the remaining columns are the values of the channels in
+ * order.
+ *
+ * Example:
+ *
+ * $ gst-launch audiotestsrc ! audio/x-raw-float, rate=64, width=32 !
+ * lal_nxydump ! fdsink fd=1
  *
  * Reviewed:  434cd4387c6349e68e764b78ed44e2867839c06d 2014-08-12 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
@@ -245,8 +254,7 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
   /*
    * Record the actual size of the buffer, but don't bother
    * realloc()ing.  Note that the final size excludes the \0
-   * terminator.  That's appropriate for strings intended to be
-   * written to a file.
+   * terminator.
    */
 
   GST_BUFFER_SIZE(out) = (guint8 *) location - GST_BUFFER_DATA(out);
