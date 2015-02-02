@@ -180,7 +180,7 @@ ker_remove_duplicate_scan
 		{
 			index = atomicInc((unsigned *)npeak, timeN);
 			peak_pos[index] = i;		
-			peak[templ] = -1;
+//			peak[templ] = -1;
 		}
         // restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
         // ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
@@ -375,15 +375,17 @@ __global__ void ker_coh_sky_map_max_and_chisq
 				}
 				utdka[j] = real * real + imag * imag;	
 			}	
-#if 0
-			printf("ipix %d, dk[0].re %f, dk[0].im %f," 
-					"dk[1].re %f, dk[1].im %f,\n dk[2].re %f, dk[2].im %f,"
-					"utdka[0] %f, utdka[1] %f\n", ipix, dk[0].re, dk[0].im,
-				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, utdka[0], utdka[1]);
-#endif
-			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
+		// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
-
+#if 1
+			if (ipix < 10) {
+			printf("ipix %d, dk[0].re %f, dk[0].im %f," 
+					"dk[1].re %f, dk[1].im %f, dk[2].re %f, dk[2].im %f,"
+					"snr %f\n", ipix, dk[0].re, dk[0].im,
+				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_tmp);
+			}
+#endif
+	
 			if (snr_tmp > snr_max)
 			{
 				snr_max = snr_tmp;
@@ -396,27 +398,33 @@ __global__ void ker_coh_sky_map_max_and_chisq
 		}
 
 		int srcLane = threadIdx.x & 0x1f;
+		float nullstream_max_tmp;
+		int sky_idx_tmp, i, i2, wID = threadIdx.x >> LOG_WARP_SIZE;		
 
-		for (int i = WARP_SIZE / 2; i > 0; i = i >> 1)
+		for (i = WARP_SIZE / 2; i > 0; i = i >> 1)
 		{
-			snr_tmp = __shfl(snr_max, srcLane + i, i * 2);
+			i2 = i * 2;
+			snr_tmp = __shfl(snr_max, srcLane + i, i2);
+			nullstream_max_tmp = __shfl(nullstream_max, srcLane + i, i2);
+			sky_idx_tmp = __shfl(sky_idx, srcLane + i, i2);
+
 			if (snr_tmp > snr_max)
 			{
 				snr_max = snr_tmp;
-				nullstream_max = __shfl(nullstream_max, srcLane + i, i * 2);
-				sky_idx = __shfl(sky_idx, srcLane + i, i * 2);
+				nullstream_max = nullstream_max_tmp;
+				sky_idx = sky_idx_tmp;
 			}
 		}
 
 		if (srcLane == 0)
 		{
-			snr_shared[threadIdx.x >> LOG_WARP_SIZE]		= snr_max;
-			nullstream_shared[threadIdx.x >> LOG_WARP_SIZE]	= nullstream_max;
-			sky_idx_shared[threadIdx.x >> LOG_WARP_SIZE]	= sky_idx;
+			snr_shared[wID]		= snr_max;
+			nullstream_shared[wID]	= nullstream_max;
+			sky_idx_shared[wID]	= sky_idx;
 		}
 		__syncthreads();
 
-		for (int i = wn >> 1; i > 0; i = i >> 1)
+		for (i = wn >> 1; i > 0; i = i >> 1)
 		{
 			if (threadIdx.x < i)
 			{
@@ -461,10 +469,8 @@ __global__ void ker_coh_sky_map_max_and_chisq
 		*/
 
 		COMPLEX_F data, tmp_snr, tmp_autocorr;
-		int wID = threadIdx.x >> LOG_WARP_SIZE;		
-		int laneID = threadIdx.x & (WARP_SIZE - 1);
 		float laneChi2 = 0.0f, tmp_maxsnr;
-		int autochisq_half_len = autochisq_len /2;
+		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
 		if (wID == 0)
 		{
@@ -474,24 +480,27 @@ __global__ void ker_coh_sky_map_max_and_chisq
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
-				for (int ishift = laneID - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
+				peak_pos_tmp = start_exe + peak_cur + NtOff;
+				for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
-					tmp_snr = snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur];
+					tmp_snr = snr[j][((peak_pos_tmp + ishift) % len) * templateN + tmplt_cur];
 					tmp_autocorr = autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len];
 					tmp_maxsnr =  maxsnglsnr[peak_cur]; 	
 					data.re += tmp_snr.re - tmp_maxsnr * tmp_autocorr.re;
 					data.im += tmp_snr.im - tmp_maxsnr * tmp_autocorr.im;
+//					printf("autocorr_matrix %d, tmplt %d, [%d]: %f, %f\n", j, tmplt_cur, ishift + autochisq_half_len, tmp_autocorr.re, tmp_autocorr.im);
 				}
 				laneChi2 += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];	
+//				printf("autocorr addr %p, autocorr_norm %d: addr %p, %f\n", autocorr_matrix[j], j, autocorr_norm[j], autocorr_norm[j][tmplt_cur]);
 			}
 
 			for (int j = WARP_SIZE >> 1; j > 0; j = j >> 1)
 			{
-				laneChi2 += __shfl(laneChi2, laneID + j, 2 * j);
+				laneChi2 += __shfl_xor(laneChi2, j, WARP_SIZE);
 			}
 
-			if (laneID == 0)
+			if (srcLane == 0)
 			{
 				chisq[peak_cur] = laneChi2;
 				printf("peak %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, coh_snr[peak_cur], coh_nullstream[peak_cur], pix_idx[peak_cur], chisq[peak_cur]);

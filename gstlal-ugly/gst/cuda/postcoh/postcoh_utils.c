@@ -169,10 +169,11 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 	XmlArray *array_autocorr = (XmlArray *)malloc(sizeof(XmlArray) * 2);
 
 	COMPLEX_F *tmp_autocorr = NULL;
+	float *tmp_norm = NULL;
 	COMPLEX_F **autocorr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * nifo );
-	COMPLEX_F **autocorr_norm = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * nifo );
+	float **autocorr_norm = (float **)malloc(sizeof(float *) * nifo );
 	cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo);
-	cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(COMPLEX_F *) * nifo);
+	cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo);
 
 	end_ifo = NULL;
 	token = strtok_r(fname_cpy, ",", &end_ifo);
@@ -204,25 +205,34 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 		ntmplt = array_autocorr[0].dim[1];
 		autocorr_len = array_autocorr[0].dim[0];
 
-		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autocorr_len);
+//		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autocorr_len);
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autocorr_len;
 		cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size);
 		cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt);
 
-		if (tmp_autocorr == NULL)
+		if (tmp_autocorr == NULL) {
 			tmp_autocorr = (COMPLEX_F *)malloc(mem_alloc_size);
+			tmp_norm = (float *)malloc(sizeof(float) * ntmplt);
+		}
 
+		float tmp_re = 0.0, tmp_im = 0.0;
+
+		memset(tmp_norm, 0, sizeof(float) * ntmplt);
 		for (int j=0; j<ntmplt; j++) {
 			for (int k=0; k<autocorr_len; k++) {
-				tmp_autocorr[j * autocorr_len + k].re = (float)((double *)(array_autocorr[0].data))[k * ntmplt + j];
-				tmp_autocorr[j * autocorr_len + k].im = (float)((double *)(array_autocorr[1].data))[k * ntmplt + j];
+				tmp_re = (float)((double *)(array_autocorr[0].data))[k * ntmplt + j];
+				tmp_im = (float)((double *)(array_autocorr[1].data))[k * ntmplt + j];
+				tmp_autocorr[j * autocorr_len + k].re = tmp_re;
+				tmp_autocorr[j * autocorr_len + k].im = tmp_im;
+				tmp_norm[j] += 2 - (tmp_re * tmp_re + tmp_im * tmp_im);
 			}
+//			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
 		}
 
 		cudaMemcpy(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice);
 		cudaMemcpy(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
-		cudaMemset(autocorr_norm[match_ifo], 1, sizeof(float) * ntmplt);
-		cudaMemcpy(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
+		cudaMemcpy(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice);
+		cudaMemcpy(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(float *), cudaMemcpyHostToDevice);
 
 		freeArraydata(array_autocorr);
 		freeArraydata(array_autocorr+1);
@@ -236,11 +246,12 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 		 */
 		xmlMemoryDump();
 
-		printf("next token %s \n", token);
+//		printf("next token %s \n", token);
 
 	}
 
 	free(tmp_autocorr);
+	free(tmp_norm);
 	state->autochisq_len = autocorr_len;
 }
 
