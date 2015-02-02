@@ -127,6 +127,7 @@ typedef struct _PostcohState {
   float dt;
   float snglsnr_thresh;
   int autocorr_len;
+  gint hist_trials;
 } PostcohState;
 
 /**
@@ -162,11 +163,11 @@ struct _CudaPostcoh {
   guint64 samples_in;
   guint64 samples_out;
 
-  gint hist_trials;
   PostcohState *state;
   float snglsnr_thresh;
   GMutex *prop_lock;
   GCond *prop_avail;
+  gint hist_trials;
 };
 
 struct _CudaPostcohClass {

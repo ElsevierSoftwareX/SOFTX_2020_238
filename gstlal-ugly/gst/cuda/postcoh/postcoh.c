@@ -250,6 +250,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	state->head_len = postcoh->preserved_len / 2;
 	state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * postcoh->rate;
+	state->hist_trials = postcoh->hist_trials;
 	state->snglsnr_start_load = postcoh->hist_trials * postcoh->rate;
 	state->snglsnr_start_exe = state->snglsnr_start_load + state->head_len;
 
