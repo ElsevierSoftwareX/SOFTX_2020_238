@@ -56,6 +56,8 @@ PeakList *create_peak_list(PostcohState *state, gint hist_trials)
 void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 {
+	// FIXME: sanity check that the size of U matrix and diff matrix for
+	// each sky pixel is consistent with number of detectors
 	printf("read map from xml\n");
 	/* first get the params */
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
@@ -205,7 +207,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 		ntmplt = array_autocorr[0].dim[1];
 		autocorr_len = array_autocorr[0].dim[0];
 
-//		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autocorr_len);
+		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autocorr_len);
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autocorr_len;
 		cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size);
 		cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt);

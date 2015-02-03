@@ -212,8 +212,8 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	/* FIXME: this is copied from gstadder.c. Replace with new version of that file
 	 * if any. */
 	GST_OBJECT_LOCK(postcoh);
-//	sinkpads = GST_ELEMENT(postcoh)->sinkpads;
-	sinkpads = GST_ELEMENT(postcoh)->pads;
+	sinkpads = GST_ELEMENT(postcoh)->sinkpads;
+//	sinkpads = GST_ELEMENT(postcoh)->pads;
 
 	GST_LOG_OBJECT(postcoh, "setting caps on pad %p,%s to %" GST_PTR_FORMAT, pad,
 			GST_PAD_NAME(pad), caps);
@@ -652,7 +652,7 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 {
 	unsigned long days_from_utc0 = t / GST_SECOND;
 	int gps_len = 24*3600 / gps_step;
-	double time_in_one_day = t/GST_SECOND - days_from_utc0;
+	double time_in_one_day = (double) t/GST_SECOND - days_from_utc0;
 	int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
 	return gps_idx;
 }
@@ -672,7 +672,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		data = collectlist->data;
 		cur_ifo = state->ifo_mapping[i];
 		snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
-		printf("cur ifo %d, len %d, start_load %d , ntmplt %d\n", cur_ifo, state->snglsnr_len, state->snglsnr_start_load, state->ntmplt);
+		printf("gps_idx %d, cur ifo %d, len %d, start_load %d , ntmplt %d\n", gps_idx, cur_ifo, state->snglsnr_len, state->snglsnr_start_load, state->ntmplt);
 		printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 		pos_dd_snglsnr = state->snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 		/* copy the snglsnr to the right cuda memory */
@@ -838,15 +838,14 @@ static void cuda_postcoh_base_init(gpointer g_class)
 
 	gst_element_class_add_pad_template(
 		element_class,
-		gst_static_pad_template_get(&cuda_postcoh_src_template)
-#if 0
+//		gst_static_pad_template_get(&cuda_postcoh_src_template)
+#if 1
 		gst_pad_template_new(
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"application/x-lal-postcohlinspiral" ,
-				NULL
+			gst_caps_from_string(
+				"application/x-lal-postcoh" 
 			)
 		)
 #endif

@@ -4,6 +4,7 @@ dist_bin_SCRIPTS = \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_iir_bank \
 	gstlal_iir_inspiral \
+	gstlal_postcohspiir_inspiral \
 	gstlal_inspiral \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \

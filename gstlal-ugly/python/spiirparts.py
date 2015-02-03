@@ -294,16 +294,17 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1):
 	properties = dict((name, value) for name, value in zip(("location", "compression"), (location, compression)))
 	if "name" in properties:
-		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
+		elem = gst.element_factory_make("postcoh_filesink", properties.pop("name"))
 	else:
-		elem = gst.element_factory_make("cuda_postcoh")
+		elem = gst.element_factory_make("postcoh_filesink")
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	postcoh.link(elem)
+	return elem
 
 
-def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
+def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_filename = None):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -359,14 +360,14 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	for instrument, banklist in banks.items():
 		autocorrelation_fname += str(instrument)
 		autocorrelation_fname += ":"
-		autocorrelation_fname += str(banklist)
+		autocorrelation_fname += str(banklist[0])
 		autocorrelation_fname += "," 
 		if len(banklist) != 1:
 			raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
-	autocorrelation_fname.rstrip(',')
+	autocorrelation_fname = autocorrelation_fname.rstrip(',')
 	print autocorrelation_fname
 
-	for instrument, bank_name in [(instrument, bank_) for instrument, banklist in banks.items() for bank in banklist]:
+	for instrument, bank_name in [(instrument, bank_name) for instrument, banklist in banks.items() for bank_name in banklist]:
 		suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_name)
@@ -380,5 +381,5 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		else:
 			snr.link_pads(None, postcoh, instrument)
 
-	
-	mkpostcohfilesink(pipeline, postcoh, location, compression):
+	# FIXME: hard-coded to do compression	
+	return mkpostcohfilesink(pipeline, postcoh, location = output_filename, compression = 1)
