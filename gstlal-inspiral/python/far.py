@@ -68,10 +68,11 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
-from pylal import date
-from pylal import inject
+import lal
+import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
+
 
 #
 # ============================================================================
@@ -1291,12 +1292,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# compute nominal SNRs
 		#
+		# FIXME:  remove LIGOTimeGPS type cast when sim is ported
+		# to swig bindings
+		#
 
 		cosi2 = math.cos(sim.inclination)**2.
-		gmst = date.XLALGreenwichMeanSiderealTime(sim.get_time_geocent())
+		gmst = lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(0, sim.get_time_geocent().ns()))
 		snr_0 = {}
 		for instrument, DH in horizon_distance.items():
-			fp, fc = inject.XLALComputeDetAMResponse(inject.cached_detector[inject.prefix_to_name[instrument]].response, sim.longitude, sim.latitude, sim.polarization, gmst)
+			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(instrument).response, sim.longitude, sim.latitude, sim.polarization, gmst)
 			snr_0[instrument] = snr_efficiency * 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
 
 		#
@@ -1365,13 +1369,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		instruments = sorted(instruments)
 		# get horizon distances and responses in that same order
 		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
-		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in instruments)
+		resps = tuple(lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in instruments)
 
 		# get horizon distances and responses of remaining
 		# instruments (order doesn't matter as long as they're in
 		# the same order)
 		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
-		resps_other = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in inst_horiz_mapping if inst not in instruments)
+		resps_other = tuple(lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in inst_horiz_mapping if inst not in instruments)
 
 		# initialize the PDF array, and pre-construct the sequence
 		# of snr,d(snr) tuples.  since the last SNR bin probably
@@ -1410,7 +1414,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		random_uniform = random.uniform
 		twopi = 2. * math.pi
 		pi_2 = math.pi / 2.
-		xlal_am_resp = inject.XLALComputeDetAMResponse
+		xlal_am_resp = lal.ComputeDetAMResponse
 		# FIXME:  scipy.stats.rice.rvs broken on reference OS.
 		# switch to it when we can rely on a new-enough scipy
 		#rice_rvs = stats.rice.rvs	# broken on reference OS
@@ -1546,7 +1550,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	if not names:
 		raise ValueError("horizon_history is empty")
 	# get responses in that same order
-	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
+	resps = [lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in names]
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
@@ -1574,7 +1578,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	random_uniform = random.uniform
 	twopi = 2. * math.pi
 	pi_2 = math.pi / 2.
-	xlal_am_resp = inject.XLALComputeDetAMResponse
+	xlal_am_resp = lal.ComputeDetAMResponse
 
 	# loop as many times as requested
 	for i in xrange(n_samples):

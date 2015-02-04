@@ -74,11 +74,11 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import time_slide as ligolw_time_slide
-from pylal import datatypes as laltypes
+import lal
 from pylal import rate
+from pylal.datatypes import LALUnit
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
-from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 from gstlal import bottle
@@ -786,12 +786,17 @@ class Data(object):
 					psddict = {}
 					for instrument in self.seglistdicts["triggersegments"]:
 						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
+						# FIXME:  remove
+						# LIGOTimeGPS type cast
+						# when we port to swig
+						# version of
+						# REAL8FrequencySeries
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
-							epoch = XLALUTCToGPS(time.gmtime()),
+							epoch = LIGOTimeGPS(0, lal.UTCToGPS(time.gmtime()).ns()),
 							f0 = 0.0,
 							deltaF = elem.get_property("delta-f"),
-							sampleUnits = laltypes.LALUnit("s strain^2"),	# FIXME:  don't hard-code this
+							sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
 							data = numpy.array(elem.get_property("mean-psd"))
 						)
 					psdmessage = StringIO.StringIO()

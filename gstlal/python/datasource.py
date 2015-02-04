@@ -46,8 +46,9 @@
 #
 
 
-import sys
 import optparse
+import sys
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -65,6 +66,7 @@ from glue.ligolw import utils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue import segments
+import lal
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
@@ -716,9 +718,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
-			import time
-			from pylal.date import XLALUTCToGPS
-			t = float(XLALUTCToGPS(time.gmtime()))
+			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
 			off = elem.get_property("off-samples")
 			gap = elem.get_property("gap-samples")
@@ -731,9 +731,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		def strain_add(elem = src):
-			import time
-			from pylal.date import XLALUTCToGPS
-			t = float(XLALUTCToGPS(time.gmtime()))
+			t = float(lal.UTCToGPS(time.gmtime()))
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
 			# FIXME don't hard code the sample rate
