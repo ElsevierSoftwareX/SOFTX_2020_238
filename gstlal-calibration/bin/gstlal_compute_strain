@@ -438,8 +438,10 @@ else:
 	derr = pipeparts.mkcapsfilter(pipeline, derr, caps)
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
 
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])-1 + len(filters["inv_sensing"]), fir_matrix = [filters["inv_sensing"]], time_domain = True, block_stride = sr)
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])-1+len(filters["dewhiten_err"]), fir_matrix = [filters["dewhiten_err"]], time_domain = True, block_stride = sr)
+	# The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
+	# FIXME: Why is there an extra - one sample + length of filter latency required here?
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])+len(filters["inv_sensing"])-1, fir_matrix = [filters["inv_sensing"][::-1]], time_domain = True)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])+len(filters["dewhiten_err"])-1, fir_matrix = [filters["dewhiten_err"][::-1]], time_domain = True)
 	
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
@@ -448,10 +450,11 @@ else:
 	dctrl = pipeparts.mkprogressreport(pipeline, dctrl, "progress_src_dctrl_%s" % instrument)
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
+	# FIXME: Why is there an extra length of filter latency required here?
 	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])-1+len(filters["actuation"]), fir_matrix = [filters["actuation"]], time_domain = True, block_stride = actuationsr)
-	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])-1+len(filters["dewhiten_ctrl"]), fir_matrix = [filters["dewhiten_ctrl"]], time_domain = True, block_stride = actuationsr)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])+len(filters["actuation"]), fir_matrix = [filters["actuation"][::-1]], time_domain = True)
+	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])+len(filters["dewhiten_ctrl"]), fir_matrix = [filters["dewhiten_ctrl"][::-1]], time_domain = True)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
 
