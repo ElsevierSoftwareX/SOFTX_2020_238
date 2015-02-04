@@ -185,7 +185,8 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 import gst
-from gstlal import bottle
+
+import lal
 
 from glue import segments
 from glue import segmentsUtils
@@ -195,15 +196,15 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
-from pylal.date import XLALUTCToGPS
-from gstlal import pipeparts
+from gstlal import bottle
+from gstlal import datasource
 from gstlal import lloidparts
 from gstlal import far
-from gstlal import inspiral
 from gstlal import httpinterface
-from gstlal import datasource
-from gstlal import simulation
 from gstlal import hoftcache
+from gstlal import inspiral
+from gstlal import pipeparts
+from gstlal import simulation
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -227,7 +228,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
-	return XLALUTCToGPS(time.gmtime())
+	return LIGOTimeGPS(0, lal.UTCToGPS(time.gmtime()).ns())
 
 
 #

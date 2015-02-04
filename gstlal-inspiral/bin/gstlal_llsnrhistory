@@ -32,12 +32,12 @@ from urlparse import urlparse
 cgitb.enable()
 form = cgi.FieldStorage()
 import pylab
-from pylal.date import XLALUTCToGPS
 from pylal import rate
+import lal
 
 
 def now():
-	return float(XLALUTCToGPS(time.gmtime()))
+	return float(lal.UTCToGPS(time.gmtime()))
 
 def to_png_image():
 	f = StringIO.StringIO()

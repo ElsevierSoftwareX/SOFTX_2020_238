@@ -35,7 +35,7 @@ import cgitb
 cgitb.enable()
 form = cgi.FieldStorage()
 import time
-from pylal.date import XLALUTCToGPS
+import lal
 
 from glue.ligolw import ligolw, table, lsctables, param, array
 array.use_in(ligolw.LIGOLWContentHandler)
@@ -46,7 +46,7 @@ from ligo.gracedb.rest import GraceDb
 import ast
 
 def now():
-	return float(XLALUTCToGPS(time.gmtime()))
+	return float(lal.UTCToGPS(time.gmtime()))
 
 def to_png_image(out):
 	f = StringIO.StringIO()

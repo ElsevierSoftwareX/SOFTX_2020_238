@@ -40,10 +40,10 @@ import cgitb
 cgitb.enable()
 form = cgi.FieldStorage()
 import time
-from pylal.date import XLALUTCToGPS
+import lal
 
 def now():
-	return float(XLALUTCToGPS(time.gmtime()))
+	return float(lal.UTCToGPS(time.gmtime()))
 
 def to_png_image():
 	f = StringIO.StringIO()

@@ -31,14 +31,15 @@ from optparse import OptionParser
 import random
 
 
+import lal
+
+
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal import date
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
-lsctables.LIGOTimeGPS = LIGOTimeGPS
+LIGOTimeGPS = lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 
 
 #
@@ -150,7 +151,7 @@ while len(sim_burst_table) < N:
 
 	# uniform peak time
 	glitch.set_time_geocent(options.start_time + random.uniform(0.0, float(options.end_time - options.start_time)))
-	glitch.time_geocent_gmst = date.XLALGreenwichMeanSiderealTime(glitch.get_time_geocent())
+	glitch.time_geocent_gmst = lal.GreenwichMeanSiderealTime(glitch.get_time_geocent())
 
 	# uniform on sky (this is useless, but can't hurt)
 	glitch.ra = random.uniform(0.0, 2 * math.pi)

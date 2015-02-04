@@ -89,12 +89,13 @@ if "--help" in sys.argv or "-h" in sys.argv:
 else:
 	import gst
 
+import lal
+
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import datasource
 
-from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 from glue.ligolw import ligolw
@@ -674,7 +675,7 @@ if options.data_source == "frames":
 # FIXME: This scheme assumes that the shared memory partitions are keeping up with real time when the data source is lvshm. This is probably not a good assumption outside of the DMT environment.
 if options.data_source == "white" or (options.data_source == "lvshm" and not options.no_gamma):
 	tm = time.gmtime()
-	NOW = XLALUTCToGPS(tm).ns()
+	NOW = lal.UTCToGPS(tm).ns()
 	seek = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
 	if options.data_source == "white":
 		datasource.do_seek(pipeline, seek)	
