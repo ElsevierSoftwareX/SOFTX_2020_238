@@ -17,7 +17,7 @@ const int GAMMA_ITMAX = 50;
 #define WARP_SIZE 		32
 #define LOG_WARP_SIZE	5
 
-#define EPSILON 1e-7
+#define MIN_EPSILON 1e-7
 #define MAXIFOS 6
 
 __device__ static inline float atomicMax(float* address, float val)
@@ -169,22 +169,23 @@ ker_remove_duplicate_scan
     float   snr;
     int     templ;
 
-	unsigned int index;
+    unsigned int index;
     for (int i = tid; i < timeN; i += tn)
     {
         snr     = ressnr[i];
         templ   = restemplate[i];
         max_snr = peak[templ];
 
-		if (abs(max_snr - snr) < EPSILON && max_snr > snglsnr_thresh)
+		if (abs(max_snr - snr) < MIN_EPSILON && max_snr > snglsnr_thresh)
 		{
 			index = atomicInc((unsigned *)npeak, timeN);
 			peak_pos[index] = i;		
+			/* FIXME: could be many peak positions for one peak */
 //			peak[templ] = -1;
+//			printf("peak tmplt %d, time %d, maxsnr %f, snr %f\n", templ, i, max_snr, snr);
 		}
         // restemplate[i]  = ((-1 + templ) + (-1 - templ) * ((max_snr > snr) * 2 - 1)) >> 1;
         // ressnr[i]       = (-1.0f + snr) * 0.5 + (-1.0f - snr) * ((max_snr > snr) - 0.5);
-//		printf("tmplt %d, snr %f\n", restemplate[i], ressnr[i]);
     }
 }
 
@@ -526,7 +527,7 @@ void peakfinder(PostcohState *state, int iifo)
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
     PeakList *pklist = state->peak_list[iifo];
     state_reset_npeak(pklist);
-	ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->dd_snglsnr, 
+    ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->dd_snglsnr, 
 						iifo,
 						state->snglsnr_start_exe,
 						state->snglsnr_len,
@@ -558,8 +559,9 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 	int threads = 1024;
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
-	printf("num_triggers %d\n", pklist->npeak[0]);
 	int npeak = pklist->npeak[0];
+	if (npeak > 0)
+		printf("num_triggers %d\n", pklist->npeak[0]);
 	if (npeak > 0)
 		ker_coh_sky_map_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,

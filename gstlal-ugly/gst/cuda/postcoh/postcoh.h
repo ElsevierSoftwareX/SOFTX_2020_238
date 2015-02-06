@@ -106,7 +106,7 @@ typedef struct _PeakList {
 } PeakList;
 
 typedef struct _PostcohState {
-  COMPLEX_F **snglsnr;
+  COMPLEX_F **d_snglsnr;
   COMPLEX_F **dd_snglsnr;
   COMPLEX_F **dd_autocorr_matrix;
   float **dd_autocorr_norm;
@@ -126,7 +126,6 @@ typedef struct _PostcohState {
   int ntmplt;
   float dt;
   float snglsnr_thresh;
-  int autocorr_len;
   gint hist_trials;
 } PostcohState;
 
@@ -168,6 +167,9 @@ struct _CudaPostcoh {
   GMutex *prop_lock;
   GCond *prop_avail;
   gint hist_trials;
+
+  /* sink event handling */
+  GstPadEventFunction collect_event;
 };
 
 struct _CudaPostcohClass {

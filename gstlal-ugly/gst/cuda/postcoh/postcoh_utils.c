@@ -44,7 +44,7 @@ PeakList *create_peak_list(PostcohState *state, gint hist_trials)
 		pklist->nullsnr_bg = pklist->cohsnr_bg + hist_trials * exe_len;
 		pklist->chisq_bg = pklist->nullsnr_bg + hist_trials * exe_len;
 
-		printf("set peak addr %p, npeak addr %p\n", pklist, pklist->npeak);
+//		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
 
 		/* temporary struct to store tmplt max in one exe_len data */
 		cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt);
@@ -158,7 +158,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
 	char *token = strtok_r(fname, ",", &end_ifo);
-	int mem_alloc_size = 0, autocorr_len = 0, ntmplt = 0, match_ifo;
+	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo;
 
 	/* parsing for nifo */
 	while (token != NULL) {
@@ -205,10 +205,10 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 		}
 
 		ntmplt = array_autocorr[0].dim[1];
-		autocorr_len = array_autocorr[0].dim[0];
+		autochisq_len = array_autocorr[0].dim[0];
 
-		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autocorr_len);
-		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autocorr_len;
+		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
+		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
 		cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size);
 		cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt);
 
@@ -221,11 +221,11 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 
 		memset(tmp_norm, 0, sizeof(float) * ntmplt);
 		for (int j=0; j<ntmplt; j++) {
-			for (int k=0; k<autocorr_len; k++) {
+			for (int k=0; k<autochisq_len; k++) {
 				tmp_re = (float)((double *)(array_autocorr[0].data))[k * ntmplt + j];
 				tmp_im = (float)((double *)(array_autocorr[1].data))[k * ntmplt + j];
-				tmp_autocorr[j * autocorr_len + k].re = tmp_re;
-				tmp_autocorr[j * autocorr_len + k].im = tmp_im;
+				tmp_autocorr[j * autochisq_len + k].re = tmp_re;
+				tmp_autocorr[j * autochisq_len + k].im = tmp_im;
 				tmp_norm[j] += 2 - (tmp_re * tmp_re + tmp_im * tmp_im);
 			}
 //			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
@@ -254,7 +254,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 
 	free(tmp_autocorr);
 	free(tmp_norm);
-	state->autochisq_len = autocorr_len;
+	state->autochisq_len = autochisq_len;
 }
 
 

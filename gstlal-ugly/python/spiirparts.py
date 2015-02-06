@@ -292,7 +292,7 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1):
-	properties = dict((name, value) for name, value in zip(("location", "compression"), (location, compression)))
+	properties = dict((name, value) for name, value in zip(("location", "compression", "sync", "async"), (location, compression, False, False)))
 	if "name" in properties:
 		elem = gst.element_factory_make("postcoh_filesink", properties.pop("name"))
 	else:
@@ -350,7 +350,6 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	# construct trigger generators
 	#
 
-	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
 	# format of banklist : {'H1': <H1Bank0>, <H1Bank1>..;
 	#			'L1': <L1Bank0>, <L1Bank1>..;..}
 	# format of bank: <H1bank0>

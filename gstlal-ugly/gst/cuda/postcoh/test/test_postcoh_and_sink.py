@@ -15,12 +15,15 @@ pipeline = gst.Pipeline("test_postcoh")
 mainloop = gobject.MainLoop()
 
 src1 = pipeparts.mkaudiotestsrc(pipeline, wave = 9)
-src1 = pipeparts.mkcapsfilter(pipeline, src1, "audio/x-raw-float, width=32, channels=2, rate=4096")
+src1 = pipeparts.mkcapsfilter(pipeline, src1, "audio/x-raw-float, width=32, channels=1, rate=4096")
 src2 = pipeparts.mkaudiotestsrc(pipeline, wave = 9)
-src2 = pipeparts.mkcapsfilter(pipeline, src2, "audio/x-raw-float, width=32, channels=2, rate=4096")
+src2 = pipeparts.mkcapsfilter(pipeline, src2, "audio/x-raw-float, width=32, channels=1, rate=4096")
 src3 = pipeparts.mkaudiotestsrc(pipeline, wave = 9)
-src3 = pipeparts.mkcapsfilter(pipeline, src3, "audio/x-raw-float, width=32, channels=2, rate=4096")
+src3 = pipeparts.mkcapsfilter(pipeline, src3, "audio/x-raw-float, width=32, channels=1, rate=4096")
 
+src1 = pipeparts.mkcudamultiratespiir(pipeline, src1, "H1bank.xml.gz", gap_handle = 0, stream_id = 0)
+src2 = pipeparts.mkcudamultiratespiir(pipeline, src2, "H1bank.xml.gz", gap_handle = 0, stream_id = 1)
+src3 = pipeparts.mkcudamultiratespiir(pipeline, src3, "H1bank.xml.gz", gap_handle = 0, stream_id = 2)
 
 postcoh = gst.element_factory_make("cuda_postcoh")
 postcoh.set_property("detrsp-fname", "L1H1V1_skymap.xml")
