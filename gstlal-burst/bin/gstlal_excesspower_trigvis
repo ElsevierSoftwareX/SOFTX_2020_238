@@ -99,8 +99,7 @@ def plot_wnb( sim_burst ):
 	"""
 	return matplotlib.patches.Rectangle( 
 		# lower left point
-		( sim_burst.get_time_geocent()-sim_burst.duration/2.0,
-		  (sim_burst.frequency - sim_burst.bandwidth/2.0) ),
+		( sim_burst.get_time_geocent()-sim_burst.duration/2.0, (sim_burst.frequency) ),
 		# tile extent
 		sim_burst.duration,
 		sim_burst.bandwidth,
@@ -541,7 +540,7 @@ for channel, selected_events in event_iter:
 					continue # outside, skip
 				print "plotting %s with params" % sb.waveform
 				if sb.waveform == "BTLWNB":
-					print "\tt:%10.2f +/- %4.2f f: %4.2f +/- %4.2f" % (sb.get_time_geocent(), sb.duration/2.0, sb.frequency, sb.bandwidth/2.0)
+					print "\tt:%10.2f +/- %4.2f f: %4.2f +/- %4.2f" % (sb.get_time_geocent(), sb.duration/2.0, sb.frequency+sb.bandwidth/2.0, sb.bandwidth/2.0)
 					ax.add_patch( plot_wnb( sb ) )
 				elif sb.waveform == "SineGaussian":
 					print "\tt:%10.2f f: %4.2f q: %4.2f" % (sb.get_time_geocent(), sb.frequency, sb.q)
