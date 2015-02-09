@@ -26,7 +26,9 @@
  * output stream corresponding to that filter kernel is given by y[k] (k =
  * 0, ...) where
  *
- *    y[i] = \sum_{j = 0}^{N} x[i + j] a[j].
+ *    y[i + N - L] = \sum_{j = 0}^{N} x[i + j] a[j]
+ *
+ * where L is the latency of the filter in samples.
  *
  * Note in particular that the kernel is defined in reverse with respect to
  * the traditional definition.  This is for historical reasons.  Also note
@@ -37,10 +39,29 @@
  * data is padded before and after by an arbitrary number of 0s and compute
  * the output stream accordingly.
  *
- * If x[0] carries timestamp t0 then y[0] will be assigned timestamp t0 +
- * (N - latency) \Delta t, where latency is the element's configured
- * latency in samples and \Delta t is the sample period.  This is
+ * If x[0] carries timestamp t0 then the first output sample, y[N - L], will 
+ * be assigned timestamp t0 + (N - L) \Delta t, where L is the element's 
+ * configured latency in samples and \Delta t is the sample period.  This is
  * equivalent to the latency definition used by the audiofirfilter element.
+ * 
+ * The traditional convolution definition for filtering can be recovered by 
+ * providing the time-reversed filter to lal_firbank.  In particular, if the 
+ * desired operation is a convolution with filter kernel b[j] (j = 0, ..., N)
+ * defined by
+ *
+ *     y[i - L] = \sum_{j = 0}^{N} x[i - j] b[j],
+ *
+ * then providing lal_firbank with a[j] = b[N - j] as the filter kernel 
+ * yields the output
+ *
+ *     y[i + N - L] = \sum_{j = 0}^{N} x[i + j] b[N - j].
+ * 
+ * Relabeling the indices so j' = N - j and i' = i + N,
+ * 
+ *     y[i' - L] = \sum_{j' = 0}^{N} x[i' - j'] b[j']
+ *
+ * where the summation order has also been reversed.  
+ * This is the convolution with kernel b[j], as desired.
  *
  * Reviewed:  3a08854e595cf35a002483eae9a2b001b1100d21 2014-08-14 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
