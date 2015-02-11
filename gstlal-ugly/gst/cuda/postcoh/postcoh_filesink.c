@@ -167,6 +167,8 @@ postcoh_filesink_class_init (PostcohFilesinkClass * klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS (klass);
 
+  parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
+  
   gobject_class->dispose = postcoh_filesink_dispose;
 
   gobject_class->set_property = postcoh_filesink_set_property;
@@ -355,6 +357,7 @@ postcoh_filesink_event (GstBaseSink * sink, GstEvent * event)
 
   switch (type) {
     case GST_EVENT_EOS:
+    GST_LOG_OBJECT(filesink, "EVENT EOS. Finish writing document");
 //      if (fflush (filesink->file))
 //        goto flush_failed;
 
@@ -372,7 +375,9 @@ postcoh_filesink_event (GstBaseSink * sink, GstEvent * event)
       break;
   }
 
-  return GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
+  return TRUE;
+//	  GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
+
 #if 0
 flush_failed:
   {
@@ -388,14 +393,21 @@ flush_failed:
 
 
 static GstFlowReturn
-postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buffer)
+postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buf)
 {
   PostcohFilesink *filesink = POSTCOH_FILESINK(sink);
-  PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buffer);
-  PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buffer) + GST_BUFFER_SIZE(buffer));
+  PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buf);
+  PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 
   XmlTable *xtable = filesink->xtable;
   int rc;
+  GST_LOG_OBJECT (filesink,
+		"Received of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
+		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
+		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
+		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
+		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
 
   for(; table<table_end; table++) {
         GString *line = g_string_new("\t\t\t\t");
@@ -413,6 +425,7 @@ postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buffer)
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
 	
 	g_string_append(line, "\n");
+	printf("%s", line->str);
         rc = xmlTextWriterWriteFormatRaw(filesink->writer, line->str);
 	if (rc < 0)
 		return GST_FLOW_ERROR;

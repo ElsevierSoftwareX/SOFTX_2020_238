@@ -79,26 +79,28 @@ typedef struct _PeakList {
 	/* data in the same type are allocated together */
 	int *tmplt_idx;
 	int *pix_idx;
+	int *pix_idx_bg;
 	int *peak_pos;
 	int *npeak;
 	float *maxsnglsnr;
 	float *cohsnr;
-	float *nullsnr;
-	float *chisq;
 	float *cohsnr_bg;
+	float *nullsnr;
 	float *nullsnr_bg;
+	float *chisq;
 	float *chisq_bg;
 
 	int *d_tmplt_idx;
 	int *d_pix_idx;
+	int *d_pix_idx_bg;
 	int *d_peak_pos;
 	int *d_npeak;
 	float *d_maxsnglsnr;
 	float *d_cohsnr;
-	float *d_nullsnr;
-	float *d_chisq;
 	float *d_cohsnr_bg;
+	float *d_nullsnr;
 	float *d_nullsnr_bg;
+	float *d_chisq;
 	float *d_chisq_bg;
 
 	float *d_peak_tmplt;

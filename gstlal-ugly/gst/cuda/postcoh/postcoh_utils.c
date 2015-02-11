@@ -1,54 +1,63 @@
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <chealpix.h>
 #include "postcoh_utils.h"
+#include <cuda_debug.h>
 
 char* IFO_MAP[] = {"L1", "H1", "V1"};
+#define debug 1
 
-PeakList *create_peak_list(PostcohState *state, gint hist_trials)
+PeakList *create_peak_list(PostcohState *state)
 {
+		int hist_trials = state->hist_trials;
+		g_assert(hist_trials != -1);
 		int exe_len = state->exe_len;
 		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
 
-		int peak_intlen = 3 * exe_len + 1;
+		int peak_intlen = (3 + hist_trials) * exe_len + 1;
 		int peak_floatlen = (4 + hist_trials * 3 ) * exe_len;
 		pklist->peak_intlen = peak_intlen;
 		pklist->peak_floatlen = peak_floatlen;
 		
-		cudaMalloc((void **) &(pklist->d_tmplt_idx), sizeof(int) * peak_intlen );
-		cudaMemset(pklist->d_tmplt_idx, 0, sizeof(int) * peak_intlen);
+		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_tmplt_idx), sizeof(int) * peak_intlen ));
+		CUDA_CHECK(cudaMemset(pklist->d_tmplt_idx, 0, sizeof(int) * peak_intlen));
 		pklist->d_pix_idx = pklist->d_tmplt_idx + exe_len;
-		pklist->d_peak_pos = pklist->d_pix_idx + exe_len;
+		pklist->d_pix_idx_bg = pklist->d_pix_idx + exe_len;
+		pklist->d_peak_pos = pklist->d_pix_idx_bg + hist_trials * exe_len;
 		pklist->d_npeak = pklist->d_peak_pos + exe_len;
 
-		cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen);
-		cudaMemset(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen);
+		printf("d_npeak %p\n", pklist->d_npeak);
+		CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
+
+		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen));
+		CUDA_CHECK(cudaMemset(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen));
 		pklist->d_cohsnr = pklist->d_maxsnglsnr + exe_len;
-		pklist->d_nullsnr = pklist->d_cohsnr + exe_len;
-		pklist->d_chisq = pklist->d_nullsnr + exe_len;
-		pklist->d_cohsnr_bg = pklist->d_chisq + exe_len;
-		pklist->d_nullsnr_bg = pklist->d_cohsnr_bg + hist_trials * exe_len;
-		pklist->d_chisq_bg = pklist->d_nullsnr_bg + hist_trials * exe_len;
+		pklist->d_cohsnr_bg = pklist->d_cohsnr + exe_len;
+		pklist->d_nullsnr = pklist->d_cohsnr_bg + hist_trials * exe_len;
+		pklist->d_nullsnr_bg = pklist->d_nullsnr + exe_len;
+		pklist->d_chisq = pklist->d_nullsnr_bg + hist_trials * exe_len;
+		pklist->d_chisq_bg = pklist->d_chisq + exe_len;
 
 		pklist->tmplt_idx = (int *)malloc(sizeof(int) * peak_intlen);
 		memset(pklist->tmplt_idx, 0, sizeof(int) * peak_intlen);
 		pklist->pix_idx = pklist->tmplt_idx + exe_len;
-		pklist->peak_pos = pklist->pix_idx + exe_len;
+		pklist->pix_idx_bg = pklist->pix_idx + exe_len;
+		pklist->peak_pos = pklist->pix_idx_bg + hist_trials * exe_len;
 		pklist->npeak = pklist->peak_pos + exe_len;
 
 		pklist->maxsnglsnr = (float *)malloc(sizeof(float) * peak_floatlen);
 		memset(pklist->maxsnglsnr, 0, sizeof(float) * peak_floatlen);
 		pklist->cohsnr = pklist->maxsnglsnr + exe_len;
-		pklist->nullsnr = pklist->cohsnr + exe_len;
-		pklist->chisq = pklist->nullsnr + exe_len;
-		pklist->cohsnr_bg = pklist->chisq + exe_len;
-		pklist->nullsnr_bg = pklist->cohsnr_bg + hist_trials * exe_len;
-		pklist->chisq_bg = pklist->nullsnr_bg + hist_trials * exe_len;
+		pklist->cohsnr_bg = pklist->cohsnr + exe_len;
+		pklist->nullsnr = pklist->cohsnr_bg + hist_trials * exe_len;
+		pklist->nullsnr_bg = pklist->nullsnr + exe_len;
+		pklist->chisq = pklist->nullsnr_bg + hist_trials * exe_len;
+		pklist->chisq_bg = pklist->chisq + exe_len;
 
 //		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
-
+		printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);
 		/* temporary struct to store tmplt max in one exe_len data */
-		cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt);
-		cudaMemset(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt);
+		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
+		CUDA_CHECK(cudaMemset(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt));
 
 		return pklist;
 }
@@ -127,10 +136,10 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 
 	int mem_alloc_size = sizeof(float) * array_u[0].dim[0] * array_u[0].dim[1];
 	for (i=0; i<ngps; i++) {
-		cudaMalloc((void **)&(state->d_U_map[i]), mem_alloc_size);
-		cudaMemcpy(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice);
-		cudaMalloc((void **)&(state->d_diff_map[i]), mem_alloc_size);
-		cudaMemcpy(state->d_diff_map[i], array_diff[i].data, mem_alloc_size, cudaMemcpyHostToDevice);
+		CUDA_CHECK(cudaMalloc((void **)&(state->d_U_map[i]), mem_alloc_size));
+		CUDA_CHECK(cudaMemcpy(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMalloc((void **)&(state->d_diff_map[i]), mem_alloc_size));
+		CUDA_CHECK(cudaMemcpy(state->d_diff_map[i], array_diff[i].data, mem_alloc_size, cudaMemcpyHostToDevice));
 
 	}
 	/*
@@ -158,7 +167,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
 	char *token = strtok_r(fname, ",", &end_ifo);
-	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo;
+	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo = 0;
 
 	/* parsing for nifo */
 	while (token != NULL) {
@@ -209,8 +218,8 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 
 		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
-		cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size);
-		cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt);
+		CUDA_CHECK(cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size));
+		CUDA_CHECK(cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt));
 
 		if (tmp_autocorr == NULL) {
 			tmp_autocorr = (COMPLEX_F *)malloc(mem_alloc_size);
@@ -231,10 +240,10 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 //			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
 		}
 
-		cudaMemcpy(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice);
-		cudaMemcpy(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
-		cudaMemcpy(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice);
-		cudaMemcpy(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(float *), cudaMemcpyHostToDevice);
+		CUDA_CHECK(cudaMemcpy(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpy(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpy(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpy(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(float *), cudaMemcpyHostToDevice));
 
 		freeArraydata(array_autocorr);
 		freeArraydata(array_autocorr+1);
@@ -273,6 +282,7 @@ state_destroy(PostcohState *state)
 void
 state_reset_npeak(PeakList *pklist)
 {
-	cudaMemset(pklist->d_npeak, 0, sizeof(int));
+	printf("d_npeak %p\n", pklist->d_npeak);
+	CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
 	pklist->npeak[0] = 0;
 }

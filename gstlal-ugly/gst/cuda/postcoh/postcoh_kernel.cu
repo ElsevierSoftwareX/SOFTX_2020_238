@@ -20,6 +20,18 @@ const int GAMMA_ITMAX = 50;
 #define MIN_EPSILON 1e-7
 #define MAXIFOS 6
 
+
+// for gpu debug
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+static void gpuAssert(cudaError_t code, char *file, int line)
+{
+   if (code != cudaSuccess) 
+   {
+      printf ("GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      exit(code);
+   }
+}
+
 __device__ static inline float atomicMax(float* address, float val)
 {
     int* address_as_i = (int*) address;
@@ -297,8 +309,8 @@ __global__ void ker_coh_sky_map_max_and_chisq
 (
 	float		*coh_snr,		/* OUTPUT, only save the max one, of size (num_triggers) */
 	float		*coh_nullstream,	/* OUTPUT, only save the max one, of size (num_triggers) */
-	int		*pix_idx,		/* OUTPUT, store the index of the sky_direction, of size (num_triggers) */
 	float		*chisq,			/* OUTPUT, chisq value */
+	int		*pix_idx,		/* OUTPUT, store the index of the sky_direction, of size (num_triggers) */
 	COMPLEX_F	**snr,			/* INPUT, (2, 3) * data_points */	
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
@@ -352,8 +364,9 @@ __global__ void ker_coh_sky_map_max_and_chisq
 		peak_cur = peak_pos[ipeak];
 		tmplt_cur = tmplt_idx[peak_cur];
 
-		for(itrial=1; itrial<=hist_trials; itrial++) {
-		trial_offset = itrial * exe_len;
+		for(itrial=0; itrial<=hist_trials; itrial++) {
+			snr_max = 0.0;
+			trial_offset = itrial * exe_len;
 		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
 		{
 			// matrix u is stored in column order
@@ -366,7 +379,7 @@ __global__ void ker_coh_sky_map_max_and_chisq
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
 				if (NtOff == 0)
-					dk[j] = snr[j][((start_exe + peak_cur + NtOff) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + peak_cur + len) % len) * templateN + tmplt_cur ]; 	
 				else
 					dk[j] = snr[j][((start_exe + peak_cur + NtOff - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
 			}
@@ -442,15 +455,17 @@ __global__ void ker_coh_sky_map_max_and_chisq
 					nullstream_shared[threadIdx.x] = nullstream_shared[threadIdx.x + i];
 					sky_idx_shared[threadIdx.x] = sky_idx_shared[threadIdx.x + i];
 				}
+
 			}	
 			__syncthreads();
-		}
 
+		}
 		if (threadIdx.x == 0)
 		{
 			coh_snr[peak_cur + trial_offset]			= snr_shared[0];
 			coh_nullstream[peak_cur + trial_offset]	= nullstream_shared[0];
 			pix_idx[peak_cur + trial_offset]		= sky_idx_shared[0]; 			
+
 		}
 		__syncthreads();
 
@@ -472,7 +487,7 @@ __global__ void ker_coh_sky_map_max_and_chisq
 			chisq[peak_cur] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
 		}
 		*/
-
+#if 1
 		COMPLEX_F data, tmp_snr, tmp_autocorr;
 		float laneChi2 = 0.0f, tmp_maxsnr;
 		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
@@ -486,7 +501,7 @@ __global__ void ker_coh_sky_map_max_and_chisq
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
 				if (NtOff == 0)
-					peak_pos_tmp = start_exe + peak_cur + NtOff;
+					peak_pos_tmp = start_exe + peak_cur;
 				else
 					peak_pos_tmp = start_exe + peak_cur + NtOff - trial_offset + len;
 
@@ -511,10 +526,14 @@ __global__ void ker_coh_sky_map_max_and_chisq
 
 			if (srcLane == 0)
 			{
+
 				chisq[peak_cur + trial_offset] = laneChi2;
-				printf("peak %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
+				//printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 			}
 		}
+
+		__syncthreads();
+#endif
 	}
 	}
 }
@@ -522,7 +541,6 @@ __global__ void ker_coh_sky_map_max_and_chisq
 void peakfinder(PostcohState *state, int iifo)
 {
 
-//	printf("start peakfinder\n");
     int THREAD_BLOCK    = 256;
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
     PeakList *pklist = state->peak_list[iifo];
@@ -535,7 +553,8 @@ void peakfinder(PostcohState *state, int iifo)
 						state->exe_len, 
 						pklist->d_maxsnglsnr, 
 						pklist->d_tmplt_idx);
-	
+	gpuErrchk(cudaPeekAtLastError());
+
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
     ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(	pklist->d_maxsnglsnr, 
 		    						pklist->d_tmplt_idx, 
@@ -543,6 +562,7 @@ void peakfinder(PostcohState *state, int iifo)
 								state->ntmplt, 
 								pklist->d_peak_tmplt);
 
+	gpuErrchk(cudaPeekAtLastError());
     ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_npeak,
 	    						pklist->d_peak_pos,	    
 		    					pklist->d_maxsnglsnr, 
@@ -551,6 +571,7 @@ void peakfinder(PostcohState *state, int iifo)
 							state->ntmplt, 
 							pklist->d_peak_tmplt,
 							state->snglsnr_thresh);
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
@@ -560,13 +581,12 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
-	if (npeak > 0)
+	if (npeak > 0) {
 		printf("num_triggers %d\n", pklist->npeak[0]);
-	if (npeak > 0)
 		ker_coh_sky_map_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,
-									pklist->d_pix_idx,
 									pklist->d_chisq,
+									pklist->d_pix_idx,
 									state->dd_snglsnr,
 									iifo,	
 									state->nifo,
@@ -587,6 +607,9 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 									state->dd_autocorr_norm,
 									state->hist_trials
 	);
+	}
+
+	gpuErrchk(cudaPeekAtLastError());
 }
 
 
