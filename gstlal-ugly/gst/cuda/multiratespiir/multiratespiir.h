@@ -143,9 +143,10 @@ struct _CudaMultirateSPIIR {
   gboolean spstate_initialised;
 
   gint stream_id;
-  gint gap_handle;
   gint deviceID;
   cudaStream_t stream;
+
+  gint gap_handle;
 };
 
 struct _CudaMultirateSPIIRClass {

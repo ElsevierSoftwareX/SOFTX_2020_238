@@ -825,7 +825,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     spiir_state_reset (element->spstate, element->num_depths, element->stream);
     gst_adapter_clear (element->adapter);
     
-    GST_DEBUG_OBJECT (element, "reset spstate2");
     element->need_discont = TRUE;
 
     /*
@@ -839,7 +838,6 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
     element->samples_in = 0;
     element->samples_out = 0;
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_head_cover_samples);
-    GST_DEBUG_OBJECT (element, "reset spstate2");
     
   }
 
@@ -1024,6 +1022,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      */
     adapter_len = cuda_multirate_spiir_get_available_samples(element);
     if (adapter_len >= element->num_exe_samples) {
+      element->need_tail_drain = TRUE;
       res = cuda_multirate_spiir_process(element, element->num_exe_samples, outbuf);
       if (res != GST_FLOW_OK)
         return res;
@@ -1142,7 +1141,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
     case PROP_IIRBANK_FNAME:
       g_mutex_lock(element->iir_bank_lock);
 
-      GST_LOG_OBJECT (element, "obtaining bank");
+      GST_LOG_OBJECT (element, "obtaining bank, stream id is %d", element->stream);
       element->bank_fname = g_value_dup_string(value);
 //      cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
  
