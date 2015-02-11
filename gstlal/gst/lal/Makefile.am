@@ -10,6 +10,7 @@ libgstlal_la_SOURCES = \
 	gstlal_drop.h gstlal_drop.c \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_gate.h gstlal_gate.c \
+	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \
 	gstlal_nxydump.h gstlal_nxydump.c \

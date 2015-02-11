@@ -455,6 +455,11 @@ def mkresample(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audioresample", **properties)
 
 
+## Adds a <a href="@gstlalgtkdoc/GSTLALInterpolator.html">lal_interpolator</a> element to a pipeline with useful default properties
+def mkinterpolator(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_interpolator", **properties)
+
+
 ## Adds a <a href="@gstlalgtkdoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties
 def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **properties):
 	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **properties)
