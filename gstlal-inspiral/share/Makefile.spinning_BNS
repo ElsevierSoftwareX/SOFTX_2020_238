@@ -5,12 +5,12 @@
 # The filtering start frequency
 LOW_FREQUENCY_CUTOFF = 30.0
 # The maximum frequency to filter to
-HIGH_FREQUENCY_CUTOFF = 2048.0
+HIGH_FREQUENCY_CUTOFF = 1024.0
 # Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 200
+NUM_SPLIT_TEMPLATES = 100
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
 # in the SVD.  Redundant templates will be removed
-OVERLAP = 20
+OVERLAP = 10
 # The program used to make the template bank. This will be searched for in the
 # process param table in order to extract some metadata
 BANK_PROGRAM = pycbc_aligned_bank_cat
@@ -22,7 +22,7 @@ APPROXIMANT = TaylorF2
 #
 
 # The detectors to analyze
-IFOS = H1 L1 V1
+IFOS = H1 L1
 # The GPS start time
 START = 966384015
 # The GPS end time
@@ -32,7 +32,7 @@ TAG = test
 # A web directory for output
 WEBDIR = ~/public_html/MDC/BNS/Summer2014/recolored/spin/$(START)-$(STOP)-$(TAG)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
-NUMBANKS = 4
+NUMBANKS = 16
 # The control peak time for the composite detection statistic.  If set to 0 the
 # statistic is disabled
 PEAK = 0
@@ -72,7 +72,7 @@ VIRGO_FRAME_TYPE='T1300121_V1_EARLY_RECOLORED_V2'
 H1_CHANNEL=LDAS-STRAIN
 L1_CHANNEL=LDAS-STRAIN
 V1_CHANNEL=h_16384Hz
-CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL) --channel-name=V1=$(V1_CHANNEL)
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 
 #
 # Get some basic definitions.  NOTE this comes from the share directory probably.
