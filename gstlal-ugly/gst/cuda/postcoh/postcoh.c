@@ -193,6 +193,10 @@ sink_event(GstPad *pad, GstEvent *event)
 		case GST_EVENT_NEWSEGMENT:
 			GST_DEBUG_OBJECT(pad, "new segment");
 			break;
+		// do not process tag.
+		case GST_EVENT_TAG:
+			gst_object_unref(event);
+			return TRUE;
 		default:
 			break;
 	}
@@ -200,7 +204,119 @@ sink_event(GstPad *pad, GstEvent *event)
 	return TRUE;
 }
 
-/* This is copied from gstadder.c 0.10.32 */
+/*
+ * forwards the event to all sinkpads, takes ownership of the event
+ */
+
+
+typedef struct {
+	GstEvent *event;
+	gboolean flush;
+} EventData;
+
+
+static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data)
+{
+	GST_DEBUG_OBJECT(pad, "forward an event");
+	gst_event_ref(data->event);
+	if(!gst_pad_push_event(pad, data->event)) {
+		/* quick hack to unflush the pads. ideally we need  a way
+		 * to just unflush this single collect pad */
+		if(data->flush)
+			gst_pad_send_event(pad, gst_event_new_flush_stop());
+	} else {
+		g_value_set_boolean(ret, TRUE);
+	}
+	gst_object_unref(GST_OBJECT(pad));
+	return TRUE;
+}
+
+
+static gboolean forward_src_event(CudaPostcoh *postcoh, GstEvent *event, gboolean flush)
+{
+	GstIterator *it;
+	GValue vret = {0};
+	EventData data = {
+		event,
+		flush
+	};
+	gboolean success;
+
+	g_value_init(&vret, G_TYPE_BOOLEAN);
+	g_value_set_boolean(&vret, FALSE);
+
+	it = gst_element_iterate_sink_pads(GST_ELEMENT(postcoh));
+	while(TRUE) {
+		switch(gst_iterator_fold(it, (GstIteratorFoldFunction) forward_src_event_func, &vret, &data)) {
+		case GST_ITERATOR_RESYNC:
+			gst_iterator_resync(it);
+			g_value_set_boolean(&vret, TRUE);
+			break;
+
+		case GST_ITERATOR_OK:
+		case GST_ITERATOR_DONE:
+			success = g_value_get_boolean(&vret);
+			goto done;
+
+		default:
+			success = FALSE;
+			goto done;
+		}
+	}
+done:
+	gst_iterator_free(it);
+	gst_event_unref(event);
+
+	return success;
+}
+
+
+/*
+ * handle events received on the source pad
+ */
+
+
+static gboolean src_event(GstPad *pad, GstEvent *event)
+{
+	CudaPostcoh *postcoh = CUDA_POSTCOH(gst_pad_get_parent(pad));
+	gboolean success;
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_SEEK: {
+		gdouble rate;
+		GstSeekFlags flags;
+		GstSeekType curtype, endtype;
+		gint64 cur, end;
+		gboolean flush;
+
+		gst_event_parse_seek(event, &rate, NULL, &flags, &curtype, &cur, &endtype, &end);
+		flush = flags & GST_SEEK_FLAG_FLUSH;
+
+		/* FIXME:  copy the adder's logic re flushing */
+
+		success = forward_src_event(postcoh, event, flush);
+		break;
+	}
+
+	/* events that can't be handled */
+	case GST_EVENT_QOS:
+	case GST_EVENT_NAVIGATION:
+		gst_event_unref(event);
+		success = FALSE;
+		break;
+
+	/* forward the rest out all sink pads */
+	default:
+		GST_DEBUG_OBJECT(postcoh, "forward src event");
+		success = forward_src_event(postcoh, event, FALSE);
+		break;
+	}
+
+	return success;
+}
+
+
+/* This is modified from gstadder.c 0.10.32 */
 static gboolean
 cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 {
@@ -607,10 +723,11 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 
 	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
-	char *ifos = (char *) malloc(sizeof(char) * 2 * nifo);
+	int ifos_size = sizeof(char) * 2 * nifo, one_ifo_size = sizeof(char) * 2 ;
+	char *ifos = (char *) malloc(ifos_size);
 
 	for(iifo=0; iifo<nifo; iifo++) 
-		strncpy(ifos+2*iifo, IFO_MAP[iifo], 2 * sizeof(char));
+		strncpy(ifos+2*iifo, IFO_MAP[iifo], one_ifo_size);
 
 	int npeak = 0, itrial = 0, exe_len = state->exe_len;
 	for(iifo=0; iifo<nifo; iifo++) {
@@ -627,8 +744,10 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			XLALGPSAdd(&(end_time[ipeak]), (double) peak_cur /exe_len);
 			output->end_time = end_time[ipeak];
 			output->is_background = 0;
-			strcpy(output->ifos, ifos);
-		       	strcpy(output->pivotal_ifo, IFO_MAP[iifo]);
+			strncpy(output->ifos, ifos, ifos_size);
+			output->ifos[2*nifo] = '\0';
+		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
+			output->pivotal_ifo[2] = '\0';
 			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
@@ -645,8 +764,10 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 				peak_cur = peak_pos[ipeak];
 				output->end_time = end_time[ipeak];
 				output->is_background = 1;
-				strcpy(output->ifos, ifos);
-		       		strcpy(output->pivotal_ifo, IFO_MAP[iifo]);
+				strncpy(output->ifos, ifos, ifos_size);
+				output->ifos[2*nifo] = '\0';
+		       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
+				output->pivotal_ifo[2] = '\0';
 				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
 				output->pix_idx = pklist->pix_idx[peak_cur];
 				output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
@@ -976,6 +1097,7 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->srcpad = gst_element_get_static_pad(element, "src");
 	GST_DEBUG_OBJECT(postcoh, "%s caps %" GST_PTR_FORMAT, GST_PAD_NAME(postcoh->srcpad), gst_pad_get_caps(postcoh->srcpad));
 
+	gst_pad_set_event_function(postcoh->srcpad, GST_DEBUG_FUNCPTR(src_event));
 	postcoh->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(postcoh->collect, GST_DEBUG_FUNCPTR(collected), postcoh);
 

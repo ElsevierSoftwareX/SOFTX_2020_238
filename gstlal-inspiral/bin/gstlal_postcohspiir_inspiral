@@ -374,6 +374,11 @@ else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
 
+
+mainloop = gobject.MainLoop()
+def on_eos(bus, message, mainloop = mainloop):
+  mainloop.quit()
+  bus.remove_signal_watch()
 #
 # Process banks in serial
 #
@@ -429,7 +434,6 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
     print >>sys.stderr, "assembling pipeline ...",
 
   pipeline = gst.Pipeline("gstlal_iir_inspiral")
-  mainloop = gobject.MainLoop()
 
   if options.postcoh is True:
     postcohsink = spiirparts.mkPostcohSPIIR(
@@ -472,22 +476,28 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if options.write_pipeline is not None:
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
+  bus = pipeline.get_bus()
+  bus.add_signal_watch()
+  bus.connect("message::eos", on_eos)
+
   if options.verbose:
     print >>sys.stderr, "running pipeline ..."
   mainloop.run()
 
-  print "before output"
-
-  # Shutdown the web interface servers
-  del httpservers
-  bottle.default_app.pop()
-
+  if options.verbose:
+    print >>sys.stderr, "setting pipeline state to NULL"
   if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
     raise RuntimeError("pipeline could not be set to NULL")
+
+
+# Shutdown the web interface servers
+  del httpservers
+  bottle.default_app.pop()
 
 #
 # done
 #
+
 
 if options.data_source in ("lvshm", "framexmit"):
   sys.exit(1) # online pipeline always ends with an error code

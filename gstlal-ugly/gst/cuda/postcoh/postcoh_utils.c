@@ -25,7 +25,7 @@ PeakList *create_peak_list(PostcohState *state)
 		pklist->d_peak_pos = pklist->d_pix_idx_bg + hist_trials * exe_len;
 		pklist->d_npeak = pklist->d_peak_pos + exe_len;
 
-		printf("d_npeak %p\n", pklist->d_npeak);
+		//printf("d_npeak %p\n", pklist->d_npeak);
 		CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
 
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen));
@@ -282,7 +282,7 @@ state_destroy(PostcohState *state)
 void
 state_reset_npeak(PeakList *pklist)
 {
-	printf("d_npeak %p\n", pklist->d_npeak);
+	//printf("d_npeak %p\n", pklist->d_npeak);
 	CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
 	pklist->npeak[0] = 0;
 }

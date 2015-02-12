@@ -349,6 +349,7 @@ postcoh_filesink_event (GstBaseSink * sink, GstEvent * event)
 {
   GstEventType type;
   PostcohFilesink *filesink;
+  int rc;
 
   filesink = POSTCOH_FILESINK (sink);
   xmlTextWriterPtr writer = filesink->writer;
@@ -357,18 +358,38 @@ postcoh_filesink_event (GstBaseSink * sink, GstEvent * event)
 
   switch (type) {
     case GST_EVENT_EOS:
-    GST_LOG_OBJECT(filesink, "EVENT EOS. Finish writing document");
 //      if (fflush (filesink->file))
 //        goto flush_failed;
 
     /* for stream */
-    xmlTextWriterEndElement(writer);
+    rc = xmlTextWriterEndElement(writer);
+    if (rc < 0) {
+        printf
+            ("Error at xmlTextWriterEndElement\n");
+        return FALSE;
+    }
+
+
 
     /* for table */
     xmlTextWriterEndElement(writer);
+    if (rc < 0) {
+        printf
+            ("Error at xmlTextWriterEndElement\n");
+        return FALSE;
+    }
+
 
     /* for the whole document */
     xmlTextWriterEndDocument(writer);
+    if (rc < 0) {
+        printf
+            ("Error at xmlTextWriterEndDocument\n");
+        return FALSE;
+    }
+
+
+    GST_LOG_OBJECT(filesink, "EVENT EOS. Finish writing document");
 
       break;
     default:
@@ -376,8 +397,8 @@ postcoh_filesink_event (GstBaseSink * sink, GstEvent * event)
   }
 
   return TRUE;
-//	  GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
 
+  // return GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
 #if 0
 flush_failed:
   {
@@ -401,13 +422,6 @@ postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buf)
 
   XmlTable *xtable = filesink->xtable;
   int rc;
-  GST_LOG_OBJECT (filesink,
-		"Received of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
-		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
-		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
-		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
-		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
 
   for(; table<table_end; table++) {
         GString *line = g_string_new("\t\t\t\t");
@@ -431,6 +445,13 @@ postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buf)
 		return GST_FLOW_ERROR;
         g_string_free(line, TRUE);
   }
+  GST_LOG_OBJECT (filesink,
+		"Writen a buffer (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
+		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
+		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
+		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
+		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
 
   return GST_FLOW_OK;
 }
