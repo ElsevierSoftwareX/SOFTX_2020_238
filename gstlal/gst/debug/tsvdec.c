@@ -175,13 +175,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		t = parse_line(&chanc, &chanv, line, element->FS);
 		if (element->t0 == GST_CLOCK_TIME_NONE)
 			element->t0 = t; /* very first time stamp */
-		/* fprintf(element->fp, "%d.%09d", t / 1000000000, t % 1000000000);
-		int c;
-		for (c = 0; c < chanc; ++c)
-			fprintf(element->fp, "\t%.6e", chanv[c]);
-		fprintf(element->fp, "\n");
-		*/
-		
 
 		/* make sure the number of channels hasn't changed */
 		if (element->channels)
@@ -205,7 +198,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* set buffer and caps on source pad */
 	if (srcbuf && GST_BUFFER_SIZE(srcbuf)) {
 		if (element->rate == 0) { /* if rate is unset, compute it */
-			guint dt = t - GST_BUFFER_TIMESTAMP(srcbuf);
+			GstClockTime dt = t - GST_BUFFER_TIMESTAMP(srcbuf);
 			element->rate = round((nlines - 1) * 1e9 / dt);
 			gst_caps_set_simple(caps, "rate", G_TYPE_INT, element->rate, NULL);
 			gst_pad_set_caps(element->srcpad, caps);
@@ -216,13 +209,36 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		GST_BUFFER_OFFSET(srcbuf) = element->offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = element->offset += nlines;
 		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
-		//fprintf(stderr, "offset = %ld, offset end = %ld, timestamp = %ld, duration = %ld\n", GST_BUFFER_OFFSET(srcbuf), GST_BUFFER_OFFSET_END(srcbuf), GST_BUFFER_TIMESTAMP(srcbuf), GST_BUFFER_DURATION(srcbuf));
 
+		if (element->newsegment == TRUE) {
+			/* push newsegment event */
+			GstEvent *event;
+			event = gst_event_new_new_segment(TRUE, element->rate, GST_FORMAT_TIME, srcbuf->timestamp, -1, srcbuf->timestamp);
+			gst_pad_push_event(element->srcpad, event);
+			element->newsegment = FALSE;
+		}
 		gst_buffer_set_caps(srcbuf, caps);
 		result = gst_pad_push(element->srcpad, srcbuf);
 	}
 
 	return result;
+}
+
+static gboolean event(GstPad *pad, GstEvent *event)
+{
+	GSTLALTSVDec *element = GSTLAL_TSVDEC(gst_pad_get_parent(pad));
+	switch (GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT:
+		/* swallow event */
+		gst_event_unref(event);
+		element->newsegment = TRUE;
+		break;
+	default:
+		/* forward event */
+		return gst_pad_event_default(pad, event);
+	}
+	gst_object_unref(element);
+	return TRUE;
 }
 
 enum property { ARG_FS = 1, ARG_RS = 2 };
@@ -287,8 +303,6 @@ static void finalize(GObject *object)
 
 	free(element->FS);
 	free(element->RS);
-
-	/* fclose(element->fp); */
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -375,6 +389,7 @@ static void gstlal_tsvdec_init(GSTLALTSVDec *element, GSTLALTSVDecClass *Klass)
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(event));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
@@ -389,6 +404,5 @@ static void gstlal_tsvdec_init(GSTLALTSVDec *element, GSTLALTSVDecClass *Klass)
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->FS = strdup(DEFAULT_FS);
 	element->RS = strdup(DEFAULT_RS);
-
-	/* element->fp = fopen("dump.out", "w"); */
+	element->newsegment = FALSE;
 }
