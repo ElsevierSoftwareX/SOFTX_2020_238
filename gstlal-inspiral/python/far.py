@@ -1300,7 +1300,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		gmst = lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(0, sim.get_time_geocent().ns()))
 		snr_0 = {}
 		for instrument, DH in horizon_distance.items():
-			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(instrument).response, sim.longitude, sim.latitude, sim.polarization, gmst)
+			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
 			snr_0[instrument] = snr_efficiency * 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
 
 		#
@@ -1369,13 +1369,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		instruments = sorted(instruments)
 		# get horizon distances and responses in that same order
 		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
-		resps = tuple(lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in instruments)
+		resps = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in instruments)
 
 		# get horizon distances and responses of remaining
 		# instruments (order doesn't matter as long as they're in
 		# the same order)
 		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
-		resps_other = tuple(lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in inst_horiz_mapping if inst not in instruments)
+		resps_other = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in inst_horiz_mapping if inst not in instruments)
 
 		# initialize the PDF array, and pre-construct the sequence
 		# of snr,d(snr) tuples.  since the last SNR bin probably
@@ -1550,7 +1550,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	if not names:
 		raise ValueError("horizon_history is empty")
 	# get responses in that same order
-	resps = [lalsimulation.DetectorPrefixToLALDetector(inst).response for inst in names]
+	resps = [lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in names]
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
