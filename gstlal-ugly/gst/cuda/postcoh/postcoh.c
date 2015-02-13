@@ -737,6 +737,8 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d", iifo, npeak);
 		int peak_cur;
+		GString *filename = NULL;
+		FILE *file = NULL;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			XLALINT8NSToGPS(&(end_time[ipeak]), ts);
 			int *peak_pos = pklist->peak_pos;
@@ -754,8 +756,27 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			output->cohsnr = pklist->cohsnr[peak_cur];
 			output->nullsnr = pklist->nullsnr[peak_cur];
 			output->chisq = pklist->chisq[peak_cur];
-			output->skymap_fname[0] ='\0';
+			filename = g_string_new(output->ifos);
+			g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds);
+			g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
+			strcpy(output->skymap_fname, filename->str);
+//			printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
+			file = fopen(output->skymap_fname, "w");
+			fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
+			fclose(file);
+			file = NULL;
+			g_string_free(filename, TRUE);
 			output++;
+		}
+
+		if (pklist->d_cohsnr_skymap) {
+			cudaFree(pklist->d_cohsnr_skymap);
+			pklist->d_cohsnr_skymap = NULL;
+		}
+
+		if (pklist->cohsnr_skymap) {
+			free(pklist->cohsnr_skymap);
+			pklist->cohsnr_skymap = NULL;
 		}
 
 		for(itrial=1; itrial<=hist_trials; itrial++) {
@@ -795,10 +816,13 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 {
-	unsigned long days_from_utc0 = t / GST_SECOND;
-	int gps_len = 24*3600 / gps_step;
-	double time_in_one_day = (double) t/GST_SECOND - days_from_utc0;
+	int seconds_in_one_day = 24 * 3600;
+	unsigned long days_from_utc0 = (t / GST_SECOND) / seconds_in_one_day;
+	int gps_len = seconds_in_one_day / gps_step;
+	double time_in_one_day = (double) (t/GST_SECOND) - days_from_utc0 * seconds_in_one_day;
 	int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
+
+//	printf("days_from_utc0 %lu, time_in_one_day %f, gps_len %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
 
@@ -811,17 +835,16 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 
 	int i = 0, cur_ifo = 0;
 	PostcohState *state = postcoh->state;
-	int gps_idx = timestamp_to_gps_idx(state->gps_step, postcoh->next_t);
 
 	GstFlowReturn ret;
 
 	while (common_size >= one_take_size) {
+		int gps_idx = timestamp_to_gps_idx(state->gps_step, postcoh->next_t);
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			cur_ifo = state->ifo_mapping[i];
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
-			GST_LOG_OBJECT(postcoh, "gps_idx %d, cur ifo %d, len %d, start_load %d , ntmplt %d", gps_idx, cur_ifo, state->snglsnr_len, state->snglsnr_start_load, state->ntmplt);
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 			/* copy the snglsnr to the right cuda memory */
@@ -851,19 +874,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 					cudaMemcpyDeviceToHost);
 
 			if (state->peak_list[cur_ifo]->npeak[0] > 0) {
-			cohsnr_and_chisq(state, cur_ifo, gps_idx);
-//			cohsnr_and_chisq_background(state, cur_ifo, postcoh->hist_trials, gps_idx);
-//
-			/* copy the snr, cohsnr, nullsnr, chisq out */
-			cudaMemcpy(	state->peak_list[cur_ifo]->tmplt_idx, 
-					state->peak_list[cur_ifo]->d_tmplt_idx, 
-					sizeof(int) * (state->peak_list[cur_ifo]->peak_intlen), 
-					cudaMemcpyDeviceToHost);
-
-			cudaMemcpy(	state->peak_list[cur_ifo]->maxsnglsnr, 
-					state->peak_list[cur_ifo]->d_maxsnglsnr, 
-					sizeof(float) * (state->peak_list[cur_ifo]->peak_floatlen), 
-					cudaMemcpyDeviceToHost);
+				cohsnr_and_chisq(state, cur_ifo, gps_idx);
 			}
 
 			/* move along */

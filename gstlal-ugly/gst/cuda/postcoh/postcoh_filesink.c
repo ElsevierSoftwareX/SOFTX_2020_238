@@ -439,7 +439,7 @@ postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buf)
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
 	
 	g_string_append(line, "\n");
-	printf("%s", line->str);
+//	printf("%s", line->str);
         rc = xmlTextWriterWriteFormatRaw(filesink->writer, line->str);
 	if (rc < 0)
 		return GST_FLOW_ERROR;

@@ -273,10 +273,42 @@ state_destroy(PostcohState *state)
 {
 	int i;
 	if(state->dd_snglsnr) {
-		for(i=0; i<state->nifo; i++)
-			cudaFree(state->dd_snglsnr[i]);
-		cudaFree(state->dd_snglsnr);
+		for(i=0; i<state->nifo; i++) {
+			CUDA_CHECK(cudaFree(state->dd_snglsnr[i]));
+			CUDA_CHECK(cudaFree(state->dd_autocorr_matrix[i]));
+			CUDA_CHECK(cudaFree(state->dd_autocorr_norm[i]));
+		}
+
+		CUDA_CHECK(cudaFree(state->dd_snglsnr));
+		CUDA_CHECK(cudaFree(state->dd_autocorr_matrix));
+		CUDA_CHECK(cudaFree(state->dd_autocorr_norm));
 	}
+	int gps_end = 24*3600;
+	int ngps = gps_end/(state->gps_step);
+	for(i=0; i<ngps; i++) {
+		CUDA_CHECK(cudaFree(state->d_U_map[i]));
+		CUDA_CHECK(cudaFree(state->d_diff_map[i]));
+	}
+
+	for(i=0; i<state->nifo; i++) {
+		peak_list_destroy(state->peak_list[i]);
+		free(state->peak_list[i]);
+	}
+
+}
+
+void
+peak_list_destroy(PeakList *pklist)
+{
+	
+	CUDA_CHECK(cudaFree(pklist->d_tmplt_idx));
+	CUDA_CHECK(cudaFree(pklist->d_maxsnglsnr));
+	CUDA_CHECK(cudaFree(pklist->d_cohsnr_skymap));
+	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
+
+	free(pklist->tmplt_idx);
+	free(pklist->maxsnglsnr);
+	free(pklist->cohsnr_skymap);
 }
 
 void

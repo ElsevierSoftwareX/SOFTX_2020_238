@@ -89,6 +89,8 @@ typedef struct _PeakList {
 	float *nullsnr_bg;
 	float *chisq;
 	float *chisq_bg;
+	float *cohsnr_skymap;
+	float *nullsnr_skymap;
 
 	int *d_tmplt_idx;
 	int *d_pix_idx;
@@ -102,6 +104,8 @@ typedef struct _PeakList {
 	float *d_nullsnr_bg;
 	float *d_chisq;
 	float *d_chisq_bg;
+	float *d_cohsnr_skymap;
+	float *d_nullsnr_skymap;
 
 	float *d_peak_tmplt;
 

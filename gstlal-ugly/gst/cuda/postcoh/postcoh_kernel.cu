@@ -5,6 +5,7 @@ extern "C" {
 #include <stdio.h>
 
 #include "postcoh_utils.h"
+#include <cuda_debug.h>
 
 #ifdef __cplusplus
 }
@@ -223,26 +224,31 @@ __device__ float gser (float x, float a)
     return sum * exp(-x + a * log(x) - lgamma(a));
 }
 
-__global__ void ker_coh_sky_map
+__global__ void ker_coh_skymap
 (
-	float	*coh_snr,			/* OUTPUT, of size (num_triggers * num_sky_directions) */
-	float	*coh_nullstream,	/* OUTPUT, of size (num_triggers * num_sky_directions) */
-	COMPLEX_F	*snr_all,			/* INPUT, (2, 3) * data_points */	
+	float	*cohsnr_skymap,			/* OUTPUT, of size (num_triggers * num_sky_directions) */
+	float	*nullsnr_skymap,	/* OUTPUT, of size (num_triggers * num_sky_directions) */
+	COMPLEX_F	**snr,			/* INPUT, (2, 3) * data_points */	
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
-	int		*triggers_offset0,	/* INPUT, place the location of the trigger */
-	int		num_triggers,		/* INPUT, number of triggers */
-	float	*u_map,				/* INPUT, u matrix map */
-	int		*toa_diff_map,		/* INPUT, time of arrival difference map */
+	int		*tmplt_idx,		/* INPUT, the tmplt index of triggers	*/
+	int		*peak_pos,	/* INPUT, place the location of the trigger */
+	int		npeak,		/* INPUT, number of triggers */
+	float		*u_map,				/* INPUT, u matrix map */
+	float		*toa_diff_map,		/* INPUT, time of arrival difference map */
 	int		num_sky_directions,	/* INPUT, # of sky directions */
-	int		exe_len				/* INPUT, execution time length */
+	int		len,				/* INPUT, snglsnr length */
+	int		exe_len,				/* INPUT, snglsnr length */
+	int		start_exe,				/* INPUT, snglsnr start exe position */
+	float		dt,			/* INPUT, 1/ sampling rate */
+	int		templateN		/* INPUT, number of templates */
 )
 {
 	int bid	= blockIdx.x;
 	int bn	= gridDim.x;
 
 	// float	*mu;	// matrix u for certain sky direction
-	int		peak_cur;
+	int		peak_cur, tmplt_cur;
 	COMPLEX_F	dk[6];
 	int		NtOff;
 	int		map_idx;
@@ -250,32 +256,21 @@ __global__ void ker_coh_sky_map
 	float	utdka[6];
 	float	al_all = 0.0f;
 
-	for (int l = bid; l < num_triggers; l += bn)
+	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
 	{
-		peak_cur = triggers_offset0[l] - 1;
+		peak_cur = peak_pos[ipeak];
+		tmplt_cur = tmplt_idx[peak_cur];
 
-		for (int i = threadIdx.x; i < num_sky_directions; i += blockDim.x)
+		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
 		{
 			for (int j = 0; j < nifo; ++j)
 			{
-				if (iifo !=  j) 
-				{
-					if (iifo < j) 
-					{
-						map_idx = nifo * iifo + j - ((iifo + 3) * iifo >> 1) - 1;		
-						NtOff = toa_diff_map[map_idx * num_sky_directions + i];
-					} 
-					else 
-					{
-						map_idx = nifo * j + iifo - ((j + 3) * j >> 1) - 1;	
-						NtOff = -toa_diff_map[map_idx * num_sky_directions + i];
-					}
-					dk[j] = snr_all[j * exe_len + peak_cur + NtOff]; 	
-				} 
-				else 
-				{
-					dk[j] = snr_all[j * exe_len + peak_cur];
-				}
+				/* this is a simplified algorithm to get map_idx */
+				map_idx = iifo * nifo + j;
+				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
+				/* NOTE: The snr is stored channel-wise */
+				dk[j] = snr[j][((start_exe + peak_cur + NtOff + len) % len) * templateN + tmplt_cur ]; 	
+
 			}
 
 			// do the matrix vector multiplication
@@ -289,23 +284,24 @@ __global__ void ker_coh_sky_map
 					real += mu[j * nifo + k] * dk[k].x;
 					imag += mu[j * nifo + k] * dk[k].y;
 					*/
-					real += u_map[(j * nifo + k) * num_sky_directions + i] * dk[k].re;
-					imag += u_map[(j * nifo + k) * num_sky_directions + i] * dk[k].im;
+					real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
+					imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
 				}
 				utdka[j] = real * real + imag * imag;	
 			}		
 
-			coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4) / sqrt(8.0f);
+			//cohsnr_skymap[ipeak * num_sky_directions + ipix] = (2 * (utdka[0] + utdka[1]) - 4) / sqrt(8.0f);
+			cohsnr_skymap[ipeak * num_sky_directions + ipix] = utdka[0] + utdka[1];
 
 			al_all = 0.0f;
 			for (int j = 2; j < nifo; ++j)
 				al_all += utdka[j];	
-			coh_nullstream[l * num_sky_directions + i] = 1 - gser(al_all, 1.0f);
+			nullsnr_skymap[ipeak * num_sky_directions + ipix] = 1 - gser(al_all, 1.0f);
 		}
 	}
 }
 
-__global__ void ker_coh_sky_map_max_and_chisq
+__global__ void ker_coh_max_and_chisq
 (
 	float		*coh_snr,		/* OUTPUT, only save the max one, of size (num_triggers) */
 	float		*coh_nullstream,	/* OUTPUT, only save the max one, of size (num_triggers) */
@@ -528,7 +524,7 @@ __global__ void ker_coh_sky_map_max_and_chisq
 			{
 
 				chisq[peak_cur + trial_offset] = laneChi2;
-				//printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
+	//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 			}
 		}
 
@@ -545,6 +541,7 @@ void peakfinder(PostcohState *state, int iifo)
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
     PeakList *pklist = state->peak_list[iifo];
     state_reset_npeak(pklist);
+
     ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->dd_snglsnr, 
 						iifo,
 						state->snglsnr_start_exe,
@@ -553,7 +550,7 @@ void peakfinder(PostcohState *state, int iifo)
 						state->exe_len, 
 						pklist->d_maxsnglsnr, 
 						pklist->d_tmplt_idx);
-	gpuErrchk(cudaPeekAtLastError());
+   // gpuErrchk(cudaPeekAtLastError());
 
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
     ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(	pklist->d_maxsnglsnr, 
@@ -561,8 +558,8 @@ void peakfinder(PostcohState *state, int iifo)
 								state->exe_len, 
 								state->ntmplt, 
 								pklist->d_peak_tmplt);
+    //gpuErrchk(cudaPeekAtLastError());
 
-	gpuErrchk(cudaPeekAtLastError());
     ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_npeak,
 	    						pklist->d_peak_pos,	    
 		    					pklist->d_maxsnglsnr, 
@@ -571,7 +568,7 @@ void peakfinder(PostcohState *state, int iifo)
 							state->ntmplt, 
 							pklist->d_peak_tmplt,
 							state->snglsnr_thresh);
-	gpuErrchk(cudaPeekAtLastError());
+  // gpuErrchk(cudaPeekAtLastError());
 }
 
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
@@ -581,9 +578,35 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
-	if (npeak > 0) {
-		printf("num_triggers %d\n", pklist->npeak[0]);
-		ker_coh_sky_map_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
+	int mem_alloc_size = sizeof(float) * npeak * state->npix * 2;
+//	printf("alloc cohsnr_skymap size %d\n", mem_alloc_size);
+	CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
+//	CUDA_CHECK(cudaMemset(pklist->d_cohsnr_skymap, 0, mem_alloc_size));
+
+	pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + npeak * state->npix;
+	pklist->cohsnr_skymap = (float *)malloc(mem_alloc_size);
+	pklist->nullsnr_skymap = pklist->cohsnr_skymap + npeak * state->npix;
+
+	ker_coh_skymap<<<npeak, threads, sharedmem>>>(			pklist->d_cohsnr_skymap,
+									pklist->d_nullsnr_skymap,
+									state->dd_snglsnr,
+									iifo,	
+									state->nifo,
+									pklist->d_tmplt_idx,
+									pklist->d_peak_pos,
+									pklist->npeak[0],
+									state->d_U_map[gps_idx],
+									state->d_diff_map[gps_idx],
+									state->npix,
+									state->snglsnr_len,
+									state->exe_len,
+									state->snglsnr_start_exe,
+									state->dt,
+									state->ntmplt);
+						
+//	gpuErrchk(cudaPeekAtLastError());
+
+	ker_coh_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,
 									pklist->d_chisq,
 									pklist->d_pix_idx,
@@ -605,11 +628,24 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 									state->autochisq_len,
 									state->dd_autocorr_matrix,
 									state->dd_autocorr_norm,
-									state->hist_trials
-	);
-	}
+									state->hist_trials);
 
-	gpuErrchk(cudaPeekAtLastError());
+//	gpuErrchk(cudaPeekAtLastError());
+	/* copy the snr, cohsnr, nullsnr, chisq out */
+	CUDA_CHECK(cudaMemcpy(	pklist->tmplt_idx, 
+			pklist->d_tmplt_idx, 
+			sizeof(int) * (pklist->peak_intlen), 
+			cudaMemcpyDeviceToHost));
+
+	CUDA_CHECK(cudaMemcpy(	pklist->maxsnglsnr, 
+			pklist->d_maxsnglsnr, 
+			sizeof(float) * (pklist->peak_floatlen), 
+			cudaMemcpyDeviceToHost));
+
+	CUDA_CHECK(cudaMemcpy(	pklist->cohsnr_skymap, 
+			pklist->d_cohsnr_skymap, 
+			mem_alloc_size,
+			cudaMemcpyDeviceToHost));
 }
 
 

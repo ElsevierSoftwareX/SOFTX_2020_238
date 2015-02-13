@@ -11,7 +11,7 @@
 
 #define MAX_IFO_LEN 4 
 #define MAX_ALLIFO_LEN 14 
-#define MAX_SKYMAP_FNAME_LEN 20
+#define MAX_SKYMAP_FNAME_LEN 50
 typedef struct
 tagPostcohTable
 {
