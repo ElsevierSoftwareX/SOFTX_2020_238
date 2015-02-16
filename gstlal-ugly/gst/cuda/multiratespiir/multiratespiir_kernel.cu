@@ -47,6 +47,7 @@ extern "C" {
 #define NB_MAX 32
 
 // #define ORIGINAL
+#define CUT_FILTERS 0 // set to 0 to keep all the filtering results
 
 // for gpu debug
 #define gpuErrchk(stream) { gpuAssert(stream, __FILE__, __LINE__); }
@@ -494,7 +495,8 @@ __global__ void upsample2x_and_add (
 		tmp_in = in[j];
 		tmp0 += tmp_in * tmp_sinc[j];
 		tmp1 += tmp_in * tmp_sinc[j + filt_len];
-		}
+	}
+
 	  out = &(mem_out[pos_out_start + 2 * pos]);
 
 	  out[0] += tmp0;
@@ -676,7 +678,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   dim3 grid(1, 1, 1);
   uint share_mem_sz;
 
-  if (SPSTATE(i)->num_templates > 0) {
+  if (SPSTATE(i)->num_filters > CUT_FILTERS) {
 
   #ifdef ORIGINAL
   block.x = SPSTATE(i)->num_filters;
@@ -781,6 +783,10 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   #endif
 
   }
+  else {
+          cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream);
+  }
+
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
   gint resample_processed, spiir_processed;
@@ -791,7 +797,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
     spiir_processed = resample_processed * 2;
 
     update_nb(spstate, spiir_processed, i);
-    if (SPSTATE(i)->num_filters > 0) 
+    if (SPSTATE(i)->num_filters > CUT_FILTERS) 
     {
 
   /*
@@ -895,6 +901,10 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 	}	
 	#endif
     }
+  else {
+          cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream);
+  }
+
     //g_mutex_unlock(element->cuTex_lock);
 
   //  gpuErrchk (stream);
