@@ -1114,7 +1114,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
           cuda_multirate_spiir_push_drain (element, adapter_len);
 	}
 
-        spiir_state_reset (element->spstate, element->num_depths, element->stream);
+        //spiir_state_reset (element->spstate, element->num_depths, element->stream);
       }
 
       break;

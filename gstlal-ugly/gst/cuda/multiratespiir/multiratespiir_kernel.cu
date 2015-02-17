@@ -38,7 +38,7 @@ extern "C" {
 #include "multiratespiir.h"
 #include "multiratespiir_utils.h"
 #include "spiir_state_macro.h"
-
+#include <cuda_debug.h>
 #ifdef __cplusplus
 }
 #endif
@@ -537,17 +537,17 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
   if (SPSTATE(0)->queue_last_sample + num_inchunk <= SPSTATE(0)->queue_len) {
 
     pos_inqueue = SPSTATE(0)->d_queue + SPSTATE(0)->queue_last_sample;
-    cudaMemcpyAsync(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice, stream);
+    CUDA_CHECK(cudaMemcpyAsync(pos_inqueue, in_multidown, num_inchunk * sizeof(float), cudaMemcpyHostToDevice, stream));
 
   } else {
 
     int num_tail_samples = SPSTATE(0)->queue_len - SPSTATE(0)->queue_last_sample;
     pos_inqueue = SPSTATE(0)->d_queue + SPSTATE(0)->queue_last_sample;
-    cudaMemcpyAsync(pos_inqueue, in_multidown, num_tail_samples * sizeof(float), cudaMemcpyHostToDevice, stream);
+    CUDA_CHECK(cudaMemcpyAsync(pos_inqueue, in_multidown, num_tail_samples * sizeof(float), cudaMemcpyHostToDevice, stream));
 
     int num_head_samples = num_inchunk - num_tail_samples;
     pos_inqueue = SPSTATE(0)->d_queue;
-    cudaMemcpyAsync(pos_inqueue, in_multidown + num_tail_samples, num_head_samples * sizeof(float), cudaMemcpyHostToDevice, stream);
+    CUDA_CHECK(cudaMemcpyAsync(pos_inqueue, in_multidown + num_tail_samples, num_head_samples * sizeof(float), cudaMemcpyHostToDevice, stream));
   }
 
   /* the following parameters should be updated each time of downsample :
@@ -724,7 +724,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 		int mem_len = SPSTATEUP(i)->mem_len;
 		int spiir_grid	= numTemplates;	
 		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
-        cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates);
+        CUDA_CHECK(cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates));
 		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
 		(
 			SPSTATE(i)->d_a1,
@@ -784,7 +784,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
   }
   else {
-          cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream);
+          CUDA_CHECK(cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream));
   }
 
   SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
@@ -843,7 +843,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 		int mem_len = SPSTATEUP(i)->mem_len;
 		int spiir_grid	= numTemplates;	
 		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
-        cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates);
+        CUDA_CHECK(cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates));
 		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
 		(
 			SPSTATE(i)->d_a1,
@@ -902,7 +902,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 	#endif
     }
   else {
-          cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream);
+          CUDA_CHECK(cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream));
   }
 
     //g_mutex_unlock(element->cuTex_lock);
@@ -936,7 +936,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
   }
 
  
-  cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream);
+  CUDA_CHECK(cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,  SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream));
 //  gpuErrchk (stream);
   return spiir_processed;
 }

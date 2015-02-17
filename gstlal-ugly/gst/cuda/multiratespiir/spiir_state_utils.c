@@ -39,6 +39,7 @@ extern "C" {
 #include "spiir_state_macro.h"
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <cuda_runtime.h>
+#include <cuda_debug.h>
 
 #ifdef __cplusplus
 }
@@ -339,11 +340,11 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
 	  state->sinc_len = state->filt_len * den_rate;
 
 
-	  cudaMalloc((void **) &(state->d_sinc_table), sizeof(float) * state->sinc_len);
+	  CUDA_CHECK(cudaMalloc((void **) &(state->d_sinc_table), sizeof(float) * state->sinc_len));
 	  float *sinc_table = (float *)malloc (sizeof(float) * state->sinc_len);
 	  /* Sinc function Generator */
 	  sinc_function(sinc_table, state->filt_len, cutoff, den_rate, DOWN_QUALITY);
-          cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream);
+          CUDA_CHECK(cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream));
   	  free(sinc_table);
 	  sinc_table = NULL;
 
@@ -355,12 +356,12 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
        	  state->filt_len = quality_map[UP_QUALITY].base_length;
 	  state->sinc_len = state->filt_len * den_rate;
 
-	  cudaMalloc((void **) &(state->d_sinc_table), sizeof(float) * state->sinc_len);
+	  CUDA_CHECK(cudaMalloc((void **) &(state->d_sinc_table), sizeof(float) * state->sinc_len));
 	  float *sinc_table = (float *)malloc (sizeof(float) * state->sinc_len);
 	  /* Sinc function Generator */
 	  sinc_function(sinc_table, state->filt_len, cutoff, den_rate, UP_QUALITY);
 //	  psinc_function(sinc_table, state->filt_len, resolution);
-          cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream);
+          CUDA_CHECK(cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream));
  	  free(sinc_table);
 	  sinc_table = NULL;
 
@@ -372,10 +373,10 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
 
 	state->mem_len = state->filt_len - 1 + num_alloc_samples;
 	mem_alloc_size = state->mem_len * channels * sizeof(float);
-	cudaMalloc((void **) &(state->d_mem), mem_alloc_size);
+	CUDA_CHECK(cudaMalloc((void **) &(state->d_mem), mem_alloc_size));
 
 //	state->mem = (float *)malloc(mem_alloc_size);
-	cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream);
+	CUDA_CHECK(cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream));
 	state->last_sample = state->filt_len/2;
 //	GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
 //	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
@@ -386,7 +387,7 @@ void
 resampler_state_reset (ResamplerState *state, cudaStream_t stream)
 {
 	gint mem_alloc_size = state->mem_len * state->channels * sizeof(float);
-	cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream);
+	CUDA_CHECK(cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream));
 	state->last_sample = state->filt_len/2;
 
 }
@@ -509,16 +510,16 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 			}
 		}
 		spstate[i]->delay_max = tmp_max;
-		cudaMalloc((void **) &(spstate[i]->d_a1), eff_len * sizeof (COMPLEX_F));
-		cudaMemcpyAsync(spstate[i]->d_a1, tmp_a1, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
-		cudaMalloc((void **) &(spstate[i]->d_b0), eff_len * sizeof (COMPLEX_F));
-		cudaMemcpyAsync(spstate[i]->d_b0, tmp_b0, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream);
-		cudaMalloc((void **) &(spstate[i]->d_d), eff_len * sizeof (int));
-		cudaMemcpyAsync(spstate[i]->d_d, tmp_d, eff_len * sizeof(int), cudaMemcpyHostToDevice, stream);
+		CUDA_CHECK(cudaMalloc((void **) &(spstate[i]->d_a1), eff_len * sizeof (COMPLEX_F)));
+		CUDA_CHECK(cudaMemcpyAsync(spstate[i]->d_a1, tmp_a1, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream));
+		CUDA_CHECK(cudaMalloc((void **) &(spstate[i]->d_b0), eff_len * sizeof (COMPLEX_F)));
+		CUDA_CHECK(cudaMemcpyAsync(spstate[i]->d_b0, tmp_b0, eff_len * sizeof(COMPLEX_F), cudaMemcpyHostToDevice, stream));
+		CUDA_CHECK(cudaMalloc((void **) &(spstate[i]->d_d), eff_len * sizeof (int)));
+		CUDA_CHECK(cudaMemcpyAsync(spstate[i]->d_d, tmp_d, eff_len * sizeof(int), cudaMemcpyHostToDevice, stream));
 
-		cudaMalloc((void **) &(spstate[i]->d_y), eff_len * sizeof (COMPLEX_F));
+		CUDA_CHECK(cudaMalloc((void **) &(spstate[i]->d_y), eff_len * sizeof (COMPLEX_F)));
 
-		cudaMemsetAsync(spstate[i]->d_y, 0, eff_len * sizeof(COMPLEX_F), stream);
+		CUDA_CHECK(cudaMemsetAsync(spstate[i]->d_y, 0, eff_len * sizeof(COMPLEX_F), stream));
 	
 		freeArray(d_array + i);
 		freeArray(a_array + i);
@@ -578,8 +579,8 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 		SPSTATE(i)->queue_first_sample = 0;
 		SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 		queue_alloc_size = SPSTATE(i)->queue_len* sizeof(float);
-		cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size);
-		cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream);
+		CUDA_CHECK(cudaMalloc((void **) &(SPSTATE(i)->d_queue), queue_alloc_size));
+		CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream));
 
 	}
 
@@ -752,7 +753,7 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
   {
     SPSTATE(i)->pre_out_spiir_len = 0;
 
-    cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream);
+    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream));
 
     SPSTATE(i)->queue_first_sample = 0;
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
