@@ -484,15 +484,16 @@ __global__ void ker_coh_max_and_chisq
 		}
 		*/
 #if 1
-		COMPLEX_F data, tmp_snr, tmp_autocorr;
-		float laneChi2 = 0.0f, tmp_maxsnr;
+		COMPLEX_F data, tmp_snr, tmp_autocorr, tmp_maxsnr;
+		float laneChi2 = 0.0f;
 		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
+		chisq[peak_cur + trial_offset] = 0.0;
 		if (wID == 0)
 		{
 			for (int j = 0; j < nifo; ++j)
 			{
-				data.re = data.im = 0.0f; 
+				laneChi2 = 0.0f;
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
@@ -501,31 +502,33 @@ __global__ void ker_coh_max_and_chisq
 				else
 					peak_pos_tmp = start_exe + peak_cur + NtOff - trial_offset + len;
 
+				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * templateN + tmplt_cur];
 				for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
 					tmp_snr = snr[j][((peak_pos_tmp + ishift + len) % len) * templateN + tmplt_cur];
 					tmp_autocorr = autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len];
-					tmp_maxsnr =  maxsnglsnr[peak_cur]; 	
-					data.re += tmp_snr.re - tmp_maxsnr * tmp_autocorr.re;
-					data.im += tmp_snr.im - tmp_maxsnr * tmp_autocorr.im;
-//					printf("autocorr_matrix %d, tmplt %d, [%d]: %f, %f\n", j, tmplt_cur, ishift + autochisq_half_len, tmp_autocorr.re, tmp_autocorr.im);
+					data.re = tmp_snr.re - tmp_maxsnr.re * tmp_autocorr.re + tmp_maxsnr.im * tmp_autocorr.im;
+					data.im = tmp_snr.im - tmp_maxsnr.re * tmp_autocorr.im - tmp_maxsnr.im * tmp_autocorr.re;
+					laneChi2 += (data.re * data.re + data.im * data.im);	
+//						printf("autocorr_matrix %d, tmplt %d, max_snr %f, %f, [%d]: %f, %f. snr.re %f, snr.im %f\n", j, tmplt_cur, tmp_maxsnr.re, tmp_maxsnr.im, ishift + autochisq_half_len, tmp_autocorr.re, tmp_autocorr.im, tmp_snr.re, tmp_snr.im);
 				}
-				laneChi2 += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];	
+				for (int k = WARP_SIZE >> 1; k > 0; k = k >> 1)
+				{
+					laneChi2 += __shfl_xor(laneChi2, k, WARP_SIZE);
+				}
+
 //				printf("autocorr addr %p, autocorr_norm %d: addr %p, %f\n", autocorr_matrix[j], j, autocorr_norm[j], autocorr_norm[j][tmplt_cur]);
+				if (srcLane == 0)
+				{
+
+					chisq[peak_cur + trial_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
+		//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
+				}
+
 			}
 
-			for (int j = WARP_SIZE >> 1; j > 0; j = j >> 1)
-			{
-				laneChi2 += __shfl_xor(laneChi2, j, WARP_SIZE);
-			}
 
-			if (srcLane == 0)
-			{
-
-				chisq[peak_cur + trial_offset] = laneChi2;
-	//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
-			}
 		}
 
 		__syncthreads();
