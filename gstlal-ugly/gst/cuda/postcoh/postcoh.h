@@ -173,6 +173,7 @@ struct _CudaPostcoh {
   GMutex *prop_lock;
   GCond *prop_avail;
   gint hist_trials;
+  gint output_skymap;
 
   /* sink event handling */
   GstPadEventFunction collect_event;

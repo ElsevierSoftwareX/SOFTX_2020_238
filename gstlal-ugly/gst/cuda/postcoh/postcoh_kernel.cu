@@ -183,6 +183,11 @@ ker_remove_duplicate_scan
     int     templ;
 
     unsigned int index;
+    /* make sure npeak is 0 at the beginning */
+    if (tid == 0)
+	    npeak[0] = 0;
+    __syncthreads();
+
     for (int i = tid; i < timeN; i += tn)
     {
         snr     = ressnr[i];
@@ -543,7 +548,7 @@ void peakfinder(PostcohState *state, int iifo)
     int THREAD_BLOCK    = 256;
     int GRID            = (state->exe_len * 32 + THREAD_BLOCK - 1) / THREAD_BLOCK;
     PeakList *pklist = state->peak_list[iifo];
-    state_reset_npeak(pklist);
+//    state_reset_npeak(pklist);
 
     ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->dd_snglsnr, 
 						iifo,
@@ -575,12 +580,13 @@ void peakfinder(PostcohState *state, int iifo)
 }
 
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
-void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
+void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap)
 {
 	int threads = 1024;
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
+	if (output_skymap) {
 	int mem_alloc_size = sizeof(float) * npeak * state->npix * 2;
 //	printf("alloc cohsnr_skymap size %d\n", mem_alloc_size);
 	CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
@@ -608,6 +614,12 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 									state->ntmplt);
 						
 //	gpuErrchk(cudaPeekAtLastError());
+	CUDA_CHECK(cudaMemcpy(	pklist->cohsnr_skymap, 
+			pklist->d_cohsnr_skymap, 
+			mem_alloc_size,
+			cudaMemcpyDeviceToHost));
+
+	}
 
 	ker_coh_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,
@@ -645,10 +657,6 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx)
 			sizeof(float) * (pklist->peak_floatlen), 
 			cudaMemcpyDeviceToHost));
 
-	CUDA_CHECK(cudaMemcpy(	pklist->cohsnr_skymap, 
-			pklist->d_cohsnr_skymap, 
-			mem_alloc_size,
-			cudaMemcpyDeviceToHost));
 }
 
 

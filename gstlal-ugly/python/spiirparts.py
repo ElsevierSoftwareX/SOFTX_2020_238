@@ -278,9 +278,9 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	assert any(triggersrcs.values())
 	return triggersrcs
 
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0):
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0):
 
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh)))
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap)))
 	if "name" in properties:
 		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
 	else:

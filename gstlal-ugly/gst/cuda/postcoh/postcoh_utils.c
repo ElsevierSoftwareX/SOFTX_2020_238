@@ -59,6 +59,8 @@ PeakList *create_peak_list(PostcohState *state)
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
 		CUDA_CHECK(cudaMemset(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt));
 
+		pklist->d_cohsnr_skymap = NULL;
+		pklist->cohsnr_skymap = NULL;
 		return pklist;
 }
 
@@ -303,18 +305,16 @@ peak_list_destroy(PeakList *pklist)
 	
 	CUDA_CHECK(cudaFree(pklist->d_tmplt_idx));
 	CUDA_CHECK(cudaFree(pklist->d_maxsnglsnr));
-	CUDA_CHECK(cudaFree(pklist->d_cohsnr_skymap));
 	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
 
 	free(pklist->tmplt_idx);
 	free(pklist->maxsnglsnr);
-	free(pklist->cohsnr_skymap);
 }
 
 void
 state_reset_npeak(PeakList *pklist)
 {
-	//printf("d_npeak %p\n", pklist->d_npeak);
+	printf("d_npeak %p\n", pklist->d_npeak);
 	CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
 	pklist->npeak[0] = 0;
 }

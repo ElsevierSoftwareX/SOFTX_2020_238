@@ -88,6 +88,7 @@ enum
 	PROP_DETRSP_FNAME,
 	PROP_AUTOCORRELATION_FNAME,
 	PROP_HIST_TRIALS,
+	PROP_OUTPUT_SKYMAP,
 	PROP_SNGLSNR_THRESH
 };
 
@@ -122,6 +123,11 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			g_mutex_unlock(element->prop_lock);
 			break;
 
+		case PROP_OUTPUT_SKYMAP:
+			element->output_skymap = g_value_get_int(value);
+			break;
+
+
 		case PROP_SNGLSNR_THRESH:
 			element->snglsnr_thresh = g_value_get_float(value);
 			element->state->snglsnr_thresh = element->snglsnr_thresh;
@@ -151,6 +157,10 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 
 		case PROP_HIST_TRIALS:
 			g_value_set_int(value, element->hist_trials);
+			break;
+
+		case PROP_OUTPUT_SKYMAP:
+			g_value_set_int(value, element->output_skymap);
 			break;
 
 		case PROP_SNGLSNR_THRESH:
@@ -737,8 +747,6 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d", iifo, npeak);
 		int peak_cur;
-		GString *filename = NULL;
-		FILE *file = NULL;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			XLALINT8NSToGPS(&(end_time[ipeak]), ts);
 			int *peak_pos = pklist->peak_pos;
@@ -756,6 +764,9 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			output->cohsnr = pklist->cohsnr[peak_cur];
 			output->nullsnr = pklist->nullsnr[peak_cur];
 			output->chisq = pklist->chisq[peak_cur];
+			if (postcoh->output_skymap) {
+			GString *filename = NULL;
+			FILE *file = NULL;
 			filename = g_string_new(output->ifos);
 			g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds);
 			g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
@@ -766,6 +777,8 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			fclose(file);
 			file = NULL;
 			g_string_free(filename, TRUE);
+			} else
+				output->skymap_fname[0] = '\0';
 			output++;
 		}
 
@@ -874,7 +887,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 					cudaMemcpyDeviceToHost);
 
 			if (state->peak_list[cur_ifo]->npeak[0] > 0) {
-				cohsnr_and_chisq(state, cur_ifo, gps_idx);
+				cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
 			}
 
 			/* move along */
@@ -1084,6 +1097,19 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_OUTPUT_SKYMAP,
+		g_param_spec_int(
+			"output-skymap",
+			"if output skymap",
+			"if output skymap",
+			0, 1, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
 
 	g_object_class_install_property(
 		gobject_class,
