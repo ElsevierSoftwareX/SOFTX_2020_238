@@ -22,9 +22,10 @@ To compute the template per core throughput
 
 \f$ \mathcal{T}_{100 \%} = N_t * T_d / T_w / N_c \f$
 
-Where \f$ N_t = \f$ the number of paralell templates (800 times the number of parallel jobs that run with -j)  \f$ T_d = 5000s \, T_w =\f$ the number "real" seconds \f$ N_c = \f$ the number of cores on the machine
+Where \f$ N_t = \f$ the number of parallel templates (800 times the number of parallel jobs that run with -j)  \f$ T_d = 5000s \, T_w =\f$ the number "real" seconds \f$ N_c = \f$ the number of cores on the machine
 
-- \ref gstlalinspiralprofileXeon_E5-2699_v3_SL7_page
 - \ref gstlalinspiralprofileXeon_E3-1271_Ubuntu-14_04_page
+- \ref gstlalinspiralprofileXeon_E5-2699_v3_SL7_page
 - \ref gstlalinspiralprofileXeon_E5-2670_SL6_page
 - \ref gstlalinspiralprofileXeon_E5-2670_SL6_icc_page
+- \ref gstlalinspiralprofileNVIDIA_K4000_page

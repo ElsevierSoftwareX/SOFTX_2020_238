@@ -1,16 +1,21 @@
+# FORCE FFTW
+export LD_PRELOAD=/usr/lib64/libfftw3.so:/usr/lib64/libfftw3f.so
+
 unset GST_PLUGIN_PATH PYTHONPATH
-unset LD_LIBRARY_PATH LIBRARY_PATH
 
 LAL_PATH=${PWD}/opt
 DEPENDENCIES_PATH=${PWD}/dep
 INSTALL_FILES_PATH=${PWD}/install
 
-export CFLAGS="-fPIC -O3 -march=native"
+export CFLAGS="-O3 -march=corei7-avx -mtune=corei7-avx -mavx  -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings"
+export LDFLAGS="-L${MKLROOT}/lib/intel64"
+export CC="icc"
+export CXX="icpc"
 
 # These are environment variables that do get exported
 PATH=${LAL_PATH}/bin:${DEPENDENCIES_PATH}/bin:$PATH
 PKG_CONFIG_PATH=${LAL_PATH}/lib/pkgconfig:${LAL_PATH}/lib64/pkgconfig:${DEPENDENCIES_PATH}/lib/pkgconfig:${DEPENDENCIES_PATH}/lib64/pkgconfig:$PKG_CONFIG_PATH
-PYTHONPATH=${LAL_PATH}/lib/python2.6/site-packages:${LAL_PATH}/lib64/python2.6/site-packages:${DEPENDENCIES_PATH}/lib/python2.6/site-packages:${DEPENDENCIES_PATH}/lib64/python2.6/site-packages
+PYTHONPATH=${LAL_PATH}/lib/python2.7/site-packages:${LAL_PATH}/lib64/python2.7/site-packages:${DEPENDENCIES_PATH}/lib/python2.7/site-packages:${DEPENDENCIES_PATH}/lib64/python2.7/site-packages
 GST_PLUGIN_PATH=${LAL_PATH}/lib/gstreamer-0.10:${LAL_PATH}/lib64/gstreamer-0.10:${DEPENDENCIES_PATH}/lib/gstreamer-0.10:${DEPENDENCIES_PATH}/lib64/gstreamer-0.10
 GST_REGISTRY=${LAL_PATH}/registry.$(uname -m).bin
 
