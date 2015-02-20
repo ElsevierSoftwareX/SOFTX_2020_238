@@ -113,6 +113,14 @@ def mergetime(M):
 	r = 9.0 * G * M / c**2
 	return norbits * (2.0 * pi * r / v)
 
+def overestimate_j_from_chi(chi):
+	"""
+	Overestimate final black hole spin
+	formula is roughly based on
+	Tichy and Marronetti Physical Review D 78 081501 (2008)
+	"""
+	return max(0.686 + 0.15 * chi, chi)
+
 def imr_time(f, m1, m2, j1, j2, f_max = None):
 	"""
 	Returns an overestimate of the inspiral time and the
@@ -135,10 +143,7 @@ def imr_time(f, m1, m2, j1, j2, f_max = None):
 	# overestimate chi:
 	chi = max(j1, j2)
 
-	# overestimate final black hole spin
-	# formula is roughly based on
-	# Tichy and Marronetti Physical Review D 78 081501 (2008)
-	j = max(0.686 + 0.15 * chi, chi)
+	j = overestimate_j_from_chi(chi)
 
 	if f > ringf(M, j):
 		warnings.warn("f is greater than the ringdown frequency. This might not be what you intend to compute")
