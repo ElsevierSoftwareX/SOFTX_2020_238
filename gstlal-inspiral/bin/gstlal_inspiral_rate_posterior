@@ -29,6 +29,7 @@
 #
 
 
+import bisect
 try:
 	from fpconst import NegInf
 except ImportError:
@@ -55,6 +56,7 @@ import sqlite3
 import sys
 
 
+from glue import segments
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
