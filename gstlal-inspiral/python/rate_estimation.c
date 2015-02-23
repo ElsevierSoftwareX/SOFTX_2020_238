@@ -70,22 +70,21 @@ static void condition(double *ln_f_over_b, int n)
  */
 
 
-static double compute_log_prior(double Rf, double Rb)
+static double log_prior(double Rf, double Rb)
 {
 	return -0.5 * log(Rf * Rb);
 }
 
 
-static double compute_log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
+static double log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
 {
 	double ln_Rf_over_Rb = log(Rf / Rb);
 	int i;
-	double ln_P;
+	double ln_P = 0.;
 
 	if(Rf < 0. || Rb < 0.)
 		return atof("-inf");
 
-	ln_P = 0.;
 	#pragma omp parallel for reduction(+:ln_P)
 	for(i = 0; i < n; i++) {
 		/*
@@ -108,20 +107,7 @@ static double compute_log_posterior(const double *ln_f_over_b, int n, double Rf,
 	}
 	ln_P += n * log(Rb) - (Rf + Rb);
 
-	return ln_P + compute_log_prior(Rf, Rb);
-}
-
-
-/*
- * compute_log_posterior() / 2.  to improve the measurement of the tails of
- * the PDF using the MCMC sampler, we draw from the square root of the PDF
- * and then correct the histogram of the samples.
- */
-
-
-static double compute_log_sqrt_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
-{
-	return compute_log_posterior(ln_f_over_b, n, Rf, Rb) / 2.;
+	return ln_P + log_prior(Rf, Rb);
 }
 
 
@@ -221,7 +207,13 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 	if(!PyArg_ParseTuple(args, "(dd)", &Rf, &Rb))
 		return NULL;
 
-	return PyFloat_FromDouble(compute_log_sqrt_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb));
+	/*
+	 * return log_posterior() / 2.  to improve the measurement of the
+	 * tails of the PDF using the MCMC sampler, we draw from the square
+	 * root of the PDF and then correct the histogram of the samples.
+	 */
+
+	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb) / 2.);
 }
 
 
