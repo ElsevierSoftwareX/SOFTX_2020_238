@@ -30,8 +30,14 @@
 #include <stdlib.h>
 
 
+#include <gsl/gsl_integration.h>
+
+
 #include <Python.h>
 #include <numpy/arrayobject.h>
+
+
+#define GSL_WORKSPACE_SIZE  8
 
 
 /*
@@ -83,7 +89,23 @@ static double log_prior(double Rf, double Rb)
  */
 
 
-static double log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
+struct integrand_data_t {
+	const double *ln_f_over_b;
+	double ln_Rf_over_Rb;
+};
+
+
+static double integrand(double i, void *data)
+{
+	const struct integrand_data_t *integrand_data = data;
+	double ln_x = integrand_data->ln_Rf_over_Rb + integrand_data->ln_f_over_b[(int) floor(i)];
+	if(ln_x > 33.)
+		return ln_x;
+	return log1p(exp(ln_x));
+}
+
+
+static double log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb, gsl_integration_cquad_workspace *workspace)
 {
 	double ln_Rf_over_Rb = log(Rf / Rb);
 	int i;
@@ -92,28 +114,58 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 	if(Rf < 0. || Rb < 0.)
 		return atof("-inf");
 
-	#pragma omp parallel for reduction(+:ln_P)
-	for(i = 0; i < n; i++) {
-		/*
-		 * need to add log(Rf f / (Rb b) + 1) to sum.  if x = Rf f
-		 * / (Rb b) is larger than about 10^14 the +1 is irrelevant
-		 * and we can approximate ln(x + 1) with ln(x).  for
-		 * smaller x we use log1p(x) to evaluate the exprsesion.
-		 * for intermediate x we approximate ln(x + 1) with
-		 *
-		 *	ln(x + 1) = ln x + 2 X + 2 X^3 / 3
-		 *
-		 * where X = 1 / (2 x + 1).  for x > 1100 this gives 15
-		 * correct digits or more.
-		 */
+	/*
+	 * need to compute sum of log(Rf f / (Rb b) + 1).  if x = Rf f /
+	 * (Rb b) is larger than about 10^15 the +1 is irrelevant and we
+	 * can approximate ln(x + 1) with ln(x).  for smaller x we use
+	 * log1p(x) to evaluate the exprsesion.  for intermediate x we
+	 * approximate ln(x + 1) with
+	 *
+	 *	ln(x + 1) = ln x + 2 X + 2 X^3 / 3
+	 *
+	 * where X = 1 / (2 x + 1).  for x > 1100 this gives 15 correct
+	 * digits or more.
+	 *
+	 * experience shows that the array of f/b values contains many very
+	 * similar entries at the lower end of its range, so we sort the
+	 * array and by treating the array as a function of its index use a
+	 * numerical integration scheme to obtain the sum.  we do this for
+	 * the bottom 90% of the array, and the top 10% is treated
+	 * explicitly to capture the more rapid sample-to-sample variation.
+	 */
 
+	/*
+	 * first do the numerical interal for the bottom part of the array
+	 */
+
+	i = 0.99 * n;
+	if(i) {
+		/*
+		 * for these entries, compute the sum of log(Rf f / (Rb b)
+		 * + 1) by approximating it with a numerical integration
+		 * of the exact addend
+		 */
+		gsl_function _integrand = {
+			.function = integrand,
+			.params = &(struct integrand_data_t) {
+				.ln_f_over_b = ln_f_over_b,
+				.ln_Rf_over_Rb = ln_Rf_over_Rb
+			}
+		};
+		gsl_integration_cquad(&_integrand, 0, i * (1. - 1e-16), 0., 1e-8, workspace, &ln_P, NULL, NULL);
+	}
+
+	/*
+	 * now compute the sum of log(Rf f / (Rb b) + 1) for the remaining
+	 * entries with an explicit loop but using approximations
+	 * (described above) for cases in which the addend is large
+	 */
+
+	for(; i < n; i++) {
 		double ln_x = ln_Rf_over_Rb + ln_f_over_b[i];
 		if(ln_x > 33.)	/* ~= log(10^14) */
 			ln_P += ln_x;
-		else if(ln_x > 7) {	/* ~= log(1100) */
-			double one_over_2x_p_1 = 1. / (2. * exp(ln_x) + 1.);
-			ln_P += ln_x + 2. * one_over_2x_p_1 * (1. + one_over_2x_p_1 * one_over_2x_p_1 / 3.);
-		} else
+		else
 			ln_P += log1p(exp(ln_x));
 	}
 
@@ -155,6 +207,7 @@ struct posterior {
 
 	double *ln_f_over_b;
 	int ln_f_over_b_len;
+	gsl_integration_cquad_workspace *workspace;
 };
 
 
@@ -170,6 +223,8 @@ static void __del__(PyObject *self)
 	free(posterior->ln_f_over_b);
 	posterior->ln_f_over_b = NULL;
 	posterior->ln_f_over_b_len = 0;
+	gsl_integration_cquad_workspace_free(posterior->workspace);
+	posterior->workspace = NULL;
 
 	self->ob_type->tp_free(self);
 }
@@ -206,6 +261,8 @@ static int __init__(PyObject *self, PyObject *args, PyObject *kwds)
 
 	condition(posterior->ln_f_over_b, posterior->ln_f_over_b_len);
 
+	posterior->workspace = gsl_integration_cquad_workspace_alloc(GSL_WORKSPACE_SIZE);
+
 	return 0;
 }
 
@@ -233,7 +290,7 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 	 * root of the PDF and then correct the histogram of the samples.
 	 */
 
-	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb) / 2.);
+	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb, posterior->workspace) / 2.);
 }
 
 

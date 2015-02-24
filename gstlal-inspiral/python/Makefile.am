@@ -28,6 +28,6 @@ pkgpython_PYTHON = \
 pkgpyexec_LTLIBRARIES = _rate_estimation.la
 
 _rate_estimation_la_SOURCES = rate_estimation.c
-_rate_estimation_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) $(OPENMP_CFLAGS) -DMODULE_NAME="\"gstlal._rate_estimation\""
-_rate_estimation_la_CFLAGS = $(AM_CFLAGS) -DMODULE_NAME="\"gstlal._rate_estimation\""
-_rate_estimation_la_LDFLAGS = $(AM_LDFLAGS) $(PYTHON_LDFLAGS) $(OPENMP_CFLAGS) -module -avoid-version
+_rate_estimation_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal._rate_estimation\""
+_rate_estimation_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) -DMODULE_NAME="\"gstlal._rate_estimation\""
+_rate_estimation_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(PYTHON_LDFLAGS) -module -avoid-version
