@@ -330,7 +330,8 @@ __global__ void ker_coh_max_and_chisq
 	int		autochisq_len,		/* INPUT, auto-chisq length */
 	COMPLEX_F	**autocorr_matrix,	/* INPUT, autocorrelation matrix for all templates */
 	float		**autocorr_norm,	/* INPUT, autocorrelation normalization matrix for all templates */
-	int		hist_trials		/* INPUT, trial number */
+	int		hist_trials,		/* INPUT, trial number */
+	int		trial_sample_inv		/* INPUT, trial interval in samples */
 )
 {
 	int bid	= blockIdx.x;
@@ -358,7 +359,7 @@ __global__ void ker_coh_max_and_chisq
 	float	snr_max			= 0.0f, snr_tmp;
 	float	nullstream_max, nullstream_max_tmp;
 	int	sky_idx, sky_idx_tmp;	
-	int	i, i2, itrial, trial_offset;
+	int	i, i2, itrial, trial_offset, output_offset;
 
 	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
 	{
@@ -367,7 +368,8 @@ __global__ void ker_coh_max_and_chisq
 
 		for(itrial=0; itrial<=hist_trials; itrial++) {
 			snr_max = 0.0;
-			trial_offset = itrial * exe_len;
+			trial_offset = itrial * trial_sample_inv;
+			output_offset = itrial * exe_len;
 		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
 		{
 			// matrix u is stored in column order
@@ -398,13 +400,13 @@ __global__ void ker_coh_max_and_chisq
 				}
 				utdka[j] = real * real + imag * imag;	
 			}	
-		// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
+			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
-			if (ipix < 10) {
-			printf("ipix %d, dk[0].re %f, dk[0].im %f," 
+			if (ipix < 2) {
+			printf("ipeak %d, trial %d, dk[0].re %f, dk[0].im %f," 
 					"dk[1].re %f, dk[1].im %f, dk[2].re %f, dk[2].im %f,"
-					"snr %f\n", ipix, dk[0].re, dk[0].im,
+					"snr %f\n", ipeak, itrial, dk[0].re, dk[0].im,
 				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_tmp);
 			}
 #endif
@@ -455,6 +457,8 @@ __global__ void ker_coh_max_and_chisq
 					snr_shared[threadIdx.x] = snr_tmp;
 					nullstream_shared[threadIdx.x] = nullstream_shared[threadIdx.x + i];
 					sky_idx_shared[threadIdx.x] = sky_idx_shared[threadIdx.x + i];
+					//if (ipeak < 1)
+					//	printf("ipeak %d, itrial %d, threadIdx.x %d, sky_idx %d\n", ipeak, itrial, threadIdx.x, sky_idx_shared[threadIdx.x]);
 				}
 
 			}	
@@ -463,9 +467,9 @@ __global__ void ker_coh_max_and_chisq
 		}
 		if (threadIdx.x == 0)
 		{
-			coh_snr[peak_cur + trial_offset]			= snr_shared[0];
-			coh_nullstream[peak_cur + trial_offset]	= nullstream_shared[0];
-			pix_idx[peak_cur + trial_offset]		= sky_idx_shared[0]; 			
+			coh_snr[peak_cur + output_offset]			= snr_shared[0];
+			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
+			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
 
 		}
 		__syncthreads();
@@ -493,7 +497,7 @@ __global__ void ker_coh_max_and_chisq
 		float laneChi2 = 0.0f;
 		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
-		chisq[peak_cur + trial_offset] = 0.0;
+		chisq[peak_cur + output_offset] = 0.0;
 		if (wID == 0)
 		{
 			for (int j = 0; j < nifo; ++j)
@@ -527,7 +531,7 @@ __global__ void ker_coh_max_and_chisq
 				if (srcLane == 0)
 				{
 
-					chisq[peak_cur + trial_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
+					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
 		//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 				}
 
@@ -643,7 +647,8 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->autochisq_len,
 									state->dd_autocorr_matrix,
 									state->dd_autocorr_norm,
-									state->hist_trials);
+									state->hist_trials,
+									state->trial_sample_inv);
 
 //	gpuErrchk(cudaPeekAtLastError());
 	/* copy the snr, cohsnr, nullsnr, chisq out */

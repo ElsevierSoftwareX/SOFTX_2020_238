@@ -88,6 +88,7 @@ enum
 	PROP_DETRSP_FNAME,
 	PROP_AUTOCORRELATION_FNAME,
 	PROP_HIST_TRIALS,
+	PROP_TRIAL_INTERVAL,
 	PROP_OUTPUT_SKYMAP,
 	PROP_SNGLSNR_THRESH
 };
@@ -123,6 +124,14 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			g_mutex_unlock(element->prop_lock);
 			break;
 
+		case PROP_TRIAL_INTERVAL:
+			g_mutex_lock(element->prop_lock);
+			element->trial_interval = g_value_get_float(value);
+			g_cond_broadcast(element->prop_avail);
+			g_mutex_unlock(element->prop_lock);
+			break;
+
+
 		case PROP_OUTPUT_SKYMAP:
 			element->output_skymap = g_value_get_int(value);
 			break;
@@ -157,6 +166,10 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 
 		case PROP_HIST_TRIALS:
 			g_value_set_int(value, element->hist_trials);
+			break;
+
+		case PROP_TRIAL_INTERVAL:
+			g_value_set_float(value, element->trial_interval);
 			break;
 
 		case PROP_OUTPUT_SKYMAP:
@@ -383,16 +396,17 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	postcoh->preserved_len = state->autochisq_len + 160; 
 	postcoh->exe_len = postcoh->rate;
 
+	state->exe_len = postcoh->rate;
 	state->head_len = postcoh->preserved_len / 2;
-	state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * postcoh->exe_len;
+	state->trial_sample_inv = round(postcoh->trial_interval * postcoh->rate);
+	state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * state->trial_sample_inv;
 	state->hist_trials = postcoh->hist_trials;
-	state->snglsnr_start_load = postcoh->hist_trials * postcoh->exe_len;
+	state->snglsnr_start_load = postcoh->hist_trials * state->trial_sample_inv;
 	state->snglsnr_start_exe = state->snglsnr_start_load + state->head_len;
 
 	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d", state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe);
 
 	state->ntmplt = postcoh->channels/2;
-	state->exe_len = postcoh->rate;
 	cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo);
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
@@ -803,7 +817,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 		       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 				output->pivotal_ifo[2] = '\0';
 				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
-				output->pix_idx = pklist->pix_idx[peak_cur];
+				output->pix_idx = pklist->pix_idx[itrial*exe_len + peak_cur];
 				output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
 				output->cohsnr = pklist->cohsnr[itrial*exe_len + peak_cur];
 				output->nullsnr = pklist->nullsnr[itrial*exe_len + peak_cur];
@@ -1092,11 +1106,24 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 		g_param_spec_int(
 			"hist-trials",
 			"history trials",
-			"history that should be kept in seconds",
+			"history that should be kept in times",
 			0, G_MAXINT, 1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_TRIAL_INTERVAL,
+		g_param_spec_float(
+			"trial-interval",
+			"trial interval in seconds",
+			"trial interval in seconds",
+			0, G_MAXFLOAT, 1,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
 
 	g_object_class_install_property(
 		gobject_class,

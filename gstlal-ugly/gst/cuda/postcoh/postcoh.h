@@ -133,6 +133,7 @@ typedef struct _PostcohState {
   float dt;
   float snglsnr_thresh;
   gint hist_trials;
+  gint trial_sample_inv;
 } PostcohState;
 
 /**
@@ -173,6 +174,8 @@ struct _CudaPostcoh {
   GMutex *prop_lock;
   GCond *prop_avail;
   gint hist_trials;
+  float trial_interval;
+  gint trial_interval_in_samples;
   gint output_skymap;
 
   /* sink event handling */
