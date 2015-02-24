@@ -1,4 +1,4 @@
-\page gstlalinspiralprofileXeon_E5-2699_v3_SL7_page Profiling of gstlal_inspiral on Xeon E5-2699 v3 with SL7
+\page gstlalinspiralprofileXeon_E5-2699_v3_SL7_icc_page Profiling of gstlal_inspiral on Xeon E5-2699 v3 with SL7 with icc
 
 \section Template per core throughput
 
