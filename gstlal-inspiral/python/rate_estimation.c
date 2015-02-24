@@ -63,10 +63,9 @@ static void condition(double *ln_f_over_b, int n)
 
 
 /*
- * compute the log probability density of the foreground and background
- * rates given by equation (21) in Farr et al., "Counting and Confusion:
- * Bayesian Rate Estimation With Multiple Populations", arXiv:1302.5341.
- * the prior is that specified in the paper.
+ * the natural logarithm (up to an unknown additive constant) of the prior.
+ * see equation (17) of Farr et al., "Counting and Confusion: Bayesian Rate
+ * Estimation With Multiple Populations", arXiv:1302.5341.
  */
 
 
@@ -74,6 +73,14 @@ static double log_prior(double Rf, double Rb)
 {
 	return -0.5 * log(Rf * Rb);
 }
+
+
+/*
+ * compute the logarithm (up to an unknown additive constant) of the joint
+ * probability density of the foreground and background rates given by
+ * equation (21) in Farr et al., "Counting and Confusion: Bayesian Rate
+ * Estimation With Multiple Populations", arXiv:1302.5341.
+ */
 
 
 static double log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb)
@@ -105,7 +112,16 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 		else
 			ln_P += log1p(exp(ln_x));
 	}
+
+	/*
+	 * multiply by the remaining factors
+	 */
+
 	ln_P += n * log(Rb) - (Rf + Rb);
+
+	/*
+	 * finally multiply by the prior
+	 */
 
 	return ln_P + log_prior(Rf, Rb);
 }
