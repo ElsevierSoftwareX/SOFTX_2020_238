@@ -40,6 +40,9 @@ G_BEGIN_DECLS
 #define GST_IS_CUDA_POSTCOH_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_POSTCOH))
 
+#ifndef MAX_ALLIFO_LEN
+#define MAX_ALLIFO_LEN 14
+#endif
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
 
@@ -134,6 +137,8 @@ typedef struct _PostcohState {
   float snglsnr_thresh;
   gint hist_trials;
   gint trial_sample_inv;
+  char cur_ifos[MAX_ALLIFO_LEN];
+  gint cur_nifo;
 } PostcohState;
 
 /**

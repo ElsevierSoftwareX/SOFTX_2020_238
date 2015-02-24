@@ -577,20 +577,20 @@ static gboolean cuda_postcoh_get_latest_start_time(GstCollectPads *pads, GstCloc
 	return TRUE;
 }
 
-static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads)
+static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, PostcohState *state)
 {
 	GSList *collectlist;
 	GstPostcohCollectData *data;
 	GstBuffer *buf = NULL;
 
-	gint min_size = 0, size_cur, null_bufs = 0;
+	gint i = 0, min_size = 0, size_cur;
 	gboolean min_size_init = FALSE;
+	state->cur_nifo = 0;
 
-	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
+	for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
 			if (buf == NULL) {
-				null_bufs++;
 				continue;
 			}
 			GST_LOG_OBJECT (data,
@@ -611,13 +611,15 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads)
 					min_size = size_cur;
 				}
 			}
+			strncpy(state->cur_ifos + 2*state->cur_nifo, IFO_MAP[state->ifo_mapping[i]], 2*sizeof(char));
+			state->cur_nifo++;
 
-			
 	}
-	/* If two or more pads returns NULL buffers, this means two or more pads at EOS,
+	/* If all pads returns NULL buffers, this means all pads at EOS,
 	 * we flag min_size as -1 to indicate we need to send an EOS event */ 
-	if (null_bufs >= 2)
+	if (state->cur_nifo == 0)
 		min_size = -1;
+
 	return min_size;
 }
 
@@ -712,6 +714,16 @@ static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
 
 }
 
+static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
+{
+	for (int i=0; i<state->cur_nifo; i++) {
+		if (strncmp(state->cur_ifos+2*i, IFO_MAP[cur_ifo], 2) == 0)
+			return TRUE;
+	}
+	return FALSE;
+
+}
+
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 {
 	GstBuffer *outbuf = NULL;
@@ -722,11 +734,19 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 	cuda_postcoh_rm_invalid_peak(state);
 	int allnpeak = 0, iifo, ipeak, nifo = state->nifo;
-	for(iifo=0; iifo<nifo; iifo++)
-		allnpeak += state->peak_list[iifo]->npeak[0];
-
 	int hist_trials = postcoh->hist_trials;
-	int out_size = sizeof(PostcohTable) * allnpeak * (1 + hist_trials);
+
+	for(iifo=0; iifo<nifo; iifo++) {
+		if(is_cur_ifo_has_data(state, iifo)) {
+			if (state->cur_nifo == state->nifo)
+				allnpeak += state->peak_list[iifo]->npeak[0]* (1 + hist_trials);
+			else
+				allnpeak += state->peak_list[iifo]->npeak[0];
+		}
+	};
+
+
+	int out_size = sizeof(PostcohTable) * allnpeak ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
@@ -747,14 +767,12 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 
 	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
-	int ifos_size = sizeof(char) * 2 * nifo, one_ifo_size = sizeof(char) * 2 ;
-	char *ifos = (char *) malloc(ifos_size);
+	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
 
-	for(iifo=0; iifo<nifo; iifo++) 
-		strncpy(ifos+2*iifo, IFO_MAP[iifo], one_ifo_size);
 
 	int npeak = 0, itrial = 0, exe_len = state->exe_len;
 	for(iifo=0; iifo<nifo; iifo++) {
+		if (is_cur_ifo_has_data(state, iifo)) {
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		LIGOTimeGPS end_time[npeak];
@@ -768,8 +786,8 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			XLALGPSAdd(&(end_time[ipeak]), (double) peak_cur /exe_len);
 			output->end_time = end_time[ipeak];
 			output->is_background = 0;
-			strncpy(output->ifos, ifos, ifos_size);
-			output->ifos[2*nifo] = '\0';
+			strncpy(output->ifos, state->cur_ifos, ifos_size);
+			output->ifos[2*state->cur_nifo] = '\0';
 		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 			output->pivotal_ifo[2] = '\0';
 			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
@@ -806,14 +824,15 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			pklist->cohsnr_skymap = NULL;
 		}
 
+		if (state->cur_nifo == state->nifo) {
 		for(itrial=1; itrial<=hist_trials; itrial++) {
 			for(ipeak=0; ipeak<npeak; ipeak++) {
 				int *peak_pos = pklist->peak_pos;
 				peak_cur = peak_pos[ipeak];
 				output->end_time = end_time[ipeak];
 				output->is_background = 1;
-				strncpy(output->ifos, ifos, ifos_size);
-				output->ifos[2*nifo] = '\0';
+				strncpy(output->ifos, state->cur_ifos, ifos_size);
+				output->ifos[2*state->cur_nifo] = '\0';
 		       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 				output->pivotal_ifo[2] = '\0';
 				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
@@ -827,6 +846,8 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 				output++;
 			}
 		}
+		}
+	}
 	}
 
 
@@ -852,7 +873,6 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 //	printf("days_from_utc0 %lu, time_in_one_day %f, gps_len %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
-
 static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint one_take_size, gint exe_size, CudaPostcoh *postcoh)
 {
 	GSList *collectlist;
@@ -871,6 +891,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			cur_ifo = state->ifo_mapping[i];
+			if (is_cur_ifo_has_data(state, cur_ifo)) {
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
@@ -887,6 +908,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				pos_in_snglsnr = snglsnr + (state->snglsnr_len - state->snglsnr_start_load) * state->ntmplt;
 				cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice);
 			}
+			}
 
 		}
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
@@ -894,18 +916,20 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			data = collectlist->data;
 			cur_ifo = state->ifo_mapping[i];
 
+			if (is_cur_ifo_has_data(state, cur_ifo)) {
 			peakfinder(state, cur_ifo);
 			cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
 					state->peak_list[cur_ifo]->d_npeak, 
 					sizeof(int), 
 					cudaMemcpyDeviceToHost);
 
-			if (state->peak_list[cur_ifo]->npeak[0] > 0) {
+			if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
 				cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
 			}
 
 			/* move along */
 			gst_adapter_flush(data->adapter, exe_size);
+			}
 		}
 		common_size -= exe_size;
 		int exe_len = state->exe_len;
@@ -978,7 +1002,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	gint exe_size = postcoh->exe_len * postcoh->bps;
 		
 	if (postcoh->is_all_aligned) {
-		common_size = cuda_postcoh_push_and_get_common_size(pads);
+		common_size = cuda_postcoh_push_and_get_common_size(pads, postcoh->state);
 		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %f", common_size, common_size/ postcoh->bps);
 
 		if (common_size == -1) {
