@@ -96,20 +96,24 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 	for(i = 0; i < n; i++) {
 		/*
 		 * need to add log(Rf f / (Rb b) + 1) to sum.  if x = Rf f
-		 * / (Rb b) is large, we approximate ln(x + 1) with
+		 * / (Rb b) is larger than about 10^14 the +1 is irrelevant
+		 * and we can approximate ln(x + 1) with ln(x).  for
+		 * smaller x we use log1p(x) to evaluate the exprsesion.
+		 * for intermediate x we approximate ln(x + 1) with
 		 *
-		 *	ln(x + 1) = ln x + 1 / x
+		 *	ln(x + 1) = ln x + 2 X + 2 X^3 / 3
 		 *
-		 * for x > 1000 this gives 7 correct digits or more.  for x
-		 * > 10^15, the 1/x correction becomes irrelevant.
+		 * where X = 1 / (2 x + 1).  for x > 1100 this gives 15
+		 * correct digits or more.
 		 */
 
 		double ln_x = ln_Rf_over_Rb + ln_f_over_b[i];
-		if(ln_x > 35.)	/* ~= log(10^15) */
+		if(ln_x > 33.)	/* ~= log(10^14) */
 			ln_P += ln_x;
-		else if(ln_x > 6.9)	/* ~= log(1000) */
-			ln_P += ln_x + exp(-ln_x);
-		else
+		else if(ln_x > 7) {	/* ~= log(1100) */
+			double one_over_2x_p_1 = 1. / (2. * exp(ln_x) + 1.);
+			ln_P += ln_x + 2. * one_over_2x_p_1 * (1. + one_over_2x_p_1 * one_over_2x_p_1 / 3.);
+		} else
 			ln_P += log1p(exp(ln_x));
 	}
 
