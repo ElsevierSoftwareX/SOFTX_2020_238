@@ -845,12 +845,26 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   /* 0-length buffers are produced to inform downstreams for current timestamp  */
   if (size == 0) {
-	 GST_BUFFER_TIMESTAMP (outbuf) = GST_BUFFER_TIMESTAMP (inbuf);
-	 GST_BUFFER_OFFSET (outbuf) = GST_BUFFER_OFFSET (inbuf);
-	 GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (inbuf);
-	 GST_BUFFER_DURATION (outbuf) = 0;
-	 GST_BUFFER_SIZE (outbuf) = GST_BUFFER_SIZE (inbuf); 
-	 return GST_FLOW_OK;
+    /* time */
+    if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
+      GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
+        gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
+        element->rate);
+    } else {
+      GST_BUFFER_TIMESTAMP (outbuf) = GST_CLOCK_TIME_NONE;
+    }
+    /* offset */
+    if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
+      GST_BUFFER_OFFSET (outbuf) = element->offset0 + element->samples_out;
+      GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (outbuf);
+    } else {
+    GST_BUFFER_OFFSET (outbuf) = GST_BUFFER_OFFSET_NONE;
+    GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET_NONE;
+    }
+ 
+   GST_BUFFER_DURATION (outbuf) = 0;
+   GST_BUFFER_SIZE (outbuf) = GST_BUFFER_SIZE (inbuf); 
+   return GST_FLOW_OK;
   }
 
   gint in_samples, num_exe_samples, num_head_cover_samples, num_tail_cover_samples;

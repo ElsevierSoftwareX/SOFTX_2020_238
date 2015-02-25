@@ -623,7 +623,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, PostcohS
 	return min_size;
 }
 
-static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, GstClockTime t0)
+static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *postcoh)
 {
 	GSList *collectlist;
 	GstPostcohCollectData *data;
@@ -631,6 +631,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, GstClockTime 
 	GstClockTime t_start_cur, t_end_cur;
 	gboolean all_aligned = TRUE;
 	guint64 offset_cur, offset_end_cur, buf_aligned_offset0;
+	GstClockTime t0 = postcoh->in_t0;
 
 	GST_DEBUG_OBJECT(pads, "begin to align offset0");
 
@@ -648,7 +649,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, GstClockTime 
 		offset_cur = GST_BUFFER_OFFSET(buf);
 		offset_end_cur = GST_BUFFER_OFFSET_END(buf);
 		if (t_end_cur > t0) {
-			buf_aligned_offset0 = gst_util_uint64_scale_int(GST_CLOCK_DIFF(t0, t_start_cur), data->offset_per_nanosecond, 1);
+			buf_aligned_offset0 = (gint) (postcoh->in_offset0 - offset_cur);
 			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
 			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
 			GST_LOG_OBJECT (pads,
@@ -988,13 +989,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		postcoh->out_t0 = t_latest_start + gst_util_uint64_scale_int_round(
 				postcoh->preserved_len/2, GST_SECOND, postcoh->rate);
 		postcoh->next_t = postcoh->out_t0;
+		postcoh->in_offset0 = offset_latest_start;
 		postcoh->out_offset0 = offset_latest_start + postcoh->preserved_len/2 ;
 		GST_DEBUG_OBJECT(postcoh, "set the aligned time to %" GST_TIME_FORMAT 
 				", out t0 to %" GST_TIME_FORMAT ", start offset to %" G_GUINT64_FORMAT,
 			       	GST_TIME_ARGS(postcoh->in_t0),
 			       	GST_TIME_ARGS(postcoh->out_t0),
-				postcoh->out_offset0);
-		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh->in_t0);
+				postcoh->in_offset0);
+		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh);
 		postcoh->set_starttime = TRUE;
 		return GST_FLOW_OK;
 	}
@@ -1014,7 +1016,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		cuda_postcoh_process(pads, common_size, one_take_size, exe_size, postcoh);
 
 	} else {
-		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh->in_t0);
+		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh);
 	}
 #if 0
 	if (!GST_CLOCK_TIME_IS_VALID(t_start)) {

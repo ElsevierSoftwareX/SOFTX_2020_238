@@ -170,6 +170,7 @@ struct _CudaPostcoh {
   GstClockTime in_t0;
   GstClockTime out_t0;
   GstClockTime next_t;
+  guint64 in_offset0;
   guint64 out_offset0;
   guint64 samples_in;
   guint64 samples_out;
