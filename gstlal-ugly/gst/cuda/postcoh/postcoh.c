@@ -638,8 +638,8 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, GstClockTime 
 		data = collectlist->data;
 		GST_DEBUG_OBJECT(pads, "now at %s is aligned %d", data->ifo_name, data->is_aligned);
 		if (data->is_aligned) {
-			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
-			gst_adapter_push(data->adapter, buf);
+			//buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
+			//gst_adapter_push(data->adapter, buf);
 			continue;
 		}
 		buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
