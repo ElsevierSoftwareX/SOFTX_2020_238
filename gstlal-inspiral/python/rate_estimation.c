@@ -285,12 +285,10 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 		return NULL;
 
 	/*
-	 * return log_posterior() / 2.  to improve the measurement of the
-	 * tails of the PDF using the MCMC sampler, we draw from the square
-	 * root of the PDF and then correct the histogram of the samples.
+	 * return log_posterior()
 	 */
 
-	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb, posterior->workspace) / 2.);
+	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb, posterior->workspace));
 }
 
 

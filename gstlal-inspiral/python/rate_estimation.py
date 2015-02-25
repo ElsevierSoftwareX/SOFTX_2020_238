@@ -237,10 +237,14 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 
 	#
 	# run MCMC sampler to generate (foreground rate, background rate)
-	# samples.
+	# samples.  to improve the measurement of the tails of the PDF
+	# using the MCMC sampler, we draw from the square root of the PDF
+	# and then correct the histogram of the samples (see below).
 	#
 
-	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(ln_f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+	log_posterior = posterior(ln_f_over_b)
+
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), (lambda x: log_posterior(x) / 2.), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
 		samples[j,:,:] = coordslist
 		# dump samples to the chain file every 2048 steps
