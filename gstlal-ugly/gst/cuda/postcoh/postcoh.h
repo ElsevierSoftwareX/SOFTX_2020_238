@@ -72,6 +72,7 @@ struct _GstPostcohCollectData {
 	gint channels;
 	gboolean is_aligned;
 	guint64 aligned_offset0;
+  	guint64 next_offset;
 	GstCollectDataDestroyNotify destroy_notify;
 };
 
@@ -167,11 +168,9 @@ struct _CudaPostcoh {
   gboolean is_all_aligned;
   double offset_per_nanosecond;
 
-  GstClockTime in_t0;
-  GstClockTime out_t0;
-  GstClockTime next_t;
-  guint64 in_offset0;
-  guint64 out_offset0;
+  GstClockTime t0;
+  GstClockTime next_exe_t;
+  guint64 offset0;
   guint64 samples_in;
   guint64 samples_out;
 
