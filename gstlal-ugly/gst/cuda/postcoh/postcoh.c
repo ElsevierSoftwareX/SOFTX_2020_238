@@ -397,7 +397,6 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	postcoh->exe_len = postcoh->rate;
 
 	state->exe_len = postcoh->rate;
-	state->head_len = postcoh->preserved_len / 2;
 	state->trial_sample_inv = round(postcoh->trial_interval * postcoh->rate);
 	state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * state->trial_sample_inv;
 	state->hist_trials = postcoh->hist_trials;
@@ -856,18 +855,18 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			output->nullsnr = pklist->nullsnr[peak_cur];
 			output->chisq = pklist->chisq[peak_cur];
 			if (postcoh->output_skymap) {
-			GString *filename = NULL;
-			FILE *file = NULL;
-			filename = g_string_new(output->ifos);
-			g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds);
-			g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
-			strcpy(output->skymap_fname, filename->str);
-//			printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
-			file = fopen(output->skymap_fname, "w");
-			fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
-			fclose(file);
-			file = NULL;
-			g_string_free(filename, TRUE);
+				GString *filename = NULL;
+				FILE *file = NULL;
+				filename = g_string_new(output->ifos);
+				g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds);
+				g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
+				strcpy(output->skymap_fname, filename->str);
+//				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
+				file = fopen(output->skymap_fname, "w");
+				fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
+				fclose(file);
+				file = NULL;
+				g_string_free(filename, TRUE);
 			} else
 				output->skymap_fname[0] = '\0';
 			output++;
