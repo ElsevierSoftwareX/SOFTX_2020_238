@@ -69,10 +69,11 @@ typedef struct _GSTLALInterpolatorClass GSTLALInterpolatorClass;
 struct _GSTLALInterpolator {
 	GstBaseTransform element;
 
+        GstAudioAdapter *adapter;
+
 	gint inrate;
 	gint outrate;
 	guint channels;
-	GstAudioAdapter *adapter;
 	
 	/* Timestamp and offset bookeeping */
 	guint64 t0;
@@ -82,28 +83,19 @@ struct _GSTLALInterpolator {
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	gboolean need_discont;
+	gboolean need_pretend;
 
 	/* Variables to control the size of transforms */
-	guint nrin;
-	guint ncin;
-	guint nrout;
-	guint ncout;
-	guint tapersampsin;
-	guint tapersampsout;
+	guint unitsize;
 	guint blocksampsin;
 	guint blocksampsout;
-	guint unitsize;
-
-	float *data;
-	float *up;
-	float *down;
-	float *last;
-	float *rin;
-	fftwf_complex *cin;
-	float *rout;
-	fftwf_complex *cout;
-	fftwf_plan fwdplan_in;
-	fftwf_plan revplan_out;
+	guint blockstridein;
+	guint blockstrideout;
+	guint factor;
+	guint half_length;
+	guint kernel_length;
+	float *kernel;
+	float *workspace;
 };
 
 
