@@ -727,14 +727,14 @@ os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXG
 #
 
 refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd')
-refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"2048", "request_cpus":"2", "+RequiresMultipleCores":"True"})
+refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"request_memory":"2GB", "request_cpus":"2"})
 medianPSDJob = inspiral_pipe.generic_job('gstlal_median_of_psds')
 svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
-gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
-gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
+gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"request_memory":"16GB", "request_cpus":"8"})
+gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"request_memory":"16GB", "request_cpus":"8"})
 createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats")
-calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"2048", "request_cpus":"3", "+RequiresMultipleCores":"True"})
+calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = {"request_memory":"2GB", "request_cpus":"3"})
 calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood")
 calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj')
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms")
