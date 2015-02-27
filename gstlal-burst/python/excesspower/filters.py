@@ -20,6 +20,7 @@ import warnings
 
 import numpy
 
+import lal
 from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
 from pylal import datatypes as laltypes
@@ -74,11 +75,10 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# filter bank and NOT the whitener. It's just not right. Fair warning.
 		# TODO: Is this default even needed anymore?
 		if corr == None:
-			wfftplan = XLALCreateForwardREAL8FFTPlan(filter_len, 1)
-			spec_corr = lalburst.XLALREAL8WindowTwoPointSpectralCorrelation(
-				XLALCreateHannREAL8Window(filter_len),
-				wfftplan 
-			)
+			spec_corr = lal.REAL8WindowTwoPointSpectralCorrelation(
+				lal.CreateHannREAL8Window(filter_len),
+				lal.CreateForwardREAL8FFTPlan(filter_len, 1)
+			).data
 		else:
 			spec_corr = numpy.array(corr)
 
