@@ -34,6 +34,7 @@
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <fftw3.h>
+#include <gsl/gsl_matrix.h>
 
 #include <gstlal/gstlal.h>
 #include <gstlal/gstaudioadapter.h>
@@ -94,8 +95,9 @@ struct _GSTLALInterpolator {
 	guint factor;
 	guint half_length;
 	guint kernel_length;
-	float *kernel;
-	float *workspace;
+	//float *kernel;
+	gsl_vector_float **kernel;
+	gsl_matrix_float *workspace;
 };
 
 
