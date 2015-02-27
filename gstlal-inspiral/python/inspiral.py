@@ -473,19 +473,16 @@ class CoincsDocument(object):
 
 	@property
 	def search_summary_outseg(self):
-		return self.search_summary.get_out()
+		return self.search_summary.out_segment
 
 
 	def add_to_search_summary_outseg(self, seg):
 		out_segs = segments.segmentlist([self.search_summary_outseg])
-		# FIXME:  (None, None) case for backwards compatiblity with
-		# older glue.  remove when we can rely on an up-to-date
-		# glue
-		if out_segs == [None] or out_segs == [(None, None)]:
+		if out_segs == [None]:
 			# out segment not yet initialized
 			del out_segs[:]
 		out_segs |= segments.segmentlist([seg])
-		self.search_summary.set_out(out_segs.extent())
+		self.search_summary.out_segment = out_segs.extent()
 
 
 	def get_next_sngl_id(self):
@@ -495,7 +492,7 @@ class CoincsDocument(object):
 	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
 		start, end = int(math.floor(start)), int(math.ceil(end))
-		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, start, end - start, extension)
+		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
 
 	def write_output_file(self, verbose = False):
@@ -507,10 +504,7 @@ class CoincsDocument(object):
 			# record the final state of the search_summary and
 			# process rows in the database
 			cursor = self.connection.cursor()
-			# FIXME:  (None, None) case for backwards
-			# compatibility with older glues.  remove when we
-			# can rely on an up-to-date glue
-			if seg is not None and seg != (None, None):
+			if seg is not None:
 				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
 			cursor.execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
 			cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
