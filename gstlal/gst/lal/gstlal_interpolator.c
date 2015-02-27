@@ -46,6 +46,8 @@
 #include <math.h>
 #include <string.h>
 #include <fftw3.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
 
 /*
  * our own stuff
@@ -62,46 +64,56 @@
 
 #define PI 3.141592653589793
 
-static float* kernel(int half_length, int factor) {
+gsl_vector_float** kernel(int half_length, int factor) {
 	int kernel_length = (2 * half_length + 1) * factor;
 	int domain = kernel_length / 2; // kernel length is gauranteed to be even
-	float *out = fftwf_alloc_real(kernel_length + 1);
+
+	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * factor);
+	for (int i = 0; i < factor; i++)
+		vecs[i] = gsl_vector_float_calloc(2 * half_length + 1);
+
+	float *out = fftwf_malloc(sizeof(float) * (kernel_length + factor / 2));
+	memset(out, 0, (kernel_length + factor / 2) * sizeof(float));
+
 	float norm = 0.;
 
-	for (int j = 0; j < kernel_length + 1; j++) {
-		float x = j - domain;
-		if (j == domain)
-			out[j] = 1.;
-		else
-			out[j] = sin(PI * x / factor) / (PI * x / factor) * (1. - x*x / domain / domain);
+	for (int j = 0; j < 2 * half_length + 1; j++) {
+		for (int i = 0; i < factor; i++) {
+			int x = j * factor + i - domain;
+			if (x == 0)
+				out[x + domain] = 1.;
+			else
+				out[x + domain] = sin(PI * x / factor) / (PI * x / factor) * (1. - (float) x*x / domain / domain);
+			norm += out[x + domain] * out[x + domain];
+		}
 	}
 
-	for (int i = 0; i < kernel_length + 1; i++)
-		norm += out[i] * out[i];
+	for (int i = 0; i < 2 * half_length+1; i++) {
+		for (int j = 0; j < factor; j++) {
+			int index = i * factor + j + factor / 2; //FIXME FIXME FIXME this offset belongs above
+			gsl_vector_float_set(vecs[factor - j - 1], i, out[index] / sqrt(norm / factor));
+		}
+	}
 
-	for (int i = 0; i < kernel_length + 1; i++)
-		out[i] /= sqrt(norm / factor);
-
-	return out;
+	free(out);
+	return vecs;
 }
 
-void convolve(float *output, float *thiskernel, float *input, guint kernel_length, guint factor, guint channels) {
-	for (guint i = 1; i < kernel_length; i++) {
-		*output += (*thiskernel) * (*input);
-		input += channels;
-		thiskernel += factor;
-	}
+void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint factor, guint channels) {
+	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
+	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
+	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
 	return;
 }
 
-void resample(float *output, float *thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout) {
+void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout) {
 	guint kernel_offset, output_offset, input_offset;
-	for (gint samp = 0; samp < blockstrideout; samp++) {
-		kernel_offset = factor - samp % factor + factor / 2;
+	for (guint samp = 0; samp < blockstrideout; samp++) {
+		kernel_offset = samp % factor;
 		output_offset = samp * channels;
 		input_offset = (samp / factor) * channels; // first input sample
-		for (gint chan = 0; chan < channels; chan++)
-			convolve(output + output_offset + chan, thiskernel + kernel_offset, input + input_offset + chan + channels, kernel_length, factor, channels);
+		// FIXME FIXME FIXME should this + channels really be there??
+		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset + channels, kernel_length, factor, channels);
 	}
 	return;
 }
@@ -270,7 +282,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->kernel = kernel(element->half_length, element->factor);
 
 	// Assume that we process inrate worth of samples at a time (e.g. 1s stride)
-	element->blockstridein = 128;//element->inrate;
+	element->blockstridein = element->inrate;
 	element->blocksampsin = element->blockstridein + element->kernel_length;
 	element->blockstrideout = element->blockstridein * element->factor;//element->outrate;
 	element->blocksampsout = element->blockstrideout + (element->kernel_length) * element->factor;
@@ -278,9 +290,8 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout);
 
 	if (element->workspace)
-		free(element->workspace);
-	element->workspace = (float *) fftw_alloc_real(element->blocksampsin * element->channels);
-	memset(element->workspace, 0, sizeof(float) * element->blocksampsin * element->channels);
+		gsl_matrix_float_free(element->workspace);
+	element->workspace = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
 
 	return TRUE;
 }
@@ -451,7 +462,7 @@ static void set_metadata(GSTLALInterpolator *element, GstBuffer *buf, guint64 ou
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
-	guint input_length, output_length, expected_output_size;
+	guint output_length;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
@@ -511,29 +522,24 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	else {
 
 
-		guint flushed = 0;
 		guint processed = 0;
-		gint input_offset;
-		gint kernel_offset;
-		gint output_offset;
-		gint f;
-		gint i;
 		float *output = (float *) GST_BUFFER_DATA(outbuf);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
+		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
 
 		GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
 
 		while (processed < output_length) {
 
-			memset(element->workspace, 0, sizeof(float) * element->blocksampsin * element->channels); // FIXME necessary?
 
 			// Special case to handle discontinuities: effectively zero pad. FIXME make this more elegant
-			if (element->need_pretend)
-				gst_audioadapter_copy_samples(element->adapter, element->workspace + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, NULL);
+			if (element->need_pretend) {
+				memset(element->workspace->data, 0, sizeof(float) * element->workspace->size1 * element->workspace->size2); // FIXME necessary?
+				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, NULL);
+			}
 			else
-				gst_audioadapter_copy_samples(element->adapter, element->workspace, element->blocksampsin, NULL, NULL);
+				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, NULL);
 
-			resample(output, element->kernel, element->workspace, element->kernel_length, element->factor, element->channels, element->blockstrideout);
+			resample(output, element->kernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout);
 
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
@@ -559,9 +565,10 @@ static void finalize(GObject *object)
         /*
          * free resources
          */
-	
-	free(element->kernel);
-	free(element->workspace);
+
+	for (guint i = 0; i < element->factor; i++)	
+		gsl_vector_float_free(element->kernel[i]);
+	gsl_matrix_float_free(element->workspace);
 
         /*
          * chain to parent class' finalize() method
