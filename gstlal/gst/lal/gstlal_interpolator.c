@@ -88,9 +88,11 @@ gsl_vector_float** kernel(int half_length, int factor) {
 		}
 	}
 
-	for (int i = 0; i < 2 * half_length+1; i++) {
+	for (int i = 1; i < 2 * half_length+1; i++) {
 		for (int j = 0; j < factor; j++) {
-			int index = i * factor + j + factor / 2; //FIXME FIXME FIXME this offset belongs above
+			int index = i * factor + j - factor / 2; //FIXME FIXME FIXME this offset belongs above
+			if (factor > 1)
+				index += 1;
 			gsl_vector_float_set(vecs[factor - j - 1], i, out[index] / sqrt(norm / factor));
 		}
 	}
@@ -113,7 +115,8 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 		output_offset = samp * channels;
 		input_offset = (samp / factor) * channels; // first input sample
 		// FIXME FIXME FIXME should this + channels really be there??
-		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset + channels, kernel_length, factor, channels);
+		//convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset + channels, kernel_length, factor, channels);
+		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, factor, channels);
 	}
 	return;
 }
