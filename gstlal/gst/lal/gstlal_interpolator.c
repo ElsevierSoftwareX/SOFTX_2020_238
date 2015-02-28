@@ -108,14 +108,16 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 	return;
 }
 
-void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout) {
+void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+	if (!nongap) {
+		memset(output, 0, sizeof(float) * blockstrideout * channels);
+		return;
+	}
 	guint kernel_offset, output_offset, input_offset;
 	for (guint samp = 0; samp < blockstrideout; samp++) {
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
 		input_offset = (samp / factor) * channels; // first input sample
-		// FIXME FIXME FIXME should this + channels really be there??
-		//convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset + channels, kernel_length, factor, channels);
 		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, factor, channels);
 	}
 	return;
@@ -467,6 +469,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
 	guint output_length;
 	GstFlowReturn result = GST_FLOW_OK;
+	gboolean copied_nongap;
 
 	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
@@ -537,12 +540,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			// Special case to handle discontinuities: effectively zero pad. FIXME make this more elegant
 			if (element->need_pretend) {
 				memset(element->workspace->data, 0, sizeof(float) * element->workspace->size1 * element->workspace->size2); // FIXME necessary?
-				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, NULL);
+				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
 			}
 			else
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, NULL);
 
-			resample(output, element->kernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout);
+			resample(output, element->kernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
 
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
