@@ -286,8 +286,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 		free(element->kernel);
 	element->kernel = kernel(element->half_length, element->factor);
 
-	// Assume that we process inrate worth of samples at a time (e.g. 1s stride)
-	element->blockstridein = element->inrate;
+	// Keep blockstride small to prevent GAPS from growing to be large
+	// FIXME probably this should be decoupled 
+	element->blockstridein = 32;//element->inrate;
 	element->blocksampsin = element->blockstridein + element->kernel_length;
 	element->blockstrideout = element->blockstridein * element->factor;//element->outrate;
 	element->blocksampsout = element->blockstrideout + (element->kernel_length) * element->factor;
@@ -557,7 +558,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			processed += element->blockstrideout;
 		}
 		GST_INFO_OBJECT(element, "Processed a %d samples", processed);
-		set_metadata(element, outbuf, output_length, FALSE);
+		set_metadata(element, outbuf, output_length, !copied_nongap);
 
 	}
 	return result;
