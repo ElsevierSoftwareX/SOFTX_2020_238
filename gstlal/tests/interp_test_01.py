@@ -33,10 +33,10 @@ def interp_test_01(pipeline, name):
 	# try changing these.  test should still work!
 	#
 
-	in_rate = 512	# Hz
-	out_rate = 2048 # Hz
-	gap_frequency = None	# Hz
-	gap_threshold = 0	# of 1
+	in_rate = 64	# Hz
+	out_rate = 128 # Hz
+	gap_frequency = 0.5	# Hz
+	gap_threshold = .75	# of 1
 	buffer_length = 5.0	# seconds
 	test_duration = 20.0	# seconds
 
@@ -44,7 +44,7 @@ def interp_test_01(pipeline, name):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, channels = 2, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
+	head = test_common.gapped_test_src(pipeline, channels = 1, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw-float, rate=%d, width=32" % in_rate)
 	head = tee = pipeparts.mktee(pipeline, head)
 
