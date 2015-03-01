@@ -544,7 +544,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
 			}
 			else
-				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, NULL);
+				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
 
 			resample(output, element->kernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
 
