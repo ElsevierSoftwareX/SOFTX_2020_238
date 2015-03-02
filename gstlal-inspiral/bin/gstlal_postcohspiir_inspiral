@@ -373,11 +373,6 @@ else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
 
-
-mainloop = gobject.MainLoop()
-def on_eos(bus, message, mainloop = mainloop):
-  mainloop.quit()
-  bus.remove_signal_watch()
 #
 # Process banks in serial
 #
@@ -432,7 +427,8 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if options.verbose:
     print >>sys.stderr, "assembling pipeline ...",
 
-  pipeline = gst.Pipeline("gstlal_iir_inspiral")
+  pipeline = gst.Pipeline("gstlal_postcoh_inspiral")
+  mainloop = gobject.MainLoop()
 
   postcohsink = spiirparts.mkPostcohSPIIR(
       pipeline,
@@ -457,6 +453,9 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if options.verbose:
     print >>sys.stderr, "done"
 
+
+  handler = simplehandler.Handler(mainloop, pipeline)
+
   if options.write_pipeline is not None:
     pipeparts.connect_appsink_dump_dot(pipeline, postcohsink, options.write_pipeline, options.verbose)
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
@@ -471,18 +470,10 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if options.write_pipeline is not None:
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
-  bus = pipeline.get_bus()
-  bus.add_signal_watch()
-  bus.connect("message::eos", on_eos)
 
   if options.verbose:
     print >>sys.stderr, "running pipeline ..."
   mainloop.run()
-
-  if options.verbose:
-    print >>sys.stderr, "setting pipeline state to NULL"
-  if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
-    raise RuntimeError("pipeline could not be set to NULL")
 
 
 # Shutdown the web interface servers
