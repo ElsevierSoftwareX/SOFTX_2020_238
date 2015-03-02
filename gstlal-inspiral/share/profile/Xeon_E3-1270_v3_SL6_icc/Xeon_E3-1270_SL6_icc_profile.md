@@ -1,4 +1,4 @@
-\page gstlalinspiralprofileXeon_E3-1270_SL6_icc_page Profiling of gstlal_inspiral on Xeon E5-1270 with SL6 using icc
+\page gstlalinspiralprofileXeon_E3-1270_SL6_icc_page Profiling of gstlal_inspiral on Xeon E3-1270 v3 with SL6 using icc
 
 NOTE HYPERTHREADING WAS ENABLED BUT THE PHYSICAL CORES WERE USED FOR THE CALCULATION
 
