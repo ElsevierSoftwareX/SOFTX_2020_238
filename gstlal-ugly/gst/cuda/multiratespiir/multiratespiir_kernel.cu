@@ -176,7 +176,7 @@ __global__ void cuda_iir_filter_kernel_coarse
 	COMPLEX_F *cudaB0, 
 	int *cudaShift,
 	COMPLEX_F *cudaPrevSnr, 
-	float *cudaData, 
+	const float * __restrict__ cudaData, 
 	float *cudaSnr,
 	gint mem_len, 
 	gint filt_len, 
@@ -224,7 +224,7 @@ __global__ void cuda_iir_filter_kernel_coarse
 
     for (int i = 0; i < len; ++i)
     {
-        data = cudaData[(shift + i + queue_first_sample) % queue_len];
+        data = __ldg(&cudaData[(shift + i + queue_first_sample) % queue_len]);
 
         fltrOutptReal = a1.re * previousSnr.re - a1.im * previousSnr.im + b0.re * data;
         fltrOutptImag = a1.re * previousSnr.im + a1.im * previousSnr.re + b0.im * data;
@@ -256,7 +256,7 @@ __global__ void cuda_iir_filter_kernel_fine
 	COMPLEX_F *cudaB0, 
 	int *cudaShift,
 	COMPLEX_F *cudaPrevSnr, 
-	float *cudaData, 
+	const float * __restrict__ cudaData, 
 	float *cudaSnr,
 	gint mem_len, 
 	gint filt_len, 
@@ -310,7 +310,7 @@ __global__ void cuda_iir_filter_kernel_fine
 
         for (int i = 0; i < len; ++i)
         {
-            data = cudaData[(shift + i + queue_first_sample) % queue_len];
+            data = __ldg(&cudaData[(shift + i + queue_first_sample) % queue_len]);
 
             fltrOutptReal = a1.re * previousSnr.re - a1.im * previousSnr.im + b0.re * data;
             fltrOutptImag = a1.re * previousSnr.im + a1.im * previousSnr.re + b0.im * data;
