@@ -489,10 +489,10 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		spiir_state_workspace_realloc_int (&tmp_d, &d_len, eff_len);
 
 		// spstate[i]->d_d = (long*)inxns[i].data;
-		printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
-				a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
+		//printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
+		//		a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
 
-		printf("eff_len %d\n", eff_len);
+		//printf("eff_len %d\n", eff_len);
 		spstate[i]->num_filters		= num_filters;
 		spstate[i]->num_templates	= num_templates;
 
@@ -525,7 +525,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		freeArray(a_array + i);
 		freeArray(b_array + i);
 
-		printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
+		//printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
 				tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
 		gpuErrchk(cudaPeekAtLastError());
 	}
@@ -752,8 +752,10 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
   for(i=0; i<num_depths; i++)
   {
     SPSTATE(i)->pre_out_spiir_len = 0;
+    eff_len = SPSTATAE(i)->num_filters * SPSTATE(i)->num_templates;
 
     CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream));
+    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_y, 0, eff_len * sizeof(COMPLEX_F), stream));
 
     SPSTATE(i)->queue_first_sample = 0;
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
