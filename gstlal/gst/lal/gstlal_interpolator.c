@@ -222,7 +222,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element, GSTLALInterpol
 	element->workspace = NULL;
 
 	// hardcoded kernel size
-	element->half_length = 8;
+	element->half_length = 16;
 	element->kernel_length = element->half_length * 2 + 1;
 
 	// Always initialize with a discont
