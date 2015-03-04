@@ -118,8 +118,9 @@ def overestimate_j_from_chi(chi):
 	Overestimate final black hole spin
 	formula is roughly based on
 	Tichy and Marronetti Physical Review D 78 081501 (2008)
+	(don't allow j >= 1 ... truncate at 0.998)
 	"""
-	return max(0.686 + 0.15 * chi, chi)
+	return max(0.686 + 0.15 * chi, chi, 0.998)
 
 def imr_time(f, m1, m2, j1, j2, f_max = None):
 	"""
