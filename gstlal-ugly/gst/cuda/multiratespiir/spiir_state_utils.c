@@ -526,7 +526,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		freeArray(b_array + i);
 
 		//printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
-				tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
+			//	tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
 		gpuErrchk(cudaPeekAtLastError());
 	}
 	
@@ -752,7 +752,7 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
   for(i=0; i<num_depths; i++)
   {
     SPSTATE(i)->pre_out_spiir_len = 0;
-    eff_len = SPSTATAE(i)->num_filters * SPSTATE(i)->num_templates;
+    int eff_len = SPSTATE(i)->num_filters * SPSTATE(i)->num_templates;
 
     CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream));
     CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_y, 0, eff_len * sizeof(COMPLEX_F), stream));
