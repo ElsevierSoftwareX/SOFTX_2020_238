@@ -900,9 +900,9 @@ FROM
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
 
 			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "%.1f" % spinstart)
+				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
+				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
+				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
 
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
@@ -911,12 +911,12 @@ FROM
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s" % instrument)
 			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] > spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "%.1f" % spinstart)
-			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx")
-			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx")
-			axes.legend(("Injections", "Background", "Zero-lag"), loc = "upper left")
+				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
+				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
+				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
+			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
+			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
+			axes.legend(loc = "upper left")
 			yield fig, "chi2_vs_rho_%s" % instrument, True
 
 
