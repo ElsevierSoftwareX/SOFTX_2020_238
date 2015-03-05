@@ -305,7 +305,7 @@ def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1):
 
 
 def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_filename = None):
-	pdb.set_trace()
+#	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
 	#
