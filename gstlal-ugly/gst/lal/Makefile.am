@@ -6,6 +6,7 @@ libgstlalugly_la_SOURCES = \
 	gstlalugly.c \
 	audioratefaker.h audioratefaker.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
+	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_mean.h gstlal_mean.c \
 	gstlal_multiplier.h gstlal_multiplier.c \
 	gstlal_pad.h gstlal_pad.c \
