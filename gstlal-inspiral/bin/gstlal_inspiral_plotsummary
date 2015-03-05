@@ -569,7 +569,10 @@ FROM
 							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
 				fig, axes = create_plot(ax1,ax2, aspect = aspect)
 				axes.set_title(r"Injection Parameter Distribution (%s Injections)" % waveform)
-				axes.plot(col1,col2, "k,")
+				if len(col1) > 16383:
+					axes.plot(col1,col2, "k,")
+				else:
+					axes.plot(col1,col2, "k.")
 				minx, maxx = axes.get_xlim()
 				miny, maxy = axes.get_ylim()
 				if aspect == 1:
