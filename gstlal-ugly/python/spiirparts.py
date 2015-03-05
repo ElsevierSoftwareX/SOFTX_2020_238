@@ -305,6 +305,7 @@ def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1):
 
 
 def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_filename = None):
+	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
 	#
@@ -331,14 +332,17 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	#
 	# construct dictionaries of whitened, conditioned, down-sampled
 	# h(t) streams
+
+	#
 	#
 
 	hoftdicts = {}
 	max_instru_rates = {} 
 	sngl_max_rate = 0
 	for instrument in detectors.channel_dict:
-		for bank_name in banks[instrument]:
-			sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_name), sngl_max_rate)
+		for instrument_from_bank, bank_list in [(instrument_from_bank, bank_list) for bank_dict in banks for instrument_from_bank, bank_list in bank_dict.items()]:
+			if instrument_from_bank == instrument:
+				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
@@ -349,36 +353,51 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	#
 	# construct trigger generators
 	#
+	triggersrcs = []
 
-	# format of banklist : {'H1': <H1Bank0>, <H1Bank1>..;
-	#			'L1': <L1Bank0>, <L1Bank1>..;..}
-	# format of bank: <H1bank0>
+	# format of banks :	[{'H1': <H1Bank0>; 'L1': <L1Bank0>..;}
+	#			 {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
+	#			 ...]
+	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	bank_count = 0
-	postcoh = None
-	autocorrelation_fname = ""
-	for instrument, banklist in banks.items():
-		autocorrelation_fname += str(instrument)
-		autocorrelation_fname += ":"
-		autocorrelation_fname += str(banklist[0])
-		autocorrelation_fname += "," 
-		if len(banklist) != 1:
-			raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
-	autocorrelation_fname = autocorrelation_fname.rstrip(',')
-	print autocorrelation_fname
+	autocorrelation_fname_list = []
+	for bank_dict in banks:
+		autocorrelation_fname = ""
+		for instrument, bank_list in bank_dict.items():
+			autocorrelation_fname += str(instrument)
+			autocorrelation_fname += ":"
+			autocorrelation_fname += str(bank_list[0])
+			autocorrelation_fname += "," 
+			if len(bank_list) != 1:
+				raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
+		autocorrelation_fname = autocorrelation_fname.rstrip(',')
+		print autocorrelation_fname
+		autocorrelation_fname_list.append(autocorrelation_fname)
 
-	for instrument, bank_name in [(instrument, bank_name) for instrument, banklist in banks.items() for bank_name in banklist]:
-		suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
-		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-		max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_name)
-		if max_bank_rate < max_instru_rates[instrument]:
-			head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-		snr = pipeparts.mkreblock(pipeline, head)
-		snr = pipeparts.mkcudamultiratespiir(pipeline, snr, bank_name, gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+	for instrument in banks[0].keys():
+		hoftdicts[instrument] = pipeparts.mktee(pipeline, hoftdicts[instrument])
 
-		if postcoh is None:
-			postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = hist_trials, snglsnr_thresh = peak_thresh)
-		else:
-			snr.link_pads(None, postcoh, instrument)
+	for i_dict, bank_dict in enumerate(banks):
+		postcoh = None
+		head = None
 
-	# FIXME: hard-coded to do compression	
-	return mkpostcohfilesink(pipeline, postcoh, location = output_filename, compression = 1)
+		for instrument, bank_list in bank_dict.items():
+			max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_list[0])
+			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+			if max_bank_rate < max_instru_rates[instrument]:
+				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
+			suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
+	
+			head = pipeparts.mkreblock(pipeline, head)
+			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+
+			if postcoh is None:
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh)
+			else:
+				snr.link_pads(None, postcoh, instrument)
+			bank_count += 1
+
+		# FIXME: hard-coded to do compression	
+		head = mkpostcohfilesink(pipeline, postcoh, location = output_filename[i_dict], compression = 1)
+		triggersrcs.append(head)
+	return triggersrcs
