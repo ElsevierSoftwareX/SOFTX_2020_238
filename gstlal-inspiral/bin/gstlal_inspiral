@@ -228,7 +228,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
-	return LIGOTimeGPS(0, lal.UTCToGPS(time.gmtime()).ns())
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 
 
 #
