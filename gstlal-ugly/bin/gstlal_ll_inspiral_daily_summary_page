@@ -28,7 +28,7 @@ def glob_trigger_files(path, seg):
 	return cache.sieve(segment = seg)
 
 def now():
-        return LIGOTimeGPS(0, lal.UTCToGPS(time.gmtime()).ns())
+        return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 
 def to_png_image(out):
 	f = StringIO.StringIO()
