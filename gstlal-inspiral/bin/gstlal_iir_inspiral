@@ -69,6 +69,7 @@ import subprocess
 import socket
 import time
 
+import multiprocessing
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -78,7 +79,6 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 import gst
-from gstlal import bottle
 
 from glue import segments
 from glue import segmentsUtils
@@ -374,8 +374,22 @@ else:
 #
 # Process banks in serial
 #
-for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, options.likelihood_file):
+def one_pipeline(iir_bank, 
+		output_filename, 
+		likelihood_file,
+		detectors,
+		psd,
+		options,
+		veto_segments,
+		):
+  if options.verbose:
+    print >>sys.stderr, "start a process for one pipeline"
 
+  print iir_bank
+  print output_filename
+  print likelihood_file
+
+  from gstlal import bottle
   # create a new, empty, Bottle application
   bottle.default_app.push()
 
@@ -405,9 +419,6 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   if "GSTLAL_LL_JOB" in os.environ:
     open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
-  print iir_bank
-  print output_filename
-  print likelihood_file
 #  banks = {}
 #  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
 #  for instrument in banks:
@@ -560,7 +571,6 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
 
   # Shutdown the web interface servers
-  del httpservers
   bottle.default_app.pop()
 
   if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
@@ -572,12 +582,28 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
 #  del bank
 #  del banks
 
-
-
 #
 # done
 #
 
-if options.data_source in ("lvshm", "framexmit"):
-  sys.exit(1) # online pipeline always ends with an error code
+#  if options.data_source in ("lvshm", "framexmit"):
+#    sys.exit(1) # online pipeline always ends with an error code
+
+
+print iir_banks
+print options.output
+print options.likelihood_file
+for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, options.likelihood_file):
+	print >> sys.stderr, "try fork a new process"
+	child = multiprocessing.Process(target = one_pipeline, 
+					args = (iir_bank, 
+						output_filename, 
+						likelihood_file,
+						detectors,
+						psd,
+						options,
+						veto_segments,
+						))
+	child.start()
+
 
