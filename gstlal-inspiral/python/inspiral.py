@@ -790,7 +790,7 @@ class Data(object):
 						# REAL8FrequencySeries
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
-							epoch = LIGOTimeGPS(0, lal.UTCToGPS(time.gmtime()).ns()),
+							epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
 							f0 = 0.0,
 							deltaF = elem.get_property("delta-f"),
 							sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
