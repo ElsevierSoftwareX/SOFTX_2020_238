@@ -201,6 +201,7 @@ def parse_command_line():
   parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
   parser.add_option("--detrsp-fname", metavar = "filename", help = "detector response filename.")
   parser.add_option("--hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
+  parser.add_option("--output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
 
   # gpu acceleartion support
   parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
@@ -447,7 +448,8 @@ if 1==1:
       peak_thresh = options.peak_thresh,
       detrsp_fname = options.detrsp_fname,
       hist_trials = options.hist_trials,
-      output_filename = options.output
+      output_filename = options.output,
+      output_skymap = options.output_skymap
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
