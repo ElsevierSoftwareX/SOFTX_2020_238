@@ -46,7 +46,7 @@ extern "C" {
 #define THREADSPERBLOCK 256
 #define NB_MAX 32
 
-#define ORIGINAL
+//#define ORIGINAL
 #define SM30
 #define CUT_FILTERS 0 // set to 0 to keep all the filtering results
 
