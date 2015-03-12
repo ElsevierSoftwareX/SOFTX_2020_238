@@ -84,6 +84,7 @@ typedef struct _SpiirState {
   gint depth; 			/* supposed to be 0-6 */
   ResamplerState *downstate, *upstate;
   float *d_queue; 		/* circular buffer (or ring buffer) for downsampler and spiir */
+  float *d_out;			/* only apply to 0 depth */
   gint queue_len;
   gint queue_first_sample;  	/* queue start position */
   gint queue_last_sample;  	/* queue end position */

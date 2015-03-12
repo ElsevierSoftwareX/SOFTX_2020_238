@@ -360,7 +360,7 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
 	  float *sinc_table = (float *)malloc (sizeof(float) * state->sinc_len);
 	  /* Sinc function Generator */
 	  sinc_function(sinc_table, state->filt_len, cutoff, den_rate, UP_QUALITY);
-//	  psinc_function(sinc_table, state->filt_len, resolution);
+	  //psinc_function(sinc_table, state->filt_len, resolution);
           CUDA_CHECK(cudaMemcpyAsync(state->d_sinc_table, sinc_table, state->sinc_len * sizeof(float), cudaMemcpyHostToDevice, stream));
  	  free(sinc_table);
 	  sinc_table = NULL;
@@ -375,11 +375,11 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
 	mem_alloc_size = state->mem_len * channels * sizeof(float);
 	CUDA_CHECK(cudaMalloc((void **) &(state->d_mem), mem_alloc_size));
 
-//	state->mem = (float *)malloc(mem_alloc_size);
+	//state->mem = (float *)malloc(mem_alloc_size);
 	CUDA_CHECK(cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream));
 	state->last_sample = state->filt_len/2;
-//	GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
-//	printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
+	//GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
+	//printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
 	return state;
 }
 
@@ -567,7 +567,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 		SPSTATEDOWN(i) = resampler_state_create (inrate, outrate, 1, num_exe_samples, num_head_cover_samples, i, stream);
 		SPSTATEUP(i) = resampler_state_create (outrate, inrate, outchannels, num_exe_samples, num_head_cover_samples, i, stream);
 		g_assert (SPSTATEDOWN(i) != NULL);
-	    g_assert (SPSTATEUP(i) != NULL);
+		g_assert (SPSTATEUP(i) != NULL);
 
 	}
 
@@ -583,10 +583,68 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 		CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, queue_alloc_size, stream));
 
 	}
+	// FIXME: this d_out will cost large GPU memory, find a way to avoid it
+	int out_alloc_size = MAX(num_exe_samples, num_head_cover_samples) * outchannels * sizeof(float);
 
-		gpuErrchk(cudaPeekAtLastError());
+	//printf("out_alloc_size %d\n", out_alloc_size);
+
+	CUDA_CHECK(cudaMalloc((void **) &(SPSTATE(0)->d_out), out_alloc_size)); // for the output
+	CUDA_CHECK(cudaMemsetAsync(SPSTATE(0)->d_out, 0, out_alloc_size, stream));
+	gpuErrchk(cudaPeekAtLastError());
 	return spstate;
 }
+
+void 
+spiir_state_destroy (SpiirState ** spstate, guint num_depths)
+{
+	guint i;
+       	for(i=0; i<num_depths; i++)
+	{
+		resampler_state_destroy (SPSTATEDOWN(i));
+		resampler_state_destroy (SPSTATEUP(i));
+		free(SPSTATEDOWN(i));
+		free(SPSTATEUP(i));
+		cudaFree(SPSTATE(i)->d_queue);
+		free(SPSTATE(i));
+
+	}
+}
+
+void
+spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
+{
+  guint i = 0;
+  for(i=0; i<num_depths; i++)
+  {
+    SPSTATE(i)->pre_out_spiir_len = 0;
+    int eff_len = SPSTATE(i)->num_filters * SPSTATE(i)->num_templates;
+
+    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream));
+    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_y, 0, eff_len * sizeof(COMPLEX_F), stream));
+
+    SPSTATE(i)->queue_first_sample = 0;
+    SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
+
+    resampler_state_reset(SPSTATEDOWN(i), stream);
+    gpuErrchk(cudaPeekAtLastError());
+    resampler_state_reset(SPSTATEUP(i), stream);
+    gpuErrchk(cudaPeekAtLastError());
+  }
+}
+
+gint
+spiir_state_get_outlen (SpiirState **spstate, gint in_len, guint num_depths) {
+  guint i;
+  for (i=0; i<num_depths-1; i++) 
+   in_len = (in_len - SPSTATEDOWN(i)->last_sample)/2; 
+
+  for (i=num_depths-1; i>0; i--) 
+   in_len = (in_len - SPSTATEUP(i)->last_sample)*2; 
+
+  return in_len;
+}
+
+
 /* DEPRECATED */
 #if 0
 void
@@ -679,13 +737,12 @@ spiir_state_load_bank (SpiirState **spstate, guint num_depths, gdouble *bank, gi
 		free (tmp_b0);
 	if (tmp_d)
 		free (tmp_d);
-//	g_assert (pos == bank_len);
+	//g_assert (pos == bank_len);
         //gpuErrchk (cudaPeekAtLastError ());
 
 
 }
-#endif
-#if 0
+
 SpiirState ** 
 spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 		guint num_exe_samples, gint width, guint rate, cudaStream_t stream)
@@ -727,61 +784,7 @@ spiir_state_create (gdouble *bank, gint bank_len, guint num_head_cover_samples,
 
 	return spstate;
 }
-#endif
 
-void 
-spiir_state_destroy (SpiirState ** spstate, guint num_depths)
-{
-	guint i;
-       	for(i=0; i<num_depths; i++)
-	{
-		resampler_state_destroy (SPSTATEDOWN(i));
-		resampler_state_destroy (SPSTATEUP(i));
-		free(SPSTATEDOWN(i));
-		free(SPSTATEUP(i));
-		cudaFree(SPSTATE(i)->d_queue);
-		free(SPSTATE(i));
-
-	}
-}
-
-void
-spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
-{
-  guint i = 0;
-  for(i=0; i<num_depths; i++)
-  {
-    SPSTATE(i)->pre_out_spiir_len = 0;
-    int eff_len = SPSTATE(i)->num_filters * SPSTATE(i)->num_templates;
-
-    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_queue, 0, SPSTATE(i)->queue_len * sizeof(float), stream));
-    CUDA_CHECK(cudaMemsetAsync(SPSTATE(i)->d_y, 0, eff_len * sizeof(COMPLEX_F), stream));
-
-    SPSTATE(i)->queue_first_sample = 0;
-    SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
-
-    resampler_state_reset(SPSTATEDOWN(i), stream);
-    gpuErrchk(cudaPeekAtLastError());
-    resampler_state_reset(SPSTATEUP(i), stream);
-    gpuErrchk(cudaPeekAtLastError());
-  }
-}
-
-gint
-spiir_state_get_outlen (SpiirState **spstate, gint in_len, guint num_depths) {
-  guint i;
-  for (i=0; i<num_depths-1; i++) 
-   in_len = (in_len - SPSTATEDOWN(i)->last_sample)/2; 
-
-  for (i=num_depths-1; i>0; i--) 
-   in_len = (in_len - SPSTATEUP(i)->last_sample)*2; 
-
-  return in_len;
-}
-
-
-#if 0
-/* DEPRECATED */
 void
 spiir_state_flush_queue (SpiirState **spstate, gint depth, gint
 		num_flush_samples)

@@ -304,8 +304,8 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
     /*
      * src caps is the same with sink caps, except it only has number of channels that equals to the number of templates
      */
-//    if (!g_mutex_trylock(element->iir_bank_lock))
-//	    printf("lock by another thread");
+    //if (!g_mutex_trylock(element->iir_bank_lock))
+      //printf("lock by another thread");
     g_mutex_lock (element->iir_bank_lock);
     if(!element->spstate) 
 	    g_cond_wait(element->iir_bank_available, element->iir_bank_lock);
@@ -663,14 +663,14 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
   num_exe_samples = element->num_exe_samples;
   num_in_multidown = MIN (old_in_len, num_exe_samples);
 
-  gint outsize = 0, out_len = 0, tmp_out_len = 0, upfilt_len;
+  gint outsize = 0, out_len = 0, upfilt_len;
   float * in_multidown, *tmp_out;
   upfilt_len = element->spstate[0]->upstate->filt_len;
-  tmp_out_len = element->spstate[0]->upstate->mem_len;
-  tmp_out = (float *)malloc(element->outchannels * tmp_out_len * sizeof(float));
+  //int tmp_out_len = element->spstate[0]->upstate->mem_len;
+  //tmp_out = (float *)malloc(element->outchannels * tmp_out_len * sizeof(float));
 
   gint i, j;
-  float *outdata;
+  float *outdata, *pos_out;
 
   if (element->num_exe_samples == element->rate)
     out_len = in_len;
@@ -679,7 +679,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
   outsize = out_len * sizeof(float) * element->outchannels;
 
-  GST_DEBUG_OBJECT (element, "tmp_out_len %d, out len predicted %d", tmp_out_len, out_len);
+  //GST_DEBUG_OBJECT (element, "tmp_out_len %d, out len predicted %d", tmp_out_len, out_len);
   outdata = (float *) GST_BUFFER_DATA(outbuf);
    
   while (num_in_multidown > 0) {
@@ -688,13 +688,21 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
     num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
-    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
+    pos_out = outdata + last_num_out_spiirup * (element->outchannels);
+    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, pos_out, element->stream);
 
 
+#if 0
+    /* reshape is deprecated because it cost hugh cpu usage */
     /* reshape to the outbuf data */
     for (i=0; i<num_out_spiirup; i++)
       for (j=0; j<element->outchannels; j++)
 	      outdata[element->outchannels * (i + last_num_out_spiirup) + j] = tmp_out[tmp_out_len * j + i + upfilt_len - 1];
+
+    //memcpy(pos_out, tmp_out, sizeof(float) * num_out_spiirup * (element->outchannels));
+    //free(tmp_out);
+#endif
+
 
     GST_DEBUG_OBJECT (element, "done cpy data to BUFFER");
  
@@ -706,7 +714,6 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
  }
 
     g_assert(last_num_out_spiirup == out_len);
-    free(tmp_out);
 
 
     /* time */
@@ -1157,7 +1164,8 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
       GST_LOG_OBJECT (element, "obtaining bank, stream id is %d", element->stream);
       element->bank_fname = g_value_dup_string(value);
-//      cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
+      /* bank_id is deprecated, get the stream id directly from prop */
+      //cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
  
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
