@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+"""
+Produce a fits file from binary sky map file
+"""
+import struct
+from lalinference import fits
+import pdb
+pdb.set_trace()
+from optparse import Option, OptionParser
+
+parser = OptionParser(
+  description = __doc__,
+  usage = '%prog [options] [INPUT.txt]',
+  option_list = [
+	  Option("--output", "-o", 
+		  help="Output filename"),
+	  Option("--event-id", "-e", type=int, default=0,
+		  help="Postcoh event ID [default: 0]")]
+)
+
+opts, args = parser.parse_args()
+
+import logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger('Postcoh_skymap')
+
+postcoh_skymap = []
+input_fname = args[0]
+instruments = input_fname.split('_')[0]
+f = open(input_fname, 'rb')
+
+for chunk in iter(lambda: f.read(4), ''):
+	postcoh_skymap.append(struct.unpack('f', chunk)[0])
+
+#FIXME: This is no reason
+min_skymap = min(postcoh_skymap)
+range_skymap = max(postcoh_skymap) - min_skymap
+for i in range(len(postcoh_skymap)):
+	postcoh_skymap[i] = (postcoh_skymap[i] - min_skymap)/ range_skymap
+
+log.info("begin to write skymap in fits format")
+#FIXME: gps_time/ runtime are not input
+fits.write_sky_map(opts.output, postcoh_skymap,
+			objid = str(opts.event_id), gps_time=0,
+			creator = 'postcoh', runtime = 0, 
+			instruments = instruments, nest = True)
+
+
