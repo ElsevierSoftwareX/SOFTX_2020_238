@@ -71,7 +71,7 @@ int gstlal_set_instrument_in_snglburst_array(SnglBurst *bankarray, int length, c
 	return 0;
 }
 
-SnglBurst *gstlal_snglburst_new_list_from_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime time, guint rate, SnglBurst* output)
+SnglBurst *gstlal_snglburst_new_list_from_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime etime, guint rate, SnglBurst* output)
 {
 	/* advance the pointer if we have one */
 	guint channel;
@@ -84,7 +84,7 @@ SnglBurst *gstlal_snglburst_new_list_from_peak(struct gstlal_peak_state *input, 
 			SnglBurst *new_event = XLALCreateSnglBurst();
 			memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
 			LIGOTimeGPS peak_time;
-			XLALINT8NSToGPS(&peak_time, time);
+			XLALINT8NSToGPS(&peak_time, etime);
 			XLALGPSAdd(&peak_time, -new_event->duration/2);
 			XLALGPSAdd(&peak_time, (double) maxsample[channel] / rate);
 			LIGOTimeGPS start_time = peak_time;
@@ -100,7 +100,7 @@ SnglBurst *gstlal_snglburst_new_list_from_peak(struct gstlal_peak_state *input, 
 	return output;
 }
 
-SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime time, guint rate, SnglBurst* output)
+SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *input, SnglBurst *bankarray, GstClockTime etime, guint rate, SnglBurst* output)
 {
 	/* advance the pointer if we have one */
 	guint channel;
@@ -113,7 +113,7 @@ SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *
 			SnglBurst *new_event = XLALCreateSnglBurst();
 			memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
 			LIGOTimeGPS peak_time;
-			XLALINT8NSToGPS(&peak_time, time);
+			XLALINT8NSToGPS(&peak_time, etime);
 			XLALGPSAdd(&peak_time, (double) maxsample[channel] / rate);
 			XLALGPSAdd(&peak_time, -new_event->duration/2);
 			// Center the tile
@@ -131,7 +131,7 @@ SnglBurst *gstlal_snglburst_new_list_from_double_peak(struct gstlal_peak_state *
 	return output;
 }
 
-GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
+GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, guint64 offset, guint64 length, GstClockTime etime, guint rate, guint64 *count)
 {
 	/* FIXME check errors */
 
@@ -170,13 +170,13 @@ GstBuffer *gstlal_snglburst_new_buffer_from_list(SnglBurst *input, GstPad *pad, 
 	GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
 	/* set the time stamps */
-	GST_BUFFER_TIMESTAMP(srcbuf) = time;
+	GST_BUFFER_TIMESTAMP(srcbuf) = etime;
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	return srcbuf;
 }
 
-SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
+SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst *bankarray, GstClockTime etime, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
 {
 	/* advance the pointer if we have one */
 	guint channel, sample;
@@ -188,7 +188,7 @@ SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst
 			    SnglBurst *new_event = XLALCreateSnglBurst();
 			    memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
 			    LIGOTimeGPS peak_time;
-			    XLALINT8NSToGPS(&peak_time, time);
+			    XLALINT8NSToGPS(&peak_time, etime);
 			    XLALGPSAdd(&peak_time, (double) sample / rate);
 			    XLALGPSAdd(&peak_time, -new_event->duration/2);
 			    // Center the tile
@@ -207,7 +207,7 @@ SnglBurst *gstlal_snglburst_new_list_from_double_buffer(double *input, SnglBurst
 	return output;
 }
 
-SnglBurst *gstlal_snglburst_new_list_from_complex_double_buffer(complex double *input, SnglBurst *bankarray, GstClockTime time, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
+SnglBurst *gstlal_snglburst_new_list_from_complex_double_buffer(complex double *input, SnglBurst *bankarray, GstClockTime etime, guint channels, guint samples, guint rate, gdouble threshold, SnglBurst* output)
 {
 	/* advance the pointer if we have one */
 	guint channel, sample;
@@ -221,7 +221,7 @@ SnglBurst *gstlal_snglburst_new_list_from_complex_double_buffer(complex double *
 			    SnglBurst *new_event = XLALCreateSnglBurst();
 			    memcpy(new_event, &(bankarray[channel]), sizeof(*new_event));
 			    LIGOTimeGPS peak_time;
-			    XLALINT8NSToGPS(&peak_time, time);
+			    XLALINT8NSToGPS(&peak_time, etime);
 			    XLALGPSAdd(&peak_time, (double) sample / rate);
 			    XLALGPSAdd(&peak_time, -new_event->duration/2);
 			    // Center the tile

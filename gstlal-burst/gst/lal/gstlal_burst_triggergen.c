@@ -467,7 +467,7 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			/* Either update the current buffer or create the new output buffer */
             dataptr = malloc(sizeof(complex double)*copysamps*element->channels);
 			gst_audioadapter_copy_samples(element->adapter, dataptrd, copysamps, &copied_gap, &copied_nongap);
-            element->event_buffer = gstlal_snglburst_new_list_from_complex_double_buffer(dataptrd, element->bankarray, element->next_output_timestamp, element->channels, copysamps, element->rate, element->snr_thresh, element->event_buffer);
+            element->event_buffer = gstlal_snglburst_new_list_from_complex_double_buffer(dataptr, element->bankarray, element->next_output_timestamp, element->channels, copysamps, element->rate, element->snr_thresh, element->event_buffer);
             free(dataptrd);
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE_NO_PEAK:
