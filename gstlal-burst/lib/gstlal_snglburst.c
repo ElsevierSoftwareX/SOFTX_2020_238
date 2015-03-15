@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include <gst/gst.h>
 #include <gstlal/gstlal_peakfinder.h>
+#include <gstlal_snglburst.h>
 #include <complex.h>
 #include <string.h>
 #include <math.h>
@@ -39,7 +40,7 @@ int gstlal_snglburst_array_from_file(char *bank_filename, SnglBurst **bankarray)
 		*bank = *this;
 		bank->next = NULL;
 		bank++;
-		free(this);
+		XLALFree(this);
 		this = next;
 	}
 
