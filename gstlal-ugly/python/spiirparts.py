@@ -260,7 +260,8 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			head = pipeparts.mkitac(pipeline, snr, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
+			head = pipeparts.mkqueue(pipeline, snr, max_size_buffers=1)
+			head = pipeparts.mkitac(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)

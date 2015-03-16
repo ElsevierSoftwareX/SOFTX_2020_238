@@ -617,6 +617,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 	CUDA_CHECK(cudaMemcpyAsync(pos_inqueue, in_multidown + num_tail_samples, num_head_samples * sizeof(float), cudaMemcpyHostToDevice, stream));
 	}
 
+	cudaStreamSynchronize(stream);
 	/* the following parameters should be updated each time of downsample :
 	* queue_last_sample,
 	* last_sample.
@@ -668,6 +669,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 							SPSTATE(i+1)->queue_len
 							);
 
+	cudaStreamSynchronize(stream);
 	//gpuErrchk (stream);
 
 	/* 
@@ -777,6 +779,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->nb,
 							SPSTATE(i)->queue_first_sample,
 							SPSTATE(i)->queue_len);
+
+	cudaStreamSynchronize(stream);
 	//g_mutex_unlock(element->cuTex_lock);
 
 	//gpuErrchk (stream);
@@ -808,6 +812,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 			numFilters,
 			numTemplates
 		);
+		cudaStreamSynchronize(stream);
 	}
 	else
 	{
@@ -845,6 +850,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 			cu,
 			logcu
 		);
+		cudaStreamSynchronize(stream);
 	}	
 	#endif
 
@@ -899,6 +905,8 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 							SPSTATE(i)->nb,
 							SPSTATE(i)->queue_first_sample,
 							SPSTATE(i)->queue_len);
+
+	cudaStreamSynchronize(stream);
 	#else
 	GST_LOG ("spiir_kernel: depth %d. processed %d, nb %d, num of (templates: %d,filters: %d). block.size (%d, %d, %d), grid.size (%d, %d, %d)", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_templates, SPSTATE(i)->num_filters, block.x, block.y, block.z, grid.x, grid.y, grid.z);
 	if (SPSTATE(i)->num_filters > 32)
@@ -927,6 +935,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 			numFilters,
 			numTemplates
 		);
+		cudaStreamSynchronize(stream);
 	}
 	else
 	{
@@ -964,11 +973,13 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 			cu,
 			logcu
 		);
+		cudaStreamSynchronize(stream);
 	}	
 	#endif
 	}
 	else {
 		CUDA_CHECK(cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * SPSTATEUP(i)->mem_len * SPSTATE(i)->num_templates, stream));
+		cudaStreamSynchronize(stream);
 	}
 
 	//g_mutex_unlock(element->cuTex_lock);
@@ -997,6 +1008,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 					SPSTATEUP(i)->mem_len,
 					SPSTATE(i)->d_out
 					);
+	cudaStreamSynchronize(stream);
 	} else {
 
 	/*
@@ -1012,6 +1024,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 					SPSTATEUP(i+1)->mem_len, 
 					SPSTATEUP(i)->mem_len);
 
+	cudaStreamSynchronize(stream);
 	}
 	//gpuErrchk (stream);
 	SPSTATEUP(i+1)->last_sample = 0;
@@ -1022,6 +1035,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
  
 	//CUDA_CHECK(cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,	SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream));
 	CUDA_CHECK(cudaMemcpyAsync(out, SPSTATE(0)->d_out,	SPSTATEUP(0)->channels * (spiir_processed) * sizeof(float), cudaMemcpyDeviceToHost, stream));
+	//cudaStreamSynchronize(stream);
 
 	//gpuErrchk (stream);
 	return spiir_processed;
