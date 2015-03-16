@@ -31,7 +31,6 @@
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
 #	+ `--verbose`: Be verbose.
 
-import bisect
 import math
 import matplotlib
 matplotlib.rcParams.update({
@@ -51,10 +50,8 @@ import numpy
 from optparse import OptionParser
 import sqlite3
 import sys
-import warnings
 
 
-from glue import iterutils
 from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
@@ -63,9 +60,8 @@ from pylal import ligolw_thinca
 
 
 from gstlal import far
+from gstlal import plotfar
 from gstlal import inspiral_pipe
-
-golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 
 def parse_command_line():
@@ -89,6 +85,8 @@ def parse_command_line():
 
 	if options.output_format not in (".png", ".pdf", ".svg"):
 		raise ValueError("invalid --output-format \"%s\"" % options.output_format)
+
+	options.user_tag = options.user_tag.upper()
 
 	return options, filenames
 
@@ -173,211 +171,6 @@ WHERE
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
-def colour_from_instruments(instruments, colours = {
-	"G1": numpy.array((0.0, 1.0, 1.0)),
-	"H1": numpy.array((1.0, 0.0, 0.0)),
-	"H2": numpy.array((0.0, 0.0, 1.0)),
-	"L1": numpy.array((0.0, 0.8, 0.0)),
-	"V1": numpy.array((1.0, 0.0, 1.0)),
-	"E1": numpy.array((1.0, 0.0, 0.0)),
-	"E2": numpy.array((0.0, 0.8, 0.0)),
-	"E3": numpy.array((1.0, 0.0, 1.0)),
-}):
-	# mix colours additively
-	colour = sum(map(colours.__getitem__, instruments))
-	# desaturate
-	colour += len(instruments) - 1
-	# normalize
-	return colour / colour.max()
-
-
-# FIXME We plan on eventually moving these plotting functions to a package,
-# plot_inspiral.py, in the gstlal module so they can be easily used in other
-# code. For now, only plot_likelihood_ratio_pdf is used by gstlal_llcbcnode, so
-# it was simply copied over. That should change in the future though
-def plot_snr_chi_pdf(instrument, binnedarray, snr_max, tag, denom_binnedarray = None):
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4.5, 3.5))
-	axes = fig.gca()
-	# the last bin can have a centre at infinity, and its value is
-	# always 0 anyway so there's no point in trying to include it
-	x = binnedarray.bins[0].centres()[:-1]
-	y = binnedarray.bins[1].centres()[:-1]
-	z = binnedarray.array[:-1,:-1]
-	if denom_binnedarray is not None:
-		assert (denom_binnedarray.bins[0].centres()[:-1] == x).all()
-		assert (denom_binnedarray.bins[1].centres()[:-1] == y).all()
-		z /= denom_binnedarray.array[:-1,:-1]
-	if numpy.isnan(z).any():
-		warnings.warn("%s PDF contains NaNs" % key)
-		z = numpy.ma.masked_where(numpy.isnan(z), z)
-	if not z.any():
-		warnings.warn("%s PDF is 0, skipping" % key)
-		return None
-
-	# the range of the plots
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, snr_max
-	ylo, yhi = .0001, 1.
-
-	x = x[binnedarray.bins[xlo:xhi, ylo:yhi][0]]
-	y = y[binnedarray.bins[xlo:xhi, ylo:yhi][1]]
-	z = z[binnedarray.bins[xlo:xhi, ylo:yhi]]
-
-	# matplotlib's colour bar seems to rely on being able to store the
-	# ratio of the lowest and highest value in a double so the range
-	# cannot be more than about 300 orders of magnitude.  experiments
-	# show it starts to go wrong before that but 250 orders of
-	# magnitude seems to be OK
-	numpy.clip(z, z.max() * 1e-250, float("+inf"), out = z)
-
-	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
-	axes.loglog()
-	axes.grid(which = "both")
-	#axes.set_xlim((xlo, xhi))
-	#axes.set_ylim((ylo, yhi))
-	fig.colorbar(mesh, ax = axes)
-	axes.set_xlabel(r"$\mathrm{SNR}$")
-	axes.set_ylabel(r"$\chi^{2} / \mathrm{SNR}^{2}$")
-	if tag.lower() in ("signal",):
-		assert denom_binnedarray is None
-		axes.set_title(r"%s %s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR})$" % (instrument, tag))
-	elif tag.lower() in ("noise", "candidates"):
-		assert denom_binnedarray is None
-		axes.set_title(r"%s %s $P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % (instrument, tag))
-	elif tag.lower() in ("lr",):
-		assert denom_binnedarray is not None
-		axes.set_title(r"%s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % instrument)
-	else:
-		raise ValueError(tag)
-	return fig
-
-def plot_likelihood_ratio_pdf(instruments, pdf, (xlo, xhi), tag, zerolag_pdf = None):
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4., 4. / golden_ratio))
-	axes = fig.gca()
-	axes.semilogy(pdf.bins[0].centres(), pdf.array, color = "k")
-	if zerolag_pdf is not None:
-		axes.semilogy(zerolag_pdf.bins[0].centres(), zerolag_pdf.array, color = "k", linestyle = "--")
-	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
-	if instruments is None:
-		axes.set_title(r"%s Log Likelihood Ratio PDF" % tag)
-	else:
-		axes.set_title(r"%s %s Log Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
-	axes.set_xlabel(r"$\ln \mathcal{L}$")
-	axes.set_ylabel(r"$P(\ln \mathcal{L} | \mathrm{%s})$" % tag.lower())
-	yhi = pdf[xlo:xhi,].max()
-	ylo = pdf[xlo:xhi,].min()
-	if zerolag_pdf is not None:
-		yhi = max(yhi, zerolag_pdf[xlo:xhi,].max())
-		ylo = min(ylo, zerolag_pdf[xlo:xhi,].min())
-	ylo = max(yhi * 1e-40, ylo)
-	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
-	axes.set_xlim((xlo, xhi))
-	fig.tight_layout(pad = .8)
-	return fig
-
-def plot_likelihood_ratio_ccdf(instruments, ccdf, zerolag_ln_likelihood_ratios, (xlo, xhi), tag):
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4., 4. / golden_ratio))
-	axes = fig.gca()
-	x = numpy.linspace(xlo, xhi, 10000)
-	y = ccdf(x)
-	axes.semilogy(x, y, color = "k")
-	yhi = y.max()
-	ylo = max(yhi * 1e-40, y.min())
-	if zerolag_ln_likelihood_ratios is not None:
-		x = numpy.array(sorted(zerolag_ln_likelihood_ratios), dtype = "double")
-		y = numpy.arange(len(zerolag_ln_likelihood_ratios), 0, -1, dtype = "double")
-		y *= (1. - 1. / math.e) / y[0]
-		axes.semilogy(x, y, color = "k", linestyle = "--")
-		yhi = max(yhi, y.max())
-		ylo = min(ylo, y.min())
-		ylo = max(ylo, yhi * (y.min() / yhi)**1.5)
-	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
-	axes.set_xlim((xlo, xhi))
-	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
-	if instruments is None:
-		axes.set_title(r"%s Log Likelihood Ratio CCDF" % tag)
-	else:
-		axes.set_title(r"%s %s Log Likelihood Ratio CCDF" % (", ".join(sorted(instruments)), tag))
-	axes.set_xlabel(r"$\ln \mathcal{L}$")
-	axes.set_ylabel(r"$P(\geq \ln \mathcal{L} | \mathrm{%s})$" % tag.lower())
-	fig.tight_layout(pad = .8)
-	return fig
-
-def plot_rates(coinc_params_distributions, ranking_data):
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((6., 6.))
-	axes0 = fig.add_subplot(2, 2, 1)
-	axes1 = fig.add_subplot(2, 2, 2)
-	axes2 = fig.add_subplot(2, 2, 3)
-	axes3 = fig.add_subplot(2, 2, 4)
-
-	# singles counts
-	labels = []
-	sizes = []
-	colours = []
-	for instrument, category in sorted(coinc_params_distributions.instrument_categories.items()):
-		count = coinc_params_distributions.background_rates["instruments"][category,]
-		if not count:
-			continue
-		labels.append("%s\n(%d)" % (instrument, count))
-		sizes.append(count)
-		colours.append(colour_from_instruments((instrument,)))
-	axes0.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes0.set_title("Observed Background Event Counts")
-
-	# projected background counts
-	labels = []
-	sizes = []
-	colours = []
-	for instruments in sorted(sorted(instruments) for instruments in coinc_params_distributions.count_above_threshold if instruments is not None):
-		count = coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),]
-		if len(instruments) < 2 or not count:
-			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
-		sizes.append(count)
-		colours.append(colour_from_instruments(instruments))
-	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes1.set_title("Projected Background Coincidence Counts")
-
-	# recovered signal distribution
-	if ranking_data is not None:
-		labels = []
-		sizes = []
-		colours = []
-		for instruments, fraction in sorted(coinc_params_distributions.Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
-			if len(instruments) < 2 or not fraction:
-				continue
-			labels.append(", ".join(sorted(instruments)))
-			sizes.append(fraction)
-			colours.append(colour_from_instruments(instruments))
-		axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-		axes2.set_title(r"Projected Recovered Signal Distribution")
-
-	# observed counts
-	labels = []
-	sizes = []
-	colours = []
-	for instruments, count in sorted((sorted(instruments), count) for instruments, count in coinc_params_distributions.count_above_threshold.items() if instruments is not None):
-		if len(instruments) < 2 or not count:
-			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
-		sizes.append(count)
-		colours.append(colour_from_instruments(instruments))
-	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes3.set_title("Observed Coincidence Counts")
-
-	fig.tight_layout(pad = .8)
-
-	return fig
-
-
 #
 # command line
 #
@@ -408,130 +201,56 @@ background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_resu
 # plots
 #
 
+# SNR and Chisquared
+for instrument in ("H1","L1","V1"):
+	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
+		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr)
+		if fig is None:
+			continue
+		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		if options.verbose:
+			print >>sys.stderr, "writing %s" % plotname
+		fig.savefig(plotname)
 
-fig = plot_rates(coinc_params_distributions, ranking_data)
-plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_rates" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+
+# Trigger and event rates
+fig = plotfar.plot_rates(coinc_params_distributions, ranking_data)
+plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 if options.verbose:
 	print >>sys.stderr, "writing %s" % plotname
 fig.savefig(plotname)
 
 
-for (instruments, horizon_distances), (ignored, binnedarray, ignored) in sorted(coinc_params_distributions.snr_joint_pdf_cache.items(), key = lambda ((a, horizon_distances), b): sorted(horizon_distances)):
-	if len(instruments) > 2:
-		# FIXME:  figure out how to plot 3D PDFs
-		continue
-	instruments = sorted(instruments)
-	horizon_distances = dict(horizon_distances)
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((5, 4))
-	axes = fig.gca()
-	x = binnedarray.bins[0].centres()
-	y = binnedarray.bins[1].centres()
-	z = binnedarray.array
-	if numpy.isnan(z).any():
-		warnings.warn("%s SNR PDF for %s contains NaNs" % (", ".join(instruments), ", ".join("%s=%g" % instdist for instdist in sorted(horizon_distances.items()))))
-		z = numpy.ma.masked_where(numpy.isnan(z), z)
+# SNR PDFs
+for (instruments, horizon_distances) in sorted(coinc_params_distributions.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions, instruments, horizon_distances, options.max_snr)
+	if fig is not None:
+		hd_dict = dict(horizon_distances)
+		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, hd_dict[k]) for k in sorted(hd_dict)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		if options.verbose:
+			print >>sys.stderr, "writing %s" % plotname
+		fig.savefig(plotname)
 
-	# the range of the plots
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, options.max_snr
-
-	x = x[binnedarray.bins[xlo:xhi, xlo:xhi][0]]
-	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
-	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
-
-	# don't try to plot blank PDFs (it upsets older matplotlibs)
-	if z.max() == 0.:
-		continue
-
-	# these plots only require about 20 orders of magnitude of dynamic
-	# range
-	numpy.clip(z, z.max() * 1e-20, float("+inf"), out = z)
-
-	# one last check for craziness to make error messages more
-	# meaningful
-	assert not numpy.isnan(z).any()
-	assert not (z <= 0.).any()
-
-	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
-	axes.loglog()
-	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
-	#axes.set_xlim((xlo, xhi))
-	#axes.set_ylim((xlo, xhi))
-	fig.colorbar(mesh, ax = axes)
-	# co-ordinates are in alphabetical order
-	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
-	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
-	axes.set_title(r"$P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_snr_pdf_%s" % (options.user_tag, "_".join(iterutils.flatten(sorted(horizon_distances)))), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
-	fig.savefig(plotname)
-
-for key, binnedarray in coinc_params_distributions.background_pdf.items() if coinc_params_distributions is not None else ():
-	if "_snr_chi" not in key:
-		continue
-	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Noise")
-	if fig is None:
-		continue
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
-	fig.savefig(plotname)
-
-
-for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coinc_params_distributions is not None else ():
-	if "_snr_chi" not in key:
-		continue
-	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Signal")
-	if fig is None:
-		continue
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_signal_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
-	fig.savefig(plotname)
-
-for key, binnedarray in coinc_params_distributions.injection_pdf.items() if coinc_params_distributions is not None else ():
-	if "_snr_chi" not in key:
-		continue
-	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "LR", denom_binnedarray = coinc_params_distributions.background_pdf[key])
-	if fig is None:
-		continue
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_lr_snrchi2" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
-	fig.savefig(plotname)
-
-for key, binnedarray in coinc_params_distributions.zero_lag_pdf.items() if coinc_params_distributions is not None else ():
-	if "_snr_chi" not in key:
-		continue
-	instrument = key.split("_")[0]
-	fig = plot_snr_chi_pdf(instrument, binnedarray, options.max_snr, "Candidates")
-	if fig is None:
-		continue
-	plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_candidate_snrchi2_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
-	fig.savefig(plotname)
 
 if ranking_data is not None:
 	for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
-		fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (options.min_log_lambda, options.max_log_lambda), "Noise", zerolag_pdf = ranking_data.zero_lag_likelihood_pdfs[instruments])
-		plotname = inspiral_pipe.T050017_filename(instruments or "NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_pdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
+		plotname = inspiral_pipe.T050017_filename(instruments or "COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_PDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
 
 	ranking_stats = sum(zerolag_ln_likelihood_ratios.values(), []) if zerolag_ln_likelihood_ratios is not None else None
-	fig = plot_likelihood_ratio_ccdf(None, fapfar.ccdf_interpolator, ranking_stats, (options.min_log_lambda, options.max_log_lambda), "Noise")
-	plotname = inspiral_pipe.T050017_filename("NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_noise_likelihood_ratio_ccdf" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), "Noise")
+	plotname = inspiral_pipe.T050017_filename("NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
+
+
+# FIXME
+# I am not sure what to do here.
+sys.exit(0)
 
 for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items() if ranking_data is not None else ():
 	fig = plot_likelihood_ratio_pdf(instruments, binnedarray, (options.min_log_lambda, options.max_log_lambda), "Signal")
@@ -564,73 +283,3 @@ for instruments, binnedarray in ranking_data.signal_likelihood_pdfs.items() if r
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
-
-
-#
-# done
-#
-
-
-sys.exit(0)
-
-
-total_count = {'H1':0., 'L1':0., 'V1':0.}
-
-for f in files:
-	Far = far.LocalRankingData.from_filenames([f], verbose = options.verbose)
-	dists, segs = Far.distributions, Far.livetime_seg
-	counts = dists.background_rates
-	inj = dists.injection_rates
-	likely = copy.deepcopy(inj)
-
-	for i, ifo in enumerate(['H1','L1', 'V1']):	
-		likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
-		total_count[ifo] += counts[ifo+"_snr_chi"].array.sum()
-		for name, obj in (("background", counts), ("injections", inj), ("likelihood", likely)):
-			fig = pylab.figure(figsize=(6,5), facecolor = 'g')
-			fig.patch.set_alpha(0.0)
-			data = obj[ifo+"_snr_chi"].array
-			snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
-			chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
-			chi[0] = 0 # not inf
-			ax = pylab.subplot(111)
-			pylab.pcolormesh(snr, chi, numpy.log10(data.T +1)[1:-1,1:-1])
-			if "Log" in str(obj[ifo+"_snr_chi"].bins[0]):
-				ax.set_xscale('log')
-			if "Log" in str(obj[ifo+"_snr_chi"].bins[1]):
-				ax.set_yscale('log')
-			pylab.colorbar()
-			pylab.xlabel('SNR')
-			pylab.ylabel('reduced chi^2 / SNR^2')
-			pylab.ylim([chi[1], chi[-1]])
-			pylab.xlim([snr[1],snr[-1]])
-			pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
-			pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
-			pylab.savefig(inspiral_pipe.T050017_filename(ifo, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_%s" % (options.user_tag, name, os.path.split(f)[1]), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir))
-
-
-if options.marginalized_file:
-	marg, procid = far.RankingData.from_xml(ligolw_utils.load_filename(options.marginalized_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
-	marg.compute_joint_cdfs()
-
-	for k in marg.likelihood_pdfs:
-		N = sum(total_count[ifo] for ifo in k)
-		#FIXME hardcoded num_slides to 2, don't do that!
-		m = marg.trials_table[k].count * marg.trials_table[k].count_below_thresh / marg.trials_table[k].thresh / float(abs(marg.livetime_seg)) * marg.trials_table.num_nonzero_count() / 2
-		pylab.figure()
-		larray = numpy.logspace(max(numpy.log10(marg.minrank[k]), -3), 0.99 * numpy.log10(marg.maxrank[k]), 1000)
-		FAP = 1.0 - marg.cdf_interpolator[k](larray)
-		FAPM = [far.fap_after_trials(p, m) for p in  FAP]
-		pylab.semilogy(numpy.log(larray), FAPM, 'k')
-		trials_high_error = FAPM + FAPM / numpy.sqrt(N*FAP)
-		trials_low_error = FAPM - FAPM / numpy.sqrt(N*FAP)
-		trials_low_error[trials_low_error < 1e-8] = 1e-8
-		pylab.fill_between(numpy.log(larray), trials_low_error, trials_high_error, alpha=0.25, color='k')	
-		pylab.grid()
-		pylab.title("%s FAP vs Likelihood" % "".join(sorted(list(k))))
-		pylab.xlabel('ln(Likelihood)')
-		pylab.ylabel('False Alarm Probability')
-		pylab.ylim([1e-8, 1])
-
-		pylab.savefig(inspiral_pipe.T050017_filename(k.keys(), "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s" % (options.user_tag, "".join(sorted(list(k)))), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir))
-
