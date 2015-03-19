@@ -77,6 +77,8 @@ from gstlal import datasource
 #	+ `--bank-cache` [filenames]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc
 #	+ `--channel` [IFO=CHANNEL-NAME]: Set the name of the channel to process (optional).  The default is "LSC-STRAIN" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times
 #	+ `--dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (required).
+#	+ `--framexmit-addr` [IFO=addr:port]: Set the framexmit address to process (required). IFO=ADDR can be given multiple times.
+#	+ `--framexmit-iface` [addr]: Set the interface address to process (required).
 #	+ `--ht-gate-threshold` [float]: Set the h(t) gate threshold to reject glitches
 #	+ `--do-iir-pipeline`: Run the iir pipeline instead of lloid")
 #	+ `--max-jobs` [num]: Stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool
@@ -149,6 +151,8 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--channel", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
+	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR can be given multiple times.")
+	parser.add_option("--framexmit-iface", metavar = "name", default=[], action = "append", help = "Set the interface address to process (required).")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
@@ -186,10 +190,11 @@ def parse_command_line():
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
 	channel_dict = datasource.channel_dict_from_channel_list(options.channel)
 	dq_channel_dict = datasource.channel_dict_from_channel_list(options.dq_channel_name)
+	framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.framexmit_addr)
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 	
-	return options, filenames, bankcache, channel_dict, dq_channel_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict
 
 
 #
@@ -197,7 +202,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -249,6 +254,8 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
 			"state-vector-on-bits":options.state_vector_on_bits,
 			"state-vector-off-bits":options.state_vector_off_bits,
+			"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(framexmit_dict),
+			"framexmit-iface":options.framexmit_iface,
 			"svd-bank":svd_bank_string,
 			"tmp-space":inspiral_pipe.condor_scratch_space(),
 			"track-psd":"",
