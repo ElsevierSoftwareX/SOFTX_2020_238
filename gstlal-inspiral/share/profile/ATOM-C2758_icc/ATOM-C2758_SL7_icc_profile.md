@@ -2,10 +2,9 @@
 
 \section Template per core throughput
 
-	real    14m6.680s
-	user    106m43.951s
-	sys     5m41.636s
-
+	real	32m14.606s
+	user	241m11.619s
+	sys	12m16.181s
 
 \f$ \mathcal{T}_{100 \%} = N_t * T_d / T_w / N_c \f$
 
@@ -13,11 +12,11 @@ Where
 
  - \f$ N_t = 6400\f$
  - \f$T_d = 5000s\f$
- - \f$T_w = 1920 \f$
+ - \f$T_w = 1934 \f$
  - \f$N_c = 8 \f$
 
 
-This gives a template per core throughput of 9450
+This gives a template per core throughput of 2070
 
 \section Profile results
 
