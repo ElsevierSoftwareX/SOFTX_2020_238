@@ -2241,8 +2241,8 @@ def parse_likelihood_control_doc(xmldoc, name = u"gstlal_inspiral_likelihood"):
 #
 
 
-def get_live_time(seglists, verbose = False):
-	livetime = float(abs(vote((segs for instrument, segs in seglists.items() if instrument != "H2"), 2)))
+def get_live_time(seglistdict, verbose = False):
+	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), 2)))
 	if verbose:
 		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime
