@@ -570,11 +570,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	block_stride = fir_stride * bank_fragment.rate
 
 	# we figure an fft costs ~5 logN flops where N is duration + block
-	# stride.  For each chunk you have to do a forward and a reverse fft.
-	# Time domain costs N * block_stride. So if block stride is less than
-	# about 10logN you might as well do time domain filtering
+	# stride.  Time domain costs N * block_stride. So if block stride is
+	# less than about 5logN you might as well do time domain filtering
 	# FIXME This calculation should probably be made more rigorous
-	time_domain = 10 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
+	time_domain = 5 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = latency, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = block_stride, time_domain = time_domain)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
