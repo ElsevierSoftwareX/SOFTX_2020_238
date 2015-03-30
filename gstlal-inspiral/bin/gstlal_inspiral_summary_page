@@ -210,11 +210,18 @@ page.subpages["background"].div("""
 <big><b>OVERVIEW:</b></big><br><br>
 This page shows the ingredients that go into ranking events and determining the False alarm probability.
 """)
-page.subpages["background"].add_section("background","SNR / chi")
-page.subpages["background"].sections["background"].div("This section gives the SNR / Chisq background statistics.")
+page.subpages["background"].add_section("snrchi","SNR and chi-squared")
+page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
 imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNRCHI2*.png'))
-imgtable += cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*png'))
-page.subpages["background"].sections["background"].add_table(imgtable, "","")
+page.subpages["background"].sections["snrchi"].add_table(imgtable, "","")
+
+page.subpages["background"].add_section("snrsnr","SNR ratios")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'))
+page.subpages["background"].sections["snrsnr"].add_table(imgtable, "","")
+
+page.subpages["background"].add_section("rates","Rates")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'))
+page.subpages["background"].sections["rates"].add_table(imgtable, "","")
 
 page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
 page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
