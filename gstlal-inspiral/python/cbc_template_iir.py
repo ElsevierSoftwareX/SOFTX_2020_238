@@ -198,9 +198,32 @@ def normalized_crosscorr(a, b, autocorrelation_length = 201):
 	af = scipy.fft(a)
 	bf = scipy.fft(b)
 	corr = scipy.ifft( af * numpy.conj( bf ))
+	abs_corr = abs(corr)
+	max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
+	if max_idx != 0:
+		raise ValueError, "max of autocorrelation must happen at position [0], got [%d]" % max_idx
 	tmp_corr = corr
 	corr = tmp_corr / tmp_corr[0]
-	return numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
+	auto_bank = numpy.zeros(autocorrelation_length, dtype = 'cdouble')
+	auto_bank[::-1] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
+	return auto_bank
+
+def normalized_convolv(a, b, autocorrelation_length = 201):
+	af = scipy.fft(a)
+	bf = scipy.fft(b)
+	corr = scipy.ifft( af *  bf )
+	abs_corr = abs(corr)
+	max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
+	if max_idx > len(abs_corr)/2:
+		max_idx = max_idx - len(abs_corr)
+	tmp_corr = corr
+	corr = tmp_corr / tmp_corr[max_idx]
+
+	#FIXME: The following code will raise type error
+	auto_bank = numpy.concatenate(corr[max_idx -(autocorrelation_length // 2):min(max_idx,0)], corr[min(max_idx,0):max(max_idx, 0)])
+	auto_bank = numpy.concatenate(auto, corr[max(max_idx, 0):max_idx + (autocorrelation_length // 2 + 1)])
+	return auto_bank
+
 
 def innerproduct(a,b):
 
@@ -456,31 +479,40 @@ class Bank(object):
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
 
                 	# get the IIR response
-                	out = spawaveform.iirresponse(length, a1, b0, delay)
+                	u = spawaveform.iirresponse(length, a1, b0, delay)
 
-			# FIXME: very ugly, rename the variables
-	                out = out[::-1]
-	                spiir_response = numpy.zeros(length * 1, dtype=numpy.cdouble)
-	                spiir_response[-len(out):] = out
-	                norm1 = 1.0/numpy.sqrt(2.0)*((spiir_response * numpy.conj(spiir_response)).sum()**0.5)
-	                spiir_response /= norm1
+	                #u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+	                #u_pad[-len(u):] = u
+
+			u_rev = u[::-1]
+	                u_rev_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+	                u_rev_pad[-len(u_rev):] = u_rev
+
+	                norm_u = 1.0/numpy.sqrt(2.0)*((u_rev_pad * numpy.conj(u_rev_pad)).sum()**0.5)
+	                u_rev_pad /= norm_u
+			#u_pad /= norm_u
 
 	                # normalize the iir coefficients
-	                b0 /= norm1
+	                b0 /= norm_u
 
 	                # get the original waveform
-	                out2 = amp * numpy.exp(1j * phase)
-	                h = numpy.zeros(length * 1, dtype=numpy.cdouble)
-	                h[-len(out2):] = out2
+	                h = amp * numpy.exp(1j * phase)
+	                h_pad = numpy.zeros(length * 1, dtype=numpy.double)
+	                h_pad[-len(h):] = h.real
 
-			norm2 = abs(numpy.dot(h, numpy.conj(h)))
-	                h *= numpy.sqrt(2 / norm2)
-			self.sigmasq.append(1.0 * norm2 / sampleRate)
+			norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
+	                h_pad /= norm_h
+			self.sigmasq.append(1.0 * norm_h / sampleRate)
 
-	                #FIXME this is actually the cross correlation between the original waveform and this approximation
-			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h, h, autocorrelation_length)
+			#pdb.set_trace()
+
+        	        #FIXME this is actually the cross correlation between the original waveform and this approximation
+			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
+			#self.autocorrelation_bank[tmp,:] = normalized_convolv(h_pad, u_pad, autocorrelation_length)
+
+			
 			# compute the SNR
-			spiir_match = abs(numpy.dot(spiir_response, numpy.conj(h)))/2.0
+			spiir_match = abs(numpy.dot(u_rev_pad, h_pad))
 			self.matches.append(spiir_match)
 
 			if verbose:
@@ -566,7 +598,7 @@ class Bank(object):
 
 		# FIXME:  ligolw format now supports complex-valued data
 		root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', -self.autocorrelation_bank.imag))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
 		root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
 		root.appendChild(array.from_array('matches', numpy.array(self.matches)))
