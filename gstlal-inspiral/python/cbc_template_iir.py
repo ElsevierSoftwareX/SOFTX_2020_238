@@ -325,22 +325,23 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
 	fseries = templates.add_quadrature_phase(fseries, working_length)
 
-		#
-		# transform template to time domain
-		#
+	#
+	# transform template to time domain
+	#
 
 	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
-		#
-		# extract the portion to be used for filtering
-		#
+	#
+	# extract the portion to be used for filtering
+	#
 
-	data = tseries.data[-length_max:]
+	#data = tseries.data[-length_max:]
+
+	filter_len = min(length_max, 1.0 * len(hplus.data.data))
+	data = tseries.data[-filter_len:]
 
 	#pdb.set_trace()
 	amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
-
-
 	return amp, phase
 
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max):
@@ -363,9 +364,25 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 						    0,7,				# Amplitude and phase order 2N+1
 						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
 
+
+	#pdb.set_trace()
+	#ori_amp, ori_phase = calc_amp_phase(hc.data.data, hp.data.data)
+	#ori_wave = ori_amp * numpy.exp(1j * ori_phase)
+       	#auto_ori = numpy.zeros(working_length * 1, dtype=numpy.cdouble)
+        #auto_ori[-len(ori_wave):] = ori_wave
+	#auto_bank_ori = normalized_crosscorr(auto_ori, auto_ori, 201)
+
+	#import matplotlib.pyplot as plt
+	#axis_x = numpy.linspace(0, len(phase), len(phase))
+	#plt.plot(axis_x, phase)
+	#plt.show()
+
+
 	if is_freq_whiten:
-		amp, phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
-		return amp, phase
+		hp.data.data *= cbc_template_fir.lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
+		lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+		return lalwhiten_amp, lalwhiten_phase
+
 	else:
 
 		amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
@@ -389,6 +406,19 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 			newpsd = psd_interp(f)
 			amp[0:len(f)] /= newpsd ** 0.5
 
+		#import matplotlib.pyplot as plt
+		#axis_x = numpy.linspace(0, len(phase), len(phase))
+		#f, axarr = plt.subplots(2, sharex = True)
+		#axarr[0].plot(axis_x, amp)
+		#axarr[0].plot(axis_x, lalwhiten_amp)
+		#axarr[1].plot(axis_x, phase)
+		#axarr[1].plot(axis_x, lalwhiten_phase)
+		#plt.show()
+
+		#f2, axarr2 = plt.subplots(2, sharex = True)
+		#axarr2[0].plot(axis_x, amp/lalwhiten_amp)
+		#axarr2[1].plot(axis_x, phase - lalwhiten_phase)
+		#plt.show()
 
 		return amp, phase
 
@@ -536,9 +566,12 @@ class Bank(object):
 	                delaydict = {}
 
 	                if downsample:
+				#min_M = 2**numpy.ceil(log2(sampleRate/ 2/ flower))
+				min_M = 1
 				# iterate over the frequencies and put them in the right downsampled bin
 				for i, f in enumerate(fs):
 					M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
+					M = max(min_M, M)
 					a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 					newdelay = numpy.ceil((delay[i]+1)/(float(M)))
 					b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
