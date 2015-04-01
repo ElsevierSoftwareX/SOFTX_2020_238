@@ -1,6 +1,6 @@
 
 # Copyright (C) 2010-2012 Shaun Hooper
-# Copyright (C) 2013-2014 David Mckenzie, Qi Chu, Kipp Cannon, Chad Hanna, Leo Singer
+# Copyright (C) 2013-2014 Qi Chu, David Mckenzie, Kipp Cannon, Chad Hanna, Leo Singer
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -29,6 +29,8 @@ import tempfile
 import lal
 import lalsimulation
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from pylal import datatypes as laltypes
+from pylal import lalfft
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 from gstlal import cbc_template_fir
 from gstlal import templates
@@ -253,52 +255,6 @@ def smooth_and_interp(psd, width=1, length = 10):
                 out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
         return interpolate.interp1d(f, out)
 
-def gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding, sampleRate, flower):
-
-        # generate the waveform
-	# FIXME: waveform approximant should not be fixed.	
-	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,					# reference phase, phi ref
-		    				    1./sampleRate,			# delta T
-						    m1*lal.MSUN_SI,			# mass 1 in kg
-						    m2*lal.MSUN_SI,			# mass 2 in kg
-						    0,0,0,				# Spin 1 x, y, z
-						    0,0,0,				# Spin 2 x, y, z
-						    flower,				# Lower frequency
-						    0,					# Reference frequency 40?
-						    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
-						    0,					# inclination
-						    0,0,				# Lambda1, lambda2
-						    None,				# Waveflags
-						    None,				# Non GR parameters
-						    0,7,				# Amplitude and phase order 2N+1
-						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
-
-	amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
-	amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
-
-	f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
-	cleanFreq(f,flower)
-
-
-	# This is the key of SPIIR method. The whitening in
-	# frequency domain
-	# can be achieved in time domain
-
-	if psd is not None:
-       		fsampling = numpy.arange(len(psd.data)) * psd.deltaF
-		# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
-		#psd_interp = interpolate.splrep(fsampling, psd.data)
-		#newpsd = interpolate.splev(f, psd_interp)
-		#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
-		psd_interp = interpolate.interp1d(fsampling, psd.data)
-		newpsd = psd_interp(f)
-		amp[0:len(f)] /= newpsd ** 0.5
-
-              	# make the iir filter coeffs
-               	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-	
-	return amp, phase, a1, b0, delay
-
 def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_max):
 
 	"""	
@@ -381,8 +337,61 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 
 	data = tseries.data[-length_max:]
 
+	#pdb.set_trace()
 	amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
+
+
 	return amp, phase
+
+def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max):
+
+        # generate the waveform
+	# FIXME: waveform approximant should not be fixed.	
+	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,				# reference phase, phi ref
+		    				    1./sampleRate,			# delta T
+						    m1*lal.MSUN_SI,			# mass 1 in kg
+						    m2*lal.MSUN_SI,			# mass 2 in kg
+						    0,0,0,				# Spin 1 x, y, z
+						    0,0,0,				# Spin 2 x, y, z
+						    flower,				# Lower frequency
+						    0,					# Reference frequency 40?
+						    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
+						    0,					# inclination
+						    0,0,				# Lambda1, lambda2
+						    None,				# Waveflags
+						    None,				# Non GR parameters
+						    0,7,				# Amplitude and phase order 2N+1
+						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+
+	if is_freq_whiten:
+		amp, phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+		return amp, phase
+	else:
+
+		amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
+		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
+
+		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
+		cleanFreq(f,flower)
+
+
+		# This is the key of SPIIR method. The whitening in
+		# frequency domain
+		# can be achieved in time domain
+
+		if psd is not None:
+       			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
+			# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
+			#psd_interp = interpolate.splrep(fsampling, psd.data)
+			#newpsd = interpolate.splev(f, psd_interp)
+			#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
+			psd_interp = interpolate.interp1d(fsampling, psd.data)
+			newpsd = psd_interp(f)
+			amp[0:len(f)] /= newpsd ** 0.5
+
+
+		return amp, phase
+
 
 class Bank(object):
 	def __init__(self, logname = None):
@@ -473,8 +482,11 @@ class Bank(object):
 			m2 = row.mass2
 			fFinal = row.f_final
 
-			amp, phase, a1, b0, delay = gen_spiir_coeffs(m1, m2, psd, epsilon, alpha, beta, padding, sampleRate, flower)
+			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, 1, working_length, working_duration, length_max)
 
+	              	# make the iir filter coeffs
+       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
+	
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
 
