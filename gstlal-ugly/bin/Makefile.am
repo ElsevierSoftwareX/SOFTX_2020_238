@@ -22,6 +22,7 @@ dist_bin_SCRIPTS = \
 	gstlal_psd_pipe \
 	gstlal_segments_operations \
 	gstlal_recolor_frames_pipe \
+	gstlal_inj_frames_shm_optparse \
 	gstlal_cache_to_segments \
 	gstlal_veto_timeseries_to_frames \
-	gstlal_parse_frame_segment_logs
+	gstlal_parse_frame_segment_logs 
