@@ -56,7 +56,7 @@
 #include <lal/LALStdlib.h>
 #include <lal/LALSimulation.h>
 #include <lal/LALSimInspiral.h>
-#include <lal/LIGOMetadataBurstUtils.h>
+#include <lal/SnglBurstUtils.h>
 #include <lal/LIGOLwXMLBurstRead.h>
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/GenerateBurst.h>
