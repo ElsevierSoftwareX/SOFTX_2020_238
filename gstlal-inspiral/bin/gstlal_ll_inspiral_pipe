@@ -135,6 +135,7 @@ class lvalert_listen_node(pipeline.CondorDAGNode):
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("username", raw_input("lvalert username: "))
 		self.add_var_opt("password", raw_input("lvalert password: "))
+		self.add_var_opt("server", "lvalert.cgca.uwm.edu")
 		self.add_var_opt("config-file", "lvalert.ini")
 		dag.add_node(self)
 
