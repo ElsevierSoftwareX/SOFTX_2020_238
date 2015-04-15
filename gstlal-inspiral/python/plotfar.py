@@ -174,11 +174,12 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
 	axes3.set_title("Observed Coincidence Counts")
-
-	fig.tight_layout(pad = .8)
-
-	return fig
-
+#FIXME: remove when we have a new enough matplotlib on all the reference platforms
+	try:
+		fig.tight_layout(pad = .8)
+		return fig
+	except AttributeError:
+		return fig
 
 def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr):
 	if len(instruments) > 2:
@@ -262,9 +263,12 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
-	fig.tight_layout(pad = .8)
-	return fig
-
+#FIXME: remove when we have a new enough matplotlib on all the reference platforms
+	try:
+		fig.tight_layout(pad = .8)
+		return fig
+	except AttributeError:
+		return fig
 
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ratios = None):
 	ccdf = fapfar.ccdf_interpolator
@@ -292,5 +296,9 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 	axes.set_title(r"%s Log Likelihood Ratio CCDF" % tag)
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
 	axes.set_ylabel(r"$P(\geq \ln \mathcal{L} | \mathrm{%s})$" % tag.lower())
-	fig.tight_layout(pad = .8)
-	return fig
+#FIXME: remove when we have a new enough matplotlib on all the reference platforms
+	try:	
+		fig.tight_layout(pad = .8)
+		return fig
+	except AttributeError:
+		return fig

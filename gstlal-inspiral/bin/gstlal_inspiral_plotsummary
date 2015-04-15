@@ -44,6 +44,7 @@ matplotlib.rcParams.update({
 })
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import scipy
 import numpy
 from optparse import OptionParser
 import sqlite3
@@ -724,8 +725,9 @@ FROM
 	def finish(self):
 
 		def hist(arr, axes):
-			start = numpy.percentile(arr, 1)
-			end = numpy.percentile(arr, 99)
+			start = scipy.stats.mstats.mquantiles(arr, 0.01)
+			end = scipy.stats.mstats.mquantiles(arr, 0.99)
+
 			axes.hist(arr, numpy.linspace(start, end, 100))
 
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
