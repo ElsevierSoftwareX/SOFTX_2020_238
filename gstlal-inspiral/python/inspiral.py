@@ -44,6 +44,7 @@ import threading
 import time
 import httplib
 import tempfile
+import shutil
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -493,7 +494,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -503,7 +504,7 @@ class Data(object):
 		self.verbose = verbose
 		# None to disable likelihood ratio assignment, otherwise a filename
 		self.marginalized_likelihood_file = marginalized_likelihood_file
-		self.likelihood_file = likelihood_file
+		self.likelihood_files_namedtuple = likelihood_files_namedtuple
 		# None to disable periodic snapshots, otherwise seconds
 		# set to 1.0 to disable background data decay
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
@@ -605,6 +606,19 @@ class Data(object):
 				# code should be responsible for it
 				# somehow, no?
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
+
+				# If a reference likelihood file is given, load
+				# data coinc_params_distributions data before
+				# smoothing distributions
+				# FIXME There is currently no guarantee that
+				# the reference_likelihood_file on disk will
+				# have updated since the last snapshot, but for
+				# our purpose it should not have that large of
+				# an effect. The data loaded should never be
+				# older than the snapshot before last
+				if self.likelihood_files_namedtuple.reference_likelihood_file is not None:
+					self.coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+					self.coinc_params_distributions.finish(verbose = self.verbose)
 
 				if self.marginalized_likelihood_file is not None:
 					# FIXME:  must set horizon
@@ -958,7 +972,7 @@ class Data(object):
 		except:
 			yield "error\n"
 
-	def __write_output_file(self, filename = None, likelihood_file = None, verbose = False):
+	def __write_output_file(self, filename = None, verbose = False):
 		self.__flush()
 
 		# FIXME:  should this be done in .flush() somehow?
@@ -969,6 +983,7 @@ class Data(object):
 			self.coincs_document.filename = filename
 		self.coincs_document.write_output_file(verbose = verbose)
 
+	def __write_likelihood_file(self, filename, description, verbose = False):
 		# write the parameter PDF file.  NOTE;  this file contains
 		# raw bin counts, and might or might not contain smoothed,
 		# normalized, PDF arrays but if it does they will not
@@ -979,21 +994,21 @@ class Data(object):
 		# thinca.  we want to know precisely when the arrays get
 		# updated so we can have a hope of computing the likelihood
 		# ratio PDFs correctly.
-		if likelihood_file is None:
-			likelihood_file = os.path.split(self.coincs_document.filename)
-			try: # preserve LIGO-T010150-00 if possible 
-				ifo, desc, start, dur = ".".join(likelihood_file[1].split('.')[:-1]).split('-')
-				likelihood_file = os.path.join(likelihood_file[0], '%s-%s_SNR_CHI-%s-%s.xml.gz' % (ifo, desc, start, dur))
-			except ValueError:
-				likelihood_file = os.path.join(likelihood_file[0], '%s_SNR_CHI.xml.gz' % likelihood_file[1].split('.')[0])
-		ligolw_utils.write_filename(self.__get_likelihood_file(), likelihood_file, gz = (likelihood_file or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
-		# can't be used anymore
-		del self.coincs_document
+		path, filename = os.path.split(filename)
+		tmp_likelihood_file = os.path.join(path, 'tmp_%s' % filename)
+		ligolw_utils.write_filename(self.__get_likelihood_file(), tmp_likelihood_file, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		shutil.move(tmp_likelihood_file, os.path.join(path,filename))
+		shutil.copy(os.path.join(path,filename), os.path.join(path, self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')))
 
-	def write_output_file(self, filename = None, likelihood_file = None, verbose = False):
+	def write_output_file(self, filename = None, verbose = False):
 		with self.lock:
-			self.__write_output_file(filename = filename, likelihood_file = likelihood_file, verbose = verbose)
+			self.__write_output_file(filename = filename, verbose = verbose)
+			if self.likelihood_files_namedtuple.likelihood_file: 
+				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, verbose = verbose)
+
+			# can't be used anymore
+			del self.coincs_document
 
 	def snapshot_output_file(self, description, extension, verbose = False):
 		with self.lock:
@@ -1001,5 +1016,10 @@ class Data(object):
 			# We require the likelihood file to have the same name
 			# as the input to this program to accumulate statistics
 			# as we go 
-			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), likelihood_file = self.likelihood_file, verbose = verbose)
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
+			if self.likelihood_files_namedtuple.likelihood_file:
+				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, verbose = verbose)
+
+			# can't be used anymore
+			del self.coincs_document
 			self.coincs_document = coincs_document
