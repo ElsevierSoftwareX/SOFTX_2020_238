@@ -142,13 +142,14 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
-#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (required).
+#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided).
+#	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided).
+#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
-#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
 #	+ `--gracedb-search`: gracedb type (default is LowMass).
-#	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
+#	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
 #
