@@ -68,6 +68,7 @@
 
 import math
 import sys
+import os
 import numpy
 import warnings
 import StringIO
@@ -387,7 +388,13 @@ class Handler(simplehandler.Handler):
 				self._close_segments(timestamp)
 				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
-				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
+				#FIXME integrate with the Data class snapshotting directories
+				path = str(int(math.floor(ext[0])))[:5]
+				try:
+					os.mkdir(path)
+				except OSError:
+					pass
+				fname = "%s/%s-%s_SEGMENTS-%d-%d.xml.gz" % (path, "".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
 				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# clear the segment lists in place
