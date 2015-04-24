@@ -459,9 +459,17 @@ class CoincsDocument(object):
 		return self.sngl_inspiral_table.get_next_id()
 
 
-	def T050017_filename(self, description, extension):
+	def T050017_filename(self, description, extension, subdir = False):
 		start, end = self.search_summary_outseg
 		start, end = int(math.floor(start)), int(math.ceil(end))
+		if subdir:
+			path = str(start)[:5]
+			try:
+				os.mkdir(path)
+			except OSError:
+				pass	
+			return "%s/%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, start, end - start, extension)
+			
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, start, end - start, extension)
 
 
@@ -983,7 +991,7 @@ class Data(object):
 			self.coincs_document.filename = filename
 		self.coincs_document.write_output_file(verbose = verbose)
 
-	def __write_likelihood_file(self, filename, description, verbose = False):
+	def __write_likelihood_file(self, filename, description, snapshot = False, verbose = False):
 		# write the parameter PDF file.  NOTE;  this file contains
 		# raw bin counts, and might or might not contain smoothed,
 		# normalized, PDF arrays but if it does they will not
@@ -999,13 +1007,14 @@ class Data(object):
 		tmp_likelihood_file = os.path.join(path, 'tmp_%s' % filename)
 		ligolw_utils.write_filename(self.__get_likelihood_file(), tmp_likelihood_file, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		shutil.move(tmp_likelihood_file, os.path.join(path,filename))
-		shutil.copy(os.path.join(path,filename), os.path.join(path, self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')))
+		if snapshot:
+			shutil.copy(os.path.join(path,filename), os.path.join(path, self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz', dir = True, verbose = verbose)))
 
-	def write_output_file(self, filename = None, verbose = False):
+	def write_output_file(self, filename = None, description = "", verbose = False):
 		with self.lock:
 			self.__write_output_file(filename = filename, verbose = verbose)
 			if self.likelihood_files_namedtuple.likelihood_file: 
-				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, verbose = verbose)
+				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document
@@ -1016,9 +1025,9 @@ class Data(object):
 			# We require the likelihood file to have the same name
 			# as the input to this program to accumulate statistics
 			# as we go 
-			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose)
+			self.__write_output_file(filename = self.coincs_document.T050017_filename(description, extension), verbose = verbose, dir = True)
 			if self.likelihood_files_namedtuple.likelihood_file:
-				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, verbose = verbose)
+				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, snapshot = True, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document
