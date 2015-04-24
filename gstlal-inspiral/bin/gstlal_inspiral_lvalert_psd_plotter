@@ -36,21 +36,6 @@
 import httplib
 import logging
 import math
-import matplotlib
-matplotlib.rcParams.update({
-	"font.size": 8.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
-	"text.usetex": True,
-	"path.simplify": True
-})
-from matplotlib import figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from optparse import OptionParser
 import os.path
@@ -66,15 +51,13 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from gstlal.reference_psd import horizon_distance
+from gstlal import plotpsd
 try:
 	from ligo.gracedb import cli as gracedb
 except ImportError:
 	from ligo import gracedb
 from ligo.lvalert.utils import get_LVAdata_from_stdin
 from pylal import series as lal_series
-
-
-golden_ratio = (1 + math.sqrt(5)) / 2
 
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -116,54 +99,6 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 
 def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
 	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), contenthandler = LIGOLWContentHandler)[0]
-
-
-def plot_psds(psds, coinc_xmldoc, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
-	coinc_event, = lsctables.CoincTable.get_table(coinc_xmldoc)
-	coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
-	offset_vector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
-	# FIXME:  MBTA uploads are missing process table
-	#process, = lsctables.ProcessTable.get_table(coinc_xmldoc)
-	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
-
-	mass1 = sngl_inspirals.values()[0].mass1
-	mass2 = sngl_inspirals.values()[0].mass2
-	end_time = coinc_inspiral.get_end()
-	logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
-
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / golden_ratio)) / float(fig.get_dpi()))
-	axes = fig.gca()
-	axes.grid(True)
-
-	min_psds, max_psds = [], []
-	for instrument, psd in sorted(psds.items()):
-		if psd is None:
-			continue
-		psd_data = psd.data
-		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
-		logging.info("found PSD for %s spanning [%g Hz, %g Hz]" % (instrument, f[0], f[-1]))
-		axes.loglog(f, psd_data, color = colours[instrument], alpha = 0.8, label = "%s (%.4g Mpc)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10)))
-		if instrument in sngl_inspirals:
-			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
-			inspiral_spectrum = [None, None]
-			horizon_distance(psd, mass1, mass2, sngl_inspirals[instrument].snr, 10, inspiral_spectrum = inspiral_spectrum)
-			axes.loglog(inspiral_spectrum[0], inspiral_spectrum[1], color = colours[instrument], dashes = (5, 2), alpha = 0.8, label = "SNR = %.3g" % sngl_inspirals[instrument].snr)
-		# record the minimum from within the rage 10 Hz -- 1 kHz
-		min_psds.append(psd_data[int((10.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].min())
-		# record the maximum from within the rage 1 Hz -- 1 kHz
-		max_psds.append(psd_data[int((1.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].max())
-
-	axes.set_xlim((1.0, 3000.0))
-	if min_psds:
-		axes.set_ylim((10**math.floor(math.log10(min(min_psds))), 10**math.ceil(math.log10(max(max_psds)))))
-	axes.set_title(r"Strain Noise Spectral Density for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger at %.2f GPS" % (mass1, mass2, float(end_time)))
-	axes.set_xlabel(r"Frequency (Hz)")
-	axes.set_ylabel(r"Spectral Density ($\mathrm{strain}^2 / \mathrm{Hz}$)")
-	axes.legend(loc = "lower left")
-
-	return fig
 
 
 def upload_fig(fig, gracedb_client, graceid, filename = "psd.png"):
@@ -237,7 +172,7 @@ for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid))
+	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid))
 	if options.no_upload:
 		filename = "psd_%s.png" % graceid
 		logging.info("writing %s ..." % filename)
