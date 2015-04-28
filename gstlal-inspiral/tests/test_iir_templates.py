@@ -22,55 +22,49 @@ import sys
 import time
 import numpy
 import scipy
+import math
 from scipy import integrate
 from scipy import interpolate
-import math
-from pylal import lalconstants
+#from pylal import lalconstants
 import pdb
 import csv
-from glue.ligolw import ligolw, lsctables, array, param, utils, types
-from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import pdb
-from subprocess import call
 import random
 import lalsimulation
 import lal
 import gc
-from optparse import OptionParser
-from multiprocessing import Pool
-
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from pylal.series import read_psd_xmldoc
-from glue.ligolw import utils, lsctables
-
-#Should actually be from gstlal import blah
-#but gstlal is not necessarily updated, so just copy these files into the local
-import cbc_template_iir 
-import cbc_template_fir 
-import templates
-import pdb
 import matplotlib.pyplot as pplot
+
+from subprocess import call #not sure this is needed
+from optparse import OptionParser
+from multiprocessing import Pool #this is not actually used at the moment
+
+from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
+from pylal.series import read_psd_xmldoc
+
+from gstlal import cbc_template_iir 
+from gstlal import cbc_template_fir 
+from gstlal import templates
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 
 
-def sigmasq2(mchirp, fLow, fhigh, psd_interp):
-	c = lalconstants.LAL_C_SI #299792458
-	G = lalconstants.LAL_G_SI #6.67259e-11
-	M = lalconstants.LAL_MSUN_SI #1.98892e30
-	Mpc =1e6 * lalconstants.LAL_PC_SI #3.0856775807e22
-	#mchirp = 1.221567#30787
-	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
-	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
+#def sigmasq2(mchirp, fLow, fhigh, psd_interp):
+#	c = lalconstants.LAL_C_SI #299792458
+#	G = lalconstants.LAL_G_SI #6.67259e-11
+#	M = lalconstants.LAL_MSUN_SI #1.98892e30
+#	Mpc =1e6 * lalconstants.LAL_PC_SI #3.0856775807e22
+#	#mchirp = 1.221567#30787
+#	const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
+#	return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
 
 
 def calc_amp_phase(hc,hp):
+    '''Given a specific hcross and hplus waveform, calculate the amplitude and phase of the waveform.
+    Strictly speaking, only one of hp or hc is necessary but both are required by this function
+    This function may be slightly deprecated and the one in cbc_template_iir should be used generally.'''
     amp = numpy.sqrt(hc*hc + hp*hp)
     phase = numpy.arctan2(hc,hp)
     
@@ -252,7 +246,7 @@ def variable_parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_
 def parameter_comparison(xmldoc,psd_interp, outfile, param_name, param_value, input_minMass=1, input_maxMass=3, input_numSignals=50):
 
         '''
-    PC - Parameter comparison. Takes a single parameter and value (e.g. eps=0.02). Generates a random spin wave and computes the overlap with SPIIR responses from templates in the supplied bank until a match of 0.97 or above is found. Repeat for a specified number of signals.
+    PC - Parameter comparison. Takes a single parameter and value (e.g. eps=0.02). Generates a random waveform and computes the overlap with SPIIR sum/response function.
 	Keyword arguments:
 	xmldoc		    -- The XML document containing information about the template bank. Used to get the final frequency (not actually useful but contains other information that might be useful in the future)
 	psd_interp	    -- An interpolated power spectral density array. This is used to weight the signal and SPIIR response from the specifications of the LIGO/VIRGO instruments (combined)
@@ -679,6 +673,8 @@ def smooth_and_interp(psd, width=1, length = 10):
 def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=None,sngl_inspiral_table=None):
         '''Compares a given template and signal
 	    New: Compare using the freq domain (lalwhiten) vs time domain applied psd
+	    (This is similar to coefficient vs f-band whitening but the freq domain whitening 
+	    also applies some conditioning and tapering to the waveform)
 	
 	'''
 	print("Beginning comptuations")
@@ -809,8 +805,8 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=N
 
 	print("FDWT-TDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
 
-	crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_FDWhitened)*numpy.conj(numpy.fft.fft(template_FDWhitened)));
-	snr = numpy.abs(crossCorr).max();
+	#crossCorr = numpy.fft.ifft(numpy.fft.fft(signal_FDWhitened)*numpy.conj(numpy.fft.fft(template_FDWhitened)));
+	#snr = numpy.abs(crossCorr).max();
 
 	print("FDWT-FDWS Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, snr))
 #	pplot.figure()
@@ -821,6 +817,240 @@ def compare_two(psd_interp, signal_m1, signal_m2, template_m1, template_m2,psd=N
 #	pdb.set_trace()
 	#### u -> filters, h -> signal ####
 	### Overlap for new signal vs new filters ####
+
+def spin_test(psd_interp, signal_m1, signal_m2, signal_spin, template_m1 = -1 , template_m2 = -1,template_spin = None):
+	print("Beginning computations")
+	fFinal = 2047; #We only go as high as the waveform anyway
+	fLower = 25 
+
+
+	#If no separate template mass is put in (or invalid)
+	#Set the templae mass to the same as the signal
+	if(template_m1 <= 0 ):
+	    template_m1 = signal_m1
+	if(template_m2 <= 0):
+	    template_m2 = signal_m2
+	if(template_spin == None):
+	    template_spin = signal_spin
+
+	#### Initialise constants ####
+	sampleRate = 4096; padding=1.1; epsilon=0.02; alpha=.99; beta=0.25;
+
+	dist=50
+	incl = 0;
+	
+	length = 2**20;
+
+	signal = numpy.zeros(length, dtype=numpy.cdouble)
+	template = numpy.zeros(length, dtype=numpy.cdouble)
+	
+
+	signalChirp = (signal_m1*signal_m2)**(0.6)/(signal_m1+signal_m2)**(0.2);
+	templateChirp = (template_m1*template_m2)**(0.6)/(template_m1+template_m2)**(0.2);
+
+
+	#### Set up the template and signal waveforms
+	# hp = hplus is used for freq domain whitening, amp/phase for TD whitening
+	hpSignal, hcSignal = generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,signal_spin[0],signal_spin[1],signal_spin[2],signal_spin[3],signal_spin[4],signal_spin[5],ampphase=0)
+	ampSignal, phaseSignal = generate_waveform(signal_m1,signal_m2,dist,incl,fLower,fFinal,0,signal_spin[0],signal_spin[1],signal_spin[2],signal_spin[3],signal_spin[4],signal_spin[5],ampphase=1)
+	hpTemplate,hcTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,template_spin[0],template_spin[1],template_spin[2],template_spin[3],template_spin[4],template_spin[5],ampphase=0)
+	ampTemplate,phaseTemplate=generate_waveform(template_m1,template_m2,dist,incl,fLower,fFinal,0,template_spin[0],template_spin[1],template_spin[2],template_spin[3],template_spin[4],template_spin[5],ampphase=1)
+
+
+
+	#Apply PSD in time domain to template
+	fTemplate = numpy.gradient(phaseTemplate)/(2.0*numpy.pi * (1.0/sampleRate))
+
+
+	cleanFreq(fTemplate,fLower)
+	#and finally, just in case
+        fTemplate = numpy.abs(fTemplate)
+	ampTemplate[0:len(fTemplate)] /= psd_interp(fTemplate)**0.5
+
+
+	#Apply PSD in time domain to signal
+	fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi*(1.0/sampleRate))
+	cleanFreq(fSignal,fLower)
+	fSignal = numpy.abs(fSignal)
+	ampSignal[0:len(fSignal)] /= psd_interp(fSignal)**0.5
+
+
+	signal[-len(ampSignal):] = ampSignal*numpy.exp(1j*phaseSignal);
+	signal = numpy.real(signal)
+	signal *= 1/numpy.sqrt(numpy.dot(signal,signal))
+
+	#Get the IIR coefficients and response from the template
+	a1, b0, delay = spawaveform.iir(ampTemplate, phaseTemplate, epsilon, alpha, beta, padding)
+	outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
+
+	template[-len(outTemplate):] = outTemplate[::-1];
+	reTemplate = numpy.real(template)
+	reTemplate *= 1/numpy.sqrt(numpy.dot(reTemplate,reTemplate))
+	imTemplate = numpy.imag(template)
+	imTemplate *= 1/numpy.sqrt(numpy.dot(imTemplate,imTemplate))
+	template = reTemplate+1j*imTemplate
+
+	#crossCorr = numpy.fft.ifft(numpy.fft.fft(signal)*numpy.conj(numpy.fft.fft(template)));
+	#snr = numpy.abs(crossCorr).max();
+	overlap  = numpy.abs(numpy.dot(signal,numpy.conj(template)))
+
+	#TBD: in the case of differing masses, print out spin information
+	if(template_m1 != signal_m1 or template_m2 != signal_m2):
+		print("Template masses: %f, %f. Signal Masses %f, %f. sigChirp-tmpChirp: %f.SNR: %f" % (template_m1, template_m2, signal_m1, signal_m2, signalChirp - templateChirp, overlap))
+	else:
+	    print("Masses: %f, %f Chirp: %f  Spin: 1x: %f, 1y: %f, 1z: %f, 2x: %f, 2y: %f, 2z: %f, overlap: %f" % (signal_m1, signal_m2, signalChirp, signal_spin[0], 
+														signal_spin[1], signal_spin[2], signal_spin[3], 
+														signal_spin[4], signal_spin[5], overlap))
+
+#	pplot.figure()
+#	pplot.plot(u)
+#	pplot.plot(h)
+#	pplot.show()
+
+	#### u -> filters, h -> signal ####
+	### Overlap for new signal vs new filters ####
+
+
+
+def test_bank(psd_interp, sngl_inspiral_table,outname):
+    sampleRate = 4096; padding=1.3; epsilon=0.02; alpha=.99; beta=0.2; fLower = 30; fFinal = 2047;
+
+    dist=50
+    incl = 0;
+    
+    length = 2**20;
+
+    signal = numpy.zeros(length, dtype=numpy.cdouble)
+    template = numpy.zeros(length, dtype=numpy.cdouble)
+    fileName = str(outname)+".dat";
+    failure_fileName = str(outname)+"_fails.dat"
+
+    with open(fileName,"w") as fileID:
+        fileID.write("overlap m1 m2 mChirpSignal numFilters s1x s1y s1z s2x s2y s2z\n")
+	fileID.flush();
+    with open(failure_fileName, "w") as fileID:
+	fileID.write("m1 m2 mChirpSignal s1x s1y s1z s2x s2y s2z \n")
+	fileID.flush();
+
+    for tmp, row in enumerate(sngl_inspiral_table):
+	signalChirp = (row.mass1*row.mass2)**(0.6)/(row.mass1+row.mass2)**(0.2);
+	signal.fill(0);
+	template.fill(0);
+	ampSignal, phaseSignal = generate_waveform(row.mass1,row.mass2,dist,incl,fLower,fFinal,70,row.spin1x,row.spin1y,row.spin1z,row.spin2x,row.spin2y,row.spin2z,ampphase=1)
+
+	try: 
+	    #Time domain whiten signal
+	    fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi*(1.0/sampleRate))
+	    cleanFreq(fSignal,fLower)
+	    ampSignal[0:len(fSignal)] /= psd_interp(fSignal)**0.5
+
+	    signal[-len(ampSignal):] = ampSignal*numpy.exp(1j*phaseSignal);
+
+	    #Just get the h_c component
+	    signal = numpy.real(signal)
+	    signal *= 1/numpy.sqrt(numpy.dot(signal,signal))
+	    a1, b0, delay = spawaveform.iir(ampSignal, phaseSignal, epsilon, alpha, beta, padding)
+	    outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
+
+	    template[-len(outTemplate):] = outTemplate[::-1];
+	    reTemplate = numpy.real(template)
+	    reTemplate *= 1/numpy.sqrt(numpy.dot(reTemplate,reTemplate))
+	    imTemplate = numpy.imag(template)
+	    imTemplate *= 1/numpy.sqrt(numpy.dot(imTemplate,imTemplate))
+	    template = reTemplate+1j*imTemplate
+	    
+	    #crossCorr = numpy.fft.ifft(numpy.fft.fft(signal)*numpy.conj(numpy.fft.fft(template)));
+	    #overlap = numpy.abs(crossCorr).max();
+	    overlap  = numpy.abs(numpy.dot(signal,numpy.conj(template)))
+	    #print "m1: %f m2: %f overlap: %f" % (row.mass1, row.mass2, overlap);
+
+	    with open(fileName,"a") as fileID:
+		fileID.write("%f %f %f %f %f %f %f %f %f %f %f\n" % (overlap, row.mass1, row.mass2, signalChirp, len(a1),row.spin1x,row.spin1y,row.spin1z,row.spin2x,row.spin2y,row.spin2z))
+		fileID.flush();
+	except:
+	    with open(failure_fileName,"a") as fileID:
+		fileID.write("%f %f %f %f %f %f %f %f %f\n" % (row.mass1, row.mass2, signalChirp, row.spin1x,row.spin1y,row.spin1z,row.spin2x,row.spin2y,row.spin2z))
+		fileID.flush();
+	#pdb.set_trace()
+#	pplot.figure()
+#	pplot.plot(numpy.real(template))
+#	pplot.plot(signal)
+#	pplot.show()
+
+def test_bank_cleanup(psd_interp, sngl_inspiral_table,inname,outname):
+    sampleRate = 4096; padding=1.3; epsilon=0.01; alpha=.99; beta=0.25; fLower = 30; fFinal = 2047;
+    dist=50
+    incl = 0;
+    
+    length = 2**20;
+
+    signal = numpy.zeros(length, dtype=numpy.cdouble)
+    template = numpy.zeros(length, dtype=numpy.cdouble)
+
+    with open(str(outname)+".dat","w") as outFile:
+	with open(str(inname)+".dat", "r") as inFile:
+	   outFile.write(inFile.readline()) #copy the file headings
+	   for line in inFile:
+	    #If the overlap is less than 0.99
+	    #Then redo the calculation with a lower epsilon
+	    if(float(line.split()[0]) <= 0.99) :
+		mass1 =	float(inFile.split()[1])
+		mass2 =	float(inFile.split()[2])
+		spin1x= float(inFile.split()[5])
+		spin1y= float(inFile.split()[6])
+		spin1z= float(inFile.split()[7])
+		spin2x= float(inFile.split()[8])
+		spin2y= float(inFile.split()[9])
+		spin2z= float(inFile.split()[10])
+
+		signalChirp = (mass1*mass2)**(0.6)/(mass1+mass2)**(0.2);
+		signal.fill(0);
+		template.fill(0);
+		ampSignal, phaseSignal = generate_waveform(mass1,mass2,dist,incl,fLower,fFinal,70,spin1x,spin1y,spin1z,spin2x,spin2y,spin2z,ampphase=1)
+
+		#Time domain whiten signal
+		fSignal = numpy.gradient(phaseSignal)/(2.0*numpy.pi*(1.0/sampleRate))
+		cleanFreq(fSignal,fLower)
+		ampSignal[0:len(fSignal)] /= psd_interp(fSignal)**0.5
+
+		signal[-len(ampSignal):] = ampSignal*numpy.exp(1j*phaseSignal);
+
+		#Just get the h_c component
+		signal = numpy.real(signal)
+		signal *= 1/numpy.sqrt(numpy.dot(signal,signal))
+		a1, b0, delay = spawaveform.iir(ampSignal, phaseSignal, epsilon, alpha, beta, padding)
+		outTemplate = spawaveform.iirresponse(length, a1, b0, delay)
+
+		template[-len(outTemplate):] = outTemplate[::-1];
+		reTemplate = numpy.real(template)
+		reTemplate *= 1/numpy.sqrt(numpy.dot(reTemplate,reTemplate))
+		imTemplate = numpy.imag(template)
+		imTemplate *= 1/numpy.sqrt(numpy.dot(imTemplate,imTemplate))
+		template = reTemplate+1j*imTemplate
+		
+		#crossCorr = numpy.fft.ifft(numpy.fft.fft(signal)*numpy.conj(numpy.fft.fft(template)));
+		#overlap = numpy.abs(crossCorr).max();
+		overlap  = numpy.abs(numpy.dot(signal,numpy.conj(template)))
+		#print "m1: %f m2: %f overlap: %f" % (row.mass1, row.mass2, overlap);
+
+		with open(fileName,"a") as fileID:
+		    outFile.write("%f %f %f %f %f %f %f %f %f %f %f\n" % (overlap, mass1, mass2, signalChirp, len(a1),spin1x,spin1y,spin1z,spin2x,spin2y,spin2z))
+		    outFile.flush();
+		outFile.write('\n')
+	    else:
+	    #copy it over
+		outFile.write(i)
+
+
+	#pdb.set_trace()
+#	pplot.figure()
+#	pplot.plot(numpy.real(template))
+#	pplot.plot(signal)
+#	pplot.show()
+
+#Hack to load template bank, apparently the old method is just outdated?
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
 
 def main():
 
@@ -851,24 +1081,31 @@ def main():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ("template_bank","reference_psd","type")
+#	required_options = ("template_bank","reference_psd","type")
 
-	missing_options = [option for option in required_options if getattr(options, option) is None]
-	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+#	missing_options = [option for option in required_options if getattr(options, option) is None]
+#	if missing_options:
+#		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
 
+	array.use_in(DefaultContentHandler)
+	param.use_in(DefaultContentHandler)
+	lsctables.use_in(DefaultContentHandler)
 	# read bank file
-	bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
-	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
-	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+	if(options.type != "spintest"):
+
+	    tmpltbank_xmldoc = utils.load_filename(options.template_bank, verbose = True, contenthandler=DefaultContentHandler)
+	    sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+
+#	bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+#	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+#	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 
 	# read psd file
 	if options.reference_psd:
-		ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd,contenthandler=ligolw.LIGOLWContentHandler))
-		bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
-		psd = ALLpsd[bank_sngl_table[0].ifo]
 		# smooth and create an interp object
+		ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd,contenthandler=DefaultContentHandler))
+		psd = ALLpsd['H1']
 		psd = smooth_and_interp(psd)
 	else:
 		psd = None
@@ -964,28 +1201,26 @@ def main():
 	    template_m1 = 1.4;
 	    template_m2 = 1.4;
 	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
-	
-	    signal_m1 = 2;
-	    signal_m2 = 2;
 
-	    template_m1 = 2;
-	    template_m2 = 2;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+	if(options.type == "spintest"):
 
+	    signal_spin = [0,0,0,0,0,0]
+	    temp_spin= [0,0,0,0,0,0]
 	    signal_m1 = 1.4;
 	    signal_m2 = 1.4;
+	    temp_m1 = 1.4;
+	    temp_m2 = 1.4;
 
-	    template_m1 = 1.45;
-	    template_m2 = 1.45;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+#	    spin_test(psd,signal_m1,signal_m2,signal_spin, template_m1 = temp_m1,template_m2 = temp_m2, template_spin = temp_spin)
+	    spin_test(psd,2.3750904,1.9942362,[0,0,0,0,0,0])
+#	    spin_test(psd,1.4,10,[0,0,1,0,0,1])
+#	    spin_test(psd,10,1.4,[1,0,0,1,0,0])
 
-	    template_m1 = 1.5;
-	    template_m2 = 1.5;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+	if(options.type == "test_bank"):
+	    test_bank(psd,sngl_inspiral_table,options.output)
 
-	    template_m1 = 1.6;
-	    template_m2 = 1.6;
-	    compare_two(psd, signal_m1, signal_m2, template_m1,template_m2,psd=psdConditioned,sngl_inspiral_table=sngl_inspiral_table)
+	if(options.type == "test_bank_cleanup"):
+	    test_bank_cleanup(psd,sngl_inspiral_table,"combinednew","combinednewclean")
 	## There is potential to easily multithread the program but currently the memory useage is too high for even one instance in some cases
 	## This is a major issue that is still being resolved but is difficult due to the very long waveforms
 

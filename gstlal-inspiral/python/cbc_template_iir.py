@@ -451,6 +451,8 @@ class Bank(object):
 		self.alpha = alpha
 		self.beta = beta
 
+		#FIXME: Sorry for not doing this properly! Pass in as argument
+		req_minimum_overlap = True;
 		if sampleRate is None:
 			sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
@@ -471,8 +473,11 @@ class Bank(object):
 		else:
 			self.autocorrelation_bank = None
 			self.autocorrelation_mask = None
-
+		
+		#This occasionally breaks with certain template banks
+		#Can just specify a certain instrument as a hack fix
 		psd = all_psd[sngl_inspiral_table[0].ifo]
+		#psd = all_psd['H1']
 		# smooth and create an interp object
 		#psd_interp = smooth_and_interp(psd)
 
@@ -505,9 +510,11 @@ class Bank(object):
 		#
 
 	
-
+		original_epsilon = epsilon
 	        for tmp, row in enumerate(sngl_inspiral_table):
-
+		    spiir_match = -1
+		    epsilon = original_epsilon
+		    while(spiir_match < 0.99 and epsilon > 0 and req_minimum_overlap):
 			m1 = row.mass1
 			m2 = row.mass2
 			fFinal = row.f_final
@@ -544,7 +551,6 @@ class Bank(object):
 
 			norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
 	                h_pad /= norm_h
-			self.sigmasq.append(1.0 * norm_h / sampleRate)
 
 			#pdb.set_trace()
 
@@ -555,38 +561,44 @@ class Bank(object):
 			
 			# compute the SNR
 			spiir_match = abs(numpy.dot(u_rev_pad, h_pad))
-			self.matches.append(spiir_match)
+			if(original_epsilon==epsilon):
+			    original_match = spiir_match
+			    original_filters = len(a1)
+			epsilon = epsilon-0.001
 
-			if verbose:
-				logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2,len(a1), spiir_match))	
-	                # get the filter frequencies
-	                fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
-	                a1dict = {}
-	                b0dict = {}
-	                delaydict = {}
+		    self.matches.append(spiir_match)
+		    self.sigmasq.append(1.0 * norm_h / sampleRate)
 
-	                if downsample:
-				#min_M = 2**numpy.ceil(log2(sampleRate/ 2/ flower))
-				min_M = 1
-				# iterate over the frequencies and put them in the right downsampled bin
-				for i, f in enumerate(fs):
-					M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
-					M = max(min_M, M)
-					a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
-					newdelay = numpy.ceil((delay[i]+1)/(float(M)))
-					b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
-					delaydict.setdefault(sampleRate/M, []).append(newdelay)
-				#logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
-			else:
-				a1dict[int(sampleRate)] = a1
-				b0dict[int(sampleRate)] = b0
-				delaydict[int(sampleRate)] = delay
+		    if verbose:
+			    logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, len(a1), spiir_match, original_epsilon, original_filters, original_match))	
+		    # get the filter frequencies
+		    fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
+		    a1dict = {}
+		    b0dict = {}
+		    delaydict = {}
 
-			# store the coeffs
-			for k in a1dict.keys():
-				Amat.setdefault(k, []).append(a1dict[k])
-				Bmat.setdefault(k, []).append(b0dict[k])
-				Dmat.setdefault(k, []).append(delaydict[k])
+		    if downsample:
+			    #min_M = 2**numpy.ceil(log2(sampleRate/ 2/ flower))
+			    min_M = 1
+			    # iterate over the frequencies and put them in the right downsampled bin
+			    for i, f in enumerate(fs):
+				    M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
+				    M = max(min_M, M)
+				    a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
+				    newdelay = numpy.ceil((delay[i]+1)/(float(M)))
+				    b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
+				    delaydict.setdefault(sampleRate/M, []).append(newdelay)
+			    #logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
+		    else:
+			    a1dict[int(sampleRate)] = a1
+			    b0dict[int(sampleRate)] = b0
+			    delaydict[int(sampleRate)] = delay
+
+		    # store the coeffs
+		    for k in a1dict.keys():
+			    Amat.setdefault(k, []).append(a1dict[k])
+			    Bmat.setdefault(k, []).append(b0dict[k])
+			    Dmat.setdefault(k, []).append(delaydict[k])
 
 
 		max_rows = max([len(Amat[rate]) for rate in Amat.keys()])
