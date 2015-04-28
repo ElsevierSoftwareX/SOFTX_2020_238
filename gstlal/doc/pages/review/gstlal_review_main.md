@@ -164,7 +164,7 @@ elements:
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
  - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
 - Write joint likelihood ranking and FAP calculation (paper in progress)
- - *Kipp: Done* LIGO P1400175
+ - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
 
 \section studies Studies
 
