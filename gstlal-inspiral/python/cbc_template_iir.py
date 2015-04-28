@@ -551,6 +551,7 @@ class Bank(object):
 
 			norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
 	                h_pad /= norm_h
+			self.sigmasq.append(1.0 * norm_h / sampleRate)
 
 			#pdb.set_trace()
 
