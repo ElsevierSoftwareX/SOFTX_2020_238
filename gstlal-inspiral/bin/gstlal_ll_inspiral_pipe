@@ -78,11 +78,11 @@ from gstlal import datasource
 #	+ `--channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (optional).  The default is "LSC-STRAIN" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times
 #	+ `--dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (required).
 #	+ `--framexmit-addr` [IFO=addr:port]: Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.
-#	+ `--framexmit-iface` [addr]: Set the interface address to process (required).
+#	+ `--framexmit-iface` [addr]: Set the interface address to process (required). default 10.14.0.1
 #	+  `--inj-channel-name` [IFO=CHANNEL-NAME]: Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.
 #	+  `--inj-dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the injection DQ channel to process (required if --inj-channel-name set).
 #	+  `--inj-framexmit-addr` [IFO=addr:port]: Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
-#	+  `--inj-framexmit-iface` [addr]: Set the interface address to process for injections (required if --inj-channel-name set).
+#	+  `--inj-framexmit-iface` [addr]: Set the interface address to process for injections (required if --inj-channel-name set).  default 10.14.0.1
 #	+ `--ht-gate-threshold` [float]: Set the h(t) gate threshold to reject glitches
 #	+ `--do-iir-pipeline`: Run the iir pipeline instead of lloid")
 #	+ `--max-jobs` [num]: Stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool
@@ -100,7 +100,6 @@ from gstlal import datasource
 #	+ `--inj-gracedb-pipeline` [str]: Set the gracedb group, default gstlal (for injection stream)
 #	+ `--inj-gracedb-group` [str]: Set the gracedb group, default Test (for injection stream)
 #	+ `--data-source` [lvshm|framexmit]: Where to get the data from. Default lvshm
-#	+ `--copy-likelihoods`: Copy the likelihood files from a seed, must give --likelihood-file: WARNING overwrites existing files
 #	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional)
 #	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list. Default is "vetoes"
 #	+ `--state-vector-on-bits` [IFO=bits]: Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times
@@ -165,15 +164,15 @@ def parse_command_line():
 	parser.add_option("--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
-	parser.add_option("--framexmit-iface", metavar = "name", default=[], action = "append", help = "Set the interface address to process (required).")
+	parser.add_option("--framexmit-iface", metavar = "name", default = "10.14.0.1", help = "Set the interface address to process (required). default 10.14.0.1")
 	parser.add_option("--inj-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.")
 	parser.add_option("--inj-dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection DQ channel to process (required if --inj-channel-name set).")
 	parser.add_option("--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
-	parser.add_option("--inj-framexmit-iface", metavar = "name", default=[], action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set).")
+	parser.add_option("--inj-framexmit-iface", metavar = "name", default "10.14.0.1", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set). default 10.14.0.1")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
-	parser.add_option("--likelihood-file", help = "set the likelihood file, required if --copy-likelihoods is used")	
+	parser.add_option("--likelihood-cache", help = "set the cache containin likelihood files")	
 	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
 	parser.add_option("--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
 	parser.add_option("--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
@@ -187,7 +186,6 @@ def parse_command_line():
 	parser.add_option("--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
 	parser.add_option("--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
 	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
-	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file: : WARNING overwrites existing files")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
@@ -206,14 +204,12 @@ def parse_command_line():
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
 
-	if options.copy_likelihoods and options.likelihood_file is None:
-		raise ValueError("Must include --likelihood-file when giving --copy-likelihoods")
-
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
 	channel_dict = datasource.channel_dict_from_channel_list(options.channel_name)
 	dq_channel_dict = datasource.channel_dict_from_channel_list(options.dq_channel_name)
-	framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.framexmit_addr)
+	framexmit_dict = datasource.framexmit_ports['CIT'] # set the default
+	framexmit_dict.update(datasource.framexmit_dict_from_framexmit_list(options.framexmit_addr))
 	inj_channel_dict = datasource.channel_dict_from_channel_list(options.inj_channel_name)
 	inj_dq_channel_dict = datasource.channel_dict_from_channel_list(options.inj_dq_channel_name)
 	inj_framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.inj_framexmit_addr)
@@ -222,6 +218,8 @@ def parse_command_line():
 		raise ValueError("Either no injection jobs must be given or the injection and non-injection channels must be specified for the same set of detectors")
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
+
+	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 
 	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict
 
@@ -267,18 +265,15 @@ listenNode = lvalert_listen_node(listenJob, dag)
 
 jobTags = []
 inj_jobTags = []
-for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1)):
 
-	# make a new likelihood file
-	# FIXME Get rid of the temporary likefile variables after removing the
-	# copy_likelihood functionality
-	likefile = os.path.split(options.likelihood_file)[1]
-	path = os.getcwd()
-	likefile = "%s/%04d_%s" % (path, num_insp_nodes, likefile)
-	if options.copy_likelihoods:
-		shutil.copyfile(options.likelihood_file, likefile)
+bank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1))
+if len(options.likelihood_files) != len(bank_groups):
+	raise ValueError("Likelihood files must correspond 1:1 with bank files")
+
+for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.likelihood_files)):
 	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
 	jobTags.append("%04d" % num_insp_nodes)
+	print likefile
 
 	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
 		opts = {"psd-fft-length":options.psd_fft_length,
@@ -342,7 +337,7 @@ for num_insp_nodes, svd_banks in enumerate(inspiral_pipe.build_bank_groups(bank_
 				"likelihood-snapshot-interval":options.likelihood_snapshot_interval
 				},
 			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
-			"reference-likelihood-file":likefile},
+			"reference-likelihood-file":[likefile]},
 			output_files = {"output":"not_used.xml.gz",
 				}
 			)
