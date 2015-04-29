@@ -713,7 +713,7 @@ for svd_bank, output_filename, likelihood_namedtuple in zip(svd_banks, options.o
 	#
 
 
-	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), verbose = options.verbose)
+	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#
