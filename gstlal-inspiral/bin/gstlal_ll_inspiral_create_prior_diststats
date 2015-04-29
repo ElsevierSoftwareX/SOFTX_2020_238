@@ -16,10 +16,11 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-## @file gstlal_inspiral_create_prior_diststats
+## @file gstlal_ll_inspiral_create_prior_diststats
 # A program to create some prior likelihood data to seed an online analysis
 #
 # ### Command line interface
+#
 #		--verbose, action = "store_true", help = "Be verbose."
 #		--num-templates, metavar = "N", default = 1000, type = "int", help = "Set the number of templates per bank. default 1000")
 #		--num-banks, metavar = "N", default = 1, type = "int", help = "Set the number of banks. default 1")
