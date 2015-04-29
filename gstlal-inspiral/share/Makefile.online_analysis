@@ -1,0 +1,63 @@
+H1_BANK_CACHE = ../bank_red_region_spin_early_aligo_2048Hz/H1_bank.cache
+L1_BANK_CACHE = ../bank_red_region_spin_early_aligo_2048Hz/L1_bank.cache
+V1_BANK_CACHE = ../bank_red_region_spin_early_aligo_2048Hz/V1_bank.cache
+
+dag : marginalized_likelihood.xml.gz prior.cache
+	gstlal_ll_inspiral_pipe \
+		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE),V1=$(V1_BANK_CACHE) \
+		--max-jobs 40 \
+		--likelihood-cache prior.cache \
+		--channel=H1=GDS-CALIB_STRAIN \
+		--channel=V1=FAKE_h_16384Hz_4R \
+		--channel=L1=GDS-CALIB_STRAIN \
+		--dq-channel-name=L1=GDS-CALIB_STATE_VECTOR \
+		--dq-channel-name=H1=GDS-CALIB_STATE_VECTOR \
+		--dq-channel-name=V1=LLD-DQ_VECTOR --psd-fft-length 4 \
+		--state-vector-on-bits=H1=0x1 \
+		--state-vector-on-bits=L1=0x1 \
+		--state-vector-on-bits=V1=0x7 \
+		--state-vector-off-bits=H1=0x0 \
+		--state-vector-off-bits=L1=0x0 \
+		--state-vector-off-bits=V1=0x0 \
+		--gracedb-far-threshold -1 \
+		--control-peak-time 0 \
+		--fir-stride 1 \
+		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
+		--gracedb-group CBC \
+		--gracedb-search LowMass \
+		--thinca-interval 1 \
+		--ht-gate-threshold 15 \
+		--data-source framexmit \
+		--likelihood-snapshot-interval 14400 \
+		--lvalert-listener-program gstlal_inspiral_followups_from_gracedb \
+		--lvalert-listener-program gstlal_inspiral_lvalert_psd_plotter
+
+set-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold $(FINAL_FAR_THRESH) \
+		*registry.txt
+
+prior.cache :
+	gstlal_ll_inspiral_create_prior_diststats \
+		--write-likelihood-cache $@ \
+		--segment-and-horizon=H1:1000000000:1000010000:60 \
+		--segment-and-horizon=L1:1000000000:1000010000:120 \
+		--segment-and-horizon=V1:1000000000:1000010000:30 \
+		--segment-and-horizon=H1:1000010000:1000020000:60 \
+		--segment-and-horizon=L1:1000010000:1000020000:120 \
+		--segment-and-horizon=H1:1000020000:1000030000:60 \
+		--segment-and-horizon=V1:1000020000:1000030000:30 \
+		--segment-and-horizon=L1:1000030000:1000040000:120 \
+		--segment-and-horizon=V1:1000030000:1000040000:30 \
+		--num-banks $(shell wc -l $(H1_BANK_CACHE) | awk '{print $1}') \
+		--verbose
+
+marginalized_likelihood.xml.gz : prior.cache
+	gstlal_inspiral_marginalize_likelihood \
+		--output $@ \
+		--verbose \
+		--likelihood-cache $<
+
+clean :
+	rm -rf gstlal_inspiral gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen 
+	rm -rf *.txt lvalert.ini *.gz trigger_pipe.* *.sub logs lvalert.sh node* *.xml
