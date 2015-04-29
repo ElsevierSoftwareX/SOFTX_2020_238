@@ -381,7 +381,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = parents,
-				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
+				opts = {"instrument":instrument_set, "synthesize-injection-count":1e12, "background-prior":10000},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
