@@ -72,44 +72,43 @@ from gstlal import datasource
 #
 # ### Command line options
 #
-#	+ `--psd-fft-length` [int] (s): FFT length, default 16s
-#	+ `--reference-psd` [filename]: Set the reference psd file
-#	+ `--bank-cache` [filenames]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc
-#	+ `--channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (optional).  The default is "LSC-STRAIN" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times
-#	+ `--dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the channel to process (required).
-#	+ `--framexmit-addr` [IFO=addr:port]: Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.
-#	+ `--framexmit-iface` [addr]: Set the interface address to process (required). default 10.14.0.1
-#	+  `--inj-channel-name` [IFO=CHANNEL-NAME]: Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.
-#	+  `--inj-dq-channel-name` [IFO=CHANNEL-NAME]: Set the name of the injection DQ channel to process (required if --inj-channel-name set).
-#	+  `--inj-framexmit-addr` [IFO=addr:port]: Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
-#	+  `--inj-framexmit-iface` [addr]: Set the interface address to process for injections (required if --inj-channel-name set).  default 10.14.0.1
-#	+ `--ht-gate-threshold` [float]: Set the h(t) gate threshold to reject glitches
-#	+ `--do-iir-pipeline`: Run the iir pipeline instead of lloid")
-#	+ `--max-jobs` [num]: Stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool
-#	+ `--likelihood-file` [filename]: Set the likelihood file, required if --copy-likelihoods is used
-#	+ `--marginalized-likelihood-file` [filename]: Set the marginalized likelihood file, required
-#	+ `--control-peak-time` [int] (s): Set the control peak time, default 4
-#	+ `--fir-stride` [int] (s): Set the fir bank stride, default 4
-#	+ `--thinca-interval` [int] (s): Set the thinca interval, default 10
-#	+ `--gracedb-far-threshold` [float] (Hz): false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent
-#	+ `--gracedb-search` [str]: Set the gracedb type, default LowMass
-#	+ `--gracedb-pipeline` [str]: Set the gracedb group, default gstlal
-#	+ `--gracedb-group` [str]: Set the gracedb group, default Test
-#	+ `--inj-gracedb-far-threshold` [float] (Hz): false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)
-#	+ `--inj-gracedb-search` [str]: Set the gracedb type, default LowMass (for injection stream)
-#	+ `--inj-gracedb-pipeline` [str]: Set the gracedb group, default gstlal (for injection stream)
-#	+ `--inj-gracedb-group` [str]: Set the gracedb group, default Test (for injection stream)
-#	+ `--data-source` [lvshm|framexmit]: Where to get the data from. Default lvshm
-#	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional)
-#	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list. Default is "vetoes"
-#	+ `--state-vector-on-bits` [IFO=bits]: Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times
-#	+ `--state-vector-off-bits` [IFO=bits]: Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times
-#	+ `--state-vector-on-bits` [IFO=bits]: Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)
-#	+ `--state-vector-off-bits` [IFO=bits]: Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)
-#	+ `--lvalert-listener-program` [program]: Set the programs to respond to lvalerts from this analysis, can be given multiple times
-#	+ `--coincidence-threshold` [seconds] (float): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
-#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#
+#		"--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+#		"--reference-psd", metavar = "filename", help = "Set the reference psd file.")
+#		"--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+#		"--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+#		"--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
+#		"--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
+#		"--framexmit-iface", metavar = "name", default = "10.14.0.1", help = "Set the interface address to process (required). default 10.14.0.1")
+#		"--inj-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.")
+#		"--inj-dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection DQ channel to process (required if --inj-channel-name set).")
+#		"--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
+#		"--inj-framexmit-iface", metavar = "name", default "10.14.0.1", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set). default 10.14.0.1")
+#		"--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+#		"--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
+#		"--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
+#		"--likelihood-cache", help = "set the cache containin likelihood files")	
+#		"--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
+#		"--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
+#		"--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
+#		"--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
+#		"--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+#		"--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
+#		"--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
+#		"--gracedb-group", default = "Test", help = "gracedb group, default Test")
+#		"--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
+#		"--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
+#		"--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
+#		"--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
+#		"--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
+#		"--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+#		"--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+#		"--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
+#		"--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
+#		"--inj-state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+#		"--inj-state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+#		"--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
+#		"--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+#		"--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 
 
 class lvalert_listen_job(inspiral_pipe.generic_job):
