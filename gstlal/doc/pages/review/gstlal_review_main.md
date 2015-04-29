@@ -18,14 +18,10 @@
 Consult the \ref gstlal_review_codes_page for more details about code action
 items.
 
-- Test delta function input to LLOID algorithm (e.g with and without SVD)
-- Background estimations should have more informative plots e.g., smoothed likelihood functions
 - Write documentation for autochisq (paper in progress)
 - Explore autocorrelation chisquared mismatch scaling with number of samples e.g., @f$ \nu + \epsilon(\nu) \delta^{2} @f$
 - Make sure capsfilters and other similar elements are well documented within graphs (e.g. put in rates, etc)
 - Add description of arrows in graphs
-- Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there)
-  - Generate plots of the various segment output and come up with sanity checks.
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
 
 - figure out what the PE people want to present and when;  it should be
@@ -73,8 +69,18 @@ items.
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 
 \section completed_action Completed action items
+
+- Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there) & Generate plots of the various segment output and come up with sanity checks.
+	- *Done:* (not pushed yet, but PR open https://bugs.ligo.org/redmine/issues/2051)
+
+- Background estimations should have more informative plots e.g., smoothed likelihood functions
+	- *Done:* see 33b29f8b653c1bb10fdec477e05644ed6b46da0d 
+
+- Test delta function input to LLOID algorithm (e.g with and without SVD)
+	- *Done:* see \gstlalmeeting20150112page
+
 - Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
- - *Chad this will not be done right now*: The SNR threshold is tied to many
+- *Chad this will not be done right now*: The SNR threshold is tied to many
    histogramming objects.  Currently the value is set at 4 which is at the
 saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
 about once per second.  A user can  change this only after the histograming
