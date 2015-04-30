@@ -319,7 +319,7 @@ AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.16.16])
+AC_SUBST([MIN_GDS_VERSION], [2.16.17])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -327,26 +327,38 @@ AC_ARG_WITH(
 	[with_gds=check]
 )
 AS_IF([test "x$with_gds" != "xno"], [
-	PKG_CHECK_MODULES(
-		[gds],
-		[gds >= ${MIN_GDS_VERSION}],
-		[HAVE_GDS="yes"
-		AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])
-		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
-		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
-		HAVE_GDS="no"]
-	)
+	PKG_CHECK_MODULES([gds], [gds >= ${MIN_GDS_VERSION}], [
+		HAVE_GDS="yes"
+		# hack to work around broken .pc file
+		gds_LIBS="$gds_LIBS -llsmp"
+
+		PKG_CHECK_MODULES([gds_framexmit], [gds-framexmit >= ${MIN_GDS_VERSION}], [
+			HAVE_GDS_FRAMEXMIT="yes"
+			# hack to work around broken .pc file
+			gds_framexmit_LIBS="$gds_framexmit_LIBS -lpthread"
+		], [
+			AC_MSG_WARN([not found: $gds_framexmit_PKG_ERRORS])
+			HAVE_GDS_FRAMEXMIT="no"
+			# this component is required
+			AC_MSG_WARN([gds install incomplete])
+			HAVE_GDS="no"
+		])
+	], [
+		AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
+		HAVE_GDS="no"
+	])
 ], [
 	AC_MSG_WARN([check for gds disabled])
 	HAVE_GDS="no"
 ])
 AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
+AS_IF([test "x${HAVE_GDS}" == "xyes"], [
+	AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])  # a little penicillin will clear that right up
+])
 AC_SUBST([gds_CFLAGS])
 AC_SUBST([gds_LIBS])
-AS_IF([test "x${HAVE_GDS}" == "xyes"], [
-	AC_SUBST([framexmit_CFLAGS], ["-I/usr/include/gds"])
-	AC_SUBST([framexmit_LIBS], ["-lframexmit -lpthread -lsockutil"])
-])
+AC_SUBST([gds_framexmit_CFLAGS])
+AC_SUBST([gds_framexmit_LIBS])
 
 
 #
