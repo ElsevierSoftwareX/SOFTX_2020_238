@@ -254,6 +254,7 @@ def parse_command_line():
 	parser.add_option("--frame-type", metavar = "IFO=TYPE", action = "append", help = "Set the instrument dependent frame type, H1=TYPE. Can be given more than once and is required for each instrument processed.")
 	parser.add_option("--frame-duration", metavar = "SECONDS", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
 	parser.add_option("--frames-per-file", metavar = "INT", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 	
 	options, filenames = parser.parse_args()
 
