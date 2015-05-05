@@ -1,3 +1,9 @@
+gstlal-calibration (0.2.4-1) unstable; urgency=low
+
+  * post ER6 bug fix for filtering convention
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 10 Feb 2015 08:50:00 -0500
+
 gstlal-calibration (0.2.3-1) unstable; urgency=low
 
   * ER6 bug fix for recoloring gaussian noise
