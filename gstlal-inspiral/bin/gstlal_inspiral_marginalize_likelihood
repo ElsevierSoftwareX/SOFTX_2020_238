@@ -68,7 +68,8 @@ def parse_command_line():
 
 	options, urls = parser.parse_args()
 
-	urls += [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
+	if options.likelihood_cache:
+		urls += [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 	if not urls and not options.ignore_missing:
 		raise ValueError("no input documents")
 
