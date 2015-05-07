@@ -451,8 +451,11 @@ class Bank(object):
 		self.alpha = alpha
 		self.beta = beta
 
-		#FIXME: Sorry for not doing this properly! Pass in as argument
-		req_minimum_overlap = True;
+		#FIXME: Sorry for not doing these properly! Pass in as argument
+		req_minimum_match = True
+		minimum_match = 0.99
+		epsilon_increment = 0.001
+
 		if sampleRate is None:
 			sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
@@ -514,7 +517,7 @@ class Bank(object):
 	        for tmp, row in enumerate(sngl_inspiral_table):
 		    spiir_match = -1
 		    epsilon = original_epsilon
-		    while(spiir_match < 0.99 and epsilon > 0 and req_minimum_overlap):
+		    while(spiir_match < minimum_match and epsilon > 0 and req_minimum_match):
 			m1 = row.mass1
 			m2 = row.mass2
 			fFinal = row.f_final
@@ -565,7 +568,9 @@ class Bank(object):
 			if(original_epsilon==epsilon):
 			    original_match = spiir_match
 			    original_filters = len(a1)
-			epsilon = epsilon-0.001
+
+			if(spiir_match < 0.99):
+				epsilon = epsilon-epsilon_increment
 
 		    self.matches.append(spiir_match)
 		    self.sigmasq.append(1.0 * norm_h / sampleRate)
