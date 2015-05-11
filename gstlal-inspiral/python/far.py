@@ -92,7 +92,7 @@ def logiv(v, z):
 
 # See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
 def ncx2logpdf(x, k, l):
-	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+	return -math.log(2.) - (x+l)/2. + (k/4.-.5) * (numpy.log(x) - numpy.log(l)) + logiv(k/2.-1., numpy.sqrt(l * x))
 
 def ncx2pdf(x, k, l):
 	return numpy.exp(ncx2logpdf(x, k, l))
