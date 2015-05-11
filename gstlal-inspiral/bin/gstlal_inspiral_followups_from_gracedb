@@ -20,36 +20,52 @@
 # A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
 
 import sys, os
+import logging
 from pylal import rate
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
 import pylab
 import numpy
-from scipy.stats import chi2
 from glue.ligolw import utils
-from pylal import ligolw_burca_tailor
 import copy
-import itertools
 from gstlal import far
 import time
-from pylal.date import XLALUTCToGPS
 from glue.ligolw import ligolw, table, lsctables, param, array
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 import urllib
+import urlparse
+import httplib
 import subprocess
 from ligo.gracedb.rest import GraceDb
-import ast
 import glob
+from ligo.lvalert.utils import get_LVAdata_from_stdin
+
+def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 10.0, ignore_404 = False):
+	for i in range(retries):
+		logging.info("retrieving \"%s\" for %s" % (filename, graceid))
+		response = gracedb_client.files(graceid, filename)
+		if response.status == httplib.OK:
+			return response
+		if response.status == httplib.NOT_FOUND and ignore_404:
+			logging.warning("retrieving \"%s\" for %s: (%d) %s.  skipping ..." % (filename, graceid, response.status, response.reason))
+			return None
+		logging.warning("retrieving \"%s\" for %s: (%d) %s.  pausing ..." % (filename, graceid, response.status, response.reason))
+		time.sleep(retry_delay)
+	raise Exception("retrieving \"%s\" for %s: (%d) %s" % (filename, graceid, response.status, response.reason))
+
 
 if len(sys.argv) == 1:
-	xmldoc = utils.load_filename(filename = None, contenthandler = ligolw.LIGOLWContentHandler)
-	lv_table = table.get_table(xmldoc, "LVAlert:table")
-	for r in lv_table:
-        	if r.alert_type == "new":
-		        gid = r.uid
+	lvalert_data = get_LVAdata_from_stdin(sys.stdin, as_dict = True)
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+	if filename not in (u"coinc.xml",) and "_CBC_" not in filename:
+		logging.info("filename is not 'coinc.xml'.  skipping")
+		sys.exit()
+	gid = str(lvalert_data["uid"])
 else:
 	gid = sys.argv[1]
 
@@ -59,8 +75,8 @@ except OSError:
 	pass
 
 gracedb = GraceDb()
-fdict = ast.literal_eval(gracedb.files(gid).read().strip())
-xmldoc, checksum = utils.load_fileobj(gracedb.get(fdict['coinc.xml']), contenthandler = ligolw.LIGOLWContentHandler)
+filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
+xmldoc, checksum = utils.load_fileobj(filename, contenthandler = ligolw.LIGOLWContentHandler)
 coinc_inspiral_row = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)[0]
 sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 process = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
@@ -71,17 +87,20 @@ for r in sngl_inspiral_table:
 for r in params:
 	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
 		path = r.value
+	if r.program == "gstlal_inspiral" and r.param == "--job-tag":
+		tag = r.value
 for r in process:
 	if r.program == "gstlal_inspiral":
 		node = r.node
 
+url = open("%s_registry.txt" % tag).readline().strip()
 
 #
 # SNR / Time plot
 #
 
 #FIXME don't hardcode port number
-t,snr = numpy.loadtxt(urllib.urlopen("http://%s:16953/snr_history.txt" % node), unpack = True)
+t,snr = numpy.loadtxt(urllib.urlopen("%ssnr_history.txt" % url), unpack = True)
 t -= coinc_inspiral_row.get_end()
 pylab.figure()
 pylab.semilogy(t, snr)
@@ -98,10 +117,10 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 # SNR / Chisq plots
 #
 
-likelihood_data = far.LocalRankingData.from_xml(utils.load_url(path, contenthandler = ligolw.LIGOLWContentHandler))
+likelihood_data = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
 
-counts = likelihood_data.distributions.background_rates
-inj = likelihood_data.distributions.injection_rates
+counts = likelihood_data.background_rates
+inj = likelihood_data.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
@@ -129,17 +148,19 @@ for i, ifo in enumerate(['H1', 'L1', 'V1']):
 		pylab.colorbar()
 		pylab.xlabel('SNR')
 		pylab.ylabel('reduced chi^2 / SNR^2')
-		pylab.ylim([chi[1], chi[-1]])
-		pylab.xlim([snr[1],snr[-1]])
+		pylab.ylim([0.001, 1])
+		pylab.xlim([4, 200])
 		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
 		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
 		fname = '%s/%s_%s_snrchi.png' % (gid, gid, ifo)
 		pylab.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = "background")
 
+sys.exit()
 
 #
 # QScans
+# FIXME currently broken
 #
 
 for r in sngl_inspiral_table:

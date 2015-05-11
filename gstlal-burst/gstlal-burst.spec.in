@@ -16,6 +16,13 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root
 %description
 This package contains the plugins and shared libraries required to run the gstlal burst (generic transient) pipeline.
 
+%package devel
+Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
+Group: LSC Software/Data Analysis
+Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ gstlal-ugly-devel >= @MIN_GSTLAL_UGLY_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel
+%description devel
+This package contains the files needed for building gstlal-burst based plugins
+and programs.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -37,7 +44,6 @@ DESTDIR=${RPM_BUILD_ROOT} %{__make} install
 [ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT}/%{_libdir} -name "*.so.*" -type l -delete
 # don't distribute *.la files
 [ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT} -name "*.la" -type f -delete
-
 
 %post
 if test -d /usr/lib64 ; then
@@ -64,4 +70,13 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
-#%{_libdir}/gstreamer-0.10/python/*
+%{_libdir}/gstreamer-0.10/*.so
+%{_libdir}/*.so.*
+
+%files devel
+%defattr(-,root,root)
+%{_libdir}/*.a
+%{_libdir}/*.so
+%{_libdir}/pkgconfig/*
+%{_libdir}/gstreamer-0.10/*.a
+%{_includedir}/*

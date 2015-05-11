@@ -46,6 +46,7 @@ def load_file(fobj, transients = (0.0, 0.0)):
 	start = lines[0][0] + transients[0]
 	stop = lines[-1][0] - transients[-1]
 	iterutils.inplace_filter(lambda line: start <= line[0] <= stop, lines)
+	assert lines, "transients remove all data"
 	return lines
 
 
@@ -81,9 +82,10 @@ def compare_fobjs(fobj1, fobj2, transients = (0.0, 0.0), timestamp_fuzz = defaul
 
 	# trim lead-in and lead-out if requested
 	if flags & COMPARE_FLAGS_ALLOW_STARTSTOP_MISALIGN:
-		lines1 = [line for line in lines1 if lines1[0][0] <= line[0] <= lines1[-1][0]]
+		lines1 = [line for line in lines1 if lines2[0][0] <= line[0] <= lines2[-1][0]]
+		assert lines1, "time intervals do not overlap"
 		lines2 = [line for line in lines2 if lines1[0][0] <= line[0] <= lines1[-1][0]]
-		assert lines1 and lines2, "time intervals do not overlap"
+		assert lines2, "time intervals do not overlap"
 
 	# construct segment lists indicating gap intervals
 	gaps1 = identify_gaps(lines1, timestamp_fuzz = timestamp_fuzz, sample_fuzz = sample_fuzz, flags = flags)
@@ -134,7 +136,10 @@ def compare(filename1, filename2, *args, **kwargs):
 if __name__ == "__main__":
 	from optparse import OptionParser
 	parser = OptionParser()
+	parser.add_option("--compare-exact-gaps", action = "store_const", const = COMPARE_FLAGS_EXACT_GAPS, default = 0)
+	parser.add_option("--compare-zero-is-gap", action = "store_const", const = COMPARE_FLAGS_ZERO_IS_GAP, default = 0)
+	parser.add_option("--compare-allow-startstop-misalign", action = "store_const", const = COMPARE_FLAGS_ALLOW_STARTSTOP_MISALIGN, default = 0)
 	parser.add_option("--timestamp-fuzz", metavar = "seconds", type = "float", default = default_timestamp_fuzz)
 	parser.add_option("--sample-fuzz", metavar = "fraction", type = "float", default = default_sample_fuzz)
 	options, (filename1, filename2) = parser.parse_args()
-	compare(filename1, filename2, timestamp_fuzz = options.timestamp_fuzz, sample_fuzz = options.sample_fuzz)
+	compare(filename1, filename2, timestamp_fuzz = options.timestamp_fuzz, sample_fuzz = options.sample_fuzz, flags = options.compare_exact_gaps | options.compare_zero_is_gap | options.compare_allow_startstop_misalign)

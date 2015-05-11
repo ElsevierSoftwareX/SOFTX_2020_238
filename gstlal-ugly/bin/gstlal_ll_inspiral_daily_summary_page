@@ -10,7 +10,7 @@ from glue import lal
 from glue import iterutils
 from pylal import rate
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
-from pylal.date import XLALUTCToGPS
+import lal
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -28,7 +28,7 @@ def glob_trigger_files(path, seg):
 	return cache.sieve(segment = seg)
 
 def now():
-        return XLALUTCToGPS(time.gmtime())
+        return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 
 def to_png_image(out):
 	f = StringIO.StringIO()

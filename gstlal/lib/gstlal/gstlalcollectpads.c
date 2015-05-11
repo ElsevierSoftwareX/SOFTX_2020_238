@@ -322,7 +322,7 @@ done:
  * @t_end:  address of #GstClockTime where end time will be stored
  *
  * Computes the earliest of the start and of the end times of the
- * #GstCollectPad's input buffers.
+ * #GstCollectPads' input buffers.
  *
  * Upon the successful completion of this function, both time parameters
  * will be set to #GST_CLOCK_TIME_NONE if all input streams are at EOS.

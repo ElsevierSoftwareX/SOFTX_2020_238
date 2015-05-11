@@ -36,6 +36,7 @@ struct _GSTLALTSVDec {
 	GstClockTime t0;
 	char *FS;
 	char *RS;
+	gboolean newsegment;
 	/* FILE *fp; */
 };
 

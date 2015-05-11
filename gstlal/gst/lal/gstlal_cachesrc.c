@@ -1,7 +1,7 @@
 /*
  * GstLALCacheSrc
  *
- * Copyright (C) 2012--2014  Kipp Cannon
+ * Copyright (C) 2012--2015  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,23 @@
 /**
  * SECTION:gstlal_cachesrc
  * @short_description:  Retrieve frame files from locations recorded in a LAL cache file.
+ *
+ * Loads files in order from a list of files stored in a LAL cache.  Each
+ * file is placed into its own #GstBuffer either by reading it into memory
+ * or mmap()ing the file.
+ *
+ * Regular expressions can be used to select a subset of files from the
+ * cache.  One regular expression can be applied to the "source" column,
+ * and one to the "description" column.  The regular expression syntax is
+ * the syntax recognized by the XLALCacheSieve() function in LAL.  At the
+ * time of writing, this function is implemented using the regcomp() POSIX
+ * standard library routine (see regex(7)).
+ *
+ * The element advertises support for the "lalcache" URI protocol.  The URI
+ * format is
+ * <quote>lalcache:///path/to/cachefile?cache-src-regex=...?cache-dsc-regex=...</quote>
+ * where the source and description regex components are both optional.
+ * See the #dataurisrc element for more information.
  *
  * Reviewed:  a922d6dd59d0b58442c0bf7bc4cc4d740b8c6a43 2014-08-12 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
@@ -633,27 +650,17 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	}
 
 	/*
-	 * require a start time
-	 */
-
-	if(!GST_CLOCK_TIME_IS_VALID(segment->start)) {
-		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("start time is required"));
-		success = FALSE;
-		goto done;
-	}
-
-	/*
 	 * do the seek
 	 */
 
-	i = time_to_index(element, segment->start);
+	i = GST_CLOCK_TIME_IS_VALID(segment->start) ? time_to_index(element, segment->start) : 0;
 	if(i >= element->cache->length)
 		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT " beyond end of cache", GST_TIME_SECONDS_ARGS(segment->start));
 	else if(GST_CLOCK_TIME_IS_VALID(segment->stop) && (GstClockTime) segment->stop <= cache_entry_start_time(element, i)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("no data available for segment"));
 		success = FALSE;
 		goto done;
-	} else if((GstClockTime) segment->start < cache_entry_start_time(element, i))
+	} else if(GST_CLOCK_TIME_IS_VALID(segment->start) && (GstClockTime) segment->start < cache_entry_start_time(element, i))
 		GST_WARNING_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->list[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));
 	else
 		GST_DEBUG_OBJECT(element, "seek to %" GST_TIME_SECONDS_FORMAT ": found uri '%s' spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), element->cache->list[i].url, GST_TIME_SECONDS_ARGS(cache_entry_start_time(element, i)), GST_TIME_SECONDS_ARGS(cache_entry_end_time(element, i)));

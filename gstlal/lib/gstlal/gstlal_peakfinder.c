@@ -206,7 +206,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
  */
 
 /* float */
-#define ABSFUNC(x) (fabsf(x))
+#define ABSFUNC(x) x * x
 #define TYPE_STRING float
 #define XLAL_TYPE_STRING REAL4
 #define TYPE float
@@ -217,7 +217,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 #undef ABSFUNC
 
 /* double */
-#define ABSFUNC(x) (fabs(x))
+#define ABSFUNC(x) x * x
 #define TYPE_STRING double
 #define XLAL_TYPE_STRING REAL8
 #define TYPE double
@@ -228,7 +228,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 #undef ABSFUNC
 
 /* float complex */
-#define ABSFUNC(x) sqrt(((float *) &x)[0] * ((float *) &x)[0] + ((float *) &x)[1] * ((float *) &x)[1])
+#define ABSFUNC(x) ((float *) &x)[0] * ((float *) &x)[0] + ((float *) &x)[1] * ((float *) &x)[1]
 #define TYPE_STRING float_complex
 #define XLAL_TYPE_STRING COMPLEX8
 #define TYPE float complex
@@ -239,7 +239,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 #undef ABSFUNC
 
 /* double complex */
-#define ABSFUNC(x) (cabs(x))
+#define ABSFUNC(x) ((double *) &x)[0] * ((double *) &x)[0] + ((double *) &x)[1] * ((double *) &x)[1]
 #define TYPE_STRING double_complex
 #define XLAL_TYPE_STRING COMPLEX16
 #define TYPE double complex

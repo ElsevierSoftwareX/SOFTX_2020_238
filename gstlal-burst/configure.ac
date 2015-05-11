@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-burst],[0.0.1],[gstlal-discuss@ligo.org],[gstlal-burst])
+AC_INIT([gstlal-burst],[0.0.2],[gstlal-discuss@ligo.org],[gstlal-burst])
 AC_COPYRIGHT([Copyright (C) 2011-2014 Chris Pankow])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -16,6 +16,10 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	gstlal-burst.spec \
 	bin/Makefile \
+	lib/gstlal-burst.pc \
+	lib/Makefile \
+	gst/Makefile \
+	gst/lal/Makefile \
 	debian/control \
 	debian/Makefile \
 	python/Makefile \
@@ -203,9 +207,10 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.12.0])
+AC_SUBST([MIN_LAL_VERSION], [6.13.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.0])
 AC_SUBST([MIN_LALBURST_VERSION], [1.2.2])
+AC_SUBST([MIN_LALSIMULATION_VERSION], [1.2.2])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalburst >= ${MIN_LALBURST_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -227,7 +232,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.7.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.8.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
@@ -242,15 +247,11 @@ AC_SUBST([GSTLAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [0.6.0])
-PKG_CHECK_MODULES([GSTLAL_UGLY], [gstlal-ugly >= ${MIN_GSTLAL_UGLY_VERSION}])
-AC_SUBST([GSTLAL_UGLY_VERSION], [`$PKG_CONFIG --modversion gstlal-ugly`])
+AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [0.7.0])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_UGLY_VERSION])
 AC_SUBST([GSTLAL_UGLY_VERSION_MAJOR])
 AC_SUBST([GSTLAL_UGLY_VERSION_MINOR])
 AC_SUBST([GSTLAL_UGLY_VERSION_POINT])
-AC_SUBST([GSTLAL_UGLY_CFLAGS])
-AC_SUBST([GSTLAL_UGLY_LIBS])
 
 
 #

@@ -1,0 +1,13 @@
+diff --git a/gstlal/lib/gstlal/gstlal_peakfinder.c b/gstlal/lib/gstlal/gstlal_peakfinder.c
+index 1eb81ba..34a26db 100644
+--- a/gstlal/lib/gstlal/gstlal_peakfinder.c
++++ b/gstlal/lib/gstlal/gstlal_peakfinder.c
+@@ -228,7 +228,7 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void
+ #undef ABSFUNC
+ 
+ /* float complex */
+-#define ABSFUNC(x) (cabsf(x))
++#define ABSFUNC(x) sqrt(((float *) &x)[0] * ((float *) &x)[0] + ((float *) &x)[1] * ((float *) &x)[1])
+ #define TYPE_STRING float_complex
+ #define XLAL_TYPE_STRING COMPLEX8
+ #define TYPE float complex

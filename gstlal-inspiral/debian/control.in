@@ -6,6 +6,8 @@ Standards-Version: 3.9.2
 X-Python-Version: >= 2.6
 Build-Depends:
  debhelper (>= 8),
+ doxygen,
+ gtk-doc-tools,
  python-all-dev (>= 2.6),
  gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject-dev,
@@ -30,6 +32,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-pylal (>= @MIN_PYLAL_VERSION@),
  gstlal-dep (>= 0.2.2),
  python-gobject,
+ python-h5py,
  python-numpy,
  python-scipy,
  lal (>= @MIN_LAL_VERSION@),

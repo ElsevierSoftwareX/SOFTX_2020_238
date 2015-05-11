@@ -21,6 +21,8 @@ int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *d
 	guint *maxsample = state->samples;
 	double absdata;
 	double absdatachannel;
+	double thresh = state->thresh * state->thresh;
+
 	
 	/* clear the state array */
 	gstlal_peak_state_clear(state);
@@ -29,7 +31,7 @@ int NAME(gstlal,peak_over_window)(struct gstlal_peak_state *state, const TYPE *d
 	for(sample = 0; sample < length; sample++) {
 		for(channel = 0; channel < state->channels; channel++) {
 			absdata = ABSFUNC(*data);
-			if(absdata > state->thresh && absdata > (absdatachannel = ABSFUNC(maxdata[channel]))) {
+			if(absdata > thresh && absdata > (absdatachannel = ABSFUNC(maxdata[channel]))) {
 				/* only increment events if the previous value was 0 */
 				if (absdatachannel == 0)
 					state->num_events += 1;

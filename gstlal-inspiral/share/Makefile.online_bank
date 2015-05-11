@@ -1,0 +1,42 @@
+FSTART = 871147316
+FSTOP =  871149864
+START = 871147516
+STOP =  871149564
+
+# Template bank parameters
+LOW_FREQUENCY_CUTOFF = 30.0
+HIGH_PASS_FREQ = 30
+HIGH_FREQUENCY_CUTOFF = 1024
+SAMPLE_RATE = 2048
+NUM_SPLIT_TEMPLATES = 130
+OVERLAP = 20
+APPROXIMANT = TaylorF2
+BANK_PROGRAM = pycbc_geom_aligned_bank
+#FIXME
+NUMBANKS = 21,22,23,24,25,26,27,28,29,30,31,32
+
+all : bank.dag
+
+LL_5mc_BHspin_red_30early.xml.gz :
+	cp $(shell echo $(dirname $(dirname $(which gstlal_inspiral))))/share/gstlal/LL_5mc_BHspin_red_30early.xml.gz .
+
+%_split_bank.cache: LL_5mc_BHspin_red_30early.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --group-by-chi --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $< --output-cache $@ --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM)
+
+%psd.xml.gz : 
+	gstlal_psd_xml_from_asd_txt --instrument $* --output $@ /usr/share/gstlal/early_aligo_asd.txt
+
+reference_psd.xml: H1psd.xml.gz L1psd.xml.gz V1psd.xml.gz
+	ligolw_add --output reference_psd.xml H1psd.xml.gz  L1psd.xml.gz V1psd.xml.gz
+
+%_bank.dag : %_split_bank.cache reference_psd.xml
+	cp $< tmp
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument $* --reference-psd reference_psd.xml --bank-cache $< --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name $@ --num-banks $(NUMBANKS)
+
+bank.dag : H1_bank.dag L1_bank.dag V1_bank.dag
+	cat H1_bank.dag L1_bank.dag V1_bank.dag > bank.dag
+	rm -f H1_bank.dag L1_bank.dag V1_bank.dag
+
+clean :
+	rm -rf *.sub* *.dag* *.cache *.sh *.xml *.gz logs gstlal_svd_bank* *split_bank

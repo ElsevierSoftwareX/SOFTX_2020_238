@@ -26,8 +26,7 @@ from collections import deque
 from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 from glue.ligolw import lsctables
 from glue.ligolw import utils
-from pylal.date import XLALGreenwichMeanSiderealTime
-from pylal.datatypes import LIGOTimeGPS
+import lal
 
 
 def sngl_inspiral_pylal_from_glue(glue_sngl):
@@ -132,13 +131,11 @@ class lal_faketriggersrc(gst.BaseSrc):
 			self.error("xml-location property is unset, cannot load template bank")
 			return False
 
-		self.__templates = [
-			x for x in
-				lsctables.table.get_table(
-					utils.load_filename(xml_location, gz=xml_location.endswith(".gz")),
-					lsctables.SnglInspiralTable.tableName
+		self.__templates = list(
+			lsctables.SnglInspiralTable.get_table(
+				utils.load_filename(xml_location)
 			)
-		]
+		)
 
 		start_time = self.get_property("start-time")
 		duration = self.get_property("duration")
@@ -204,13 +201,13 @@ class lal_faketriggersrc(gst.BaseSrc):
 			new_triggers = deque()
 			while len(triggertimes) > 0 and triggertimes[0] < end_time:
 				triggertime = triggertimes.popleft()
-				triggertime = LIGOTimeGPS(triggertime / gst.SECOND, triggertime % gst.SECOND)
+				triggertime = lal.LIGOTimeGPS(triggertime / gst.SECOND, triggertime % gst.SECOND)
 				sngl = sngl_inspiral_pylal_from_glue(template)
 				sngl.ifo = instrument
 				sngl.channel = "FAKE_TRIGGER"
-				sngl.end_time = triggertime.seconds
-				sngl.end_time_ns = triggertime.nanoseconds
-				sngl.end_time_gmst = XLALGreenwichMeanSiderealTime(triggertime)
+				sngl.end_time = triggertime.gpsSeconds
+				sngl.end_time_ns = triggertime.gpsNanoSeconds
+				sngl.end_time_gmst = lal.GreenwichMeanSiderealTime(triggertime)
 				sngl.snr = 5
 				sngl.coa_phase = 0
 				sngl.chisq = 1

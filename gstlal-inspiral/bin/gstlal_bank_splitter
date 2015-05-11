@@ -29,11 +29,12 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from glue import lal
+from lal import MSUN_SI
+from glue import lal as gluelal
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import templates
 from gstlal import inspiral_pipe
-
+from gstlal import chirptime
 
 ## @file gstlal_bank_splitter
 #
@@ -53,7 +54,7 @@ from gstlal import inspiral_pipe
 #	+ `--output-cache` [file]: Set the file name for the output cache.
 #	+ `--n` [count] (int): Set the number of templates per output file (required).  It will be rounded to make all sub banks approximately the same size.
 #	+ `--overlap` [count] (int): Overlap the templates in each file by this amount, must be even.
-#	+ `--sort-by` [mchirp|mtotal|ffinal|chirptime]: Select the template sort order (required).
+#	+ `--sort-by` [column]: Select the template sort order column (required).
 #	+ `--add-f-final`: Select whether to add f_final to the bank.
 #	+ `--max-f-final` [max final freq] (float): Max f_final to populate table with; if f_final > max, use max.
 #	+ `--instrument` [ifo]: Override the instrument, required
@@ -153,19 +154,25 @@ for filename in filenames:
 		else:
 			flow = options.f_low
 		for row in sngl_inspiral_table:
-			chi = spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)
+			# Find the total spin magnitudes
+			spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
+			# Chirptime uses SI
+			m1_SI, m2_SI = MSUN_SI * row.mass1, MSUN_SI * row.mass2
+
 			if options.approximant in ('IMRPhenomB', 'EOBNRv2'):
-				row.f_final= max(1024, 2 * spawaveform.imrffinal(row.mass1,row.mass2,chi)) # over sample these waveforms Use at least a 512 Hz rate
-				if options.max_f_final and row.f_final>options.max_f_final:
-					row.f_final=options.max_f_final
-				row.template_duration = spawaveform.imrchirptime(row.mass1, row.mass2, flow, chi)
+				# make sure to go a factor of 2 above the ringdown frequency for safety
+				row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
 			else:
-				row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'bkl_isco')
-				if options.max_f_final and (row.f_final > options.max_f_final):
-					row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,chi)))
-					row.f_final=options.max_f_final
-				# FIXME I use options.max_f_final as a reference if it exists
-				row.template_duration = spawaveform.chirptime(row.mass1, row.mass2, 7, flow, row.f_final, chi)
+				# otherwise choose a suitable high frequency
+				# NOTE not SI
+				row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
+
+			# Override the high frequency with the max if appropriate
+			if options.max_f_final and (row.f_final > options.max_f_final):
+				row.f_final = options.max_f_final
+
+			# Record the conservative template duration
+			row.template_duration = chirptime.imr_time(flow, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
 
 
 	for row in sngl_inspiral_table:
@@ -192,7 +199,7 @@ for filename in filenames:
 
 
 		for rows in group_templates(chirows, options.n, options.overlap):
-			assert len(rows) >= options.n/2, "There are too few templates in this sample rate interval.  Requested %d: have %d" % (options.n, len(rows))
+			assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
 			outputrows.append((rows[0], rows))
 
 
@@ -205,7 +212,7 @@ outputrows.sort(key=sort_func)
 for bank_count, (row, rows) in enumerate(outputrows):
 	sngl_inspiral_table[:] = rows
 	output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-	output_cache_file.write("%s\n" % lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+	output_cache_file.write("%s\n" % gluelal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
 output_cache_file.close()

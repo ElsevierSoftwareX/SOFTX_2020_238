@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2011--2012,2014,2015 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,20 @@
 /**
  * SECTION:gstlal_statevector
  * @short_description:  Converts a state vector stream into booleans, for example to drive a lal_gate element.
+ *
+ * Each sample of the input stream is interpreted as a bit vector, and
+ * mapped one-to-one to boolean-valued output samples.  Each bit of the
+ * input vectors can be required to be on, required to be off, or ignored.
+ * The bits that must be on are set with the #required-on property;  the
+ * bits that must be off are set with the #required-off property.  For each
+ * input sample that satisfies the on/off requirements the output is a
+ * non-zero sample, all other output samples are 0.  Note that if the
+ * bitwise intersection of the #required-on and #required-off properties is
+ * non-zero it will be impossible for the input stream to satisfy the
+ * conditions and the output will be identically 0.
+ *
+ * Typically this element is used to transform a bit vector-valued stream
+ * into a boolean stream suitable for controling a gate element.
  *
  * Reviewed:  f989b34f43aec056f021f10e5e01866846a3c58d 2014-08-10 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
@@ -79,12 +93,6 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  *
  * ============================================================================
  */
-
-
-static gboolean required_on_off_too_wide(GSTLALStateVector *element)
-{
-	return (element->required_on | element->required_off) & ~element->mask ? TRUE : FALSE;
-}
 
 
 static guint get_input_uint8(void **in)
@@ -281,26 +289,20 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	switch(width) {
 	case 8:
 		element->get_input = get_input_uint8;
-		element->mask = 0xff;
 		break;
 
 	case 16:
 		element->get_input = get_input_uint16;
-		element->mask = 0xffff;
 		break;
 
 	case 32:
 		element->get_input = get_input_uint32;
-		element->mask = 0xffffffff;
 		break;
 
 	default:
 		success = FALSE;
 		break;
 	}
-
-	if(required_on_off_too_wide(element))
-		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format;  high-order bits will be ignored");
 
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
@@ -339,7 +341,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	g_assert(element->get_input != NULL);
 
-	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+	GST_LOG_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
@@ -349,8 +351,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		void *in = GST_BUFFER_DATA(inbuf);
 		void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
 		guint8 *out = GST_BUFFER_DATA(outbuf);
-		guint required_on = element->required_on & element->mask;
-		guint required_off = element->required_off | ~element->mask;
+		guint required_on = element->required_on;
+		guint required_off = element->required_off;
 
 		for(; in < end; out++) {
 			guint input = element->get_input(&in);
@@ -434,9 +436,6 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	if(required_on_off_too_wide(element))
-		GST_WARNING_OBJECT(element, "required-on and/or required-off too wide for stream format;  high-order bits will be ignored");
-
 	GST_OBJECT_UNLOCK(element);
 }
 
@@ -518,7 +517,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		g_param_spec_uint(
 			"required-on",
 			"On bits",
-			"Bit mask setting the bits that must be on in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			"Bit mask setting the bits that must be on in the state vector.  Note:  if the mask is wider than the input stream, the high-order bits should be 0 or the on condition will never be met.",
 			0, G_MAXUINT, DEFAULT_REQUIRED_ON,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -529,7 +528,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		g_param_spec_uint(
 			"required-off",
 			"Off bits",
-			"Bit mask setting the bits that must be off in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			"Bit mask setting the bits that must be off in the state vector.",
 			0, G_MAXUINT, DEFAULT_REQUIRED_OFF,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -580,7 +579,4 @@ static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVector
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 
 	filter->get_input = NULL;
-	/* this value makes all required_on/off masks appear to be OK until
-	 * we know otherwise */
-	filter->mask = 0xffffffff;
 }

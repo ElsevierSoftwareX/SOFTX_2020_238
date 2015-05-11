@@ -1,4 +1,50 @@
+gstlal-calibration (0.2.4-1) unstable; urgency=low
+
+  * post ER6 bug fix for filtering convention
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 10 Feb 2015 08:50:00 -0500
+
+gstlal-calibration (0.2.3-1) unstable; urgency=low
+
+  * ER6 bug fix for recoloring gaussian noise
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 11 Dec 2014 15:14:08 -0500
+
+gstlal-calibration (0.2.2-1) unstable; urgency=low
+
+  * ER6 bug fix and offline feature release with packaging fixes
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 8 Dec 2014 09:49:50 -0500
+
+gstlal-calibration (0.2.1-2+deb7u0) unstable; urgency=low
+
+  * build for Wheezy
+
+ -- Steffen Grunewald <steffen.grunewald@ligo.org>  Mon, 08 Dec 2014 16:43:31 +0100
+
+gstlal-calibration (0.2.1-2) unstable; urgency=low
+
+  * added libs to install file
+
+ -- Steffen Grunewald <steffen.grunewald@ligo.org>  Mon, 8 Dec 2014 16:43:00 +0100
+
+gstlal-calibration (0.2.1-1) unstable; urgency=low
+
+  * ER6 bug fix and offline feature release
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 8 Dec 2014 00:51:29 -0500
+
+gstlal-calibration (0.2.0-1) unstable; urgency=low
+
+  * ER6 release
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 27 Nov 2014 21:15:34 -0500
+
 gstlal-calibration (0.1.1-1) unstable; urgency=low
+
+  * initial release
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 30 Jan 2014 14:02:06 -0500
 
   * initial release
 

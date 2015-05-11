@@ -12,7 +12,7 @@ identified the low-latency detection of gravitational waves, i.e., detection in
 less than 1 minute from the signal arriving at Earth, from coalescing neutron
 star and black hole binary systems as a science priority. Joint gravitational
 wave and electromagnetic observations will determine the progenitor models of
-some of the Universe's most violent transient astronomical events - such as
+some of violent transient astronomical events - such as
 gamma-ray bursts - and set the stage to discover completely unanticipated
 phenomena.
 
@@ -111,7 +111,7 @@ published.  The 6th engineering run will be the first to use the new procedure.
 
 - Start by making a directory where you will run the analysis:
 
-		$ mkdir /home/gstlalcbc/engineering/5
+		$ mkdir /home/gstlalcbc/engineering/7
 
 \subsection Gotchas Gotchas:
 
@@ -124,33 +124,23 @@ https://wiki.ligo.org/AuthProject/LIGOCARobotCertificate
 
 \section Banks Preparing the template banks
 
-\subsection banks_description Description of the workflow
-
-The following graph shows the sequence of events to make the online template
-banks. These steps are mostly automated by a Makefile and a condor dag.
-
-Steps in the Makefile
-
-@dotfile bankgeneration.dot
-
 \subsection Instructions
 
 - First make a directory for the template banks, e.g.,
 
-		$ mkdir /home/gstlalcbc/engineering/5/bns_bank
+		$ mkdir /home/gstlalcbc/engineering/7/bns_bank
 
-- Next obtain a Makefile to automate the bank generation, e.g. : <a
-  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.BNSERBank>this
+- Next obtain a Makefile to automate the bank generation, e.g. : <a href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_bank>this
 example</a>
 
-		$ wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.BNSERBank
+		$ wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_bank
 
 - Then modify the make file to suit your needs, e.g. changing the masses or low
   frequency starting points
 
 - Then run make
 
-		$ make -f Makefile.BNSERBank
+		$ make -f Makefile.online_bank
 
 - After several minutes this will result in a dag file that can be submited by
 		$ condor_submit_dag bank.dag
@@ -161,8 +151,6 @@ example</a>
 
 \subsection Resources Resources used 
 
-- gstlal_fake_frames
-- lalapps_tmpltbank
 - gstlal_bank_splitter
 - gstlal_psd_xml_from_asd_txt
 - ligolw_add
@@ -170,23 +158,20 @@ example</a>
 
 \section Analysis Setting up the analysis dag
 
-A makefile automates the construction of a HTCondor DAG.  The steps in the
-makefile are shown in the diagram below.  The dag requires the template banks
-set up in the previous section.
+A makefile automates the construction of a HTCondor DAG.  The dag requires the
+template banks set up in the previous section.
 
-@dotfile analysisgeneration.dot
 
 - Begin by making a directory for the analysis dag to run, e.g.,
 
-		$ mkdir /home/gstlalcbc/engineering/5/analysis
+		$ mkdir /home/gstlalcbc/engineering/7/analysis
 
 - Next obtain a makefile to automate the dag generation, e.g., <a
-  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.ERTrigs>this
-example</a>
+  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_analysis>this example</a>
 
-- Modify the makefile to your liking (make sure it knows where the files you made with the bank dag are) and then run make seed
+- Modify the makefile to your liking (make sure it knows where the files you made with the bank dag are) and then run make
 
-		$ make seed -f Makefile.ERTrigs
+		$ make Makefile.online_analysis
 
 	Note that you will be prompted during the dag creation stage for your
 lvalert username and password.  The password for lvalert is **not** secure. It
@@ -204,20 +189,13 @@ something like this:
 
 		NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0009&dir=/mnt/qfs3/gstlalcbc/engineering/5/bns_trigs_40Hz
 
-- Make seed is the first and necessary step when starting a new analysis from
-  scratch. It sets up some of the necessary input files and produces a dag that
-will *not* submit events to gracedb.  This is important because the online
-analysis needs time to run and collect background statistics.
+- Pay attention to the gracedb far threshold. When set to -1 
 
 \section Running Running the analysis dag
 
 - Once make is finished condor submit the dag
 
 		$ condor_submit_dag trigger_pipe.dag
-
-- At this point one must wait until a sufficient sample of background is
-  collected (at least 24 hours of triple coincident time).  While the dag is
-running you can monitor it by going to the monitoring section of this document
 
 - Once the dag has run for a sufficient time to collect background statistics
   condor remove it and wait for the jobs to finish.  **NOTE: Since these online
@@ -226,9 +204,9 @@ rather than a hard kill (sig 9).  The jobs intercept signal 15 and perform some
 cleanup steps to shutdown the analysis and write out the final output files.
 This is a necessary step, otherwise data will be lost.**
 
-- Next you have to remake the dag, but without the "seed" configuration.
+- Next you can remake the dag with a positive gracedb far threshold, e.g., 0.0001.
 
-		$ make -f Makefile.ERTrigs 
+		$ make -f Makefile.online_analysis
 
 - This will overwrite your dag file, but not other files, like logs, so you
   will need to force resubmission
@@ -254,11 +232,13 @@ the triggers directory with
 
 \subsection Resources Resources used
 
+- gstlal_inspiral
+- gstlal_ll_inspiral_get_urls
 - gstlal_ll_trigger_pipe
-- gstlal_inspiral_reset_likelihood
 - gstlal_ll_inspiral_gracedb_threshold
-- gstlal_inspiral_create_prior_diststats
+- gstlal_inspiral_ll_create_prior_diststats
 - gstlal_inspiral_marginalize_likelihood
+- gstlal_inspiral_marginalize_likelihoods_online
 
 		
 \section monitor Monitoring the output
@@ -267,5 +247,3 @@ As mentioned above you can monitor the output.  Please see the
 gstlal_llcbcsummary for more information. 
 
 Events are uploaded to https://gracedb.ligo.org
-
-![Kipp explaining that the Flux Capacitor is what makes time travel possible; Jolien responds incredulously at the one point twenty-one jiga-flops of power required](@ref kipp.png)  ![LLOID](@ref lloid.png) 

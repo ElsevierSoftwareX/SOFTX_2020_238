@@ -180,7 +180,7 @@ def audio_buffer_from_array(arr, timestamp, offset, rate):
 	buf = gst.Buffer(arr.data)
 	buf.caps = caps_from_array(arr, rate = rate)
 	buf.timestamp = timestamp
-	buf.duration = gst.SECOND * arr.shape[0]
+	buf.duration = (gst.SECOND * arr.shape[0] + rate // 2) // rate
 	buf.offset = offset
 	buf.offset_end = offset + arr.shape[0]
 	return buf

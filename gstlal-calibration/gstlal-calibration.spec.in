@@ -64,3 +64,5 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_libdir}/gstreamer-0.10/python/*
+%{_libdir}/gstreamer-0.10/libgstlalcalibration.a
+%{_libdir}/gstreamer-0.10/libgstlalcalibration.so

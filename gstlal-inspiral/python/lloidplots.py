@@ -121,9 +121,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	from mpl_toolkits.basemap import Basemap, shiftgrid
 	import numpy as np
 	import lal
-	from pylal import inject
-	from pylal.datatypes import LIGOTimeGPS
-	from pylal.date import XLALGreenwichMeanSiderealTime
+	import lalsimulation
 	from glue.iterutils import choices
 
 
@@ -132,7 +130,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	def location_for_site(prefix):
 		"""Get the Cartesian (WGS84) coordinates of a site, given its prefix
 		(H1 for Hanford, L1 for Livingston...)."""
-		return inject.cached_detector[inject.prefix_to_name[prefix]].location
+		return lalsimulation.DetectorPrefixToLALDetector(prefix).location
 
 	def cart2spherical(cart):
 		"""Convert a Cartesian vector to spherical polar azimuth (phi) and elevation (theta) in radians."""
@@ -154,7 +152,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	m.drawmapboundary()
 
 	# lal_skymap outputs geographic coordinates; convert to celestial here.
-	sidereal_time = np.mod(XLALGreenwichMeanSiderealTime(LIGOTimeGPS(gpstime)) / lal.PI_180, 360)
+	sidereal_time = np.mod(lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(gpstime)) / lal.PI_180, 360)
 	lons_grid = sidereal_time + phi.reshape(450, 900) / lal.PI_180
 	lats_grid = 90 - theta.reshape(450, 900) / lal.PI_180
 	logp_grid = logp.reshape(450, 900)

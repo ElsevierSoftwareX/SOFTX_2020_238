@@ -56,9 +56,9 @@ from gstlal._rate_estimation import *
 #
 
 
-def maximum_likelihood_rates(f_over_b):
+def maximum_likelihood_rates(ln_f_over_b):
 	# the upper bound is chosen to include N + \sqrt{N}
-	return optimize.fmin((lambda x: -RatesLnPDF(x, f_over_b)), (1.0, len(f_over_b) + len(f_over_b)**.5), disp = True)
+	return optimize.fmin((lambda x: -RatesLnPDF(x, ln_f_over_b)), (1.0, len(ln_f_over_b) + len(ln_f_over_b)**.5), disp = True)
 
 
 def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, args = (), n_burn = 100, progressbar = None):
@@ -126,7 +126,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		yield coordslist
 		if progressbar is not None:
 			progressbar.increment()
-	if sampler.acceptance_fraction.min() < 0.5:
+	if n_samples_per_walker and sampler.acceptance_fraction.min() < 0.5:
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
 
 
@@ -149,7 +149,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_instruments = None, progressbar = None, chain_file = None, nsample = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = None):
 	"""
 	FIXME:  document this
 	"""
@@ -166,22 +166,31 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	# PDF.
 	#
 
-	f_over_b = numpy.array([ranking_data.signal_likelihood_pdfs[restrict_to_instruments][ln_lr,] / ranking_data.background_likelihood_pdfs[restrict_to_instruments][ln_lr,] for ln_lr in ln_likelihood_ratios])
+	if ranking_data is not None:
+		f = ranking_data.signal_likelihood_pdfs[None]
+		b = ranking_data.background_likelihood_pdfs[None]
+		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
 
-	# remove NaNs.  these occur because the ranking statistic PDFs have
-	# been zeroed at the cut-off and some events get pulled out of the
-	# database with ranking statistic values in that bin
-	#
-	# FIXME:  re-investigate the decision to zero the bin at threshold.
-	# the original motivation for doing it might not be there any
-	# longer
-	f_over_b = f_over_b[~numpy.isnan(f_over_b)]
-	# safety check
-	if numpy.isinf(f_over_b).any():
-		raise ValueError("infinity encountered in ranking statistic PDF ratios")
+		# remove NaNs.  these occur because the ranking statistic
+		# PDFs have been zeroed at the cut-off and some events get
+		# pulled out of the database with ranking statistic values
+		# in that bin
+		#
+		# FIXME:  re-investigate the decision to zero the bin at
+		# threshold.  the original motivation for doing it might
+		# not be there any longer
+		ln_f_over_b = ln_f_over_b[~numpy.isnan(ln_f_over_b)]
+		# safety check
+		if numpy.isinf(ln_f_over_b).any():
+			raise ValueError("infinity encountered in ranking statistic PDF ratios")
+	elif nsample > 0:
+		raise ValueError("must supply ranking data to run MCMC sampler")
+	else:
+		# no-op path
+		ln_f_over_b = numpy.array([])
 
 	#
-	# initializer MCMC chain.  try loading a chain from a chain file if
+	# initialize MCMC chain.  try loading a chain from a chain file if
 	# provided, otherwise seed the walkers for a burn-in period
 	#
 
@@ -197,22 +206,26 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 		progressbar.max = nsample + nburn
 		progressbar.show()
 
-	i = None
+	i = 0
 	if chain_file is not None and "chain" in chain_file:
-		chain = chain_file["chain"].items()
-		samples = numpy.empty((max(nsample, len(chain)), nwalkers, ndim), dtype = "double")
+		chain = chain_file["chain"].values()
+		length = sum(sample.shape[0] for sample in chain)
+		samples = numpy.empty((max(nsample, length), nwalkers, ndim), dtype = "double")
+		if progressbar is not None:
+			progressbar.max = samples.shape[0]
 		# load chain from HDF file
-		for i, (sample_id, sample) in enumerate(chain):
-			samples[i,:,:] = sample
+		for sample in chain:
+			samples[i:i+sample.shape[0],:,:] = sample
+			i += sample.shape[0]
 			if progressbar is not None:
-				progressbar.max = samples.shape[0]
-				progressbar.increment()
-		if i is not None:
+				progressbar.update(i)
+		if i:
 			# skip burn-in, restart chain from last position
 			nburn = 0
-			pos0 = samples[i,:,:]
-			i += 1
-	if i is None:
+			pos0 = samples[i - 1,:,:]
+	elif nsample <= 0:
+		raise ValueError("no chain file to load or invalid chain file, and no new samples requested")
+	if not i:
 		# no chain file provided, or file does not contain sample
 		# chain or sample chain is empty.  still need burn-in.
 		# seed signal rate walkers from exponential distribution,
@@ -224,16 +237,30 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 
 	#
 	# run MCMC sampler to generate (foreground rate, background rate)
-	# samples.
+	# samples.  to improve the measurement of the tails of the PDF
+	# using the MCMC sampler, we draw from the square root of the PDF
+	# and then correct the histogram of the samples (see below).
 	#
 
-	for i, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), posterior(f_over_b), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+	log_posterior = posterior(ln_f_over_b)
+
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), (lambda x: log_posterior(x) / 2.), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
-		samples[i,:,:] = coordslist
-		if chain_file is not None:
-			chain_file["chain/%08d" % i] = coordslist
-			if not i % 2048:
-				chain_file.flush()
+		samples[j,:,:] = coordslist
+		# dump samples to the chain file every 2048 steps
+		if j + 1 >= i + 2048 and chain_file is not None:
+			chain_file["chain/%08d" % i] = samples[i:j+1,:,:]
+			chain_file.flush()
+			i = j + 1
+	# dump any remaining samples to chain file
+	if chain_file is not None and i < samples.shape[0]:
+		chain_file["chain/%08d" % i] = samples[i:,:,:]
+		chain_file.flush()
+
+	#
+	# safety check
+	#
+
 	if samples.min() < 0:
 		raise ValueError("MCMC sampler yielded negative rate(s)")
 
@@ -254,11 +281,11 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, restrict_to_in
 	#
 
 	Rf_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
-	Rf_pdf.array = Rf_pdf.array**2. / (Rf_pdf.bins[0].upper() - Rf_pdf.bins[0].lower())
+	Rf_pdf.array = Rf_pdf.array**2. / Rf_pdf.bins.volumes()
 	Rf_pdf.to_pdf()
 
 	Rb_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
-	Rb_pdf.array = Rb_pdf.array**2. / (Rb_pdf.bins[0].upper() - Rb_pdf.bins[0].lower())
+	Rb_pdf.array = Rb_pdf.array**2. / Rb_pdf.bins.volumes()
 	Rb_pdf.to_pdf()
 
 	#

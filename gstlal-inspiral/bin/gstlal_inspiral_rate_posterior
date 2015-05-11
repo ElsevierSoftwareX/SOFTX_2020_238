@@ -29,6 +29,11 @@
 #
 
 
+import bisect
+try:
+	from fpconst import NegInf
+except ImportError:
+	NegInf = float("-inf")
 import h5py
 import math
 import matplotlib
@@ -45,15 +50,19 @@ matplotlib.rcParams.update({
 })
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import numpy
 from optparse import OptionParser
 import sqlite3
 import sys
 
 
+from glue import segments
 from glue.lal import CacheEntry
+from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 from glue.text_progress_bar import ProgressBar
 from pylal import ligolw_thinca
 
@@ -63,6 +72,9 @@ from gstlal import rate_estimation
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+
+process_name = u"gstlal_inspiral_rate_posterior"
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -83,17 +95,19 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
-	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".95,.999999\", clear to disable).")
+	parser.add_option("-c", "--confidence-intervals", metavar = "confidence[,...]", default = "0.68,0.95,0.999999", help = "Compute and report confidence intervals in the signal count for these confidences (default = \".68,.95,.999999\", clear to disable).")
 	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("--chain-file", metavar = "filename", help = "Read chain from this file, save chain to this file.")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Load ranking statistic PDFs from this file.  Can be given multiple times.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
-	parser.add_option("--restrict-to-instruments", metavar = "name,name[,...]", help = "Compute rate posteriors by looking only at events seen in precisely these instruments (default = use all events).  WARNING:  this is a diagnostic hack for testing the behaviour of the code, the output is not equivalent to inferring the event rate using only the given instruments (that would require discarding triggers and re-ranking the coincs).")
 	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
+	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
+
+	paramdict = options.__dict__
 
 	options.confidence_intervals = map(float, options.confidence_intervals.split(","))
 
@@ -108,13 +122,7 @@ def parse_command_line():
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
 
-	if options.restrict_to_instruments is not None:
-		try:
-			options.restrict_to_instruments = frozenset(lsctables.instrument_set_from_ifos(options.restrict_to_instruments))
-		except:
-			ValueError("invalid --restrict-to-instruments '%s'" % options.restrict_to_instruments)
-
-	return options, filenames
+	return options, paramdict, filenames
 
 
 #
@@ -126,7 +134,7 @@ def parse_command_line():
 #
 
 
-def load_ranking_data(filenames, verbose = False):
+def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
 	ranking_data = None
@@ -142,11 +150,23 @@ def load_ranking_data(filenames, verbose = False):
 			ranking_data = this_ranking_data
 		else:
 			ranking_data += this_ranking_data
+	# affect the zeroing of the PDFs below threshold by hacking the
+	# histograms before running .finish().  do the indexing ourselves
+	# to not 0 the bin @ threshold
+	if ln_likelihood_ratio_threshold is not None:
+		for binnedarray in ranking_data.background_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.signal_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+
 	ranking_data.finish(verbose = verbose)
+
 	return ranking_data
 
 
-def load_search_results(filenames, ln_likelihood_ratio_threshold, restrict_to_instruments = None, tmp_path = None, verbose = False):
+def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
 	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
 
@@ -178,9 +198,8 @@ FROM
 	)
 WHERE
 	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?""" + ("""
-	AND coinc_inspiral.ifos == '%s'""" % lsctables.ifos_from_instrument_set(restrict_to_instruments) if restrict_to_instruments is not None else "")
-	, (definer_id, ln_likelihood_ratio_threshold)):
+	AND coinc_event.likelihood >= ?"""
+	, (definer_id, (ln_likelihood_ratio_threshold if ln_likelihood_ratio_threshold is not None else NegInf))):
 			if is_background:
 				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
 			else:
@@ -192,40 +211,34 @@ WHERE
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
 
-def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, restrict_to_instruments = None):
+def plot_rates(signal_rate, confidence_intervals = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
-	fig.set_size_inches((4., (6. if noise_rate is not None else 4.) / golden_ratio))
-	if restrict_to_instruments is None:
-		fig.suptitle("Event Rate Posterior")
-	else:
-		fig.suptitle("Event Rate Posterior (from %s only)" % ", ".join(sorted(restrict_to_instruments)))
-	if noise_rate is None:
-		signal_axes = fig.gca()
-	else:
-		signal_axes = fig.add_subplot(2, 1, 2)
+	fig.set_size_inches((4., 4. / golden_ratio))
+	signal_axes = fig.gca()
 
 	x = signal_rate.bins[0].centres()
 	y = signal_rate.array
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
+	signal_axes.set_title("Event Rate Posterior")
 	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
 	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
-	#signal_axes.loglog()
+	signal_axes.loglog()
 
-	#signal_axes.set_ylim((1e-8, 1.))
+	signal_axes.set_ylim((1e-8, 1.))
 
 	if confidence_intervals is not None:
-		table = signal_axes.table(cellText = [[r"$P(\mathrm{signals}/\mathrm{experiment} \in [%.4g, %.4g]) = %g$" % (lo, hi, conf)] for conf, (mode, lo, hi) in sorted(confidence_intervals.items())], cellLoc = "left", colWidths = [.7], loc = "upper right")
-		for cell in table.get_celld().values():
-			cell.set_edgecolor("w")
+		alphas = dict(zip(sorted(confidence_intervals), [.6, .4, .2]))
 
-	if noise_rate is not None:
-		background_axes = fig.add_subplot(2, 1, 1)
-		x = noise_rate.bins[0].centres()
-		y = noise_rate.array
-		line2, = background_axes.plot(x, y, color = "r", linestyle = "-", label = "Background")
-		background_axes.set_ylabel(r"$P(\mathrm{background\ count})$")
-		fig.legend((line1, line2), (line1.get_label(), line2.get_label()), loc = "upper right")
+		# convert lo and hi bounds to co-ordinate index segments
+		confidence_intervals = sorted((conf, segments.segmentlist([segments.segment(bisect.bisect_left(x, lo), bisect.bisect_right(x, hi))])) for conf, (mode, lo, hi) in confidence_intervals.items())
+
+		# remove from each the indexes spanned by lower confidence regions
+		confidence_intervals = [(conf, indexes - sum((segs for conf, segs in confidence_intervals[:i]), segments.segmentlist())) for i, (conf, indexes) in enumerate(confidence_intervals)]
+
+		for conf, segs in confidence_intervals:
+			for lo, hi in segs:
+				signal_axes.fill_between(x[lo:hi], y[lo:hi], 1e-8, color = "k", alpha = alphas[conf])
 
 	try:
 		fig.tight_layout()
@@ -249,7 +262,7 @@ def plot_rates(signal_rate, noise_rate = None, confidence_intervals = None, rest
 #
 
 
-options, filenames = parse_command_line()
+options, paramdict, filenames = parse_command_line()
 
 
 #
@@ -258,7 +271,7 @@ options, filenames = parse_command_line()
 
 
 if options.likelihood_filenames:
-	ranking_data = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+	ranking_data = load_ranking_data(options.likelihood_filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 else:
 	ranking_data = None
 
@@ -268,7 +281,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, 0.0, restrict_to_instruments = options.restrict_to_instruments, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
@@ -281,7 +294,7 @@ if options.verbose:
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, restrict_to_instruments = options.restrict_to_instruments, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
 del progressbar
 
 
@@ -293,7 +306,7 @@ del progressbar
 if options.confidence_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining confidence intervals ..."
-	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in (0.95, 0.999999))
+	confidence_intervals = dict((conf, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, conf)) for conf in options.confidence_intervals)
 else:
 	confidence_intervals = None
 if options.verbose and confidence_intervals is not None:
@@ -309,10 +322,20 @@ if options.verbose and confidence_intervals is not None:
 #
 
 
-filename = "rate_posteriors.png"
-if options.verbose:
-	print >>sys.stderr, "writing %s ..." % filename
-plot_rates(signal_rate_pdf, noise_rate = noise_rate_pdf if options.with_background else None, confidence_intervals = confidence_intervals, restrict_to_instruments = options.restrict_to_instruments).savefig(filename)
+filename = "rate_posteriors.xml.gz"
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
+xmldoc.childNodes[-1].appendChild(signal_rate_pdf.to_xml(u"%s:signal_pdf" % process_name))
+xmldoc.childNodes[-1].appendChild(noise_rate_pdf.to_xml(u"%s:noise_pdf" % process_name))
+ligolw_utils.write_filename(xmldoc, filename, gz = (filename or stdout).endswith(".gz"), verbose = options.verbose)
+
+
+fig = plot_rates(signal_rate_pdf, confidence_intervals = confidence_intervals)
+for filename in ("rate_posteriors.png", "rate_posteriors.pdf"):
+	if options.verbose:
+		print >>sys.stderr, "writing %s ..." % filename
+	fig.savefig(filename)
 
 if options.verbose:
 	print >>sys.stderr, "done"

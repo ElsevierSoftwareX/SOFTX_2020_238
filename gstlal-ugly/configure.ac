@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.6.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[0.7.3],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) 2008--2014 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -17,8 +17,6 @@ AC_CONFIG_FILES([ \
 	gstlal-ugly.spec \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal-ugly.pc \
-	lib/Makefile \
 	python/Makefile \
 	share/Makefile \
 	gst/Makefile \
@@ -172,7 +170,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 #
 
 
-AC_SUBST([MIN_NDS_VERSION], [0.10.4])
+AC_SUBST([MIN_NDS_VERSION], [0.11.2])
 AC_ARG_WITH(
 	[nds],
 	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
@@ -276,7 +274,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [1.19.37])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.0.4])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -313,13 +311,15 @@ AC_SUBST([framecpp_CXXFLAGS])
 AC_SUBST([framecpp_LIBS])
 AC_SUBST([framecpp_VERSION])
 
+AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
+
 
 #
 # Check for GDS
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.16.10])
+AC_SUBST([MIN_GDS_VERSION], [2.16.17])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -327,26 +327,38 @@ AC_ARG_WITH(
 	[with_gds=check]
 )
 AS_IF([test "x$with_gds" != "xno"], [
-	PKG_CHECK_MODULES(
-		[gds],
-		[gds >= ${MIN_GDS_VERSION}],
-		[HAVE_GDS="yes"
-		AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])
-		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
-		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
-		HAVE_GDS="no"]
-	)
+	PKG_CHECK_MODULES([gds], [gds >= ${MIN_GDS_VERSION}], [
+		HAVE_GDS="yes"
+		# hack to work around broken .pc file
+		gds_LIBS="$gds_LIBS -llsmp"
+
+		PKG_CHECK_MODULES([gds_framexmit], [gds-framexmit >= ${MIN_GDS_VERSION}], [
+			HAVE_GDS_FRAMEXMIT="yes"
+			# hack to work around broken .pc file
+			gds_framexmit_LIBS="$gds_framexmit_LIBS -lpthread"
+		], [
+			AC_MSG_WARN([not found: $gds_framexmit_PKG_ERRORS])
+			HAVE_GDS_FRAMEXMIT="no"
+			# this component is required
+			AC_MSG_WARN([gds install incomplete])
+			HAVE_GDS="no"
+		])
+	], [
+		AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
+		HAVE_GDS="no"
+	])
 ], [
 	AC_MSG_WARN([check for gds disabled])
 	HAVE_GDS="no"
 ])
 AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
+AS_IF([test "x${HAVE_GDS}" == "xyes"], [
+	AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])  # a little penicillin will clear that right up
+])
 AC_SUBST([gds_CFLAGS])
 AC_SUBST([gds_LIBS])
-AS_IF([test "x${HAVE_GDS}" == "xyes"], [
-	AC_SUBST([framexmit_CFLAGS], ["-I/usr/include/gds"])
-	AC_SUBST([framexmit_LIBS], ["-lframexmit -lpthread -lsockutil"])
-])
+AC_SUBST([gds_framexmit_CFLAGS])
+AC_SUBST([gds_framexmit_LIBS])
 
 
 #
@@ -354,7 +366,7 @@ AS_IF([test "x${HAVE_GDS}" == "xyes"], [
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.12.0])
+AC_SUBST([MIN_LAL_VERSION], [6.13.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.0])
 AC_SUBST([MIN_LALBURST_VERSION], [1.2.2])
 AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.5.3])
@@ -368,8 +380,8 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.46])
-AC_SUBST([MIN_PYLAL_VERSION], [0.5.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.47])
+AC_SUBST([MIN_PYLAL_VERSION], [0.6.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
@@ -379,7 +391,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.7.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.8.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

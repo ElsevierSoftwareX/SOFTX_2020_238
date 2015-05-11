@@ -39,6 +39,7 @@ pygst.require('0.10')
 import gst
 
 
+from glue import iterutils
 from glue import lal
 from glue import segments
 from gstlal import pipeio
@@ -170,9 +171,10 @@ class framecpp_channeldemux_set_units(object):
 
 
 class framecpp_channeldemux_check_segments(object):
-	def __init__(self, elem, seglists):
+	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
 		self.elem = elem
 		self.probe_handler_ids = {}
+		self.jitter = jitter
 		# keep a copy of the segmentlistdict incase the calling
 		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
@@ -182,20 +184,23 @@ class framecpp_channeldemux_check_segments(object):
 		if name in self.probe_handler_ids:
 			pad.remove_data_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
-			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name])
+			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
 
 	@staticmethod
-	def set_probe(pad, seglist):
+	def set_probe(pad, seglist, jitter = LIGOTimeGPS(0, 1)):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, segments.segmentlist(seglist))
+		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglist), jitter))
 
 	@staticmethod
-	def probe(pad, obj, seglist):
+	def probe(pad, obj, (seglist, jitter)):
 		if isinstance(obj, gst.Buffer):
 			if not obj.flag_is_set(gst.BUFFER_FLAG_GAP):
 				# remove the current buffer from the data
 				# we're expecting to see
 				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
+				# ignore missing data intervals unless
+				# they're bigger than the jitter
+				iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			# are we still expecting to see something that
 			# precedes the current buffer?
 			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
@@ -448,6 +453,11 @@ def mkaudioundersample(pipeline, src):
 ## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-audioresample.html">audioresample</a> element to a pipeline with useful default properties
 def mkresample(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "audioresample", **properties)
+
+
+## Adds a <a href="@gstlalgtkdoc/GSTLALInterpolator.html">lal_interpolator</a> element to a pipeline with useful default properties
+def mkinterpolator(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_interpolator", **properties)
 
 
 ## Adds a <a href="@gstlalgtkdoc/GSTLALWhiten.html">lal_whiten</a> element to a pipeline with useful default properties

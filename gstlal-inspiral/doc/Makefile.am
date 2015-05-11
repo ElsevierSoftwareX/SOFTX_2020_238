@@ -11,7 +11,7 @@ html/% html/search/% : doxyfile.stamp
 # Will uninstall work??
 nobase_pkgdoc_DATA = $(wildcard html/*.*) $(wildcard html/search/*.*)
 
-CLEANFILES = doxyfile.stamp gstlalinspiraldoxy.tag
+CLEANFILES = doxyfile.stamp gstlalinspiraldoxy.tag doxygen_sqlite3.db
 
 clean-local : clean-local-html clean-local-latex clean-local-man
 

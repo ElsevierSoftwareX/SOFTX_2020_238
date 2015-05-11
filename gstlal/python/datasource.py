@@ -46,8 +46,9 @@
 #
 
 
-import sys
 import optparse
+import sys
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -65,6 +66,7 @@ from glue.ligolw import utils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue import segments
+import lal
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
@@ -236,6 +238,47 @@ framexmit_ports = {
 }
 
 
+def framexmit_dict_from_framexmit_list(framexmit_list):
+	"""!
+	Given a list of framexmit addresses with ports, produce a dictionary keyed by ifo:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+
+		>>> framexmit_dict_from_framexmit_list(["H1=224.3.2.1:7096", "L1=224.3.2.2:7097", "V1=224.3.2.3:7098"])
+		{'V1': ('224.3.2.3', 7098), 'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097)}
+	"""
+	out = []
+	for instrument_addr in framexmit_list:
+		ifo, addr_port = instrument_addr.split("=")
+		addr, port = addr_port.split(':')
+		out.append((ifo, (addr, int(port))))
+	return dict(out)
+
+
+def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "framexmit-addr"):
+	"""!
+	Creates a string of framexmit address options from a dictionary keyed by ifos.
+
+	Examples:
+
+		>>> framexmit_list_from_framexmit_dict({'V1': ('224.3.2.3', 7098), 'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097)})
+		'V1=224.3.2.3:7098 --framexmit-addr=H1=224.3.2.1:7096 --framexmit-addr=L1=224.3.2.2:7097 '
+	"""
+	outstr = ""
+	if ifos is None:
+		ifos = framexmit_dict.keys()
+	for i, ifo in enumerate(ifos):
+		if i == 0:
+			outstr += "%s=%s:%s " % (ifo, framexmit_dict[ifo][0], framexmit_dict[ifo][1])
+		else:
+			outstr += "--%s=%s=%s:%s " % (opt, ifo, framexmit_dict[ifo][0], framexmit_dict[ifo][1])
+
+	return outstr
+
+
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	"""!
 	Create a new seek event, i.e., gst.event_new_seek()  for a given
@@ -299,6 +342,12 @@ class GWDataSourceInfo(object):
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
+
+		## A dictionary of framexmit addresses
+		self.framexmit_addr = framexmit_ports["CIT"]
+		if options.framexmit_addr is not None:
+			self.framexmit_addr.update( framexmit_dict_from_framexmit_list(options.framexmit_addr) )
+		self.framexmit_iface = options.framexmit_iface
 
 		## Seek event. Default is None, i.e., no seek
 		self.seekevent = None
@@ -384,7 +433,7 @@ def append_options(parser):
 	for applications that read GW data.
 	
 -	--data-source [string]
-		Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
+		Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
 
 -	--block-size [int] (bytes)
 		Data block size to read in bytes. Default 16384 * 8 * 512 which is 512 seconds of double
@@ -421,10 +470,17 @@ def append_options(parser):
 -	--nds-channel-type [string] type
 		FIXME please document
 
+-	--framexmit-addr [string]
+		Set the address of the framexmit service.  Can be given
+		multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port
+
+-	--framexmit-iface [string]
+		Set the address of the framexmit interface.
+
 -	--dq-channel-name [string]
 		Set the name of the data quality (or state vector) channel.
 		This channel will be used to control the flow of data via the on/off bits.
-		Can be given multiple times as --channel-nameIFOCHANNEL-NAME)
+		Can be given multiple times as --dq-channel-name=IFO=DQ-CHANNEL-NAME
 
 -	--shared-memory-partition [string]
 		Set the name of the shared memory partition for a given instrument.
@@ -465,7 +521,7 @@ def append_options(parser):
 	-# Many other combinations possible, please add some!
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmitsrc|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence, AdvVirgo, LIGO, AdvLIGO, nds.")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
@@ -475,6 +531,8 @@ def append_options(parser):
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-port", metavar = "portnumber", type=int, default=31200, help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
+	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
+	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality (or state vector) channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
@@ -552,7 +610,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #      }
 #	subgraph clusteronline {
 #		color=black;
-#		online_0 [label="lvshmsrc|framexmitsrc", URL="\ref pipeparts.mklvshmsrc()"];
+#		online_0 [label="lvshmsrc|framexmit", URL="\ref pipeparts.mklvshmsrc()"];
 #		online_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
 #		online_2a [label ="strain queue", URL="\ref pipeparts.mkqueue()"];
 #		online_2b [label ="statevector queue", URL="\ref pipeparts.mkqueue()"];
@@ -639,7 +697,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# FIXME make wait_time adjustable through web interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
 		elif gw_data_source_info.data_source == "framexmit":
-			src = pipeparts.mkframexmitsrc(pipeline, multicast_group = framexmit_ports["CIT"][instrument][0], port = framexmit_ports["CIT"][instrument][1], wait_time = 120)
+			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = gw_data_source_info.framexmit_iface, multicast_group = gw_data_source_info.framexmit_addr[instrument][0], port = gw_data_source_info.framexmit_addr[instrument][1], wait_time = 120)
 		else:
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
@@ -654,15 +712,13 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
-		if gw_data_source_info.dq_channel_type == "ODC":
+		if gw_data_source_info.dq_channel_type == "ODC" or gw_data_source_info.dq_channel_dict[instrument] == "Hrec_Flag_Quality":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
-			import time
-			from pylal.date import XLALUTCToGPS
-			t = float(XLALUTCToGPS(time.gmtime()))
+			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
 			off = elem.get_property("off-samples")
 			gap = elem.get_property("gap-samples")
@@ -675,9 +731,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		def strain_add(elem = src):
-			import time
-			from pylal.date import XLALUTCToGPS
-			t = float(XLALUTCToGPS(time.gmtime()))
+			t = float(lal.UTCToGPS(time.gmtime()))
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
 			# FIXME don't hard code the sample rate

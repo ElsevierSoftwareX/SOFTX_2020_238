@@ -52,11 +52,11 @@
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_multiplier.h>
 #include <gstlal_iirbank.h>
+#include <gstlal_interpolator.h>
 #include <gstlal_mean.h>
 #include <gstlal_specgram.h>
 #include <gstlal_pad.h>
 #include <gstlal_trim.h>
-#include <gstlal_burst_triggergen.h>
 #include <gstlal_bitvectorgen.h>
 #include <audioratefaker.h>
 
@@ -78,10 +78,10 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 		{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
+		{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},
 		{"lal_mean", GSTLAL_MEAN_TYPE},
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
 		{"lal_pad", GST_TYPE_LALPAD},
-		{"lal_bursttriggergen", GSTLAL_BURST_TRIGGERGEN_TYPE},
 		{"lal_trim", GST_TYPE_LALTRIM},
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},

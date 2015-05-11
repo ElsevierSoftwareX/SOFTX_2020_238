@@ -1,7 +1,7 @@
 /*
  * framecpp channel demultiplexor
  *
- * Copyright (C) 2011--2013  Kipp Cannon, Ed Maros
+ * Copyright (C) 2011--2014  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -171,11 +171,7 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, gint *rate, guint *unit_size)
-#else
-static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gint *rate, guint *unit_size)
-#endif
 {
 	GstCaps *caps;
 	gint width = vect->GetTypeSize() * 8;
@@ -248,11 +244,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrameCPP::FrVect > vect, gi
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
-#else
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
-#endif
 {
 	GstBuffer *buffer;
 
@@ -294,7 +286,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 	 * set timestamp and duration
 	 */
 
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp + (GstClockTime) round(vect->GetDim(0).GetStartX() * GST_SECOND);
 	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
 	GST_BUFFER_OFFSET(buffer) = offset;
 	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
@@ -575,11 +567,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
  */
 
 
-#ifdef HAVE_FRAMECPP_2x
 static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp)
-#else
-static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
-#endif
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
@@ -949,8 +937,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 
-			GST_LOG_OBJECT(element, "found frame %d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), GST_TIME_SECONDS_ARGS(frame_timestamp));
-
 			/*
 			 * update element properties
 			 */
@@ -967,6 +953,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			/* assume this changes */
 			element->frame_number = frame->GetFrame();
 			g_object_notify(G_OBJECT(element), "frame-number");
+
+			GST_LOG_OBJECT(element, "frame index %d: #%d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), element->frame_number, GST_TIME_SECONDS_ARGS(frame_timestamp));
 
 			/*
 			 * populate tags from frame metadata.  the tags
@@ -1013,12 +1001,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						continue;
 					}
 					srcpad = get_src_pad(element, name, GST_FRPAD_TYPE_FRADCDATA, &pads_added);
-					/* FIXME:  bias, slope, units */
+					/* FIXME:  units */
 					g_object_set(srcpad,
 						"comment", (*current)->GetComment().c_str(),
 						"channel-group", (*current)->GetChannelGroup(),
 						"channel-number", (*current)->GetChannelNumber(),
 						"nbits", (*current)->GetNBits(),	/* FIXME:  set depth in caps */
+						"bias", (*current)->GetBias(),
+						"slope", (*current)->GetSlope(),
 						NULL
 					);
 					if(!gst_pad_is_linked(srcpad)) {

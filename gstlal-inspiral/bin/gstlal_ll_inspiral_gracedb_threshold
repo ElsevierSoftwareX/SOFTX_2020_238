@@ -92,7 +92,7 @@ else:
 
 OK = True
 
-urls = set(url.strip() for filename in filenames for url in open(filename) if "gracedb_far_threshold.txt" in url)
+urls = set("%sgracedb_far_threshold.txt" % url.strip() for filename in filenames for url in open(filename))
 
 for url in sorted(urls):
 	print "%s:" % url

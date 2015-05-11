@@ -68,6 +68,7 @@
 
 import math
 import sys
+import os
 import numpy
 import warnings
 import StringIO
@@ -205,7 +206,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -247,8 +248,10 @@ class Handler(simplehandler.Handler):
 		# mapping instrument to segment list
 		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)) for segtype in gate_suffix)
 		# add a "triggersegments" entry
-		self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
-
+		if seglistdict is None:
+			self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
+		else:
+			self.seglistdicts["triggersegments"] = seglistdict
 		# hook the Data class's livetime record keeping into ours
 		# so that all segments come here
 		# FIXME:  don't do this, get rid of the Data class
@@ -385,7 +388,13 @@ class Handler(simplehandler.Handler):
 				self._close_segments(timestamp)
 				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
-				fname = "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
+				#FIXME integrate with the Data class snapshotting directories
+				path = str(int(math.floor(ext[0])))[:5]
+				try:
+					os.mkdir(path)
+				except OSError:
+					pass
+				fname = "%s/%s-%s_SEGMENTS-%d-%d.xml.gz" % (path, "".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
 				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 				# clear the segment lists in place
@@ -563,20 +572,15 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# convolution, high-frequency branches use FFT convolution with a
 	# block stride given by fir_stride.
 	#
-	# FIXME:  why the -1?  without it the pieces don't match but I
-	# don't understand where this offset comes from.  it might really
-	# need to be here, or it might be a symptom of a bug elsewhere.
-	# figure this out.
 
-	latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1
+	latency = -int(round(bank_fragment.start * bank_fragment.rate))
 	block_stride = fir_stride * bank_fragment.rate
-	
+
 	# we figure an fft costs ~5 logN flops where N is duration + block
-	# stride.  For each chunk you have to do a forward and a reverse fft.
-	# Time domain costs N * block_stride. So if block stride is less than
-	# about 10logN you might as well do time domain filtering
+	# stride.  Time domain costs N * block_stride. So if block stride is
+	# less than about 5logN you might as well do time domain filtering
 	# FIXME This calculation should probably be made more rigorous
-	time_domain = 10 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
+	time_domain = 5 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = latency, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = block_stride, time_domain = time_domain)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
@@ -613,17 +617,22 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# signal if that element gets smarter maybe this could be made smaller
 		# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
 		#
+		# FIXME for an unknown reason there needs to be an extra large
+		# queue in this part of the pipeline in order to prevent
+		# lock-ups.  Fortunately this is buffering up relatively
+		# lightweight data, i.e., before reconstruction
+		#
 		# FIXME since peakfinding is done, or control is based on
 		# injections only, we ignore the bank.gate_threshold parameter
 		# and just use 1e-100
 
 		src = pipeparts.mkgate(
 			pipeline,
-			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 10 * block_duration),
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration),
 			threshold = 1e-100,
 			attack_length = gate_attack_length,
 			hold_length = gate_hold_length,
-			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 10 * block_duration)
+			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration)
 		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 	else:
@@ -970,6 +979,9 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+		# uncomment this tee if the diagnostic sinks below are
+		# needed
+		#snr = pipeparts.mktee(pipeline, snr)
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is 1 second at max rate, ie max(rates)

@@ -47,8 +47,9 @@
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#	+ `--gracedb-type`: gracedb type (default is LowMass).
+#	+ `--gracedb-search`: gracedb type (default is LowMass).
 #	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal-spiir).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval (default = 30s).
 
 #

@@ -20,6 +20,8 @@ pkgpython_PYTHON = \
 	multirate_datasource.py \
 	pipeio.py \
 	pipeutil.py \
+	plotpsd.py \
+	plotutil.py \
 	reference_psd.py \
 	simplehandler.py \
 	simulation.py

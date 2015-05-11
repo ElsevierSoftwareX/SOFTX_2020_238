@@ -70,18 +70,27 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 10000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 10000000).")
+	parser.add_option("--samples-file", metavar = "filename", action = "append", help = "Load the results of previous sampler runs from this file, and add the samples we generate to it.  Can be given multiple times.")
+	parser.add_option("--samples-cache", metavar = "filename", help = "Load the results of previous sampler runs from the files listed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
+
+	paramdict = options.__dict__.copy()
 
 	if options.likelihood_cache is not None:
 		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
 	if not urls:
 		raise ValueError("must provide some likelihood files")
 
+	if options.samples_file is None:
+		options.samples_file = []
+	if options.samples_cache is not None:
+		options.samples_file += [CacheEntry(line).url for line in open(options.samples_cache)]
+
 	if options.output is None:
 		raise ValueError("must set --output")
 
-	return options, urls
+	return options, urls, paramdict
 
 
 #
@@ -98,13 +107,28 @@ def parse_command_line():
 #
 
 
-options, urls = parse_command_line()
+options, urls, paramdict = parse_command_line()
 
 
 #
-# load parameter distribution data
+# load parameter distribution data and, optionally, samples from previous
+# runs
 #
 
+
+old_ranking_data = None
+for n, filename in enumerate(options.samples_file, start = 1):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(options.samples_file)),
+	xmldoc = ligolw_utils.load_url(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+	ignored, this_ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
+	xmldoc.unlink()
+	if this_ranking_data is None:
+		raise ValueError("%s does not contain ranking statistic distribution data" % filename)
+	if old_ranking_data is None:
+		old_ranking_data = this_ranking_data
+	else:
+		old_ranking_data += this_ranking_data
 
 coincparamsdistributions = None
 seglists = segments.segmentlistdict()
@@ -121,6 +145,7 @@ for n, likelihood_url in enumerate(urls, start = 1):
 	else:
 		coincparamsdistributions += this_coincparamsdistributions
 	seglists |= this_seglists
+
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
@@ -138,6 +163,8 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 
 coincparamsdistributions.finish(verbose = options.verbose)
+if old_ranking_data is not None:
+	old_ranking_data.finish(verbose = options.verbose)
 
 
 #
@@ -159,6 +186,8 @@ for horizon_distances in coincparamsdistributions.horizon_history.all():
 
 
 ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), nsamples = options.ranking_stat_samples, verbose = options.verbose)
+if old_ranking_data is not None:
+	ranking_data += old_ranking_data
 
 
 #
@@ -168,7 +197,7 @@ ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = {})
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = paramdict)
 search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
 ligolw_process.set_process_end_time(process)

@@ -178,7 +178,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			sampleUnits = laltypes.LALUnit("strain"),
 			data = data
 		)
-		
+
 		lalfft.XLALREAL8TimeFreqFFT(fworkspace, tseries, fwdplan)
 		z = numpy.copy(fworkspace.data)
 
@@ -509,10 +509,14 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			# start and end times are measured *backwards* from
 			# template end;  subtract from n to convert to
 			# start and end index;  end:start is the slice to
-			# extract (argh!  Chad!)
-			begin_index = length_max - int(round(time_slice['begin'] * sample_rate_max))
-			end_index = length_max - int(round(time_slice['end'] * sample_rate_max))
+			# extract, but there's also an amount added equal
+			# to 1 less than the stride that I can't explain
+			# but probaby has something to do with the reversal
+			# of the open/closed boundary conditions through
+			# all of this (argh!  Chad!)
 			stride = int(round(sample_rate_max / time_slice['rate']))
+			begin_index = length_max - int(round(time_slice['begin'] * sample_rate_max)) + stride - 1
+			end_index = length_max - int(round(time_slice['end'] * sample_rate_max)) + stride - 1
 			# make sure the rates are commensurate
 			assert stride * time_slice['rate'] == sample_rate_max
 

@@ -44,7 +44,14 @@ import random
 import warnings
 from scipy import interpolate
 from scipy import optimize
+# FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
+# systems are already fine
+try:
+	from scipy.optimize import curve_fit
+except ImportError:
+	from gstlal.curve_fit import curve_fit
 from scipy import stats
+from scipy.special import ive
 import sqlite3
 sqlite3.enable_callback_tracebacks(True)
 import sys
@@ -61,9 +68,34 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
-from pylal import inject
+import lal
+import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
+
+
+#
+# ============================================================================
+#
+#			Non-central chisquared pdf
+#
+# ============================================================================
+#
+
+#
+# FIXME this is to work around a precision issue in scipy
+# See: https://github.com/scipy/scipy/issues/1608
+#
+
+def logiv(v, z):
+	return numpy.log(ive(v,z)) + z
+
+# See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
+def ncx2logpdf(x, k, l):
+	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+
+def ncx2pdf(x, k, l):
+	return numpy.exp(ncx2logpdf(x, k, l))
 
 
 #
@@ -84,12 +116,55 @@ def fap_after_trials(p, m):
 	The return value is 1 - (1 - p)^m computed avoiding round-off
 	errors and underflows.  m cannot be negative but need not be an
 	integer.
+
+	Example:
+
+	>>> fap_after_trials(0.5, 1)
+	0.5
+	>>> fap_after_trials(0.066967008463192584, 10)
+	0.5
+	>>> fap_after_trials(0.0069075045629640984, 100)
+	0.5
+	>>> fap_after_trials(0.00069290700954747807, 1000)
+	0.5
+	>>> fap_after_trials(0.000069312315846428086, 10000)
+	0.5
+	>>> fap_after_trials(.000000006931471781576803, 100000000)
+	0.5
+	>>> fap_after_trials(0.000000000000000069314718055994534, 10000000000000000)
+	0.5
+	>>> "%.15g" % fap_after_trials(0.1, 21.854345326782834)
+	'0.9'
+	>>> "%.15g" % fap_after_trials(1e-17, 2.3025850929940458e+17)
+	'0.9'
+	>>> fap_after_trials(0.1, .2)
+	0.020851637639023216
 	"""
+	# when m*p is not >> 1, we can use an expansion in powers of m*p
+	# that allows us to avoid having to compute differences of
+	# probabilities (which would lead to loss of precision when working
+	# with probabilities close to 0 or 1)
+	#
 	# 1 - (1 - p)^m = m p - (m^2 - m) p^2 / 2 +
 	#	(m^3 - 3 m^2 + 2 m) p^3 / 6 -
 	#	(m^4 - 6 m^3 + 11 m^2 - 6 m) p^4 / 24 + ...
 	#
-	# starting at 0, the nth term in the series is
+	# the coefficient of each power of p is a polynomial in m.  if m <<
+	# 1, these polynomials can be approximated by their leading term in
+	# m
+	#
+	# 1 - (1 - p)^m ~= m p + m p^2 / 2 + m p^3 / 3 + m p^4 / 4 + ...
+	#                = -m * log(1 - p)
+	#
+	# NOTE: the ratio of the coefficients of higher-order terms in the
+	# polynomials in m to that of the leading-order term grows with
+	# successive powers of p and eventually the higher-order terms will
+	# dominate.  we assume that this does not happen until the power of
+	# p is sufficiently high that the entire term (polynomial in m and
+	# all) is negligable and the series has been terminated.
+	#
+	# if m is not << 1, then returning to the full expansion, starting
+	# at 0, the nth term in the series is
 	#
 	# -1^n * (m - 0) * (m - 1) * ... * (m - n) * p^(n + 1) / (n + 1)!
 	#
@@ -97,9 +172,9 @@ def fap_after_trials(p, m):
 	#
 	# X * (n - m) * p / (n + 1)
 	#
-	# which allows us to avoid explicit evaluation of each term's
-	# numerator and denominator separately (each of which quickly
-	# overflow).
+	# this recursion relation allows us to compute successive terms
+	# without explicit evaluation of the full numerator and denominator
+	# expressions (each of which quickly overflow).
 	#
 	# for sufficiently large n the denominator dominates and the terms
 	# in the series become small and the sum eventually converges to a
@@ -109,77 +184,103 @@ def fap_after_trials(p, m):
 	# grow large and alternate in sign and an accurate result can only
 	# be obtained through careful cancellation of the large values.
 	#
-	# for large m*p we take a different approach to evaluating the
-	# result.  in this regime the result will be close to 1 so (1 -
-	# p)^m will be small
+	# for large m*p we write the expression as
 	#
-	# (1 - p)^m = exp(m ln(1 - p))
+	# 1 - (1 - p)^m = 1 - exp(m log(1 - p))
 	#
-	# if p is small, ln(1 - p) suffers from loss of precision but the
-	# Taylor expansion of ln(1 - p) converges quickly
+	# if p is small, log(1 - p) suffers from loss of precision but the
+	# Taylor expansion of log(1 - p) converges quickly
 	#
 	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
 	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
 	#
-	# as an alternative, the standard library provides log1p(),
-	# which evalutes ln(1 + p) accurately for small p.
+	# math libraries (including Python's) generally provide log1p(),
+	# which evalutes log(1 + p) accurately for small p.  we rely on
+	# this function to provide results valid both in the small-p and
+	# not small-p regimes.
 	#
-	# if p is close to 1, ln(1 - p) suffers a domain error
+	# if p = 1, log1p() complains about an overflow error.  we trap
+	# these and return the hard-coded answer
 	#
 
-	assert m >= 0, "m = %g cannot be negative" % m
-	assert 0 <= p <= 1, "p = %g must be between 0 and 1 inclusively" % p
+	if m <= 0.:
+		raise ValueError("m = %g must be positive" % m)
+	if not (0. <= p <= 1.):
+		raise ValueError("p = %g must be between 0 and 1 inclusively" % p)
 
-	if m * p < 1.0:
+	if m * p < 4.:
 		#
-		# use direct Taylor expansion of 1 - (1 - p)^m
+		# expansion of 1 - (1 - p)^m in powers of p
 		#
 
-		s = 0.0
-		term = -1.0
+		if m < 1e-8:
+			#
+			# small m approximation
+			#
+
+			try:
+				return -m * math.log1p(-p)
+			except OverflowError:
+				#
+				# p is too close to 1.  result is 1
+				#
+
+				return 1.
+
+		#
+		# general m
+		#
+
+		s = []
+		term = -1.
 		for n in itertools.count():
-			term *= (n - m) * p / (n + 1.0)
-			s += term
-			if abs(term) <= abs(1e-17 * s):
-				return s
+			term *= (n - m) * p / (n + 1.)
+			s.append(term)
+			# 0th term is always positive
+			if abs(term) <= 1e-18 * s[0]:
+				s.reverse()
+				return sum(s)
 
-	if p < .125:
-		#
-		# compute result from Taylor expansion of ln(1 - p)
-		#
-
-		return 1.0 - math.exp(m * math.log1p(-p))
-
-		#
-		# original implementation in case log1p() gives us problems
-		#
-
-		s = p_powers = 1.0
-		for n in itertools.count(2):
-			p_powers *= p
-			term = p_powers / n
-			s += term
-			if term <= 1e-17 * s:
-				return 1.0 - math.exp(-m * p * s)
+	#
+	# compute result as 1 - exp(m * log(1 - p))
+	#
 
 	try:
+		x = m * math.log1p(-p)
+	except OverflowError:
 		#
-		# try direct evaluation of 1 - exp(m ln(1 - p))
-		#
-
-		return 1.0 - math.exp(m * math.log(1.0 - p))
-
-	except ValueError:
-		#
-		# math.log has suffered a domain error, therefore p is very
-		# close to 1.  we know p <= 1 because it's a probability,
-		# and we know that m*p >= 1 otherwise we wouldn't have
-		# followed this code path, therefore m >= 1, and so because
-		# p is close to 1 and m is not small we can safely assume
-		# the anwer is 1.
+		# p is very close to 1.  we know p <= 1 because it's a
+		# probability, and we know that m*p >= 4 otherwise we
+		# wouldn't have followed this code path, and so because p
+		# is close to 1 and m is not small we can safely assume the
+		# anwer is 1.
 		#
 
-		return 1.0
+		return 1.
+
+	if x > -0.69314718055994529:
+		#
+		# result is closer to 0 than to 1.  use Taylor expansion
+		# for exp() with leading term removed to avoid having to
+		# subtract from 1 to get answer.
+		#
+		# 1 - exp x = -(x + x^2/2! + x^3/3! + ...)
+		#
+
+		s = [x]
+		term = x
+		for n in itertools.count(2):
+			term *= x / n
+			s.append(term)
+			# 0th term is always negative
+			if abs(term) <= -1e-18 * s[0]:
+				s.reverse()
+				return -sum(s)
+
+	return 1. - math.exp(x)
+
+
+fap_after_trials_arr = numpy.frompyfunc(fap_after_trials, 2, 1)
 
 
 def trials_from_faps(p0, p1):
@@ -206,20 +307,10 @@ def trials_from_faps(p0, p1):
 		return PosInf
 
 	#
-	# find range of m that contains solution.  the false alarm
-	# probability increases monotonically with the number of trials
+	# m log(1 - p0) = log(1 - p1)
 	#
 
-	lo, hi = 0, 100
-	while fap_after_trials(p0, hi) < p1:
-		hi *= 100
-
-	#
-	# use fap_after_trials() and scipy's Brent root finder to solve for
-	# m
-	#
-
-	return optimize.brentq((lambda m: fap_after_trials(p0, m) - p1), lo, hi)
+	return math.log1p(-p1) / math.log1p(-p0)
 
 
 #
@@ -229,47 +320,6 @@ def trials_from_faps(p0, p1):
 #
 # =============================================================================
 #
-
-
-#
-# FAR normalization helper
-#
-
-
-class CountAboveThreshold(dict):
-	"""
-	Device for counting the number of zero-lag coincs above threshold
-	as a function of the instruments that participated.
-	"""
-	def update(self, connection, coinc_def_id, threshold):
-		for instruments, count in connection.cursor().execute("""
-SELECT
-	coinc_inspiral.ifos,
-	COUNT(*)
-FROM
-	coinc_inspiral
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-WHERE
-	coinc_event.coinc_def_id == ?
-	AND coinc_event.likelihood >= ?
-	AND NOT EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
-GROUP BY
-	coinc_inspiral.ifos
-""", (coinc_def_id, threshold)):
-			try:
-				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] += count
-			except KeyError:
-				self[frozenset(lsctables.instrument_set_from_ifos(instruments))] = count
 
 
 #
@@ -958,7 +1008,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
 					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
 					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
-						v = stats.ncx2.pdf(chi2, df, pfs * snr**2)
+						v = ncx2pdf(chi2, df, pfs * snr2)
 					# remove nans and infs, and barf if
 					# we got a negative number
 					v = v[numpy.isfinite(v)]
@@ -1118,7 +1168,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		to number of zero-lag coincs observed.  An additional entry
 		with key None stores the total.
 		"""
-		count_above_threshold = CountAboveThreshold((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
+		count_above_threshold = dict((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
 		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
 		return count_above_threshold
 
@@ -1166,6 +1216,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		>>> x = iter(ThincaCoincParamsDistributions().random_params(("H1", "L1", "V1")))
 		>>> x.next()
+
+		See also:
+
+		random_sim_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
 		"""
 		snr_slope = 0.8 / len(instruments)**3
 
@@ -1187,6 +1245,114 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# so the documentation doesn't promise that it is.
 			yield params, sum(seq[1::2], log_P_horizons)
 
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0):
+		"""
+		Generator that yields an endless sequence of randomly
+		generated parameter dictionaries drawn from the
+		distribution of parameters expected for the given
+		injection, which is an instance of a SimInspiral table row
+		object (see glue.ligolw.lsctables.SimInspiral for more
+		information).  The return value is a tuple, the first
+		element of which is the random parameter dictionary and the
+		second is 0.
+
+		See also:
+
+		random_params()
+
+		The sequence is suitable for input to the
+		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
+		ratio generator.
+
+		Bugs:
+
+		The second element in each tuple in the sequence is merely
+		a placeholder, not the natural logarithm of the PDF from
+		which the sample has been drawn, as in the case of
+		random_params().  Therefore, when used in combination with
+		pylal.snglcoinc.LnLikelihoodRatio.samples(), the two
+		probability densities computed and returned by that
+		generator along with each log likelihood ratio value will
+		simply be the probability densities of the signal and noise
+		populations at that point in parameter space.  They cannot
+		be used to form an importance weighted sampler of the log
+		likeklihood ratios.
+		"""
+		#
+		# retrieve horizon distance from history if not given
+		# explicitly.  retrieve SNR threshold from class attribute
+		# if not given explicitly
+		#
+
+		if horizon_distance is None:
+			horizon_distance = self.horizon_history[float(sim.get_time_geocent())]
+		if snr_min is None:
+			snr_min = self.snr_min
+
+		#
+		# compute nominal SNRs
+		#
+		# FIXME:  remove LIGOTimeGPS type cast when sim is ported
+		# to swig bindings
+		#
+
+		cosi2 = math.cos(sim.inclination)**2.
+		gmst = lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(0, sim.get_time_geocent().ns()))
+		snr_0 = {}
+		for instrument, DH in horizon_distance.items():
+			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
+			snr_0[instrument] = snr_efficiency * 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
+
+		#
+		# construct SNR generators, and approximating the SNRs to
+		# be fixed at the nominal SNRs construct \chi^2 generators
+		#
+
+		def snr_gen(snr):
+			rvs = stats.ncx2(2., snr**2.).rvs
+			math_sqrt = math.sqrt
+			while 1:
+				yield math_sqrt(rvs())
+
+		def chi2_over_snr2_gen(instrument, snr):
+			rates_lnx = numpy.log(self.injection_rates["%s_snr_chi" % instrument].bins[1].centres())
+			# FIXME:  kinda broken for SNRs below self.snr_min
+			rates_cdf = self.injection_rates["%s_snr_chi" % instrument][max(snr, self.snr_min),:].cumsum()
+			# add a small tilt to break degeneracies then
+			# normalize
+			rates_cdf += numpy.linspace(0., 0.001 * rates_cdf[-1], len(rates_cdf))
+			rates_cdf /= rates_cdf[-1]
+			assert not numpy.isnan(rates_cdf).any()
+
+			interp = interpolate.interp1d(rates_cdf, rates_lnx)
+			math_exp = math.exp
+			random_uniform = random.uniform
+			while 1:
+				yield math_exp(float(interp(random_uniform(0., 1.))))
+
+		gens = dict(((instrument, "%s_snr_chi" % instrument), (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
+
+		#
+		# yield a sequence of randomly generated parameters for
+		# this sim.
+		#
+
+		while 1:
+			params = CoincParams()
+			instruments = []
+			for (instrument, key), (snr, chi2_over_snr2) in gens.items():
+				snr = snr()
+				if snr < snr_min:
+					continue
+				params[key] = snr, chi2_over_snr2()
+				instruments.append(instrument)
+			if len(instruments) < 2:
+				continue
+			params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(instruments),)
+			params.horizons = horizon_distance
+			yield params, 0.
+
+
 	@classmethod
 	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
 		"""
@@ -1203,13 +1369,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		instruments = sorted(instruments)
 		# get horizon distances and responses in that same order
 		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
-		resps = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in instruments)
+		resps = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in instruments)
 
 		# get horizon distances and responses of remaining
 		# instruments (order doesn't matter as long as they're in
 		# the same order)
 		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
-		resps_other = tuple(inject.cached_detector[inject.prefix_to_name[inst]].response for inst in inst_horiz_mapping if inst not in instruments)
+		resps_other = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in inst_horiz_mapping if inst not in instruments)
 
 		# initialize the PDF array, and pre-construct the sequence
 		# of snr,d(snr) tuples.  since the last SNR bin probably
@@ -1248,7 +1414,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		random_uniform = random.uniform
 		twopi = 2. * math.pi
 		pi_2 = math.pi / 2.
-		xlal_am_resp = inject.XLALComputeDetAMResponse
+		xlal_am_resp = lal.ComputeDetAMResponse
 		# FIXME:  scipy.stats.rice.rvs broken on reference OS.
 		# switch to it when we can rely on a new-enough scipy
 		#rice_rvs = stats.rice.rvs	# broken on reference OS
@@ -1384,7 +1550,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	if not names:
 		raise ValueError("horizon_history is empty")
 	# get responses in that same order
-	resps = [inject.cached_detector[inject.prefix_to_name[inst]].response for inst in names]
+	resps = [lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in names]
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
@@ -1412,7 +1578,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	random_uniform = random.uniform
 	twopi = 2. * math.pi
 	pi_2 = math.pi / 2.
-	xlal_am_resp = inject.XLALComputeDetAMResponse
+	xlal_am_resp = lal.ComputeDetAMResponse
 
 	# loop as many times as requested
 	for i in xrange(n_samples):
@@ -1542,6 +1708,14 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 	return signal_rates, noise_rates
 
 
+def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwargs):
+	try:
+		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
+	except:
+		queue.put(None)
+		raise
+
+
 #
 # Class to compute ranking statistic PDFs for background-like and
 # signal-like populations
@@ -1583,14 +1757,6 @@ class RankingData(object):
 		self.process_id = process_id
 
 		#
-		# bailout out used by .from_xml() class method to get an
-		# uninitialized instance
-		#
-
-		if coinc_params_distributions is None:
-			return
-
-		#
 		# initialize binnings
 		#
 
@@ -1599,6 +1765,14 @@ class RankingData(object):
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+
+		#
+		# bailout out used by .from_xml() class method to get an
+		# uninitialized instance
+		#
+
+		if coinc_params_distributions is None:
+			return
 
 		#
 		# run importance-weighted random sampling to populate
@@ -1610,12 +1784,13 @@ class RankingData(object):
 			if verbose:
 				print >>sys.stderr, "computing ranking statistic PDFs for %s" % ", ".join(sorted(key))
 			q = multiprocessing.queues.SimpleQueue()
-			p = multiprocessing.Process(target = lambda: q.put(binned_log_likelihood_ratio_rates_from_samples(
+			p = multiprocessing.Process(target = lambda: binned_log_likelihood_ratio_rates_from_samples_wrapper(
+				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
 				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
 				nsamples = nsamples
-			)))
+			))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
@@ -1736,14 +1911,10 @@ WHERE
 		self.background_likelihood_pdfs.clear()
 		self.signal_likelihood_pdfs.clear()
 		self.zero_lag_likelihood_pdfs.clear()
-		def build_pdf(binnedarray, ln_likelihood_ratio_threshold, filt):
+		def build_pdf(binnedarray, filt):
 			# copy counts into pdf array and smooth
 			pdf = binnedarray.copy()
 			rate.filter_array(pdf.array, filt)
-			# zero the counts below the threshold.  this also
-			# zeros the at-threshold bin.  FIXME:  correct to
-			# zero at-threshold bin?
-			pdf[:ln_likelihood_ratio_threshold,] = 0.
 			# zero the counts in the infinite-sized high bin so
 			# the final PDF normalization ends up OK
 			pdf.array[-1] = 0.
@@ -1757,17 +1928,17 @@ WHERE
 			progressbar = None
 		for key, binnedarray in self.background_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s noise model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.background_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.signal_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s signal model log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.signal_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 		for key, binnedarray in self.zero_lag_likelihood_rates.items():
 			assert not numpy.isnan(binnedarray.array).any(), "%s zero lag log likelihood ratio counts contain NaNs" % (key if key is not None else "combined")
-			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.ln_likelihood_ratio_threshold, self.filters["ln_likelihood_ratio"])
+			self.zero_lag_likelihood_pdfs[key] = build_pdf(binnedarray, self.filters["ln_likelihood_ratio"])
 			if progressbar is not None:
 				progressbar.increment()
 
@@ -1833,106 +2004,76 @@ WHERE
 
 
 class FAPFAR(object):
-	def __init__(self, ranking_stats, count_above_threshold, threshold, livetime = None):
-		# None is OK, but then can only compute FAPs, not FARs
+	def __init__(self, ranking_stats, livetime = None):
+		# none is OK, but then can only compute FAPs, not FARs
 		self.livetime = livetime
 
-		# dictionary keyed by instrument combination
-		self.cdf_interpolator = {}
-		self.ccdf_interpolator = {}
-		self.zero_lag_total_count = {}
+		# pull out both the bg counts and the pdfs, we need 'em both
+		bgcounts_ba = ranking_stats.background_likelihood_rates[None]
+		bgpdf_ba = ranking_stats.background_likelihood_pdfs[None]
+		# we also need the zero lag counts to build the extinction model
+		zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[None]
 
-		_ranks = None
+		# safety checks
+		assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
+		assert not (bgcounts_ba.array < 0.0).any(), "log likelihood ratio rate contains negative values"
+		assert not numpy.isnan(bgpdf_ba.array).any(), "log likelihood ratio pdf contains NaNs"
+		assert not (bgpdf_ba.array < 0.0).any(), "log likelihood ratio pdf contains negative values"
 
-		# Iterate through instruments in background likelihood rates,
-		# making sure to go through the combined rates (dictionary key
-		# None) last
-		for instruments in sorted(ranking_stats.background_likelihood_rates.keys(), key = lambda k: tuple(k) if k is not None else None, reverse=True):
-			# useful for printing certain messages
-			instruments_name = ", ".join(sorted(instruments)) if instruments is not None else "combined"
+		# grab bins that are not infinite in size
+		finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
+		ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
+		drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
-			# Pull out both the bg counts and the pdfs, we need 'em both
-			bgcounts_ba = ranking_stats.background_likelihood_rates[instruments]
-			bgpdf_ba = ranking_stats.background_likelihood_pdfs[instruments]
-			# We also need the zero lag counts to build the extinction model
-			zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[instruments]
+		# whittle down the arrays of counts and pdfs
+		bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
+		bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
+		zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
 
-			# Check for Nans
-			assert not numpy.isnan(bgcounts_ba.array).any(), "%s log likelihood ratio rates contains NaNs" % instruments_name
-			assert not (bgcounts_ba.array < 0.0).any(), "%s log likelihood ratio rate contains negative values" % instruments_name
-			assert not numpy.isnan(bgpdf_ba.array).any(), "%s log likelihood ratio pdf contains NaNs" % instruments_name
-			assert not (bgpdf_ba.array < 0.0).any(), "%s log likelihood ratio pdf contains negative values" % instruments_name
+		# get the extincted background PDF
+		self.zero_lag_total_count = zlagcounts_ba_array.sum()
+		extinct_bf_pdf = self.extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks)
 
-			# Grab bins that are not infinite in size
-			finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
-			ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
-			drank = bgcounts_ba.bins.volumes().compress(finite_bins)
+		# cumulative distribution function and its complement.
+		# it's numerically better to recompute the ccdf by
+		# reversing the array of weights than trying to subtract
+		# the cdf from 1.
+		weights = extinct_bf_pdf * drank
+		cdf = weights.cumsum()
+		cdf /= cdf[-1]
+		ccdf = weights[::-1].cumsum()[::-1]
+		ccdf /= ccdf[0]
 
-			# Check that the rank binnings we have seen so far are self consistent
-			if _ranks is None:
-				_ranks = ranks
-			elif (_ranks != ranks).any():
-				raise ValueError("incompatible binnings in ranking statistics rates")
+		# cdf boundary condition:  cdf = 1/e at the ranking
+		# statistic threshold so that self.far_from_rank(threshold)
+		# * livetime = observed count of events above threshold.
+		# FIXME this doesn't actually work.
+		# FIXME not doing it doesn't actually work.
+		# ccdf *= 1. - 1. / math.e
+		# cdf *= 1. - 1. / math.e
+		# cdf += 1. / math.e
 
-			# whittle down the arrays of counts and pdfs
-			bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
-			bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
-			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
+		# last checks that the CDF and CCDF are OK
+		assert not numpy.isnan(cdf).any(), "log likelihood ratio CDF contains NaNs"
+		assert not numpy.isnan(ccdf).any(), "log likelihood ratio CCDF contains NaNs"
+		assert ((0. <= cdf) & (cdf <= 1.)).all(), "log likelihood ratio CDF failed to be normalized"
+		assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "log likelihood ratio CCDF failed to be normalized"
+		assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "log likelihood ratio CDF + CCDF != 1 (max error = %g)" % abs(1. - (cdf[:-1] + ccdf[1:])).max()
 
-			# get the extincted background PDF
-			# FIXME don't extinct the individual detector PDFs,
-			# they are just for diagnostics anyway
-			extinct_bf_pdf = self.extinct(instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, self.zero_lag_total_count)
+		# build interpolators
+		self.cdf_interpolator = interpolate.interp1d(ranks, cdf)
+		self.ccdf_interpolator = interpolate.interp1d(ranks, ccdf)
 
-			# Now compute the CCDF and CDF
-			weights = extinct_bf_pdf * drank
-			# cumulative distribution function and its
-			# complement.  it's numerically better to recompute
-			# the ccdf by reversing the array of weights than
-			# trying to subtract the cdf from 1.
-			cdf = weights.cumsum()
-			cdf /= cdf[-1]
-			ccdf = weights[::-1].cumsum()[::-1]
-			ccdf /= ccdf[0]
+		# record min and max ranks so we know which end of the ccdf
+		# to use when we're out of bounds
+		self.minrank = min(ranks)
+		self.maxrank = max(ranks)
 
-			# cdf boundary condition:  cdf = 1/e at the ranking
-			# statistic threshold so that
-			# self.far_from_rank(threshold) * livetime =
-			# observed count of events above threshold.
-			# FIXME this doesn't actually work.
-			# FIXME not doing it doesn't actually work.
-			# ccdf *= 1. - 1. / math.e
-			# cdf *= 1. - 1. / math.e
-			# cdf += 1. / math.e
-
-			# last checks that the CDF and CCDF are OK
-			assert not numpy.isnan(cdf).any(), "%s log likelihood ratio CDF contains NaNs" % instruments_name
-			assert not numpy.isnan(ccdf).any(), "%s log likelihood ratio CCDF contains NaNs" % instruments_name
-			# Be extremely pedantic about the PDF,CDF,CCDF that
-			# counts, i.e., the joint one specified by instruments
-			# being None.
-			if instruments is None:
-				assert ((0. <= cdf) & (cdf <= 1.)).all(), "%s log likelihood ratio CDF failed to be normalized" % instruments_name
-				assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "%s log likelihood ratio CCDF failed to be normalized" % instruments_name
-				assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "%s log likelihood ratio CDF + CCDF != 1 (max error = %g)" % (instruments_name, abs(1. - (cdf[:-1] + ccdf[1:])).max())
-			# build interpolators
-			self.cdf_interpolator[instruments] = interpolate.interp1d(ranks, cdf)
-			self.ccdf_interpolator[instruments] = interpolate.interp1d(ranks, ccdf)
-
-		if _ranks is None:
-			raise ValueError("no ranking statistic rates")
-
-		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-		self.minrank = min(_ranks)
-		self.maxrank = max(_ranks)
-
-	def extinct(self, instruments, instruments_name, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, zero_lag_total_count):
-
+	def extinct(self, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks):
 		# Generate arrays of complementary cumulative counts
 		# for background events (monte carlo, pre clustering)
 		# and zero lag events (observed, post clustering)
 		zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
-		zero_lag_total_count[instruments] = int(zero_lag_compcumcount[0])
 		bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
 
 		# Fit for the number of preclustered, independent coincs by
@@ -1940,12 +2081,13 @@ class FAPFAR(object):
 		# the distribution.  Only do the fit above 10 counts and below
 		# 10000, unless that can't be met and trigger a warning
 		fit_min_rank = 1.
-		fit_min_counts = min(10., zero_lag_total_count[instruments] / 10. + 1)
-		fit_max_counts = min(10000., zero_lag_total_count[instruments] / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
+		fit_min_counts = min(10., self.zero_lag_total_count / 10. + 1)
+		fit_max_counts = min(10000., self.zero_lag_total_count / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
 		if fit_min_counts < 100.:
-			warnings.warn("There are less than 100 %s coincidences, extinction effects on %s background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation." % (instruments_name, instruments_name))
-		assert zero_lag_compcumcount.compress(rank_range).size > 0, "Not enough zero lag data for %s to fit background"  % instruments_name
+			warnings.warn("There are less than 100 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
+		if zero_lag_compcumcount.compress(rank_range).size < 1:
+			raise ValueError("not enough zero lag data to fit background")
 
 		# Use curve fit to find the predicted total preclustering
 		# count. First we need an interpolator of the counts
@@ -1964,7 +2106,7 @@ class FAPFAR(object):
 
 		# Fit for the ratio of unclustered to clustered triggers.
 		# Only fit N_ratio over the range of ranks decided above
-		precluster_normalization, precluster_covariance_matrix = optimize.curve_fit(
+		precluster_normalization, precluster_covariance_matrix = curve_fit(
 			extincted_counts,
 			ranks[rank_range],
 			zero_lag_compcumcount.compress(rank_range),
@@ -1980,8 +2122,8 @@ class FAPFAR(object):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718
 		rank = max(self.minrank, min(self.maxrank, rank))
-		fap = float(self.ccdf_interpolator[None](rank))
-		return fap_after_trials(fap, self.zero_lag_total_count[None])
+		fap = float(self.ccdf_interpolator(rank))
+		return fap_after_trials(fap, self.zero_lag_total_count)
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
@@ -1991,7 +2133,7 @@ class FAPFAR(object):
 		rank = max(self.minrank, min(self.maxrank, rank))
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		tdp = float(self.cdf_interpolator[None](rank))
+		tdp = float(self.cdf_interpolator(rank))
 		try:
 			log_tdp = math.log(tdp)
 		except ValueError:
@@ -1999,8 +2141,8 @@ class FAPFAR(object):
 			return PosInf
 		if log_tdp >= -1e-9:
 			# rare event:  avoid underflow by using log1p(-FAP)
-			log_tdp = math.log1p(-float(self.ccdf_interpolator[None](rank)))
-		return self.zero_lag_total_count[None] * -log_tdp / self.livetime
+			log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+		return self.zero_lag_total_count * -log_tdp / self.livetime
 
 	def assign_faps(self, connection):
 		# assign false-alarm probabilities
@@ -2099,8 +2241,8 @@ def parse_likelihood_control_doc(xmldoc, name = u"gstlal_inspiral_likelihood"):
 #
 
 
-def get_live_time(seglists, verbose = False):
-	livetime = float(abs(vote((segs for instrument, segs in seglists.items() if instrument != "H2"), 2)))
+def get_live_time(seglistdict, verbose = False):
+	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), 2)))
 	if verbose:
 		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime

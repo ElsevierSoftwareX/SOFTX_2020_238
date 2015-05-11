@@ -71,7 +71,7 @@ def parse_command_line():
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite.")
 	parser.add_option("--non-injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from a non-injection run.  Can be given multiple times.")
 	parser.add_option("--injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from an injection run.  Can be given multiple times.  Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
-	parser.add_option("--force", "-f", action = "store_true", help = "Force script to reevaluate FARs and FAPs")
+	parser.add_option("--force", "-f", action = "store_true", help = "Force script to reevaluate FARs and FAPs.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -124,7 +124,6 @@ if ranking_data is None:
 if options.verbose:
 	print >>sys.stderr, "beginning count of above-threshold events"
 
-count_above_threshold = far.CountAboveThreshold()
 for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
 	binnedarray.array[:] = 0.
 
@@ -135,7 +134,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.non_injection_db)),
+		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
@@ -146,7 +145,6 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	xmldoc = dbtables.get_xml(connection)
 	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	xmldoc.unlink()
-	count_above_threshold.update(connection, coinc_def_id, ranking_data.ln_likelihood_ratio_threshold)
 	ranking_data.collect_zero_lag_rates(connection, coinc_def_id)
 
 	#
@@ -155,13 +153,6 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 
 	connection.close()
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
-
-coinc_params_distributions.count_above_threshold = count_above_threshold
-# make sure instrument combination probabilities reflect new counts
-coinc_params_distributions.finish(verbose = options.verbose)
-
-if options.verbose:
-	print >>sys.stderr, "number of above-threshold events:  %s" % ", ".join("%s=%d" % (",".join(sorted(instruments)), count) for instruments, count in count_above_threshold.items())
 
 
 # FIXME:  need to do this to get the combined PDFs populated.  the XML file
@@ -181,7 +172,7 @@ ranking_data.finish(verbose = options.verbose)
 #
 
 
-fapfar = far.FAPFAR(ranking_data, coinc_params_distributions.count_above_threshold, threshold = ranking_data.ln_likelihood_ratio_threshold, livetime = far.get_live_time(seglists))
+fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 
 
 #
@@ -198,7 +189,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.non_injection_db + options.injection_db)),
+		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db + options.injection_db), filename)
 	if not options.force and sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_compute_far_from_snr_chisq_histograms",)).fetchone()[0]:
 		if options.verbose:
 			print >>sys.stderr, "already processed, skipping"

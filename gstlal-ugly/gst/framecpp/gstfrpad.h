@@ -1,7 +1,7 @@
 /*
  * GstFrPad
  *
- * Copyright (C) 2012,2013  Kipp Cannon
+ * Copyright (C) 2012--2014  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -111,7 +111,9 @@ struct _GstFrPad {
 	guint channel_group;	/* validity: FrAdcData */
 	guint channel_number;	/* validity: FrAdcData */
 	guint nbits;		/* validity: FrAdcData */
-	gchar *units;		/* units */
+	gchar *units;		/* validity: FrAdcData */
+	gfloat bias;		/* validity; FrAdcData */
+	gfloat slope;		/* validity: FrAdcData */
 	GValueArray *history;	/* validity: FrProcData */
 
 	GstTagList *tags;

@@ -1,7 +1,7 @@
 /*
  * GstFrPad
  *
- * Copyright (C) 2012,2013  Kipp Cannon
+ * Copyright (C) 2012--2014  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,6 +85,8 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 #define DEFAULT_CHANNEL_NUMBER 0
 #define DEFAULT_NBITS 1	/* FIXME:  is there a "not set" value?  -1? */
 #define DEFAULT_UNITS ""
+#define DEFAULT_BIAS 0.0
+#define DEFAULT_SLOPE 1.0
 
 
 /*
@@ -149,43 +151,50 @@ static gint get_bitrate(GstFrPad *pad)
 }
 
 
-static gboolean update_tag_list(GstFrPad *pad)
+static void update_tag_list(GstFrPad *pad)
 {
-	GstTagList *new_tags = gst_tag_list_new_full(
+	GstTagList *new_tags;
+	gint bitrate;
+
+	GST_OBJECT_LOCK(pad);
+
+	new_tags = gst_tag_list_new_full(
 		GST_TAG_CODEC, "RAW",
 		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
-		GSTLAL_TAG_INSTRUMENT, pad->instrument && strcmp(pad->instrument, "") ? pad->instrument : " ",
-		GSTLAL_TAG_CHANNEL_NAME, pad->channel_name && strcmp(pad->channel_name, "") ? pad->channel_name : " ",
+		GSTLAL_TAG_INSTRUMENT, pad->instrument && g_strcmp0(pad->instrument, "") ? pad->instrument : " ",
+		GSTLAL_TAG_CHANNEL_NAME, pad->channel_name && g_strcmp0(pad->channel_name, "") ? pad->channel_name : " ",
 		/*GST_TAG_GEO_LOCATION_NAME, observatory,
 		GST_TAG_GEO_LOCATION_SUBLOCATION, pad->instrument,*/
-		GSTLAL_TAG_UNITS, pad->units && strcmp(pad->units, "") ? pad->units : " ",
+		GSTLAL_TAG_UNITS, pad->units && g_strcmp0(pad->units, "") ? pad->units : " ",
 		NULL
 	);
-	gint bitrate = get_bitrate(pad);
+	bitrate = get_bitrate(pad);
 
 	if(!new_tags) {
+		GST_OBJECT_UNLOCK(pad);
 		GST_ERROR_OBJECT(pad, "failed to update tags");
 		g_assert_not_reached();	/* can be compiled out */
-		return FALSE;
-	} else if(bitrate >= 0)
+		return;
+	}
+
+	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, NULL);
+
+	if(bitrate >= 0)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 
 	gst_tag_list_free(pad->tags);
 	pad->tags = new_tags;
-	return TRUE;
+
+	GST_OBJECT_UNLOCK(pad);
+
+	g_object_notify(G_OBJECT(pad), "tags");
 }
 
 
 static void caps_notify_handler(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-	gboolean got_new_tags;
-
-	GST_OBJECT_LOCK(object);
-	got_new_tags = update_tag_list(GST_FRPAD(object));
-	GST_OBJECT_UNLOCK(object);
-
-	if(got_new_tags)
-		g_object_notify(object, "tags");
+	update_tag_list(GST_FRPAD(object));
 }
 
 
@@ -231,13 +240,15 @@ enum property {
 	PROP_UNITS,
 	PROP_TAGS,
 	PROP_HISTORY,
+	PROP_BIAS,
+	PROP_SLOPE,
 };
 
 
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GstFrPad *pad = GST_FRPAD(object);
-	gboolean got_new_tags = FALSE;
+	gboolean need_new_tags = FALSE;
 
 	GST_OBJECT_LOCK(object);
 
@@ -251,17 +262,23 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		pad->comment = g_value_dup_string(value);
 		break;
 
-	case PROP_INSTRUMENT:
+	case PROP_INSTRUMENT: {
+		gchar *instrument = g_value_dup_string(value);
+		if(g_strcmp0(instrument, pad->instrument))
+			need_new_tags = TRUE;
 		g_free(pad->instrument);
-		pad->instrument = g_value_dup_string(value);
-		got_new_tags = update_tag_list(pad);
+		pad->instrument = instrument;
 		break;
+	}
 
-	case PROP_CHANNEL_NAME:
+	case PROP_CHANNEL_NAME: {
+		gchar *channel_name = g_value_dup_string(value);
+		if(g_strcmp0(channel_name, pad->channel_name))
+			need_new_tags = TRUE;
 		g_free(pad->channel_name);
-		pad->channel_name = g_value_dup_string(value);
-		got_new_tags = update_tag_list(pad);
+		pad->channel_name = channel_name;
 		break;
+	}
 
 	case PROP_CHANNEL_GROUP:
 		pad->channel_group = g_value_get_uint(value);
@@ -275,16 +292,35 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		pad->nbits = g_value_get_uint(value);
 		break;
 
-	case PROP_UNITS:
+	case PROP_UNITS: {
+		gchar *units = g_value_dup_string(value);
+		if(g_strcmp0(units, pad->units))
+			need_new_tags = TRUE;
 		g_free(pad->units);
-		pad->units = g_value_dup_string(value);
-		got_new_tags = update_tag_list(pad);
+		pad->units = units;
 		break;
+	}
 
 	case PROP_HISTORY:
 		g_value_array_free(pad->history);
 		pad->history = g_value_array_copy(g_value_get_boxed(value));
 		break;
+
+	case PROP_BIAS: {
+		gfloat bias = g_value_get_float(value);
+		if(bias != pad->bias)
+			need_new_tags = TRUE;
+		pad->bias = bias;
+		break;
+	}
+
+	case PROP_SLOPE: {
+		gfloat slope = g_value_get_float(value);
+		if(slope != pad->slope)
+			need_new_tags = TRUE;
+		pad->slope = slope;
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -293,8 +329,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	GST_OBJECT_UNLOCK(object);
 
-	if(got_new_tags)
-		g_object_notify(G_OBJECT(pad), "tags");
+	if(need_new_tags)
+		update_tag_list(pad);
 }
 
 
@@ -343,6 +379,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_HISTORY:
 		g_value_set_boxed(value, pad->history);
+		break;
+
+	case PROP_BIAS:
+		g_value_set_float(value, pad->bias);
+		break;
+
+	case PROP_SLOPE:
+		g_value_set_float(value, pad->slope);
 		break;
 
 	default:
@@ -464,6 +508,28 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Number of bits",
 			"Number of bits in A/D output.  Validity:  FrAdcData.",
 			1, G_MAXUINT, DEFAULT_NBITS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_BIAS,
+		g_param_spec_float(
+			"bias",
+			"Bias",
+			"DC bias on channel (units @ count = 0).  Validity:  FrAdcData.",
+			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_BIAS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_SLOPE,
+		g_param_spec_float(
+			"slope",
+			"Slope",
+			"ADC calibration (units/count).  Validity:  FrAdcData.",
+			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_SLOPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

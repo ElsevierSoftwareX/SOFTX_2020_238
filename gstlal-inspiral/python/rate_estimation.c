@@ -30,8 +30,14 @@
 #include <stdlib.h>
 
 
+#include <gsl/gsl_integration.h>
+
+
 #include <Python.h>
 #include <numpy/arrayobject.h>
+
+
+#define GSL_WORKSPACE_SIZE  8
 
 
 /*
@@ -44,8 +50,7 @@
 
 
 /*
- * input conditioning.  sort f_over_b array in descending order to allow
- * for early bail-out
+ * input conditioning.  sort ln_f_over_b array in ascending order.
  */
 
 
@@ -53,60 +58,128 @@ static int conditioning_compare(const void *a, const void *b)
 {
 	double A = *(double *) a, B = *(double *) b;
 
-	return A > B ? -1 : A < B ? +1 : 0;
+	return A > B ? +1 : A < B ? -1 : 0;
 }
 
 
-static void condition(double *f_over_b, int n)
+static void condition(double *ln_f_over_b, int n)
 {
-	qsort(f_over_b, n, sizeof(*f_over_b), conditioning_compare);
+	qsort(ln_f_over_b, n, sizeof(*ln_f_over_b), conditioning_compare);
 }
 
 
 /*
- * compute the log probability density of the foreground and background
- * rates given by equation (21) in Farr et al., "Counting and Confusion:
- * Bayesian Rate Estimation With Multiple Populations", arXiv:1302.5341.
- * The default prior is that specified in the paper but it can be
- * overridden with the lnpriorfunc keyword argument (giving a function that
- * returns the natural log of the prior given Rf, Rb).
+ * the natural logarithm (up to an unknown additive constant) of the prior.
+ * see equation (17) of Farr et al., "Counting and Confusion: Bayesian Rate
+ * Estimation With Multiple Populations", arXiv:1302.5341.
  */
 
 
-static double compute_log_prior(double Rf, double Rb)
+static double log_prior(double Rf, double Rb)
 {
 	return -0.5 * log(Rf * Rb);
 }
 
 
-static double compute_log_posterior(const double *f_over_b, int n, double Rf, double Rb)
+/*
+ * compute the logarithm (up to an unknown additive constant) of the joint
+ * probability density of the foreground and background rates given by
+ * equation (21) in Farr et al., "Counting and Confusion: Bayesian Rate
+ * Estimation With Multiple Populations", arXiv:1302.5341.
+ */
+
+
+struct integrand_data_t {
+	const double *ln_f_over_b;
+	double ln_Rf_over_Rb;
+};
+
+
+static double integrand(double i, void *data)
 {
-	double Rf_over_Rb = Rf / Rb;
+	const struct integrand_data_t *integrand_data = data;
+	double ln_x = integrand_data->ln_Rf_over_Rb + integrand_data->ln_f_over_b[(int) floor(i)];
+	if(ln_x > 33.)
+		return ln_x;
+	return log1p(exp(ln_x));
+}
+
+
+static double log_posterior(const double *ln_f_over_b, int n, double Rf, double Rb, gsl_integration_cquad_workspace *workspace)
+{
+	double ln_Rf_over_Rb = log(Rf / Rb);
 	int i;
-	double ln_P;
+	double ln_P = 0.;
 
 	if(Rf < 0. || Rb < 0.)
 		return atof("-inf");
 
-	ln_P = 0.;
-	for(i = 0; i < n; i++)
-		ln_P += log1p(Rf_over_Rb * f_over_b[i]);
+	/*
+	 * need to compute sum of log(Rf f / (Rb b) + 1).  if x = Rf f /
+	 * (Rb b) is larger than about 10^15 the +1 is irrelevant and we
+	 * can approximate ln(x + 1) with ln(x).  for smaller x we use
+	 * log1p(x) to evaluate the exprsesion.  for intermediate x we
+	 * approximate ln(x + 1) with
+	 *
+	 *	ln(x + 1) = ln x + 2 X + 2 X^3 / 3
+	 *
+	 * where X = 1 / (2 x + 1).  for x > 1100 this gives 15 correct
+	 * digits or more.
+	 *
+	 * experience shows that the array of f/b values contains many very
+	 * similar entries at the lower end of its range, so we sort the
+	 * array and by treating the array as a function of its index use a
+	 * numerical integration scheme to obtain the sum.  we do this for
+	 * the bottom 90% of the array, and the top 10% is treated
+	 * explicitly to capture the more rapid sample-to-sample variation.
+	 */
+
+	/*
+	 * first do the numerical interal for the bottom part of the array
+	 */
+
+	i = 0.99 * n;
+	if(i) {
+		/*
+		 * for these entries, compute the sum of log(Rf f / (Rb b)
+		 * + 1) by approximating it with a numerical integration
+		 * of the exact addend
+		 */
+		gsl_function _integrand = {
+			.function = integrand,
+			.params = &(struct integrand_data_t) {
+				.ln_f_over_b = ln_f_over_b,
+				.ln_Rf_over_Rb = ln_Rf_over_Rb
+			}
+		};
+		gsl_integration_cquad(&_integrand, 0, i * (1. - 1e-16), 0., 1e-8, workspace, &ln_P, NULL, NULL);
+	}
+
+	/*
+	 * now compute the sum of log(Rf f / (Rb b) + 1) for the remaining
+	 * entries with an explicit loop but using approximations
+	 * (described above) for cases in which the addend is large
+	 */
+
+	for(; i < n; i++) {
+		double ln_x = ln_Rf_over_Rb + ln_f_over_b[i];
+		if(ln_x > 33.)	/* ~= log(10^14) */
+			ln_P += ln_x;
+		else
+			ln_P += log1p(exp(ln_x));
+	}
+
+	/*
+	 * multiply by the remaining factors
+	 */
+
 	ln_P += n * log(Rb) - (Rf + Rb);
 
-	return ln_P + compute_log_prior(Rf, Rb);
-}
+	/*
+	 * finally multiply by the prior
+	 */
 
-
-/*
- * compute_log_posterior() / 2.  to improve the measurement of the tails of
- * the PDF using the MCMC sampler, we draw from the square root of the PDF
- * and then correct the histogram of the samples.
- */
-
-
-static double compute_log_sqrt_posterior(const double *f_over_b, int n, double Rf, double Rb)
-{
-	return compute_log_posterior(f_over_b, n, Rf, Rb) / 2.;
+	return ln_P + log_prior(Rf, Rb);
 }
 
 
@@ -132,8 +205,9 @@ struct posterior {
 	 * in the experiment's results
 	 */
 
-	double *f_over_b;
-	int f_over_b_len;
+	double *ln_f_over_b;
+	int ln_f_over_b_len;
+	gsl_integration_cquad_workspace *workspace;
 };
 
 
@@ -146,9 +220,11 @@ static void __del__(PyObject *self)
 {
 	struct posterior *posterior = (struct posterior *) self;
 
-	free(posterior->f_over_b);
-	posterior->f_over_b = NULL;
-	posterior->f_over_b_len = 0;
+	free(posterior->ln_f_over_b);
+	posterior->ln_f_over_b = NULL;
+	posterior->ln_f_over_b_len = 0;
+	gsl_integration_cquad_workspace_free(posterior->workspace);
+	posterior->workspace = NULL;
 
 	self->ob_type->tp_free(self);
 }
@@ -177,18 +253,15 @@ static int __init__(PyObject *self, PyObject *args, PyObject *kwds)
 		return -1;
 	}
 
-	posterior->f_over_b_len = *PyArray_DIMS(arr);
-	posterior->f_over_b = malloc(posterior->f_over_b_len * sizeof(*posterior->f_over_b));
+	posterior->ln_f_over_b_len = *PyArray_DIMS(arr);
+	posterior->ln_f_over_b = malloc(posterior->ln_f_over_b_len * sizeof(*posterior->ln_f_over_b));
 
-	for(i = 0; i < posterior->f_over_b_len; i++) {
-		posterior->f_over_b[i] = *(double *) PyArray_GETPTR1(arr, i);
-		if(posterior->f_over_b[i] < 0.) {
-			PyErr_SetString(PyExc_ValueError, "negative probability density encountered");
-			return -1;
-		}
-	}
+	for(i = 0; i < posterior->ln_f_over_b_len; i++)
+		posterior->ln_f_over_b[i] = *(double *) PyArray_GETPTR1(arr, i);
 
-	condition(posterior->f_over_b, posterior->f_over_b_len);
+	condition(posterior->ln_f_over_b, posterior->ln_f_over_b_len);
+
+	posterior->workspace = gsl_integration_cquad_workspace_alloc(GSL_WORKSPACE_SIZE);
 
 	return 0;
 }
@@ -211,7 +284,11 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 	if(!PyArg_ParseTuple(args, "(dd)", &Rf, &Rb))
 		return NULL;
 
-	return PyFloat_FromDouble(compute_log_sqrt_posterior(posterior->f_over_b, posterior->f_over_b_len, Rf, Rb));
+	/*
+	 * return log_posterior()
+	 */
+
+	return PyFloat_FromDouble(log_posterior(posterior->ln_f_over_b, posterior->ln_f_over_b_len, Rf, Rb, posterior->workspace));
 }
 
 

@@ -142,12 +142,14 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
-#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (required).
+#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided).
+#	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided).
+#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
-#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#	+ `--gracedb-type`: gracedb type, default is LowMass.
-#	+ `--gracedb-group`: gracedb group, default is Test.
+#	+ `--gracedb-search`: gracedb type (default is LowMass).
+#	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
+#	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
 #
@@ -175,6 +177,7 @@ import socket
 import time
 import tempfile
 import math
+from collections import namedtuple
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -184,7 +187,8 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 import gst
-from gstlal import bottle
+
+import lal
 
 from glue import segments
 from glue import segmentsUtils
@@ -194,15 +198,15 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
-from pylal.date import XLALUTCToGPS
-from gstlal import pipeparts
+from gstlal import bottle
+from gstlal import datasource
 from gstlal import lloidparts
 from gstlal import far
-from gstlal import inspiral
 from gstlal import httpinterface
-from gstlal import datasource
-from gstlal import simulation
 from gstlal import hoftcache
+from gstlal import inspiral
+from gstlal import pipeparts
+from gstlal import simulation
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -226,7 +230,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
-	return XLALUTCToGPS(time.gmtime())
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 
 
 #
@@ -273,11 +277,13 @@ def parse_command_line():
 	# Online options
 
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..")
-	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (required).")
+	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided)")
+	parser.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided)")
+	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
-	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
+	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
@@ -289,30 +295,17 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	if options.reference_psd is None and not options.track_psd:
-		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+	#
+	# check for options, files that are always required
+	#
 
-	if options.blind_injections and options.injections:
-		raise ValueError("must use only one of --blind-injections or --injections")
+	missing_options = ["--%s" % option.replace("_", "-") for option in ["svd_bank", "output"] if getattr(options, option) is None]
+	if options.likelihood_file is None and options.reference_likelihood_file is None:
+		missing_options.append("either --likelihood-file or --reference-likelihood-file")
 
-	if options.local_frame_caching and not options.data_source == "frames":
-		raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
-
-	required_options = ["svd_bank", "likelihood_file", "output"]
-	if options.data_source in ("lvshm", "framexmit"):
-		required_options += ["job_tag", "marginalized_likelihood_file"]
-
-	missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
-	# make sure we have the correct numbers of svd banks output files and likelihood files.
-	if options.data_source in ("lvshm", "framexmit") and len(options.svd_bank) > 1:
-		raise ValueError("Can only have one set of svd banks in online mode (i.e. when datasource is lvshm or framexmit)")
-	if not (len(options.svd_bank) == len(options.output) == len(options.likelihood_file)):
-		raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
-
-	# parse the datasource specific information and do option checking
 	detectors = datasource.GWDataSourceInfo(options)
 	if len(detectors.channel_dict) < 2:
 		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
@@ -332,20 +325,40 @@ def parse_command_line():
 	if options.veto_segments_file:
 		required_files += [options.veto_segments_file]
 	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+
 	if missing_files:
 		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
+	#
+	# check for mutually exclusive options
+	#
 
-	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
+	bad_combos = []
+	if options.blind_injections and options.injections:
+		bad_combos.append("(--blind-injections, --injections)")
+	if options.likelihood_file and options.reference_likelihood_file:
+		bad_combos.append(("--likelihood-file", "--reference-likelihood-file"))
 
-	# do this before converting option types
-	process_params = options.__dict__.copy()
+	if bad_combos:
+		raise ValueError("must use only one option from each set: %s" % ', '.join(bad_combos))
 
-	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+	#
+	# check sanity of options
+	#
 
 	# Online specific initialization
 	# FIXME someday support other online sources
 	if options.data_source in ("lvshm", "framexmit"):
+		missed_options = []
+		for option in ["job_tag", "marginalized_likelihood_file"]:
+			if getattr(options, option) is None:
+				missed_options.append("--%s" %option.replace("_","-"))
+
+		if missed_options:
+			raise ValueError("%s required for --data-source is lvshm or framexmit" % ", ".join(missed_options))
+
+		if len(options.svd_bank) > 1:
+			raise ValueError("more than one --svd-bank not allowed for --datasource lvshm or framexmit, %d given" % len(options.likelihood_file))
+
 		# make an "infinite" extent segment
 		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 
@@ -353,14 +366,36 @@ def parse_command_line():
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
 	else:
 		bad_options = []
-		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval", "reference_likelihood_file"]:
 			if getattr(options, option) is not None:
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
 			raise ValueError("%s options can only be given for --data-source is lvshm or framexmit " % ", ".join(bad_options))
 
-	# Override the injection_filename for datasource to use blind injections.
-	# FIXME You cant have both regular and blind injections
+	if options.reference_psd is None and not options.track_psd:
+		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+	if options.local_frame_caching and not options.data_source == "frames":
+		raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
+	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
+		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
+	
+	if options.reference_likelihood_file:
+		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(None, options.reference_likelihood_file)]
+	else:
+		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
+
+	if not (len(options.svd_bank) == len(options.output) == len(likelihood_namedtuples_list)):
+		raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
+
+	#
+	# Option checks complete
+	#
+
+	# do this before converting option types
+	process_params = options.__dict__.copy()
+
+	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+
 	if options.blind_injections is not None:
 		detectors.injection_filename = options.blind_injections
 	
@@ -402,7 +437,7 @@ def parse_command_line():
 		reconstruction_segment_list = None
 
 	# we're done
-	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list
+	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list
 
 
 #
@@ -449,7 +484,7 @@ class OneTimeSignalHandler(object):
 #
 
 
-options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list = parse_command_line()
+options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list = parse_command_line()
 
 if not options.check_time_stamps:
 	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -487,7 +522,7 @@ else:
 #
 
 
-for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output, options.likelihood_file):
+for svd_bank, output_filename, likelihood_namedtuple in zip(svd_banks, options.output, likelihood_namedtuples_list):
 	#
 	# create a new, empty, Bottle application and make it the current
 	# default, then start http server(s) to serve it up
@@ -578,11 +613,12 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+		coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		assert set(seglists) == set(detectors.channel_dict)
 		if coinc_params_distributions is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
+			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
 	else:
-		coinc_params_distributions = far.ThincaCoincParamsDistributions()
+		coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
 
 
 	#
@@ -600,7 +636,9 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 		coincidence_threshold = options.coincidence_threshold,
 		coinc_params_distributions = coinc_params_distributions,
+		ranking_data = ranking_data,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
+		likelihood_files_namedtuple = likelihood_namedtuple,
 		injection_filename = options.injections,
 		time_slide_file = options.time_slide_file,
 		comment = options.comment,
@@ -610,13 +648,14 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
 		gracedb_group = options.gracedb_group,
-		gracedb_type = options.gracedb_type,
+		gracedb_search = options.gracedb_search,
+		gracedb_pipeline = options.gracedb_pipeline,
 		verbose = options.verbose
 	)
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
+	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
 
 
 	if options.verbose:
@@ -674,7 +713,7 @@ for svd_bank, output_filename, likelihood_file in zip(svd_banks, options.output,
 	#
 
 
-	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
+	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#

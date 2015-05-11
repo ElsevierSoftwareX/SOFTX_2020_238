@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>
+ * Copyright (C) 2009--2012,2014,2015 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@
 /**
  * SECTION:gstlal_sumsquares
  * @short_description:  Computes the weighted sum-of-squares of the input channels.
+ *
+ * Computes the weighted sum-of-squares of the input channels.
  *
  * Reviewed:  fcba8806c67cc57e279f3b1f5d2706cd355f35c8 2014-08-10 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.

@@ -23,6 +23,15 @@
  * SECTION:gstlal_segmentsrc
  * @short_description:  The output is a buffer of boolean values specifying when a list of segments are on and off.
  *
+ * Generates a one-channel boolean-valued stream from the #segment-list
+ * property, which must be set to an array of two-element arrays of
+ * start/stop time pairs.  If #invert-output is %False the start/stop pairs
+ * are taken to give intervals when the output is %True, otherwise they are
+ * taken to gve intervals when the output is %False.
+ *
+ * The element can be seeked, but when seeked the requested start time must
+ * be set.
+ *
  * Reviewed:  a2d52f933cd71abc2effa66b46d030ee605e7cea 2014-08-13 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
  */
@@ -500,7 +509,7 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
         g_param_spec_value_array(
             "segment-list",
             "Segment List",
-            "List of Segments. This is a Nx2 array where N (the rows) is the number of segments. The columns are the start and stop times of each segment.",
+            "List of Segments.  This is an Nx2 array where N (the rows) is the number of segments. The columns are the start and stop times of each segment.",
                 g_param_spec_value_array(
                     "segment",
                     "[start, stop)",

@@ -23,6 +23,7 @@
 #
 #	+ `--ignore-missing`: Ignore and skip missing input documents.
 #	+ `--output` [filename]: Set the output file name (default = write to stdout).
+#	+ `--likelihood-cache` [filename]: Set the cache file name from which to read likelihood files
 #	+ `--verbose`: Be verbose.
 #
 # =============================================================================
@@ -42,6 +43,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
+from glue import lal
 
 
 from gstlal import far
@@ -61,10 +63,13 @@ def parse_command_line():
 	)
 	parser.add_option("--ignore-missing", action = "store_true", help = "Ignore and skip missing input documents.")
 	parser.add_option("-o", "--output", metavar = "filename", help = "Set the output file name (default = write to stdout).")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Set the cache file name from which to read likelihood files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
 	options, urls = parser.parse_args()
 
+	if options.likelihood_cache:
+		urls += [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 	if not urls and not options.ignore_missing:
 		raise ValueError("no input documents")
 

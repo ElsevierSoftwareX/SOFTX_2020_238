@@ -47,6 +47,8 @@ from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
 import lalsimulation as lalsim
+from gstlal import chirptime
+from lal import MSUN_SI
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -251,11 +253,6 @@ def time_slices(
 	while allowed_rates[0] > sample_rate_max:
 		allowed_rates.pop(0)
 
-	# make sure the Nyquist rate of the second allowed rate is less than
-	# ringdown frequency else cut allowed rates until it is true
-	min_ringdown_frequency = min(spawaveform.imrffinal(row.mass1, row.mass2, spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z), 'ringdown') for row in sngl_inspiral_rows)
-	allowed_rates = [allowed_rates[0]] + [r for r in allowed_rates[1:] if r/(2.*padding) < min_ringdown_frequency]
-
 	#
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
 	#
@@ -297,11 +294,8 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		try:
-			longest_chirp = max(spawaveform.imrchirptime(row.mass1,row.mass2,this_flow,spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in sngl_inspiral_rows)
-		except ValueError as e:
-			print "Continuing decomposition by moving to next slice despite:\n\t", e
-			continue
+		longest_chirp = max(chirptime.imr_time(this_flow, row.mass1*MSUN_SI ,row.mass2*MSUN_SI, row.spin1z, row.spin2z) for row in sngl_inspiral_rows)
+
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
 		# If not, we can skip this sampling rate and move on to the next lower one.

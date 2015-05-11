@@ -1636,7 +1636,7 @@ SKIP_FUNCTION_MACROS   = YES
 # doxygen is run, you must also specify the path to the tagfile here.
 # FIXME don't hard code this version number, get it from configure
 
-TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.3.2/html
+TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.4.2/html
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.

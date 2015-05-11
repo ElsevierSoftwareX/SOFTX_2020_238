@@ -27,8 +27,8 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--vetoes-name` [name]: Set the name of the segment lists to use as vetoes (default = do not apply vetoes).
 #	+ `--verbose`: Be verbose.
-#	+ `--write-likelihood` [filename]: Write merged raw likelihood data to this file.
-#	+ `--trim-database`: Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.
+#	+ `--write-rates` [filename]: Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.
+
 
 #
 # =============================================================================
@@ -59,6 +59,9 @@ from pylal import snglcoinc
 from gstlal import far
 
 
+process_name = u"gstlal_inspiral_calc_likelihood"
+
+
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "git id %s" % ""	# FIXME
 __date__ = ""	# FIXME
@@ -84,8 +87,10 @@ def parse_command_line():
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
 	parser.add_option("-f", "--force", action = "store_true", help = "Force recomputation of likelihood values.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--trim-database", action = "store_true", help = "Delete events that are found to be below the pipeline's likelihood ratio threshold (default = do not delete them).  Deleting the events saves a significant amount of disk space but is inconvenient during pipeline development and tuning as it makes it impossible to rerank the events later with a different ranking statistic.")
+	parser.add_option("-w", "--write-rates", metavar = "filename", help = "Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.")
 	options, filenames = parser.parse_args()
+
+	paramdict = options.__dict__
 
 	options.likelihood_urls = []
 	if options.likelihood_urls is not None:
@@ -98,7 +103,7 @@ def parse_command_line():
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
 
-	return options, filenames
+	return options, paramdict, filenames
 
 
 #
@@ -129,7 +134,7 @@ def sngl_inspiral_veto_func(event, vetoseglists):
 #
 
 
-options, filenames = parse_command_line()
+options, paramdict, filenames = parse_command_line()
 
 
 #
@@ -155,7 +160,7 @@ for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-# Compute the probability of instruments given signal
+# compute the probability of instruments given signal
 coincparamsdistributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
 
 # compute the instrument combination counts
@@ -173,6 +178,18 @@ ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 
 #
+# initialize a RankingData object in which to collect ranking statistic
+# histograms if requested
+#
+
+
+if options.write_rates is not None:
+	ranking_data = far.RankingData(None, seglists.keys())
+else:
+	ranking_data = None
+
+
+#
 # iterate over files
 #
 
@@ -180,8 +197,8 @@ ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 failed = []
 for n, filename in enumerate(filenames, 1):
 	#
-	# Open the file.  Be lazy and use the content handler for the
-	# distribution data files because it's fine for this, too.  If a
+	# open the file.  be lazy and use the content handler for the
+	# distribution data files because it's fine for this, too.  if a
 	# file can't be loaded because of a filesystem failure or CRC
 	# failure, or whatever, try to do the rest of the files before
 	# exiting instead of crashing right away to reduce the time spent
@@ -198,14 +215,14 @@ for n, filename in enumerate(filenames, 1):
 		failed.append(filename)
 		continue
 
-	if not options.force and ligolw_process.doc_includes_process(xmldoc, u"gstlal_inspiral_calc_likelihood"):
+	if not options.force and ligolw_process.doc_includes_process(xmldoc, process_name):
 		if options.verbose:
 			print >>sys.stderr, "already processed, skipping"
 		xmldoc.unlink()
 		continue
 
 	#
-	# Summarize the database, and record our passage.
+	# summarize the database, and record our passage.
 	#
 
 	try:
@@ -216,7 +233,7 @@ for n, filename in enumerate(filenames, 1):
 		xmldoc.unlink()
 		continue
 
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_likelihood", {})
+	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
 	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 
 	if options.verbose:
@@ -228,6 +245,7 @@ for n, filename in enumerate(filenames, 1):
 			continue
 		coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
 	del sngl_inspiral_table_index
+	coinc_inspiral_index = dict((row.coinc_event_id, row) for row in lsctables.CoincInspiralTable.get_table(xmldoc))
 
 	offset_vectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
 
@@ -239,7 +257,7 @@ for n, filename in enumerate(filenames, 1):
 		print >>sys.stderr, "done"
 
 	#
-	# Run likelihood ratio calculation.
+	# run likelihood ratio calculation.
 	#
 
 	ligolw_burca2.assign_likelihood_ratios_xml(
@@ -255,28 +273,28 @@ for n, filename in enumerate(filenames, 1):
 	)
 
 	#
-	# Delete low significance events to reduce database size
+	# collect ranking statistic values if that's what we're doing.
 	#
 
-	if options.trim_database:
-		coinc_ids_to_delete = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id and row.likelihood < far.RankingData.ln_likelihood_ratio_threshold)
-		# FIXME:  don't hard-code program and parameter names
-		sngls_snr_threshold, = ligolw_process.get_process_params(xmldoc, u"gstlal_inspiral", u"--singles-threshold")
-		sngl_ids_to_delete = set(sngl.event_id for coinc_event_id in coinc_ids_to_delete for sngl in coinc_event_map_index[coinc_event_id] if sngl.snr < sngls_snr_threshold)
-
-		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincTable.get_table(xmldoc))
-		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincInspiralTable.get_table(xmldoc))
-		iterutils.inplace_filter((lambda row: row.coinc_event_id not in coinc_ids_to_delete), lsctables.CoincMapTable.get_table(xmldoc))
-		iterutils.inplace_filter((lambda row: row.event_id not in sngl_ids_to_delete), lsctables.SnglInspiralTable.get_table(xmldoc))
+	if ranking_data is not None:
+		for row in lsctables.CoincTable.get_table(xmldoc):
+			if row.coinc_def_id != coinc_def_id:
+				continue
+			instruments = lsctables.instrument_set_from_ifos(coinc_inspiral_index[row.coinc_event_id].ifos)
+			ln_likelihood_ratio = row.likelihood
+			if any(offset_vectors[row.time_slide_id].values()):
+				ranking_data.background_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.
+			else:
+				ranking_data.zero_lag_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.
 
 	#
-	# Close out process metadata.
+	# close out process metadata.
 	#
 
 	ligolw_process.set_process_end_time(process)
 
 	#
-	# Clean up.
+	# clean up.
 	#
 
 	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
@@ -284,9 +302,23 @@ for n, filename in enumerate(filenames, 1):
 
 
 #
-# Crash if any input files were broken
+# crash if any input files were broken
 #
 
 
 if failed:
 	raise ValueError("%s could not be processed" % ", ".join("'%s'" % filename for filename in failed))
+
+
+#
+# finally write combined ranking data file if requested
+#
+
+
+if options.write_rates is not None:
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(ligolw.LIGO_LW())
+	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
+	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+	far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
+	ligolw_utils.write_filename(xmldoc, options.write_rates, gz = (options.write_rates or "stdout").endswith(".gz"), verbose = options.verbose)

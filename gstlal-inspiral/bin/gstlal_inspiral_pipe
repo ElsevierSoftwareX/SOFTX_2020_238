@@ -315,8 +315,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"data-source":"frames",
 								"local-frame-caching":""
 								},
-							input_files = {	"time-slide-file":options.time_slide_file,
-									"frame-cache":options.frame_cache,
+							input_files = {	"frame-cache":options.frame_cache,
 									"frame-segments-file":options.frame_segments_file,
 									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
 									"veto-segments-file":options.vetoes,
@@ -382,7 +381,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = parents,
-				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
+				opts = {"instrument":instrument_set, "synthesize-injection-count":1000000000000, "background-prior":10000},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
@@ -727,29 +726,28 @@ os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXG
 # setup the job classes
 #
 
-refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd')
-refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"2048", "request_cpus":"2", "+RequiresMultipleCores":"True"})
-medianPSDJob = inspiral_pipe.generic_job('gstlal_median_of_psds')
-svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
-horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
-gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
-gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
-createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats")
-calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = {"requirements":"( CAN_RUN_MULTICORE )", "request_memory":"2048", "request_cpus":"3", "+RequiresMultipleCores":"True"})
-calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood")
-calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj')
-gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms")
-ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind")
-toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml")
-toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml")
-lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite")
-plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary")
-plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj")
-plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity")
-openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open')
-pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page")
-marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood")
-plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background")
+refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = {"request_memory":"2GB", "request_cpus":"2"})
+medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = {"request_memory":"2GB"})
+svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = {"request_memory":"2GB"})
+horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = {"request_memory":"2GB"})
+gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"request_memory":"15GB", "request_cpus":"8"})
+gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"request_memory":"15GB", "request_cpus":"8"})
+createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = {"request_memory":"2GB"})
+calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = {"request_memory":"2GB", "request_cpus":"3"})
+calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = {"request_memory":"2GB"})
+calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = {"request_memory":"2GB"})
+gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = {"request_memory":"2GB"})
+ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = {"request_memory":"2GB"})
+toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = {"request_memory":"2GB"})
+toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = {"request_memory":"2GB"})
+lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = {"request_memory":"2GB"})
+plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = {"request_memory":"2GB"})
+plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = {"request_memory":"2GB"})
+plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = {"request_memory":"2GB"})
+openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = {"request_memory":"2GB"})
+pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = {"request_memory":"2GB"})
+marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = {"request_memory":"2GB"})
+plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = {"request_memory":"2GB"})
 
 #
 # Get the analysis segments
@@ -865,12 +863,12 @@ for injdb in injdbs:
 	))
 # make sensitivity plots
 plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
+	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "bin-by-mass-ratio":"", "bin-by-aligned-spin":"","include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
 	input_files = {"zero-lag-database":noninjdb, "":injdbs}
 ))
 for injdb in injdbs:
 	plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
+		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "bin-by-mass-ratio":"", "bin-by-aligned-spin":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
 		input_files = {"zero-lag-database":noninjdb, "":injdb}
 	))
 
