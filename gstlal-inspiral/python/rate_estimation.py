@@ -149,7 +149,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
 	"""
 	FIXME:  document this
 	"""
@@ -159,6 +159,8 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 
 	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
 		raise ValueError("NaN log likelihood ratio encountered")
+	if nsample < 0:
+		raise ValueError("nsample < 0: %d" % nsample)
 
 	#
 	# for each sample of the ranking statistic, evaluate the ratio of
@@ -196,8 +198,6 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 
 	ndim = 2
 	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
-	if nsample is None:
-		nsample = 400000
 	nburn = 1000
 
 	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
