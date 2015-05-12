@@ -62,6 +62,7 @@ from gstlal.reference_psd import interpolate_psd, horizon_distance
 
 
 from gstlal import templates
+from gstlal import chirptime
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -187,33 +188,31 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
-		epoch = laltypes.LIGOTimeGPS(0),
+		epoch = laltypes.LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
 		f0 = 0.0,
 		deltaF = 1.0 / duration,
 		sampleUnits = laltypes.LALUnit("strain"),
 		data = z
 	)
 
-def condition_imr_template(approximant, data, sample_rate_max, max_mass):
-	# sample index of peak amplitude
-	max_index = numpy.argmax(numpy.abs(data))
+def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
+	# find the index for the peak sample using the epoch returned by
+	# the waveform generator
+	epoch_index = -int(epoch_time*sample_rate_max) - 1
+	# align the peaks according to an overestimate of max rinddown
+	# time for a given split bank
+	target_index = len(data)-1 - int(sample_rate_max * max_ringtime)
 	# rotate phase so that sample with peak amplitude is real
-	phase = numpy.arctan2(data[max_index].real, data[max_index].imag)
+	phase = numpy.arctan2(data[epoch_index].real, data[epoch_index].imag)
 	data *= numpy.exp(1.j * phase)
-	# sample index where we want the peak to be.  300 M for the max
-	# mass to leave room for ringdown
-	target_index = len(data) - int(sample_rate_max * (300. * max_mass) * lal.MTSUN_SI)
-	assert target_index >= 0, "waveform too short"
-	# cyclically permute the samples so the sample with peak amplitude
-	# has the desired index
-	data = numpy.roll(data, target_index - max_index)
+	data = numpy.roll(data, target_index-epoch_index)
 	# re-taper the ends of the waveform that got cyclically permuted
 	# around the ring
-	tukey_beta = 2. * abs(target_index - max_index) / float(len(data))
+	tukey_beta = 2. * abs(target_index - epoch_index) / float(len(data))
 	assert 0. <= tukey_beta <= 1., "waveform got rolled WAY too much"
 	data *= lal.CreateTukeyREAL8Window(len(data), tukey_beta).data.data
 	# done
-	return data
+	return data, target_index
 
 
 def compute_autocorrelation_mask( autocorrelation ):
@@ -413,6 +412,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 	# Generate each template, downsampling as we go to save memory
 	max_mass = max([row.mass1+row.mass2 for row in template_table])
+	max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
 	for i, row in enumerate(template_table):
 		if verbose:
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
@@ -446,11 +446,13 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
+		data = tseries.data
+		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
+		assert epoch_time < 0.0, "Epoch returned follows a different convention"
 		#
 		# extract the portion to be used for filtering
 		#
 
-		data = tseries.data[-length_max:]
 
 		#
 		# condition the template if necessary (e.g. line up IMR
@@ -458,10 +460,13 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		#
 
 		if approximant in templates.gstlal_IMR_approximants:
-			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
+			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
+			# record the new end times for the waveforms (since we performed the shifts)
+			row.set_end(laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max))
 		else:
 			data *= tukeywindow(data, samps = 32)
 
+		data = data[-length_max:]
 		#
 		# normalize so that inner product of template with itself
 		# is 2
