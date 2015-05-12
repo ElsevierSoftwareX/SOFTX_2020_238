@@ -101,13 +101,13 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (2) has an IFFT which is duration seconds long and
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
-	if approximant in templates.gstlal_FD_approximants:
+	if approximant in templates.gstlal_approximants:
 
 		# FIXME use hcross somday?
 		# We don't here because it is not guaranteed to be orthogonal
 		# and we add orthogonal phase later
 
-		hplus,hcross = lalsim.SimInspiralChooseFDWaveform(
+		hplus,hcross = lalsim.SimInspiralFD(
 			0., # phase
 			1.0 / duration, # sampling interval
 			lal.MSUN_SI * template_bank_row.mass1,
@@ -120,8 +120,9 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			template_bank_row.spin2z,
 			f_low,
 			f_high,
-			f_high, #FIXME chosen until suitable default value for f_ref is defined
+			0., #FIXME chosen until suitable default value for f_ref is defined
 			1.e6 * lal.PC_SI, # distance
+			0., # redshift
 			0., # inclination
 			0., # tidal deformability lambda 1
 			0., # tidal deformability lambda 2
@@ -135,53 +136,6 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		# NOTE assumes fhigh is the Nyquist frequency!!!
 		z = hplus.data.data
 		assert len(z) == int(round(sample_rate * duration))//2 +1
-
-	elif approximant in templates.gstlal_TD_approximants:
-
-		# FIXME use hcross somday?
-		# We don't here because it is not guaranteed to be orthogonal
-		# and we add orthogonal phase later
-
-		hplus,hcross = lalsim.SimInspiralChooseTDWaveform(
-			0., # phase
-			1.0 / sample_rate, # sampling interval
-			lal.MSUN_SI * template_bank_row.mass1,
-			lal.MSUN_SI * template_bank_row.mass2,
-			template_bank_row.spin1x,
-			template_bank_row.spin1y,
-			template_bank_row.spin1z,
-			template_bank_row.spin2x,
-			template_bank_row.spin2y,
-			template_bank_row.spin2z,
-			f_low,
-			0, # reference frequency?
-			1.e6 * lal.PC_SI, # distance
-			0., # inclination
-			0., # tidal deformability lambda 1
-			0., # tidal deformability lambda 2
-			None, # waveform flags
-			None, # Non GR params
-			amporder,
-			order,
-			lalsim.GetApproximantFromString(str(approximant))
-			)
-
-		# Taper a couple of cycles at the start
-		hplus.data.data *= lefttukeywindow(hplus.data.data, samps = int(4 * sample_rate / f_low))
-		data = numpy.zeros((sample_rate * duration,))
-		data[-hplus.data.length:] = hplus.data.data
-
-		tseries = laltypes.REAL8TimeSeries(
-			name = "template",
-			epoch = laltypes.LIGOTimeGPS(0),
-			f0 = 0.0,
-			deltaT = 1.0 / sample_rate,
-			sampleUnits = laltypes.LALUnit("strain"),
-			data = data
-		)
-
-		lalfft.XLALREAL8TimeFreqFFT(fworkspace, tseries, fwdplan)
-		z = numpy.copy(fworkspace.data)
 
 	else:
 		raise ValueError("Unsupported approximant given %s" % approximant)
@@ -372,7 +326,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	working_f_low_extra_time, working_f_low = joliens_function(f_low, template_table)
 
 	# Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = templates.ceil_pow_2(length_max + round((1./psd.deltaF + working_f_low_extra_time) * sample_rate_max))
+	working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
 	# Smooth the PSD and interpolate to required resolution
@@ -422,7 +376,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# waveform is generated for a canonical distance of 1 Mpc.
 		#
 
-		fseries = generate_template(row, approximant, sample_rate_max, working_duration, working_f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
