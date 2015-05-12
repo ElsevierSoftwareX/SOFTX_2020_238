@@ -457,7 +457,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# waveforms by peak amplitude)
 		#
 
-		if approximant in ("IMRPhenomB", "EOBNRv2"):
+		if approximant in templates.gstlal_IMR_approximants:
 			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
 		else:
 			data *= tukeywindow(data, samps = 32)
