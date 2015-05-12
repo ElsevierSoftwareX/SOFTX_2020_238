@@ -21,17 +21,15 @@
 #
 # STATUS: Not reviewed, actions must be dealt with
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Names                                               | Hash                                        | Date       |
+# | -------------------------------------------         | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad      | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Florent, Surabhi, Tjonnie, Kent, Jolien, Kipp, Chad | 0d7301a22ad3346f1283d3a1917b67aa7ec1c1ab    | 2015-05-12 |
 #
 # #### Action items
 #
-# - Are all waveform approximants being conditioned properly?
-# - Is the PSD being conditioned properly, .e.g, high Q lines, wandering lines?
-# - Test waveform conditioning in isolation and analysis DAGs 
-# - Is the @f$\sigma^{2}@f$ calculation correct?
-
+# - Is the PSD being conditioned properly, .e.g, high Q lines, wandering lines? 
+# - Remove Jolien's function and get the new flow from lalsimulation to use XLALSimInspiralChirpStartFrequencyBound() and friends
 
 ## @package cbc_template_fir
 
@@ -83,15 +81,6 @@ def tukeywindow(data, samps = 200.):
 	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
 	tp = float(samps) / len(data)
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
-
-
-def lefttukeywindow(data, samps = 200.):
-	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = float(samps) / len(data)
-	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
-	wn[len(wn)//2:] = 1.0
-	return wn
-
 
 
 def generate_template(template_bank_row, approximant, sample_rate, duration, f_low, f_high, amporder = 0, order = 7, fwdplan = None, fworkspace = None):
@@ -365,7 +354,6 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	sigmasq = []
 
 	# Generate each template, downsampling as we go to save memory
-	max_mass = max([row.mass1+row.mass2 for row in template_table])
 	max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
 	for i, row in enumerate(template_table):
 		if verbose:
