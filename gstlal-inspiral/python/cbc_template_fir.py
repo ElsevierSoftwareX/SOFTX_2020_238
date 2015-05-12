@@ -372,8 +372,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# working f_low to actually use for generating the waveform
 	working_f_low_extra_time, working_f_low = joliens_function(f_low, template_table)
 
-	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sample_rate_max))
+	# Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
+	working_length = templates.ceil_pow_2(length_max + round((1./psd.deltaF + working_f_low_extra_time) * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
 	# Smooth the PSD and interpolate to required resolution
