@@ -15,6 +15,26 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# The python module to implement false alarm probability and false alarm rate
+#
+# ### Review Status
+#
+# STATUS: reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Hanna, Cannon, Meacher, Creighton J, Robinet, Sathyaprakash, Messick, Dent, Blackburn | 7fb5f008afa337a33a72e182d455fdd74aa7aa7a    | 2014-11-05 |
+#
+# #### Action items
+#
+
+# - Address the fixed SNR PDF using median PSD which could be pre-computed and stored on disk. (Store database of SNR pdfs for a variety of horizon)
+# - The binning parameters are hard-coded too; Could it be a problem?
+# - Chisquare binning hasn't been tuned to be a good representation of the PDFs; could be improved in future
+
+## @package far
+
 
 #
 # =============================================================================
