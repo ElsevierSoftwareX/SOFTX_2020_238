@@ -15,6 +15,30 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
+## @file
+# The python module to implement things needed by gstlal_inspiral
+#
+# ### Review Status
+#
+# STATUS: reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 |
+#
+# #### Action items
+# - Document examples of how to get SNR history, etc., to a web browser in an offline search
+# - Long term goal: Using template duration (rather than chirp mass) should load balance the pipeline and improve statistics
+# - L651: One thing to sort out is the signal probability while computing coincs
+# - L640-L647: Get rid of obsolete comments
+# - L667: Make sure timeslide events are not sent to GRACEDB
+# - Lxxx: Can normalisation of the tail of the distribution pre-computed using fake data?
+# - L681: fmin should not be hard-coded to 10 Hz. horizon_distance will be horribly wrong if psd is constructed, e.g. using some high-pass filter. For example, change the default to 40 Hz.
+# - L817: If gracedb upload failed then it should be possible to identify the failure, the specifics of the trigger that encountered failure and a way of submitting the trigger again to gracedb is important. Think about how to clean-up failures.
+# - Mimick gracedb upload failures and see if the code crashes
+
+
+## @package inspiral
 
 #
 # =============================================================================
