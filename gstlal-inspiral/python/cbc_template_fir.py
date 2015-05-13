@@ -19,7 +19,7 @@
 #
 # ### Review Status
 #
-# STATUS: Not reviewed, actions must be dealt with
+# STATUS: reviewed with actions
 #
 # | Names                                               | Hash                                        | Date       |
 # | -------------------------------------------         | ------------------------------------------- | ---------- |
@@ -28,7 +28,7 @@
 #
 # #### Action items
 #
-# - Is the PSD being conditioned properly, .e.g, high Q lines, wandering lines? 
+# - Consider changing the order of interpolation and smoothing the PSD
 # - Remove Jolien's function and get the new flow from lalsimulation to use XLALSimInspiralChirpStartFrequencyBound() and friends
 
 ## @package cbc_template_fir
@@ -139,6 +139,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	)
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
+	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
 	# find the index for the peak sample using the epoch returned by
 	# the waveform generator
 	epoch_index = -int(epoch_time*sample_rate_max) - 1
@@ -146,8 +147,8 @@ def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_r
 	# time for a given split bank
 	target_index = len(data)-1 - int(sample_rate_max * max_ringtime)
 	# rotate phase so that sample with peak amplitude is real
-	phase = numpy.arctan2(data[epoch_index].real, data[epoch_index].imag)
-	data *= numpy.exp(1.j * phase)
+	phase = numpy.arctan2(data[epoch_index].imag, data[epoch_index].real)
+	data *= numpy.exp(-1.j * phase)
 	data = numpy.roll(data, target_index-epoch_index)
 	# re-taper the ends of the waveform that got cyclically permuted
 	# around the ring
@@ -390,7 +391,6 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		data = tseries.data
 		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
-		assert epoch_time < 0.0, "Epoch returned follows a different convention"
 		#
 		# extract the portion to be used for filtering
 		#
