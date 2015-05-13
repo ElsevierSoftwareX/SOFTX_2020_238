@@ -30,9 +30,9 @@ Redundant entries are omitted
 <tr><td> 					</td><td> glue.pipeliene                </td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_svd_bank			</td><td>                               </td><td> 164	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> svd_bank.py			</td><td> 363	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>					</td><td> cbc_template_fir.py		</td><td> 443	</td><td> \notreviewed with actions</td><td> \stable </td></tr>
+<tr><td>					</td><td> cbc_template_fir.py		</td><td> 443	</td><td> \reviewed with actions</td><td> \moddev </td></tr>
 <tr><td> gstlal_inspiral_create_prior_diststats	</td><td>                               </td><td> 125	</td><td> \notreviewed	</td><td> \hidev </td></tr>
-<tr><td>					</td><td> far.py			</td><td> 1714	</td><td> \notreviewed	</td><td> \hidev </td></tr>
+<tr><td>					</td><td> far.py			</td><td> 1714	</td><td> \reviewed with actions	</td><td> \hidev </td></tr>
 <tr><td>					</td><td> pylal.inject			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.rate			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.snglcoinc		</td><td> ?	</td><td> ?		</td><td> \moddev </td></tr>
@@ -42,8 +42,8 @@ Redundant entries are omitted
 <tr><td>					</td><td> lloidparts.py			</td><td> 826	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pipeio.py			</td><td> 239	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> simulation.py			</td><td> 72	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td>					</td><td> inspiral.py			</td><td> 949	</td><td> \notreviewed	</td><td> \moddev </td></tr>
-<tr><td>					</td><td> streamthinca.py		</td><td> 387	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td>					</td><td> inspiral.py			</td><td> 949	</td><td> \reviewed with actions	</td><td> \moddev </td></tr>
+<tr><td>					</td><td> streamthinca.py		</td><td> 387	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.ligolw_thinca		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td>					</td><td> httpinterface.py		</td><td> 110	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td>					</td><td> hoftcache.py			</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
