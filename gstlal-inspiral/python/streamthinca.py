@@ -14,6 +14,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# The python module to implement streaming coincidence
+#
+# ### Review Status
+#
+# STATUS: reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 |
+#
+# #### Action items
+#
+# - L300+: Please document within the code that the FAR column is used to store FAP so that future developers don't get confused what that column represents
 
 #
 # =============================================================================
