@@ -30,7 +30,13 @@
 #
 # - Consider changing the order of interpolation and smoothing the PSD
 # - Remove Jolien's function and get the new flow from lalsimulation to use XLALSimInspiralChirpStartFrequencyBound() and friends
-
+# - move sigma squared calculation somewhere and get them updated dynamically
+# - possibly use ROM stuff, possibly use low-order polynomial approx computed on the fly from the template as it's generated
+# - remove lefttukeywindow()
+# - use template_bank_row.coa_phase == 0. in SimInspiralFD() call, make sure itac adjusts the phase it assigns to triggers from the template coa_phase
+# - change "assumes fhigh" to "asserts fhigh"
+# - move assert epoch_time into condition_imr_waveform(), should be assert -len(data) <= epoch_time * sample_rate < 0
+#
 ## @package cbc_template_fir
 
 #
