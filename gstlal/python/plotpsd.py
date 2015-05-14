@@ -49,6 +49,7 @@ from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from gstlal.plotutil import golden_ratio
+from glue.ligolw import lsctables
 
 def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
 	"""!
