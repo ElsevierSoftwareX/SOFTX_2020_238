@@ -75,7 +75,7 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
+	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 100000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("--horizon-distances", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is \"instrument=distance,instrument=distance,...\", e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of two or more instruments from the set.  It is an error for an instrument to be named here and not in a --instrument option.")
