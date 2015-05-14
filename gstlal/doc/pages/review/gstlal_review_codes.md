@@ -36,7 +36,7 @@ Redundant entries are omitted
 <tr><td>					</td><td> pylal.inject			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.rate			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>					</td><td> pylal.snglcoinc		</td><td> ?	</td><td> ?		</td><td> \moddev </td></tr>
-<tr><td> gstlal_inspiral_marginalize_likelihood	</td><td>                               </td><td> 167	</td><td> \notreviewed	</td><td> \moddev </td></tr>
+<tr><td> gstlal_inspiral_marginalize_likelihood	</td><td>                               </td><td> 167	</td><td> \reviewed	</td><td> \moddev </td></tr>
 <tr><td> gstlal_ll_trigger_pipe			</td><td>                               </td><td> -	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> gstlal_inspiral			</td><td>                               </td><td> 707	</td><td> \reviewed with actions	</td><td> \moddev </td></tr>
 <tr><td>					</td><td> lloidparts.py			</td><td> 826	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
@@ -50,7 +50,7 @@ Redundant entries are omitted
 <tr><td> gstlal_llcbcsummary			</td><td>                               </td><td> 450	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_llcbcnode			</td><td>                               </td><td> 318	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_inspiral_lvalert_psd_plotter	</td><td>                               </td><td> 240	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td> gstlal_ll_inspiral_get_urls		</td><td>                               </td><td> 93	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> gstlal_ll_inspiral_get_urls		</td><td>                               </td><td> 30	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_inspiral_followups_from_gracedb	</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> gstlal_inspiral_recompute_online_far_from_gracedb </td><td>                    </td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> gstlal_inspiral_recompute_online_far   </td><td>                    		</td><td> 92	</td><td> \notreviewed	</td><td> \hidev </td></tr>
@@ -92,7 +92,9 @@ Redundant entries are omitted
 <tr><td> \ref pipeparts.mkfirbank() lal_firbank		</td><td>			</td><td> 	  </td><td> \reviewed		</td><td> \stable 	</td></tr>
 <tr><td> \ref pipeparts.mkdrop() lal_drop		</td><td>			</td><td> 	  </td><td> \reviewed (with actions)</td><td> \stable 	</td></tr>
 <tr><td> \ref pipeparts.mkcachesrc() lal_cachesrc	</td><td>			</td><td> 	  </td><td> \reviewed (with actions)</td><td> \stable 	</td></tr>
-<tr><td> \ref pipeparts.mkitac() lal_itac		</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \moddev	</td></tr>
+<tr><td> \ref pipeparts.mkitac() lal_itac		</td><td>			</td><td> 	  </td><td> \reviewed (with actions)</td><td> \stable	</td></tr>
+<tr><td> gstlal_autocorrelation				</td><td>			</td><td> 	  </td><td> \reviewed (with actions)</td><td> \stable	</td></tr>
+<tr><td> gstlal_peakfinder				</td><td>			</td><td> 	  </td><td> \reviewed (with actions)</td><td> \stable	</td></tr>
 <tr><td> framecpp_filesink				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> framecpp_channelmux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable 	</td></tr>
 <tr><td> framecpp_channeldemux				</td><td>			</td><td> 	  </td><td> \notreviewed	</td><td> \stable	</td></tr>
