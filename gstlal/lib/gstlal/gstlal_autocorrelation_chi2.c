@@ -17,6 +17,19 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+/**
+ * SECTION:gstlal_itac
+ * @short_description:  Compute inspiral triggers
+ *
+ * Reviewed: 38c65535fc96d6cc3dee76c2de9d3b76b47d5283 2015-05-14 
+ * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
+ *
+ * Actions:
+ * 
+ * line 282: could be more efficient
+ * lines 496, 501: assert the length retuned by gstlal_autocorrelation_chi2_float is exactly 1.
+ *
+ */
 
 /*
  * ============================================================================
