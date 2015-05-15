@@ -16,6 +16,18 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+/**
+ * SECTION:rate_estimation.c
+ * @short_description: C code for event rate intervals
+ * 
+ * Reviewed: 2fb185eda0edb9d49d79b8185f7b35457cafa06b 2015-05-14 
+ * K. Cannon, J. Creighton, C. Hanna, F. Robinett
+ *
+ * Actions:
+ *  - Improve comments (some out of date)
+ *
+ */
+
 
 /*
  * ============================================================================
