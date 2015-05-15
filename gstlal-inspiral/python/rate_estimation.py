@@ -15,6 +15,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## 
+# @file
+#
+# A file that contains the rate estimation code.
+#
+# Review Status: Reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# |          Sathya, Duncan Me, Jolien, Kipp, Chad | 2fb185eda0edb9d49d79b8185f7b35457cafa06b    | 2015-05-14 |
+#
+# #### Actions
+# - Increase nbins to at least 10,000
+# - Check max acceptance
 
 #
 # =============================================================================
