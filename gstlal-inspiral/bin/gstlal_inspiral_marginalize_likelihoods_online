@@ -40,7 +40,16 @@
 # each iteration.  Files are not overwritten directly, but rather via a
 # temporary file and mv operation to ensure that no files are corrupted in
 # a POSIX file environment.
-# 
+#
+# ### Review status
+#
+# | Names                                       | Hash                                        | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Jolien, Kipp, Chad                 | 0e96523b8846e5a4597ba3477c8462443470cd94    | 2015-05-15 |
+#
+# #### Action
+#
+
 
 #
 # get the output file name
