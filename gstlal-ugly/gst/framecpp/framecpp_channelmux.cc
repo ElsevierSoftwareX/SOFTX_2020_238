@@ -381,12 +381,12 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
 					g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 					g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
-					if(buffer_t_start + 1 == frame_t_start)
-						buffer_t_start++;
-					if(buffer_t_end - 1 == frame_t_end)
-						buffer_t_end--;
-					g_assert_cmpuint(buffer_t_start, <=, buffer_t_end);
+					if(llabs(frame_t_start - buffer_t_start) <= 1)
+						buffer_t_start = frame_t_start;
+					if(llabs(frame_t_end - buffer_t_end) <= 1)
+						buffer_t_end = frame_t_end;
 					g_assert_cmpuint(frame_t_start, <=, buffer_t_start);
+					g_assert_cmpuint(buffer_t_start, <=, buffer_t_end);
 					g_assert_cmpuint(buffer_t_end, <=, frame_t_end);
 
 					/*
