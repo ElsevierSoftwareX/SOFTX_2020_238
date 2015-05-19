@@ -1,7 +1,7 @@
 /*
- * GstFrHistory
+ * GstLALFrHistory
  *
- * Copyright (C) 2013  Kipp Cannon
+ * Copyright (C) 2013,2015  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,8 @@
  */
 
 
-#ifndef __GST_FRHISTORY_H__
-#define __GST_FRHISTORY_H__
+#ifndef __GSTLAL_FRHISTORY_H__
+#define __GSTLAL_FRHISTORY_H__
 
 
 /*
@@ -48,23 +48,26 @@ G_BEGIN_DECLS
  */
 
 
-typedef struct _GstFrHistory GstFrHistory;
+#define GSTLAL_FRHISTORY_TYPE \
+	(gstlal_frhistory_get_type())
+#define GSTLAL_FRHISTORY(obj) \
+	((GstLALFrHistory *) (obj))
+#define GSTLAL_IS_FRHISTORY(obj) \
+	((obj) && (GSTLAL_FRHISTORY(obj)->type == GSTLAL_FRHISTORY_TYPE))
 
 
-#define GST_FRHISTORY_TYPE \
-	(gst_frhistory_get_type())
-#define GST_FRHISTORY(obj) \
-	((GstFrHistory *) (obj))
-#define GST_IS_FRHISTORY(obj) \
-	((obj) && (GST_FRHISTORY(obj)->type == GST_FRHISTORY_TYPE))
+typedef struct _GstLALFrHistory GstLALFrHistory;
 
 
 /**
- * GstFrHistory
+ * GstLALFrHistory:
+ * @time:  Raw FrHistory time entry.  Use #gstlal_frhistory_set_timestamp() and
+ * #gstlal_frhistory_get_timestamp() to access as a #GstClockTime.
+ * @comment:  Comment string.
  */
 
 
-struct _GstFrHistory {
+struct _GstLALFrHistory {
 	GType type;
 
 	guint32 time;
@@ -84,22 +87,22 @@ struct _GstFrHistory {
  */
 
 
-GType gst_frhistory_get_type(void);
+GType gstlal_frhistory_get_type(void);
 
 
-GstFrHistory *gst_frhistory_new(const gchar *);
-GstFrHistory *gst_frhistory_copy(const GstFrHistory *);
-gchar *gst_frhistory_to_string(const GstFrHistory *);
-void gst_frhistory_set_timestamp(GstFrHistory *, GstClockTime);
-GstClockTime gst_frhistory_get_timestamp(const GstFrHistory *);
-void gst_frhistory_set_comment(GstFrHistory *, const gchar *);
-const gchar *gst_frhistory_get_comment(const GstFrHistory *);
-const gchar *gst_frhistory_get_name(const GstFrHistory *);
-void gst_frhistory_free(GstFrHistory *);
-gint gst_frhistory_compare_by_time(gconstpointer, gconstpointer);
+GstLALFrHistory *gstlal_frhistory_new(const gchar *name);
+GstLALFrHistory *gstlal_frhistory_copy(const GstLALFrHistory *self);
+gchar *gstlal_frhistory_to_string(const GstLALFrHistory *self);
+void gstlal_frhistory_set_timestamp(GstLALFrHistory *self, GstClockTime time);
+GstClockTime gstlal_frhistory_get_timestamp(const GstLALFrHistory *self);
+void gstlal_frhistory_set_comment(GstLALFrHistory *self, const gchar *comment);
+const gchar *gstlal_frhistory_get_comment(const GstLALFrHistory *self);
+const gchar *gstlal_frhistory_get_name(const GstLALFrHistory *self);
+void gstlal_frhistory_free(GstLALFrHistory *self);
+gint gstlal_frhistory_compare_by_time(gconstpointer a, gconstpointer b);
 
 
 G_END_DECLS
 
 
-#endif	/* __GST_FRHISTORY_H__ */
+#endif	/* __GSTLAL_FRHISTORY_H__ */

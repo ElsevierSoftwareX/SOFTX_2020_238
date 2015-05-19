@@ -74,9 +74,9 @@
 
 
 #include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channelmux.h>
-#include <gstfrhistory.h>
 #include <gstfrpad.h>
 #include <muxcollectpads.h>
 #include <muxqueue.h>
@@ -303,11 +303,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			 */
 
 			for(i = 0; i < mux->frame_history->n_values; i++) {
-				GstFrHistory *history = GST_FRHISTORY(g_value_get_boxed(g_value_array_get_nth(mux->frame_history, i)));
-				gchar *str = gst_frhistory_to_string(history);
+				GstLALFrHistory *history = GSTLAL_FRHISTORY(g_value_get_boxed(g_value_array_get_nth(mux->frame_history, i)));
+				gchar *str = gstlal_frhistory_to_string(history);
 				GST_LOG_OBJECT(mux, "FrHistory: %s", str);
 				g_free(str);
-				frame->RefHistory().append(FrameCPP::FrHistory(gst_frhistory_get_name(history), gst_frhistory_get_timestamp(history) / GST_SECOND, gst_frhistory_get_comment(history)));
+				frame->RefHistory().append(FrameCPP::FrHistory(gstlal_frhistory_get_name(history), gstlal_frhistory_get_timestamp(history) / GST_SECOND, gstlal_frhistory_get_comment(history)));
 			}
 
 			/*
@@ -1344,7 +1344,7 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 				"history",
 				"History entry",
 				"GstFrHistory object.",
-				GST_FRHISTORY_TYPE,
+				GSTLAL_FRHISTORY_TYPE,
 				(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
 			),
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)

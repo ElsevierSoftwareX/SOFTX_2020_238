@@ -50,9 +50,9 @@
  */
 
 
+#include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstfrpad.h>
-#include <gstfrhistory.h>
 
 
 
@@ -566,7 +566,7 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 				"history",
 				"History entry",
 				"GstFrHistory object.",
-				GST_FRHISTORY_TYPE,
+				GSTLAL_FRHISTORY_TYPE,
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS

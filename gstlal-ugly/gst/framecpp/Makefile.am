@@ -1,12 +1,5 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
-lib_LTLIBRARIES = libgstframecpp.la
-
-libgstframecpp_la_SOURCES = \
-	gstfrhistory.c gstfrhistory.h
-libgstframecpp_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
-libgstframecpp_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS)
-
 plugin_LTLIBRARIES = libframecpp_plugin.la
 
 libframecpp_plugin_la_SOURCES = \
@@ -24,4 +17,3 @@ endif
 libframecpp_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) $(framecpp_CFLAGS)
 libframecpp_plugin_la_CXXFLAGS = $(AM_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) $(framecpp_CXXFLAGS)
 libframecpp_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(framecpp_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
-libframecpp_plugin_la_LIBADD = libgstframecpp.la
