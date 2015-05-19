@@ -55,6 +55,7 @@
 
 #include <framecpp/Common/MemoryBuffer.hh>
 #include <framecpp/Common/Verify.hh>
+#include <framecpp/Detectors.hh>
 #include <framecpp/Dimension.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -246,9 +247,6 @@ static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 
 /*
  * build frame file from queue contents and push downstream
- *
- * FIXME:  do we need to add FrDetector structures to each frame file based
- * on the instrument list?
  */
 
 
@@ -271,11 +269,31 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		 */
 
 		for(frame_t_start = gwf_t_start, frame_t_end = MIN(gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration, gwf_t_end); frame_t_start < gwf_t_end; frame_t_start = frame_t_end, frame_t_end = MIN(frame_t_end + mux->frame_duration, gwf_t_end)) {
+			GHashTableIter it;
+			gchar *instrument;
 			GSList *collectdatalist;
 			FrameCPP::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
 			LDASTools::AL::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
 
 			GST_LOG_OBJECT(mux, "building frame %d [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", mux->frame_number, GST_TIME_SECONDS_ARGS(frame_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
+
+			/*
+			 * add FrDetector objects
+			 */
+
+			g_hash_table_iter_init(&it, mux->instruments);
+			while(g_hash_table_iter_next(&it, (void **) &instrument, NULL)) {
+				if(!strcmp(instrument, "H1"))
+					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H1, gpstime));
+				if(!strcmp(instrument, "H2"))
+					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H2, gpstime));
+				if(!strcmp(instrument, "L1"))
+					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_L1, gpstime));
+				if(!strcmp(instrument, "V1"))
+					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_V1, gpstime));
+				else
+					GST_WARNING_OBJECT(mux, "not adding FrDetector for unknown instrument '%s'", instrument);
+			}
 
 			/*
 			 * loop over pads
