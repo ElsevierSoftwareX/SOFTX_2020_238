@@ -59,6 +59,7 @@
 #include <framecpp/Dimension.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
+#include <framecpp/FrHistory.hh>
 #include <framecpp/FrProcData.hh>
 #include <framecpp/FrRawData.hh>
 #include <framecpp/FrSimData.hh>
@@ -74,8 +75,9 @@
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
-#include <gstfrpad.h>
 #include <framecpp_channelmux.h>
+#include <gstfrhistory.h>
+#include <gstfrpad.h>
 #include <muxcollectpads.h>
 #include <muxqueue.h>
 
@@ -271,6 +273,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		for(frame_t_start = gwf_t_start, frame_t_end = MIN(gwf_t_start - gwf_t_start % mux->frame_duration + mux->frame_duration, gwf_t_end); frame_t_start < gwf_t_end; frame_t_start = frame_t_end, frame_t_end = MIN(frame_t_end + mux->frame_duration, gwf_t_end)) {
 			GHashTableIter it;
 			gchar *instrument;
+			guint i;
 			GSList *collectdatalist;
 			FrameCPP::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
 			LDASTools::AL::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
@@ -293,6 +296,18 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_V1, gpstime));
 				else
 					GST_WARNING_OBJECT(mux, "not adding FrDetector for unknown instrument '%s'", instrument);
+			}
+
+			/*
+			 * add frame-level FrHistory objects
+			 */
+
+			for(i = 0; i < mux->frame_history->n_values; i++) {
+				GstFrHistory *history = GST_FRHISTORY(g_value_get_boxed(g_value_array_get_nth(mux->frame_history, i)));
+				gchar *str = gst_frhistory_to_string(history);
+				GST_LOG_OBJECT(mux, "FrHistory: %s", str);
+				g_free(str);
+				frame->RefHistory().append(FrameCPP::FrHistory(gst_frhistory_get_name(history), gst_frhistory_get_timestamp(history) / GST_SECOND, gst_frhistory_get_comment(history)));
 			}
 
 			/*
@@ -1034,6 +1049,7 @@ enum property {
 	ARG_FRAME_NAME,
 	ARG_FRAME_RUN,
 	ARG_FRAME_NUMBER,
+	ARG_FRAME_HISTORY,
 	ARG_COMPRESSION_SCHEME,
 	ARG_COMPRESSION_LEVEL
 };
@@ -1121,6 +1137,10 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 		g_value_set_uint(value, element->frame_number);
 		break;
 
+	case ARG_FRAME_HISTORY:
+		g_value_set_boxed(value, element->frame_history);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1147,6 +1167,8 @@ static void finalize(GObject * object)
 	element->srcpad = NULL;
 	g_hash_table_unref(element->instruments);
 	element->instruments = NULL;
+	g_value_array_free(element->frame_history);
+	element->frame_history = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1313,6 +1335,23 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_FRAME_HISTORY,
+		g_param_spec_value_array(
+			"frame-history",
+			"Frame-level history list",
+			"List of GstFrHistory objects.",
+			g_param_spec_boxed(
+				"history",
+				"History entry",
+				"GstFrHistory object.",
+				GST_FRHISTORY_TYPE,
+				(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+			),
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_COMPRESSION_SCHEME,
 		g_param_spec_enum(
 			"compression-scheme",
@@ -1364,4 +1403,5 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChan
 	/* initialize other internal data */
 	mux->instruments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	mux->need_tag_list = FALSE;
+	mux->frame_history = g_value_array_new(0);
 }
