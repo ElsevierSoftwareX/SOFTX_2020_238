@@ -986,7 +986,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			g_value_array_free(element->frame_history);
 			element->frame_history = g_value_array_new(0);
 			for(FrameCPP::FrameH::history_iterator current = frame->RefHistory().begin(), last = frame->RefHistory().end(); current != last; current++) {
+#ifndef G_VALUE_INIT
+				GValue value = {0};	/* FIXME:  remove when we can rely on glib >= 2.30 */
+#else
 				GValue value = G_VALUE_INIT;
+#endif
 				gchar *str;
 				GstFrHistory *history = gst_frhistory_new((*current)->GetName().c_str());
 				gst_frhistory_set_timestamp(history, (*current)->GetTime() * GST_SECOND);
