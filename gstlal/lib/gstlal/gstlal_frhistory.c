@@ -83,7 +83,6 @@ GstLALFrHistory *gstlal_frhistory_new(const gchar *name)
 
 	g_return_val_if_fail(name, NULL);
 
-	new->type = GSTLAL_FRHISTORY_TYPE;
 	new->name = g_strdup(name);
 	new->time = -1;
 	new->comment = NULL;
@@ -128,8 +127,6 @@ GstLALFrHistory *gstlal_frhistory_copy(const GstLALFrHistory *self)
 
 gchar *gstlal_frhistory_to_string(const GstLALFrHistory *self)
 {
-	g_return_val_if_fail(GSTLAL_IS_FRHISTORY(self), NULL);
-
 	if(self->time == (guint32) -1)
 		return g_strdup_printf("%s @ (unknown) s: %s", self->name, self->comment);
 	return g_strdup_printf("%s @ %u s: %s", self->name, self->time, self->comment); }
@@ -150,8 +147,6 @@ gchar *gstlal_frhistory_to_string(const GstLALFrHistory *self)
 
 void gstlal_frhistory_set_timestamp(GstLALFrHistory *self, GstClockTime time)
 {
-	g_return_if_fail(GSTLAL_IS_FRHISTORY(self));
-
 	self->time = GST_CLOCK_TIME_IS_VALID(time) ? time / GST_SECOND : (guint32) -1;
 }
 
@@ -167,8 +162,6 @@ void gstlal_frhistory_set_timestamp(GstLALFrHistory *self, GstClockTime time)
 
 GstClockTime gstlal_frhistory_get_timestamp(const GstLALFrHistory *self)
 {
-	g_return_val_if_fail(GSTLAL_IS_FRHISTORY(self), GST_CLOCK_TIME_NONE);
-
 	return self->time == (guint32) -1 ? GST_CLOCK_TIME_NONE : self->time * GST_SECOND;
 }
 
@@ -187,8 +180,6 @@ GstClockTime gstlal_frhistory_get_timestamp(const GstLALFrHistory *self)
 
 void gstlal_frhistory_set_comment(GstLALFrHistory *self, const gchar *comment)
 {
-	g_return_if_fail(GSTLAL_IS_FRHISTORY(self));
-
 	g_free(self->comment);
 	self->comment = g_strdup(comment);
 }
@@ -210,8 +201,6 @@ void gstlal_frhistory_set_comment(GstLALFrHistory *self, const gchar *comment)
 
 const gchar *gstlal_frhistory_get_comment(const GstLALFrHistory *self)
 {
-	g_return_val_if_fail(GSTLAL_IS_FRHISTORY(self), NULL);
-
 	return self->comment;
 }
 
@@ -232,8 +221,6 @@ const gchar *gstlal_frhistory_get_comment(const GstLALFrHistory *self)
 
 const gchar *gstlal_frhistory_get_name(const GstLALFrHistory *self)
 {
-	g_return_val_if_fail(GSTLAL_IS_FRHISTORY(self), NULL);
-
 	return self->name;
 }
 
@@ -271,12 +258,8 @@ void gstlal_frhistory_free(GstLALFrHistory *self)
 
 gint gstlal_frhistory_compare_by_time(gconstpointer a, gconstpointer b)
 {
-	guint32 t_a, t_b;
-
-	g_return_val_if_fail(GSTLAL_IS_FRHISTORY(a) && GSTLAL_IS_FRHISTORY(b), -1);
-
-	t_a = ((const GstLALFrHistory *) a)->time;
-	t_b = ((const GstLALFrHistory *) b)->time;
+	guint32 t_a = ((const GstLALFrHistory *) a)->time;
+	guint32 t_b = ((const GstLALFrHistory *) b)->time;
 
 	if(t_a == (guint32) -1)
 		t_a = 0;	/* smallest allowed value */
@@ -303,8 +286,7 @@ static GstLALFrHistory *copy_conditional(GstLALFrHistory *src)
 
 static void to_string(const GValue *src, GValue *dst)
 {
-	g_return_if_fail(src != NULL);
-	g_return_if_fail(dst != NULL);
+	g_return_if_fail(GSTLAL_VALUE_HOLDS_FRHISTORY(src));
 
 	dst->data[0].v_pointer = gstlal_frhistory_to_string(src->data[0].v_pointer);
 }

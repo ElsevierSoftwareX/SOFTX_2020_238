@@ -52,8 +52,8 @@ G_BEGIN_DECLS
 	(gstlal_frhistory_get_type())
 #define GSTLAL_FRHISTORY(obj) \
 	((GstLALFrHistory *) (obj))
-#define GSTLAL_IS_FRHISTORY(obj) \
-	((obj) && (GSTLAL_FRHISTORY(obj)->type == GSTLAL_FRHISTORY_TYPE))
+#define GSTLAL_VALUE_HOLDS_FRHISTORY(x) \
+	((x) != NULL && G_VALUE_TYPE(x) == GSTLAL_FRHISTORY_TYPE)
 
 
 typedef struct _GstLALFrHistory GstLALFrHistory;
@@ -68,8 +68,6 @@ typedef struct _GstLALFrHistory GstLALFrHistory;
 
 
 struct _GstLALFrHistory {
-	GType type;
-
 	guint32 time;
 	gchar *comment;
 
