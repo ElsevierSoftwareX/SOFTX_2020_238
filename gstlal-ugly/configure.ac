@@ -274,7 +274,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [2.0.4])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.3.3])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -319,7 +319,7 @@ AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.16.17])
+AC_SUBST([MIN_GDS_VERSION], [2.17.0])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
