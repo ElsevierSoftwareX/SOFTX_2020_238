@@ -344,7 +344,7 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
 	return amp, phase
 
-def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max):
+def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
 
         # generate the waveform
 	# FIXME: waveform approximant should not be fixed.	
@@ -352,8 +352,8 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 		    				    1./sampleRate,			# delta T
 						    m1*lal.MSUN_SI,			# mass 1 in kg
 						    m2*lal.MSUN_SI,			# mass 2 in kg
-						    0,0,0,				# Spin 1 x, y, z
-						    0,0,0,				# Spin 2 x, y, z
+						    spin1x, spin1y, spin1z,		# Spin 1 x, y, z
+						    spin2x, spin2y, spin2z,		# Spin 2 x, y, z
 						    flower,				# Lower frequency
 						    0,					# Reference frequency 40?
 						    1.e6*lal.PC_SI,			# r - distance in M (convert to MPc)
@@ -520,9 +520,18 @@ class Bank(object):
 		    while(spiir_match < minimum_match and epsilon > 0 and req_minimum_match):
 			m1 = row.mass1
 			m2 = row.mass2
+			
+			spin1x = row.spin1x
+			spin1y = row.spin1y
+			spin1z = row.spin1z
+
+			spin2x = row.spin2x
+			spin2y = row.spin2y
+			spin2z = row.spin2z
+
 			fFinal = row.f_final
 
-			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, 1, working_length, working_duration, length_max)
+			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, 1, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
 
 	              	# make the iir filter coeffs
        	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
