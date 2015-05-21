@@ -40,15 +40,15 @@ set-far-thresh :
 prior.cache :
 	gstlal_ll_inspiral_create_prior_diststats \
 		--write-likelihood-cache $@ \
-		--segment-and-horizon=H1:1000000000:1000010000:60 \
-		--segment-and-horizon=L1:1000000000:1000010000:120 \
-		--segment-and-horizon=V1:1000000000:1000010000:30 \
-		--segment-and-horizon=H1:1000010000:1000020000:60 \
-		--segment-and-horizon=L1:1000010000:1000020000:120 \
-		--segment-and-horizon=H1:1000020000:1000030000:60 \
-		--segment-and-horizon=V1:1000020000:1000030000:30 \
-		--segment-and-horizon=L1:1000030000:1000040000:120 \
-		--segment-and-horizon=V1:1000030000:1000040000:30 \
+		--segment-and-horizon=H1:1000000000:1000000100:60 \
+		--segment-and-horizon=L1:1000000000:1000000100:120 \
+		--segment-and-horizon=V1:1000000000:1000000100:30 \
+		--segment-and-horizon=H1:1000000100:1000000200:60 \
+		--segment-and-horizon=L1:1000000100:1000000200:120 \
+		--segment-and-horizon=H1:1000000200:1000000300:60 \
+		--segment-and-horizon=V1:1000000200:1000000300:30 \
+		--segment-and-horizon=L1:1000000300:1000000400:120 \
+		--segment-and-horizon=V1:1000000300:1000000400:30 \
 		--num-banks $(shell wc -l $(H1_BANK_CACHE) | awk '{print $1}') \
 		--verbose
 
