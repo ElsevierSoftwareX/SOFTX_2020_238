@@ -19,6 +19,7 @@ pkgpython_PYTHON = \
 	inspiral.py \
 	lloidparts.py \
 	lloidplots.py \
+	llweb.py \
 	plotfar.py \
 	rate_estimation.py \
 	spiirparts.py \
