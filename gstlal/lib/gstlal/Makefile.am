@@ -57,6 +57,8 @@ CLEANFILES += gstlal_peakfinder.h gstlal_peakfinder_types.h
 INTROSPECTION_GIRS =
 INTROSPECTION_SCANNER_ARGS = --warn-all --add-include-path=$(srcdir) --identifier-prefix GstLAL --identifier-prefix gstlal_frhistory
 INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
+dist_gir_DATA =
+typelib_DATA =
 
 if HAVE_INTROSPECTION
 INTROSPECTION_GIRS += GstLAL-$(GIR_VERSION).gir
@@ -70,7 +72,7 @@ GstLAL_@GIR_VERSION_@_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c gstlal_f
 GstLAL_@GIR_VERSION_@_gir_NAMESPACE = GstLAL
 GstLAL_@GIR_VERSION_@_gir_VERSION = $(GIR_VERSION)
 
-dist_gir_DATA = $(INTROSPECTION_GIRS)
-typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+dist_gir_DATA += $(INTROSPECTION_GIRS)
+typelib_DATA += $(INTROSPECTION_GIRS:.gir=.typelib)
 CLEANFILES += $(dist_gir_DATA) $(typelib_DATA)
 endif
