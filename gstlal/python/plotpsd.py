@@ -33,22 +33,12 @@
 import logging
 import math
 import matplotlib
-matplotlib.rcParams.update({
-	"font.size": 8.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
-	"text.usetex": True,
-	"path.simplify": True
-})
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from gstlal.plotutil import golden_ratio
+from glue.ligolw import lsctables
+from gstlal.reference_psd import horizon_distance
 
 def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
 	"""!
@@ -82,7 +72,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	else:
 		# Use the cannonical BNS binary for horizon distance if an event wasn't given
 		sngl_inspirals = {}
-		mass1, mass2 = 1.4, 1.4
+		mass1, mass2, end_time = 1.4, 1.4, 0
 
 	fig = figure.Figure()
 	FigureCanvas(fig)

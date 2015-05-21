@@ -19,20 +19,24 @@
 #
 # ### Review Status
 #
-# STATUS: Not reviewed, actions must be dealt with
+# STATUS: reviewed with actions
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Names                                               | Hash                                        | Date       |
+# | -------------------------------------------         | ------------------------------------------- | ---------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad      | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Florent, Surabhi, Tjonnie, Kent, Jolien, Kipp, Chad | 0d7301a22ad3346f1283d3a1917b67aa7ec1c1ab    | 2015-05-12 |
 #
 # #### Action items
 #
-# - Are all waveform approximants being conditioned properly?
-# - Is the PSD being conditioned properly, .e.g, high Q lines, wandering lines?
-# - Test waveform conditioning in isolation and analysis DAGs 
-# - Is the @f$\sigma^{2}@f$ calculation correct?
-
-
+# - Consider changing the order of interpolation and smoothing the PSD
+# - Remove Jolien's function and get the new flow from lalsimulation to use XLALSimInspiralChirpStartFrequencyBound() and friends
+# - move sigma squared calculation somewhere and get them updated dynamically
+# - possibly use ROM stuff, possibly use low-order polynomial approx computed on the fly from the template as it's generated
+# - remove lefttukeywindow()
+# - use template_bank_row.coa_phase == 0. in SimInspiralFD() call, make sure itac adjusts the phase it assigns to triggers from the template coa_phase
+# - change "assumes fhigh" to "asserts fhigh"
+# - move assert epoch_time into condition_imr_waveform(), should be assert -len(data) <= epoch_time * sample_rate < 0
+#
 ## @package cbc_template_fir
 
 #
@@ -62,6 +66,7 @@ from gstlal.reference_psd import interpolate_psd, horizon_distance
 
 
 from gstlal import templates
+from gstlal import chirptime
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -84,15 +89,6 @@ def tukeywindow(data, samps = 200.):
 	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
 
 
-def lefttukeywindow(data, samps = 200.):
-	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = float(samps) / len(data)
-	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
-	wn[len(wn)//2:] = 1.0
-	return wn
-
-
-
 def generate_template(template_bank_row, approximant, sample_rate, duration, f_low, f_high, amporder = 0, order = 7, fwdplan = None, fworkspace = None):
 	"""
 	Generate a single frequency-domain template, which
@@ -100,13 +96,13 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (2) has an IFFT which is duration seconds long and
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
-	if approximant in templates.gstlal_FD_approximants:
+	if approximant in templates.gstlal_approximants:
 
 		# FIXME use hcross somday?
 		# We don't here because it is not guaranteed to be orthogonal
 		# and we add orthogonal phase later
 
-		hplus,hcross = lalsim.SimInspiralChooseFDWaveform(
+		hplus,hcross = lalsim.SimInspiralFD(
 			0., # phase
 			1.0 / duration, # sampling interval
 			lal.MSUN_SI * template_bank_row.mass1,
@@ -119,8 +115,9 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 			template_bank_row.spin2z,
 			f_low,
 			f_high,
-			f_high, #FIXME chosen until suitable default value for f_ref is defined
+			0., #FIXME chosen until suitable default value for f_ref is defined
 			1.e6 * lal.PC_SI, # distance
+			0., # redshift
 			0., # inclination
 			0., # tidal deformability lambda 1
 			0., # tidal deformability lambda 2
@@ -135,85 +132,37 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		z = hplus.data.data
 		assert len(z) == int(round(sample_rate * duration))//2 +1
 
-	elif approximant in templates.gstlal_TD_approximants:
-
-		# FIXME use hcross somday?
-		# We don't here because it is not guaranteed to be orthogonal
-		# and we add orthogonal phase later
-
-		hplus,hcross = lalsim.SimInspiralChooseTDWaveform(
-			0., # phase
-			1.0 / sample_rate, # sampling interval
-			lal.MSUN_SI * template_bank_row.mass1,
-			lal.MSUN_SI * template_bank_row.mass2,
-			template_bank_row.spin1x,
-			template_bank_row.spin1y,
-			template_bank_row.spin1z,
-			template_bank_row.spin2x,
-			template_bank_row.spin2y,
-			template_bank_row.spin2z,
-			f_low,
-			0, # reference frequency?
-			1.e6 * lal.PC_SI, # distance
-			0., # inclination
-			0., # tidal deformability lambda 1
-			0., # tidal deformability lambda 2
-			None, # waveform flags
-			None, # Non GR params
-			amporder,
-			order,
-			lalsim.GetApproximantFromString(str(approximant))
-			)
-
-		# Taper a couple of cycles at the start
-		hplus.data.data *= lefttukeywindow(hplus.data.data, samps = int(4 * sample_rate / f_low))
-		data = numpy.zeros((sample_rate * duration,))
-		data[-hplus.data.length:] = hplus.data.data
-
-		tseries = laltypes.REAL8TimeSeries(
-			name = "template",
-			epoch = laltypes.LIGOTimeGPS(0),
-			f0 = 0.0,
-			deltaT = 1.0 / sample_rate,
-			sampleUnits = laltypes.LALUnit("strain"),
-			data = data
-		)
-
-		lalfft.XLALREAL8TimeFreqFFT(fworkspace, tseries, fwdplan)
-		z = numpy.copy(fworkspace.data)
-
 	else:
 		raise ValueError("Unsupported approximant given %s" % approximant)
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
-		epoch = laltypes.LIGOTimeGPS(0),
+		epoch = laltypes.LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
 		f0 = 0.0,
 		deltaF = 1.0 / duration,
 		sampleUnits = laltypes.LALUnit("strain"),
 		data = z
 	)
 
-def condition_imr_template(approximant, data, sample_rate_max, max_mass):
-	# sample index of peak amplitude
-	max_index = numpy.argmax(numpy.abs(data))
+def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
+	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
+	# find the index for the peak sample using the epoch returned by
+	# the waveform generator
+	epoch_index = -int(epoch_time*sample_rate_max) - 1
+	# align the peaks according to an overestimate of max rinddown
+	# time for a given split bank
+	target_index = len(data)-1 - int(sample_rate_max * max_ringtime)
 	# rotate phase so that sample with peak amplitude is real
-	phase = numpy.arctan2(data[max_index].real, data[max_index].imag)
-	data *= numpy.exp(1.j * phase)
-	# sample index where we want the peak to be.  300 M for the max
-	# mass to leave room for ringdown
-	target_index = len(data) - int(sample_rate_max * (300. * max_mass) * lal.MTSUN_SI)
-	assert target_index >= 0, "waveform too short"
-	# cyclically permute the samples so the sample with peak amplitude
-	# has the desired index
-	data = numpy.roll(data, target_index - max_index)
+	phase = numpy.arctan2(data[epoch_index].imag, data[epoch_index].real)
+	data *= numpy.exp(-1.j * phase)
+	data = numpy.roll(data, target_index-epoch_index)
 	# re-taper the ends of the waveform that got cyclically permuted
 	# around the ring
-	tukey_beta = 2. * abs(target_index - max_index) / float(len(data))
+	tukey_beta = 2. * abs(target_index - epoch_index) / float(len(data))
 	assert 0. <= tukey_beta <= 1., "waveform got rolled WAY too much"
 	data *= lal.CreateTukeyREAL8Window(len(data), tukey_beta).data.data
 	# done
-	return data
+	return data, target_index
 
 
 def compute_autocorrelation_mask( autocorrelation ):
@@ -372,8 +321,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# working f_low to actually use for generating the waveform
 	working_f_low_extra_time, working_f_low = joliens_function(f_low, template_table)
 
-	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sample_rate_max))
+	# Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
+	working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
 	# Smooth the PSD and interpolate to required resolution
@@ -412,7 +361,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	sigmasq = []
 
 	# Generate each template, downsampling as we go to save memory
-	max_mass = max([row.mass1+row.mass2 for row in template_table])
+	max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
 	for i, row in enumerate(template_table):
 		if verbose:
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
@@ -422,7 +371,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# waveform is generated for a canonical distance of 1 Mpc.
 		#
 
-		fseries = generate_template(row, approximant, sample_rate_max, working_duration, working_f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
@@ -446,22 +395,26 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
+		data = tseries.data
+		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
 		#
 		# extract the portion to be used for filtering
 		#
 
-		data = tseries.data[-length_max:]
 
 		#
 		# condition the template if necessary (e.g. line up IMR
 		# waveforms by peak amplitude)
 		#
 
-		if approximant in ("IMRPhenomB", "EOBNRv2"):
-			data = condition_imr_template(approximant, data, sample_rate_max, max_mass)
+		if approximant in templates.gstlal_IMR_approximants:
+			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
+			# record the new end times for the waveforms (since we performed the shifts)
+			row.set_end(laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max))
 		else:
 			data *= tukeywindow(data, samps = 32)
 
+		data = data[-length_max:]
 		#
 		# normalize so that inner product of template with itself
 		# is 2

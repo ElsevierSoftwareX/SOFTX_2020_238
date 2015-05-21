@@ -10,6 +10,20 @@
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
 
+/**
+ * SECTION:gstlal_snglinspiral.c
+ * @short_description:  Utilities for sngl inspiral 
+ * 
+ * Reviewed: 38c65535fc96d6cc3dee76c2de9d3b76b47d5283 2015-05-14 
+ * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
+ * 
+ * Actions:
+ *  56: free() should be LALFree()
+ * 67,79: outside of loop
+ * 144: add bankarray end time here to take into account the IMR waveform shifts
+ * 152: figure out how to use a more accurate sigmasq calculation
+ */
+
 double gstlal_eta(double m1, double m2)
 {
 	return m1 * m2 / pow(m1 + m2, 2);

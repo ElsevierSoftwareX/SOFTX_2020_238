@@ -268,21 +268,13 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 		lw.appendChild(root)
 
 		# FIXME FIXME FIXME move this clipping stuff to the Bank class
-		# Open template bank file
-		bank_xmldoc = ligolw_utils.load_filename(bank.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
-
-		# Get sngl inspiral table
-		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
-
 		# set the right clipping index
-		clipright = len(sngl_inspiral_table) - clipright
+		clipright = len(bank.sngl_inspiral_table) - clipright
 		
 		# Apply clipping option to sngl inspiral table
-		sngl_inspiral_table = sngl_inspiral_table[clipleft:clipright]
-
 		# put the bank table into the output document
 		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
-		for row in sngl_inspiral_table:
+		for row in bank.sngl_inspiral_table[clipleft:clipright]:
 			new_sngl_table.append(row)
 
 		# put the possibly clipped table into the file

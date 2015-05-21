@@ -15,6 +15,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## 
+# @file
+#
+# A file that contains the rate estimation code.
+#
+# Review Status: Reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# |          Sathya, Duncan Me, Jolien, Kipp, Chad | 2fb185eda0edb9d49d79b8185f7b35457cafa06b    | 2015-05-14 |
+#
+# #### Actions
+# - Increase nbins to at least 10,000
+# - Check max acceptance
 
 #
 # =============================================================================
@@ -149,7 +163,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = None):
+def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
 	"""
 	FIXME:  document this
 	"""
@@ -159,6 +173,8 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 
 	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
 		raise ValueError("NaN log likelihood ratio encountered")
+	if nsample < 0:
+		raise ValueError("nsample < 0: %d" % nsample)
 
 	#
 	# for each sample of the ranking statistic, evaluate the ratio of
@@ -196,8 +212,6 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 
 	ndim = 2
 	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
-	if nsample is None:
-		nsample = 400000
 	nburn = 1000
 
 	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")

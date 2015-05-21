@@ -26,6 +26,15 @@
 #	+ `--likelihood-cache` [filename]: Set the cache file name from which to read likelihood files
 #	+ `--verbose`: Be verbose.
 #
+# ### Review status
+#
+# | Names 	                                | Hash 					      | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Jolien, Kipp, Chad | ca54624dac65388bc8dfd0d8f5ed5d187fbcb99a  | 2015-05-14 |
+#
+# #### Action
+# - none
+#
 # =============================================================================
 #
 #                                   Preamble
@@ -189,8 +198,7 @@ ranking_data.finish(verbose = options.verbose)
 
 distributions.process_id = ranking_data.process_id = process.process_id
 far.gen_likelihood_control_doc(xmldoc, process, distributions, ranking_data, seglists)
-search_summary.set_ifos(seglists.keys())
-search_summary.set_in(seglists.extent_all())
-search_summary.set_out(search_summary.get_in())
+search_summary.instruments = seglists.keys()
+search_summary.in_segment = search_summary.out_segment = seglists.extent_all()
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

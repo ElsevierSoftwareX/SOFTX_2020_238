@@ -159,7 +159,7 @@ for filename in filenames:
 			# Chirptime uses SI
 			m1_SI, m2_SI = MSUN_SI * row.mass1, MSUN_SI * row.mass2
 
-			if options.approximant in ('IMRPhenomB', 'EOBNRv2'):
+			if options.approximant in templates.gstlal_IMR_approximants:
 				# make sure to go a factor of 2 above the ringdown frequency for safety
 				row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
 			else:

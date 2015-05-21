@@ -102,7 +102,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
-	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to a negative number to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
+	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to 0 to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -294,7 +294,12 @@ if options.verbose:
 	progressbar = ProgressBar()
 else:
 	progressbar = None
-signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, chain_file = h5py.File(options.chain_file) if options.chain_file is not None else None)
+kwargs = {}
+if options.chain_file is not None:
+	kwargs["chain_file"] = h5py.File(options.chain_file)
+if options.samples is not None:
+	kwargs["nsamples"] = options.samples
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
 del progressbar
 
 

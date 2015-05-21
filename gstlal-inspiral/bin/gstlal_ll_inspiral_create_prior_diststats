@@ -135,7 +135,7 @@ diststats = far.ThincaCoincParamsDistributions()
 
 diststats.add_background_prior(n = n_background, ba = "background_rates", prefactors_range = tuple(float(x) for x in options.background_prefactors.split(",")), verbose = options.verbose)
 diststats.add_background_prior(n = n_zerolag, ba = "zero_lag_rates", prefactors_range = tuple(float(x) for x in options.background_prefactors.split(",")), verbose = options.verbose)
-diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e12) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), verbose = options.verbose)
+diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e6) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), verbose = options.verbose)
 
 #
 # Update the horizon distance history with our fake, user provided horizon history

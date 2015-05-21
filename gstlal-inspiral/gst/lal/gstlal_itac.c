@@ -18,6 +18,50 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+/**
+ * SECTION:gstlal_itac
+ * @short_description:  Compute inspiral triggers
+ *
+ * Reviewed: a2347a2191cdea431a256abc1651736a2c28bfda 2015-05-13 
+ * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
+ *
+ * Actions:
+ *
+ *	- sigma^2 range should be limited to non-negative numbers
+ *	- delete the commented out "+ ..." thing in the
+ *	  next_buffer_timestamp initialization
+ *	- line 521 ">" should be ">="
+ *	- edit comment on line 535
+ *	- check that there's a test that autocorrelation length is odd:
+ *	  yes, done
+ *	- modify allowed range for n to exclude 0
+ *	- fix mask
+ *	- don't initialize properties in instance_init() that get
+ *	  PARAM_CONSTRUCT'ed
+ *	- event handler:
+ *		- make sure succes is &='ed everywhere
+ *		- move the default() chain out of switch (all cases do
+ *		  it)
+ *	- move update of channel and instrument names in tags event
+ *	  handler to inside the mutex-protected code
+ *	- ABSFUNC() macros:  use .im, .re to get real and imaginary
+ *	  parts
+ *	- ABSFUNC() macros:  parentheses around real versions
+ *	- peak_state_free():  whole thing should be in an
+ *	  if(val) { ... }
+ *	- peak_state_clear():  sizeof()s should be tied to types by
+ *	  compiler
+ *	- peak_state_clear():  memset()s shouldn't be passed 0.0
+ *	- peak_state_clear():  maybe add a .as_void element to the
+ *	  unions to use instead of .as_float to aid readability in cases
+ *	  where the type isn't really being assumed
+ *	- maybe clean up case in peak_state init function
+ *	- peak_state init default case leaks memory.  Kipp suggests
+ *	  g_assert_not_reached().
+ *	- peak_state:  maybe check all g_assert()s in defaults 
+ *
+ */
+
 
 /*
  * ========================================================================
@@ -498,7 +542,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(element->maxdata, dataptr.as_complex, (float complex *) element->snr_mat, element->maxdata->pad);
-			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			}
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2);

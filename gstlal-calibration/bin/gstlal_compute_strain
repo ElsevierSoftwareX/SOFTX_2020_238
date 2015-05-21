@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010-2014  Jordi Burguet-Castell, Madeline Wade
+# Copyright (C) 2010-2015  Jordi Burguet-Castell, Madeline Wade
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -34,9 +34,9 @@ Further documentation explaining the time domain calibration procedure can be fo
 
 Example: To run this pipeline on some of the earliest locked stretches of the LLO instrument, first query for the locked segments
 
-$ ligolw_segment_query --query-segments --segment-url https://segdb-er.ligo.caltech.edu --gps-start-time `lalapps_tconvert October 1 2014` --gps-end-time `lalapps_tconvert now` --include-segments L1:DMT-DC_READOUT --result-name datasegments > L1_segments.xml
+$ ligolw_segment_query_dqsegdb --query-segments ligolw_segment_query_dqsegdb --segment-url=https://dqsegdb5.phy.syr.edu/ --gps-start-time `lalapps_tconvert November 13 2014` --gps-end-time `lalapps_tconvert now` --include-segments L1:DMT-DC_READOUT --result-name datasegments > L1_segments.xml
 
-The above command will write the locked segments for which the DMT-DC_READOUT flag was on from October 1, 2014 until now to a file called L1_segments.xml. To take a look at the start and stop times 
+The above command will write the locked segments for which the DMT-DC_READOUT flag was on from November 13, 2014 until now to a file called L1_segments.xml. To take a look at the start and stop times 
 
 $ ligolw_print -t segment -c start_time -c end_time L1_segments.xml
 
@@ -46,15 +46,13 @@ $ ligo_data_find -o L -t L1_R -s start_time -e end_time -l --url-type file > L1_
 
 where you can choose start_time and end_time to be any GPS time within these segments, for example
 
-$ ligo_data_find -o L -t L1_R -s 1096167450 -e 1096291128 -l --url-type file > L1_frames.cache
+$ ligo_data_find -o L -t L1_R -s 1100513916 -e 1104641381 -l --url-type file > L1_frames.cache
 
-Now create calibrated data by running this executable with the following command line options,
+Now create calibrated data by running this executable with the following command line options
 
-$ gstlal_compute_strain --data-source frames --frame-cache L1_frames.cache --frame-segments-file L1_segments.xml --gps-start-time 1096261732 --gps-end-time 1096261832 --output-channel-name=LSC-STRAIN --sample-rate=16384 --dq-channel-name=ODC-MASTER_CHANNEL_OUT_DQ --science-locked-mask 5 --locked-mask 4  --frame-duration=4 --frames-per-file=1 --darm-err-channel-name=CAL-DELTAL_RESIDUAL_DQ --darm-ctrl-channel-name=CAL-DELTAL_CTRL_DQ --filters-file ER6_filters.npz --no-gamma --frame-segments-name datasegments --ifo L1 --frame-type L1_GSTLAL_CAL
+$ gstlal_compute_strain --data-source frames --frame-cache L1_frames.cache --frame-segments-file L1_segments.xml --gps-start-time 1100513916 --gps-end-time 1100514016 --output-channel-name=GDS-CALIB_STRAIN --dq-channel-name=ODC-MASTER_CHANNEL_OUT_DQ --frame-duration=4 --frames-per-file=1 --darm-err-channel-name=CAL-DARM_ERR_WHITEN_OUT_DQ --darm-ctrl-channel-name=CAL-DARM_CTRL_WHITEN_OUT_DQ --filters-file FILTERSFILE --frame-segments-name datasegments --ifo L1
 
-The above command requires the filters file called ER6_filters.npz.  This file can be found at LLO in /home/wademc/calibration/calibrate/. This will write four second frame files containing 1 second frames for a just a short, 100 second chunk of time.  You can also write to shared memory by specifying --write-to-shm-partition=PARTITION-NAME.
-
-NOTE: For these early lock stretches, DARM_ERR was not whitened.  However, DARM_ERR is now being whitened.  To appropriately calibrate the early lock stretches, you must comment out the dewhitener in the DARM_ERR branch below.
+The above command requires the filters file, all of which can be found in the calibration SVN. This will write four second frame files containing one four second frame for a just a short, 100 second chunk of time.  You can also write to shared memory by specifying --write-to-shm-partition=PARTITION-NAME.
 
 Type gstlal_compute_strain --help to see the full list of command line options.
 """
@@ -130,18 +128,16 @@ parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required for --data-source=frames")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required for --data-source=frames")
 parser.add_option("--wings", metavar = "seconds", type = "int", help = "Number of seconds to trim off of the beginning and end of the output")
-parser.add_option("--dq-channel-name", metavar = "name", help = "Set the name of the data quality (or state vector) channel.")
+parser.add_option("--dq-channel-name", metavar = "name", default = "ODC-MASTER_CHANNEL_OUT_DQ", help = "Set the name of the data quality (or state vector) channel. (Default=ODC-MASTER_CHANNEL_OUT_DQ)")
 parser.add_option("--ifo", metavar = "name", help = "Name of the IFO to be calibrated.")
-parser.add_option("--shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition.")
+parser.add_option("--shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition to read from (only if --data-source=lvshm).")
 parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Required for --data-source=frames")
 parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required if --frame-segments-file is given")
-parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
+parser.add_option("--output-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "The name of the channel in the output frames. (Default = GDS-CALIB_STRAIN")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
-parser.add_option("--dq-sample-rate", metavar = "Hz", default = 1, type = "int", help = "Sample rate for the outgoing DQ vector GDS-CALIB_STATE_VECTOR. (Default = 1 Hz)")
-parser.add_option("--science-locked-mask", metavar = "bit", type = "int", default = 3, help = "Set the bit mask for bits that must be on for the instrument/susbystem to be both locked and in science mode. (Default = 0x1)")
-parser.add_option("--locked-mask", metavar = "bit", type = "int", default = 1, help = "Set the bit mask for bits that must be on for the instrument/subsystem to be locked. (Default = 0x2)")
-parser.add_option("--frame-duration", metavar = "seconds", type = "int", help = "Set the number of seconds for each frame.")
-parser.add_option("--frames-per-file", metavar = "count", type = "int", help = "Set the number of frames per frame file.")
+parser.add_option("--dq-sample-rate", metavar = "Hz", default = 16, type = "int", help = "Sample rate for the outgoing DQ vector GDS-CALIB_STATE_VECTOR. (Default = 16 Hz)")
+parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
+parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
 parser.add_option("--compression-scheme", metavar = "scheme", type = "int", default = 256, help = "Set the compression scheme for the framecpp_channelmux element. (Default=256, no compression)")
 parser.add_option("--compression-level", metavar = "level", type = "int", default = 0, help = "Set the compression level for the framecpp_channelmux element. (Default=0)")
 parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, frames will be written to a file.")
@@ -160,15 +156,15 @@ parser.add_option("--recolor", action = "store_true", help = "Recolor data to pr
 parser.add_option("--recolor-channel-name", metavar = "name", help = "Channel name to be recolored.")
 parser.add_option("--reference-psd", metavar = "name", help = "RECOLORING MODE: Set the name of psd xml file to whiten the data with. Use this option if you are whitening with a fixed PSD.")
 parser.add_option("--recolor-psd", metavar = "name", help = "RECOLORING MODE: Set the name of psd xml file to recolor the data with")
-parser.add_option("--track-psd", action = "store_true", help = "RECOORING MODE: Calculate PSD from input data and track with time. Use this option if you are adaptively whitening.")
+parser.add_option("--track-psd", action = "store_true", help = "RECOLORING MODE: Calculate PSD from input data and track with time. Use this option if you are adaptively whitening.")
 
 # These are options specific to the calibration mode of the pipeline
 parser.add_option("--filters-file", metavar="filename", help = "CALIBRATION MODE: Name of file containing filters (in npz format)")
 parser.add_option("--no-gamma", action = "store_true", help = "CALIBRATION MODE: Set this to turn off the calculation of \gamma from calibration lines.")
-parser.add_option("--actuation-sr", type = "int", metavar="Hz", default = 2048, help = "CALIBRATION MODE: Set the sample rate for the actuation filtering. (Default = 2048 Hz)")
-parser.add_option("--darm-ctrl-channel-name", metavar = "name", default = "LSC-DARM_CTRL", help = "CALIBRATION MODE: Set the name for the control signal channel. (Default: LSC-DARM_CTRL)")
-parser.add_option("--darm-err-channel-name", metavar = "name", default = "LSC-DARM_ERR", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default: LSC-DARM_ERR)")
+parser.add_option("--darm-ctrl-channel-name", metavar = "name", default = "CAL-DARM_CTRL_WHITEN_OUT_DQ", help = "CALIBRATION MODE: Set the name for the control signal channel. (Default: CAL-DARM_CTRL_WHTIEN_OUT_DQ)")
+parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_WHITEN_OUT_DQ", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default: CAL-DARM_ERR_WHITEN_OUT_DQ)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "LSC-DARM_CTRL_EXC_DAQ", help = "CALIBRATION MODE: Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = LSC-DARM_CTRL_EXC_DAQ)")
+parser.add_option("--control-chain-delay", metavar = "int", default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the control chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
 
 #
 # Parse options
@@ -252,7 +248,6 @@ else:
 # Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps
 sr = options.sample_rate
 dqsr = options.dq_sample_rate
-actuationsr = options.actuation_sr
 caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
 
 #
@@ -409,6 +404,8 @@ if options.recolor:
 else:
 	# Load in the filters file that contains filter coefficients, etc.
 	filters = numpy.load(options.filters_file)
+	actuationsr = int(filters["actuation_sr"])
+	dewhitenctrlsr = int(filters["dewhiten_ctrl_sr"])
 
 	# For comparisons with the second S6 epoch, uncomment the following lines
 	olgR = 3.2749237351091275e-2
@@ -439,9 +436,9 @@ else:
 	derr = pipeparts.mkprogressreport(pipeline, derr, "progress_src_derr_%s" % instrument)
 
 	# The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
-	# FIXME: Why is there an extra - one sample + length of filter latency required here?
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])+len(filters["inv_sensing"])-1, fir_matrix = [filters["inv_sensing"][::-1]], time_domain = True)
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])+len(filters["dewhiten_err"])-1, fir_matrix = [filters["dewhiten_err"][::-1]], time_domain = True)
+	# FIXME: Why is there an extra length of filter latency required here?
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])+len(filters["inv_sensing"]), fir_matrix = [filters["inv_sensing"][::-1]], time_domain = True)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])+len(filters["dewhiten_err"]), fir_matrix = [filters["dewhiten_err"][::-1]], time_domain = True)
 	
 	# DARM_CTRL branch
 	dctrl = pipeparts.mkaudiorate(pipeline, dctrl, skip_to_first = True, silent = False)
@@ -451,9 +448,12 @@ else:
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
 	# FIXME: Why is there an extra length of filter latency required here?
-	dctrl = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, dctrltee), quality = 9)
+	dctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, dctrltee), latency = -int(options.control_chain_delay), fir_matrix = [[1]], time_domain = True)
+	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])+len(filters["actuation"]), fir_matrix = [filters["actuation"][::-1]], time_domain = True)
+	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
+	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % dewhitenctrlsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["dewhiten_ctrl_delay"])+len(filters["dewhiten_ctrl"]), fir_matrix = [filters["dewhiten_ctrl"][::-1]], time_domain = True)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % sr)
@@ -469,17 +469,21 @@ else:
 
 		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = sr, time_domain = True, wI = wI, wR = wR)
 		gammaR = compute_gamma_bin.get_pad("gammaR")
+		gammaR = pipeparts.mkaudiorate(pipeline, gammaR, skip_to_first = True, silent = False)
 		gammaRtee = pipeparts.mktee(pipeline, gammaR)
 
 		gammaI = compute_gamma_bin.get_pad("gammaI")
+		gammaI = pipeparts.mkaudiorate(pipeline, gammaI, skip_to_first = True, silent = False)
 		gammaItee = pipeparts.mktee(pipeline, gammaI)
 	
+		# The \gamma(t) factors will not modify the sensing function during ER7.  Once the \gamma(t) calculation is fully commissioned, it will be used to modify the sensing chain.
 		# Mulitiply the derr branch by 1/gamma
-		derr_gamma = gst.element_factory_make("lal_multiplier")
-		derr_gamma.set_property("sync", True)
-		pipeline.add(derr_gamma)
-		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*100).link(derr_gamma)
-		pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gammaRtee, exponent = -1.0), max_size_time = gst.SECOND*100).link(derr_gamma)
+		#derr_gamma = gst.element_factory_make("lal_multiplier")
+		#derr_gamma.set_property("sync", True)
+		#pipeline.add(derr_gamma)
+		#pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND*100).link(derr_gamma)
+		#pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), exponent = -1.0).link(derr_gamma)
+		derr_gamma = derr
 
 	# Add DARM_ERR and DARM_CTRL to make h(t)
 	strain = gst.element_factory_make("lal_adder")
@@ -503,6 +507,11 @@ strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 if options.wings is not None:
 	strain = pipeparts.mkgeneric(pipeline, strain, "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
 	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False) # This audiorate fixes a segfault that results from lal_wings
+	if not options.no_gamma and not options.recolor:
+		gammaR = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
+		gammaR = pipeparts.mkaudiorate(pipeline, gammaR, skip_to_first = True, silent = False)
+		gammaI = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100), "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.wings) * gst.SECOND, final_timestamp = (int(options.gps_end_time) - options.wings) * gst.SECOND, timestamp = True)
+		gammaI = pipeparts.mkaudiorate(pipeline, gammaI, skip_to_first = True, silent = False)
 
 #
 # MAKE THE GDS-CALIB_STATE_VECTOR
@@ -510,30 +519,30 @@ if options.wings is not None:
 
 if not options.no_dq_vector:
 
+	science_quality_mask = 4 # FIXME: actually calculate this from EPICS
+
 	odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
 	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
 	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
+	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	# 
-	# SCIENCE-INTENT+LOCKED BIT BRANCH
+	# SCIENCE-INTENT BIT BRANCH
 	#
 
-	sciencelocked = pipeparts.mkqueue(pipeline, odcstatevectortee)
-	sciencelocked = pipeparts.mkgeneric(pipeline, sciencelocked, "lal_logical_undersampler", required_on = options.science_locked_mask, status_out = 2)
-	sciencelocked = pipeparts.mkcapsfilter(pipeline, sciencelocked, "audio/x-raw-int, rate=%d" % dqsr)
-	sciencelocked = pipeparts.mkprogressreport(pipeline, sciencelocked, "progress_odc_%s" % instrument)
-	sciencelockedtee = pipeparts.mktee(pipeline, sciencelocked)
-	
+	scienceintent = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100)
+	scienceintent = pipeparts.mkgeneric(pipeline, scienceintent, "lal_logical_undersampler", required_on = 2, status_out = 2)
+	scienceintent = pipeparts.mkcapsfilter(pipeline, scienceintent, "audio/x-raw-int, rate=%d" % dqsr)
+	scienceintenttee = pipeparts.mktee(pipeline, scienceintent)	
 
 	#
-	# LOCKED BIT BRANCH
+	# SCIENCE-QUALITY BIT BRANCH
 	#
 
-	locked = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.locked_mask, status_out = 4)
-	locked = pipeparts.mkcapsfilter(pipeline, locked, "audio/x-raw-int, rate=%d" % dqsr)
-	locked = pipeparts.mkprogressreport(pipeline, locked, "progress_locked_%s" % instrument)
-	lockedtee = pipeparts.mktee(pipeline, locked)
+	sciencequality = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = science_quality_mask, status_out = 4)
+	sciencequality = pipeparts.mkcapsfilter(pipeline, sciencequality, "audio/x-raw-int, rate=%d" % dqsr)
+	sciencequalitytee = pipeparts.mktee(pipeline, sciencequality)
 	
 	#
 	# H(t)-PRODUCED BIT BRANCH
@@ -550,11 +559,11 @@ if not options.no_dq_vector:
 	# FILTERS-OK BIT BRANCH
 	#
 	
-	# Set the FILTERS-OK bit based on science mode transitions
+	# Set the FILTERS-OK bit based on science-quality transitions
 	if not options.recolor:
-		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4, attack_length = -options.filter_settle_time * dqsr)
+		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, sciencequalitytee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4, attack_length = -options.filter_settle_time * dqsr)
 	else:
-		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4)
+		filtersok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, sciencequalitytee, max_size_time = gst.SECOND * 100), bit_vector = 16, threshold = 4)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 
 	#
@@ -562,14 +571,20 @@ if not options.no_dq_vector:
 	#
 	
 	if not options.no_gamma and not options.recolor:
-		# FIXME: What was I doing here? Why I am looking at sciencetee?
-		gammaok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, sciencetee), threshold = 0.8, control = pipeparts.mkqueue(pipeline, gammaRtee))
-		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRtee))	
-		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = -0.2, control = pipeparts.mkqueue(pipeline, gammaItee))
-		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaItee))
+		# FIXME: Threshold can only be positive... need to figure out corner cases.
+		gammaok = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), quality=9)
+		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, threshold = 0.8, bit_vector = 32)	
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
+		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100))	
+		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100))
+		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
 		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 32, nongap_is_control = True)
 		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
+		# FIXME: This needs to be replaced with a logical undersampler
+		gammaok = pipeparts.mkaudioundersample(pipeline, gammaok)
+		#gammaok = pipeparts.mkgeneric(pipeline, gammaok, "lal_logical_undersampler", required_on = 32, status_out = 32)
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 
 	#
 	# H(T)-OK BIT BRANCH
@@ -581,12 +596,25 @@ if not options.no_dq_vector:
 	pipeline.add(higher_bits)
 	pipeparts.mkqueue(pipeline, filtersok, max_size_time = gst.SECOND * 100).link(higher_bits)
 	pipeparts.mkqueue(pipeline, htproduced, max_size_time = gst.SECOND * 100).link(higher_bits)
-	pipeparts.mkqueue(pipeline, lockedtee, max_size_time = gst.SECOND * 100).link(higher_bits)
+	pipeparts.mkqueue(pipeline, sciencequalitytee, max_size_time = gst.SECOND * 100).link(higher_bits)
 	higher_bits_tee = pipeparts.mktee(pipeline, higher_bits)
 
 	# Now calculate h(t)-OK bit
 	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100), bit_vector = 1, threshold = 28)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
+
+	#
+	# HW INJECTION BITS
+	#	
+
+	hwinjcbc = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = 16777216, status_out = 64)
+	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, "audio/x-raw-int, rate=%d" % dqsr)
+
+	hwinjburst = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = 33554432, status_out = 128)
+	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, "audio/x-raw-int, rate=%d" % dqsr)
+
+	hwinjdetchar = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = 67108864, status_out = 256)
+	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, "audio/x-raw-int, rate=%d" % dqsr)
 
 	#
 	# COMBINE ALL BITS TO MAKE GDS-CALIB_STATE_VECTOR
@@ -596,10 +624,13 @@ if not options.no_dq_vector:
 	calibstatevector.set_property("sync", True)
 	pipeline.add(calibstatevector)
 	pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
-	pipeparts.mkqueue(pipeline, sciencelockedtee, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, scienceintenttee, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	if not options.no_gamma and not options.recolor:
 		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, hwinjcbc, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, hwinjburst, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	pipeparts.mkqueue(pipeline, hwinjdetchar, max_size_time = gst.SECOND * 100).link(calibstatevector)
 
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
@@ -615,13 +646,24 @@ if not options.no_dq_vector:
 
 	calibstatevector = pipeparts.mkaudiorate(pipeline, calibstatevector, skip_to_first = True, silent = False)
 
-	# Drop the gaps in data if wings are given so they don't get written to frames
-	if options.wings is not None:
-		calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND), threshold = 0, leaky = True)
-		if options.data_source != "white":
-			odcstatevector_out = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevector_out, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
-		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+
+# Gate everything with the strain channel so that no frames get written without a strain channel
+# These leaky gates also drop any gaps set by the "wings" option
+straintee = pipeparts.mktee(pipeline, strain)
+
+strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, straintee), control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+if not options.no_dq_vector:
+	calibstatevector = pipeparts.mkgate(pipeline, calibstatevector, control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+if options.data_source != "white":
+	if not options.no_dq_vector:
+		odcstatevector_out = pipeparts.mkgate(pipeline, odcstatevector_out, control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+if not options.no_gamma and not options.recolor:
+	if options.wings is None:
+		gammaR = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+		gammaI = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+	else:
+		gammaR = pipeparts.mkgate(pipeline, gammaR, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+		gammaI = pipeparts.mkgate(pipeline, gammaI, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 
 
 #
@@ -648,8 +690,8 @@ pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("s
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma and not options.recolor:
-	pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GAMMA-REAL" % instrument))
-	pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GAMMA-IMAGINARY" % instrument))
+	gammaR.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_REAL" % instrument))
+	gammaI.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_IMAGINARY" % instrument))
 
 # FIXME: More outputs need to be hooked up to the muxer
 
@@ -671,27 +713,26 @@ else:
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
 
-if options.data_source == "frames":
-	datasource.do_seek(pipeline, seekevent)
-	print >>sys.stderr, "seeking GPS start and stop times ..."
+# Seek the pipeline when necessary.  Note: The seekevent for frames is set above when command line is being parsed/sanity checked.
 
 # FIXME: This scheme assumes that the shared memory partitions are keeping up with real time when the data source is lvshm. This is probably not a good assumption outside of the DMT environment.
 if options.data_source == "white" or (options.data_source == "lvshm" and not options.no_gamma):
 	tm = time.gmtime()
 	NOW = lal.UTCToGPS(tm) * gst.SECOND
-	seek = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
-	if options.data_source == "white":
-		datasource.do_seek(pipeline, seek)	
-	elif options.data_source == "lvshm" and not options.no_gamma and not options.recolor:
-		if coshead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
-		if not coshead.send_event(seek):
-			raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
+	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
+if options.data_source == "white" or options.data_source == "frames":
+	datasource.do_seek(pipeline, seekevent)	
+	print >>sys.stderr, "seeking GPS start and stop times ..."
+if not options.no_gamma and not options.recolor and not options.data_source == "white" and not options.data_source == "frames":
+	if coshead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
+	if not coshead.send_event(seekevent):
+		raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
 			
-		if sinhead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
-		if not sinhead.send_event(seek):
-			raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
+	if sinhead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError("Element %s did not want to enter ready state" % sinhead.get_name())
+	if not sinhead.send_event(seekevent):
+		raise RuntimeError("Element %s did not handle seek event" % sinhead.get_name())
 		
 
 if options.verbose:

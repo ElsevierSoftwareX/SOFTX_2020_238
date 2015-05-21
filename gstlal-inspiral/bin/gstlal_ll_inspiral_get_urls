@@ -15,6 +15,16 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+# ### Review status
+#
+# | Names                                       | Hash                                        | Date       |
+# | ------------------------------------------- | ------------------------------------------- | ---------- |
+# | Florent, Jolien, Kipp, Chad                 | 8aad48d2d796642a2925c7d70dd207c06c0e9a70    | 2015-05-14 |
+#
+# #### Action
+# - none
+
 
 while true ; do
 	for f in $@; do

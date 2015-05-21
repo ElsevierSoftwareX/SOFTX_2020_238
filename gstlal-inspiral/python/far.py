@@ -15,6 +15,26 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+# The python module to implement false alarm probability and false alarm rate
+#
+# ### Review Status
+#
+# STATUS: reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Hanna, Cannon, Meacher, Creighton J, Robinet, Sathyaprakash, Messick, Dent, Blackburn | 7fb5f008afa337a33a72e182d455fdd74aa7aa7a    | 2014-11-05 |
+#
+# #### Action items
+#
+
+# - Address the fixed SNR PDF using median PSD which could be pre-computed and stored on disk. (Store database of SNR pdfs for a variety of horizon)
+# - The binning parameters are hard-coded too; Could it be a problem?
+# - Chisquare binning hasn't been tuned to be a good representation of the PDFs; could be improved in future
+
+## @package far
+
 
 #
 # =============================================================================
@@ -88,11 +108,30 @@ from pylal import snglcoinc
 #
 
 def logiv(v, z):
-	return numpy.log(ive(v,z)) + z
+	# from Abramowitz and Stegun (9.7.1), if mu = 4 v^2, then for large
+	# z:
+	#
+	# Iv(z) ~= exp(z) / (\sqrt(2 pi z)) { 1 - (mu - 1)/(8 z) + (mu - 1)(mu - 9) / (2! (8 z)^2) - (mu - 1)(mu - 9)(mu - 25) / (3! (8 z)^3) ... }
+	# Iv(z) ~= exp(z) / (\sqrt(2 pi z)) { 1 + (mu - 1)/(8 z) [-1 + (mu - 9) / (2 (8 z)) [1 - (mu - 25) / (3 (8 z)) ... ]]}
+	# log Iv(z) ~= z - .5 log(2 pi) log z + log1p(1 + (mu - 1)/(8 z) (-1 + (mu - 9)/(16 z) (1 - (mu - 25)/(24 z) ... )))
+
+	with numpy.errstate(divide = "ignore"):
+		a = numpy.log(ive(v,z))
+
+	# because this result will only be used for large z, to silence
+	# divide-by-0 complaints from inside log1p() when z is small we
+	# clip z to 1.
+	mu = 4. * v**2.
+	with numpy.errstate(divide = "ignore", invalid = "ignore"):
+		b = -math.log(2. * math.pi) / 2. * numpy.log(z)
+		z = numpy.clip(z, 1., PosInf)
+		b += numpy.log1p((mu - 1.) / (8. * z) * (-1. + (mu - 9.) / (16. * z) * (1. - (mu - 25.) / (24. * z))))
+
+	return z + numpy.where(z < 1e8, a, b)
 
 # See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
 def ncx2logpdf(x, k, l):
-	return - math.log(2.) -(x+l)/2. + (k/4. -1./2) * (numpy.log(x) - numpy.log(l)) + logiv(k/2-1, (l * x)**.5)
+	return -math.log(2.) - (x+l)/2. + (k/4.-.5) * (numpy.log(x) - numpy.log(l)) + logiv(k/2.-1., numpy.sqrt(l * x))
 
 def ncx2pdf(x, k, l):
 	return numpy.exp(ncx2logpdf(x, k, l))

@@ -15,6 +15,30 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
+## @file
+# The python module to implement things needed by gstlal_inspiral
+#
+# ### Review Status
+#
+# STATUS: reviewed with actions
+#
+# | Names                                          | Hash                                        | Date       |
+# | -------------------------------------------    | ------------------------------------------- | ---------- |
+# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 |
+#
+# #### Action items
+# - Document examples of how to get SNR history, etc., to a web browser in an offline search
+# - Long term goal: Using template duration (rather than chirp mass) should load balance the pipeline and improve statistics
+# - L651: One thing to sort out is the signal probability while computing coincs
+# - L640-L647: Get rid of obsolete comments
+# - L667: Make sure timeslide events are not sent to GRACEDB
+# - Lxxx: Can normalisation of the tail of the distribution pre-computed using fake data?
+# - L681: fmin should not be hard-coded to 10 Hz. horizon_distance will be horribly wrong if psd is constructed, e.g. using some high-pass filter. For example, change the default to 40 Hz.
+# - L817: If gracedb upload failed then it should be possible to identify the failure, the specifics of the trigger that encountered failure and a way of submitting the trigger again to gracedb is important. Think about how to clean-up failures.
+# - Mimick gracedb upload failures and see if the code crashes
+
+
+## @package inspiral
 
 #
 # =============================================================================
@@ -450,19 +474,16 @@ class CoincsDocument(object):
 
 	@property
 	def search_summary_outseg(self):
-		return self.search_summary.get_out()
+		return self.search_summary.out_segment
 
 
 	def add_to_search_summary_outseg(self, seg):
 		out_segs = segments.segmentlist([self.search_summary_outseg])
-		# FIXME:  (None, None) case for backwards compatiblity with
-		# older glue.  remove when we can rely on an up-to-date
-		# glue
-		if out_segs == [None] or out_segs == [(None, None)]:
+		if out_segs == [None]:
 			# out segment not yet initialized
 			del out_segs[:]
 		out_segs |= segments.segmentlist([seg])
-		self.search_summary.set_out(out_segs.extent())
+		self.search_summary.out_segment = out_segs.extent()
 
 
 	def get_next_sngl_id(self):
@@ -472,7 +493,7 @@ class CoincsDocument(object):
 	def T050017_filename(self, description, extension):
 		start, end = self.search_summary_outseg
 		start, end = int(math.floor(start)), int(math.ceil(end))
-		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.get_ifos())), description, start, end - start, extension)
+		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
 
 	def write_output_file(self, verbose = False):
@@ -484,10 +505,7 @@ class CoincsDocument(object):
 			# record the final state of the search_summary and
 			# process rows in the database
 			cursor = self.connection.cursor()
-			# FIXME:  (None, None) case for backwards
-			# compatibility with older glues.  remove when we
-			# can rely on an up-to-date glue
-			if seg is not None and seg != (None, None):
+			if seg is not None:
 				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
 			cursor.execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
 			cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
