@@ -200,6 +200,10 @@ class generic_node(InspiralNode):
 	dictionary of options related to input files and a dictionary of options
 	related to output files.  Otherwise it is a subclass of InspiralNode and thus
 	pipeline.CondorDAGNode
+
+	NOTE and important and subtle behavior - You can specify an option with
+	an empty argument by setting it to "".  However options set to None are simply
+	ignored.
 	"""
 	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}):
 		InspiralNode.__init__(self, job, dag, parent_nodes)
