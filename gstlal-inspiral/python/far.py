@@ -704,18 +704,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
 	# binnings (filter funcs look-up initialized in .__init__()
+	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200)))
 	binnings = {
 		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
-		"H1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"H1H2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"E1_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"E2_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"E3_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200))),
-		"E0_snr_chi": rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 260), rate.ATanLogarithmicBins(.001, 0.5, 200)))
+		"H1_snr_chi": snr_chi_binning,
+		"H2_snr_chi": snr_chi_binning,
+		"H1H2_snr_chi" :snr_chi_binning,
+		"L1_snr_chi": snr_chi_binning,
+		"V1_snr_chi": snr_chi_binning,
+		"E1_snr_chi": snr_chi_binning,
+		"E2_snr_chi": snr_chi_binning,
+		"E3_snr_chi": snr_chi_binning,
+		"E0_snr_chi": snr_chi_binning
 	}
+	del snr_chi_binning
 
 	def __init__(self, *args, **kwargs):
 		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
