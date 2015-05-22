@@ -1134,9 +1134,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# get the binned array we're going to process, sanity check
 		# input
 		binnedarray = pdf_dict[key]
-		assert not numpy.isnan(binnedarray.array).any()
-		assert not numpy.isinf(binnedarray.array).any()
-		assert (binnedarray.array >= 0.).all()
+		assert not numpy.isnan(binnedarray.array).any(), "%s rates array contains NaNs" % key
+		assert not numpy.isinf(binnedarray.array).any(), "%s rates array is not finite" % key
+		assert (binnedarray.array >= 0.).all(), "%s rates array contains negative values" % key
 
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
@@ -1154,10 +1154,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# normalize what remains to be a valid PDF, sanity check
 		# the result
+		all_zero = (binnedarray.array == 0.).all()
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.to_pdf()
-		assert not numpy.isnan(binnedarray.array).any()
-		assert (binnedarray.array >= 0.).all()
+		assert all_zero or not numpy.isnan(binnedarray.array).any(), "%s PDF array contains NaNs and rates array was not all 0" % key
+		assert (binnedarray.array >= 0.).all(), "%s PDF array contains negative values" % key
 
 		# if this is the numerator, convert (rho, chi^2/rho^2) PDFs
 		# into P(chi^2/rho^2 | rho).  don't bother unless some
