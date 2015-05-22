@@ -1131,8 +1131,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binnedarray.array /= binnedarray.array.sum()
 
 	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = math.sqrt(2) / 4.0, sigma = 10.):
-		# get the binned array we're going to process
+		# get the binned array we're going to process, sanity check
+		# input
 		binnedarray = pdf_dict[key]
+		assert not numpy.isnan(binnedarray.array).any()
+		assert not numpy.isinf(binnedarray.array).any()
+		assert (binnedarray.array >= 0.).all()
 
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
@@ -1148,9 +1152,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# slicing ourselves to avoid zeroing the at-threshold bin
 		binnedarray.array[:binnedarray.bins[0][self.snr_min],:] = 0.
 
-		# normalize what remains to be a valid PDF
+		# normalize what remains to be a valid PDF, sanity check
+		# the result
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.to_pdf()
+		assert not numpy.isnan(binnedarray.array).any()
+		assert (binnedarray.array >= 0.).all()
 
 		# if this is the numerator, convert (rho, chi^2/rho^2) PDFs
 		# into P(chi^2/rho^2 | rho).  don't bother unless some
