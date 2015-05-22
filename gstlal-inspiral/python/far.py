@@ -1554,7 +1554,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 			if progressbar is not None:
 				progressbar.increment()
-		# check for divide-by-zeros that weren't caught
+		# check for divide-by-zeros that weren't caught.  also
+		# finds NaNs if they're there
 		assert numpy.isfinite(pdf.array).all()
 
 		# convolve the samples with a Gaussian density estimation
@@ -1575,6 +1576,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			pdf.array[slices] = 0.
 		# convert bin counts to normalized PDF
 		pdf.to_pdf()
+		# one last sanity check
+		assert numpy.isfinite(pdf.array).all()
 		# done
 		return pdf
 
