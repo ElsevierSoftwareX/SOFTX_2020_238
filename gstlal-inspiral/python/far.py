@@ -1548,8 +1548,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			#
 			#	d count \propto D^2 |dD|
 			#	  count \propto Dhi^3 - Dlo**3
-			for D, Dhi, Dlo in max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]:
-				pdf[tuple(rice_rvs(snr_times_D / D))] += Dhi**3. - Dlo**3.
+			D_Dhi_Dlo_sequence = max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]
+			for snr, weight in zip(rice_rvs(snr_times_D / numpy.reshape(D_Dhi_Dlo_sequence[:,0], (len(D_Dhi_Dlo_sequence), 1))), D_Dhi_Dlo_sequence[:,1]**3. - D_Dhi_Dlo_sequence[:,2]**3.):
+				pdf[tuple(snr)] += weight
 
 			if progressbar is not None:
 				progressbar.increment()
