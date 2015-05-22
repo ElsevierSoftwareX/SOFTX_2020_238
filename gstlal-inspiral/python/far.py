@@ -709,7 +709,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
 		"H1_snr_chi": snr_chi_binning,
 		"H2_snr_chi": snr_chi_binning,
-		"H1H2_snr_chi" :snr_chi_binning,
+		"H1H2_snr_chi": snr_chi_binning,
 		"L1_snr_chi": snr_chi_binning,
 		"V1_snr_chi": snr_chi_binning,
 		"E1_snr_chi": snr_chi_binning,
