@@ -131,7 +131,7 @@ def logiv(v, z):
 
 # See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
 def ncx2logpdf(x, k, l):
-	return -math.log(2.) - (x+l)/2. + (k/4.-.5) * (numpy.log(x) - numpy.log(l)) + logiv(k/2.-1., numpy.sqrt(l * x))
+	return -math.log(2.) - (x+l)/2. + (k/4.-.5) * (numpy.log(x) - numpy.log(l)) + logiv(k/2.-1., numpy.sqrt(l) * numpy.sqrt(x))
 
 def ncx2pdf(x, k, l):
 	return numpy.exp(ncx2logpdf(x, k, l))
@@ -895,7 +895,44 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		lnP_noise += math.log(0.01)
 		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
 
-	def add_background_prior(self, instruments, n = 1., transition = 23., verbose = False):
+	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
+		if verbose:
+			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
+		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
+		for instrument, number_of_events in n.items():
+			binarr = rates_dict["%s_snr_chi" % instrument]
+			if verbose:
+				progressbar = ProgressBar(instrument, max = len(pfs))
+			else:
+				progressbar = None
+
+			# will need to normalize results so need new storage
+			new_binarr = rate.BinnedArray(binarr.bins)
+
+			# NOTE remove extreme bins in case of ATan bins that
+			# can cause overflows. Also remove bins below our snr
+			# threshold
+			snrmin, snrmax = new_binarr.bins[0][self.snr_min], new_binarr.bins[0][1e10]
+			snr, dsnr = new_binarr.bins[0].centres()[snrmin:snrmax], new_binarr.bins[0].upper()[snrmin:snrmax] - new_binarr.bins[0].lower()[snrmin:snrmax]
+			rcossmin, rcossmax = new_binarr.bins[1][1e-10], new_binarr.bins[1][1e10]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossmin:rcossmax], new_binarr.bins[1].upper()[rcossmin:rcossmax] - new_binarr.bins[1].lower()[rcossmin:rcossmax]
+
+			snrs2 = snr**2
+			snrchi2 = numpy.outer(snrs2, rcoss) * df
+
+			for pf in pfs:
+				if progressbar is not None:
+					progressbar.increment()
+				new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
+
+			# Add an SNR power law in with the differentials
+			dsnrdchi2 = numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
+			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= dsnrdchi2
+			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= number_of_events / new_binarr.array.sum()
+			# add to raw counts
+			binarr += new_binarr
+
+	def add_background_prior(self, n = {"H1": 10000, "L1": 10000, "V1": 10000}, prefactors_range = (0.5, 20.), df = 40, inv_snr_pow = 2., ba = "background_rates", verbose = False):
 		#
 		# populate snr,chi2 binnings with a slope to force
 		# higher-SNR events to be assesed to be more significant
@@ -905,49 +942,37 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		if verbose:
 			print >>sys.stderr, "adding tilt to (SNR, \\chi^2) background PDFs ..."
-		for instrument in instruments:
-			binarr = self.background_rates["%s_snr_chi" % instrument]
-			if verbose:
-				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
-			else:
-				progressbar = None
+		for instrument, number_of_events in n.items():
+			binarr = getattr(self, ba)["%s_snr_chi" % instrument]
 
 			# will need to normalize results so need new
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
-			# don't compute this in the loop
-			transition_factor = transition**5. * math.exp(-transition**2. / 2.)
-			# iterate over all bins
-			dchi2_over_snr2s = new_binarr.bins[1].upper() - new_binarr.bins[1].lower()
-			dchi2_over_snr2s[numpy.isinf(dchi2_over_snr2s)] = 0.
-			for snr, dsnr in zip(new_binarr.bins[0].centres(), new_binarr.bins[0].upper() - new_binarr.bins[0].lower()):
-				# normalization is irrelevant.  overall
-				# normalization will be imposed afterwards.
-				# tilt looks like expected behaviour for
-				# Gaussian noise + softer fall-off above
-				# some transition SNR to avoid zero-valued
-				# bins
-				#
-				# NOTE:  expression split up so that if a
-				# numerical overflow or underflow occurs we
-				# can see which part of the expression was
-				# the problem from the traceback
-				if math.isinf(dsnr):
-					continue
-				p = math.exp(-snr**2. / 2.)
-				p += transition_factor / snr**5.
-				new_binarr[snr,:] += p * dsnr * dchi2_over_snr2s
-				if progressbar is not None:
-					progressbar.increment()
-			# zero everything below the search threshold and
-			# normalize what's left to the requested count.
-			# need to do the slicing ourselves to avoid zeroing
-			# the at-threshold bin
-			new_binarr.array[:new_binarr.bins[0][self.snr_min],:] = 0.
-			new_binarr.array *= n / new_binarr.array.sum()
+
+			# NOTE remove extreme bins in case of ATan bins that
+			# can cause overflows. Also remove bins below our snr
+			# threshold
+			snrmin, snrmax = new_binarr.bins[0][self.snr_min], new_binarr.bins[0][1e10]
+			snr, dsnr = new_binarr.bins[0].centres()[snrmin:snrmax], new_binarr.bins[0].upper()[snrmin:snrmax] - new_binarr.bins[0].lower()[snrmin:snrmax]
+			rcossmin, rcossmax = new_binarr.bins[1][1e-10], new_binarr.bins[1][1e10]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossmin:rcossmax], new_binarr.bins[1].upper()[rcossmin:rcossmax] - new_binarr.bins[1].lower()[rcossmin:rcossmax]
+
+			psnr = numpy.exp(-(snr**2 - 6.**2)/ 2.) + (1 + 6.**6) / (1. + snr**6)
+			prcoss = numpy.ones(len(rcoss))
+
+			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] = numpy.outer(psnr * dsnr, prcoss * drcoss)
+
+			# Normalize what's left to the requested count.
+			# Give .1% of the requested events to this portion of the model
+			new_binarr.array *= 0.001 * number_of_events / new_binarr.array.sum()
 			# add to raw counts
-			self.background_rates["instruments"][self.instrument_categories.category([instrument]),] += n
+			getattr(self, ba)["instruments"][self.instrument_categories.category(frozenset([instrument])),] += number_of_events
 			binarr += new_binarr
+
+		# Give 99.9% of the requested events to the "glitch model"
+		ncopy = n.copy()
+		ncopy.update((ifo, x * 0.999) for ifo, x in n.items())
+		self.add_snrchi_prior(getattr(self, ba), ncopy, prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def add_instrument_combination_counts(self, segs, verbose = False):
 		#
@@ -1019,57 +1044,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for instruments, count in coincsynth.mean_coinc_count.items():
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
-
-	def add_foreground_snrchi_prior(self, instruments, n, prefactors_range, df, verbose = False):
-		if verbose:
-			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
-		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for instrument in instruments:
-			binarr = self.injection_rates["%s_snr_chi" % instrument]
-			if verbose:
-				progressbar = ProgressBar(instrument, max = len(binarr.bins[0]))
-			else:
-				progressbar = None
-
-			# will need to normalize results so need new
-			# storage
-			new_binarr = rate.BinnedArray(binarr.bins)
-
-			# iterate over all bins
-			chi2_over_snr2s = new_binarr.bins[1].centres()
-			dchi2_over_snr2s = new_binarr.bins[1].upper() - new_binarr.bins[1].lower()
-			dchi2_over_snr2s[numpy.isinf(dchi2_over_snr2s)] = 0.
-			for snr, dsnr in zip(new_binarr.bins[0].centres(), new_binarr.bins[0].upper() - new_binarr.bins[0].lower()):
-				if math.isinf(dsnr):
-					continue
-				# avoid computing things in loops
-				snr2 = snr**2.
-				dsnr_over_snr4 = dsnr / snr**4.
-				# iterate over chi2 bins
-				for chi2_over_snr2, dchi2_over_snr2 in zip(chi2_over_snr2s, dchi2_over_snr2s):
-					chi2 = chi2_over_snr2 * snr2 * df # We record the reduced chi2
-					with numpy.errstate(over = "ignore", divide = "ignore", invalid = "ignore"):
-						v = ncx2pdf(chi2, df, pfs * snr2)
-					# remove nans and infs, and barf if
-					# we got a negative number
-					v = v[numpy.isfinite(v)]
-					assert (v >= 0.).all(), v
-					# normalization is irrelevant,
-					# final result will have over-all
-					# normalization imposed
-					p = v.sum() * dsnr_over_snr4 * dchi2_over_snr2
-					assert p >= 0. and not (math.isinf(p) or math.isnan(p)), p
-					new_binarr[snr, chi2_over_snr2] = p
-				if progressbar is not None:
-					progressbar.increment()
-			# zero everything below the search threshold and
-			# normalize what's left to the requested count.
-			# need to do the slicing ourselves to avoid zeroing
-			# the at-threshold bin
-			new_binarr.array[:new_binarr.bins[0][self.snr_min],:] = 0.
-			new_binarr.array *= n / new_binarr.array.sum()
-			# add to raw counts
-			binarr += new_binarr
+	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.5), df = 40, inv_snr_pow = 4., verbose = False):
+		for instrument, number_of_events in n.items():
+			# NOTE a uniform prior is added that must be smaller than the uniform prior added for the background
+			self.injection_rates["%s_snr_chi" % instrument].array += 1. / number_of_events / self.injection_rates["%s_snr_chi" % instrument].array.size / 1e20
+		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
 		#
