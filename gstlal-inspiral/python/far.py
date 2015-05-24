@@ -1044,7 +1044,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for instruments, count in coincsynth.mean_coinc_count.items():
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
-	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.5), df = 40, inv_snr_pow = 4., verbose = False):
+	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		for instrument, number_of_events in n.items():
 			# NOTE a uniform prior is added that must be smaller than the uniform prior added for the background
 			self.injection_rates["%s_snr_chi" % instrument].array += 1. / number_of_events / self.injection_rates["%s_snr_chi" % instrument].array.size / 1e20
@@ -1111,21 +1111,31 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.array /= binnedarray.array.sum()
 
-	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = math.sqrt(2) / 4.0, sigma = 10.):
-		# get the binned array we're going to process, sanity check
-		# input
+	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 10., chisq_kernel_width = 0.1,  sigma = 10.):
+		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
-		assert not numpy.isnan(binnedarray.array).any(), "%s rates array contains NaNs" % key
-		assert not numpy.isinf(binnedarray.array).any(), "%s rates array is not finite" % key
-		assert (binnedarray.array >= 0.).all(), "%s rates array contains negative values" % key
-		all_zero = (binnedarray.array == 0.).all()
-
+		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
+		chisq_bins = binnedarray.bins[1]
 		snr_per_bin_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.]]
-		snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8
-		assert snr_kernel_bins >= 2.5, snr_kernel_bins	# don't let the window get too small
-		kernel = rate.gaussian_window(snr_kernel_bins, 5, sigma = sigma)
+		chisq_per_bin_at_0_02 = (chisq_bins.upper() - chisq_bins.lower())[chisq_bins[0.02]]
+
+		# Apply Silverman's rule so that the width scales with numsamples**(-1./6.) for a 2D PDF
+		snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8 / numsamples**(1./6.)
+		chisq_kernel_bins = chisq_kernel_width / chisq_per_bin_at_0_02 / numsamples**(1./6.)
+
+		# check the size of the kernel. We don't ever let it get
+		# smaller than the 2.5 times the bin size
+		if  snr_kernel_bins < 2.5:
+			snr_kernel_bins = 2.5
+			warnings.warn("Replacing snr kernel bins with 2.5")
+		if  chisq_kernel_bins < 2.5:
+			chisq_kernel_bins = 2.5
+			warnings.warn("Replacing chisq kernel bins with 2.5")
+
+		# Compute the KDE
+		kernel = rate.gaussian_window(snr_kernel_bins, chisq_kernel_bins, sigma = sigma)
 
 		# convolve with the bin count data
 		rate.filter_array(binnedarray.array, kernel)
@@ -1134,14 +1144,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# slicing ourselves to avoid zeroing the at-threshold bin
 		binnedarray.array[:binnedarray.bins[0][self.snr_min],:] = 0.
 
-		# normalize what remains to be a valid PDF, sanity check
-		# the result (but only for arrays with non-zero rates
-		# counts)
+		# normalize what remains to be a valid PDF
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.to_pdf()
-		if not all_zero:
-			assert not numpy.isnan(binnedarray.array).any(), "%s PDF array contains NaNs" % key
-			assert (binnedarray.array >= 0.).all(), "%s PDF array contains negative values" % key
 
 		# if this is the numerator, convert (rho, chi^2/rho^2) PDFs
 		# into P(chi^2/rho^2 | rho).  don't bother unless some
