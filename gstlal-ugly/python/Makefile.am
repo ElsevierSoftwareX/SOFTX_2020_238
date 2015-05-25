@@ -10,7 +10,6 @@ pkgpython_PYTHON = \
 	gviz_api.py \
 	httpinterface.py \
 	servicediscovery.py \
-	vetosrc.py \
 	spiirparts.py \
 	uni_datasource.py
 
