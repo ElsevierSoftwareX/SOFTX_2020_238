@@ -66,10 +66,13 @@ import resource
 import sys
 from optparse import OptionParser
 import signal
-import subprocess
 import socket
 import time
+import tempfile
+import math
+from collections import namedtuple
 
+import subprocess
 import multiprocessing
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -91,15 +94,18 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
+from gstlal import bottle
+from gstlal import datasource
+from gstlal import lloidparts
 from gstlal import far
+from gstlal import httpinterface
+from gstlal import hoftcache
 from gstlal import inspiral
 from gstlal import pipeparts
-from gstlal import lloidparts
+from gstlal import simulation
+
 from gstlal import spiirparts
 from gstlal import simplehandler
-from gstlal import inspiral
-from gstlal import httpinterface
-from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
   pass
@@ -107,41 +113,24 @@ ligolw_array.use_in(LIGOLWContentHandler)
 ligolw_param.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
 
-def excepthook(*args):
-  # system exception hook that forces hard exit.  without this,
-  # exceptions that occur inside python code invoked as a call-back
-  # from the gstreamer pipeline just stop the pipeline, they don't
-  # cause gstreamer to exit.
-
-  # FIXME:  they probably *would* cause if we could figure out why
-  # element errors and the like simply stop the pipeline instead of
-  # crashing it, as well.  Perhaps this should be removed when/if the
-  # "element error's don't crash program" problem is fixed
-  sys.__excepthook__(*args)
-  os._exit(1)
-
-sys.excepthook = excepthook
-
 #
 # Make sure we have sufficient resources
 # We allocate far more memory than we need, so this is okay
 #
 
-# set the number of processes up to hard limit
-maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
-resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+def setrlimit(res, lim):
+  hard_lim = resource.getrlimit(res)[1]
+  resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
 
-# set the total set size up to hard limit
-maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
-resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
-
-# set the stack size per thread to be smaller
-maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
-resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
-
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 def now():
-  return XLALUTCToGPS(time.gmtime())
+  return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 
 #
 # =============================================================================
@@ -187,10 +176,12 @@ def parse_command_line():
   #FIXME: do not consider online paramters yet
   parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
   parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
+  parser.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided)")
   parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
-  parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
   parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
-  parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+  parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+  parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
+  parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
   parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
@@ -284,12 +275,72 @@ def parse_command_line():
 	bad_options.append("--%s" % option.replace("_", "-"))
     if bad_options:
       raise ValueError("%s options should only be given for --data-source is lvshm or framexmit " % ", ".join(bad_options))
+  
+  if options.reference_psd is None and not options.track_psd:
+    raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+  if options.local_frame_caching and not options.data_source == "frames":
+    raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
+  if options.chisq_type not in ["autochisq", "timeslicechisq"]:
+    raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
+
+  if options.reference_likelihood_file:
+    likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(None, options.reference_likelihood_file)]
+  else:
+    likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
+
+  if not (len(options.svd_bank) == len(options.output) == len(likelihood_namedtuples_list)):
+    raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
+
 
   #FIXME: job tag and output can not be both none
   #	if options.job_tag is None and options.output is None:
   #		raise ValueError("must provide --job-tag or --output for output file naming purpose")
+  
+  #
+  # Option checks complete
+  #
 
-  return options, filenames, process_params, iir_banks, detectors
+  if options.blind_injections is not None:
+    detectors.injection_filename = options.blind_injections
+	
+  # Setup local caching
+  if options.local_frame_caching:
+    f, fname = tempfile.mkstemp(".cache")
+    if options.verbose:
+      print >> sys.stderr, "caching frame data locally to ", fname
+    f = open(fname, "w")
+    # FIXME:  should try to down-sample if possible.  there are
+    # MDCs data sets floating around whose streams do not start
+    # on integer second boundaries, however, and it's possible
+    # to trigger a failure in the frame muxer if those get
+    # down-sampled so for now we're not doing any resampling.
+    # later, when we don't care about those MDCs, we can go
+    # back to down-sampling.  if not being able to down-sample
+    # is a problem in the meantime, I think the best way
+    # forward is to clip the start of said streams using a drop
+    # element and a (to be written) buffer probe that figures
+    # out how many samples to clip off the start of the stream.
+    # FIXME shouldn't use tempfile.gettempdir() directly, use
+    # _CONDOR_SCRATCH_DIR like glue??
+    # FIXME, note that at least for now condor sets TMPDIR to the
+    # run scratch space so this *will* work properly
+    detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), verbose = options.verbose)
+    for cacheentry in detectors.local_cache_list:
+      # Guarantee a lal cache complient file with only integer starts and durations.
+      cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
+      print >>f, str(cacheentry)
+    detectors.frame_cache = fname
+
+    # the injections are now present in the data so we don't want to do them twice
+    detectors.injection_filename = None
+	
+  # Choose to optionally reconstruct segments around injections (not blind injections!)
+  if options.injections:
+    reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections)
+  else:
+    reconstruction_segment_list = None
+
+  return options, filenames, process_params, iir_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list
 ################################################################
 # end parse_command_line
 ################################################################
@@ -339,7 +390,7 @@ class OneTimeSignalHandler(object):
 #
 
 
-options, filenames, process_params, iir_banks, detectors = parse_command_line()
+options, filenames, process_params, iir_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list = parse_command_line()
 
 if not options.check_time_stamps:
   pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -373,7 +424,7 @@ else:
 
 
 #
-# Process banks in serial
+# Process banks in multi-process
 #
 def one_pipeline(iir_bank, 
 		output_filename, 
@@ -385,12 +436,10 @@ def one_pipeline(iir_bank,
 		):
   if options.verbose:
     print >>sys.stderr, "start a process for one pipeline"
+    print >>sys.stderr, iir_bank
+    print >>sys.stderr, output_filename
+    print >>sys.stderr, likelihood_file
 
-  print iir_bank
-  print output_filename
-  print likelihood_file
-
-  from gstlal import bottle
   # create a new, empty, Bottle application
   bottle.default_app.push()
 
@@ -489,7 +538,7 @@ def one_pipeline(iir_bank,
     if coinc_params_distributions is None:
       raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
   else:
-	coinc_params_distributions = far.ThincaCoincParamsDistributions()
+	coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
   #
   # build output document
@@ -506,7 +555,9 @@ def one_pipeline(iir_bank,
     seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
     coincidence_threshold = options.coincidence_threshold,
     coinc_params_distributions = coinc_params_distributions,
+    ranking_data = ranking_data,
     marginalized_likelihood_file = options.marginalized_likelihood_file,
+    likelihood_files_namedtuple = likelihood_file, 
     injection_filename = options.injections,
     time_slide_file = options.time_slide_file,
     comment = options.comment,
@@ -515,13 +566,14 @@ def one_pipeline(iir_bank,
     thinca_interval = options.thinca_interval,
     gracedb_far_threshold = options.gracedb_far_threshold,
     gracedb_group = options.gracedb_group,
-    gracedb_type = options.gracedb_type,
+    gracedb_search = options.gracedb_search,
+    gracedb_pipeline = options.gracedb_pipeline, 
     verbose = options.verbose
   )
   if options.verbose:
     print >>sys.stderr, "... output document initialized"
   
-  handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
+  handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
 
   if options.verbose:
     print >>sys.stderr, "attaching appsinks to pipeline ...",
@@ -564,8 +616,6 @@ def one_pipeline(iir_bank,
     print >>sys.stderr, "running pipeline ..."
   mainloop.run()
 
-  print "before output"
-
   #
   # write output file
   #
@@ -590,21 +640,34 @@ def one_pipeline(iir_bank,
 #  if options.data_source in ("lvshm", "framexmit"):
 #    sys.exit(1) # online pipeline always ends with an error code
 
+jobs = []
+for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, likelihood_namedtuples_list):
 
-print iir_banks
-print options.output
-print options.likelihood_file
-for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, options.likelihood_file):
-	print >> sys.stderr, "try fork a new process"
-	child = multiprocessing.Process(target = one_pipeline, 
-					args = (iir_bank, 
-						output_filename, 
-						likelihood_file,
-						detectors,
-						psd,
-						options,
-						veto_segments,
-						))
-	child.start()
+  if options.verbose:
+    print >> sys.stderr, "try fork a new process"
+  
+  child = multiprocessing.Process(target = one_pipeline, 
+      args = (iir_bank, 
+	output_filename, 
+	likelihood_file,
+	detectors,
+	psd,
+	options,
+	veto_segments,
+	))
+  jobs.append(child)
+  child.start()
 
+#jobs[-1].terminate()
+for j in jobs:
+  j.join()
 
+if options.local_frame_caching:
+  if options.verbose:
+    print >>sys.stderr, "deleting temporary cache file ", detectors.frame_cache
+    
+  os.remove(detectors.frame_cache)
+  del detectors.local_cache_list
+
+if options.data_source in ("lvshm", "framexmit"):
+  sys.exit(1)
