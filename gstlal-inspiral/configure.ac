@@ -105,15 +105,19 @@ case `cat /etc/redhat-release 2> /dev/null` in
 esac
 LT_INIT
 PKG_PROG_PKG_CONFIG()
-AC_PATH_PROG(DOXYGEN, doxygen)
-AM_CONDITIONAL([COND_DOXYGEN], [test -n "${DOXYGEN}"])
+
+MIN_DOXYGEN_VERSION="1.8.3"
+GSTLAL_DOXYGEN([$MIN_DOXYGEN_VERSION])
+AM_CONDITIONAL([COND_DOXYGEN], [test "x$HAVE_DOXYGEN" == "xyes"])
+AC_SUBST([MIN_DOXYGEN_VERSION])
 
 #
 # Check for Python
 #
 
 
-AM_PATH_PYTHON([2.6],,)
+MIN_PYTHON_VERSION="2.6"
+AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
 # Debian and SL6.  FIXME:  find a way to do this properly
@@ -121,6 +125,7 @@ PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:sp
 # hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
 # AX_PYTHON_DEVEL!?
 PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+AC_SUBST([MIN_PYTHON_VERSION])
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])

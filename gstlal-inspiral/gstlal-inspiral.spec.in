@@ -6,8 +6,8 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= @MIN_GSTLAL_VERSION@ gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@ python >= 2.6 glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 h5py pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl ligo-gracedb >= 1.11
-BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
+Requires: gstlal >= @MIN_GSTLAL_VERSION@ gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@ python >= @MIN_PYTHON_VERSION@ glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 h5py pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl ligo-gracedb >= 1.11
+BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
@@ -26,7 +26,7 @@ analysis.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-inspiral based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
+Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
 %description devel
 This package contains the files needed for building gstlal-inspiral based
 plugins and programs.
@@ -38,7 +38,10 @@ plugins and programs.
 
 %build
 . /opt/lscsoft/gst/gstenvironment.sh
-%configure
+# FIXME:  enable doxygen when we can rely on a platform with a new-enough
+# version.  don't forget to uncomment the documentation entries in the
+# files section
+%configure --without-doxygen
 %{__make}
 
 
@@ -79,7 +82,9 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_datadir}/gstlal/*
-%{_docdir}/gstlal-inspiral-*
+# commented out until RPM-based reference platform can be relied upon to
+# have a new-enough doxygen installed
+#%{_docdir}/gstlal-inspiral-*
 %{_libdir}/*.so.*
 %{_libdir}/gstreamer-0.10/*.so
 %{_libdir}/gstreamer-0.10/python/*

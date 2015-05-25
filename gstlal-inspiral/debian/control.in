@@ -3,12 +3,12 @@ Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
-X-Python-Version: >= 2.6
+X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
  doxygen,
  gtk-doc-tools,
- python-all-dev (>= 2.6),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
  gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
@@ -25,7 +25,7 @@ Build-Depends:
 Package: gstlal-inspiral
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
- python (>= 2.6),
+ python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-ligo-gracedb (>= 1.11),
@@ -56,7 +56,7 @@ Description: GStreamer for GW data analysis (inspiral parts)
 Package: gstlal-inspiral-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
- python-all-dev (>= 2.6),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-gobject-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
