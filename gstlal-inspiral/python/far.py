@@ -2139,7 +2139,7 @@ class FAPFAR(object):
 			return out
 
 		def extincted_pdf(x, N_ratio):
-			out = N_ratio * numpy.exp(-obs_counts(x) * N_ratio) * bg_pdf_interp(x)
+			out = numpy.exp(numpy.log(N_ratio) - obs_counts(x) * N_ratio + numpy.log(bg_pdf_interp(x)))
 			out[~numpy.isfinite(out)] = 0.
 			return out
 
