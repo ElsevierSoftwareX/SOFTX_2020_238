@@ -972,9 +972,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binarr += new_binarr
 
 		# Give 99.9% of the requested events to the "glitch model"
-		ncopy = n.copy()
-		ncopy.update((ifo, x * 0.999) for ifo, x in n.items())
-		self.add_snrchi_prior(getattr(self, ba), ncopy, prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
+		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.999) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def add_instrument_combination_counts(self, segs, verbose = False):
 		#
