@@ -472,9 +472,8 @@ class NearestLeafTree(object):
 			x_lo, val_lo = x_hi, val_hi
 		else:
 			x_lo, val_lo = self.tree[hi - 1]
-		# compute average in way that will be safe if x values are
-		# range-limited objects
-		return val_lo if x < x_lo + (x_hi - x_lo) / 2. else val_hi
+		assert x_lo <= x <= x_hi
+		return val_lo if abs(x - x_lo) < abs(x_hi - x) else val_hi
 
 	def __delitem__(self, x):
 		"""
