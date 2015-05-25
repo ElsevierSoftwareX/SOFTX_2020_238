@@ -948,18 +948,21 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			# NOTE remove extreme bins in case of ATan bins that
-			# can cause overflows. Also remove bins below our snr
-			# threshold
-			snrmin, snrmax = new_binarr.bins[0][self.snr_min], new_binarr.bins[0][1e10]
-			snr, dsnr = new_binarr.bins[0].centres()[snrmin:snrmax], new_binarr.bins[0].upper()[snrmin:snrmax] - new_binarr.bins[0].lower()[snrmin:snrmax]
-			rcossmin, rcossmax = new_binarr.bins[1][1e-10], new_binarr.bins[1][1e10]
-			rcoss, drcoss = new_binarr.bins[1].centres()[rcossmin:rcossmax], new_binarr.bins[1].upper()[rcossmin:rcossmax] - new_binarr.bins[1].lower()[rcossmin:rcossmax]
+			snr = new_binarr.bins[0].centres()
+			rcoss = new_binarr.bins[1].centres()
 
-			psnr = numpy.exp(-(snr**2 - 6.**2)/ 2.) + (1 + 6.**6) / (1. + snr**6)
+			# ignore overflows in SNR^6.  correct answer is 0
+			# when that happens.
+			with numpy.errstate(over = "ignore"):
+				psnr = numpy.exp(-(snr**2 - 6.**2)/ 2.) + (1 + 6.**6) / (1. + snr**6)
 			prcoss = numpy.ones(len(rcoss))
 
-			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] = numpy.outer(psnr * dsnr, prcoss * drcoss)
+			# the bins at the edges end up with infinite volume
+			# elements.  the PDF should be 0 in those bins so
+			# we 0 their volume elements to force that result
+			dsnr_drcoss = new_binarr.bins.volumes()
+			dsnr_drcoss[~numpy.isfinite(dsnr_drcoss)] = 0.
+			new_binarr.array[:,:] = numpy.outer(psnr, prcoss) * dsnr_drcoss
 
 			# Normalize what's left to the requested count.
 			# Give .1% of the requested events to this portion of the model
