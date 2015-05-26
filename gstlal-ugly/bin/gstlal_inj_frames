@@ -51,8 +51,6 @@ if "--help" in sys.argv or "-h" in sys.argv:
 else:
         import gst
 
-
-
 from gstlal import pipeparts
 from gstlal import pipeutil
 from gstlal import simplehandler
@@ -75,12 +73,12 @@ def write_graph(demux):
 parser = OptionParser( usage = usage, description = __doc__ )
 
 def parse_command_line():
-        #parser = OptionParser( usage = usage, description = __doc__ )
         parser.add_option("--shared-memory-read", default = None, type = "string", help = "Give the shared memory section name to read the frames from")
         parser.add_option("--shared-memory-write", default = None, type = "string", help = "Give the shared memory section name to write the frames with injections into it.")
         parser.add_option("--channel", default = None, type = "string", help = "Give the name of the original channel that the injetions will be injected into it.")
         parser.add_option("--channel-inj", default = None, type = "string", help = "Give a new name to the channel that has the injections.")
         parser.add_option("--dqv-channel", default = None, type = "string", help = "Give the name of the data quality vector channel of the of the original frame file.")
+        parser.add_option("--odc-channel", default = None, type = "string", help = "Give the name of the ODC channel of the original frame file.")
         parser.add_option("--injections-file", default = None, type = "string", help = "Give the injections xml file to be injected to the data.") 
         parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
         parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
@@ -90,15 +88,13 @@ def parse_command_line():
 
         options, filenames = parser.parse_args()
 
-        required_options = ["shared_memory_read", "shared_memory_write", "channel", "channel_inj", "dqv_channel", "injections_file"]
+        required_options = ["shared_memory_read", "shared_memory_write", "channel", "channel_inj", "dqv_channel", "odc_channel", "injections_file"]
 
         missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
         if missing_options:
                 raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
         return options, filenames
-
-#options, filenames = parse_command_line()
 
 # debugging options
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -122,10 +118,9 @@ if options.write_pipeline is not None:
         demux.connect("no-more-pads", write_graph)
 
 # original channel
-#inj = pipeparts.mkqueue(pipeline, None)
 inj = pipeparts.mkaudioconvert(pipeline, None)
 pipeparts.src_deferred_link(src, options.channel, inj.get_pad("sink"))
-inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
+#inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
 inj = pipeparts.mkqueue(pipeline, inj, max_size_buffers = 0 , max_size_time = 0, max_size_bytes = 0)
 
 
@@ -144,8 +139,12 @@ dqv = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0,
 pipeparts.src_deferred_link(src, options.dqv_channel, dqv.get_pad("sink"))
 channel_src_map[options.dqv_channel] = dqv
 
+# ODC channel
+odc = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
+pipeparts.src_deferred_link(src, options.odc_channel, odc.get_pad("sink"))
+channel_src_map[options.odc_channel] = odc
+
 # muxer
-# mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None)
 # The compression level, frames_per_file and frame_duration are set when broadcasting using DMTGen
 # To get these values, we have to look at the DMTGen configuration file.
 # This file (DMTGen-LHO_Data.cfg in Patrick's home directory) currently (6 Aug 2014) looks like:
@@ -269,17 +268,17 @@ if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 else:
         print "set to playing successfully"
 
-## Debugging output
-
-if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
-        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
-
 handler = simplehandler.Handler(mainloop, pipeline)
 print 'running mainloop...'
 
-mainloop.run()
+try:
+    mainloop.run()
 
-
-
-
-
+# I put the plotting part here to get all the pads as they have been hoocked. The plot will get generated when we intrupt the code by "Conrel c"
+except KeyboardInterrupt:
+    if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
+#
+#
+#
+#
