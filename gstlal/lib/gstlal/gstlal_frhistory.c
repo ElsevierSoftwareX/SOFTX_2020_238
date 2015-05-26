@@ -24,7 +24,7 @@
  * @include:  gstlal/gstlal_frhistory.h
  * @short_description:  #GValue type for holding FrHistory information.
  *
- * #GstALALFrHistory is a #GValue type that carries a name, a timestamp and
+ * #GstLALFrHistory is a #GValue type that carries a name, a timestamp and
  * a comment.
  */
 
