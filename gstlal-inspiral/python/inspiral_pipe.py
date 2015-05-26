@@ -327,3 +327,23 @@ def T050017_filename(instruments, description, start, end, extension, path = Non
 if __name__ == "__main__":
 	import doctest
 	doctest.testmod()
+
+
+def condor_command_dict_from_opts(opts, defaultdict = {}):
+	"""!
+	A function to turn a list of options into a dictionary of condor commands, e.g.,
+
+	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"])
+	{'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"], {"somecommand":"somevalue"})
+	{'somecommand': 'somevalue', 'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"], {"+Online_CBC_SVD":"False"})
+	{'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	"""
+
+	for o in opts:
+		osplit = o.split("=")
+		k = osplit[0]
+		v = "=".join(osplit[1:])
+		defaultdict.update([(k, v)])
+	return defaultdict

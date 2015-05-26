@@ -109,16 +109,18 @@ from gstlal import datasource
 #		"--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
 #		"--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 #		"--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+#		"--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
+#		"--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
 
 
 class lvalert_listen_job(inspiral_pipe.generic_job):
 	"""
 	A lvalert_listen_job
 	"""
-	def __init__(self, program, gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb")):
+	def __init__(self, program, gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local")
+		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		# produce the lvalert processor
 
@@ -194,6 +196,8 @@ def parse_command_line():
 	parser.add_option("--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
+	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
 
 	options, filenames = parser.parse_args()
 
@@ -242,17 +246,17 @@ dag = dagparts.CondorDAG("trigger_pipe")
 
 # Figure out if it is iir or not
 if options.do_iir_pipeline is not None:
-	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 else:
-	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 	if inj_channel_dict:
-		gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "+Online_CBC_SVD":"True", "Requirements":"(TARGET.Online_CBC_SVD =?= True)"})
+		gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 # A local universe job that will run in a loop marginalizing all of the likelihoods
-margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local")
+margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program)
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 # get urls job 
-urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local")
+urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 
 #
