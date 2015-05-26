@@ -896,6 +896,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
+		if df <= 0.:
+			raise ValueError("require df >= 0: %s" % repr(df))
 		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
 		for instrument, number_of_events in n.items():
 			binarr = rates_dict["%s_snr_chi" % instrument]
@@ -907,13 +909,21 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# will need to normalize results so need new storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			# NOTE remove extreme bins in case of ATan bins that
-			# can cause overflows. Also remove bins below our snr
-			# threshold
-			snrmin, snrmax = new_binarr.bins[0][self.snr_min], new_binarr.bins[0][1e10]
-			snr, dsnr = new_binarr.bins[0].centres()[snrmin:snrmax], new_binarr.bins[0].upper()[snrmin:snrmax] - new_binarr.bins[0].lower()[snrmin:snrmax]
-			rcossmin, rcossmax = new_binarr.bins[1][1e-10], new_binarr.bins[1][1e10]
-			rcoss, drcoss = new_binarr.bins[1].centres()[rcossmin:rcossmax], new_binarr.bins[1].upper()[rcossmin:rcossmax] - new_binarr.bins[1].lower()[rcossmin:rcossmax]
+			# FIXME:  except for the low-SNR cut, the slicing
+			# is done to work around various overflow and
+			# loss-of-precision issues in the extreme parts of
+			# the domain of definition.  it would be nice to
+			# identify the causes of these and either fix them
+			# or ignore them one-by-one with a comment
+			# explaining why it's OK to ignore the ones being
+			# ignored.  for example, computing snrchi2 by
+			# exponentiating the sum of the logs of the terms
+			# might permit its evaluation everywhere on the
+			# domain.  can ncx2pdf() be made to work
+			# everywhere?
+			snrindices, rcossindices = new_binarr.bins[self.snr_min:1e10, 1e-10:1e10]
+			snr, dsnr = new_binarr.bins[0].centres()[snrindices], new_binarr.bins[0].upper()[snrindices] - new_binarr.bins[0].lower()[snrindices]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossindices], new_binarr.bins[1].upper()[rcossindices] - new_binarr.bins[1].lower()[rcossindices]
 
 			snrs2 = snr**2
 			snrchi2 = numpy.outer(snrs2, rcoss) * df
@@ -921,12 +931,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for pf in pfs:
 				if progressbar is not None:
 					progressbar.increment()
-				new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
+				new_binarr.array[snrindices, rcossindices] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
 
 			# Add an SNR power law in with the differentials
 			dsnrdchi2 = numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
-			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= dsnrdchi2
-			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= number_of_events / new_binarr.array.sum()
+			new_binarr.array[snrindices, rcossindices] *= dsnrdchi2
+			new_binarr.array[snrindices, rcossindices] *= number_of_events / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
 
