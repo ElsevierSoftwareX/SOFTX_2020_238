@@ -1,3 +1,9 @@
+gstlal-burst (0.0.3) unstable; urgency=low
+
+  * Updates for lalburst compatibility
+
+ -- Chris Pankow <chris.pankow@ligo.org>  Mon, 25 May 2015 20:29:00 -0500
+
 gstlal-burst (0.0.2-1) unstable; urgency=low
 
   * intial release -- packaging updates
