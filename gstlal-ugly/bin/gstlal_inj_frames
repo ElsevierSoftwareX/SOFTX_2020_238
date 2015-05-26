@@ -28,6 +28,13 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
+from glue.ligolw import utils as ligolw_utils
+
+
 # This mess is to make gstreamer stop eating our help messages.
 if "--help" in sys.argv or "-h" in sys.argv:
         try:
@@ -148,6 +155,101 @@ channel_src_map[options.dqv_channel] = dqv
 # To figure out the numerical compression level, do a "gst-inspect framecpp_channelmux"
 mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
 
+# to read and remove past injs from sim_inspiral_table and put the injs that have been added to the broadcasting data  addto GraceDB
+## define a content handler
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+        pass
+lsctables.use_in(LIGOLWContentHandler)
+
+xmldoc = ligolw_utils.load_filename(options.injections_file, contenthandler = LIGOLWContentHandler, verbose = True)
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
+sim_inspiral_table.sort(key = lambda row: -row.get_end())
+
+for i in range(0, len(sim_inspiral_table)-11):
+    if sim_inspiral_table[i].get_end() < sim_inspiral_table[i+10].get_end() + lsctables.LIGOTimeGPS(60.0):
+        print "There are more than 10 injections per minute."
+        sys.exit(-1)
+
+#######################################################
+
+# http://www.devshed.com/c/a/python/basic-threading-in-python/
+# NOTE: we may have to kill this thread if it still exists after, say,
+# two minutes. In that case, we may have to read up on this at e.g.
+# https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread-in-python
+# https://stackoverflow.com/questions/919897/how-to-find-a-thread-id-in-python
+# as indicated in this last link, maybe the 'logging' module?
+import threading
+from glue.ligolw.utils import process as ligolw_process
+# need?:
+# from glue.ligolw import ligolw
+# from glue.ligolw import lsctables
+from ligo.gracedb.rest import GraceDb
+# for HTTPError:
+import urllib2
+
+import StringIO
+
+class GraceDBThread ( threading.Thread ):
+    def __init__ ( self, inj ):
+        self.inj = inj
+        threading.Thread.__init__ ( self )
+    def run ( self ):
+       # This follows the code at the end of lalsuite/glue/glue/ligolw/utils/process.py
+        print 'Notifying GraceDB now'
+       # Create an empty XML document to send to GraceDB
+        xmldoc = ligolw.Document()
+        xmldoc.appendChild(ligolw.LIGO_LW())
+       # Add in the metadata for this injection process
+        process = ligolw_process.register_to_xmldoc(xmldoc, "gstinjector", {"verbose": True, "server": "127.0.0.1"})
+       # Make a very small sim inspiral table with just this one event
+        sim_inspiral_table_one_injection = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimInspiralTable))
+       # Now add in the injection
+        sim_inspiral_table_one_injection.append(self.inj)
+       # Get string representation
+       # use StringIO to make in-ram file, write to it with xmldoc.write(fileobj)
+        fake_file = StringIO.StringIO()
+        xmldoc.write(fake_file)
+       # fake_file.write("Hello world.")
+        print "fake_file: [", fake_file.getvalue(), "]"
+        print "Talking to GraceDB"
+        gracedb = GraceDb("https://simdb.phys.uwm.edu/api/")
+        try:
+            r = gracedb.createEvent("Test", "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
+            rdict = r.json()
+            graceid = rdict['graceid']
+            print "Success: GraceID = %s" % graceid
+            inst, channel = options.channel.split(":")
+            inst_inj, channel_inj = options.channel_inj.split(":")
+            try:
+                r = gracedb.writeLog(graceid, "Injected from " + options.channel + " into " + options.channel_inj)
+            except urllib2.HTTPError as e:
+                pass
+        except urllib2.HTTPError as e:
+            pass
+       # discard the xml string
+        fake_file.close()
+
+#######################################################
+# add a probe to the pipeline
+def watch_data(pad, obj, sim_inspiral_table):
+    if isinstance(obj, gst.Buffer):
+        timestamp = lal.LIGOTimeGPS(0, obj.timestamp)
+        duration = lal.LIGOTimeGPS(0, obj.duration)
+        print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
+            sim = sim_inspiral_table.pop()
+            print "upload sim to gracedb" 
+            GraceDBThread(sim).start()
+    elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_NEWSEGMENT:
+        update, rate, format, start, stop, position = obj.parse_new_segment()
+        start = lal.LIGOTimeGPS(0, start)
+        print "data starts at %s" % start
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
+            sim_inspiral_table.pop()
+    return True
+mux.get_pad("src").add_data_probe(watch_data, sim_inspiral_table)
+
+#######################################################
 
 # writing to the shared memory
 mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
