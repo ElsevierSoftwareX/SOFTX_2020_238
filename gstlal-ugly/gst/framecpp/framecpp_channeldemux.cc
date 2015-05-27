@@ -72,9 +72,9 @@
 
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
-#include <gstfrhistory.h>
 #include <gstfrpad.h>
 
 
@@ -992,13 +992,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				GValue value = G_VALUE_INIT;
 #endif
 				gchar *str;
-				GstFrHistory *history = gst_frhistory_new((*current)->GetName().c_str());
-				gst_frhistory_set_timestamp(history, (*current)->GetTime() * GST_SECOND);
-				gst_frhistory_set_comment(history, (*current)->GetComment().c_str());
-				str = gst_frhistory_to_string(history);
+				GstLALFrHistory *history = gstlal_frhistory_new((*current)->GetName().c_str());
+				gstlal_frhistory_set_timestamp(history, (*current)->GetTime() * GST_SECOND);
+				gstlal_frhistory_set_comment(history, (*current)->GetComment().c_str());
+				str = gstlal_frhistory_to_string(history);
 				GST_LOG_OBJECT(element, "FrHistory: %s", str);
 				g_free(str);
-				g_value_init(&value, GST_FRHISTORY_TYPE);
+				g_value_init(&value, GSTLAL_FRHISTORY_TYPE);
 				g_value_take_boxed(&value, history);
 				g_value_array_append(element->frame_history, &value);
 			}
@@ -1653,7 +1653,7 @@ static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass
 				"history",
 				"History entry",
 				"GstFrHistory object.",
-				GST_FRHISTORY_TYPE,
+				GSTLAL_FRHISTORY_TYPE,
 				(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)
 			),
 			(GParamFlags) (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)

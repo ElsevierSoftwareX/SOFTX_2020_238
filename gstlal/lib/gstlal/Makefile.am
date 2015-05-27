@@ -1,7 +1,7 @@
 EXTRA_DIST =
 CLEANFILES =
 
-pkginclude_HEADERS = gstlal.h gstlal_debug.h gstlal_marshal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h gstlal_autocorrelation_chi2.h gstlal_gps_clock.h
+pkginclude_HEADERS = gstlal.h gstlal_debug.h gstlal_marshal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h gstlal_autocorrelation_chi2.h gstlal_gps_clock.h gstlal_frhistory.h
 pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la libgstlaltags.la libgstlaltypes.la
 
@@ -13,7 +13,7 @@ libgstlaltags_la_SOURCES = gstlal_tags.c gstlal_tags.h
 libgstlaltags_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
 libgstlaltags_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(gstreamer_LIBS)
 
-libgstlaltypes_la_SOURCES = gstlal_debug.h gstaudioadapter.h gstaudioadapter.c gstlalcollectpads.h gstlalcollectpads.c gstlal_gps_clock.h gstlal_gps_clock.c
+libgstlaltypes_la_SOURCES = gstlal_debug.h gstaudioadapter.h gstaudioadapter.c gstlalcollectpads.h gstlalcollectpads.c gstlal_gps_clock.h gstlal_gps_clock.c gstlal_frhistory.h gstlal_frhistory.c
 libgstlaltypes_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlaltypes_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(LAL_LIBS) $(gstreamer_LIBS)
 
@@ -55,8 +55,10 @@ CLEANFILES += gstlal_peakfinder.h gstlal_peakfinder_types.h
 
 -include $(INTROSPECTION_MAKEFILE)
 INTROSPECTION_GIRS =
-INTROSPECTION_SCANNER_ARGS = --warn-all --add-include-path=$(srcdir) --identifier-prefix GstLAL
+INTROSPECTION_SCANNER_ARGS = --warn-all --add-include-path=$(srcdir) --identifier-prefix GstLAL --identifier-prefix gstlal_frhistory
 INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
+dist_gir_DATA =
+typelib_DATA =
 
 if HAVE_INTROSPECTION
 INTROSPECTION_GIRS += GstLAL-$(GIR_VERSION).gir
@@ -66,11 +68,11 @@ GstLAL-$(GIR_VERSION).gir : libgstlaltypes.la Makefile
 GstLAL_@GIR_VERSION_@_gir_INCLUDES = Gst-0.10
 GstLAL_@GIR_VERSION_@_gir_CFLAGS = $(INCLUDES)
 GstLAL_@GIR_VERSION_@_gir_LIBS = libgstlaltypes.la
-GstLAL_@GIR_VERSION_@_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c
+GstLAL_@GIR_VERSION_@_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c gstlal_frhistory.h gstlal_frhistory.c
 GstLAL_@GIR_VERSION_@_gir_NAMESPACE = GstLAL
 GstLAL_@GIR_VERSION_@_gir_VERSION = $(GIR_VERSION)
 
-dist_gir_DATA = $(INTROSPECTION_GIRS)
-typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+dist_gir_DATA += $(INTROSPECTION_GIRS)
+typelib_DATA += $(INTROSPECTION_GIRS:.gir=.typelib)
 CLEANFILES += $(dist_gir_DATA) $(typelib_DATA)
 endif

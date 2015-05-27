@@ -6,8 +6,8 @@ Release: 1.lscsoft
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: python >= 2.6 glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalsimulation >= @MIN_LALSIMULATION_VERSION@ lalburst >= @MIN_LALBURST_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl orc >= @MIN_ORC_VERSION@
-BuildRequires: python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel orc >= @MIN_ORC_VERSION@
+Requires: python >= @MIN_PYTHON_VERSION@ glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalsimulation >= @MIN_LALSIMULATION_VERSION@ lalburst >= @MIN_LALBURST_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl orc >= @MIN_ORC_VERSION@
+BuildRequires: doxygen python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel numpy lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel orc >= @MIN_ORC_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
@@ -26,7 +26,7 @@ gstlal-based applications.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
+Requires: %{name} = %{version} python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
 %description devel
 This package contains the files needed for building gstlal-based plugins
 and programs.
@@ -38,7 +38,10 @@ and programs.
 
 %build
 . /opt/lscsoft/gst/gstenvironment.sh
-%configure
+# FIXME:  enable doxygen when we can rely on a platform with a new-enough
+# version.  don't forget to uncomment the documentation entries in the
+# files section
+%configure --without-doxygen
 %{__make}
 
 
@@ -80,7 +83,9 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_bindir}/*
 %{_datadir}/gstlal
 %{_datadir}/gtk-doc/html/gstlal-*
-%{_docdir}/gstlal-*
+# commented out until RPM-based reference platform can be relied upon to
+# have a new-enough doxygen installed
+#%{_docdir}/gstlal-*
 %{_libdir}/*.so.*
 %{_libdir}/gstreamer-0.10/*.so
 %{_libdir}/gstreamer-0.10/python/*

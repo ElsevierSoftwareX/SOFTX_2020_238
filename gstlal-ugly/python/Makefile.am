@@ -11,8 +11,8 @@ pkgpython_PYTHON = \
 	httpinterface.py \
 	servicediscovery.py \
 	spiirparts.py \
-	uni_datasource.py
-
+	uni_datasource.py \
+	idq_vetosrc.py
 pkgpyexec_LTLIBRARIES =
 
 if COND_FRAMECPP
@@ -24,3 +24,4 @@ _gstfrhistory_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
 _gstfrhistory_la_LIBADD = $(top_builddir)/gst/framecpp/libgstframecpp.la
 _gstfrhistory_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS) $(PYTHON_LDFLAGS) -module -avoid-version
 endif
+

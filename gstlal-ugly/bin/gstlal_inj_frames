@@ -28,6 +28,19 @@ gobject.threads_init()
 import pygst
 pygst.require("0.10")
 
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
+from glue.ligolw import utils as ligolw_utils
+
+# modules for uploading to GraceDB
+import threading
+from glue.ligolw.utils import process as ligolw_process
+from ligo.gracedb.rest import GraceDb
+import urllib2  # for HTTPError:
+import StringIO
+
 # This mess is to make gstreamer stop eating our help messages.
 if "--help" in sys.argv or "-h" in sys.argv:
         try:
@@ -43,8 +56,6 @@ if "--help" in sys.argv or "-h" in sys.argv:
         sys.argv.append( "--help" )
 else:
         import gst
-
-
 
 from gstlal import pipeparts
 from gstlal import pipeutil
@@ -68,13 +79,14 @@ def write_graph(demux):
 parser = OptionParser( usage = usage, description = __doc__ )
 
 def parse_command_line():
-        #parser = OptionParser( usage = usage, description = __doc__ )
         parser.add_option("--shared-memory-read", default = None, type = "string", help = "Give the shared memory section name to read the frames from")
         parser.add_option("--shared-memory-write", default = None, type = "string", help = "Give the shared memory section name to write the frames with injections into it.")
         parser.add_option("--channel", default = None, type = "string", help = "Give the name of the original channel that the injetions will be injected into it.")
         parser.add_option("--channel-inj", default = None, type = "string", help = "Give a new name to the channel that has the injections.")
         parser.add_option("--dqv-channel", default = None, type = "string", help = "Give the name of the data quality vector channel of the of the original frame file.")
+        parser.add_option("--save-channel", default = None, type = "string", help = "Give the name of the channel of the original frame file which should be carried on to the final frame files.")
         parser.add_option("--injections-file", default = None, type = "string", help = "Give the injections xml file to be injected to the data.") 
+        parser.add_option("--upload-to-gracedb", action = "store_true", help = "upload the paramters of the added injections to GraceDB/SimDB (optional).")
         parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
         parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
         parser.add_option("--compression-level", default = 6, type = "int", help = "compression_level (optional)")
@@ -90,8 +102,6 @@ def parse_command_line():
                 raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
         return options, filenames
-
-#options, filenames = parse_command_line()
 
 # debugging options
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -115,10 +125,9 @@ if options.write_pipeline is not None:
         demux.connect("no-more-pads", write_graph)
 
 # original channel
-#inj = pipeparts.mkqueue(pipeline, None)
 inj = pipeparts.mkaudioconvert(pipeline, None)
 pipeparts.src_deferred_link(src, options.channel, inj.get_pad("sink"))
-inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
+#inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
 inj = pipeparts.mkqueue(pipeline, inj, max_size_buffers = 0 , max_size_time = 0, max_size_bytes = 0)
 
 
@@ -137,8 +146,13 @@ dqv = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0,
 pipeparts.src_deferred_link(src, options.dqv_channel, dqv.get_pad("sink"))
 channel_src_map[options.dqv_channel] = dqv
 
+
+if options.save_channel is not None:
+    saved_channel = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
+    pipeparts.src_deferred_link(src, options.save_channel, saved_channel.get_pad("sink"))
+    channel_src_map[options.save_channel] = saved_channel
+
 # muxer
-# mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None)
 # The compression level, frames_per_file and frame_duration are set when broadcasting using DMTGen
 # To get these values, we have to look at the DMTGen configuration file.
 # This file (DMTGen-LHO_Data.cfg in Patrick's home directory) currently (6 Aug 2014) looks like:
@@ -148,6 +162,92 @@ channel_src_map[options.dqv_channel] = dqv
 # To figure out the numerical compression level, do a "gst-inspect framecpp_channelmux"
 mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
 
+# to read and remove past injs from sim_inspiral_table and put the injs that have been added to the broadcasting data  addto GraceDB
+## define a content handler
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+        pass
+lsctables.use_in(LIGOLWContentHandler)
+
+xmldoc = ligolw_utils.load_filename(options.injections_file, contenthandler = LIGOLWContentHandler, verbose = True)
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
+sim_inspiral_table.sort(key = lambda row: -row.get_end())
+
+for i in range(0, len(sim_inspiral_table)-11):
+    if sim_inspiral_table[i].get_end() < sim_inspiral_table[i+10].get_end() + lsctables.LIGOTimeGPS(60.0):
+        print "There are more than 10 injections per minute."
+        sys.exit(-1)
+
+#######################################################
+
+# http://www.devshed.com/c/a/python/basic-threading-in-python/
+# NOTE: we may have to kill this thread if it still exists after, say,
+# two minutes. In that case, we may have to read up on this at e.g.
+# https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread-in-python
+# https://stackoverflow.com/questions/919897/how-to-find-a-thread-id-in-python
+# as indicated in this last link, maybe the 'logging' module?
+
+class GraceDBThread ( threading.Thread ):
+    def __init__ ( self, inj ):
+        self.inj = inj
+        threading.Thread.__init__ ( self )
+    def run ( self ):
+       # This follows the code at the end of lalsuite/glue/glue/ligolw/utils/process.py
+        print 'Notifying GraceDB now'
+       # Create an empty XML document to send to GraceDB
+        xmldoc = ligolw.Document()
+        xmldoc.appendChild(ligolw.LIGO_LW())
+       # Add in the metadata for this injection process
+        process = ligolw_process.register_to_xmldoc(xmldoc, "gstinjector", {"verbose": True, "server": "127.0.0.1"})
+       # Make a very small sim inspiral table with just this one event
+        sim_inspiral_table_one_injection = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimInspiralTable))
+       # Now add in the injection
+        sim_inspiral_table_one_injection.append(self.inj)
+       # Get string representation
+       # use StringIO to make in-ram file, write to it with xmldoc.write(fileobj)
+        fake_file = StringIO.StringIO()
+        xmldoc.write(fake_file)
+       # fake_file.write("Hello world.")
+        print "fake_file: [", fake_file.getvalue(), "]"
+        print "Talking to GraceDB"
+        gracedb = GraceDb("https://simdb.phys.uwm.edu/api/")
+        try:
+            r = gracedb.createEvent("Test", "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
+            rdict = r.json()
+            graceid = rdict['graceid']
+            print "Success: GraceID = %s" % graceid
+            inst, channel = options.channel.split(":")
+            inst_inj, channel_inj = options.channel_inj.split(":")
+            try:
+                r = gracedb.writeLog(graceid, "Injected from " + options.channel + " into " + options.channel_inj)
+            except urllib2.HTTPError as e:
+                pass
+        except urllib2.HTTPError as e:
+            pass
+       # discard the xml string
+        fake_file.close()
+
+#######################################################
+# add a probe to the pipeline
+def watch_data(pad, obj, sim_inspiral_table):
+    if isinstance(obj, gst.Buffer):
+        timestamp = lal.LIGOTimeGPS(0, obj.timestamp)
+        duration = lal.LIGOTimeGPS(0, obj.duration)
+        print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
+            sim = sim_inspiral_table.pop()
+            if options.upload_to_gracedb is not None:
+                print "upload sim to gracedb" 
+                GraceDBThread(sim).start()
+    elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_NEWSEGMENT:
+        update, rate, format, start, stop, position = obj.parse_new_segment()
+        start = lal.LIGOTimeGPS(0, start)
+        print "data starts at %s" % start
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
+            sim_inspiral_table.pop()
+    return True
+mux.get_pad("src").add_data_probe(watch_data, sim_inspiral_table)
+
+#######################################################
 
 # writing to the shared memory
 mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
@@ -167,17 +267,17 @@ if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 else:
         print "set to playing successfully"
 
-## Debugging output
-
-if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
-        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
-
 handler = simplehandler.Handler(mainloop, pipeline)
 print 'running mainloop...'
 
-mainloop.run()
+try:
+    mainloop.run()
 
-
-
-
-
+# I put the plotting part here to get all the pads as they have been hoocked. The plot will get generated when we intrupt the code by "Conrel c"
+except KeyboardInterrupt:
+    if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
+#
+#
+#
+#

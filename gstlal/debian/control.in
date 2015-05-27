@@ -3,17 +3,18 @@ Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
-X-Python-Version: >= 2.6
+X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
- doxygen,
- gtk-doc-tools,
- python-all-dev (>= 2.6),
+ doxygen (>= @MIN_DOXYGEN_VERSION@),
+ gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
  libfftw3-dev (>= 3),
  gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject-dev,
+ python-numpy-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
@@ -29,7 +30,7 @@ Architecture: any
 Replaces: gstlal-ugly (<< 0.4.0)
 Breaks: gstlal-ugly (<< 0.4.0)
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
- python (>= 2.6),
+ python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-pylal (>= @MIN_PYLAL_VERSION@),
@@ -59,7 +60,7 @@ Package: gstlal-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  gstlal (= ${binary:Version}),
- python-all-dev (>= 2.6),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
  libfftw3-dev (>= 3),
  libgsl0-dev (>= 1.9),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),

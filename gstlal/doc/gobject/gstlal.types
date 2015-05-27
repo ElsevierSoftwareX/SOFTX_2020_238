@@ -3,6 +3,7 @@
 #include <gstlal/gstlal_cdf_weighted_chisq_P.h>
 #include <gstlal/gstlalcollectpads.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_gps_clock.h>
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_marshal.h>
@@ -32,6 +33,7 @@
 
 
 gst_audioadapter_get_type
+gstlal_frhistory_get_type
 gstlal_gps_system_clock_get_type
 
 gstlal_adder_get_type

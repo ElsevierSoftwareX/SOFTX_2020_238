@@ -325,6 +325,12 @@ class Handler(simplehandler.Handler):
 			if message.structure.get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
 				timestamp = message.structure["timestamp"]
+				# FIXME:  the function that makes these
+				# messages uses a default value of None,
+				# and in principle could be called with
+				# other non-timestamp-like things, so this
+				# code should check that it has actually
+				# gotten a valid timestamp
 				self.checkpoint(timestamp)
 				return True
 		elif message.type == gst.MESSAGE_EOS:
@@ -340,6 +346,11 @@ class Handler(simplehandler.Handler):
 		return False
 
 	def _close_segments(self, timestamp):
+		"""
+		@timestamp must be a GPS time that is guaranteed to precede
+		any possible future state transitions in all segment lists
+		being tracked.
+		"""
 		# close out existing segments.  the code in the loop
 		# modifies the iteration target, so iterate over a copy
 		for (segtype, instrument), start_time in list(self.current_segment_start.items()):
@@ -369,6 +380,13 @@ class Handler(simplehandler.Handler):
 
 		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
 		"""
+		# FIXME:  the timestamp is used to close off open segments
+		# and so should *not* be the timestamp of the current
+		# buffer, necessarily, but rather a GPS time guaranteed to
+		# precede any future state transitions of any segment list.
+		# especially if the pipeline is ever run in an "advanced
+		# warning" configuration using the GPS time of a trigger
+		# buffer would be an especially bad choice.
 		self.flush_segments_to_disk(timestamp)
 		try:
 			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
@@ -415,6 +433,13 @@ class Handler(simplehandler.Handler):
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 
 	def _gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
+		# FIXME:  this method could conceivably be patched to know
+		# what to do with state transitions that appear to have
+		# gone backwards, i.e., it could correct segments that are
+		# already in the segmentlist.  this might be one way to
+		# sort out the problem of segment state snap-shotting code
+		# artificially claiming segments to be on beyond the time
+		# when they should stop.
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
 		state_key = (segtype, instrument)
 

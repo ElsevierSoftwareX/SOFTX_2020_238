@@ -17,15 +17,18 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 ## @file gstlal_inspiral_create_prior_diststats
-# A program to create some prior likelihood data to seed an online analysis
+# A program to create some prior likelihood data to seed an offline analysis
 #
 # ### Command line interface
-#	+ `--verbose`: Be verbose.
-#	+ `--synthesize-injection-count` [N] (int): Synthesize an injection distribution with N injections (default is 1000000).
-#	+ `--write-likelihood` [filename]: Write merged raw likelihood data to this file.
-#	+ `--instrument`: Append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze.
-#	+ `--trials-far-thresh` (float): Set the far threshold for the thresh parameter in the trials table.
-#	+ `--background-prior` [N] (float): Include an exponential background prior with the maximum bin count = N (default is 1).
+	
+#			("-v", "--verbose", action = "store_true", help = "Be verbose.")
+#			("-s", "--synthesize-injection-count", metavar = "N", default = 1e8, type = "int", help = "Synthesize an injection distribution with N injections. default 1e8")
+#			("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+#			("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
+#			("--horizon-distances", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is \"instrument=distance,instrument=distance,...\", e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of two or more instruments from the set.  It is an error for an instrument to be named here and not in a --instrument option.")
+#			("--horizon-distance-masses", metavar = "m1,m2", action = "append", default = ["1.4,1.4"], help = "When computing pre-cached SNR PDFs from a collection of PSD files, compute horizon distances for these masses in solar mass units (default = 1.4,1.4).  Can be given multiple times.")
+#			("--horizon-distance-flow", metavar = "Hz", default = 10., type = "float", help = "When computing pre-cached SNR PDFs from a collection PSD files, start horizon distance integral at this frequency in Hertz (default = 10 Hz).")
+#			("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
 
 #
 # =============================================================================
@@ -75,7 +78,7 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 100000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
+	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 1e8, type = "int", help = "Synthesize an injection distribution with N injections. default 1e8")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("--horizon-distances", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is \"instrument=distance,instrument=distance,...\", e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of two or more instruments from the set.  It is an error for an instrument to be named here and not in a --instrument option.")
@@ -142,10 +145,10 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 coincparamsdistributions = far.ThincaCoincParamsDistributions()
 
 if options.background_prior > 0:
-	coincparamsdistributions.add_background_prior(n = options.background_prior, instruments = options.instrument, verbose = options.verbose)
+	coincparamsdistributions.add_background_prior(n = dict((ifo, options.background_prior) for ifo in options.instrument), verbose = options.verbose)
 
 if options.synthesize_injection_count > 0:
-	coincparamsdistributions.add_foreground_snrchi_prior(instruments = options.instrument, n = options.synthesize_injection_count, prefactors_range = (0.0, 0.10), df = 40, verbose = options.verbose)
+	coincparamsdistributions.add_foreground_snrchi_prior(n = dict((ifo, options.synthesize_injection_count) for ifo in options.instrument), df = 40, verbose = options.verbose)
 
 
 #

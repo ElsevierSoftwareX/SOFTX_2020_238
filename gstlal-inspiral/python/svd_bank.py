@@ -290,6 +290,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 
 		# apply clipping to autocorrelations and sigmasq
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
+		bank.autocorrelation_mask = bank.autocorrelation_mask[clipleft:clipright,:]
 		bank.sigmasq = bank.sigmasq[clipleft:clipright]
 
 		# Add root-level arrays
