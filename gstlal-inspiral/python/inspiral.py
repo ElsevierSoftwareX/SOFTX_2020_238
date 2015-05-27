@@ -1028,9 +1028,8 @@ class Data(object):
 		shutil.move(tmp_likelihood_file, os.path.join(path,filename))
 		# Snapshots get their own custom file and path
 		if snapshot:
-			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz', verbose = verbose)
-			path = subdir_from_T050017_filename(fname)
-			shutil.copy(os.path.join(path,filename), os.path.join(path, fname))
+			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
+			shutil.copy(os.path.join(path,filename), os.path.join(subdir_from_T050017_filename(fname), fname))
 
 	def write_output_file(self, filename = None, description = "", verbose = False):
 		with self.lock:
