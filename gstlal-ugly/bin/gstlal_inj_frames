@@ -89,7 +89,8 @@ def parse_command_line():
         parser.add_option("--upload-to-gracedb", action = "store_true", help = "upload the paramters of the added injections to GraceDB/SimDB (optional).")
         parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
         parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
-        parser.add_option("--compression-level", default = 6, type = "int", help = "compression_level (optional)")
+        parser.add_option("--compression-level", default = 3, type = "int", help = "compression_level (optional)")
+        parser.add_option("--compression-scheme", default = 6, type = "int", help = "compression_scheme (optional)")
         parser.add_option("--frames-per-file", default = 1, type = "int", help = "frames_per_file (optional)")
         parser.add_option("--frame-duration", default = 4, metavar= "frame duration in seconds" , type = "int", help = "frame_duration (optional)")        
 
@@ -160,7 +161,7 @@ if options.save_channel is not None:
 # Parameter OutputDirectory /online/LHO_Data
 # Parameter FrameLength 4
 # To figure out the numerical compression level, do a "gst-inspect framecpp_channelmux"
-mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
+mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, compression_scheme=options.compression_scheme , frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
 
 # to read and remove past injs from sim_inspiral_table and put the injs that have been added to the broadcasting data  addto GraceDB
 ## define a content handler
