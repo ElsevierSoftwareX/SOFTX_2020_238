@@ -43,6 +43,7 @@ import StringIO
 import sys
 import time
 import urlparse
+import json
 
 
 from glue.ligolw import ligolw
@@ -52,11 +53,11 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from gstlal.reference_psd import horizon_distance
 from gstlal import plotpsd
+#FIXME Switch to newest GraceDb api
 try:
 	from ligo.gracedb import cli as gracedb
 except ImportError:
 	from ligo import gracedb
-from ligo.lvalert.utils import get_LVAdata_from_stdin
 from pylal import series as lal_series
 
 
@@ -123,6 +124,7 @@ def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--no-upload", action = "store_true", help = "Write plots to disk.")
 	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, graceids = parser.parse_args()
 
@@ -153,11 +155,11 @@ options, graceids = parse_command_line()
 
 
 if not graceids:
-	lvalert_data = get_LVAdata_from_stdin(sys.stdin, as_dict = True)
+	lvalert_data = json.loads(sys.stdin.read())
 	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 	logging.info("lvalert data: %s" % repr(lvalert_data))
 	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-	if filename not in (u"coinc.xml",) and "_CBC_" not in filename:
+	if filename not in (u"coinc.xml",):
 		logging.info("filename is not 'coinc.xml'.  skipping")
 		sys.exit()
 	graceids = [str(lvalert_data["uid"])]
@@ -165,7 +167,7 @@ if not graceids:
 	time.sleep(8)
 
 
-gracedb_client = gracedb.Client()
+gracedb_client = gracedb.Client(url=options.gracedb_service_url)
 
 
 for graceid in graceids:

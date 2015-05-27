@@ -30,6 +30,7 @@ import numpy
 from glue.ligolw import utils
 import copy
 from gstlal import far
+from gstlal import plotfar
 import time
 from glue.ligolw import ligolw, table, lsctables, param, array
 array.use_in(ligolw.LIGOLWContentHandler)
@@ -39,9 +40,35 @@ import urllib
 import urlparse
 import httplib
 import subprocess
+from ligo.gracedb import DEFAULT_SERVICE_URL
 from ligo.gracedb.rest import GraceDb
 import glob
-from ligo.lvalert.utils import get_LVAdata_from_stdin
+import json
+from optparse import OptionParser
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--gracedb-service-url", default="%s" % DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_SERVICE_URL)
+
+	options, gid_list = parser.parse_args()
+	
+	if len(gid_list) > 1:
+		raise ValueError("%d graceids specified, no more than one allowed" % len(gid_list))
+
+	if len(gid_list) == 0:
+		lvalert_data = json.loads(sys.stdin.read())
+		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+		logging.info("lvalert data: %s" % repr(lvalert_data))
+		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+		if filename not in (u"coinc.xml",):
+			logging.info("filename is not 'coinc.xml'.  skipping")
+			sys.exit()
+		gid = str(lvalert_data["uid"])
+	else:
+		gid = gid_list[0]
+
+	return options, gid
+	
 
 def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 10.0, ignore_404 = False):
 	for i in range(retries):
@@ -56,29 +83,30 @@ def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 1
 		time.sleep(retry_delay)
 	raise Exception("retrieving \"%s\" for %s: (%d) %s" % (filename, graceid, response.status, response.reason))
 
+def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
+	for i, ifo in enumerate(['H1', 'L1', 'V1']):
+		snrm, chisqm = snr_chisq_dict[ifo]
+		if snrm is None:
+			continue
+		fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, ifo, plot_type, 400, event_snr = snrm, event_chisq = chisqm)
+		fname = 'gracedb/%s/%s_%s_%s_snrchi.png' % (gid, gid, ifo, plot_type)
+		fig.savefig(fname)
+		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = {"background_pdf":"background", "injection_pdf":"background", "zero_lag_pdf":"background", "LR":"background"}[plot_type])
 
-if len(sys.argv) == 1:
-	lvalert_data = get_LVAdata_from_stdin(sys.stdin, as_dict = True)
-	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
-	logging.info("lvalert data: %s" % repr(lvalert_data))
-	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-	if filename not in (u"coinc.xml",) and "_CBC_" not in filename:
-		logging.info("filename is not 'coinc.xml'.  skipping")
-		sys.exit()
-	gid = str(lvalert_data["uid"])
-else:
-	gid = sys.argv[1]
+
+options, gid = parse_command_line()
 
 try:
-	os.mkdir(gid)
+	os.mkdir("gracedb/" + gid)
 except OSError:
 	pass
 
-gracedb = GraceDb()
+gracedb = GraceDb(options.gracedb_service_url)
 filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
 xmldoc, checksum = utils.load_fileobj(filename, contenthandler = ligolw.LIGOLWContentHandler)
 coinc_inspiral_row = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)[0]
 sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+coinc_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)[0]
 process = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
 params = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
 snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
@@ -87,6 +115,10 @@ for r in sngl_inspiral_table:
 for r in params:
 	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
 		path = r.value
+	elif r.program == "gstlal_inspiral" and r.param == "--reference-likelihood-file":
+		path = r.value
+	if r.program =="gstlal_inspiral" and r.param == "--marginalized-likelihood-file":
+		marg_path = r.value
 	if r.program == "gstlal_inspiral" and r.param == "--job-tag":
 		tag = r.value
 for r in process:
@@ -106,7 +138,7 @@ pylab.figure()
 pylab.semilogy(t, snr)
 pylab.ylabel('SNR')
 pylab.xlabel('Time from event (s)')
-fname = '%s/%s_snrtime.png' % (gid, gid)
+fname = 'gracedb/%s/%s_snrtime.png' % (gid, gid)
 pylab.ylim([min(snr), max(snr)])
 pylab.xlim([min(t), max(t)])
 pylab.grid()
@@ -117,44 +149,30 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 # SNR / Chisq plots
 #
 
-likelihood_data = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+coinc_param_distributions = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+ranking_data, seglistsdict = far.parse_likelihood_control_doc(utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
+ranking_data.finish()
+# FIXME Is this livetime correct?
+fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglistsdict))
 
-counts = likelihood_data.background_rates
-inj = likelihood_data.injection_rates
+counts = coinc_param_distributions.background_rates
+inj = coinc_param_distributions.injection_rates
 
 bgcol = (224/255.,224/255.,224/255.)
 
 likely = copy.deepcopy(inj)
-for i, ifo in enumerate(['H1', 'L1', 'V1']):
-	snrm, chisqm = snr_chisq_dict[ifo]
-	if snrm is None:
-		continue
-	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
-	for name, obj in (("background", counts),):
-		fig = pylab.figure(figsize=(6,4), facecolor = 'g')
-		fig.patch.set_alpha(0.0)
-		H1 = obj[ifo+"_snr_chi"].array
-		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
-		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
-		chi[0] = 0 # not inf
-		ax = pylab.subplot(111)
-		pylab.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
-		if snrm is not None and chisqm is not None:
-			pylab.plot(snrm, chisqm / snrm / snrm, 'ko', mfc = 'None', ms = 14, mew=4)
-		if "Log" in str(obj[ifo+"_snr_chi"].bins[0]):
-			ax.set_xscale('log')
-		if "Log" in str(obj[ifo+"_snr_chi"].bins[1]):
-			ax.set_yscale('log')
-		pylab.colorbar()
-		pylab.xlabel('SNR')
-		pylab.ylabel('reduced chi^2 / SNR^2')
-		pylab.ylim([0.001, 1])
-		pylab.xlim([4, 200])
-		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
-		pylab.grid(color=(0.1,0.4,0.5), linewidth=2)
-		fname = '%s/%s_%s_snrchi.png' % (gid, gid, ifo)
-		pylab.savefig(fname)
-		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = "background")
+for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
+	plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type)
+
+fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,100.), "Noise", event_likelihood = coinc_table.likelihood)
+fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
+fig.savefig(fname)
+gracedb.writeLog(gid, "Likelihood Ratio CCDF", filename = fname, filecontents = open(fname).read(), tagname = "background")
+
+fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral_row.get_end() - 14400.,coinc_inspiral_row.get_end()), 241)
+fname = 'gracedb/%s/%s_horizon_distances.png' % (gid, gid)
+fig.savefig(fname)
+gracedb.writeLog(gid, "Horizon Distances", filename = fname, filecontents = open(fname).read(), tagname = "psd")
 
 sys.exit()
 

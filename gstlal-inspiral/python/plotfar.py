@@ -27,25 +27,22 @@
 import warnings
 import math
 import matplotlib
-matplotlib.rcParams.update({
-	"font.size": 10.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 600,
-	"savefig.dpi": 600,
-	"text.usetex": True
-})
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from gstlal import plotutil
 from gstlal import far
 
+def init_plot(figsize):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches(figsize)
+	axes = fig.gca()
 
-def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, snr_max, dynamic_range_factor = 1e-10):
+	return fig, axes
+
+
+def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, snr_max, dynamic_range_factor = 1e-10, event_snr = None, event_chisq = None):
 	key = "%s_snr_chi" % instrument
 	if binnedarray_string == "LR":
 		binnedarray = getattr(coinc_param_distributions, "injection_pdf")[key]
@@ -53,10 +50,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		binnedarray = getattr(coinc_param_distributions, binnedarray_string)[key]
 	tag = {"background_pdf":"Noise", "injection_pdf":"Signal", "zero_lag_pdf":"Candidates", "LR":"LR"}[binnedarray_string]
 
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4.5, 3.5))
-	axes = fig.gca()
+	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	# the last bin can have a centre at infinity, and its value is
 	# always 0 anyway so there's no point in trying to include it
 	x = binnedarray.bins[0].centres()[:-1]
@@ -92,6 +86,8 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	if event_snr is not None and event_chisq is not None:
+		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
 	axes.loglog()
 	axes.grid(which = "both")
 	#axes.set_xlim((xlo, xhi))
@@ -104,7 +100,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	elif tag.lower() in ("noise", "candidates"):
 		axes.set_title(r"%s %s $P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % (instrument, tag))
 	elif tag.lower() in ("lr",):
-		axes.set_title(r"%s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % instrument)
+		axes.set_title(r"%s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise} )$" % instrument)
 	else:
 		raise ValueError(tag)
 	return fig
@@ -188,10 +184,7 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	ignored, binnedarray, ignored = coinc_param_distributions.snr_joint_pdf_cache[(instruments, horizon_distances)]
 	instruments = sorted(instruments)
 	horizon_distances = dict(horizon_distances)
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((5, 4))
-	axes = fig.gca()
+	fig, axes = init_plot((5, 4))
 	x = binnedarray.bins[0].centres()
 	y = binnedarray.bins[1].centres()
 	z = binnedarray.array
@@ -241,10 +234,7 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	else:
 		zerolag_pdf = None
 
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4., 4. / plotutil.golden_ratio))
-	axes = fig.gca()
+	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	axes.semilogy(pdf.bins[0].centres(), pdf.array, color = "k")
 	if zerolag_pdf is not None:
 		axes.semilogy(zerolag_pdf.bins[0].centres(), zerolag_pdf.array, color = "k", linestyle = "--")
@@ -270,15 +260,12 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	except AttributeError:
 		return fig
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ratios = None):
+def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ratios = None, event_likelihood = None):
 	ccdf = fapfar.ccdf_interpolator
 
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches((4., 4. / plotutil.golden_ratio))
-	axes = fig.gca()
+	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	x = numpy.linspace(xlo, xhi, 10000)
-	y = ccdf(x)
+	y = numpy.array([far.fap_after_trials(ccdf(likelihood), fapfar.zero_lag_total_count) for likelihood in x])
 	axes.semilogy(x, y, color = "k")
 	yhi = y.max()
 	ylo = max(yhi * 1e-40, y.min())
@@ -290,6 +277,8 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 		yhi = max(yhi, y.max())
 		ylo = min(ylo, y.min())
 		ylo = max(ylo, yhi * (y.min() / yhi)**1.5)
+	if event_likelihood is not None:
+		axes.axvline(event_likelihood, ylo, yhi)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
 	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
@@ -302,3 +291,27 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 		return fig
 	except AttributeError:
 		return fig
+
+def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
+	horizon_history = coinc_param_distributions.horizon_history
+
+	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
+	t = numpy.linspace(tlo, thi, tbins)
+	yhi = 0
+	for ifo in horizon_history.viewkeys():
+		y = numpy.array([horizon_history[ifo][seg] for seg in t])
+		axes.plot(t, y, color = colours[ifo], label = '%s' % ifo)
+		yhi = max(y.max()+5., yhi)
+	axes.set_ylim((0,yhi))
+	axes.set_xlim((round(tlo), round(thi)))
+	axes.set_ylabel('D_H (Mpc)')
+	axes.set_xlabel('GPS Time (s)')
+	axes.set_title('Horizon Distance')
+	axes.legend(loc = "lower left")
+	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
+	try:	
+		fig.tight_layout(pad = .8)
+		return fig
+	except AttributeError:
+		return fig
+
