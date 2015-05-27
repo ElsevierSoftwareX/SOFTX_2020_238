@@ -47,7 +47,8 @@ from gstlal import far
 cgitb.enable()
 
 from gstlal import plotpsd
-from gstlal import  plotfar
+from gstlal import plotfar
+from gstlal import plotsegments
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -202,6 +203,11 @@ class GstlalWebSummary(object):
 			elif datatype == "likelihood":
 				try:
 					self.found[datatype][id] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml" % fname, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+				except KeyError:
+					self.missed[datatype][id] = {}
+			elif datatype == "cumulative_segments":
+				try:
+					self.found[datatype][id] = plotsegments.parse_segments_xml("%s.xml" % fname)
 				except KeyError:
 					self.missed[datatype][id] = {}
 			else:
@@ -476,5 +482,14 @@ class GstlalWebSummary(object):
 			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
 			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "")
+			out += self.to_png(fig = fig)
+		return out
+
+	def plotcumulativesegments(self):
+		out = ""
+		for id in self.registry:
+			likelihood, ranking_data, nu = self.found["likelihood"][id]
+			seglistdicts = self.found["cumulative_segments"][id]
+			fig = plotsegments.plot_segments_history(seglistdicts)
 			out += self.to_png(fig = fig)
 		return out

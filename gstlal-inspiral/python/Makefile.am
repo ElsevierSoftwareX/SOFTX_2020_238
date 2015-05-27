@@ -21,6 +21,7 @@ pkgpython_PYTHON = \
 	lloidplots.py \
 	llweb.py \
 	plotfar.py \
+	plotsegments.py \
 	rate_estimation.py \
 	spiirparts.py \
 	streamthinca.py \

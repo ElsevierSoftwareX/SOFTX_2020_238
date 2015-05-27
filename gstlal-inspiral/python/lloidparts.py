@@ -65,13 +65,13 @@
 # =============================================================================
 #
 
-
+from copy import deepcopy
 import math
-import sys
-import os
 import numpy
-import warnings
+import os
 import StringIO
+import sys
+import warnings
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -96,6 +96,7 @@ from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
+import lal
 from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
 
@@ -206,7 +207,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, segment_history_duration = 2592000., verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -219,6 +220,7 @@ class Handler(simplehandler.Handler):
 		self.dataclass = dataclass
 
 		self.tag = tag
+		self.segment_history_duration = segment_history_duration
 		self.verbose = verbose
 
 		# setup segment list collection from gates
@@ -235,11 +237,7 @@ class Handler(simplehandler.Handler):
 		# record, or maybe not because it could result in a lot of
 		# duplication of on-disk data.  who knows.  think about it.
 		gate_suffix = {
-			# FIXME:  datasegments temporarily disabled until
-			# we decide how to deal with livetime in dag (which
-			# is currently adding its own datasegments lists to
-			# the final database)
-			#"datasegments": "frame_segments_gate",
+			"framesegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
@@ -256,6 +254,9 @@ class Handler(simplehandler.Handler):
 		# so that all segments come here
 		# FIXME:  don't do this, get rid of the Data class
 		dataclass.seglistdicts = self.seglistdicts
+
+		# create a deep copy to keep track of cumulative segments
+		self.cumulative_seglistdicts = deepcopy(self.seglistdicts)
 
 		# state of segments being collected
 		self.current_segment_start = {}
@@ -293,6 +294,7 @@ class Handler(simplehandler.Handler):
 
 		# segment lists
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
+		bottle.route("/cumulative_segments.xml")(self.web_get_cumulative_segments_xml)
 
 	def do_on_message(self, bus, message):
 		"""!
@@ -402,8 +404,9 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			try:
-				# close out existing segments.
+				# close out existing and update cumulative segments.
 				self._close_segments(timestamp)
+				self.update_cumulative_segments()
 				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
 				#FIXME integrate with the Data class snapshotting directories
@@ -490,6 +493,59 @@ class Handler(simplehandler.Handler):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+		return outstr
+
+	def update_cumulative_segments(self):
+		"""!
+		A method to update the cumulative segment list 
+		"""
+		# FIXME Type casts should be removed when we switch to swig bindings
+		current_gps_time = float(lal.GPSTimeNow())
+		seglist_to_drop = segments.segmentlist([segments.segment(NegInfinity, LIGOTimeGPS(current_gps_time - self.segment_history_duration))])
+		for segtype, seglistdict in self.cumulative_seglistdicts.items():
+			seglistdict.extend(self.seglistdicts[segtype])
+			seglistdict.coalesce()
+			for seglist in seglistdict.values():
+				seglist -= seglist_to_drop
+
+	def gen_cumulative_segments_xmldoc(self):
+		"""!
+		A method to output the cumulative segment list in a valid
+		ligolw xml format.
+		"""
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
+
+		# Toggle segments off and on to make sure segment information
+		# added to the cumulative segments is current This needs to be
+		# run with self.dataclass.lock, but this function is only
+		# called currently by web_get_cumulative_segments_xml, which
+		# calls with with self.dataclass.lock
+		try:
+			# FIXME Timestamp here needs to be thought about more,
+			# for the same reason mentioned _gatehandler
+			timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
+			self._close_segments(timestamp)
+		except ValueError:
+			# no segments
+			print >>sys.stderr, "cannot close segments before updating cumulative segments, segment info may be incomplete"
+		self.update_cumulative_segments()
+		with ligolw_segments.LigolwSegments(xmldoc, process) as ligolwsegments:
+			for segtype, seglistdict in self.cumulative_seglistdicts.items():
+				ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_cumulative_segments_xml(self):
+		"""!
+		provide a bottle route to get cumulative segment information via a url
+		"""
+		with self.dataclass.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.gen_cumulative_segments_xmldoc(), output, trap_signals = None)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
