@@ -34,6 +34,12 @@ from glue.ligolw import lsctables
 lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 from glue.ligolw import utils as ligolw_utils
 
+# modules for uploading to GraceDB
+import threading
+from glue.ligolw.utils import process as ligolw_process
+from ligo.gracedb.rest import GraceDb
+import urllib2  # for HTTPError:
+import StringIO
 
 # This mess is to make gstreamer stop eating our help messages.
 if "--help" in sys.argv or "-h" in sys.argv:
@@ -80,6 +86,7 @@ def parse_command_line():
         parser.add_option("--dqv-channel", default = None, type = "string", help = "Give the name of the data quality vector channel of the of the original frame file.")
         parser.add_option("--save-channel", default = None, type = "string", help = "Give the name of the channel of the original frame file which should be carried on to the final frame files.")
         parser.add_option("--injections-file", default = None, type = "string", help = "Give the injections xml file to be injected to the data.") 
+        parser.add_option("--upload-to-gracedb", action = "store_true", help = "upload the paramters of the added injections to GraceDB/SimDB (optional).")
         parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
         parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
         parser.add_option("--compression-level", default = 6, type = "int", help = "compression_level (optional)")
@@ -178,16 +185,6 @@ for i in range(0, len(sim_inspiral_table)-11):
 # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread-in-python
 # https://stackoverflow.com/questions/919897/how-to-find-a-thread-id-in-python
 # as indicated in this last link, maybe the 'logging' module?
-import threading
-from glue.ligolw.utils import process as ligolw_process
-# need?:
-# from glue.ligolw import ligolw
-# from glue.ligolw import lsctables
-from ligo.gracedb.rest import GraceDb
-# for HTTPError:
-import urllib2
-
-import StringIO
 
 class GraceDBThread ( threading.Thread ):
     def __init__ ( self, inj ):
@@ -238,8 +235,9 @@ def watch_data(pad, obj, sim_inspiral_table):
         print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
         while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
             sim = sim_inspiral_table.pop()
-            print "upload sim to gracedb" 
-            GraceDBThread(sim).start()
+            if options.upload_to_gracedb is not None:
+                print "upload sim to gracedb" 
+                GraceDBThread(sim).start()
     elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_NEWSEGMENT:
         update, rate, format, start, stop, position = obj.parse_new_segment()
         start = lal.LIGOTimeGPS(0, start)
