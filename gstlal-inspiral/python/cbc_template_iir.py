@@ -532,9 +532,10 @@ class Bank(object):
 			fFinal = row.f_final
 
 			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, 1, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
-
+			
+			iir_type_flag = 1
 	              	# make the iir filter coeffs
-       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
+       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
 	
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
