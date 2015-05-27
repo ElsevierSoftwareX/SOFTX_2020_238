@@ -2122,8 +2122,8 @@ class FAPFAR(object):
 		fit_min_counts = min(10., self.zero_lag_total_count / 10. + 1)
 		fit_max_counts = min(10000., self.zero_lag_total_count / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
-		if fit_min_counts < 100.:
-			warnings.warn("There are less than 100 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
+		if fit_max_counts < 10000.:
+			warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
 		if zero_lag_compcumcount.compress(rank_range).size < 1:
 			raise ValueError("not enough zero lag data to fit background")
 
