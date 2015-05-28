@@ -231,7 +231,7 @@ class GstlalWebSummary(object):
 		lat = [l[0,1] for l in self.found["latency_history"].values() if l[0,1] > 180]
 		if lat:
 			return "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
-		return "<em class=red>OK</em>"
+		return "<em class=green>OK</em>"
 
 	def latency(self):
 		out = [l[0,1] for l in self.found["latency_history"].values()]
