@@ -30,7 +30,7 @@ def parse_segments_xml(path):
 	#ligolwsegments = ligolw_segments.LigolwSegments(ligolw_utils.load_filename(path,contenthandler=far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 	#return {'h(t) gate': ligolwsegments.get_by_name(u'whitehtsegments'), 'state vector': ligolwsegments.get_by_name(u'statevectorsegments'), 'trigger buffers': ligolwsegments.get_by_name(u'triggersegments'), 'frame gate': ligolwsegments.get_by_name(u'framesegments')}
 	xmldoc = ligolw_utils.load_filename(path,contenthandler=far.ThincaCoincParamsDistributions.LIGOLWContentHandler)
-	return { 'frame gate': ligolw_utils.segments.segmenttable_get_by_name(xmldoc, u'framesegments'),
+	return { #'frame gate': ligolw_utils.segments.segmenttable_get_by_name(xmldoc, u'framesegments'),
 		'h(t) gate': ligolw_utils.segments.segmenttable_get_by_name(xmldoc, u'whitehtsegments'), 
 		'state vector': ligolw_utils.segments.segmenttable_get_by_name(xmldoc, u'statevectorsegments'), 
 		'trigger buffers': ligolw_utils.segments.segmenttable_get_by_name(xmldoc, u'triggersegments')}
@@ -49,7 +49,7 @@ def plot_segments_history(seglistdicts, length = 86400., labelspacing = 10800.):
 	x_format = tkr.FuncFormatter(lambda x, pos: datetime.datetime(*lal.GPSToUTC(int(x))[:7]).strftime("%Y-%m-%d, %H:%M:%S UTC"))
 	x_ticks = numpy.arange(t_min,t_max+labelspacing, labelspacing)
 
-	for j, segtype in enumerate(['trigger buffers', 'h(t) gate', 'state vector', 'frame gate']):
+	for j, segtype in enumerate(['trigger buffers', 'h(t) gate', 'state vector']):#, 'frame gate']):
 		for row, (ifo, segmentlist) in enumerate(seglistdicts[segtype].items()):
 			y_ticks.append([row + 2*j + 0.5])
 			y_tick_labels.append('%s %s' % (ifo, segtype))
