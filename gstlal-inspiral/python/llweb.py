@@ -228,17 +228,17 @@ class GstlalWebSummary(object):
 			return "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
 			return "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
-		lat = [l[0,1] for l in self.found["latency_history"].values() if l[0,1] > 180]
+		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 180]
 		if lat:
 			return "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
 		return "<em class=green>OK</em>"
 
 	def latency(self):
-		out = [l[0,1] for l in self.found["latency_history"].values()]
+		out = [l[-1,1] for l in self.found["latency_history"].values()]
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def time_since_last(self):
-		out = [now() - l[0,0] for l in self.found["latency_history"].values()]
+		out = [now() - l[-1,0] for l in self.found["latency_history"].values()]
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def average_up_time(self):
