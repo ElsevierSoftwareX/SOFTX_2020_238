@@ -68,12 +68,12 @@ print """
 		<label for="tab-%d">Summary</label>
 		<div class="content">
 			<table>
-				<tr><th>Latency</th><th>SNR</th><th>Chirp Mass</th><th>RAM</th><th>Time since last</th><th>Live time</th></tr>
-				<tr><td>%s     </td><td>%s </td><td>%s        </td><td>%s </td><td>%s             </td><td>%s       </td></tr>
+				<tr><th>Latency</th><th>Time since last</th><th>Live time</th></tr>
+				<tr><td>%s     </td><td>%s             </td><td>%s       </td></tr>
 			</table>
 		</div>
 	</div>
-""" % (cnt, cnt, web.latency(), "0", "0", "0", web.time_since_last(), web.average_up_time())
+""" % (cnt, cnt, web.latency(), web.time_since_last(), web.average_up_time())
 
 cnt+=1
 
