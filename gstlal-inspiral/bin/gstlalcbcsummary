@@ -99,6 +99,15 @@ for ifo in web.ifos:
 		cnt+=1
 
 print """
+	<div class=tab>
+	<input type="radio" id="tab-%d" name="tab-group-1">
+	<label for="tab-%d">%s</label>
+	<div class="content">%s</div>
+	</div>
+	""" % (cnt, cnt, "likelihood CCDF", web.plot("marginalized_likelihood"))
+cnt+=1
+
+print """
 </div>
 <div class=topbox>
 	Node links:

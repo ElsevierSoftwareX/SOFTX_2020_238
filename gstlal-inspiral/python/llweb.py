@@ -211,6 +211,12 @@ class GstlalWebSummary(object):
 					self.found[datatype][id] = plotsegments.parse_segments_xml("%s.xml" % fname)
 				except KeyError:
 					self.missed[datatype][id] = {}
+			elif datatype == "marginalized_likelihood":
+				fname = "%s/%s" % (self.directory, datatype)
+				try:
+					self.found[datatype] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml.gz" % fname, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+				except KeyError:
+					self.missed[datatype] = {}
 			else:
 				try:
 					self.found[datatype][id] = numpy.loadtxt("%s.txt" % fname)
@@ -301,7 +307,8 @@ class GstlalWebSummary(object):
 		return out
 
 	def plot(self, datatype, ifo = None):
-		fig, h = self.setup_plot()
+		if "marginalized_likelihood" not in datatype:
+			fig, h = self.setup_plot()
 		found = self.found[datatype]
 		missed = self.missed[datatype]
 		if datatype == "latency_history":
@@ -314,6 +321,8 @@ class GstlalWebSummary(object):
 			return self.plot_single_col(fig, h, found, missed, col = 2, title = "Chirp Mass")
 		if "ram_history" in datatype:
 			return self.plot_ram(fig, h, found, missed)
+		if "marginalized_likelihood" in datatype:
+			return self.plot_likelihood_ccdf(found, missed)
 
 	def plot_latency(self, fig, h, found, missed):
 		found_x = range(len(found))
@@ -413,6 +422,17 @@ class GstlalWebSummary(object):
 		plt.title("max RAM usage (GB)")
 		return self.finish_plot([0.9 * min_y, max_y])
 
+	def plot_likelihood_ccdf(self, found, missed):
+		likelihood, ranking_data, nu = found
+		ranking_data.finish()
+		fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(nu))
+		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "Noise")
+		f = StringIO.StringIO()
+		fig.savefig(f, format="png")
+		out = '<img src="data:image/png;base64,' + base64.b64encode(f.getvalue()) + '"></img>'
+		f.close()
+		return out
+
 	#
 	# Single Node plots
 	# 
@@ -504,7 +524,7 @@ class GstlalWebSummary(object):
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
-			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "")
+			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "Noise")
 			out += self.to_png(fig = fig)
 		return out
 
