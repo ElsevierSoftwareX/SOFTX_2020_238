@@ -190,6 +190,7 @@ class GstlalWebSummary(object):
 
 		self.found = Data()
 		self.missed = Data()
+		self.now = now()
 
 	def load_data(self, datatype):
 		self.found[datatype] = {}; self.missed[datatype] = {}
@@ -221,8 +222,16 @@ class GstlalWebSummary(object):
 					self.missed[datatype][id] = numpy.array([])
 
 	def status(self):
+		if self.oldest_data() > 1800:
+			return "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
 		if not self.found["latency_history"]:
 			return "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
+		if self.missed["latency_history"]:
+			return "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
+		lat = [l[0,1] for l in self.found["latency_history"].values() if l[0,1] > 180]
+		if lat:
+			return "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
+		return "<em class=red>OK</em>"
 
 	def latency(self):
 		out = [l[0,1] for l in self.found["latency_history"].values()]
@@ -243,7 +252,21 @@ class GstlalWebSummary(object):
 			else:
 				fac = 1.
 			out[ifo] = [sum(l[0,1:4])/fac for l in self.found["%s/state_vector_on_off_gap" % ifo].values()]
-		return "<br>".join(["%s=%.0e s" % (ifo, numpy.mean(v)) for ifo,v in out.items()])
+		return "<br>".join(["%s=%.0f s" % (ifo, numpy.mean(v)) for ifo,v in out.items()])
+
+	def oldest_data(self):
+		out = 0.
+		for ifo in self.ifos:
+			# FIXME a hack to deal with 16 Hz sample rate for LIGO
+			# statevector and 1 Hz for Virgo
+			# FIXME this should go in gstlal proper.
+			if ifo != "V1":
+				fac = 16.
+			else:
+				fac = 1.
+			x = [self.now - l[0,0] for l in self.found["%s/state_vector_on_off_gap" % ifo].values()]
+			out = max(out, max(x))
+		return out
 
 	def setup_plot(self):
 		fig = plt.figure(figsize=(15, 4.0),)
