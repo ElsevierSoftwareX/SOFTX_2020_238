@@ -60,8 +60,8 @@ def parse_command_line():
 		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 		logging.info("lvalert data: %s" % repr(lvalert_data))
 		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-		if filename not in (u"coinc.xml",):
-			logging.info("filename is not 'coinc.xml'.  skipping")
+		if filename not in (u"psd.xml.gz",):
+			logging.info("filename is not 'psd.xml.gz'.  skipping")
 			sys.exit()
 		gid = str(lvalert_data["uid"])
 	else:
