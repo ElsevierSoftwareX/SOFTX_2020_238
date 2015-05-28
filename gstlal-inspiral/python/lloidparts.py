@@ -503,7 +503,7 @@ class Handler(simplehandler.Handler):
 		"""
 		# FIXME Type casts should be removed when we switch to swig bindings
 		current_gps_time = float(lal.GPSTimeNow())
-		seglist_to_drop = segments.segmentlist([segments.segment(NegInfinity, LIGOTimeGPS(current_gps_time - self.segment_history_duration))])
+		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, LIGOTimeGPS(current_gps_time - self.segment_history_duration))])
 		for segtype, seglistdict in self.cumulative_seglistdicts.items():
 			seglistdict.extend(self.seglistdicts[segtype])
 			seglistdict.coalesce()
