@@ -148,7 +148,7 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 		f.write("[%s_%s_%s]\n" % (gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
 		f.write("executable=./lvalert.sh")
 		if injections:
-			f.write("\n[%s_%s_%s]\n" % (inj_gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
+			f.write("\n[%s_%s_%s]\n" % (inj_gracedb_group.lower(), inj_gracedb_pipeline.lower(), inj_gracedb_search.lower()))
 			f.write("executable=./lvalert_inj.sh")
 		f.close()
 
