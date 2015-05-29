@@ -64,13 +64,7 @@ from gstlal import simplehandler
 usage = """
 This help mssage help you to get started. Examples of given options is as the following:
 For LHO:
-./gstlal_inj_frames_shm_optparse --channel H1:GDS-FAKE_STRAIN --shared-memory-read LHO_Data --injections-file ER6_BNS.xml --shared-memory-write LHO_Data_Inj --channel-inj H1:GDS-FAKE_STRAIN_INJ --dqv-channel H1:GDS-CALIB_STATE_VECTOR
-
-For LLO:
-./gstlal_inj_frames_shm_optparse --channel L1:GDS-CALIB_STRAIN --shared-memory-read LLO_Data --injections-file ER6_BNS.xml --shared-memory-write LLO_Data_Inj --channel-inj L1:GDS-CALIB_STRAIN_INJ --dqv-channel L1:GDS-CALIB_STATE_VECTOR
-
-For Virgo:
-./gstlal_inj_frames_shm_optparse --channel V1:FAKE_h_16384Hz_4R --shared-memory-read VIRGO_Data --injections-file ER6_BNS.xml --shared-memory-write VIRGO_Data_Inj --channel-inj V1:FAKE_h_16384Hz_4R_INJ --dqv-channel V1:LLD-DQ_VECTOR
+./gstlal_inj_frames --channel H1:GDS-CALIB_STRAIN --shared-memory-read LHO_Data --injections-file ER7_bns_injs.xml --shared-memory-write LHO_Data_Inj --channel-inj H1:GDS-CALIB_STRAIN_INJ --dqv-channel H1:GDS-CALIB_STATE_VECTOR --save-channel H1:ODC-MASTER_CHANNEL_OUT_DQ --upload-to-gracedb --group Test --search LowMassInj
 """
 
 def write_graph(demux):
@@ -87,6 +81,8 @@ def parse_command_line():
         parser.add_option("--save-channel", default = None, type = "string", help = "Give the name of the channel of the original frame file which should be carried on to the final frame files.")
         parser.add_option("--injections-file", default = None, type = "string", help = "Give the injections xml file to be injected to the data.") 
         parser.add_option("--upload-to-gracedb", action = "store_true", help = "upload the paramters of the added injections to GraceDB/SimDB (optional).")
+        parser.add_option("--group", default = None, type = "string", help = "Give the group name to be uploaded to GraceDB e.g. Test")
+        parser.add_option("--search", default = None, type = "string", help = "Give the search name to be uploaded to GraceDB e.g. LowMassInjReplay.")
         parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
         parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
         parser.add_option("--compression-level", default = 3, type = "int", help = "compression_level (optional)")
@@ -101,6 +97,13 @@ def parse_command_line():
         missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
         if missing_options:
                 raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
+
+        required_options_for_gracedb = ["group", "search"]
+
+        missing_options_for_gracedb = ["--%s" % option.replace("_", "-") for option in required_options_for_gracedb if getattr(options, option) is None]
+        if options.upload_to_gracedb is not None:
+            if missing_options_for_gracedb:
+                    raise ValueError("missing required option(s) to be able to upload to graedb %s" % ", ".join(sorted(missing_options_for_gracedb)))
 
         return options, filenames
 
@@ -212,7 +215,8 @@ class GraceDBThread ( threading.Thread ):
         print "Talking to GraceDB"
         gracedb = GraceDb("https://simdb.phys.uwm.edu/api/")
         try:
-            r = gracedb.createEvent("Test", "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
+            r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
+            #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
             rdict = r.json()
             graceid = rdict['graceid']
             print "Success: GraceID = %s" % graceid
