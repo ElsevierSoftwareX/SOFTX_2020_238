@@ -139,8 +139,6 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 			f.write("#!/bin/bash \n")
 			f.write('cat <&0 | tee ')
 			for prog in inj_progs:
-				print inj_gracedb_service_url
-				print dagparts.which(prog)
 				f.write(">(%s --gracedb-service-url=%s) " % (dagparts.which(prog), inj_gracedb_service_url))
 			f.close()
 			os.chmod('lvalert_inj.sh', os.stat('lvalert_inj.sh').st_mode | stat.S_IEXEC)
