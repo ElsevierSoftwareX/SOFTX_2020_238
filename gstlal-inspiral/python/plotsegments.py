@@ -69,7 +69,9 @@ def plot_segments_history(seglistdicts, length = 86400., labelspacing = 10800.):
 	plt.yticks(y_ticks, y_tick_labels)
 	plt.xticks(x_ticks, rotation=10.)
 	h.tick_params(axis='y',which='both',left='off',right='off')
-	h.grid(color=(0.1,0.4,0.5), linewidth=2, which='both', axis='x')
+	h.grid(color=(0.1,0.4,0.5), linewidth=2)
+	# FIXME use this grid() when we have a newer matplotlib
+	# h.grid(color=(0.1,0.4,0.5), linewidth=2, which='both', axis='x')
 	# FIXME Switch to tight_layout() when matplotlib is updated
 	try:
 		fig.tight_layout(pad = .8)
