@@ -168,8 +168,8 @@ parser.add_option("--record-gamma-sr", metavar = "Hz", type = int, default = 16,
 parser.add_option("--darm-ctrl-channel-name", metavar = "name", default = "CAL-DARM_CTRL_WHITEN_OUT_DQ", help = "CALIBRATION MODE: Set the name for the control signal channel. (Default = CAL-DARM_CTRL_WHTIEN_OUT_DQ)")
 parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_WHITEN_OUT_DQ", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default = CAL-DARM_ERR_WHITEN_OUT_DQ)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "CALIBRATION MODE: Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = LSC-DARM_CTRL_EXC_DAQ)")
-parser.add_option("--control-chain-delay", metavar = "int", default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the control chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
-parser.add_option("--error-chain-delay", metavar = "int", default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the error chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
+parser.add_option("--control-chain-delay", metavar = "samples", type = int, default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the control chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
+parser.add_option("--error-chain-delay", metavar = "samples", type = int, default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the error chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
 
 #
 # Parse options
@@ -417,11 +417,11 @@ else:
 	#cal_line_freq = 1144.300000
 
 	# If you have a filters file with all of the info in it, uncomment the following lines
-	olgR = filters["olg_re"]
-	olgI = filters["olg_im"]
-	wR = filters["whitener_re"]
-	wI = filters["whitener_im"]
-	cal_line_freq = filters["cal_line_freq"]
+	olgR = float(filters["olg_re"])
+	olgI = float(filters["olg_im"])
+	wR = float(filters["whitener_re"])
+	wI = float(filters["whitener_im"])
+	cal_line_freq = float(filters["cal_line_freq"])
 
 	# EXC branch
 	if not options.no_gamma:
@@ -439,7 +439,7 @@ else:
 
 	# The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
 	# FIXME: Why is there an extra length of filter latency required here?
-	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(options.error_chain_delay), fir_matrix = [[1]], time_domain = True)
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(options.error_chain_delay), fir_matrix = [[0,1]], time_domain = True)
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])+len(filters["inv_sensing"]), fir_matrix = [filters["inv_sensing"][::-1]], time_domain = True)
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])+len(filters["dewhiten_err"]), fir_matrix = [filters["dewhiten_err"][::-1]], time_domain = True)
 	
@@ -451,7 +451,7 @@ else:
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
 	# FIXME: Why is there an extra length of filter latency required here?
-	dctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), latency = -int(options.control_chain_delay), fir_matrix = [[1]], time_domain = True)
+	dctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), latency = -int(options.control_chain_delay), fir_matrix = [[0,1]], time_domain = True)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])+len(filters["actuation"]), fir_matrix = [filters["actuation"][::-1]], time_domain = True)
@@ -747,7 +747,7 @@ if options.data_source == "white" or (options.data_source == "lvshm" and not opt
 if options.data_source == "white" or options.data_source == "frames":
 	datasource.do_seek(pipeline, seekevent)	
 	print >>sys.stderr, "seeking GPS start and stop times ..."
-if not options.no_gamma and not options.recolor and not options.data_source == "white" and not options.data_source == "frames":
+if not options.no_gamma and not options.recolor:
 	if coshead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 		raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
 	if not coshead.send_event(seekevent):
