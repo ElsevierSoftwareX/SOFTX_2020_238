@@ -451,7 +451,7 @@ else:
 	dctrltee = pipeparts.mktee(pipeline, dctrl)
 
 	# FIXME: Why is there an extra length of filter latency required here?
-	dctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, dctrltee), latency = -int(options.control_chain_delay), fir_matrix = [[1]], time_domain = True)
+	dctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), latency = -int(options.control_chain_delay), fir_matrix = [[1]], time_domain = True)
 	dctrl = pipeparts.mkresample(pipeline, dctrl, quality = 9)
 	dctrl = pipeparts.mkcapsfilter(pipeline, dctrl, "audio/x-raw-float, rate=%d" % actuationsr)
 	dctrl = pipeparts.mkfirbank(pipeline, dctrl, latency = -int(filters["actuation_delay"])+len(filters["actuation"]), fir_matrix = [filters["actuation"][::-1]], time_domain = True)
@@ -478,7 +478,7 @@ else:
 		excgamma = pipeparts.mkresample(pipeline, excgamma, quality = 9)
 		excgamma = pipeparts.mkcapsfilter(pipeline, excgamma, "audio/x-raw-float, rate=%d" % options.compute_gamma_sr) 
 
-		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, dctrlgamma, excgamma, pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = sr, time_domain = True, wI = wI, wR = wR)
+		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, dctrlgamma, excgamma, pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = options.compute_gamma_sr, time_domain = True, wI = wI, wR = wR)
 		gammaR = compute_gamma_bin.get_pad("gammaR")
 		gammaR = pipeparts.mkaudiorate(pipeline, gammaR, skip_to_first = True, silent = False)
 		gammaRtee = pipeparts.mktee(pipeline, gammaR)
@@ -486,7 +486,7 @@ else:
 		gammaI = compute_gamma_bin.get_pad("gammaI")
 		gammaI = pipeparts.mkaudiorate(pipeline, gammaI, skip_to_first = True, silent = False)
 		gammaItee = pipeparts.mktee(pipeline, gammaI)
-	
+
 		# The \gamma(t) factors will not modify the sensing function during ER7.  Once the \gamma(t) calculation is fully commissioned, it will be used to modify the sensing chain.
 		# Mulitiply the derr branch by 1/gamma
 		#gamma_modify_derr = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), quality = 9)
@@ -534,7 +534,6 @@ elif options.wings is None and (not options.no_gamma and not options.recolor):
 #
 
 if not options.no_dq_vector:
-
 	odcstatevector = pipeparts.mkaudiorate(pipeline, odcstatevector, skip_to_first = True, silent = False)
 	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
 	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
@@ -594,10 +593,10 @@ if not options.no_dq_vector:
 		gammaRdq = pipeparts.mkaudiorate(pipeline, gammaRdq, skip_to_first = True, silent = False)
 		gammaRdqtee = pipeparts.mktee(pipeline, gammaRdq)
 
-		gammaok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, gammaRdqtee), threshold = 0.8, bit_vector = 32)	
+		gammaok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, gammaRdqtee, max_size_time = gst.SECOND * 100), threshold = 0.8, bit_vector = 32)	
 		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
-		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRdqtee))	
+		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRdqtee, max_size_time = gst.SECOND * 100))	
 		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = gammaIdq)
 		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 32, nongap_is_control = True)
 		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
@@ -665,17 +664,17 @@ if not options.no_dq_vector:
 
 # Resample the gamma channels at the specified recording sample rate and change them to single precision channels
 if not options.no_gamma and not options.recolor:
-	gammaRout = pipeparts.mkresample(pipeline, gammaRout, quality = 9)
+	#gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
+	#gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32")
+	gammaRout = pipeparts.mkaudioundersample(pipeline, gammaRout)
 	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
 	gammaRout = pipeparts.mkaudiorate(pipeline, gammaRout, skip_to_first = True, silent = False)
-	gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
-	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32")
  
-	gammaIout = pipeparts.mkresample(pipeline, gammaIout, quality = 9)
+	#gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
+	#gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32")
+	gammaIout = pipeparts.mkaudioundersample(pipeline, gammaIout)
 	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
 	gammaIout = pipeparts.mkaudiorate(pipeline, gammaIout, skip_to_first = True, silent = False)
-	gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
-	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32")
 
 # Gate everything with the strain channel so that no frames get written without a strain channel
 # These leaky gates also drop any gaps set by the "wings" option
