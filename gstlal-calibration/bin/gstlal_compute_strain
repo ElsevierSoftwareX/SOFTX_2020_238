@@ -135,6 +135,7 @@ parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the
 parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required if --frame-segments-file is given")
 parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate strain data. This should be less than or equal to the sample rate of the measured PSDs provided if the pipeline is operating in recoloring mode, and it should be less than or equal to the sample rate of the error and control signal channels if operating in calibration mode. (Default = 16384 Hz)")
 parser.add_option("--dq-sample-rate", metavar = "Hz", default = 16, type = "int", help = "Sample rate for the outgoing DQ vector GDS-CALIB_STATE_VECTOR. (Default = 16 Hz)")
+parser.add_option("--output-strain-channel-name", metavar = "name", default="GDS-CALIB_STRAIN", help = "Output strain channel name. (Default=GDS-CALIB_STRAIN)")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
 parser.add_option("--compression-scheme", metavar = "scheme", type = "int", default = 256, help = "Set the compression scheme for the framecpp_channelmux element. (Default=256, no compression)")
@@ -168,6 +169,7 @@ parser.add_option("--darm-ctrl-channel-name", metavar = "name", default = "CAL-D
 parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_WHITEN_OUT_DQ", help = "CALIBRATION MODE: Set the name of the error signal channel. (Default = CAL-DARM_ERR_WHITEN_OUT_DQ)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "CALIBRATION MODE: Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = LSC-DARM_CTRL_EXC_DAQ)")
 parser.add_option("--control-chain-delay", metavar = "int", default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the control chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
+parser.add_option("--error-chain-delay", metavar = "int", default = 0, help = "CALIBRATION MODE: Additional delay from the front end to apply to the error chain. Should be given as number of samples at sample rate specified by --sample-rate (default of 16384 Hz). (Default = 0)")
 
 #
 # Parse options
@@ -408,18 +410,18 @@ else:
 	dewhitenctrlsr = int(filters["dewhiten_ctrl_sr"])
 
 	# For comparisons with the second S6 epoch, uncomment the following lines
-	olgR = 3.2749237351091275e-2
-	olgI = 2.2395752008766873e-1
-	wR = 0.0099845355484356
-	wI = -0.000556250270852907
-	cal_line_freq = 1144.300000
+	#olgR = 3.2749237351091275e-2
+	#olgI = 2.2395752008766873e-1
+	#wR = 0.0099845355484356
+	#wI = -0.000556250270852907
+	#cal_line_freq = 1144.300000
 
 	# If you have a filters file with all of the info in it, uncomment the following lines
-	#olgR = filters["olg_re"]
-	#olgI = filters["olg_im"]
-	#wR = filters["whitener_re"]
-	#wI = filters["whitener_im"]
-	#cal_line_freq = filters["cal_line_freq"]
+	olgR = filters["olg_re"]
+	olgI = filters["olg_im"]
+	wR = filters["whitener_re"]
+	wI = filters["whitener_im"]
+	cal_line_freq = filters["cal_line_freq"]
 
 	# EXC branch
 	if not options.no_gamma:
@@ -437,6 +439,7 @@ else:
 
 	# The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
 	# FIXME: Why is there an extra length of filter latency required here?
+	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(options.error_chain_delay), fir_matrix = [[1]], time_domain = True)
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["inv_sens_delay"])+len(filters["inv_sensing"]), fir_matrix = [filters["inv_sensing"][::-1]], time_domain = True)
 	derr = pipeparts.mkfirbank(pipeline, derr, latency = -int(filters["dewhiten_err_delay"])+len(filters["dewhiten_err"]), fir_matrix = [filters["dewhiten_err"][::-1]], time_domain = True)
 	
@@ -471,7 +474,8 @@ else:
 		dctrlgamma = pipeparts.mkresample(pipeline, dctrlgamma, quality = 9)
 		dctrlgamma = pipeparts.mkcapsfilter(pipeline, dctrlgamma, "audio/x-raw-float, rate=%d" % options.compute_gamma_sr) 
 
-		excgamma = pipeparts.mkresample(pipeline, exc, quality = 9)
+		excgamma = pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 100)
+		excgamma = pipeparts.mkresample(pipeline, excgamma, quality = 9)
 		excgamma = pipeparts.mkcapsfilter(pipeline, excgamma, "audio/x-raw-float, rate=%d" % options.compute_gamma_sr) 
 
 		compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, dctrlgamma, excgamma, pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = sr, time_domain = True, wI = wI, wR = wR)
@@ -509,7 +513,7 @@ else:
 	
 # Put the units back to strain before writing to frames
 straintee = pipeparts.mktee(pipeline, strain)
-straintagstr = "units=strain,channel-name=GDS-CALIB_STRAIN,instrument=%s" % (instrument)
+straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_strain_channel_name, instrument)
 strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 
 if options.wings is not None:
@@ -583,22 +587,21 @@ if not options.no_dq_vector:
 		# FIXME: Threshold can only be positive... need to figure out corner cases.
 		gammaIdq = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100), quality = 9)
 		gammaIdq = pipeparts.mkcapsfilter(pipeline, gammaIdq, "audio/x-raw-float, rate=%d" % dqsr)
+		gammaIdq = pipeparts.mkaudiorate(pipeline, gammaIdq, skip_to_first = True, silent = False)
 
 		gammaRdq = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), quality=9)
-	#	gammaRdq = pipeparts.mkcapsfilter(pipeline, gammaRdq, "audio/x-raw-float, rate=%d" % dqsr)
+		gammaRdq = pipeparts.mkcapsfilter(pipeline, gammaRdq, "audio/x-raw-float, rate=%d" % dqsr)
+		gammaRdq = pipeparts.mkaudiorate(pipeline, gammaRdq, skip_to_first = True, silent = False)
 		gammaRdqtee = pipeparts.mktee(pipeline, gammaRdq)
 
-		pipeparts.mkfakesink(pipeline, gammaIdq)
-		pipeparts.mkfakesink(pipeline, gammaRdqtee)
-
-	#	gammaok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, gammaRdqtee), threshold = 0.8, bit_vector = 32)	
-	#	gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-	#	gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
-	#	gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRdqtee))	
-	#	gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = gammaIdq)
-	#	gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 32, nongap_is_control = True)
-	#	gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-	#	gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
+		gammaok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, gammaRdqtee), threshold = 0.8, bit_vector = 32)	
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
+		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
+		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 1.2, invert_control = True, control = pipeparts.mkqueue(pipeline, gammaRdqtee))	
+		gammaok = pipeparts.mkgate(pipeline, gammaok, threshold = 0.2, invert_control = True, control = gammaIdq)
+		gammaok = pipeparts.mkbitvectorgen(pipeline, gammaok, bit_vector = 32, nongap_is_control = True)
+		gammaok = pipeparts.mkcapsfilter(pipeline, gammaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
+		gammaok = pipeparts.mkaudiorate(pipeline, gammaok, skip_to_first = True, silent = False)
 
 	#
 	# H(T)-OK BIT BRANCH
@@ -640,8 +643,8 @@ if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, higher_bits_tee, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, scienceintenttee, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, htok, max_size_time = gst.SECOND * 100).link(calibstatevector)
-	#if not options.no_gamma and not options.recolor:
-	#	pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
+	if not options.no_gamma and not options.recolor:
+		pipeparts.mkqueue(pipeline, gammaok, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, hwinjcbc, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, hwinjburst, max_size_time = gst.SECOND * 100).link(calibstatevector)
 	pipeparts.mkqueue(pipeline, hwinjdetchar, max_size_time = gst.SECOND * 100).link(calibstatevector)
@@ -664,28 +667,29 @@ if not options.no_dq_vector:
 if not options.no_gamma and not options.recolor:
 	gammaRout = pipeparts.mkresample(pipeline, gammaRout, quality = 9)
 	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
-	#gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
-	#gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32")
+	gammaRout = pipeparts.mkaudiorate(pipeline, gammaRout, skip_to_first = True, silent = False)
+	gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
+	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32")
  
 	gammaIout = pipeparts.mkresample(pipeline, gammaIout, quality = 9)
 	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
-	#gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
-	#gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32")
+	gammaIout = pipeparts.mkaudiorate(pipeline, gammaIout, skip_to_first = True, silent = False)
+	gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
+	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32")
 
 # Gate everything with the strain channel so that no frames get written without a strain channel
 # These leaky gates also drop any gaps set by the "wings" option
 straintee = pipeparts.mktee(pipeline, strain)
 
-strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, straintee), control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 if not options.no_dq_vector:
-	calibstatevector = pipeparts.mkgate(pipeline, calibstatevector, control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+	calibstatevector = pipeparts.mkgate(pipeline, calibstatevector, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 if options.data_source != "white":
 	if not options.no_dq_vector:
-		odcstatevector_out = pipeparts.mkgate(pipeline, odcstatevector_out, control = pipeparts.mkqueue(pipeline, straintee), threshold = 0, leaky = True)
+		odcstatevector_out = pipeparts.mkgate(pipeline, odcstatevector_out, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 if not options.no_gamma and not options.recolor:
 	gammaRout = pipeparts.mkgate(pipeline, gammaRout, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 	gammaIout = pipeparts.mkgate(pipeline, gammaIout, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
-
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -704,15 +708,15 @@ mux.set_property("compression-level", options.compression_level)
 if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STATE_VECTOR" % instrument))
 	if options.data_source != "white":
-		odcstatevector_out.get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
+		pipeparts.mkqueue(pipeline, odcstatevector_out, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
 pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STRAIN" % (instrument)))
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma and not options.recolor:
-	gammaRout.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_REAL" % instrument))
-	gammaIout.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, gammaRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_REAL" % instrument))
+	pipeparts.mkqueue(pipeline, gammaIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_IMAGINARY" % instrument))
 
 # FIXME: More outputs need to be hooked up to the muxer
 
