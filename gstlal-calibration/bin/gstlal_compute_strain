@@ -498,6 +498,14 @@ else:
 		#pipeparts.mkpow(pipeline, gamma_modify_derr, exponent = -1.0).link(derr_gamma)
 		derr_gamma = derr
 
+	# Use a leaky gate on error, control, and excitation channel to drop any filter settle gaps upon start up
+	# FIXME: This process assumes the control chain will always include longer filters
+	dctrltee = pipeparts.mktee(pipeline, dctrl)
+	if options.no_gamma:
+		derr = pipeparts.mkgate(pipeline, derr, control = pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+	elif not options.no_gamma and not options.recolor:
+		derr_gamma = pipeparts.mkgate(pipeline, derr_gamma, control = pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+
 	# Add DARM_ERR and DARM_CTRL to make h(t)
 	strain = gst.element_factory_make("lal_adder")
 	strain.set_property("sync", True)
@@ -506,7 +514,7 @@ else:
 		pipeparts.mkqueue(pipeline, derr_gamma, max_size_time = gst.SECOND * 100).link(strain)
 	else:
 		pipeparts.mkqueue(pipeline, derr, max_size_time = gst.SECOND * 100).link(strain)
-	pipeparts.mkqueue(pipeline, dctrl, max_size_time = gst.SECOND * 100).link(strain)
+	pipeparts.mkqueue(pipeline, dctrltee, max_size_time = gst.SECOND * 100).link(strain)
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3995.1)
 	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 	strain = pipeparts.mkprogressreport(pipeline, strain, "%s_progress_hoft" % instrument)
@@ -664,27 +672,46 @@ if not options.no_dq_vector:
 
 # Resample the gamma channels at the specified recording sample rate and change them to single precision channels
 if not options.no_gamma and not options.recolor:
-	#gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
-	#gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32")
+	gammaRout = pipeparts.mkaudioconvert(pipeline, gammaRout)
+	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, width=32, rate=%d" % options.compute_gamma_sr)
 	gammaRout = pipeparts.mkaudioundersample(pipeline, gammaRout)
 	gammaRout = pipeparts.mkcapsfilter(pipeline, gammaRout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
 	gammaRout = pipeparts.mkaudiorate(pipeline, gammaRout, skip_to_first = True, silent = False)
  
-	#gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
-	#gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32")
+	gammaIout = pipeparts.mkaudioconvert(pipeline, gammaIout)
+	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, width=32, rate=%d" % options.compute_gamma_sr)
 	gammaIout = pipeparts.mkaudioundersample(pipeline, gammaIout)
 	gammaIout = pipeparts.mkcapsfilter(pipeline, gammaIout, "audio/x-raw-float, rate=%d" % options.record_gamma_sr)
 	gammaIout = pipeparts.mkaudiorate(pipeline, gammaIout, skip_to_first = True, silent = False)
 
-# Gate everything with the strain channel so that no frames get written without a strain channel
+# Gate the strain channel with all of the channels we want in frames
+if not options.no_dq_vector:
+	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+	strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
+	if options.data_source != "white":
+		odcstatevector_outtee = pipeparts.mktee(pipeline, odcstatevector_out)
+		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, odcstatevector_outtee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+		odcstatevector_out = pipeparts.mkqueue(pipeline, odcstatevector_outtee, max_size_time = gst.SECOND * 100) 
+if not options.no_gamma and not options.recolor:
+	gammaRouttee = pipeparts.mktee(pipeline, gammaRout)
+	strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, gammaRouttee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+	gammaRout = pipeparts.mkqueue(pipeline, gammaRouttee, max_size_time = gst.SECOND * 100)
+	
+	gammaIouttee = pipeparts.mktee(pipeline, gammaIout)
+	strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, gammaIouttee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
+	gammaIout = pipeparts.mkqueue(pipeline, gammaIouttee, max_size_time = gst.SECOND * 100)
+
+strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+
+# Gate everything with the strain channel so that no frames get written without a strain channel or any other channel already gated with the strain channel
 # These leaky gates also drop any gaps set by the "wings" option
 straintee = pipeparts.mktee(pipeline, strain)
 
 strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 if not options.no_dq_vector:
 	calibstatevector = pipeparts.mkgate(pipeline, calibstatevector, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
-if options.data_source != "white":
-	if not options.no_dq_vector:
+	if options.data_source != "white":
 		odcstatevector_out = pipeparts.mkgate(pipeline, odcstatevector_out, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
 if not options.no_gamma and not options.recolor:
 	gammaRout = pipeparts.mkgate(pipeline, gammaRout, control = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), threshold = 0, leaky = True)
