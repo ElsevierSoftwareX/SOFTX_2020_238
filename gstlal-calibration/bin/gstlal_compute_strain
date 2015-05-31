@@ -585,7 +585,7 @@ if not options.no_dq_vector:
 		filtersok = pipeparts.mkgeneric(pipeline, filtersok, "lal_wings", initial_timestamp = (int(options.gps_start_time) + options.filter_settle_time) * gst.SECOND, final_timestamp = sys.maxint, timestamp = True)
 		filtersok = pipeparts.mkaudiorate(pipeline, filtersok, skip_to_first = True, silent = False)
 	elif options.data_source == "lvshm":
-		filtersok = pipeparts.mkgeneric(pipeline, filtersok, "lal_wings", initial_timestamp = (NOW + options.filter_settle_time) * gst.SECOND, final_timestamp = sys.maxint, timestamp = True)
+		filtersok = pipeparts.mkgeneric(pipeline, filtersok, "lal_wings", initial_timestamp = int(NOW) + (options.filter_settle_time * gst.SECOND), final_timestamp = sys.maxint, timestamp = True)
 		filtersok = pipeparts.mkaudiorate(pipeline, filtersok, skip_to_first = True, silent = False)
 
 	#
