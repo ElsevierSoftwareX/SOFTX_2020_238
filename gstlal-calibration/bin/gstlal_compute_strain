@@ -251,6 +251,8 @@ else:
 sr = options.sample_rate
 dqsr = options.dq_sample_rate
 caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
+tm = time.gmtime()
+NOW = lal.UTCToGPS(tm) * gst.SECOND
 
 #
 # RECOLORING MODE ONLY: Read psd file
@@ -768,8 +770,6 @@ if options.write_pipeline is not None:
 # Seek the pipeline when necessary.  Note: The seekevent for frames is set above when command line is being parsed/sanity checked.
 
 # FIXME: This scheme assumes that the shared memory partitions are keeping up with real time when the data source is lvshm. This is probably not a good assumption outside of the DMT environment.
-tm = time.gmtime()
-NOW = lal.UTCToGPS(tm) * gst.SECOND
 if options.data_source == "white" or (options.data_source == "lvshm" and not options.no_gamma):
 	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
 if options.data_source == "white" or options.data_source == "frames":
