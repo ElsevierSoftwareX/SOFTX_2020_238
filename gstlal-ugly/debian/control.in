@@ -6,8 +6,6 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
- doxygen (>= @MIN_DOXYGEN_VERSION@),
- graphviz,
  gtk-doc-tools,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  libfftw3-dev (>= 3),

@@ -3,6 +3,9 @@
 	. /opt/lscsoft/gst/etc/gstenvironment.sh; \
 	dh $@ --with=python2
 
+override_dh_auto_configure:
+	dh_auto_configure -- --without-doxygen
+
 override_dh_auto_test:
 	. /opt/lscsoft/gst/etc/gstenvironment.sh; \
 	export PYTHONPATH=$$(pwd)/python; \
