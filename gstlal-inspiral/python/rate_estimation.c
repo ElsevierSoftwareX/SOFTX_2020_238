@@ -339,6 +339,6 @@ void init_rate_estimation(void)
 
 	if(PyType_Ready(&posterior_Type) < 0)
 		return;
-	Py_INCREF(&posterior_Type);
+	Py_INCREF((PyObject *) &posterior_Type);
 	PyModule_AddObject(module, "posterior", (PyObject *) &posterior_Type);
 }
