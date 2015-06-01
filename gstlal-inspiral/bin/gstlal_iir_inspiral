@@ -95,11 +95,11 @@ from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from gstlal import bottle
-from gstlal import datasource
+from gstlal import spiirdatasource as datasource
 from gstlal import lloidparts
 from gstlal import far
 from gstlal import httpinterface
-from gstlal import hoftcache
+from gstlal import spiirhoftcache as hoftcache
 from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import simulation
@@ -428,7 +428,7 @@ else:
 #
 def one_pipeline(iir_bank, 
 		output_filename, 
-		likelihood_file,
+		likelihood_namedtuple,
 		detectors,
 		psd,
 		options,
@@ -438,7 +438,7 @@ def one_pipeline(iir_bank,
     print >>sys.stderr, "start a process for one pipeline"
     print >>sys.stderr, iir_bank
     print >>sys.stderr, output_filename
-    print >>sys.stderr, likelihood_file
+    print >>sys.stderr, likelihood_namedtuple
 
   # create a new, empty, Bottle application
   bottle.default_app.push()
@@ -534,9 +534,9 @@ def one_pipeline(iir_bank,
   # Load likelihood ratio data, assume injections are present
   #
   if options.data_source in ("lvshm", "framexmit"):
-    coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+    coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
     if coinc_params_distributions is None:
-      raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
+      raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
   else:
 	coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
@@ -557,7 +557,7 @@ def one_pipeline(iir_bank,
     coinc_params_distributions = coinc_params_distributions,
     ranking_data = ranking_data,
     marginalized_likelihood_file = options.marginalized_likelihood_file,
-    likelihood_files_namedtuple = likelihood_file, 
+    likelihood_files_namedtuple = likelihood_namedtuple, 
     injection_filename = options.injections,
     time_slide_file = options.time_slide_file,
     comment = options.comment,
@@ -619,7 +619,7 @@ def one_pipeline(iir_bank,
   #
   # write output file
   #
-  output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
+  output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
   # Shutdown the web interface servers
   bottle.default_app.pop()
@@ -641,7 +641,7 @@ def one_pipeline(iir_bank,
 #    sys.exit(1) # online pipeline always ends with an error code
 
 jobs = []
-for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, likelihood_namedtuples_list):
+for iir_bank, output_filename, likelihood_namedtuple in zip(iir_banks, options.output, likelihood_namedtuples_list):
 
   if options.verbose:
     print >> sys.stderr, "try fork a new process"
@@ -649,7 +649,7 @@ for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output,
   child = multiprocessing.Process(target = one_pipeline, 
       args = (iir_bank, 
 	output_filename, 
-	likelihood_file,
+	likelihood_namedtuple,
 	detectors,
 	psd,
 	options,
