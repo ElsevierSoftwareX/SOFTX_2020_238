@@ -1,7 +1,7 @@
 /*
  * An interface to LALSimulation.  
  *
- * Copyright (C) 2008--2013  Kipp Cannon, Chad Hanna, Drew Keppel
+ * Copyright (C) 2008--2015  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -282,23 +282,10 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	 * collecting and returning a conditioned waveform suitable for
 	 * injection into an h(t) stream (after projection onto an antenna
 	 * respose).
-	 *
-	 * FIXME:  remove locks when we can be sure lal has been compiled
-	 * with pthread support
 	 */
 
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_lock();
-#endif
-	if(XLALInspiralTDWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE) {
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_unlock();
-#endif
+	if(XLALInspiralTDWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE)
 		XLAL_ERROR(XLAL_EFUNC);
-	}
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_unlock();
-#endif
 
 	/* add the time of the injection at the geocentre to the
 	 * start times of the h+ and hx time series.  after this,
@@ -448,24 +435,12 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 		/*
 		 * add detector strain to simulation_series
-		 *
-		 * FIXME:  remove the locking when we figure out how to
-		 * co-ordinate this with LAL
 		 */
 
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_lock();
-#endif
 		if(XLALSimAddInjectionREAL8TimeSeries(element->simulation_series, inspiral_series, response)) {
-#ifndef LAL_PTHREAD_LOCK
-			gstlal_fftw_unlock();
-#endif
 			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
 		}
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_unlock();
-#endif
 		XLALDestroyREAL8TimeSeries(inspiral_series);
 
 		/*
@@ -504,23 +479,10 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 		/*
 		 * inject waveforms into that buffer
-		 *
-		 * FIXME: remove the locking when we figure out how to co-ordinate this with LAL
 		 */
 
-
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_lock();
-#endif
-		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response)) {
-#ifndef LAL_PTHREAD_LOCK
-			gstlal_fftw_unlock();
-#endif
+		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response))
 			XLAL_ERROR(XLAL_EFUNC);
-		}
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_unlock();
-#endif
 
 		/*
 		 * add waveforms buffer into simulation_series
@@ -675,21 +637,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 		/* FIXME:  hard-coded = BAD BAD BAD */
 		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
 		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
-		/* FIXME remove locks when we can be sure LAL has been
-		 * compiled with pthread support.
-		 * load_injection_document() relies on testing the xlal
-		 * errno variable, which is only thread-safe when lal was
-		 * compiled with pthread locking turned on.  previously
-		 * there have also been thread safety problems in
-		 * libmetaio, but those have been fixed so it's just lal
-		 * that we're waiting on now. */
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_lock();
-#endif
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
-#ifndef LAL_PTHREAD_LOCK
-		gstlal_fftw_unlock();
-#endif
 		if(!element->injection_document) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("error loading \"%s\"", element->xml_location));
 			result = GST_FLOW_ERROR;

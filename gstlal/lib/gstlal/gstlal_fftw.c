@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008--2013  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008--2013,2015  Kipp Cannon, Chad Hanna
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,22 +71,11 @@
  */
 
 
-/*
- * FIXME:  we don't *really* need both locks, but we can't rely on LAL to
- * actually have a lock behind the macros, so we implement our own as well
- * until LAL can be trusted to lock fftw
- */
-
-static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
-
-
 /**
  * gstlal_fftw_lock:
  *
  * Aquire the lock to protect the global shared state in the FFTW wisdom.
- * This function also aquires LAL's FFTW wisdom lock if that lock is
- * available.  In the future, GstLAL will loose its mutex and rely
- * exclusively on LAL's lock when LAL has one unconditionally.
+ * This function is a proxy for LAL's FFTW wisdom lock.
  *
  * See also:  gstlal_fftw_unlock()
  */
@@ -95,7 +84,6 @@ static GStaticMutex gstlal_fftw_lock_mutex = G_STATIC_MUTEX_INIT;
 void gstlal_fftw_lock(void)
 {
 	LAL_FFTW_WISDOM_LOCK;
-	g_static_mutex_lock(&gstlal_fftw_lock_mutex);
 }
 
 
@@ -103,9 +91,7 @@ void gstlal_fftw_lock(void)
  * gstlal_fftw_unlock:
  *
  * Release the lock to protect the global shared state in the FFTW wisdom.
- * This function also releases LAL's FFTW wisdom lock if that lock is
- * available.  In the future, GstLAL will loose its mutex and rely
- * exclusively on LAL's lock when LAL has one unconditionally.
+ * This function is a proxy for LAL's FFTW wisdom unlock.
  *
  * See also:  gstlal_fftw_lock()
  */
@@ -113,7 +99,6 @@ void gstlal_fftw_lock(void)
 
 void gstlal_fftw_unlock(void)
 {
-	g_static_mutex_unlock(&gstlal_fftw_lock_mutex);
 	LAL_FFTW_WISDOM_UNLOCK;
 }
 
