@@ -1398,7 +1398,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 160000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
