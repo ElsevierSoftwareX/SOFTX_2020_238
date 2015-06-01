@@ -51,7 +51,7 @@ def plot_segments_history(seglistdicts, length = 86400., labelspacing = 10800.):
 
 	for j, segtype in enumerate(['trigger buffers', 'h(t) gate', 'state vector']):#, 'frame gate']):
 		for row, (ifo, segmentlist) in enumerate(seglistdicts[segtype].items()):
-			y_ticks.append([row + 2*j + 0.5])
+			y_ticks.append(row + 2*j + 0.5)
 			y_tick_labels.append('%s %s' % (ifo, segtype))
 			bottom.extend([row + 2*j + 0.25] * len(segmentlist))
 			colors.extend([color_dict[ifo]] * len(segmentlist))
