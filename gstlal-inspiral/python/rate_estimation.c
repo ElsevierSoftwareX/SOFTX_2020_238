@@ -111,7 +111,7 @@ static double integrand(double i, void *data)
 {
 	const struct integrand_data_t *integrand_data = data;
 	double ln_x = integrand_data->ln_Rf_over_Rb + integrand_data->ln_f_over_b[(int) floor(i)];
-	if(ln_x > 33.)
+	if(ln_x > 33.)	/* x ~= 10^14 */
 		return ln_x;
 	return log1p(exp(ln_x));
 }
@@ -128,21 +128,15 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 
 	/*
 	 * need to compute sum of log(Rf f / (Rb b) + 1).  if x = Rf f /
-	 * (Rb b) is larger than about 10^15 the +1 is irrelevant and we
-	 * can approximate ln(x + 1) with ln(x).  for smaller x we use
-	 * log1p(x) to evaluate the exprsesion.  for intermediate x we
-	 * approximate ln(x + 1) with
-	 *
-	 *	ln(x + 1) = ln x + 2 X + 2 X^3 / 3
-	 *
-	 * where X = 1 / (2 x + 1).  for x > 1100 this gives 15 correct
-	 * digits or more.
+	 * (Rb b) is larger than about 10^14 we consider the +1 to be
+	 * irrelevant and approximate ln(x + 1) with ln(x).  for smaller x
+	 * we use log1p(x) to evaluate the exprsesion.
 	 *
 	 * experience shows that the array of f/b values contains many very
 	 * similar entries at the lower end of its range, so we sort the
 	 * array and by treating the array as a function of its index use a
 	 * numerical integration scheme to obtain the sum.  we do this for
-	 * the bottom 90% of the array, and the top 10% is treated
+	 * the bottom 99% of the array, and the top 1% is treated
 	 * explicitly to capture the more rapid sample-to-sample variation.
 	 */
 
@@ -175,7 +169,7 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 
 	for(; i < n; i++) {
 		double ln_x = ln_Rf_over_Rb + ln_f_over_b[i];
-		if(ln_x > 33.)	/* ~= log(10^14) */
+		if(ln_x > 33.)	/* x ~= log(10^14) */
 			ln_P += ln_x;
 		else
 			ln_P += log1p(exp(ln_x));
