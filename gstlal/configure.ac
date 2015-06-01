@@ -260,7 +260,9 @@ CFLAGS="$CFLAGS ${LAL_CFLAGS}"
 AC_CHECK_DECL([LAL_PTHREAD_LOCK], [HAVE_LAL_PTHREAD_LOCK=yes], [HAVE_LAL_PTHREAD_LOCK=no], [#include <lal/LALConfig.h>])
 CFLAGS="$old_CFLAGS"
 
-AS_IF([test "x$HAVE_LAL_PTHREAD_LOCK" = "xyes"], AC_DEFINE([HAVE_LAL_PTHREAD_LOCK]))
+AS_IF([test "x$HAVE_LAL_PTHREAD_LOCK" != "xyes"], [
+	AC_MSG_FAILURE([lal must be built with pthread locking enabled])
+])
 
 
 #
