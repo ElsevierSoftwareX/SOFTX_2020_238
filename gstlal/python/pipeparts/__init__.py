@@ -831,13 +831,10 @@ def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
 			self.verbose = verbose
 
 		def execute(self, elem):
-			self.n_lock.acquire()
-			try:
+			with self.n_lock:
 				type(self).n += 1
 				if self.n >= self.write_after:
 					write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			finally:
-				self.n_lock.release()
 			elem.disconnect(self.handler_id)
 
 	for sink in appsinks:
