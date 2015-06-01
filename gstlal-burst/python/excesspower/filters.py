@@ -27,7 +27,6 @@ from pylal import datatypes as laltypes
 
 from glue.ligolw import ligolw, utils, ilwd, lsctables
 
-import gstlal.fftw
 from gstlal.excesspower import utils
 
 #
@@ -66,32 +65,24 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	# define number of band window
 	bands = int((fhigh - flow) / b_wind) - 1
 
-	# FFTW requires a thread lock for plans
-	gstlal.fftw.lock()
-	try:
+	# Build spectral correlation function
+	# NOTE: The default behavior is relative to the Hann window used in the
+	# filter bank and NOT the whitener. It's just not right. Fair warning.
+	# TODO: Is this default even needed anymore?
+	if corr == None:
+		spec_corr = lal.REAL8WindowTwoPointSpectralCorrelation(
+			lal.CreateHannREAL8Window(filter_len),
+			lal.CreateForwardREAL8FFTPlan(filter_len, 1)
+		).data
+	else:
+		spec_corr = numpy.array(corr)
 
-		# Build spectral correlation function
-		# NOTE: The default behavior is relative to the Hann window used in the
-		# filter bank and NOT the whitener. It's just not right. Fair warning.
-		# TODO: Is this default even needed anymore?
-		if corr == None:
-			spec_corr = lal.REAL8WindowTwoPointSpectralCorrelation(
-				lal.CreateHannREAL8Window(filter_len),
-				lal.CreateForwardREAL8FFTPlan(filter_len, 1)
-			).data
-		else:
-			spec_corr = numpy.array(corr)
-
-		# If no PSD is provided, set it equal to unity for all bins
-		#if psd == None:
-			#ifftplan = XLALCreateReverseREAL8FFTPlan( filter_len, 1 )
-		#else:
-		ifftplan = XLALCreateReverseREAL8FFTPlan((len(psd.data)-1)*2, 1)
-		d_len = (len(psd.data)-1)*2
-
-	finally:
-		# Give the lock back
-		gstlal.fftw.unlock()
+	# If no PSD is provided, set it equal to unity for all bins
+	#if psd == None:
+		#ifftplan = XLALCreateReverseREAL8FFTPlan( filter_len, 1 )
+	#else:
+	ifftplan = XLALCreateReverseREAL8FFTPlan((len(psd.data)-1)*2, 1)
+	d_len = (len(psd.data)-1)*2
 
 	# FIXME: Move to main script
 	if b_wind % psd.deltaF != 0:
@@ -207,16 +198,10 @@ def build_filter_from_xml(sb_table, psd, corr=None):
 
 	# FIXME: We'll need to create one plan for each duration for filters with
 	# differing durations
-	# FFTW requires a thread lock for plans
-	gstlal.fftw.lock()
-	try:
-		# Build spectral correlation function
-		spec_corr = numpy.array(corr)
-		ifftplan = XLALCreateReverseREAL8FFTPlan( (len(psd.data)-1)*2, 1 )
-		d_len = (len(psd.data)-1)*2
-	finally:
-		# Give the lock back
-		gstlal.fftw.unlock()
+	# Build spectral correlation function
+	spec_corr = numpy.array(corr)
+	ifftplan = XLALCreateReverseREAL8FFTPlan( (len(psd.data)-1)*2, 1 )
+	d_len = (len(psd.data)-1)*2
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
