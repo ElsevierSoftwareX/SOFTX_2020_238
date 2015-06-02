@@ -58,6 +58,13 @@ lsctables.use_in(DefaultContentHandler)
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
+def lefttukeywindow(data, samps = 200.):
+       assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+       tp = float(samps) / len(data)
+       wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
+       wn[len(wn)//2:] = 1.0
+       return wn
+
 def Theta(eta, Mtot, t):
 	Tsun = lal.MTSUN_SI #4.925491e-6
 	theta = eta / (5.0 * Mtot * Tsun) * -t
@@ -379,7 +386,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 
 
 	if is_freq_whiten:
-		hp.data.data *= cbc_template_fir.lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
+		hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
 		lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
 		return lalwhiten_amp, lalwhiten_phase
 
