@@ -237,7 +237,9 @@ class Handler(simplehandler.Handler):
 		# record, or maybe not because it could result in a lot of
 		# duplication of on-disk data.  who knows.  think about it.
 		gate_suffix = {
-			"framesegments": "frame_segments_gate",
+			# FIXME uncomment the framesegments line once the
+			# online analysis has a frame segments gate
+			#"framesegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
