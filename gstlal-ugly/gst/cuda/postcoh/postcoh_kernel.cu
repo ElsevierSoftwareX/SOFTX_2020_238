@@ -539,10 +539,12 @@ __global__ void ker_coh_max_and_chisq
 		__syncthreads();
 #endif
 
-		int ipix = 0;
+		int ipix = 0, rand_range = trial_sample_inv * hist_trials -1;
 		for(itrial=1; itrial<=hist_trials; itrial++) {
 			snr_max = 0.0;
 			snr_tmp = 0.0;
+			// FIXME: try using random offset like the following
+			//trial_offset = rand()% rand_range + 1;
 			trial_offset = itrial * trial_sample_inv;
 			output_offset = itrial * exe_len;
 		for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions/16; seed_pix += blockDim.x)
@@ -557,8 +559,9 @@ __global__ void ker_coh_max_and_chisq
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
+				// The background cohsnr should be obtained coherently as well.
 				if (NtOff == 0)
-					dk[j] = snr[j][((start_exe + peak_cur + len) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + peak_cur - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
 				else
 					dk[j] = snr[j][((start_exe + peak_cur + NtOff - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
 			}
