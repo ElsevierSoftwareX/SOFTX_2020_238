@@ -95,11 +95,11 @@ from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from gstlal import bottle
-from gstlal import spiirdatasource as datasource
+from gstlal import datasource
 from gstlal import lloidparts
 from gstlal import far
 from gstlal import httpinterface
-from gstlal import spiirhoftcache as hoftcache
+from gstlal import hoftcache
 from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import simulation
