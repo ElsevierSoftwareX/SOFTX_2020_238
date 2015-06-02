@@ -202,6 +202,7 @@ class GraceDBThread ( threading.Thread ):
         xmldoc.appendChild(ligolw.LIGO_LW())
        # Add in the metadata for this injection process
         process = ligolw_process.register_to_xmldoc(xmldoc, "gstinjector", {"verbose": True, "server": "127.0.0.1"})
+        self.inj.process_id = process.process_id
        # Make a very small sim inspiral table with just this one event
         sim_inspiral_table_one_injection = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimInspiralTable))
        # Now add in the injection
