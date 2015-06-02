@@ -1,0 +1,1060 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2014 Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file gstlal_inspiral_pipe
+# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+#
+# ### Usage:
+# It is rare that you would invoke this program in a standalone mode. Usually the inputs are complicated and best automated via a Makefile, e.g., Makefile.triggers_example
+#
+# ### Command line options
+#
+# See datasource.append_options() for generic options
+#
+#	+ `--psd-fft-length` [int] (s): FFT length, default 16s.
+#	+ `--reference-psd: Don't measure PSDs, use this one instead
+#	+ `--overlap [int]: Set the factor that describes the overlap of the sub banks, must be even!
+#	+ `--autocorrelation-length [int]: The minimum number of samples to use for auto-chisquared, default 201 should be odd
+#	+ `--samples-min [int]: The minimum number of samples to use for time slices default 1024
+#	+ `--samples-max-256 [int]: The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024
+#	+ `--samples-max-64 [int]: The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048
+#	+ `--samples-max [int]: The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
+#	+ `--bank-cache [file names]: Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..
+#	+ `--tolerance [float]: set the SVD tolerance, default 0.9999
+#	+ `--flow [float]: set the low frequency cutoff, default 40 (Hz)
+#	+ `--identity-transform: Use identity transform, i.e. no SVD
+#	+ `--vetoes [filename]: Set the veto xml file.
+#	+ `--time-slide-file [filename]: Set the time slide table xml file
+#	+ `--web-dir [filename]: Set the web directory like /home/USER/public_html
+#	+ `--fir-stride [int] (s): Set the duration of the fft output blocks, default 8
+#	+ `--control-peak-time [int] (s): Set the peak finding time for the control signal, default 8
+#	+ `--coincidence-threshold [int] (s): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--num-banks [str]: The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.
+#	+ `--max-inspiral-jobs [int]: Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.
+#	+ `--ht-gate-threshold [float]: set a threshold on whitened h(t) to veto glitches
+#	+ `--inspiral-executable [str]: Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
+#	+ `--blind-injections [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
+#	+ `--far-injections` [filename]: Injection files with injections too far away to be seen that are not filtered. Must be 1:1 with --injections if given at all. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.
+#	+ `--verbose: Be verbose
+#
+# ### Diagram of the HTCondor workfow produced
+# @dotfile trigger_pipe.dot
+# 
+
+"""
+This program makes a dag to run gstlal_inspiral offline
+"""
+
+__author__ = 'Chad Hanna <chad.hanna@ligo.org>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, copy, math, stat
+import subprocess, socket, tempfile
+import itertools
+
+##############################################################################
+# import the modules we need to build the pipeline
+from glue import iterutils
+from glue import pipeline
+from glue import lal
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import lsctables
+from glue.ligolw import param as ligolw_param
+import glue.ligolw.utils as ligolw_utils
+import glue.ligolw.utils.segments as ligolw_segments
+from optparse import OptionParser
+from gstlal import inspiral, inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
+from pylal import series as lalseries
+import numpy
+from pylal.datatypes import LIGOTimeGPS
+from gstlal import datasource
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+
+
+#
+# Utility functions
+#
+
+
+def sim_tag_from_inj_file(injections):
+	if injections is None:
+		return None
+	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
+
+def get_max_length(bank_cache, verbose = False):
+	max_time = 0
+	cache = lal.Cache.fromfilenames([bank_cache.values()[0]])
+	for f in cache.pfnlist():
+		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+		sngls = lsctables.SnglInspiralTable.get_table(xmldoc)
+		max_time = max(max_time, max(sngls.get_column('template_duration')))
+		xmldoc.unlink()
+
+	return max_time
+
+def chunks(l, n):
+	for i in xrange(0, len(l), n):
+		yield l[i:i+n]
+
+def flatten(lst):
+    "Flatten one level of nesting"
+    return list(itertools.chain.from_iterable(lst))
+
+#
+# get a dictionary of all the disjoint 2+ detector combination segments
+#
+
+def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length):
+	segsdict = segments.segmentlistdict()
+	# 512 seconds for the whitener to settle + the maximum template_length
+	start_pad = 512 + max_template_length
+	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
+	segment_length = int(20 * start_pad)
+	for n in range(2, 1 + len(analyzable_instruments_set)):
+		for ifo_combos in iterutils.choices(list(analyzable_instruments_set), n):
+			# never analyze H1H2 or H2L1 times
+			if set(ifo_combos) == set(('H1', 'H2')) or set(ifo_combos) == set(('L1', 'H2')):
+				print >> sys.stderr, "not analyzing: ", ifo_combos, " only time"
+				continue
+			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
+			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
+			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad) #FIXME don't hard code
+			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad) #FIXME don't hardcode
+			if not segsdict[frozenset(ifo_combos)]:
+				del segsdict[frozenset(ifo_combos)]
+	return segsdict
+
+def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
+	psd_nodes = {}
+	for ifos in segsdict:
+		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+		for seg in segsdict[ifos]:
+			psd_nodes[(ifos, seg)] = \
+				inspiral_pipe.generic_node(refPSDJob, dag, parent_nodes = parent_nodes,
+					opts = {"gps-start-time":seg[0].seconds,
+						"gps-end-time":seg[1].seconds,
+						"data-source":"frames",
+						"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict, ifos = ifos),
+						"psd-fft-length":options.psd_fft_length,
+						"frame-segments-name": options.frame_segments_name},
+					input_files = {	"frame-cache":options.frame_cache,
+							"frame-segments-file":options.frame_segments_file},
+					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", seg[0].seconds, seg[1].seconds, '.xml.gz', path = refPSDJob.output_path)}
+				)
+	return psd_nodes
+
+def iir_node_gen(iirJob, dag, parent_nodes, psd, bank_groups, options, seg):
+	iir_nodes = {}
+	for i, bank_group in enumerate(bank_groups):
+		for ifo, files in bank_group.items():
+			# First sort out the clipleft, clipright options
+			clipleft = []
+			clipright = []
+			ids = []
+			for n, f in enumerate(files):
+				# handle template bank clipping
+				if (n == 0) and (i == 0):
+					clipleft.append(0)
+				else:
+					clipleft.append(options.overlap / 2)
+				if (i == len(bank_groups) - 1) and (n == len(files) -1):
+					clipright.append(0)
+				else:
+					clipright.append(options.overlap / 2)
+				ids.append("%d_%d" % (i, n))
+
+			iir_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_IIR' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = iirJob.output_path)
+
+			iir_nodes.setdefault(ifo, []).append(
+				inspiral_pipe.generic_node(iirJob, dag,
+				parent_nodes = parent_nodes, 
+				opts = {"downsample":"",
+					"flow":options.flow,
+					"epsilon":options.epsilon,
+					"instrument":ifo,
+					"autocorrelation-length":options.autocorrelation_length,
+					"sampleRate":options.samples_max},
+				input_files = {"template-bank":files,
+						"reference-psd":psd},
+				output_files = {"output":iir_bank_name}
+				)
+			)
+	return iir_nodes
+
+def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
+	svd_nodes = {}
+	for i, bank_group in enumerate(bank_groups):
+		for ifo, files in bank_group.items():
+			# First sort out the clipleft, clipright options
+			clipleft = []
+			clipright = []
+			ids = []
+			for n, f in enumerate(files):
+				# handle template bank clipping
+				if (n == 0) and (i == 0):
+					clipleft.append(0)
+				else:
+					clipleft.append(options.overlap / 2)
+				if (i == len(bank_groups) - 1) and (n == len(files) -1):
+					clipright.append(0)
+				else:
+					clipright.append(options.overlap / 2)
+				ids.append("%d_%d" % (i, n))
+
+			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_SVD' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = svdJob.output_path)
+
+			svd_nodes.setdefault(ifo, []).append(
+				inspiral_pipe.generic_node(svdJob, dag,
+				parent_nodes = parent_nodes, 
+				opts = {"svd-tolerance":options.tolerance,
+					"flow":options.flow,
+					"clipleft":clipleft,
+					"clipright":clipright,
+					"samples-min":options.samples_min,
+					"samples-max-256":options.samples_max_256,
+					"samples-max-64":options.samples_max_64,
+					"samples-max":options.samples_max,
+					"autocorrelation-length":options.autocorrelation_length,
+					"bank-id":ids,
+					"identity-transform":options.identity_transform,
+					"snr-threshold":4.0, "ortho-gate-fap":0.5},
+				input_files = {	"template-bank":files,
+						"reference-psd":psd},
+				output_files = {"write-svd":svd_bank_name}
+				)
+			)
+	return svd_nodes
+
+def create_iir_bank_strings(iir_nodes, instruments = None):
+	# FIXME assume that the number of iir nodes is the same per ifo, a good assumption though
+	outstrings = []
+	for i in range(len(iir_nodes.values()[0])):
+		iir_bank_string = ""
+		for ifo in iir_nodes:
+			if instruments is not None and ifo not in instruments:
+				continue
+			iir_bank_string += "%s:%s," % (ifo, iir_nodes[ifo][i].output_files["output"])
+		iir_bank_string = iir_bank_string.strip(",")
+		outstrings.append(iir_bank_string)
+	return outstrings
+
+
+def create_svd_bank_strings(svd_nodes, instruments = None):
+	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
+	outstrings = []
+	for i in range(len(svd_nodes.values()[0])):
+		svd_bank_string = ""
+		for ifo in svd_nodes:
+			if instruments is not None and ifo not in instruments:
+				continue
+			svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i].output_files["write-svd"])
+		svd_bank_string = svd_bank_string.strip(",")
+		outstrings.append(svd_bank_string)
+	return outstrings
+
+def iir_inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_nodes, segsdict, options, channel_dict):
+
+	inspiral_nodes = {}
+	for ifos in segsdict:
+
+		# setup dictionaries to hold the inspiral nodes
+		inspiral_nodes[(ifos, None)] = {}	
+		for injections in options.injections:
+			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+		
+		# FIXME choose better splitting?
+		numchunks = 10
+
+		for seg in segsdict[ifos]:
+			
+			# only use a channel dict with the relevant channels
+			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+
+			# get the iir bank strings
+			iir_bank_strings_full = create_iir_bank_strings(iir_nodes, instruments = this_channel_dict.keys())
+
+			for chunk_counter, iir_bank_strings in enumerate(chunks(iir_bank_strings_full, numchunks)):
+				# setup output names
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(iir_bank_strings)]
+				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(iir_bank_strings)]
+
+				# FIXME do better with iir node parents?
+				# non injection node
+				noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(iir_nodes.values(),[]),
+						opts = {"psd-fft-length":options.psd_fft_length,
+							"ht-gate-threshold":options.ht_gate_threshold,
+							"frame-segments-name":options.frame_segments_name,
+							"gps-start-time":seg[0].seconds,
+							"gps-end-time":seg[1].seconds,
+							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+							"iir-bank":iir_bank_strings,
+							"tmp-space":inspiral_pipe.condor_scratch_space(),
+							"track-psd":"",
+							"control-peak-time":options.control_peak_time,
+							"coincidence-threshold":options.coincidence_threshold,
+							"fir-stride":options.fir_stride,
+							"data-source":"frames",
+							"local-frame-caching":""
+							},
+						input_files = {	"time-slide-file":options.time_slide_file,
+								"frame-cache":options.frame_cache,
+								"frame-segments-file":options.frame_segments_file,
+								"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+								"blind-injections":options.blind_injections,
+								"veto-segments-file":options.vetoes,
+							},
+						output_files = {
+								"output":output_names,
+								"likelihood-file":dist_stat_names
+							}
+						)
+				# Set a post script to check for file integrity
+				noninjnode.set_post_script("gzip_test.sh")
+				noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
+				# impose a priority to help with depth first submission
+				noninjnode.set_priority(chunk_counter)
+				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
+
+			for chunk_counter, iir_bank_strings in enumerate(chunks(iir_bank_strings_full, numchunks)):
+
+				# process injections
+				for injections in options.injections:
+				
+					# setup output names	
+					sim_name = sim_tag_from_inj_file(injections)
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(iir_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(iir_bank_strings)]
+
+					# setup injection node
+					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(iir_nodes.values(),[]),
+							opts = {"psd-fft-length":options.psd_fft_length,
+								"ht-gate-threshold":options.ht_gate_threshold,
+								"frame-segments-name":options.frame_segments_name,
+								"gps-start-time":seg[0].seconds,
+								"gps-end-time":seg[1].seconds,
+								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+								"iir-bank":iir_bank_strings,
+								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"track-psd":"",
+								"control-peak-time":options.control_peak_time,
+								"coincidence-threshold":options.coincidence_threshold,
+								"fir-stride":options.fir_stride,
+								"data-source":"frames",
+								"local-frame-caching":""
+								},
+							input_files = {	"frame-cache":options.frame_cache,
+									"frame-segments-file":options.frame_segments_file,
+									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+									"veto-segments-file":options.vetoes,
+									"injections": injections
+								},
+							output_files = {
+									"output":output_names,
+									"likelihood-file":dist_stat_names
+								}
+							)
+					# Set a post script to check for file integrity
+					injnode.set_post_script("gzip_test.sh")
+					injnode.add_post_script_arg(" ".join(output_names))
+					# impose a priority to help with depth first submission
+					injnode.set_priority(chunk_counter)
+					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+
+	return inspiral_nodes
+
+
+def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict):
+
+	inspiral_nodes = {}
+	for ifos in segsdict:
+
+		# setup dictionaries to hold the inspiral nodes
+		inspiral_nodes[(ifos, None)] = {}	
+		for injections in options.injections:
+			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+		
+		# FIXME choose better splitting?
+		numchunks = 10
+
+		for seg in segsdict[ifos]:
+			
+			# only use a channel dict with the relevant channels
+			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+
+			# get the svd bank strings
+			svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
+
+			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+				# setup output names
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
+
+				# FIXME do better with svd node parents?
+				# non injection node
+				noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+						opts = {"psd-fft-length":options.psd_fft_length,
+							"ht-gate-threshold":options.ht_gate_threshold,
+							"frame-segments-name":options.frame_segments_name,
+							"gps-start-time":seg[0].seconds,
+							"gps-end-time":seg[1].seconds,
+							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+							"svd-bank":svd_bank_strings,
+							"tmp-space":inspiral_pipe.condor_scratch_space(),
+							"track-psd":"",
+							"control-peak-time":options.control_peak_time,
+							"coincidence-threshold":options.coincidence_threshold,
+							"fir-stride":options.fir_stride,
+							"data-source":"frames",
+							"local-frame-caching":""
+							},
+						input_files = {	"time-slide-file":options.time_slide_file,
+								"frame-cache":options.frame_cache,
+								"frame-segments-file":options.frame_segments_file,
+								"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+								"blind-injections":options.blind_injections,
+								"veto-segments-file":options.vetoes,
+							},
+						output_files = {
+								"output":output_names,
+								"likelihood-file":dist_stat_names
+							}
+						)
+				# Set a post script to check for file integrity
+				noninjnode.set_post_script("gzip_test.sh")
+				noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
+				# impose a priority to help with depth first submission
+				noninjnode.set_priority(chunk_counter)
+				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
+
+			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+
+				# process injections
+				for injections in options.injections:
+				
+					# setup output names	
+					sim_name = sim_tag_from_inj_file(injections)
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+
+					# setup injection node
+					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+							opts = {"psd-fft-length":options.psd_fft_length,
+								"ht-gate-threshold":options.ht_gate_threshold,
+								"frame-segments-name":options.frame_segments_name,
+								"gps-start-time":seg[0].seconds,
+								"gps-end-time":seg[1].seconds,
+								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+								"svd-bank":svd_bank_strings,
+								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"track-psd":"",
+								"control-peak-time":options.control_peak_time,
+								"coincidence-threshold":options.coincidence_threshold,
+								"fir-stride":options.fir_stride,
+								"data-source":"frames",
+								"local-frame-caching":""
+								},
+							input_files = {	"frame-cache":options.frame_cache,
+									"frame-segments-file":options.frame_segments_file,
+									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+									"veto-segments-file":options.vetoes,
+									"injections": injections
+								},
+							output_files = {
+									"output":output_names,
+									"likelihood-file":dist_stat_names
+								}
+							)
+					# Set a post script to check for file integrity
+					injnode.set_post_script("gzip_test.sh")
+					injnode.add_post_script_arg(" ".join(output_names))
+					# impose a priority to help with depth first submission
+					injnode.set_priority(chunk_counter)
+					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+
+	return inspiral_nodes
+
+def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
+
+	# first get the previous output in a usable form
+	lloid_output = {}
+	for inj in options.injections + [None]:
+		lloid_output[sim_tag_from_inj_file(inj)] = {}
+	lloid_diststats = {}
+	for ifos in segsdict:
+		for seg in segsdict[ifos]:
+			# iterate over the mass space chunks for each segment
+			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
+				len_out_files = len(node.output_files["output"])
+				for i,f in enumerate(node.output_files["output"]):
+					# Store the output files and the node for use as a parent dependency
+					lloid_output[None].setdefault((j,i), []).append((f, [node]))
+				for i,f in enumerate(node.output_files["likelihood-file"]):
+					lloid_diststats.setdefault((j,i) ,[]).append(f)
+				for inj in options.injections:
+					# NOTE This assumes that injection jobs
+					# and non injection jobs are 1:1 in
+					# terms of the mass space they cover,
+					# e.g., that the chunks ar the same!
+					injnode = inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j]
+					for i,f in enumerate(injnode.output_files["output"]):
+						# Store the output files and the node and injnode for use as a parent dependencies
+						lloid_output[sim_tag_from_inj_file(inj)].setdefault((j,i), []).append((f, [node, injnode]))
+
+	return lloid_output, lloid_diststats
+
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode):
+
+	likelihood_nodes = {}
+	rankpdf_nodes = []
+	outnodes = {}
+	instruments = "".join(sorted(instrument_set))
+	priornodes = []
+	# first non-injections
+	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+		inputs = [o[0] for o in outputs]
+		parents = []
+		[parents.extend(o[1]) for o in outputs]
+		# FIXME we keep this here in case we someday want to have a
+		# mass bin dependent prior, but it really doesn't matter for
+		# the time being.   
+		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+				parent_nodes = parents,
+				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
+				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+			)
+		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
+				parent_nodes = [priornode, snrpdfnode],
+				input_files = {"":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
+			)
+		priornodes.append(priornode)
+		rankpdf_nodes.append(calcranknode)
+
+		
+		# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
+		likelihood_nodes.setdefault(None,[]).append(
+			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
+				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"likelihood-url":diststats +
+					[priornode.output_files["write-likelihood"],
+					snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+					}
+				) for chunked_inputs in chunks(inputs, 25)]
+			)
+
+	# then injections
+	for inj in options.injections:
+		for n, (outputs, diststats) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+			inputs = [o[0] for o in outputs]
+			parents = []
+			[parents.extend(o[1]) for o in outputs]
+			# Break up the likelihood jobs into chunks to process fewer files, e.g., 25
+			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
+				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
+					parent_nodes = parents + [priornodes[n], snrpdfnode],
+					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"likelihood-url":diststats + 
+						[priornodes[n].output_files["write-likelihood"], 
+						snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+						}
+					) for chunked_inputs in chunks(inputs, 25)]
+				)
+
+	
+	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
+	files_to_group = 10
+	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
+		# Flatten the nodes for this sub bank
+		nodes = flatten(nodes)
+		merge_nodes = []
+		# Flatten the input/output files from calc_likelihood
+		inputs = flatten([node.input_files[""] for node in nodes])
+		if inj is None:
+			# 10 at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
+			for n in range(0, len(inputs), files_to_group):
+				merge_nodes.append(inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = nodes,
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":inputs[n:n+files_to_group]}
+					)
+				)
+
+			# Merging all the dbs from the same sub bank
+			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
+				db = inspiral_pipe.T050017_filename(instruments, '%04d_LLOID' % (subbank,), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":inputs},
+					output_files = {"database":db}
+				)
+				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":db}
+				)
+				outnodes.setdefault(None, []).append(sqlitenode)
+		else:
+			# 10 at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
+			for n in range(0, len(inputs), files_to_group):
+				merge_nodes.append(inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = nodes,
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":inputs[n:n+files_to_group]}
+					)
+				)
+
+			# Merging all the dbs from the same sub bank and injection run
+			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
+				injdb = inspiral_pipe.T050017_filename(instruments, '%04d_LLOID_%s' % (subbank, sim_tag_from_inj_file(inj)), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":inputs},
+					output_files = {"database":injdb}
+				)
+				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":injdb}
+				)
+				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
+
+	return rankpdf_nodes, outnodes
+
+def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, options, instruments):
+
+	if options.vetoes is None:
+		vetoes = []
+	else:
+		vetoes = [options.vetoes]
+
+	chunk_nodes = []
+	# Process the chirp mass bins in chunks to paralellize the merging process
+	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
+		# Merge the final non injection database into chunks
+		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d' % chunk, int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"": dbs},
+			output_files = {"database":noninjdb}
+		)
+
+		# cluster the final non injection database
+		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":noninjdb}
+		)
+		chunk_nodes.append(noninjsqlitenode)
+
+	# Merge the final non injection database
+	noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+	sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
+		opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+		input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file])},
+		output_files = {"database":noninjdb}
+	)
+
+	# cluster the final non injection database
+	noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+		opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+		input_files = {"":noninjdb}
+	)
+
+	injdbs = []
+	outnodes = [noninjsqlitenode]
+
+	for injections, far_injections in zip(options.injections, options.far_injections):
+
+		# extract only the nodes that were used for injections
+		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
+		chunk_nodes = []
+
+		for chunk, dbs in enumerate(chunks([node.input_files[""] for node in thisinjnodes], 20)):
+
+			# Setup the final output names, etc.
+			injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d_%s' % (chunk, sim_tag_from_inj_file(injections)), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+
+
+			# merge
+			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = thisinjnodes,
+				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"":dbs},
+				output_files = {"database":injdb}
+			)
+
+			# cluster
+			clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"":injdb}
+			)
+			chunk_nodes.append(clusternode)
+
+
+		# Setup the final output names, etc.
+		injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+		injdbs.append(injdb)
+		injxml = os.path.splitext(injdb)[0] + ".xml.gz"
+
+		# If there are injections that are too far away to be seen in a separate file, add them now. 
+		if far_injections is not None:
+			xml_input = [injxml] + [far_injections]
+		else:
+			xml_input = injxml
+
+		# merge
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file, injections])},
+			output_files = {"database":injdb}
+		)
+
+		# cluster
+		clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":injdb}
+		)
+
+
+		clusternode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = [clusternode],
+			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+			output_files = {"extract":injxml},
+			input_files = {"database":injdb}
+		)
+
+		inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [clusternode],
+			opts = {"time-window":0.9},
+			input_files = {"":injxml}
+		)
+
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [inspinjnode],
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			output_files = {"database":injdb},
+			input_files = {"":xml_input}
+		)
+			
+		outnodes.append(sqlitenode)
+
+	return injdbs, noninjdb, outnodes
+
+def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes):
+	# compute FAPs and FARs
+	# split up the marginilization into groups of 10
+	margin = [node.output_files["output"] for node in rankpdf_nodes]
+	margout = []
+	margnodes = []
+	margnum = 16
+	for i,n in enumerate(range(0, len(margin), margnum)):
+		margout.append("%d_marginalized_likelihood.xml.gz" % (i,))
+		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes + rankpdf_nodes,
+			output_files = {"output":margout[-1]}, 
+			input_files = {"":margin[n:n+margnum]}
+		))
+
+	margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
+		output_files = {"output":"marginalized_likelihood.xml.gz"},
+		input_files = {"":margout}
+	)
+	
+	farnode = inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = [margnode],
+		opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+		input_files = {"background-bins-file":"marginalized_likelihood.xml.gz", "injection-db":injdbs, "non-injection-db":noninjdb}
+	)
+	
+	return farnode
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# generic data source options
+	datasource.append_options(parser)
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+
+	# reference_psd
+	parser.add_option("--reference-psd", help = "Don't measure PSDs, use this one instead")
+	
+	# SVD bank construction options
+	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
+	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
+	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
+	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
+	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
+	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
+	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
+	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
+	
+	# trigger generation options
+	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
+	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
+	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
+	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
+	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
+	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
+	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
+	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
+	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
+	parser.add_option("--epsilon", metavar = "float", type = "float", default = 0.02, help = "set the epsilon for IIR filter generation.")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+
+	# Override the datasource injection option
+	parser.remove_option("--injections")
+	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
+
+	options, filenames = parser.parse_args()
+	options.num_banks = [int(v) for v in options.num_banks.split(",")]
+	
+	if options.overlap % 2:
+		raise ValueError("overlap must be even")
+
+	fail = ""
+	for option in ("bank_cache",):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+	if fail: raise ValueError, fail
+
+	if options.far_injections is not None and len(options.injections) != len(options.far_injections):
+		raise ValueError("number of injection files and far injection files must be equal")
+	if options.far_injections is None:
+		options.far_injections = [None for inj in options.injections]
+
+	#FIXME a hack to find the sql paths
+	share_path = os.path.split(inspiral_pipe.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
+	options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
+	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
+
+	return options, filenames
+
+
+#
+# Useful variables
+#
+
+options, filenames = parse_command_line()
+bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
+detectors = datasource.GWDataSourceInfo(options)
+channel_dict = detectors.channel_dict
+instruments = "".join(sorted(bank_cache.keys()))
+instrument_set = bank_cache.keys()
+boundary_seg = detectors.seg
+
+output_dir = "plots"
+
+#
+# Setup the dag
+#
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = inspiral_pipe.DAG("trigger_pipe")
+
+if options.max_inspiral_jobs is not None:
+	dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
+
+#
+# Make an xml integrity checker
+#
+
+f = open("gzip_test.sh", "w")
+f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
+f.close()
+os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
+
+#
+# setup the job classes
+#
+
+refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = {"request_memory":"2GB", "request_cpus":"2"})
+medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = {"request_memory":"2GB"})
+#svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = {"request_memory":"2GB"})
+iirJob = inspiral_pipe.generic_job("gstlal_iir_bank", condor_commands = {"request_memory":"2GB"})
+horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = {"request_memory":"2GB"})
+gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"request_memory":"15GB", "request_cpus":"8"})
+gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = {"request_memory":"15GB", "request_cpus":"8"})
+createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = {"request_memory":"2GB"})
+calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = {"request_memory":"2GB", "request_cpus":"3"})
+calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = {"request_memory":"2GB"})
+calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = {"request_memory":"2GB"})
+gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = {"request_memory":"2GB"})
+ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = {"request_memory":"2GB"})
+toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = {"request_memory":"2GB"})
+toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = {"request_memory":"2GB"})
+lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = {"request_memory":"2GB"})
+plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = {"request_memory":"2GB"})
+plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = {"request_memory":"2GB"})
+plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = {"request_memory":"2GB"})
+openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = {"request_memory":"2GB"})
+pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = {"request_memory":"2GB"})
+marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = {"request_memory":"2GB"})
+plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = {"request_memory":"2GB"})
+
+#
+# Get the analysis segments
+#
+
+segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, get_max_length(bank_cache))
+
+if options.reference_psd is None:
+
+	#
+	# Compute the PSDs for each segment
+	#
+
+
+	psd_nodes = psd_node_gen(refPSDJob, dag, [], segsdict, channel_dict, options)
+
+	#
+	# plot the horizon distance
+	#
+
+	inspiral_pipe.generic_node(horizonJob, dag,
+		parent_nodes = psd_nodes.values(),
+		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+		output_files = {"":inspiral_pipe.T050017_filename(instruments, "HORIZON", boundary_seg[0].seconds, boundary_seg[1].seconds, '.png', path = output_dir)}
+	)
+
+	#
+	# compute the median PSD
+	#
+
+	median_psd_node = \
+		inspiral_pipe.generic_node(medianPSDJob, dag,
+			parent_nodes = psd_nodes.values(),
+			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = medianPSDJob.output_path)}
+		)
+
+	ref_psd = median_psd_node.output_files["output-name"]
+	ref_psd_parent_nodes = [median_psd_node]
+
+
+	# NOTE: compute just the SNR pdf cache here, set other features to 0
+	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+			parent_nodes = ref_psd_parent_nodes,
+			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
+			input_files = {"":ref_psd},
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+		)
+
+else:
+	ref_psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler)) 
+
+	# NOTE: compute just the SNR pdf cache here, set other features to 0
+	# NOTE: This will likely result in downstream codes needing to compute
+	# more SNR PDFS, since in this codepath only an average spectrum is
+	# used.
+	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
+			input_files = {"":options.reference_psd},
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+		)
+	ref_psd_parent_nodes = []
+
+#
+# Compute SVD banks
+#
+
+iir_nodes = iir_node_gen(iirJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg)
+
+
+#	
+# Inspiral jobs by segment
+#
+
+#inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_nodes, segsdict, options, channel_dict)
+inspiral_nodes = iir_inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_nodes, segsdict, options, channel_dict)
+
+#
+# Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
+#
+
+lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
+
+#
+# Setup likelihood jobs, clustering and merging
+#
+
+rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode)
+
+#
+# after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
+#
+
+injdbs, noninjdb, final_sqlite_nodes = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, outnodes, options, instruments)
+
+#
+# Compute FAP
+#
+
+farnode = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes)
+
+# make summary plots
+plotnodes = []
+
+plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[farnode],
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir},
+	input_files = {"":[noninjdb] + injdbs}
+))
+
+for injdb in injdbs:
+	plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=[farnode],
+		opts = {"segments-name": options.frame_segments_name, "tmp-space":inspiral_pipe.condor_scratch_space(), "user-tag":injdb.replace(".sqlite","").split("-")[1], "plot-group":1, "output-dir":output_dir},
+		input_files = {"":[noninjdb] + [injdb]}
+	))
+# make sensitivity plots
+plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
+	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "bin-by-mass-ratio":"", "bin-by-aligned-spin":"","include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
+	input_files = {"zero-lag-database":noninjdb, "":injdbs}
+))
+for injdb in injdbs:
+	plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
+		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-total-mass":"", "bin-by-mass1-mass2":"", "bin-by-chirp-mass":"", "bin-by-mass-ratio":"", "bin-by-aligned-spin":"", "include-play":"", "dist-bins":200, "data-segments-name":"datasegments"},
+		input_files = {"zero-lag-database":noninjdb, "":injdb}
+	))
+
+
+# make background plots
+plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
+
+# make a web page
+
+inspiral_pipe.generic_node(openpageJob, dag, parent_nodes = plotnodes, 
+	opts = {"title":"gstlal-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs], "open-box":""}
+)
+inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
+	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs]}
+)
+
+#
+# all done
+#
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
