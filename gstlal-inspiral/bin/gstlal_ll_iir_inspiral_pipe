@@ -1,0 +1,378 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011  Chad Hanna
+# Copyright (C) 2015  Qi Chu 
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# This program will make create a HTCondor DAG to automate the running of low-latency, online gstlal_inspiral jobs; see gstlal_ll_trigger_pipe
+
+"""
+This program makes a dag for a gstlal inspiral low latency pipeline
+"""
+
+__author__ = 'Chad Hanna <channa@caltech.edu>'
+
+#
+# import standard modules and append the lalapps prefix to the python path
+#
+
+import sys, os, copy, stat
+import shutil
+
+#
+# import the modules we need to build the pipeline
+#
+
+from glue import pipeline
+from glue import lal
+import glue.ligolw.utils as utils
+from optparse import OptionParser
+from gstlal import inspiral
+from gstlal import inspiral_pipe
+from gstlal import dagparts
+from gstlal import datasource
+
+##
+# ### Graph of the HTCondor DAG
+#
+# - gray boxes are optional and depend on the command line given
+#
+# @dot
+# digraph G {
+#       // graph properties
+#
+#       rankdir=LR;
+#       compound=true;
+#       node [shape=record fontsize=10 fontname="Verdana"];     
+#       edge [fontsize=8 fontname="Verdana"];
+#	gstlal_inspiral [URL="\ref gstlal_inspiral"];
+#	gstlal_llcbcsummary [URL="\ref gstlal_llcbcsummary"];
+#	gstlal_llcbcnode [URL="\ref gstlal_llcbcnode"];
+#	gstlal_inspiral_marginalize_likelihoods_online [URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
+#	lvalert_listen [style=filled, color=lightgrey, URL="https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lvalert-howto.html"];
+# }
+# @enddot
+#
+# ### Usage cases
+#
+# - Typical usage case
+#
+# ### Command line options
+#
+#		"--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+#		"--reference-psd", metavar = "filename", help = "Set the reference psd file.")
+#		"--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+#		"--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+#		"--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
+#		"--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
+#		"--framexmit-iface", metavar = "name", default = "10.14.0.1", help = "Set the interface address to process (required). default 10.14.0.1")
+#		"--inj-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.")
+#		"--inj-dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection DQ channel to process (required if --inj-channel-name set).")
+#		"--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
+#		"--inj-framexmit-iface", metavar = "name", default "10.14.0.1", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set). default 10.14.0.1")
+#		"--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+#		"--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
+#		"--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
+#		"--likelihood-cache", help = "set the cache containin likelihood files")	
+#		"--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
+#		"--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
+#		"--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
+#		"--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
+#		"--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+#		"--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
+#		"--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
+#		"--gracedb-group", default = "Test", help = "gracedb group, default Test")
+#		"--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
+#		"--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
+#		"--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
+#		"--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
+#		"--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
+#		"--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+#		"--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+#		"--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
+#		"--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
+#		"--inj-state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+#		"--inj-state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+#		"--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
+#		"--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+#		"--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+#		"--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
+#		"--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
+
+
+class lvalert_listen_job(inspiral_pipe.generic_job):
+	"""
+	A lvalert_listen_job
+	"""
+	def __init__(self, program, gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}):
+		"""
+		"""
+		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+
+		# produce the lvalert processor
+
+		f = open("lvalert.sh", "w")
+		f.write("#!/bin/bash \n")
+		f.write('cat <&0 | tee ')
+		for prog in progs:
+			f.write(">(%s) " % dagparts.which(prog))
+		f.close()
+		os.chmod('lvalert.sh', os.stat('lvalert.sh').st_mode | stat.S_IEXEC)
+
+		f = open("lvalert.ini", "w")
+		#FIXME gracedb server code sets up nodes based on this convention
+		f.write("[%s_%s_%s]\n" % (gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
+		f.write("executable=./lvalert.sh")
+		f.close()
+
+
+class lvalert_listen_node(pipeline.CondorDAGNode):
+	"""
+	lvalert_listen node
+	"""
+	def __init__(self, job, dag):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("username", raw_input("lvalert username: "))
+		self.add_var_opt("password", raw_input("lvalert password: "))
+		self.add_var_opt("server", "lvalert.cgca.uwm.edu")
+		self.add_var_opt("config-file", "lvalert.ini")
+		dag.add_node(self)
+
+
+#
+# Parse the command line
+#
+
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
+	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
+	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
+	parser.add_option("--framexmit-iface", metavar = "name", help = "Set the interface address to process (required).")
+	parser.add_option("--inj-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection channel to process (optional). IFO=CHANNEL-NAME can be given multiple times.")
+	parser.add_option("--inj-dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection DQ channel to process (required if --inj-channel-name set).")
+	parser.add_option("--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
+	parser.add_option("--inj-framexmit-iface", metavar = "name", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set).")
+	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
+	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
+	parser.add_option("--likelihood-cache", help = "set the cache containin likelihood files")	
+	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
+	parser.add_option("--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
+	parser.add_option("--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
+	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
+	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
+	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
+	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
+	parser.add_option("--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
+	parser.add_option("--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
+	parser.add_option("--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
+	parser.add_option("--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
+	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+	parser.add_option("--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
+	parser.add_option("--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
+	parser.add_option("--inj-state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+	parser.add_option("--inj-state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
+	parser.add_option("--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
+	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
+
+	options, filenames = parser.parse_args()
+
+	fail = ""
+	for option in ("bank_cache", "gracedb_far_threshold"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+	if fail: raise ValueError, fail
+
+	#FIXME add consistency check?
+	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
+	channel_dict = datasource.channel_dict_from_channel_list(options.channel_name)
+	dq_channel_dict = datasource.channel_dict_from_channel_list(options.dq_channel_name)
+	framexmit_dict = datasource.framexmit_ports['CIT'] # set the default
+	framexmit_dict.update(datasource.framexmit_dict_from_framexmit_list(options.framexmit_addr))
+	inj_channel_dict = datasource.channel_dict_from_channel_list(options.inj_channel_name)
+	inj_dq_channel_dict = datasource.channel_dict_from_channel_list(options.inj_dq_channel_name)
+	inj_framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.inj_framexmit_addr)
+
+	if inj_channel_dict and not ( set(inj_channel_dict.keys()) == set(channel_dict.keys()) ):
+		raise ValueError("Either no injection jobs must be given or the injection and non-injection channels must be specified for the same set of detectors")
+
+	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
+
+	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
+
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict
+
+
+#
+# MAIN
+#
+
+
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict = parse_command_line()
+
+try: os.mkdir("logs")
+except: pass
+dag = dagparts.CondorDAG("trigger_pipe")
+
+
+#
+# setup the job classes
+#
+
+
+# Figure out if it is iir or not
+if options.do_iir_pipeline is not None:
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+else:
+	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+	if inj_channel_dict:
+		gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+# A local universe job that will run in a loop marginalizing all of the likelihoods
+margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+# an lvalert_listen job
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+# get urls job 
+urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
+
+#
+# loop over banks to run gstlal inspiral pre clustering and far computation
+#
+
+
+listenNode = lvalert_listen_node(listenJob, dag)
+
+jobTags = []
+inj_jobTags = []
+
+bank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1))
+if len(options.likelihood_files) != len(bank_groups):
+	raise ValueError("Likelihood files must correspond 1:1 with bank files")
+
+for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.likelihood_files)):
+	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
+	jobTags.append("%04d" % num_insp_nodes)
+
+	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
+		opts = {"psd-fft-length":options.psd_fft_length,
+			"ht-gate-threshold":options.ht_gate_threshold,
+			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
+			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
+			"state-vector-on-bits":options.state_vector_on_bits,
+			"state-vector-off-bits":options.state_vector_off_bits,
+			"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(framexmit_dict),
+			"framexmit-iface":options.framexmit_iface,
+			"svd-bank":svd_bank_string,
+			"tmp-space":inspiral_pipe.condor_scratch_space(),
+			"track-psd":"",
+			"control-peak-time":options.control_peak_time,
+			"coincidence-threshold":options.coincidence_threshold,
+			"fir-stride":options.fir_stride,
+			"data-source":options.data_source,
+			"gracedb-far-threshold":options.gracedb_far_threshold,
+			"gracedb-group":options.gracedb_group,
+			"gracedb-pipeline":options.gracedb_pipeline,
+			"gracedb-search":options.gracedb_search,
+			"thinca-interval":options.thinca_interval,
+			"job-tag":jobTags[-1],
+			"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+			},
+		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
+		output_files = {"output":"not_used.xml.gz",
+				"likelihood-file":likefile
+			}
+		)
+
+	if inj_channel_dict:
+		# FIXME The node number for injection jobs currently follows the same
+		# numbering system as non-injection jobs, except instead of starting at
+		# 0000 the numbering starts at 1000. There is probably a better way to
+		# do this in the future, this system was just the simplest to start
+		# with
+		inj_jobTags.append("%04d" % (num_insp_nodes + 1000))
+		inspInjNode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, [],
+			opts = {"psd-fft-length":options.psd_fft_length,
+				"ht-gate-threshold":options.ht_gate_threshold,
+				"channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_channel_dict),
+				"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_dq_channel_dict, opt = "dq-channel-name"),
+				"state-vector-on-bits":options.inj_state_vector_on_bits,
+				"state-vector-off-bits":options.inj_state_vector_off_bits,
+				"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(inj_framexmit_dict),
+				"framexmit-iface":options.inj_framexmit_iface,
+				"svd-bank":svd_bank_string,
+				"tmp-space":inspiral_pipe.condor_scratch_space(),
+				"track-psd":"",
+				"control-peak-time":options.control_peak_time,
+				"coincidence-threshold":options.coincidence_threshold,
+				"fir-stride":options.fir_stride,
+				"data-source":options.data_source,
+				"gracedb-far-threshold":options.inj_gracedb_far_threshold,
+				"gracedb-group":options.inj_gracedb_group,
+				"gracedb-pipeline":options.inj_gracedb_pipeline,
+				"gracedb-search":options.inj_gracedb_search,
+				"thinca-interval":options.thinca_interval,
+				"job-tag":inj_jobTags[-1],
+				"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+				},
+			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
+			"reference-likelihood-file":[likefile]},
+			output_files = {"output":"not_used.xml.gz",
+				}
+			)
+
+urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags + inj_jobTags)}, output_files = {})
+margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
+
+
+#
+# Write out the dag and other flies
+#
+
+
+dag.write_sub_files()
+# we probably want these jobs to retry indefinitely on dedicated nodes. A user
+# can intervene and fix a problem without having to bring the dag down and up.
+# There are few enough total jobs that this really shouldn't bog down the
+# scheduler. For now 10000 will be considered indefinite
+[node.set_retry(10000) for node in dag.get_nodes()]
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
+
+#
+# set up the webpage cgi scripts
+# FIXME don't hardcode this stuff
+#
+
+
+shutil.copy2(dagparts.which('gstlal_llcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
+shutil.copy2(dagparts.which('gstlal_llcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
+print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (os.environ['USER'], jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+if inj_jobTags:
+	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
