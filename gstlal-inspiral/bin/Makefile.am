@@ -4,6 +4,7 @@ dist_bin_SCRIPTS = \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_iir_bank \
 	gstlal_iir_inspiral \
+	gstlal_iir_inspiral_pipe \
 	gstlal_iir_inspiral_multithreaded \
 	gstlal_postcohspiir_inspiral \
 	gstlal_postcohspiir_pipe \
