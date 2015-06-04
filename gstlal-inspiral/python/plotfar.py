@@ -298,7 +298,7 @@ def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, c
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	t = numpy.linspace(tlo, thi, tbins)
 	yhi = 0
-	for ifo in horizon_history.viewkeys():
+	for ifo in horizon_history.keys():
 		y = numpy.array([horizon_history[ifo][seg] for seg in t])
 		axes.plot(t, y, color = colours[ifo], label = '%s' % ifo)
 		yhi = max(y.max()+5., yhi)
