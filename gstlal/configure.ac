@@ -264,6 +264,8 @@ AS_IF([test "x$HAVE_LAL_PTHREAD_LOCK" != "xyes"], [
 	AC_MSG_FAILURE([lal must be built with pthread locking enabled])
 ])
 
+AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+
 
 #
 # Check for glue and pylal

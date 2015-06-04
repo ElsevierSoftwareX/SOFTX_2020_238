@@ -242,6 +242,8 @@ PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
+AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+
 
 #
 # Check for glue and pylal
