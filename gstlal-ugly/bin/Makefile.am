@@ -26,4 +26,5 @@ dist_bin_SCRIPTS = \
 	gstlal_cache_to_segments \
 	gstlal_veto_timeseries_to_frames \
 	gstlal_parse_frame_segment_logs \
-	gstlal_postcoh_skymap2fits
+	gstlal_postcoh_skymap2fits \
+	gstlal_ll_iir_inspiral_pipe

@@ -6,7 +6,6 @@ dist_bin_SCRIPTS = \
 	gstlal_iir_inspiral \
 	gstlal_iir_inspiral_pipe \
 	gstlal_iir_inspiral_multithreaded \
-	gstlal_ll_iir_inspiral_pipe \
 	gstlal_postcohspiir_inspiral \
 	gstlal_postcohspiir_pipe \
 	gstlal_inspiral \
