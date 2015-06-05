@@ -522,7 +522,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -542,6 +542,7 @@ class Data(object):
 		self.gracedb_group = gracedb_group
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
+		self.gracedb_service_url = gracedb_service_url
 
 		#
 		# setup bottle routes
@@ -797,7 +798,7 @@ class Data(object):
 
 	def __do_gracedb_alerts(self):
 		if self.stream_thinca.last_coincs:
-			gracedb_client = gracedb.Client()
+			gracedb_client = gracedb.Client(url=self.gracedb_service_url)
 			gracedb_ids = []
 			psdmessage = None
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
@@ -1029,9 +1030,8 @@ class Data(object):
 		shutil.move(tmp_likelihood_file, os.path.join(path,filename))
 		# Snapshots get their own custom file and path
 		if snapshot:
-			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz', verbose = verbose)
-			path = subdir_from_T050017_filename(fname)
-			shutil.copy(os.path.join(path,filename), os.path.join(path, fname))
+			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
+			shutil.copy(os.path.join(path,filename), os.path.join(subdir_from_T050017_filename(fname), fname))
 
 	def write_output_file(self, filename = None, description = "", verbose = False):
 		with self.lock:

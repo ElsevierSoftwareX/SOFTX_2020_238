@@ -50,10 +50,8 @@ class lal_compute_gamma(gst.Bin):
 	olgI_default = 1.0
 	wR_default = 1.0
 	wI_default = 1.0
-	#cal_line_freq_default = 1144.3
 	sr_default = 16384
 	time_domain_default = True
-	#caps_default = 'audio/x-raw-float, width=64, rate=16384'
 
 	__gstdetails__ = (
 		'Compute Gamma',
@@ -91,13 +89,6 @@ class lal_compute_gamma(gst.Bin):
 			-gobject.G_MAXDOUBLE, gobject.G_MAXDOUBLE, wI_default,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		),
-#		'cal-line-freq' : (
-#			gobject.TYPE_DOUBLE,
-#			'cal line freq',
-#			'calibration line frequency',
-#			-gobject.G_MAXDOUBLE, gobject.G_MAXDOUBLE, cal_line_freq_default,
-#			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
-#		),
 		'sr' : (
 			gobject.TYPE_UINT,
 			'sr',
@@ -112,22 +103,11 @@ class lal_compute_gamma(gst.Bin):
 			time_domain_default,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		)
-#		'caps' : (
-#			gobject.TYPE_STRING,
-#			'caps',
-#			'caps for each data stream',
-#			caps_default,
-#			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
-#		)
 	}
 
 	def do_set_property(self, prop, val):
-#		if prop.name == 'cal-line-freq':
-#			self.cal_line_freq = val
 		if prop.name == 'sr':
 			self.sr = val
-#		elif prop.name == 'caps':
-#			self.caps = val
 		elif prop.name == 'time-domain':
 			self.time_domain = val
 		elif prop.name == 'olgR':
@@ -140,12 +120,8 @@ class lal_compute_gamma(gst.Bin):
 			self.wI = val
 
 	def do_get_property(self, prop):
-#		if prop.name == 'cal-line-freq':
-#			return self.cal_line_freq
 		if prop.name == 'sr':
 			return self.sr
-#		elif prop.name == 'caps':
-#			return self.caps
 		elif prop.name == 'time-domain':
 			return self.time_domain
 		elif prop.name == 'olgR':
@@ -161,17 +137,13 @@ class lal_compute_gamma(gst.Bin):
 	def __init__(self):
 		super(lal_compute_gamma, self).__init__()
 		
-		#self.cal_line_freq, self.sr, self.caps, self.time_domain, self.olgR, self.olgI, self.wR, self.wI = lal_compute_gamma.cal_line_freq_default, lal_compute_gamma.sr_default, lal_compute_gamma.caps_default, lal_compute_gamma.time_domain_default, lal_compute_gamma.olgR_default, lal_compute_gamma.olgI_default, lal_compute_gamma.wR_default, lal_compute_gamma.wI_default
 		self.sr, self.time_domain, self.olgR, self.olgI, self.wR, self.wI = lal_compute_gamma.sr_default, lal_compute_gamma.time_domain_default, lal_compute_gamma.olgR_default, lal_compute_gamma.olgI_default, lal_compute_gamma.wR_default, lal_compute_gamma.wI_default
 
 		self.w_mod = self.wR*self.wR + self.wI*self.wI
 		self.olg_mod = self.olgR*self.olgR + self.olgI*self.olgI
-#		self.deltat = 1.0/self.sr
 		self.window = numpy.hanning(self.sr)
 
 		# Make an oscillator at calibration line frequency for computation of gamma factors
-		#re_osc = pipeparts.mkgeneric(self, None, "lal_numpy_functiongenerator", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (self.deltat, self.cal_line_freq), blocksize = self.sr * 4)
-		#re_osc = pipeparts.mkcapsfilter(self, re_osc, self.caps)
 		cos = gst.element_factory_make("tee")
 		self.add(cos)
 		sin = gst.element_factory_make("tee")
@@ -179,11 +151,6 @@ class lal_compute_gamma(gst.Bin):
 		
 		self.add_pad(gst.GhostPad("cos", cos.get_pad("sink")))
 		self.add_pad(gst.GhostPad("sin", sin.get_pad("sink")))		
-
-		#im_osc = pipeparts.mkgeneric(self, None, "lal_numpy_functiongenerator", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (self.deltat, self.cal_line_freq), blocksize = self.sr * 4)
-		#im_osc = pipeparts.mkcapsfilter(self, im_osc, self.caps)
-		#im_osc = pipeparts.mktee(self, im_osc)
-
 		# Tee off sources
 		exc = gst.element_factory_make("tee")
 		self.add(exc)

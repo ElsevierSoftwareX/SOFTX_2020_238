@@ -702,7 +702,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
 	# binnings (filter funcs look-up initialized in .__init__()
-	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 600)))
+	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300)))
 	binnings = {
 		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
 		"H1_snr_chi": snr_chi_binning,
@@ -896,6 +896,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
+		if df <= 0.:
+			raise ValueError("require df >= 0: %s" % repr(df))
 		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
 		for instrument, number_of_events in n.items():
 			binarr = rates_dict["%s_snr_chi" % instrument]
@@ -907,13 +909,21 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# will need to normalize results so need new storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			# NOTE remove extreme bins in case of ATan bins that
-			# can cause overflows. Also remove bins below our snr
-			# threshold
-			snrmin, snrmax = new_binarr.bins[0][self.snr_min], new_binarr.bins[0][1e10]
-			snr, dsnr = new_binarr.bins[0].centres()[snrmin:snrmax], new_binarr.bins[0].upper()[snrmin:snrmax] - new_binarr.bins[0].lower()[snrmin:snrmax]
-			rcossmin, rcossmax = new_binarr.bins[1][1e-10], new_binarr.bins[1][1e10]
-			rcoss, drcoss = new_binarr.bins[1].centres()[rcossmin:rcossmax], new_binarr.bins[1].upper()[rcossmin:rcossmax] - new_binarr.bins[1].lower()[rcossmin:rcossmax]
+			# FIXME:  except for the low-SNR cut, the slicing
+			# is done to work around various overflow and
+			# loss-of-precision issues in the extreme parts of
+			# the domain of definition.  it would be nice to
+			# identify the causes of these and either fix them
+			# or ignore them one-by-one with a comment
+			# explaining why it's OK to ignore the ones being
+			# ignored.  for example, computing snrchi2 by
+			# exponentiating the sum of the logs of the terms
+			# might permit its evaluation everywhere on the
+			# domain.  can ncx2pdf() be made to work
+			# everywhere?
+			snrindices, rcossindices = new_binarr.bins[self.snr_min:1e10, 1e-10:1e10]
+			snr, dsnr = new_binarr.bins[0].centres()[snrindices], new_binarr.bins[0].upper()[snrindices] - new_binarr.bins[0].lower()[snrindices]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossindices], new_binarr.bins[1].upper()[rcossindices] - new_binarr.bins[1].lower()[rcossindices]
 
 			snrs2 = snr**2
 			snrchi2 = numpy.outer(snrs2, rcoss) * df
@@ -921,12 +931,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for pf in pfs:
 				if progressbar is not None:
 					progressbar.increment()
-				new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
+				new_binarr.array[snrindices, rcossindices] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
 
 			# Add an SNR power law in with the differentials
 			dsnrdchi2 = numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
-			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= dsnrdchi2
-			new_binarr.array[snrmin:snrmax, rcossmin:rcossmax] *= number_of_events / new_binarr.array.sum()
+			new_binarr.array[snrindices, rcossindices] *= dsnrdchi2
+			new_binarr.array[snrindices, rcossindices] *= number_of_events / new_binarr.array.sum()
 			# add to raw counts
 			binarr += new_binarr
 
@@ -1388,7 +1398,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 
 	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 80000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
+	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 160000, bins = rate.ATanLogarithmicBins(3.6, 120., 100), progressbar = None):
 		"""
 		Return a BinnedArray representing the joint probability
 		density of measuring a set of SNRs from a network of
@@ -2122,8 +2132,8 @@ class FAPFAR(object):
 		fit_min_counts = min(10., self.zero_lag_total_count / 10. + 1)
 		fit_max_counts = min(10000., self.zero_lag_total_count / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
 		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
-		if fit_min_counts < 100.:
-			warnings.warn("There are less than 100 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
+		if fit_max_counts < 10000.:
+			warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
 		if zero_lag_compcumcount.compress(rank_range).size < 1:
 			raise ValueError("not enough zero lag data to fit background")
 

@@ -6,7 +6,6 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
- doxygen (>= @MIN_DOXYGEN_VERSION@),
  gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),

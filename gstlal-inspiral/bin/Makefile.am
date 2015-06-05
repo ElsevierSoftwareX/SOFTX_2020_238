@@ -37,4 +37,6 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_gracedb_threshold \
 	gstlal_ll_inspiral_pipe \
 	gstlal_inspiral_summary_page \
+	gstlalcbcnode \
+	gstlalcbcsummary \
 	gstlal_svd_bank

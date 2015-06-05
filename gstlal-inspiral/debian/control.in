@@ -6,7 +6,6 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
- doxygen,
  gtk-doc-tools,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  gstlal-dep (>= 2.2) | gstenvironment,

@@ -150,6 +150,7 @@
 #	+ `--gracedb-search`: gracedb type (default is LowMass).
 #	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
 #	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--gracedb-service-url`: gracedb service url (default is https://gracedb.ligo.org/api/)
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
 #
@@ -285,6 +286,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url, default is https://gracedb.ligo.org/api/")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
 	# in the process_params table to determine the threshold below
@@ -650,6 +652,7 @@ for svd_bank, output_filename, likelihood_namedtuple in zip(svd_banks, options.o
 		gracedb_group = options.gracedb_group,
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,
+		gracedb_service_url = options.gracedb_service_url,
 		verbose = options.verbose
 	)
 	if options.verbose:

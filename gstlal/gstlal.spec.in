@@ -7,7 +7,7 @@ Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
 Requires: python >= @MIN_PYTHON_VERSION@ glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ lalsimulation >= @MIN_LALSIMULATION_VERSION@ lalburst >= @MIN_LALBURST_VERSION@ lalinspiral >= @MIN_LALINSPIRAL_VERSION@ gsl orc >= @MIN_ORC_VERSION@
-BuildRequires: doxygen python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel numpy lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel orc >= @MIN_ORC_VERSION@
+BuildRequires: doxygen graphviz python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel numpy lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel orc >= @MIN_ORC_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>

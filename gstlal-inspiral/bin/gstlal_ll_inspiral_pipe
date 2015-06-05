@@ -95,10 +95,12 @@ from gstlal import datasource
 #		"--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
 #		"--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
 #		"--gracedb-group", default = "Test", help = "gracedb group, default Test")
+#		"--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "GraceDb service url, default https://gracedb.ligo.org/api/")
 #		"--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
+#		"--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
 #		"--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
 #		"--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
-#		"--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
+#		"--inj-gracedb-service-url", default = "https://simdb.phys.uwm.edu/api/", help = "GraceDb service url, default https://simdb.phys.uwm.edu/api/ (for injection stream)")
 #		"--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
 #		"--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 #		"--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
@@ -117,7 +119,7 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 	"""
 	A lvalert_listen_job
 	"""
-	def __init__(self, program, gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}):
+	def __init__(self, program, gracedb_service_url = "https://gracedb.ligo.org/api/", gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), inj_progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}, inj_gracedb_group = "CBC", inj_gracedb_search = "LowMass", inj_gracedb_pipeline = "gstlal", inj_gracedb_service_url = "https://simdb.phys.uwm.edu/api/", injections = False):
 		"""
 		"""
 		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
@@ -128,14 +130,26 @@ class lvalert_listen_job(inspiral_pipe.generic_job):
 		f.write("#!/bin/bash \n")
 		f.write('cat <&0 | tee ')
 		for prog in progs:
-			f.write(">(%s) " % dagparts.which(prog))
+			f.write(">(%s --gracedb-service-url=%s)" % (dagparts.which(prog), gracedb_service_url))
 		f.close()
 		os.chmod('lvalert.sh', os.stat('lvalert.sh').st_mode | stat.S_IEXEC)
 
+		if injections:
+			f = open("lvalert_inj.sh", "w")
+			f.write("#!/bin/bash \n")
+			f.write('cat <&0 | tee ')
+			for prog in inj_progs:
+				f.write(">(%s --gracedb-service-url=%s) " % (dagparts.which(prog), inj_gracedb_service_url))
+			f.close()
+			os.chmod('lvalert_inj.sh', os.stat('lvalert_inj.sh').st_mode | stat.S_IEXEC)
+			
 		f = open("lvalert.ini", "w")
 		#FIXME gracedb server code sets up nodes based on this convention
 		f.write("[%s_%s_%s]\n" % (gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
 		f.write("executable=./lvalert.sh")
+		if injections:
+			f.write("\n[%s_%s_%s]\n" % (inj_gracedb_group.lower(), inj_gracedb_pipeline.lower(), inj_gracedb_search.lower()))
+			f.write("executable=./lvalert_inj.sh")
 		f.close()
 
 
@@ -149,6 +163,7 @@ class lvalert_listen_node(pipeline.CondorDAGNode):
 		self.add_var_opt("password", raw_input("lvalert password: "))
 		self.add_var_opt("server", "lvalert.cgca.uwm.edu")
 		self.add_var_opt("config-file", "lvalert.ini")
+		self.add_var_opt("dont-wait", "")
 		dag.add_node(self)
 
 
@@ -182,10 +197,12 @@ def parse_command_line():
 	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
+	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "GraceDb service url, default https://gracedb.ligo.org/api/")
 	parser.add_option("--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
 	parser.add_option("--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
 	parser.add_option("--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
 	parser.add_option("--inj-gracedb-group", default = "Test", help = "gracedb group, default Test (for injection stream)")
+	parser.add_option("--inj-gracedb-service-url", default = "https://simdb.phys.uwm.edu/api/", help = "GraceDb service url, default https://simdb.phys.uwm.edu/api/ (for injection stream)")
 	parser.add_option("--data-source", metavar = "[lvshm|]", default = "lvshm", help = "Where to get the data from. Default lvshm")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
@@ -194,6 +211,7 @@ def parse_command_line():
 	parser.add_option("--inj-state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
 	parser.add_option("--inj-state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times (for injection stream)")
 	parser.add_option("--lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times")
+	parser.add_option("--inj-lvalert-listener-program", action = "append", default = [], metavar = "program", help = "set the programs to respond to lvalerts from this analysis, can be given multiple times (for injection stream)")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
@@ -236,6 +254,8 @@ options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, i
 
 try: os.mkdir("logs")
 except: pass
+try: os.mkdir("gracedb")
+except: pass
 dag = dagparts.CondorDAG("trigger_pipe")
 
 
@@ -254,7 +274,7 @@ else:
 # A local universe job that will run in a loop marginalizing all of the likelihoods
 margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
 # get urls job 
 urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
@@ -297,6 +317,7 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 			"gracedb-group":options.gracedb_group,
 			"gracedb-pipeline":options.gracedb_pipeline,
 			"gracedb-search":options.gracedb_search,
+			"gracedb-service-url":options.gracedb_service_url,
 			"thinca-interval":options.thinca_interval,
 			"job-tag":jobTags[-1],
 			"likelihood-snapshot-interval":options.likelihood_snapshot_interval
@@ -334,6 +355,7 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 				"gracedb-group":options.inj_gracedb_group,
 				"gracedb-pipeline":options.inj_gracedb_pipeline,
 				"gracedb-search":options.inj_gracedb_search,
+				"gracedb-service-url":options.inj_gracedb_service_url,
 				"thinca-interval":options.thinca_interval,
 				"job-tag":inj_jobTags[-1],
 				"likelihood-snapshot-interval":options.likelihood_snapshot_interval
