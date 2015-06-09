@@ -194,7 +194,7 @@ def parse_command_line():
   parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
 
   # gpu acceleartion support
-  parser.add_option("--gpu-acc", metavar = "on|off", default = "on", help = "Turn on gpu acceleration code or not")
+  parser.add_option("--gpu-acc", metavar = "on|off", default = "off", help = "Turn on gpu acceleration code or not")
 
 
 
