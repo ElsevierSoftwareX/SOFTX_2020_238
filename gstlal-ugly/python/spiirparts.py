@@ -391,6 +391,8 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+			if verbose:
+				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
 				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap)
@@ -398,7 +400,9 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
 
-		# FIXME: hard-coded to do compression	
+		# FIXME: hard-coded to do compression
+		if verbose:
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump")
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_filename[i_dict], compression = 1)
 		triggersrcs.append(head)
 	return triggersrcs
