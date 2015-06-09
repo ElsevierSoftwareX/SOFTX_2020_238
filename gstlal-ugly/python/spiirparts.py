@@ -387,12 +387,12 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
+			suffix = "%s%s" % (instrument,  "_%d" % bank_count)
 	
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
-				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_gpu_filtering_%s" % suffix)
+				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
 				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap)
