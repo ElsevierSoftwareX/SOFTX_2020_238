@@ -183,17 +183,18 @@ def parse_command_line():
   parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb search, default is LowMass")
   parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+  parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url, default is https://gracedb.ligo.org/api/")
   parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
 	# in the process_params table to determine the threshold below
 	# which it can delete uninteresting singles after the coincs are
 	# ranked.  if the name of this option is changed, be sure to update
 	# gstlal_inspiral_calc_likelihood
-  parser.add_option("--singles-threshold-record", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
+  parser.add_option("--singles-threshold", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
   parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
 
   # gpu acceleartion support
-  parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
+  parser.add_option("--gpu-acc", metavar = "on|off", default = "on", help = "Turn on gpu acceleration code or not")
 
 
 
@@ -288,8 +289,8 @@ def parse_command_line():
   else:
     likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
 
-  if not (len(options.svd_bank) == len(options.output) == len(likelihood_namedtuples_list)):
-    raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
+  if not (len(options.iir_bank) == len(options.output) == len(likelihood_namedtuples_list)):
+    raise ValueError("must have equal numbers of iir banks, output files and likelihood files")
 
 
   #FIXME: job tag and output can not be both none
@@ -445,7 +446,7 @@ def one_pipeline(iir_bank,
 
   # show trackbacks when something fails
   #bottle.app().catchall = False
-  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_iir_inspiral" + (" (%s)" % options.job_ta if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_iir_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
 
   # Set up a registry of the resources that this job provides
   @bottle.route("/")
@@ -489,7 +490,7 @@ def one_pipeline(iir_bank,
   pipeline = gst.Pipeline("gstlal_iir_inspiral")
   mainloop = gobject.MainLoop()
 
-  if options.gpu_acc is True:
+  if options.gpu_acc is "on":
     triggersrc = spiirparts.mkBuildBossSPIIR(
       pipeline,
       detectors = detectors,
@@ -534,7 +535,8 @@ def one_pipeline(iir_bank,
   # Load likelihood ratio data, assume injections are present
   #
   if options.data_source in ("lvshm", "framexmit"):
-    coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+    coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+    assert set(seglists) == set(detectors.channel_dict)
     if coinc_params_distributions is None:
       raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
   else:
@@ -564,10 +566,12 @@ def one_pipeline(iir_bank,
     tmp_path = options.tmp_space,
     likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
     thinca_interval = options.thinca_interval,
+    sngls_snr_threshold = options.singles_threshold,
     gracedb_far_threshold = options.gracedb_far_threshold,
     gracedb_group = options.gracedb_group,
     gracedb_search = options.gracedb_search,
     gracedb_pipeline = options.gracedb_pipeline, 
+    gracedb_service_url = options.gracedb_service_url,
     verbose = options.verbose
   )
   if options.verbose:

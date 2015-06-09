@@ -177,6 +177,7 @@ def parse_command_line():
 	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--num-banks", metavar = "num", type = "int", help = "Set the number of banks to be processed by each job")
 	parser.add_option("--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
@@ -216,6 +217,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
+	parser.add_option("--gpu-acc", metavar = "on|off", default = "on", help = "Turn on gpu acceleration code or not")
 
 	options, filenames = parser.parse_args()
 
@@ -267,6 +269,9 @@ dag = dagparts.CondorDAG("trigger_pipe")
 # Figure out if it is iir or not
 if options.do_iir_pipeline is not None:
 	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+	if inj_channel_dict:
+		gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_iir_inspiral', tag_base = "gstlal_iir_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+
 else:
 	gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 	if inj_channel_dict:
@@ -289,12 +294,22 @@ listenNode = lvalert_listen_node(listenJob, dag)
 jobTags = []
 inj_jobTags = []
 
-bank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1))
-if len(options.likelihood_files) != len(bank_groups):
-	raise ValueError("Likelihood files must correspond 1:1 with bank files")
+iirbank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [options.num_banks], options.max_jobs - 1))
+if len(options.likelihood_files) > len(iirbank_groups):
+	corresp_likelihood_files = options.likelihood_files[0:len(iirbank_groups)]
+	#raise ValueError("Likelihood files must correspond 1:1 with bank files")
 
-for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.likelihood_files)):
-	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
+def assemble_iir_bank_string(iir_banks):
+	ifos = iir_banks.keys()
+	iir_bank_string = ""
+	for i in range(len(iir_banks[ifos[0]])):
+		iir_bank_string += ",".join([":".join([k, v[i]]) for k,v in iir_banks.items()])
+		iir_bank_string += ","
+	iir_bank_string = iir_bank_string[:-1]
+	return iir_bank_string
+
+for num_insp_nodes, (iir_banks, likefile) in enumerate(zip(iirbank_groups, corresp_likelihood_files)):
+	iir_bank_string = assemble_iir_bank_string(iir_banks)
 	jobTags.append("%04d" % num_insp_nodes)
 
 	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
@@ -306,7 +321,7 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 			"state-vector-off-bits":options.state_vector_off_bits,
 			"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(framexmit_dict),
 			"framexmit-iface":options.framexmit_iface,
-			"svd-bank":svd_bank_string,
+			"iir-bank":iir_bank_string,
 			"tmp-space":inspiral_pipe.condor_scratch_space(),
 			"track-psd":"",
 			"control-peak-time":options.control_peak_time,
@@ -320,7 +335,8 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 			"gracedb-service-url":options.gracedb_service_url,
 			"thinca-interval":options.thinca_interval,
 			"job-tag":jobTags[-1],
-			"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+			"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+			"gpu-acc": options.gpu_acc
 			},
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
@@ -344,7 +360,7 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 				"state-vector-off-bits":options.inj_state_vector_off_bits,
 				"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(inj_framexmit_dict),
 				"framexmit-iface":options.inj_framexmit_iface,
-				"svd-bank":svd_bank_string,
+				"iir-bank":iir_bank_string,
 				"tmp-space":inspiral_pipe.condor_scratch_space(),
 				"track-psd":"",
 				"control-peak-time":options.control_peak_time,
