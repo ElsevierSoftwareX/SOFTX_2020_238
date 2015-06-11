@@ -93,7 +93,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 		min_fs.append(f[0])
 		max_fs.append(f[-1])
 		#FIXME: Horizon distance stopped at 0.9 max frequency due to low pass filter messing up the end of the PSD
-		axes.loglog(f, psd_data, color = colours[instrument], alpha = 0.8, label = "%s (%.4g Mpc)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
+		axes.loglog(f, psd_data, color = colours[instrument], alpha = 0.8, label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
 		if instrument in sngl_inspirals:
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
 			inspiral_spectrum = [None, None]
