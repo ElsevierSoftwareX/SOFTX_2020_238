@@ -67,6 +67,8 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 
 		mass1 = sngl_inspirals.values()[0].mass1
 		mass2 = sngl_inspirals.values()[0].mass2
+		if mass1 < mass2:
+			mass1, mass2 = mass2, mass1
 		end_time = coinc_inspiral.get_end()
 		logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
 	else:
