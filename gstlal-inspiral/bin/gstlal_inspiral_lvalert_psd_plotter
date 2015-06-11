@@ -68,6 +68,20 @@ ligolw_param.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
 
 
+plotpsd.matplotlib.rcParams.update({
+	"font.size": 8.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
+	"text.usetex": True,
+	"path.simplify": True
+})
+
+
 #
 # =============================================================================
 #
