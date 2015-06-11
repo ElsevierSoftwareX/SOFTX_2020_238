@@ -490,7 +490,7 @@ def one_pipeline(iir_bank,
   pipeline = gst.Pipeline("gstlal_iir_inspiral")
   mainloop = gobject.MainLoop()
 
-  if options.gpu_acc is "on":
+  if options.gpu_acc == "on":
     triggersrc = spiirparts.mkBuildBossSPIIR(
       pipeline,
       detectors = detectors,
