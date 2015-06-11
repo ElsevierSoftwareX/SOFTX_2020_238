@@ -177,8 +177,6 @@ if not graceids:
 		logging.info("filename is not 'psd.xml.gz'.  skipping")
 		sys.exit()
 	graceids = [str(lvalert_data["uid"])]
-	# pause to give the psd file a chance to get uploaded.
-	time.sleep(8)
 
 
 gracedb_client = gracedb.Client(url=options.gracedb_service_url)
