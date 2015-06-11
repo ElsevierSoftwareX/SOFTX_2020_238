@@ -1,6 +1,7 @@
 
 # Copyright (C) 2010-2012 Shaun Hooper
 # Copyright (C) 2013-2014 Qi Chu, David Mckenzie, Kipp Cannon, Chad Hanna, Leo Singer
+# Copyright (C) 2015 Qi Chu, Shin Chung, David Mckenzie, Yan Wang
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -542,7 +543,7 @@ class Bank(object):
 			
 			iir_type_flag = 1
 	              	# make the iir filter coeffs
-       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
+       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
 	
                		# get the chirptime (nearest power of two)
                 	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
