@@ -72,7 +72,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	else:
 		# Use the cannonical BNS binary for horizon distance if an event wasn't given
 		sngl_inspirals = {}
-		mass1, mass2, end_time = 1.4, 1.4, 0
+		mass1, mass2, end_time = 1.4, 1.4, None
 
 	fig = figure.Figure()
 	FigureCanvas(fig)
@@ -102,7 +102,10 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	axes.set_xlim((1.0, 3000.0))
 	if min_psds:
 		axes.set_ylim((10**math.floor(math.log10(min(min_psds))), 10**math.ceil(math.log10(max(max_psds)))))
-	axes.set_title(r"Strain Noise Spectral Density for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger at %.2f GPS" % (mass1, mass2, float(end_time)))
+	title = r"Strain Noise Spectral Density for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger Candidate" % (mass1, mass2)
+	if end_time is not None:
+		title += r" at %.2f GPS" % float(end_time)
+	axes.set_title(title)
 	axes.set_xlabel(r"Frequency (Hz)")
 	axes.set_ylabel(r"Spectral Density ($\mathrm{strain}^2 / \mathrm{Hz}$)")
 	axes.legend(loc = "lower left")
