@@ -83,12 +83,15 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	axes.grid(True)
 
 	min_psds, max_psds = [], []
+	min_fs, max_fs = [], []
 	for instrument, psd in sorted(psds.items()):
 		if psd is None:
 			continue
 		psd_data = psd.data
 		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 		logging.info("found PSD for %s spanning [%g Hz, %g Hz]" % (instrument, f[0], f[-1]))
+		min_fs.append(f[0])
+		max_fs.append(f[-1])
 		#FIXME: Horizon distance stopped at 0.9 max frequency due to low pass filter messing up the end of the PSD
 		axes.loglog(f, psd_data, color = colours[instrument], alpha = 0.8, label = "%s (%.4g Mpc)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
 		if instrument in sngl_inspirals:
@@ -101,7 +104,10 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 		# record the maximum from within the rage 1 Hz -- 1 kHz
 		max_psds.append(psd_data[int((1.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].max())
 
-	axes.set_xlim((1.0, 3000.0))
+	if min_fs:
+		axes.set_xlim((6.0, max(max_fs)))
+	else:
+		axes.set_xlim((6.0, 3000.0))
 	if min_psds:
 		axes.set_ylim((10**math.floor(math.log10(min(min_psds))), 10**math.ceil(math.log10(max(max_psds)))))
 	title = r"Strain Noise Spectral Density for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger Candidate" % (mass1, mass2)
