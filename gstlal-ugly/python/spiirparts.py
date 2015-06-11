@@ -242,7 +242,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 #	pdb.set_trace()
 	bank_count = 0
 	for instrument, bank_name in [(instrument, bank_name) for instrument, banklist in banks.items() for bank_name in banklist]:
-		suffix = "%s%s" % (instrument, (bank_count and "_%d" % bank_count or ""))
+		suffix = "%s%s" % (instrument,  "_%d" % bank_count)
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_name)
 		if max_bank_rate < max_instru_rates[instrument]:
