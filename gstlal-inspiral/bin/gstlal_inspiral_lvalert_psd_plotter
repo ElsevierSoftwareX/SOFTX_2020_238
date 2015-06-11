@@ -71,8 +71,8 @@ plotpsd.matplotlib.rcParams.update({
 	"xtick.labelsize": 8.0,
 	"ytick.labelsize": 8.0,
 	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
+	"figure.dpi": 175,
+	"savefig.dpi": 175,
 	"text.usetex": True,
 	"path.simplify": True
 })
@@ -182,7 +182,7 @@ for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid))
+	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1024)
 	try:
 		fig.tight_layout()
 	except AttributeError:
