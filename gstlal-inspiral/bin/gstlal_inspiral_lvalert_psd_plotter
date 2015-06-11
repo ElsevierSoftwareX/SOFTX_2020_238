@@ -189,6 +189,11 @@ for graceid in graceids:
 	if psds is None:
 		continue
 	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid))
+	try:
+		fig.tight_layout()
+	except AttributeError:
+		# not available on old matplotlibs
+		pass
 	if options.no_upload:
 		filename = "psd_%s.png" % graceid
 		logging.info("writing %s ..." % filename)
