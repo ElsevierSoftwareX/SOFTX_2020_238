@@ -116,6 +116,6 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	axes.set_title(title)
 	axes.set_xlabel(r"Frequency (Hz)")
 	axes.set_ylabel(r"Spectral Density ($\mathrm{strain}^2 / \mathrm{Hz}$)")
-	axes.legend(loc = "lower left")
+	axes.legend(loc = "upper right")
 
 	return fig
