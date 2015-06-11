@@ -53,11 +53,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from gstlal.reference_psd import horizon_distance
 from gstlal import plotpsd
-#FIXME Switch to newest GraceDb api
-try:
-	from ligo.gracedb import cli as gracedb
-except ImportError:
-	from ligo import gracedb
+from ligo.gracedb import rest as gracedb
 from pylal import series as lal_series
 
 
@@ -179,7 +175,7 @@ if not graceids:
 	graceids = [str(lvalert_data["uid"])]
 
 
-gracedb_client = gracedb.Client(url=options.gracedb_service_url)
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
 
 
 for graceid in graceids:
