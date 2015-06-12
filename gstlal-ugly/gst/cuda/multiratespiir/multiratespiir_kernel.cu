@@ -477,7 +477,7 @@ __global__ void upsample2x_and_add_reshape (
 						float *sinc, 
 					const gint filt_len, 
 					gint last_sample,
-					const gint len,
+					const gint len, /* number of samples need to to be upsampled */
 					float *mem_in, 
 					float *mem_out,
 					const gint mem_in_len,
@@ -507,12 +507,12 @@ __global__ void upsample2x_and_add_reshape (
 		tmp_in = in[j];
 		tmp0 += tmp_in * tmp_sinc[j];
 		tmp1 += tmp_in * tmp_sinc[j + filt_len];
-	}
+		}
 
 		out = &(out_data[by + 2 * i * channels]);
 
-		out[0] = mem_out[mem_out_start + i] + tmp0;
-		out[channels] = mem_out[mem_out_start + i + 1] + tmp1;
+		out[0] = mem_out[mem_out_start + 2 * i] + tmp0;
+		out[channels] = mem_out[mem_out_start + 2 * i + 1] + tmp1;
 	}
 
 	__syncthreads();
@@ -994,8 +994,9 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 	share_mem_sz = SPSTATEUP(i)->sinc_len * sizeof(float);
 
 	if (i == 0) {
+//	if (i == -1) {
 	/*
-	 * upsample 2x and add 
+	 * upsample 2x and add; reshape for the output buffer
 	 */
 
 	upsample2x_and_add_reshape <<<grid, block, share_mem_sz, stream>>>(SPSTATEUP(i+1)->d_sinc_table, 

@@ -664,10 +664,10 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
   num_in_multidown = MIN (old_in_len, num_exe_samples);
 
   gint outsize = 0, out_len = 0, upfilt_len;
-  float * in_multidown, *tmp_out;
+  float *in_multidown;
   upfilt_len = element->spstate[0]->upstate->filt_len;
   //int tmp_out_len = element->spstate[0]->upstate->mem_len;
-  //tmp_out = (float *)malloc(element->outchannels * tmp_out_len * sizeof(float));
+  //float *tmp_out = (float *)malloc(element->outchannels * tmp_out_len * sizeof(float));
 
   gint i, j;
   float *outdata, *pos_out;
@@ -690,6 +690,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
     pos_out = outdata + last_num_out_spiirup * (element->outchannels);
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, pos_out, element->stream);
+    //num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
 #if 0
