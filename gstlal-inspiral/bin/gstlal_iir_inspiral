@@ -209,6 +209,7 @@ def parse_command_line():
   required_options = []
 	
   missing_options = []
+
   # FIXME: wield way to be compatible with SVD method
   if options.svd_bank is not None:
     options.iir_bank = options.svd_bank
@@ -263,7 +264,7 @@ def parse_command_line():
     os.environ['GSTLAL_LL_JOB'] = options.job_tag
 
     # check required options in this case
-    required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
+    required_options = ["job_tag", "marginalized_likelihood_file"]
 
     missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
     if missing_options:

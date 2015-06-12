@@ -297,6 +297,9 @@ inj_jobTags = []
 iirbank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [options.num_banks], options.max_jobs - 1))
 if len(options.likelihood_files) > len(iirbank_groups):
 	corresp_likelihood_files = options.likelihood_files[0:len(iirbank_groups)]
+else:
+	corresp_likelihood_files = options.likelihood_files
+
 	#raise ValueError("Likelihood files must correspond 1:1 with bank files")
 
 def assemble_iir_bank_string(iir_banks):
@@ -374,7 +377,8 @@ for num_insp_nodes, (iir_banks, likefile) in enumerate(zip(iirbank_groups, corre
 				"gracedb-service-url":options.inj_gracedb_service_url,
 				"thinca-interval":options.thinca_interval,
 				"job-tag":inj_jobTags[-1],
-				"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+				"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+				"gpu-acc": options.gpu_acc
 				},
 			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
 			"reference-likelihood-file":[likefile]},
