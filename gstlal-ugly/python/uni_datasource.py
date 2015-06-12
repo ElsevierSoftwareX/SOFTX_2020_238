@@ -45,13 +45,13 @@ from gstlal import datasource
 ## 
 # @file
 #
-# A file that contains the multirate_datasource module code
+# A file that contains the unirate_datasource module code
 #
 
 ##
-# @package python.multirate_datasource
+# @package python.unirate_datasource
 #
-# multirate_datasource module
+# unirate_datasource module
 
 ## #### produced whitened h(t) at (possibly) multiple sample rates
 # ##### Gstreamer graph describing this function
@@ -121,7 +121,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -222,6 +222,25 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_leng
 	if veto_segments is not None:
 		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, seekevent=seekevent, invert_output=True)
 
+	# h(t) gate plugin (mkhtgate) was first not used in this file. It caused that 
+	# the gpu pipeline could not find htgate , e.g. htgate for H1:
+	# "could not find H1_ht_gate for H1 'whitehtsegments'"
+	# where it should be:
+        # "found H1_ht_gate for H1 'whitehtsegments'"
+
+	#
+	# optional gate on whitened h(t) amplitude.  attack and hold are
+	# made to be 1/4 second or 1 sample, whichever is larger
+	#
+
+	# FIXME:  this could be omitted if ht_gate_threshold is None, but
+	# we need to collect whitened h(t) segments, however something
+	# could be done to collect those if these gates aren't here.
+	ht_gate_window = max(max_rate // 4, 1)	# samples
+	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
+	# emit signals so that a user can latch on to them
+	head.set_property("emit-signals", True)
+
 	# uni data source differs from multi rate data source starts here
 	# reblock incoming data into 1 second-long data segments
 
@@ -229,6 +248,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_leng
 	# e.g. if downsample_depth = 8:
 	#      1 channel, rate = 4096-> multi channel, rate = (32, 64, 128, 256, 512, 1024, 2048, 4096)
 	# multi_downsample embeds amplitude correction (audioamplify)
+
 
 	head = pipeparts.mktee(pipeline, head)
 	return head
