@@ -799,7 +799,7 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			gracedb_client = gracedb.Client(url=self.gracedb_service_url)
 			gracedb_ids = []
-			psdmessage = None
+			common_messages = []
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 
 			# This appears to be a silly for loop since
@@ -816,10 +816,10 @@ class Data(object):
 					continue
 
 				#
-				# retrieve PSDs
+				# retrieve PSDs and ranking data
 				#
 
-				if psdmessage is None:
+				if not common_messages:
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
@@ -838,8 +838,16 @@ class Data(object):
 							sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
 							data = numpy.array(elem.get_property("mean-psd"))
 						)
-					psdmessage = StringIO.StringIO()
-					reference_psd.write_psd_fileobj(psdmessage, psddict, gz = True, trap_signals = None)
+					fobj = StringIO.StringIO()
+					reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+					common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
+
+					if self.verbose:
+						print >>sys.stderr, "generating ranking_data.xml.gz ..."
+					fobj = StringIO.StringIO()
+					ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
+					common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
+					del fobj
 
 				#
 				# fake a filename for end-user convenience
@@ -896,13 +904,13 @@ class Data(object):
 				message.close()
 
 			#
-			# do PSD file uploads
+			# do PSD and ranking data file uploads
 			#
 
-			if psdmessage is not None:
-				filename = "psd.xml.gz"
+			while common_messages:
+				message, filename, tag, contents = common_messages.pop()
 				for gracedb_id in gracedb_ids:
-					resp = gracedb_client.writeLog(gracedb_id, "strain spectral densities", filename = filename, filecontents = psdmessage.getvalue(), tagname = "psd")
+					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
