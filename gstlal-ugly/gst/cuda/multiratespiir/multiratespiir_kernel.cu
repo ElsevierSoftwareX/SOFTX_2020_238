@@ -49,8 +49,8 @@ extern "C" {
 //#define ORIGINAL
 #define SM30
 #define CUT_FILTERS 0 // set to 0 to keep all the filtering results
-
-// for gpu debug
+#if 0
+// deprecated: we have cuda_debug.h for gpu debug now
 #define gpuErrchk(stream) { gpuAssert(stream, __FILE__, __LINE__); }
 static void gpuAssert(cudaStream_t stream, char *file, int line, bool abort=true)
 {
@@ -63,7 +63,7 @@ static void gpuAssert(cudaStream_t stream, char *file, int line, bool abort=true
 		if (abort) exit(code);
 	}
 }
-
+#endif
 extern __shared__ char sharedMem[];
 
 __global__ void downsample2x (const float amplifier,
@@ -670,7 +670,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 							);
 
 	cudaStreamSynchronize(stream);
-	//gpuErrchk (stream);
+	CUDA_CHECK (cudaPeekAtLastError());
 
 	/* 
 	 * FIXME: the only possible situation to discard some samples is 
@@ -783,7 +783,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 	cudaStreamSynchronize(stream);
 	//g_mutex_unlock(element->cuTex_lock);
 
-	//gpuErrchk (stream);
+	CUDA_CHECK (cudaPeekAtLastError());
 	#else
 	GST_LOG ("spiir_kernel: depth %d. processed %d, nb %d, num of (templates: %d,filters: %d). block.size (%d, %d, %d), grid.size (%d, %d, %d)", i, num_inchunk, SPSTATE(i)->nb, SPSTATE(i)->num_templates, SPSTATE(i)->num_filters, block.x, block.y, block.z, grid.x, grid.y, grid.z);
 	if (SPSTATE(i)->num_filters > 32)
@@ -984,7 +984,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
 	//g_mutex_unlock(element->cuTex_lock);
 
-	//gpuErrchk (stream);
+	CUDA_CHECK (cudaPeekAtLastError());
 
 
 	SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + spiir_processed) % SPSTATE(i)->queue_len;
@@ -1027,7 +1027,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
 	cudaStreamSynchronize(stream);
 	}
-	//gpuErrchk (stream);
+	CUDA_CHECK (cudaPeekAtLastError());
 	SPSTATEUP(i+1)->last_sample = 0;
 	num_inchunk = spiir_processed; 
 
@@ -1036,8 +1036,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
  
 	//CUDA_CHECK(cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,	SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream));
 	CUDA_CHECK(cudaMemcpyAsync(out, SPSTATE(0)->d_out,	SPSTATEUP(0)->channels * (spiir_processed) * sizeof(float), cudaMemcpyDeviceToHost, stream));
-	//cudaStreamSynchronize(stream);
-
-	//gpuErrchk (stream);
+	cudaStreamSynchronize(stream);
+	CUDA_CHECK (cudaPeekAtLastError());
 	return spiir_processed;
 }

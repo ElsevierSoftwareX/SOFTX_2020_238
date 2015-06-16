@@ -22,7 +22,8 @@ const int GAMMA_ITMAX = 50;
 #define MAXIFOS 6
 
 
-// for gpu debug
+#if 0
+// deprecated: we have cuda_debug.h for gpu debug now
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 static void gpuAssert(cudaError_t code, char *file, int line)
 {
@@ -32,6 +33,7 @@ static void gpuAssert(cudaError_t code, char *file, int line)
       exit(code);
    }
 }
+#endif
 
 __device__ static inline float atomicMax(float* address, float val)
 {
@@ -737,7 +739,7 @@ void peakfinder(PostcohState *state, int iifo)
 						state->exe_len, 
 						pklist->d_maxsnglsnr, 
 						pklist->d_tmplt_idx);
-   // gpuErrchk(cudaPeekAtLastError());
+    CUDA_CHECK(cudaPeekAtLastError());
 
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
     ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(	pklist->d_maxsnglsnr, 
@@ -745,7 +747,7 @@ void peakfinder(PostcohState *state, int iifo)
 								state->exe_len, 
 								state->ntmplt, 
 								pklist->d_peak_tmplt);
-    //gpuErrchk(cudaPeekAtLastError());
+    CUDA_CHECK(cudaPeekAtLastError());
 
     ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_npeak,
 	    						pklist->d_peak_pos,	    
@@ -755,7 +757,7 @@ void peakfinder(PostcohState *state, int iifo)
 							state->ntmplt, 
 							pklist->d_peak_tmplt,
 							state->snglsnr_thresh);
-  // gpuErrchk(cudaPeekAtLastError());
+   CUDA_CHECK(cudaPeekAtLastError());
 }
 
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
@@ -792,7 +794,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->dt,
 									state->ntmplt);
 						
-//	gpuErrchk(cudaPeekAtLastError());
+	CUDA_CHECK(cudaPeekAtLastError());
 	CUDA_CHECK(cudaMemcpy(	pklist->cohsnr_skymap, 
 			pklist->d_cohsnr_skymap, 
 			mem_alloc_size,
@@ -825,7 +827,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->hist_trials,
 									state->trial_sample_inv);
 
-//	gpuErrchk(cudaPeekAtLastError());
+	CUDA_CHECK(cudaPeekAtLastError());
 	/* copy the snr, cohsnr, nullsnr, chisq out */
 	CUDA_CHECK(cudaMemcpy(	pklist->tmplt_idx, 
 			pklist->d_tmplt_idx, 

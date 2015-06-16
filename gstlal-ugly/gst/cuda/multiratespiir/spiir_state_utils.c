@@ -45,7 +45,8 @@ extern "C" {
 }
 #endif
 
-// for gpu debug
+#if 0
+// deprecated: we have cuda_debug.h for gpu debug now
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 static void gpuAssert(cudaError_t code, char *file, int line)
 {
@@ -55,7 +56,7 @@ static void gpuAssert(cudaError_t code, char *file, int line)
       exit(code);
    }
 }
-
+#endif
 /*
  * ============================================================================
  *
@@ -527,7 +528,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 
 		//printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
 			//	tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
-		gpuErrchk(cudaPeekAtLastError());
+		CUDA_CHECK(cudaPeekAtLastError());
 	}
 	
 	free(inxns);
@@ -590,7 +591,7 @@ spiir_state_create (const gchar *bank_fname, guint ndepth, guint rate, guint num
 
 	CUDA_CHECK(cudaMalloc((void **) &(SPSTATE(0)->d_out), out_alloc_size)); // for the output
 	CUDA_CHECK(cudaMemsetAsync(SPSTATE(0)->d_out, 0, out_alloc_size, stream));
-	gpuErrchk(cudaPeekAtLastError());
+	CUDA_CHECK(cudaPeekAtLastError());
 	return spstate;
 }
 
@@ -626,9 +627,9 @@ spiir_state_reset (SpiirState **spstate, guint num_depths, cudaStream_t stream)
     SPSTATE(i)->queue_last_sample = SPSTATE(i)->delay_max;
 
     resampler_state_reset(SPSTATEDOWN(i), stream);
-    gpuErrchk(cudaPeekAtLastError());
+    CUDA_CHECK(cudaPeekAtLastError());
     resampler_state_reset(SPSTATEUP(i), stream);
-    gpuErrchk(cudaPeekAtLastError());
+    CUDA_CHECK(cudaPeekAtLastError());
   }
 }
 

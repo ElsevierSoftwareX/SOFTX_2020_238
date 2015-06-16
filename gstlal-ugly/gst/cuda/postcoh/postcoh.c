@@ -928,7 +928,7 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 	double time_in_one_day = (double) (t/GST_SECOND) - days_from_utc0 * seconds_in_one_day;
 	int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
 
-//	printf("days_from_utc0 %lu, time_in_one_day %f, gps_len %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
+	GST_LOG("current days from utc0 %lu, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
 static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint one_take_size, gint exe_size, CudaPostcoh *postcoh)
@@ -957,6 +957,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
 				/* when the snglsnr can be put in as one chunk */
 				cudaMemcpy(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice);
+				GST_LOG("load snr to gpu as a chunk");
 			} else {
 
 				int tail_cpy_size = (state->snglsnr_len - state->snglsnr_start_load) * postcoh->bps;
@@ -965,6 +966,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				pos_dd_snglsnr = state->d_snglsnr[cur_ifo];
 				pos_in_snglsnr = snglsnr + (state->snglsnr_len - state->snglsnr_start_load) * state->ntmplt;
 				cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice);
+				GST_LOG("load snr to gpu as as two chunks");
 			}
 			}
 
@@ -975,18 +977,20 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			cur_ifo = state->ifo_mapping[i];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
-			peakfinder(state, cur_ifo);
-			cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
-					state->peak_list[cur_ifo]->d_npeak, 
-					sizeof(int), 
-					cudaMemcpyDeviceToHost);
+				GST_LOG("peak finder for ifo %d", cur_ifo);
+				peakfinder(state, cur_ifo);
+				cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
+						state->peak_list[cur_ifo]->d_npeak, 
+						sizeof(int), 
+						cudaMemcpyDeviceToHost);
 
-			if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
-				cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
-			}
+				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
+					GST_LOG("coherent analysis for ifo %d", cur_ifo);
+					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
+				}
 
-			/* move along */
-			gst_adapter_flush(data->adapter, exe_size);
+				/* move along */
+				gst_adapter_flush(data->adapter, exe_size);
 			}
 		}
 		common_size -= exe_size;
