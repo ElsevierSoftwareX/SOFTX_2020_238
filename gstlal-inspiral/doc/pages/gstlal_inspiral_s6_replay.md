@@ -9,9 +9,9 @@ data simulation run using S6 data to test various piplines for the purpose of
 code review.  This documentation page is specific to the gstlal portion of the
 simulation run.  
 
-\subsection Goals
+\subsection Goals Goals
 
- - Establish the accuracy of FAP in online analysis for low mass systems
+ - Establish the accuracy of False Alarm Rate/False Alarm Probability (FAR/FAP) calculations in online analysis for low mass systems
  - Establish the online analysis has the appropriate sensitivity
 
 \section Proposal Proposed Approach
@@ -19,31 +19,42 @@ simulation run.
 The gstlal analysis team proposes to use two weeks of S6 data replayed in an
 online environment.  Details can be found <a href="https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/140812103550GeneralData%20broadcasting">here</a>
 
-\subsection Data
+\subsection Data Data
 
 Some quick facts:
 
  - GPS Start: 968543943
  - GPS End: 971622087
+ - IFOs: H1, L1
 
-\subsection Resources
+\subsection Resources Resources
 
- - 96 HT cores (48 physical cores) on three nodes: execute1000, execute1001, execute1002,
+ - Online: 96 HT cores (48 physical cores) on three nodes: execute1000, execute1001, execute1002
+ - Offline: NEMO Cluster (does not need to be as specific as online)
 
-\section Analysis
+\section Analysis Analysis
 
  - location, UWM: /home/gstlalcbc/review/s6replay
  - online and offline are in the appropriately named directories
 
-\subsection Analysis codes
+\subsection AnalysisCodes Analysis codes
 
  - gstlal 1a44f7af0cf69293f4b0883e4e4142ce263e86f4
  - all other dependencies from ER7 releases
 
-\subesection Template Banks
+\subsection Injections Injection Parameters
+
+ - Component mass normally distributed with mean mass of 1.4 \f$M_\odot\f$ and standard deviation of 0.01 \f$M_\odot\f$
+ - Sources uniformly distributed in interval [5,45] Mpc
+ - Spinless
+
+\subsection Online Online Analysis
+
+\subsubsection OnlineBanks Template Banks
 
  - /home/gstlalcbc/review/s6replay/online/bank
  - Makefile to make the template banks
+
 		FSTART = 871147316
 		FSTOP =  871149864
 		START = 871147516
@@ -125,7 +136,10 @@ Some quick facts:
 		clean :
 			rm -rf *.sub* *.dag* *.cache *.sh *.xml *.gz logs gstlal_svd_bank* *split_bank
 
-\subsection Triggers
+\subsubsection Triggers Triggers
+
+ - /home/gstlalcbc/review/s6replay/online/trigs
+ - Makefile to make the analysis dag
 
 		H1_BANK_CACHE = ../bank/H1_bank.cache
 		L1_BANK_CACHE = ../bank/L1_bank.cache
@@ -216,3 +230,184 @@ Some quick facts:
 			rm -rf gstlal_inspiral gstlal_inspiral_inj gracedb gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen 
 			rm -rf *.txt lvalert.ini *.gz trigger_pipe.* *.sub logs lvalert*.sh node* *.xml prior.cache
 
+\subsection Offline Offline Analysis
+
+
+\subsubsection OfflineAnalysis Offline Analysis
+
+ - /home/gstlalcbc/review/s6replay/offline
+ - Makefile which contains rules for every offline analysis
+
+		# Misc useful definitions
+		empty:=
+		space:= $(empty) $(empty)
+		comma:= ,
+
+		# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+		BANK_CACHE_PREFIX = $(empty)
+		BANK_CACHE_SUFFIX = _split_bank.cache
+		BANK_CACHE_FILES = $(addsuffix $(BANK_CACHE_SUFFIX),$(IFOS))
+		BANK_CACHE_STRING:= $(addprefix $(BANK_CACHE_PREFIX),$(IFOS))
+		BANK_CACHE_STRING:= $(addprefix =,$(BANK_CACHE_STRING))
+		BANK_CACHE_STRING:= $(addsuffix $(BANK_CACHE_SUFFIX),$(BANK_CACHE_STRING))
+		BANK_CACHE_STRING:= $(join $(IFOS),$(BANK_CACHE_STRING))
+		BANK_CACHE_STRING:= $(strip $(BANK_CACHE_STRING))
+		BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
+
+		# Segments file names
+		segments_suffix := _segmentspadded.xml
+		SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+		# Frame cache file names
+		frame_suffix      := _frame.cache
+		FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+		# Injection file names
+		injections:=--injections $(space)
+		INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
+
+ - Makefile to create the analysis dag using the template bank generated in the online analysis, H1-TMPLTBANK-871147516-2048.xml
+
+		#
+		# Template bank parameters
+		#
+
+		# The filtering start frequency
+		LOW_FREQUENCY_CUTOFF = 40.0
+		# The maximum frequency to filter to
+		HIGH_FREQUENCY_CUTOFF = 1024.0
+		# Controls the number of templates in each SVD sub bank
+		NUM_SPLIT_TEMPLATES = 100
+		# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+		# in the SVD.  Redundant templates will be removed
+		OVERLAP = 20
+		# The approximant that you wish to filter with
+		APPROXIMANT = TaylorF2
+
+		#
+		# Triggering parameters
+		#
+
+		# The detectors to analyze
+		IFOS = H1 L1
+		# The GPS start time of the S6 replay
+		START = 967161687
+		# The GPS end time of the S6 replay
+		STOP = 968371287
+		# A user tag for the run
+		TAG = offline_s6_replay
+		# A web directory for output
+		WEBDIR = ~/public_html/$(TAG)
+		# The number of sub banks to process in parallel for each gstlal_inspiral job
+		NUMBANKS = 5,6,7
+		# The control peak time for the composite detection statistic.  If set to 0 the
+		# statistic is disabled
+		PEAK = 0
+		# The length of autocorrelation chi-squared in sample points
+		AC_LENGTH = 351
+		# The minimum number of samples to include in a given time slice
+		SAMPLES_MIN = 1024 # default value
+		# The maximum number of samples to include in the 256 Hz or above time slices
+		SAMPLES_MAX_256 = 1024 # default value
+
+		#
+		# additional options, e.g.,
+		#
+
+		#ADDITIONAL_DAG_OPTIONS = "--blind-injections BNS-MDC1-WIDE.xml"
+
+		#
+		# Injections
+		#
+
+		# The seed is the string before the suffix _injections.xml
+		# Change as appropriate, whitespace is important
+		INJECTIONS := S6_bns_injs_shifted.xml
+
+		#
+		# Segment and frame type info
+		#
+
+		# The LIGO and Virgo frame types
+		LIGO_FRAME_TYPE_SUFFIX='LDAS_C02_L2'
+		# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+		# you want to analyze a different set of IFOS
+		H1_CHANNEL=LDAS-STRAIN
+		L1_CHANNEL=LDAS-STRAIN
+		CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+
+		#
+		# Get some basic definitions.  NOTE this comes from the share directory probably.
+		#
+
+		include Makefile.offline_analysis_rules
+
+		#
+		# Workflow
+		#
+
+		all : dag
+
+		H1-TMPLTBANK-871147516-2048.xml :
+			cp ../online/bank/H1-TMPLTBANK-871147516-2048.xml .
+
+		%_split_bank.cache : H1-TMPLTBANK-871147516-2048.xml
+			mkdir -p $*_split_bank
+			gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+		plots :
+			mkdir plots
+
+		$(WEBDIR) : 
+			mkdir -p $(WEBDIR)
+
+		tisi.xml :
+			ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+			ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+			ligolw_add --output $@ tisi0.xml tisi1.xml
+
+		dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+			gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS)
+
+		V1_frame.cache:
+			# FIXME force the observatory column to actually be instrument
+			ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" V1_"$$2" "$$3" "$$4" "$$5}' > $@
+
+		%_frame.cache:
+			# FIXME horrible hack to get the observatory, not guaranteed to work
+			$(eval OBS:=$*)
+			$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+			$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+			# FIXME force the observatory column to actually be instrument
+			ligo_data_find -o $(OBS) -t $*_$(LIGO_FRAME_TYPE_SUFFIX) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+		frame.cache: $(FRAME_CACHE_FILES)
+			cat $(FRAME_CACHE_FILES) > frame.cache
+
+		segments.xml.gz: frame.cache
+			# These segments come from the MDC set  
+			gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/SELECTED_SEGS.xml.gz $@
+			gstlal_cache_to_segments frame.cache nogaps.xml
+			gstlal_segments_operations --segment-file1 $@ --segment-file2 nogaps.xml --intersection --output-file $@
+			-rm -vf nogaps.xml
+			gstlal_segments_trim --trim 8 --gps-start-time $(START) --gps-end-time $(STOP) --min-length 2048 --output $@ $@
+
+		vetoes.xml.gz:
+			gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/COMBINED_CAT_4_VETO_SEGS.xml.gz $@
+			gstlal_segments_trim --gps-start-time $(START) --gps-end-time $(STOP) --segment-name vetoes --output $@ $@
+
+		clean:
+			-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+			-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+			-rm -vf segments.xml.gz tisi.xml H*.xml L*.xml V*.xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+			-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+			-rm -vf tisi0.xml tisi1.xml
+			-rm -rf *_split_bank
+
+\section Results Results
+ - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201118438426..1119648026">GraceDb query</a>
+ - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201118438426..1119648026">SimDb query</a>
+ - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20hardwareinjection%20replaylowmassinj%201118438426..1119648026">SimDb injection file query</a>
+ - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/range.png">Low latency sensitivity plots</a>
+   - Covers the last 48 hours
+   - Updated every 5-10 minutes
