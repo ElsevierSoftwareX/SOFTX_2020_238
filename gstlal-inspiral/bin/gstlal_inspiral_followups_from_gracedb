@@ -89,6 +89,11 @@ def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
 		if snrm is None:
 			continue
 		fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, ifo, plot_type, 400, event_snr = snrm, event_chisq = chisqm)
+		try:
+			fig.tight_layout()
+		except AttributeError:
+			# not in old matplotlibs
+			pass
 		fname = 'gracedb/%s/%s_%s_%s_snrchi.png' % (gid, gid, ifo, plot_type)
 		fig.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = {"background_pdf":"background", "injection_pdf":"background", "zero_lag_pdf":"background", "LR":"background"}[plot_type])
@@ -159,6 +164,11 @@ for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
 
 fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,100.), "Noise", event_likelihood = coinc_table.likelihood)
 fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
+try:
+	fig.tight_layout()
+except AttributeError:
+	# not in old matplotlibs
+	pass
 fig.savefig(fname)
 gracedb.writeLog(gid, "Likelihood Ratio CCDF", filename = fname, filecontents = open(fname).read(), tagname = "background")
 
