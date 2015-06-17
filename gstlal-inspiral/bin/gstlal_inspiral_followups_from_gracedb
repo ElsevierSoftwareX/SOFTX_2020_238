@@ -32,6 +32,7 @@ from gstlal import plotfar
 import time
 from glue.ligolw import ligolw, lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 import urllib
 import urlparse
 import httplib
@@ -106,23 +107,16 @@ xmldoc, checksum = ligolw_utils.load_fileobj(filename, contenthandler = LIGOLWCo
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
-process = lsctables.ProcessTable.get_table(xmldoc)
-params = lsctables.ProcessParamsTable.get_table(xmldoc)
 snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
 for r in sngl_inspiral_table:
 	snr_chisq_dict[r.ifo] = (r.snr, r.chisq)
-for r in params:
-	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
-		path = r.value
-	elif r.program == "gstlal_inspiral" and r.param == "--reference-likelihood-file":
-		path = r.value
-	if r.program =="gstlal_inspiral" and r.param == "--marginalized-likelihood-file":
-		marg_path = r.value
-	if r.program == "gstlal_inspiral" and r.param == "--job-tag":
-		tag = r.value
-for r in process:
-	if r.program == "gstlal_inspiral":
-		node = r.node
+try:
+	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--likelihood-file")
+except ValueError:
+	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--reference-likelihood-file")
+marg_path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--marginalized-likelihood-file")
+tag, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--job-tag")
+node, = [r.node for r in lsctables.ProcessTable.get_table(xmldoc) if r.program == "gstlal_inspiral"]
 
 url = open("%s_registry.txt" % tag).readline().strip()
 
