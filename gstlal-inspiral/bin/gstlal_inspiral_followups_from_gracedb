@@ -21,7 +21,6 @@
 
 import sys, os
 import logging
-from pylal import rate
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
