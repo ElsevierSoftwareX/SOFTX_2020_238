@@ -26,15 +26,12 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab
 import numpy
-from glue.ligolw import utils
 import copy
 from gstlal import far
 from gstlal import plotfar
 import time
-from glue.ligolw import ligolw, table, lsctables, param, array
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import ligolw, lsctables
+from glue.ligolw import utils as ligolw_utils
 import urllib
 import urlparse
 import httplib
@@ -44,6 +41,10 @@ from ligo.gracedb.rest import GraceDb
 import glob
 import json
 from optparse import OptionParser
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
 
 def parse_command_line():
 	parser = OptionParser()
@@ -102,12 +103,12 @@ except OSError:
 
 gracedb = GraceDb(options.gracedb_service_url)
 filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
-xmldoc, checksum = utils.load_fileobj(filename, contenthandler = ligolw.LIGOLWContentHandler)
-coinc_inspiral_row = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)[0]
-sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-coinc_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)[0]
-process = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
-params = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+xmldoc, checksum = ligolw_utils.load_fileobj(filename, contenthandler = LIGOLWContentHandler)
+coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
+process = lsctables.ProcessTable.get_table(xmldoc)
+params = lsctables.ProcessParamsTable.get_table(xmldoc)
 snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
 for r in sngl_inspiral_table:
 	snr_chisq_dict[r.ifo] = (r.snr, r.chisq)
@@ -148,8 +149,8 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 # SNR / Chisq plots
 #
 
-coinc_param_distributions = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-ranking_data, seglistsdict = far.parse_likelihood_control_doc(utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
+coinc_param_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+ranking_data, seglistsdict = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
 ranking_data.finish()
 # FIXME Is this livetime correct?
 fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglistsdict))
