@@ -36,8 +36,7 @@ import urllib
 import urlparse
 import httplib
 import subprocess
-from ligo.gracedb import DEFAULT_SERVICE_URL
-from ligo.gracedb.rest import GraceDb
+from ligo.gracedb import rest as gracedb
 import glob
 import json
 from optparse import OptionParser
@@ -48,7 +47,7 @@ lsctables.use_in(LIGOLWContentHandler)
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--gracedb-service-url", default="%s" % DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_SERVICE_URL)
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
 
 	options, gid_list = parser.parse_args()
 	
@@ -101,7 +100,7 @@ try:
 except OSError:
 	pass
 
-gracedb = GraceDb(options.gracedb_service_url)
+gracedb = gracedb.GraceDb(options.gracedb_service_url)
 filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
 xmldoc, checksum = ligolw_utils.load_fileobj(filename, contenthandler = LIGOLWContentHandler)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
