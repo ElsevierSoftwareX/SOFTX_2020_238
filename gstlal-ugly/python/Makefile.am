@@ -10,4 +10,3 @@ pkgpython_PYTHON = \
 	gviz_api.py \
 	httpinterface.py \
 	servicediscovery.py \
-	idq_vetosrc.py
