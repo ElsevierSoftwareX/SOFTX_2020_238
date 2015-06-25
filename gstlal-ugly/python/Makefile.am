@@ -9,4 +9,4 @@ pkgpythondir = $(pkgpyexecdir)
 pkgpython_PYTHON = \
 	gviz_api.py \
 	httpinterface.py \
-	servicediscovery.py \
+	servicediscovery.py 
