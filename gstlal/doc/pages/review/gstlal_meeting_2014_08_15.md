@@ -38,12 +38,14 @@ consider that part of the gstlal review or "Waveform" review group.
 can handle gaps in data using state vectors and so gstlal will, in principle,
 be ready to make use of ODC vetoes
 
+<!---
 - Action: Jolien Creighton to focus on the delta function test.
 
 - Action: Kipp/Chad -> Perform auto-correlation test.
 
 - Action: Kipp/Chad -> Template bank test -> Do a bunch of injections and look at the distribution
 of SNR/<SNR>.
+-->
 
 Codes reviewed and comments
 
@@ -65,6 +67,7 @@ Codes reviewed and comments
 DQ and what is masked or interpreted by gstlal is important as otherwise
 the pipeline might break.
 
+<!---
 - Action: Reviewers to interact with DQ team to make sure statevectors
 are compatible.
 
@@ -98,6 +101,7 @@ segments are hanelded and if logic covers all cases possible.
 - Notes: Many changes were made to this code during the review. It
 should be checked again and we should have a look at it again
 at some point.
+-->
 
 ##gstlal_reblock
 
@@ -116,12 +120,14 @@ lalchecktimestamps does unit test but it needs to be recorded somewhere.
 
 - Reviewed with no actions
 
+<!---
 ##gstlal_gate
 
 - Reviewed with actions: Set caps seem to have 64 but it is not implemented
 in sink nor is a function available for type casting 64 bits (line 1322).
 
 - Also please write a unit test.
+-->
 
 ##gstlal_firbank
 
@@ -129,6 +135,7 @@ in sink nor is a function available for type casting 64 bits (line 1322).
 to the review page outputs of unit tests using points for the plot and
 zoommed in version.
 
+<---
 ##gstlal_drop
 
 - Reviewed with actions: Write some unit tests and show them to reviewers;
@@ -143,4 +150,4 @@ files on the status page
 
 - Reviewed with actions: Please add output of tests that were done at
 the f2f meeting to the review page.
-
+-->

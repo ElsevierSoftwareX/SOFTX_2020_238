@@ -5,6 +5,7 @@
 - \ref gstlal_review_howto_page
 - \ref gstlal_review_codes_page
 - \ref gstlalmeetingspage
+- \ref gstlalactionitemspage
 
 \section Team Review Team 2014
 
@@ -12,6 +13,7 @@
 - Reviewers: Jolien, Florent, Duncan Me, Sathya
 
 
+<!---
 \section action Action items
 
 *NOTE: This list contains broad action times and not code specific actions.
@@ -165,9 +167,11 @@ elements:
  - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
 - Write joint likelihood ranking and FAP calculation (paper in progress)
  - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
+-->
 
 \section studies Studies
 
 - \ref gstlal_inspiral_BNS_MDC_study
 - \ref gstlalinspiralcontrolpeaktimestudypage
 - \ref gstlalinspiralautochisqlenstudypage
+- \ref gstlal_inspiral_impulse_response_study

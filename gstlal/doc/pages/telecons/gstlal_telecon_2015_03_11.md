@@ -23,11 +23,13 @@ Jolien
 Stephen
 Patrick
 
+<!---
 \section action Action Items
   - For Cody: Check that changes in compilers haven't caused problems. Check that a temporary variable was used when checking gps_time_now value. Do another sanity check that the times are actually valid. Try replacing code with code to return random struct with times that have failed in the past.
 * For Jolien: Check the behavior of gstreamer and lal's raise function. Change siminspiralFDTD routine to take df.
   - For Kipp: Change swig code so it just copies values in SWIGPython.i
   - For discussion next time: Should likelihood ranking stat include triggers found in coincidence? Question based on rates/significance group discussion.
+-->
 
 \section minutes Minutes
 

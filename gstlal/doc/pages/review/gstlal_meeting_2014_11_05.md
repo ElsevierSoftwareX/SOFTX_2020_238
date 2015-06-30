@@ -19,6 +19,7 @@
 
 In attendance: Hanna, Cannon, Meacher, Creighton J, Robinet, Sathyaprakash, Messick, Dent, Blackburn
 
+<!---
 \section action Action Items:General
 
 
@@ -78,7 +79,7 @@ far.py:
 - Jolien: Example in 1165 could print the output.
 
 - Kipp: Chisquare binning hasn't been tuned to be a good representation of the PDFs; could be improved in future
-
+-->
 
 Makefiles for various runs:
 

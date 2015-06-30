@@ -12,6 +12,7 @@
 
 \section minutes minutes
 
+<!---
 Actions:
 
 - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
@@ -84,3 +85,4 @@ up again there)
 - Feature request for detchar - It would be helpful to have online 
 instrument state that could be queried to know if an instrument will 
 be down for an extended time
+-->
