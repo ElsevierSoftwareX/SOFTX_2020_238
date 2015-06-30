@@ -8,18 +8,12 @@
 - Make sure capsfilters and other similar elements are well documented within graphs (e.g. put in rates, etc)
 - Add description of arrows in graphs
 - Feature request for detchar - It would be helpful to have online instrument state that could be queried to know if an instrument will be down for an extended time
-
 - figure out what the PE people want to present and when;  it should be
   related to this subject matter of this review meeting
-
 - get documentation generated and installed
-
 - explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with \chi distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
-
 - show histogram of horizon distance history
-
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
-
 - Write as many unit tests as possible
 
 <!---
