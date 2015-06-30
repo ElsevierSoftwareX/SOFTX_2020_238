@@ -160,6 +160,10 @@
 # | -------------------------------------------    | ------------------------------------------- | ---------- |
 # | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | 7536db9d496be9a014559f4e273e1e856047bf71 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_inspiral</a> |
+#
 # #### Actions
 #
 # - Consider cleaning up the nxydump segment option.  Currently it only works with modifying source code

@@ -23,6 +23,10 @@
 # | -------------------------------------------    | ------------------------------------------- | ---------- |
 # | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-29 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | 7536db9d496be9a014559f4e273e1e856047bf71 | <a href="@gstlal_inspiral_cgit_diff/python/templates.py?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">templates.py</a> |
+#
 # #### Actions
 #
 # - Performance of time slices could be improved by e.g., not using powers of 2 for time slice sample size. This might also simplify the code

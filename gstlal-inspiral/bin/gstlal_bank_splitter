@@ -75,6 +75,10 @@ from gstlal import chirptime
 # | ------------------------------------------- | ------------------------------------------- | ---------- |
 # | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-28 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | 7536db9d496be9a014559f4e273e1e856047bf71 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_bank_splitter?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_bank_splitter</a> |
+#
 # #### Action
 #
 # - Consider cleanup once additional bank programs are used and perhaps have additional metadata

@@ -32,6 +32,10 @@
 # | ------------------------------------------- | ------------------------------------------- | ---------- |
 # | Florent, Jolien, Kipp, Chad                 | ca54624dac65388bc8dfd0d8f5ed5d187fbcb99a    | 2015-05-14 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | ca54624dac65388bc8dfd0d8f5ed5d187fbcb99a | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral_marginalize_likelihood?id=HEAD&id2=ca54624dac65388bc8dfd0d8f5ed5d187fbcb99a">gstlal_inspiral_marginalize_likelihood</a> |
+#
 # #### Action
 # - none
 #

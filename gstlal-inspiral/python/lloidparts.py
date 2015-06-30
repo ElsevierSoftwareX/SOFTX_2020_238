@@ -28,6 +28,10 @@
 # | -------------------------------------------    | ------------------------------------------- | ---------- |
 # |          Sathya, Duncan Me, Jolien, Kipp, Chad | 4bb3204b4ea43e4508dc279ddcfc417366c72841    | 2014-05-02 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | 4bb3204b4ea43e4508dc279ddcfc417366c72841 | <a href="@gstlal_inspiral_cgit_diff/python/lloidparts.py?id=HEAD&id2=4bb3204b4ea43e4508dc279ddcfc417366c72841">lloidparts.py</a> |
+#
 # #### Actions
 # - Feature request: do checkpointing when instruments are down
 # - Feature request: need to hook up equivalent of "CAT 2" vetoes to online analysis when ready, and HW inj veto, etc.

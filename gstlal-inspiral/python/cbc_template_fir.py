@@ -26,6 +26,10 @@
 # | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad      | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
 # | Florent, Surabhi, Tjonnie, Kent, Jolien, Kipp, Chad | 0d7301a22ad3346f1283d3a1917b67aa7ec1c1ab    | 2015-05-12 |
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | 0d7301a22ad3346f1283d3a1917b67aa7ec1c1ab | <a href="@gstlal_inspiral_cgit_diff/python/cbc_template_fir.py?id=HEAD&id2=0d7301a22ad3346f1283d3a1917b67aa7ec1c1ab">cbc_template_fir.py</a> |
+#
 # #### Action items
 #
 # - Consider changing the order of interpolation and smoothing the PSD

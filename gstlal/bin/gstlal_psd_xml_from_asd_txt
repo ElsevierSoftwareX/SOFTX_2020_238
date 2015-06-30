@@ -61,6 +61,9 @@ from optparse import OptionParser
 # | ----------------------------------- | --------------------- 			| ------------- |
 # | Florent, Duncan Me., Jolien, Kipp, Chad |abedb7c19ad3d5348c000bc5f9435d5d2e810e42	| 2014-04-29	|
 #
+# | Review Hash                              | Diff                |
+# | ---------------------------------------- | ------------------- |
+# | abedb7c19ad3d5348c000bc5f9435d5d2e810e42 | <a href="@gstlal_cgit_diff/bin/gstlal_psd_xml_from_asd_txt?id=HEAD&id2=abedb7c19ad3d5348c000bc5f9435d5d2e810e42">gstlal_psd_xml_from_asd_txt</a> |
 #
 
 parser = OptionParser(description = __doc__)
