@@ -134,7 +134,7 @@ nightly build:
 elements:
 	- lal_statevector:
 		- added warning messages if required-on/required-off have too many bits for width of input stream
-		- generalized transform_caps() so that sink-->src conversions are complete
+		- generalized transform_caps() so that sink to src conversions are complete
 		- added notifications for sample count properties
 		- wrote unit test
 	- lal_sumsquares:
