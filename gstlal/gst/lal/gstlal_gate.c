@@ -26,6 +26,12 @@
  *
  * Reviewed:  8466e17ed01185bd3182603207d2ac322f502967 2014-08-14 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
+ *
+ * Completed Actions:
+ * - removed 64-bit support for control stream:  not possibleto specify 
+ * threshold to that precision
+ * - Why not signal control_queue_head_changed on receipt of NEW_SEGMENT? not needed.
+ *
  */
 
 

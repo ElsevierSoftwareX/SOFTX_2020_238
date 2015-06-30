@@ -54,8 +54,12 @@
  * 
  * Reviewed:  cf799de0ed55bf454fcd7fd8bc88dcaa8c4bd97e 2014-08-10 K. Cannon, J.
  * Creighton, B. Sathyaprakash.
+ *
+ * Actions:
+ *
+ * - get plots into documentation
+ *
  */
-
 
 /*
  * ========================================================================

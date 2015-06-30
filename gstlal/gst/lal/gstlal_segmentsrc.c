@@ -34,6 +34,16 @@
  *
  * Reviewed:  a2d52f933cd71abc2effa66b46d030ee605e7cea 2014-08-13 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
+ *
+ * Actions:
+ * - Fix hard coded width.i
+ * - There is a *fixme* issue on line 498 that must be looked at.
+ * - Write an illustration to describe how start and stop times of
+ *  segments are hanelded and if logic covers all cases possible.
+ *
+ * Completed Action:
+ * - Wrote a unit test
+ *
  */
 
 

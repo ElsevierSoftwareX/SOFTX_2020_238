@@ -44,6 +44,14 @@
  *
  * Reviewed:  3a08854e595cf35a002483eae9a2b001b1100d21 2014-08-14 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
+ *
+ * Actions:
+ * - impulse tests of filtering code?
+ * - pick a PSD, generate template bank, inject an exact
+ * template whitened with that PSD, confirm that SNR stream
+ * is the autocorrelation recorded in the svd bank file with
+ * the correct SNR for the injection
+ *
  */
 
 

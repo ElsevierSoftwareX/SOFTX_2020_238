@@ -31,6 +31,7 @@
 #
 # #### Action items
 #
+# - Question: Is it possible for the offline pipeline to begin producing tiggers after a certain time rather than waiting for all the inspiral jobs to get over? Will be particularly useful if the data length is ~ months or ~ year. Should also avoid producing massive amount of data, right?
 # - L300+: Please document within the code that the FAR column is used to store FAP so that future developers don't get confused what that column represents
 
 #

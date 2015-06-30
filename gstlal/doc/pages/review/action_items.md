@@ -12,39 +12,6 @@
 - figure out what the PE people want to present and when;  it should be
   related to this subject matter of this review meeting
 
-- ranking statistic:
-	- far.py
-	- gstlal_inspiral_calc_likelihood
-	- gstlal_marginalize_likelihood
-	- gstlal_compute_far_from_snr_chisq_histograms
-
-- bits of gstlal_inspiral:
-	- pipeio.py
-	- inspiral.py
-	- httpinterface.py
-	- hoftcache.py
-	- track down ligolw_thinca validation from ihope
-	- streamthinca.py
-
-- elements:
-	- whiten:
-		- get plots into documentation
-	- lal_cachesrc:
-		- link missing from review status page
-	- lal_drop:
-		- write unit test
-	- lal_simulation:
-		- consider patching lal to remove start/stop parameters from
-		  XML loading functions so that they just load everything
-	- lal_adder
-	- lal_firbank:
-		- impulse tests of filtering code?
-		- pick a PSD, generate template bank, inject an exact
-		  template whitened with that PSD, confirm that SNR stream
-		  is the autocorrelation recorded in the svd bank file with
-		  the correct SNR for the injection
-	- lal_itac
-
 - get documentation generated and installed
 
 - explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with \chi distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
@@ -53,6 +20,21 @@
 
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 
+<!---
+These elements had general action items which have been moved to their source code
+	- whiten
+	- lal_cachesrc
+	- lal_drop
+	- lal_adder
+	- lal_firbank
+	- lal_itac
+-->
+
+\section unittest Unit Tests
+- gstlal_drop
+- gstlal_gate
+- lal_checktimestamps (Jolien)
+- lal_shift (Chad)
 
 \section telecon2015_03_11 March 11, 2015 telecon
 \ref gstlaltelecons20150311page
@@ -99,23 +81,10 @@
 \section meeting2014_12_03 December 3, 2014 meeting
 \ref gstlalmeeting20141203page
 
-Action items on inspiral.py
-- Document examples of how to get SNR history, etc., to a web browser in an offline search
-- Long term goal: Using template duration (rather than chirp mass) should load balance the pipeline and improve statistics
-- L651: One thing to sort out is the signal probability while computing coincs
-- L640-L647: Get rid of obsolete comments
-- L667: Make sure timeslide events are not sent to GRACEDB
-- Lxxx: Can normalisation of the tail of the distribution pre-computed using fake data?
-- L681: fmin should not be hard-coded to 10 Hz. horizon_distance will be horribly wrong if psd is constructed, e.g. using some high-pass filter. For example, change the default to 40 Hz.
-- L817: If gracedb upload failed then it should be possible to identify the failure, the specifics of the trigger that encountered failure and a way of submitting the trigger again to gracedb is important. Think about how to clean-up failures.
-- Mimick gracedb upload failures and see if the code crashes
+-Action items added to inspiral.py
 
-Action items on streamthinca.py
+-Action items added to streamthinca.py
 
-- Question: Is it possible for the offline pipeline to begin producing tiggers after a certain time rather than waiting for all the inspiral jobs to get over? Will be particularly useful if the data length is ~ months or ~ year. Should also avoid producing massive amount of data, right?
-
-- L300+: Please document within the code that the FAR column is used to store FAP so that future developers don't get confused what that column represents
-					
 
 \section meeting2014_11_05 November 5, 2014 meeting
 \ref gstlalmeeting20141105page
@@ -139,9 +108,10 @@ Action items on streamthinca.py
 - Chad: Makefile for NSBH and BNS-spinning on the documentation page all point to the BNS Makefile; please correct them.
 
 \section meeting2014_10_22 October 10, 2014 meeting
-\ref gstlalmeeting20141022
+\ref gstlalmeeting20141022page
 
-##iterutils.py: randindex()
+iterutils.py: randindex()
+This is in glue. Someone please move and address this
 
 - Need a test code to show that the distribution produced is the intended one. Please produce some histograms of the distribution and attach to review documentation.
 
@@ -179,58 +149,36 @@ of SNR/<SNR>.
 - Action: Reviewers to interact with DQ team to make sure statevectors
 are compatible.
 
-##gstlal_simulation
+<!---
+- Write some unit tests for gstlal_drop
+-->
 
-- There are a number of issues with gstlal_simulation, such as extra padding for injection series,
-simulation series, etc., that need to be sorted out. At the moment it is also
-not possible to get all the injections from a frame file. Also why is a
-nano-second taken out at the beginning and added at the end. Get lal to
-do a conditional taper at the start of the waveform and run it through
-a high-pass filter (need to check if this is really needed for BNS).
-Also need to find out if this should be the responsibility of waveform
-developers or it could be done outside waveform generation.
+\subsection sourcecodeadditions Action Items added to the following source codes
 
-- We need to look at this code again.
+- gstlal_simulation
 
-- Action: Please prepare a figure and a document to say what exactly
+	- We need to look at this code again.
+
+	- Please prepare a figure and a document to say what exactly
 is being done to help complete the review.
+	- Kipp will clean up this code and get it ready for review (Perhaps we could take one of the montly telecons to complete this review)
 
-- Action: Kipp will clean up this code and get it ready for review
-(Perhaps we could take one of the montly telecons to complete this review)
+- gstlal_segmentsrc
 
-##gstlal_segmentsrc
-
-- Reviewed with actions: Fix hard coded width. There is also a
-*fixme* issue on line 498 that must be looked at.
-
-- Write an illustration to describe how start and stop times of
-segments are hanelded and if logic covers all cases possible.
-
-- Notes: Many changes were made to this code during the review. It
+	- Notes: Many changes were made to this code during the review. It
 should be checked again and we should have a look at it again
 at some point.
 
-##gstlal_gate
+<!---
+- gstlal_gate
 
-- Reviewed with actions: Set caps seem to have 64 but it is not implemented
-in sink nor is a function available for type casting 64 bits (line 1322).
+	- Write a unit test.
+-->
 
-- Also please write a unit test.
+- gstlal_cachesrc
 
-##gstlal_drop
+- gds_lvshmsrc
 
-- Reviewed with actions: Write some unit tests and show them to reviewers;
-otherwise we are done with this code.
-
-##gstlal_cachesrc
-
-- Reviewed with actions: Provide link to lal_cachesrc and other similar
-files on the status page
-
-##gds_lvshmsrc
-
-- Reviewed with actions: Please add output of tests that were done at
-the f2f meeting to the review page.
 
 \section meeting2014_06_18 June 18, 2014 meeting
 \ref gstlalmeeting20140618page
@@ -262,8 +210,6 @@ the f2f meeting to the review page.
  - Duncan: Usage case 3
  - Florent: Usage case 4
 	- each person should run the case and use the information in the "Debug" section of the documentation to write out the pipeline.  Also, try making plots of the output, etc.  Examine it critically and figure out what questions you have and what you would like to see answered in order to validate each piece.  We will go over each case next week.
-- I hope this leads to a systematic plan to review each element and document the review of each element, etc in a coherent way.
-
 
 \section meeting2014_03_05 March 5, 2014 meeting
 \ref gstlalmeeting20140305page
@@ -282,7 +228,9 @@ the f2f meeting to the review page.
 \section meeting2014_02_19 February 19, 2014 meeting
 \ref gstlalmeeting20140219page
 
+<!---
 - Jolien to write a unit test code for lal_checktimestamps
+-->
 - Chad has taken a stab at something that might help and checked it into gstlal/gstlal/tests.  This test program dynamically adds a one nanosecond time shift every time the user hits ctrl+C.  You need to do kill -9 to stop the program ;) Here is an example session
 
 		$ ./lal_checktimestamps_test_01.py 
@@ -306,7 +254,9 @@ the f2f meeting to the review page.
 
 Chads Actions
 - Investigate the use of make_whitened_multirate_src() vs the whitener in gstlal_fake_frames
+<!---
 - lal_shift: make a unit test
+-->
 - Fix order of capsfilter / audioresample in gstlal_fake_frames graph Commit: b8d40a78d2484b32867ef06b7cc574871725f589
 - Add dot graph output for gstlal_fake_frames Commit: b8d40a78d2484b32867ef06b7cc574871725f589
 - make dot graph get dumped by env variable. Commit: 434a2d61eb5611817444309398d0859018dfed86
@@ -326,6 +276,8 @@ Chads Actions
 - Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
 - *Chad this will not be done right now*: The SNR threshold is tied to many
    histogramming objects.  Currently the value is set at 4 which is at the
+saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
+about once per second.  A user can  change this only after the histograming
 saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
 about once per second.  A user can  change this only after the histograming
 code is generalized. It will be left for a future feature request.  Things to consider:
@@ -372,38 +324,6 @@ nightly build:
 	- turned off SL6 until it works
 	- got nightly build running on debian:
 		- includes all gstlal-packages, all documentation, all unit tests
-
-elements:
-	- lal_statevector:
-		- added warning messages if required-on/required-off have too many bits for width of input stream
-		- generalized transform_caps() so that sink-->src conversions are complete
-		- added notifications for sample count properties
-		- wrote unit test
-	- lal_sumsquares:
-		- wrote unit test
-	- lal_togglecomplex:
-		- wrote unit test
-	- lal_cachesrc:
-		- are the warnings and errors related to lack of data in
-		  do_seek() correct?  i.e., are warnings and errors needed
-		  for these conditions?  done:  lack of start time is no
-		  longer an error, element seeks to start of cache in this
-		  case
-	- lal_gate:
-		- removed 64-bit support for control stream:  not possible
-		  to specify threshold to that precision
-		- why not signal control_queue_head_changed on receipt of
-		  NEW_SEGMENT?  not needed.
-	- lal_statevector
-		- statevector:  why the mask?  remove?  maybe safer to
-		  remove.  removed
-	- lal_segmentsrc:
-		- wrote a unit test
-	- lvshmsink/src:
-		- wrote pass-through unit test
-	- lal_cachesrc:
-		- wrote a unit test
-
 
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
  - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage

@@ -16,8 +16,21 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Actions:
+ *
+ * - Sort out extra padding for injection series, simulation series, etc.
+ * - Make it possible to get all the injections from a frame file.
+ * - Why is a nano-second taken out at the beginning and added at the end?
+ * - Get lal to do a conditional taper at the start of the waveform and run it through
+ * a high-pass filter (need to check if this is really needed for BNS).
+ * - Should the conditional tapering be the responsibility of waveform
+ * developers or could it be done outside waveform generation?
+ * - consider patching lal to remove start/stop parameters from
+ * XML loading functions so that they just load everything
+ *
  */
-
+		   
 
 /*
  * ========================================================================
