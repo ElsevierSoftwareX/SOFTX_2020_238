@@ -12,7 +12,6 @@
   related to this subject matter of this review meeting
 - get documentation generated and installed
 - explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with \chi distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
-- show histogram of horizon distance history
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 - Write as many unit tests as possible
 
@@ -292,10 +291,10 @@ code is generalized. It will be left for a future feature request.  Things to co
 - added check to svd_bank that the command line option matches snr_min in
   far.py
 
-- added test of behaviour of sampler generators to glue's test suite
+- added test of behaviour of sampler generators to glues test suite
 
 - expanded docstring for NDBins.volumes() so that this method is covered by
-  pylal's test suite
+  pylals test suite
 
 - removed ImportError path for speed of light from snglcoinc.py
 
@@ -307,7 +306,7 @@ code is generalized. It will be left for a future feature request.  Things to co
 
 - see if the noise coinc rates can be recomputed on the fly by factoring
   out the rates:  yes, they can be;  have not made this improvement because
-  it would require tinkering with the code a bit and we're about to do a
+  it would require tinkering with the code a bit and we are about to do a
   release, but I have added a FIXME to remind me that this performance
   improvement is possible.
 
@@ -318,5 +317,9 @@ nightly build:
 
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
  - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
+
 - Write joint likelihood ranking and FAP calculation (paper in progress)
  - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
+
+- show histogram of horizon distance history
+ - *Cody: Done* 54368d058460d37473e78bf26776a4929db01433
