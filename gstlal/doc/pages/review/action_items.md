@@ -20,6 +20,8 @@
 
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 
+- Write as many unit tests as possible
+
 <!---
 These elements had general action items which have been moved to their source code
 	- whiten
@@ -30,11 +32,6 @@ These elements had general action items which have been moved to their source co
 	- lal_itac
 -->
 
-\section unittest Unit Tests
-- gstlal_drop
-- gstlal_gate
-- lal_checktimestamps (Jolien)
-- lal_shift (Chad)
 
 \section telecon2015_03_11 March 11, 2015 telecon
 \ref gstlaltelecons20150311page
