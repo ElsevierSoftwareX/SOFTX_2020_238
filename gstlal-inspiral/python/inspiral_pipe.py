@@ -205,11 +205,16 @@ class generic_node(InspiralNode):
 	an empty argument by setting it to "".  However options set to None are simply
 	ignored.
 	"""
-	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}):
+	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}, input_cache_files = {}, output_cache_files = {}):
 		InspiralNode.__init__(self, job, dag, parent_nodes)
 
-		self.input_files = input_files
-		self.output_files = output_files
+		self.input_files = input_files.copy()
+		self.input_files.update(input_cache_files)
+		self.output_files = output_files.copy()
+		self.output_files.update(output_cache_files)
+
+		self.cache_inputs = {}
+		self.cache_outputs = {}
 
 		for opt, val in opts.items() + output_files.items() + input_files.items():
 			if val is None:
@@ -226,6 +231,26 @@ class generic_node(InspiralNode):
 				else:
 					self.add_var_opt(opt, pipeline_dot_py_append_opts_hack(opt, val))
 
+		# Create cache files for long command line arguments and store them in the job's subdirectory. NOTE the svd-bank string
+		# is handled by gstlal_inspiral_pipe directly
+
+		for opt, val in input_cache_files.items():
+			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
+			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
+			with open(cache_file_name, "w") as cache_file:
+				lal.Cache(cache_entries).tofile(cache_file)
+			self.add_var_opt(opt, cache_file_name)
+			# Keep track of the cache files being created
+			self.cache_inputs.setdefault(opt, []).append(cache_file_name)
+
+		for opt, val in output_cache_files.items():
+			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
+			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
+			with open(cache_file_name, "w") as cache_file:
+				lal.Cache(cache_entries).tofile(cache_file)
+			self.add_var_opt(opt, cache_file_name)
+			# Keep track of the cache files being created
+			self.cache_outputs.setdefault(opt, []).append(cache_file_name)
 
 def pipeline_dot_py_append_opts_hack(opt, vals):
 	"""!

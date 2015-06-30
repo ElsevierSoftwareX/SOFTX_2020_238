@@ -205,8 +205,8 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 					"bank-id":ids,
 					"identity-transform":options.identity_transform,
 					"snr-threshold":4.0, "ortho-gate-fap":0.5},
-				input_files = {	"template-bank":files,
-						"reference-psd":psd},
+				input_files = {"reference-psd":psd},
+				input_cache_files = {"template-bank-cache":files},
 				output_files = {"write-svd":svd_bank_name}
 				)
 			)
@@ -225,6 +225,18 @@ def create_svd_bank_strings(svd_nodes, instruments = None):
 		outstrings.append(svd_bank_string)
 	return outstrings
 
+def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
+	if injection:
+		dir_name = "gstlal_inspiral_inj"
+	else:
+		dir_name = "gstlal_inspiral"
+	svd_cache_entries = []
+	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
+	for svd_bank_parsed_dict in parsed_svd_bank_strings:
+		for url in svd_bank_parsed_dict.itervalues():
+			svd_cache_entries.append(lal.CacheEntry.from_T050017(url))
+
+	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
 
 def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict):
 
@@ -261,7 +273,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							"gps-start-time":seg[0].seconds,
 							"gps-end-time":seg[1].seconds,
 							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"svd-bank":svd_bank_strings,
 							"tmp-space":inspiral_pipe.condor_scratch_space(),
 							"track-psd":"",
 							"control-peak-time":options.control_peak_time,
@@ -277,9 +288,10 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"blind-injections":options.blind_injections,
 								"veto-segments-file":options.vetoes,
 							},
-						output_files = {
-								"output":output_names,
-								"likelihood-file":dist_stat_names
+						input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings, chunk_counter)},
+						output_cache_files = {
+								"output-cache":output_names,
+								"likelihood-file-cache":dist_stat_names
 							}
 						)
 				# Set a post script to check for file integrity
@@ -307,7 +319,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"gps-start-time":seg[0].seconds,
 								"gps-end-time":seg[1].seconds,
 								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-								"svd-bank":svd_bank_strings,
 								"tmp-space":inspiral_pipe.condor_scratch_space(),
 								"track-psd":"",
 								"control-peak-time":options.control_peak_time,
@@ -322,9 +333,10 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 									"veto-segments-file":options.vetoes,
 									"injections": injections
 								},
-							output_files = {
-									"output":output_names,
-									"likelihood-file":dist_stat_names
+							input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings, chunk_counter, injection = True)},
+							output_cache_files = {
+									"output-cache":output_names,
+									"likelihood-file-cache":dist_stat_names
 								}
 							)
 					# Set a post script to check for file integrity
@@ -347,11 +359,11 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 		for seg in segsdict[ifos]:
 			# iterate over the mass space chunks for each segment
 			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
-				len_out_files = len(node.output_files["output"])
-				for i,f in enumerate(node.output_files["output"]):
+				len_out_files = len(node.output_files["output-cache"])
+				for i,f in enumerate(node.output_files["output-cache"]):
 					# Store the output files and the node for use as a parent dependency
 					lloid_output[None].setdefault((j,i), []).append((f, [node]))
-				for i,f in enumerate(node.output_files["likelihood-file"]):
+				for i,f in enumerate(node.output_files["likelihood-file-cache"]):
 					lloid_diststats.setdefault((j,i) ,[]).append(f)
 				for inj in options.injections:
 					# NOTE This assumes that injection jobs
@@ -359,7 +371,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 					# terms of the mass space they cover,
 					# e.g., that the chunks ar the same!
 					injnode = inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j]
-					for i,f in enumerate(injnode.output_files["output"]):
+					for i,f in enumerate(injnode.output_files["output-cache"]):
 						# Store the output files and the node and injnode for use as a parent dependencies
 						lloid_output[sim_tag_from_inj_file(inj)].setdefault((j,i), []).append((f, [node, injnode]))
 
@@ -387,7 +399,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
 				parent_nodes = [priornode, snrpdfnode],
-				input_files = {"":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
+				input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		priornodes.append(priornode)
@@ -399,9 +411,10 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"likelihood-url":diststats +
+				input_files = {"":chunked_inputs},
+				input_cache_files = {"likelihood-cache":diststats +
 					[priornode.output_files["write-likelihood"],
-					snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+					snrpdfnode.output_files["write-likelihood"]]
 					}
 				) for chunked_inputs in chunks(inputs, 25)]
 			)
@@ -417,9 +430,10 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents + [priornodes[n], snrpdfnode],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-					input_files = {"likelihood-url":diststats + 
+					input_files = {"":chunked_inputs},
+					input_cache_files = {"likelihood-cache":diststats + 
 						[priornodes[n].output_files["write-likelihood"], 
-						snrpdfnode.output_files["write-likelihood"]], "":chunked_inputs
+						snrpdfnode.output_files["write-likelihood"]]
 						}
 					) for chunked_inputs in chunks(inputs, 25)]
 				)
