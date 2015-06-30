@@ -15,14 +15,12 @@
 
 ### Useful Links
 
-- \ref gstlalinspirals6replaypage
-- \ref gstlalinspiralcodeoptimization
-  -  \ref gstlalinspiralpatchinformation
 - \ref gstlalinspiralprofilepage
 
 ### Studies
 
 - \ref gstlal_inspiral_BNS_MDC_study
+- \ref gstlalinspirals6replaypage
 
 ### References
 
