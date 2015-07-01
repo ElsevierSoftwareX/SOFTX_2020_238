@@ -54,17 +54,17 @@ Some quick facts:
 \subsubsection OnlineBanks Template Banks
 
  - /home/gstlalcbc/review/s6replay/online/bank
- - Makefile to make the template banks
+ - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay_bank>Makefile to make the template banks</a>
 
 \subsubsection OnlineTriggers Online Triggers
 
  - /home/gstlalcbc/review/s6replay/online/trigs
- - Makefile to make the analysis dag
+ - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay_online>Makefile to make the analysis dag</a>
 
 \subsection Offline Offline Analysis
 
  - /home/gstlalcbc/review/s6replay/offline
- - Makefile which contains rules for every offline analysis
+ - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay>Makefile which contains rules for every offline analysis</a>
 
 
 \section Results Results
@@ -73,3 +73,4 @@ Some quick facts:
  - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/range.png">Low latency sensitivity plots</a>
    - Covers the last 48 hours
    - Updated every 5-10 minutes
+ - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/offline_s6_replay/">Offline analysis results</a>
