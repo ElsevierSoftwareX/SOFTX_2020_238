@@ -1,0 +1,80 @@
+FSTART = 871147316
+FSTOP =  871149864
+START = 871147516
+STOP =  871149564
+
+# Template bank parameters
+MIN_MASS = 1.0
+MAX_MASS = 12.0
+MIN_TOTAL_MASS = 2.0 
+MAX_TOTAL_MASS = 15.0
+LOW_FREQUENCY_CUTOFF = 40.0
+HIGH_PASS_FREQ = 35
+HIGH_FREQUENCY_CUTOFF = 1024.0
+SAMPLE_RATE = 2048
+NUM_SPLIT_TEMPLATES = 100
+OVERLAP = 20
+MM = 0.97
+NUMBANKS = 5,6,7
+
+all : bank.dag
+
+
+FAKE :
+	gstlal_fake_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --channel-name H1=FAKE-STRAIN --verbose --data-source LIGO --frame-type FAKE --output-path FAKE
+
+frame.cache : FAKE
+	ls FAKE/H-FAKE-871/*.gwf | lalapps_path2cache > frame.cache
+
+H1-TMPLTBANK-871147516-2048.xml : frame.cache
+	lalapps_tmpltbank \
+		--disable-compute-moments \
+		--grid-spacing Hexagonal \
+		--dynamic-range-exponent 69.0 \
+		--enable-high-pass $(HIGH_PASS_FREQ) \
+		--high-pass-order 8 \
+		--strain-high-pass-order 8 \
+		--minimum-mass $(MIN_MASS) \
+		--maximum-mass $(MAX_MASS) \
+		--min-total-mass $(MIN_TOTAL_MASS) \
+		--max-total-mass $(MAX_TOTAL_MASS) \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--calibrated-data real_8 \
+		--channel-name H1:FAKE-STRAIN \
+		--space Tau0Tau3 \
+		--number-of-segments 15 \
+		--minimal-match $(MM) \
+		--candle-snr 8 \
+		--high-pass-attenuation 0.1 \
+		--min-high-freq-cutoff SchwarzISCO \
+		--segment-length 524288 \
+		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
+		--pad-data 8 \
+		--num-freq-cutoffs 1 \
+		--sample-rate $(SAMPLE_RATE) \
+		--high-frequency-cutoff $(HIGH_FREQUENCY_CUTOFF) \
+		--resample-filter ldas \
+		--strain-high-pass-atten 0.1 \
+		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
+		--frame-cache frame.cache \
+		--max-high-freq-cutoff SchwarzISCO \
+		--approximant TaylorF2 \
+		--order twoPN \
+		--spectrum-type median \
+		--verbose
+
+%_split_bank.cache: H1-TMPLTBANK-871147516-2048.xml
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml --output-cache $@ --output-path $*_split_bank --approximant TaylorF2
+
+%_bank.dag : %_split_bank.cache reference_psd.xml.gz
+	cp $< tmp
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument $* --reference-psd reference_psd.xml.gz --bank-cache $< --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name $@ --num-banks $(NUMBANKS)
+
+bank.dag : H1_bank.dag L1_bank.dag
+	cat H1_bank.dag L1_bank.dag > bank.dag
+	rm -f H1_bank.dag L1_bank.dag
+
+clean :
+	rm -rf *.sub* *.dag* *.cache *.sh *.xml *.gz logs gstlal_svd_bank* *split_bank
