@@ -30,6 +30,8 @@
 # - Increase nbins to at least 10,000
 # - Check max acceptance
 
+## @package rate_estimation
+
 #
 # =============================================================================
 #
