@@ -21,13 +21,9 @@
 #
 # STATUS: reviewed with actions
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 |
-#
-# | Review Hash                              | Diff                |
-# | ---------------------------------------- | ------------------- |
-# | b8fef70a6bafa52e3e120a495ad0db22007caa20 | <a href="@gstlal_inspiral_cgit_diff/python/streamthinca.py?id=HEAD&id2=b8fef70a6bafa52e3e120a495ad0db22007caa20">streamthinca.py</a> |
+# | Names                                       | Hash                                        | Date       | Diff to Head of Master      |
+# | ------------------------------------------- | ------------------------------------------- | ---------- | --------------------------- |
+# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 | <a href="@gstlal_inspiral_cgit_diff/python/streamthinca.py?id=HEAD&id2=b8fef70a6bafa52e3e120a495ad0db22007caa20">streamthinca.py</a> |
 #
 # #### Action items
 #

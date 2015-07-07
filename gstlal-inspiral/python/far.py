@@ -22,13 +22,9 @@
 #
 # STATUS: reviewed with actions
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Hanna, Cannon, Meacher, Creighton J, Robinet, Sathyaprakash, Messick, Dent, Blackburn | 7fb5f008afa337a33a72e182d455fdd74aa7aa7a    | 2014-11-05 |
-#
-# | Review Hash                              | Diff                |
-# | ---------------------------------------- | ------------------- |
-# | 7fb5f008afa337a33a72e182d455fdd74aa7aa7a | <a href="@gstlal_inspiral_cgit_diff/python/far.py?id=HEAD&id2=7fb5f008afa337a33a72e182d455fdd74aa7aa7a">far.py</a> |
+# | Names                                          | Hash                                        | Date       | Diff to Head of Master      |
+# | -------------------------------------------    | ------------------------------------------- | ---------- | --------------------------- |
+# | Hanna, Cannon, Meacher, Creighton J, Robinet, Sathyaprakash, Messick, Dent, Blackburn | 7fb5f008afa337a33a72e182d455fdd74aa7aa7a | 2014-11-05 |<a href="@gstlal_inspiral_cgit_diff/python/far.py?id=HEAD&id2=7fb5f008afa337a33a72e182d455fdd74aa7aa7a">far.py</a> |
 #
 # #### Action items
 #

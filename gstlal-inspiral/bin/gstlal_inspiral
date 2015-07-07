@@ -156,13 +156,9 @@
 #
 # ### Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
-#
-# | Review Hash                              | Diff                |
-# | ---------------------------------------- | ------------------- |
-# | 7536db9d496be9a014559f4e273e1e856047bf71 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_inspiral</a> |
+# | Names                                          | Hash                                        | Date       | Diff to Head of Master      |
+# | -------------------------------------------    | ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 9074294d6b57f43651143b5f93210751de1fe55a    | 2014-05-02 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=HEAD&id2=9074294d6b57f43651143b5f93210751de1fe55a">gstlal_inspiral</a> |
 #
 # #### Actions
 #

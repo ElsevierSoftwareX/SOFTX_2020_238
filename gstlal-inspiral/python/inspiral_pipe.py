@@ -27,13 +27,9 @@
 #
 # ### Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e    | 2014-06-18 |
-#
-# | Review Hash                              | Diff                |
-# | ---------------------------------------- | ------------------- |
-# | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e | <a href="@gstlal_inspiral_cgit_diff/python/inspiral_pipe.py?id=HEAD&id2=8a6ea41398be79c00bdc27456ddeb1b590b0f68e">inspiral_pipe.py</a> |
+# | Names                                          | Hash                                        | Date       | Diff to Head of Master      |
+# | -------------------------------------------    | ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e    | 2014-06-18 | <a href="@gstlal_inspiral_cgit_diff/python/inspiral_pipe.py?id=HEAD&id2=8a6ea41398be79c00bdc27456ddeb1b590b0f68e">inspiral_pipe.py</a> |
 #
 # #### Actions
 #

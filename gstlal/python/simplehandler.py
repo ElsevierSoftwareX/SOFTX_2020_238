@@ -43,13 +43,9 @@ import signal
 #
 # ### Review Status
 #
-# | Names                                       | Hash                                        | Date       |
-# | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
-#
-# | Review Hash                              | Diff                |
-# | ---------------------------------------- | ------------------- |
-# | b3ef077fe87b597578000f140e4aa780f3a227aa | <a href="@gstlal_cgit_diff/python/simplehandler.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">simplehandler.py</a> |
+# | Names                                           | Hash                                     | Date       | Diff to Head of Master      |
+# | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 | <a href="@gstlal_cgit_diff/python/simplehandler.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">simplehandler.py</a> |
 
 # #### Action items
 #
