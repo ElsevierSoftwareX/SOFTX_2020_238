@@ -229,7 +229,11 @@ if options.gps_start_time is not None:
 	if start >= end:
 		raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
 	# segment from gps start and stop time if given
-	seg = segments.segment(start, end)
+	if options.wings is not None:
+		end = end - LIGOTimeGPS(options.wings, 0)
+		seg = segments.segment(start, end)
+	else:
+		seg = segments.segment(start, end)
 	# seek event from the gps start and stop time if given
 	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 elif options.gps_end_time is not None:
