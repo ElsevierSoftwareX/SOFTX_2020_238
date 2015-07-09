@@ -93,7 +93,7 @@ def parse_command_line():
 	paramdict = options.__dict__
 
 	options.likelihood_urls = []
-	if options.likelihood_urls is not None:
+	if options.likelihood_url is not None:
 		options.likelihood_urls += options.likelihood_url
 	if options.likelihood_cache is not None:
 		options.likelihood_urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]

@@ -5,6 +5,7 @@
 - \ref gstlal_review_howto_page
 - \ref gstlal_review_codes_page
 - \ref gstlalmeetingspage
+- \ref gstlalactionitemspage
 
 \section Team Review Team 2014
 
@@ -12,6 +13,7 @@
 - Reviewers: Jolien, Florent, Duncan Me, Sathya
 
 
+<!---
 \section action Action items
 
 *NOTE: This list contains broad action times and not code specific actions.
@@ -132,7 +134,7 @@ nightly build:
 elements:
 	- lal_statevector:
 		- added warning messages if required-on/required-off have too many bits for width of input stream
-		- generalized transform_caps() so that sink-->src conversions are complete
+		- generalized transform_caps() so that sink to src conversions are complete
 		- added notifications for sample count properties
 		- wrote unit test
 	- lal_sumsquares:
@@ -165,9 +167,11 @@ elements:
  - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
 - Write joint likelihood ranking and FAP calculation (paper in progress)
  - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
+-->
 
 \section studies Studies
 
 - \ref gstlal_inspiral_BNS_MDC_study
 - \ref gstlalinspiralcontrolpeaktimestudypage
 - \ref gstlalinspiralautochisqlenstudypage
+- \ref gstlal_inspiral_impulse_response_study

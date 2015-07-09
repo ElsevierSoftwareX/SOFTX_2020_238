@@ -28,9 +28,9 @@
 #
 # ### Review status
 #
-# | Names 	                                | Hash 					      | Date       |
-# | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Jolien, Kipp, Chad                 | ca54624dac65388bc8dfd0d8f5ed5d187fbcb99a    | 2015-05-14 |
+# | Names 	                    | Hash 					                   | Date       | Diff to Head of Master      |
+# | --------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Florent, Jolien, Kipp, Chad | 1dbbbd963c9dc076e1f7f5f659f936e44005f33b | 2015-05-14 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral_marginalize_likelihood?id=HEAD&id2=1dbbbd963c9dc076e1f7f5f659f936e44005f33b">gstlal_inspiral_marginalize_likelihood</a> |
 #
 # #### Action
 # - none

@@ -1,4 +1,4 @@
-\mainpage gstlalmainpage Welcome page
+\mainpage Welcome page
 
 \section gstlalmainpagegettingstarted Getting Started
 

@@ -42,8 +42,17 @@
  *
  * Reviewed:  a922d6dd59d0b58442c0bf7bc4cc4d740b8c6a43 2014-08-12 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
+ *
+ * Action:
+ * - Provide link to lal_cachesrc and other similar files on the status page
+ *
+ * Completed Actions:
+ * - are the warnings and errors related to lack of data in do_seek() correct?
+ * i.e., are warnings and errors needed for these conditions?  
+ * done: lack of start time is no longer an error, element seeks to start of cache in this case
+ * - Wrote a unit test
+ *
  */
-
 
 /*
  * ============================================================================

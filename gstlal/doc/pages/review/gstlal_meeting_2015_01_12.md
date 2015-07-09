@@ -14,6 +14,7 @@
   - delta function test: Inject delta-function and compare with time-reversed chirp
   - Inject a chirp waveform into "slience" and compare with signal auto-correlation function
 
+<!---
 The following images show the delta function test:
 
 @image html gstlal_impulse_response_01.png "Response of gstlal using TaylorF2 to an impulse injected at t=128 s compared to time-reversed TaylorF2: Plot shows high frequency end of the waveform"
@@ -54,7 +55,7 @@ The image below shows the injection of a TaylorF2 into "silence":
     - It would be useful to have a Table of CPU usage rather than for individual nodes.
     - Currently, on-line analysis requests a headroom of 20% CPU. Can this be defended? Explore running some `nice` jobs in the background and see if this affects performace 
     - The particular event we saw had a 17 minute latency for producing sky-map: https://gracedb.ligo.org/events/view/T124866
-
+-->
 
 \section minutes minutes
 
@@ -80,6 +81,7 @@ Jan 14
    * **Action**: Les's patch needs to have a *variable* rather than fixed time-before-last-sample.'
 
 
+<!---
   - Impulse response test:
    1. Python program:
       `dt = 1.0 / 4096.0`  
@@ -93,7 +95,8 @@ Jan 14
    3. Change file name with 
       `gst-launch filesrc location=foo.gwf blocksize=8395941 ! framecpp_channeldemux .C01 ! .H1:C01 framecpp_channelmux frames-per-file=256 ! filesink location=bar.gwf`
    4. Run this through `gstlal_inspiral`
-  
+-->
+
 Jan 15
 
   - **Action**: What we want:

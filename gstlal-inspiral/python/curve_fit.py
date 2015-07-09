@@ -36,6 +36,10 @@
 #
 # Minor modifications (for compatibility) by Chad Hanna (2014) 
 
+## @file
+
+## @package curve_fit
+
 import warnings
 
 from scipy.optimize import _minpack

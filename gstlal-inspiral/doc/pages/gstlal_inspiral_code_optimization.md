@@ -1,5 +1,7 @@
 \page gstlalinspiralcodeoptimization gstlal inspiral code optimization
 
+This page is obsolete: please find this information here: \ref gstlalinspiralprofilepage
+
 \section Introduction
 
 This documentation page covers installation of optimized dependencies for use in gstlal profiling and benchmarking.  The instructions below cover a general case, however at the end there are links to pages for detailed instruction sets for specific machines.  After reading this page, the user should be well prepared to install all of the needed software on a vanilla machine and to then perform profiling and benchmarking.

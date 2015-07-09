@@ -21,12 +21,13 @@
 #
 # STATUS: reviewed with actions
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 |
+# | Names                                       | Hash                                        | Date       | Diff to Head of Master      |
+# | ------------------------------------------- | ------------------------------------------- | ---------- | --------------------------- |
+# | Kipp Cannon, Chad Hanna, Jolien Creighton, Florent Robinet, B. Sathyaprakash, Duncan Meacher, T.G.G. Li | b8fef70a6bafa52e3e120a495ad0db22007caa20 | 2014-12-03 | <a href="@gstlal_inspiral_cgit_diff/python/streamthinca.py?id=HEAD&id2=b8fef70a6bafa52e3e120a495ad0db22007caa20">streamthinca.py</a> |
 #
 # #### Action items
 #
+# - Question: Is it possible for the offline pipeline to begin producing tiggers after a certain time rather than waiting for all the inspiral jobs to get over? Will be particularly useful if the data length is ~ months or ~ year. Should also avoid producing massive amount of data, right?
 # - L300+: Please document within the code that the FAR column is used to store FAP so that future developers don't get confused what that column represents
 
 #

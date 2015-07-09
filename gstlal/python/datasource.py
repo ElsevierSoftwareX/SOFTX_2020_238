@@ -30,9 +30,9 @@
 #
 # ### Review Status
 #
-# | Names                                       | Hash                                        | Date       |
-# | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa    | 2014-05-01 |
+# | Names                                       | Hash                                         | Date       | Diff to Head of Master      |
+# | ------------------------------------------- | -------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 | <a href="@gstlal_cgit_diff/python/datasource.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">datasource.py</a> |
 #
 # #### Action items
 #
@@ -377,7 +377,7 @@ class GWDataSourceInfo(object):
 		elif options.gps_end_time is not None:
 			raise ValueError("must provide both --gps-start-time and --gps-end-time")
 		elif options.data_source not in self.live_sources:
-			raise ValueError("--gps-start-time and --gps-end-time must be specified when %s" % " or ".join("--data-source=%s" % src for src in sorted(self.live_sources)))
+			raise ValueError("--gps-start-time and --gps-end-time must be specified when --data-source not one of %s" % ", ".join(sorted(self.live_sources)))
 
 		if options.frame_segments_file is not None:
 			## Frame segments from a user defined file

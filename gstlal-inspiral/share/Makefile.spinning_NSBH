@@ -1,3 +1,8 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG)
+
 #
 # Template bank parameters
 #
@@ -113,7 +118,7 @@ tisi.xml :
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) $(FAR_INJECTIONS)
-	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS) $(FAR_INJECTION_LIST)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS) $(FAR_INJECTION_LIST) $(CONDOR_COMMANDS)
 
 V1_frame.cache:
 	# FIXME force the observatory column to actually be instrument

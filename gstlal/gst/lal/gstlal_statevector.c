@@ -37,6 +37,14 @@
  *
  * Reviewed:  f989b34f43aec056f021f10e5e01866846a3c58d 2014-08-10 K.
  * Cannon, J.  Creighton, B. Sathyaprakash.
+ *
+ * Completed Actions:
+ * - added warning messages if required-on/required-off have too many bits for width of input stream
+ * - generalized transform_caps() so that sink-->src conversions are complete
+ * - added notifications for sample count properties
+ * - wrote unit test
+ * - why the mask?  remove?  maybe safer to remove.  removed
+ *
  */
 
 

@@ -11,6 +11,7 @@
 - Discuss gstlal_fake_frames runs by Florent and Duncan (only got through Florent; run by Duncan next week).
 
 
+<!---
 Actions
  - Chad: Please provide instructions on how to make the review pages appear online. At the moment the pages dont seem to appear even after several days and no one knows how to do this apart from Chad.
   - The pages show up after the gstlalcbc account pulls and builds the doc.  This will be automatic once we move the doc to UWM nightly build
@@ -23,7 +24,8 @@ Actions
  - Kipp: Explore why overlapping signal injections produced only one injection. 
  - Florent:  Send Kipp instructions for reproducing the "really slow and really really low sampling rate" demo
  - Kipp: Explore why the codes runs slower with smaller sampling rates (e.g. 10 Hz as opposed to 1 kHz takes longer).
- 
+-->
+
 \section questions Questions
 
 1/ Timing? I checked the time of the injections taking into account the time propagation to the detectors. --> OK

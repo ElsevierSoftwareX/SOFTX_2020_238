@@ -26,13 +26,7 @@ pkgpython_PYTHON = \
 	simplehandler.py \
 	simulation.py
 
-pkgpyexec_LTLIBRARIES = fftw.la _misc.la
-
-fftw_la_SOURCES = fftw.c
-fftw_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
-fftw_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-fftw_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la
-fftw_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(PYTHON_LDFLAGS) -module -avoid-version
+pkgpyexec_LTLIBRARIES = _misc.la
 
 _misc_la_SOURCES = misc.c
 _misc_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)

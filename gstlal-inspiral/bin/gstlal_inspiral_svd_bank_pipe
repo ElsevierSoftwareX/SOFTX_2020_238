@@ -93,10 +93,9 @@ from gstlal import far
 #
 # ### Review Status
 #
-# | Reviewers				| git hash					| date 		|
-# | ----------------------------------- | --------------------- 			| ------------- |
-# | Florent, Duncan Me., Jolien, Kipp, Chad | 004cf84d7e980eca0c7fd228c6d49cad959649c7 	| 2014-04-29	|
-#
+# | Reviewers				                | Hash				                       | Date 		| Diff to Head of Master     |
+# | --------------------------------------- | ---------------------------------------- | ---------- | -------- |
+# | Florent, Duncan Me., Jolien, Kipp, Chad | 67f86a6f2830f399c8d7c4cec6f357940a4b0abb | 2014-04-29	| <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral_svd_bank_pipe?id=HEAD&id2=67f86a6f2830f399c8d7c4cec6f357940a4b0abb">gstlal_inspiral_svd_bank_pipe</a> |
 
 def parse_command_line():
 	parser = OptionParser()

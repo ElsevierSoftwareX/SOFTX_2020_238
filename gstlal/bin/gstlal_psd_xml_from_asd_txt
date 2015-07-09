@@ -57,10 +57,9 @@ from optparse import OptionParser
 #
 # ### Review status
 #
-# | Reviewers				| git hash					| date 		|
-# | ----------------------------------- | --------------------- 			| ------------- |
-# | Florent, Duncan Me., Jolien, Kipp, Chad |abedb7c19ad3d5348c000bc5f9435d5d2e810e42	| 2014-04-29	|
-#
+# | Reviewers			                    | Hash		                               | Date 		| Diff to Head of Master      |
+# | --------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Florent, Duncan Me., Jolien, Kipp, Chad | e5b22699b049f7a35dff468febad471ca6c737f3 | 2014-04-29 | <a href="@gstlal_cgit_diff/bin/gstlal_psd_xml_from_asd_txt?id=HEAD&id2=e5b22699b049f7a35dff468febad471ca6c737f3">gstlal_psd_xml_from_asd_txt</a> |
 #
 
 parser = OptionParser(description = __doc__)

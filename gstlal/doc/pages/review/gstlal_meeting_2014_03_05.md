@@ -12,12 +12,14 @@
 
 - walked through some parts of gstlal_whiten.c focussing on data whitening and the part that applies the Hann window and handles overlapping segments.
 
+<!---
 Actions
 - Kipp or Chad to create a separate gstlal_debug directory to host test codes and packges.
 - Jolien to add his test package on lal_checktimestamps
 - Fabien, Duncan and Sathya to install the test package 
 - Kipp should send instructions/pipeline to test gstlal_whiten
 - Review should at some point go through XLALPSDRegressor codes (there quite a few but in this category that have been written solely for gstlal).
+-->
 
 Suggestions
 - Jolien suggested to test gstlal_whiten using one noisy segment but with slighly different starting points to see if the code produces identical whitened data

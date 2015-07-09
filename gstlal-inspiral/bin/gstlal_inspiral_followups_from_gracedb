@@ -21,34 +21,34 @@
 
 import sys, os
 import logging
-from pylal import rate
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
 import pylab
 import numpy
-from glue.ligolw import utils
 import copy
 from gstlal import far
 from gstlal import plotfar
 import time
-from glue.ligolw import ligolw, table, lsctables, param, array
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import ligolw, lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 import urllib
 import urlparse
 import httplib
 import subprocess
-from ligo.gracedb import DEFAULT_SERVICE_URL
-from ligo.gracedb.rest import GraceDb
+from ligo.gracedb import rest as gracedb
 import glob
 import json
 from optparse import OptionParser
 
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--gracedb-service-url", default="%s" % DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_SERVICE_URL)
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
 
 	options, gid_list = parser.parse_args()
 	
@@ -89,6 +89,11 @@ def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
 		if snrm is None:
 			continue
 		fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, ifo, plot_type, 400, event_snr = snrm, event_chisq = chisqm)
+		try:
+			fig.tight_layout()
+		except AttributeError:
+			# not in old matplotlibs
+			pass
 		fname = 'gracedb/%s/%s_%s_%s_snrchi.png' % (gid, gid, ifo, plot_type)
 		fig.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = {"background_pdf":"background", "injection_pdf":"background", "zero_lag_pdf":"background", "LR":"background"}[plot_type])
@@ -101,29 +106,22 @@ try:
 except OSError:
 	pass
 
-gracedb = GraceDb(options.gracedb_service_url)
+gracedb = gracedb.GraceDb(options.gracedb_service_url)
 filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
-xmldoc, checksum = utils.load_fileobj(filename, contenthandler = ligolw.LIGOLWContentHandler)
-coinc_inspiral_row = lsctables.table.get_table(xmldoc, lsctables.CoincInspiralTable.tableName)[0]
-sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-coinc_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)[0]
-process = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
-params = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+xmldoc, checksum = ligolw_utils.load_fileobj(filename, contenthandler = LIGOLWContentHandler)
+coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
 snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
 for r in sngl_inspiral_table:
 	snr_chisq_dict[r.ifo] = (r.snr, r.chisq)
-for r in params:
-	if r.program == "gstlal_inspiral" and r.param == "--likelihood-file":
-		path = r.value
-	elif r.program == "gstlal_inspiral" and r.param == "--reference-likelihood-file":
-		path = r.value
-	if r.program =="gstlal_inspiral" and r.param == "--marginalized-likelihood-file":
-		marg_path = r.value
-	if r.program == "gstlal_inspiral" and r.param == "--job-tag":
-		tag = r.value
-for r in process:
-	if r.program == "gstlal_inspiral":
-		node = r.node
+try:
+	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--likelihood-file")
+except ValueError:
+	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--reference-likelihood-file")
+marg_path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--marginalized-likelihood-file")
+tag, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--job-tag")
+node, = [r.node for r in lsctables.ProcessTable.get_table(xmldoc) if r.program == "gstlal_inspiral"]
 
 url = open("%s_registry.txt" % tag).readline().strip()
 
@@ -149,8 +147,8 @@ gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname
 # SNR / Chisq plots
 #
 
-coinc_param_distributions = far.parse_likelihood_control_doc(utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-ranking_data, seglistsdict = far.parse_likelihood_control_doc(utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
+coinc_param_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+ranking_data, seglistsdict = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
 ranking_data.finish()
 # FIXME Is this livetime correct?
 fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglistsdict))
@@ -166,6 +164,11 @@ for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
 
 fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,100.), "Noise", event_likelihood = coinc_table.likelihood)
 fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
+try:
+	fig.tight_layout()
+except AttributeError:
+	# not in old matplotlibs
+	pass
 fig.savefig(fname)
 gracedb.writeLog(gid, "Likelihood Ratio CCDF", filename = fname, filecontents = open(fname).read(), tagname = "background")
 

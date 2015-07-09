@@ -20,9 +20,9 @@
 #
 # ### Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Names                                          | Hash                                        | Date       | Diff to Head of Master      |
+# | -------------------------------------------    | ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 | <a href="@gstlal_inspiral_cgit_diff/python/svd_bank.py?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">svd_bank.py</a> |
 #
 # #### Actions
 # - Consider a study of how to supply the svd / time slice boundaries

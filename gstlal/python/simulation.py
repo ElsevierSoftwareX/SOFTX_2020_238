@@ -30,9 +30,9 @@ from pylal.datatypes import LIGOTimeGPS
 #
 # Review status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Sathya, Duncan Me, Jolien, Kipp, Chad          | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
+# | Names                                 | Hash                                     | Date       | Diff to Head of Master      |
+# | ------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-05-02 | <a href="@gstlal_cgit_diff/python/simulation.py?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">simulation.py</a> |
 #
 
 

@@ -53,11 +53,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from gstlal.reference_psd import horizon_distance
 from gstlal import plotpsd
-#FIXME Switch to newest GraceDb api
-try:
-	from ligo.gracedb import cli as gracedb
-except ImportError:
-	from ligo import gracedb
+from ligo.gracedb import rest as gracedb
 from pylal import series as lal_series
 
 
@@ -66,6 +62,20 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 ligolw_array.use_in(LIGOLWContentHandler)
 ligolw_param.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
+
+
+plotpsd.matplotlib.rcParams.update({
+	"font.size": 8.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 175,
+	"savefig.dpi": 175,
+	"text.usetex": True,
+	"path.simplify": True
+})
 
 
 #
@@ -106,7 +116,7 @@ def upload_fig(fig, gracedb_client, graceid, filename = "psd.png"):
 	plotfile = StringIO.StringIO()
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
-	response = gracedb_client.writeLog(graceid, "strain spectral densities", filename = filename, filecontents = plotfile.getvalue(), tagname = "psd")
+	response = gracedb_client.writeLog(graceid, "strain spectral density plot", filename = filename, filecontents = plotfile.getvalue(), tagname = "psd")
 	if response.status != httplib.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
@@ -163,18 +173,21 @@ if not graceids:
 		logging.info("filename is not 'psd.xml.gz'.  skipping")
 		sys.exit()
 	graceids = [str(lvalert_data["uid"])]
-	# pause to give the psd file a chance to get uploaded.
-	time.sleep(8)
 
 
-gracedb_client = gracedb.Client(url=options.gracedb_service_url)
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
 
 
 for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid))
+	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1024)
+	try:
+		fig.tight_layout()
+	except AttributeError:
+		# not available on old matplotlibs
+		pass
 	if options.no_upload:
 		filename = "psd_%s.png" % graceid
 		logging.info("writing %s ..." % filename)

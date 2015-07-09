@@ -197,7 +197,7 @@ TAB_SIZE               = 4
 # will result in a user-defined paragraph with heading "Side Effects:".
 # You can put \n's in the value part of an alias to insert newlines.
 
-ALIASES                = gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/ reviewed="\htmlonly &#x2713; \endhtmlonly: YES" notreviewed="\htmlonly &#x2717; \endhtmlonly: NO" stable="\image html go.png" moddev="\image html yellow.png" hidev="\image html stop.png"
+ALIASES                = gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/ reviewed="\htmlonly &#x2713; \endhtmlonly: YES" notreviewed="\htmlonly &#x2717; \endhtmlonly: NO" stable="\image html go.png" moddev="\image html yellow.png" hidev="\image html stop.png" gstlal_cgit_diff=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/diff/gstlal/
 
 # This tag can be used to specify a number of word-keyword mappings (TCL only).
 # A mapping has the form "name=value". For example adding
@@ -1471,18 +1471,6 @@ GENERATE_XML           = NO
 
 XML_OUTPUT             = xml
 
-# The XML_SCHEMA tag can be used to specify an XML schema,
-# which can be used by a validating XML parser to check the
-# syntax of the XML files.
-
-XML_SCHEMA             =
-
-# The XML_DTD tag can be used to specify an XML DTD,
-# which can be used by a validating XML parser to check the
-# syntax of the XML files.
-
-XML_DTD                =
-
 # If the XML_PROGRAMLISTING tag is set to YES Doxygen will
 # dump the program listings (including syntax highlighting
 # and cross-referencing information) to the XML output. Note that
@@ -1636,7 +1624,7 @@ SKIP_FUNCTION_MACROS   = YES
 # doxygen is run, you must also specify the path to the tagfile here.
 # FIXME don't hard code this version number, get it from configure
 
-TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.4.2/html
+TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.5.2/html
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.

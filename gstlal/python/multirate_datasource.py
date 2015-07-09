@@ -49,10 +49,10 @@ from gstlal import datasource
 #
 # ###Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e    | 2014-06-18 |
-#
+# | Names                                          | Hash                                     | Date       | Diff to Head of Master      |
+# | ---------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e | 2014-06-18 | <a href="@gstlal_cgit_diff/python/multirate_datasource.py?id=HEAD&id2=8a6ea41398be79c00bdc27456ddeb1b590b0f68e">multirate_datasource.py</a> |
+
 # #### Actions
 #
 # - Is the h(t) gate really necessary? It shouldn't really be used unless

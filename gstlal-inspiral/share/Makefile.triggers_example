@@ -1,3 +1,8 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG)
+
 ## @file
 # An example configuration file to create a gstlal_inspiral workflow
 # Tailored to BNS but can be adapted to other sources by chaning parameters or programs
@@ -158,7 +163,7 @@ tisi.xml : %.xml :
 
 ## The dag generator and the whole point of this makefile. The result is a file: trigger_pipe.dag that can be submitted to HTCondor
 dag : segments.xml frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
-	gstlal_inspiral_pipe --verbose --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS)
+	gstlal_inspiral_pipe --verbose --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) $(ADDITIONAL_DAG_OPTIONS) $(CONDOR_COMMANDS)
 
 ## Excecute a single segment query for a given IFO
 # Note: Virgo might sometimes need a special rule

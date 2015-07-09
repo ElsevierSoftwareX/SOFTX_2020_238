@@ -24,9 +24,9 @@
 #
 # Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# |          Sathya, Duncan Me, Jolien, Kipp, Chad | 4bb3204b4ea43e4508dc279ddcfc417366c72841    | 2014-05-02 |
+# | Names                                 | Hash                                     | Date       | Diff to Head of Master      |
+# | ------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Sathya, Duncan Me, Jolien, Kipp, Chad | 2f5f73f15a1903dc7cc4383ef30a4187091797d1 | 2014-05-02 | <a href="@gstlal_inspiral_cgit_diff/python/lloidparts.py?id=HEAD&id2=2f5f73f15a1903dc7cc4383ef30a4187091797d1">lloidparts.py</a> |
 #
 # #### Actions
 # - Feature request: do checkpointing when instruments are down

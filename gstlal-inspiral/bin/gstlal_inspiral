@@ -156,9 +156,9 @@
 #
 # ### Review Status
 #
-# | Names                                          | Hash                                        | Date       |
-# | -------------------------------------------    | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-05-02 |
+# | Names                                          | Hash                                        | Date       | Diff to Head of Master      |
+# | -------------------------------------------    | ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 9074294d6b57f43651143b5f93210751de1fe55a    | 2014-05-02 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=HEAD&id2=9074294d6b57f43651143b5f93210751de1fe55a">gstlal_inspiral</a> |
 #
 # #### Actions
 #
@@ -191,6 +191,7 @@ import gst
 
 import lal
 
+from glue.lal import CacheEntry
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
@@ -206,6 +207,7 @@ from gstlal import far
 from gstlal import httpinterface
 from gstlal import hoftcache
 from gstlal import inspiral
+from gstlal import inspiral_pipe
 from gstlal import pipeparts
 from gstlal import simulation
 
@@ -258,10 +260,12 @@ def parse_command_line():
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
-	parser.add_option("--output", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
+	parser.add_option("--output", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
+	parser.add_option("--output-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
-	parser.add_option("--svd-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
+	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
+	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
@@ -278,7 +282,8 @@ def parse_command_line():
 	# Online options
 
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..")
-	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided)")
+	parser.add_option("--likelihood-file", metavar = "filename", action = "append", default = [], help = "Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided)")
+	parser.add_option("--likelihood-file-cache", metavar = "filename", help = "Cache file for likelihood ratio data to use for ranking events")
 	parser.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided)")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
@@ -300,6 +305,19 @@ def parse_command_line():
 	#
 	# check for options, files that are always required
 	#
+	
+	if options.svd_bank_cache:
+		svd_bank_dict = {}
+		for line in open(options.svd_bank_cache):
+			svd_bank_cache_entry = CacheEntry(line)
+			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
+		options.svd_bank.extend([",".join(svd_string) for svd_string in svd_bank_dict.itervalues()])
+
+	if options.output_cache:
+		options.output.extend([CacheEntry(line).url for line in open(options.output_cache)])
+
+	if options.likelihood_file_cache:
+		options.likelihood_file.extend([CacheEntry(line).url for line in open(options.likelihood_file_cache)])
 
 	missing_options = ["--%s" % option.replace("_", "-") for option in ["svd_bank", "output"] if getattr(options, option) is None]
 	if options.likelihood_file is None and options.reference_likelihood_file is None:

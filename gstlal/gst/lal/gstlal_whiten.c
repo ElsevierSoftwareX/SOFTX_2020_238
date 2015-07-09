@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008-2014  Kipp Cannon, Chad Hanna, Drew Keppel
+ * Copyright (C) 2008-2015  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,8 +54,12 @@
  * 
  * Reviewed:  cf799de0ed55bf454fcd7fd8bc88dcaa8c4bd97e 2014-08-10 K. Cannon, J.
  * Creighton, B. Sathyaprakash.
+ *
+ * Actions:
+ *
+ * - get plots into documentation
+ *
  */
-
 
 /*
  * ========================================================================
@@ -89,7 +93,6 @@
  */
 
 
-#include <lal/LALConfig.h>	/* only needed for LAL_PTHREAD_LOCK */
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
 #include <lal/Date.h>
@@ -303,15 +306,8 @@ static int make_workspace(GSTLALWhiten *element)
 	 * build FFT plans
 	 */
 
-	/* FIXME:  remove locks when we can be sure lal has been compiled with pthread support */
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_lock();
-#endif
 	fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length(element), 1);
 	revplan = XLALCreateReverseREAL8FFTPlan(fft_length(element), 1);
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_unlock();
-#endif
 	if(!fwdplan || !revplan) {
 		GST_ERROR_OBJECT(element, "failure creating FFT plans: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
@@ -371,14 +367,8 @@ static int make_workspace(GSTLALWhiten *element)
 error:
 	XLALDestroyREAL8Window(hann_window);
 	XLALDestroyREAL8Window(tukey_window);
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_lock();
-#endif
 	XLALDestroyREAL8FFTPlan(fwdplan);
 	XLALDestroyREAL8FFTPlan(revplan);
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_unlock();
-#endif
 	XLALDestroyREAL8TimeSeries(tdworkspace);
 	XLALDestroyCOMPLEX16FrequencySeries(fdworkspace);
 	XLALDestroyREAL8Sequence(output_history);
@@ -401,16 +391,10 @@ static void free_workspace(GSTLALWhiten *element)
 	element->hann_window = NULL;
 	XLALDestroyREAL8Window(element->tukey_window);
 	element->tukey_window = NULL;
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_lock();
-#endif
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	element->fwdplan = NULL;
 	XLALDestroyREAL8FFTPlan(element->revplan);
 	element->revplan = NULL;
-#ifndef LAL_PTHREAD_LOCK
-	gstlal_fftw_unlock();
-#endif
 	XLALDestroyREAL8TimeSeries(element->tdworkspace);
 	element->tdworkspace = NULL;
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);

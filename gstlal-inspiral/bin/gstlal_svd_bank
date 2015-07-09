@@ -33,6 +33,7 @@ from optparse import OptionParser
 import uuid
 
 
+from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
@@ -75,9 +76,9 @@ from gstlal.far import ThincaCoincParamsDistributions
 #
 # ### Review Status
 #
-# | Names                                       | Hash                                        | Date       |
-# | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71    | 2014-04-30 |
+# | Names                                           | Hash                                     | Date       | Diff to Head of Master      |
+# | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-30 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_svd_bank?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_svd_bank</a> |
 #
 # #### Actions
 # 
@@ -113,7 +114,8 @@ parser.add_option("--identity-transform", action = "store_true", default = False
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
-parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+parser.add_option("--template-bank-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML file from which to load the template bank.")
 parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
 parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0). Currently this cannot be changed.")
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
@@ -129,6 +131,9 @@ parser.add_option("--bank-id", metavar = "id", action = "append", help = "Set a 
 parser.add_option("--write-psd", action = "store_true", default = False, help = "Write the PSD used to actually whiten the templates after interpolating and conditioning.  It will be inserted into the svd bank file.")
 
 options, filenames = parser.parse_args()
+
+if options.template_bank_cache:
+	options.template_bank.extend([CacheEntry(line).url for line in open(options.template_bank_cache)])
 
 required_options = ("reference_psd", "template_bank", "write_svd_bank", "clipleft", "clipright")
 

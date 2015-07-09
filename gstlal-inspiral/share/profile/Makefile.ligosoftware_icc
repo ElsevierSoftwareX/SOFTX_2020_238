@@ -1,0 +1,423 @@
+TARDIR:=${PWD}/tarball
+INSTALL_FILES_DIR:=${PWD}/install
+DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
+INSTALL_DIR:=${LAL_PATH}
+PATCH_DIR:=${PWD}/patches
+
+GLUE=glue-1.48
+GSTLAL=gstlal-0.9.0
+GSTLALCALIBRATION=gstlal-calibration-0.2.4
+GSTLALINSPIRAL=gstlal-inspiral-0.5.1
+GSTLALUGLY=gstlal-ugly-0.8.0
+PYLAL=pylal-0.7.0
+LAL=lal-6.14.0
+LALAPPS=lalapps-6.16.0
+LALBURST=lalburst-1.3.0
+LALDETCHAR=laldetchar-0.3.0
+LALFRAME=lalframe-1.2.5
+LALINFERENCE=lalinference-1.5.0
+LALINSPIRAL=lalinspiral-1.6.5
+LALMETAIO=lalmetaio-1.2.6
+LALPULSAR=lalpulsar-1.11.0
+LALSIMULATION=lalsimulation-1.3.0
+LALSTOCHASTIC=lalstochastic-1.1.16
+LALXML=lalxml-1.1.16
+LDASTOOLS=ldas-tools-2.3.3
+GDS=gds-2.17.1
+
+all : $(INSTALL_DIR)/lib/libgstlalinspiral.so env.sh
+
+env.sh :
+	# use the robot cert
+	echo 'unset X509_USER_PROXY' > $@
+	echo 'export X509_USER_CERT=/home/gstlalcbc/.cert/gstlalcbcrobot.cert.pem' >> $@
+	echo 'export X509_USER_KEY=/home/gstlalcbc/.cert/gstlalcbcrobot.key.pem' >> $@
+	echo 'unset GST_PLUGIN_PATH PYTHONPATH' >> $@
+	echo 'LAL_PATH=${PWD}/opt' >> $@
+	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
+	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
+	echo 'export CFLAGS="-O3 -march=native  -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings"' >> $@
+	echo 'export LDFLAGS="-L${MKLROOT}/lib/intel64"' >> $@
+	echo 'export CC="icc"' >> $@
+	echo 'export CXX="icpc"' >> $@
+	# Force FFTW
+	echo 'export LD_PRELOAD=$${DEPENDENCIES_PATH}/lib/libfftw3f.so:$${DEPENDENCIES_PATH}/lib/libfftw3.so' >> $@
+	# These are environment variables that do get exported
+	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
+	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.6/site-packages:$${LAL_PATH}/lib64/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.6/site-packages' >> $@
+	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-0.10:$${LAL_PATH}/lib64/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib64/gstreamer-0.10' >> $@
+	echo 'GST_REGISTRY=$${LAL_PATH}/registry.$(uname -m).bin' >> $@
+	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
+
+clean :
+	rm -rvf $(TARDIR)
+	rm -rvf $(INSTALL_FILES_PATH)
+	rm -rvf $(DEP_INSTALL_DIR)
+	rm -rvf $(LAL_PATH)
+	rm -rvf $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TARDIR)
+
+$(INSTALL_DIR)/lib/libgstlalinspiral.so : $(INSTALL_FILES_DIR)/$(GSTLALINSPIRAL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTLALINSPIRAL) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTLALINSPIRAL)/config.log : $(INSTALL_DIR)/bin/gstlal_compute_strain
+	tar -xzf $(TARDIR)/$(GSTLALINSPIRAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTLALINSPIRAL) && \
+		wget 'http://ligo-vcs.phys.uwm.edu/cgit/gstlal/patch/?id=7d90a2068691a34f36570b804909f4ce5f418779' --output-document 7d90a2068691a34f36570b804909f4ce5f418779.patch && \
+		patch -p2 < 7d90a2068691a34f36570b804909f4ce5f418779.patch && \
+		wget 'https://ligo-vcs.phys.uwm.edu/cgit/gstlal/patch/?id=557c6fa7bf12a898eda78cfd0b7ea4acd4f4e6e6' --output-document 557c6fa7bf12a898eda78cfd0b7ea4acd4f4e6e6.patch && \
+		patch -p2 < 557c6fa7bf12a898eda78cfd0b7ea4acd4f4e6e6.patch && \
+		./configure --without-doxygen --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/bin/gstlal_compute_strain : $(INSTALL_FILES_DIR)/$(GSTLALCALIBRATION)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTLALCALIBRATION) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTLALCALIBRATION)/config.log : $(INSTALL_DIR)/lib/libgstlalugly.so
+	tar -xzf $(TARDIR)/$(GSTLALCALIBRATION).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTLALCALIBRATION) && \
+		./configure --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/libgstlalugly.so : $(INSTALL_FILES_DIR)/$(GSTLALUGLY)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTLALUGLY) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTLALUGLY)/config.log : $(INSTALL_DIR)/lib/libgstlal.so
+	tar -xzf $(TARDIR)/$(GSTLALUGLY).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTLALUGLY) && \
+		./configure --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/libgstlal.so : $(INSTALL_FILES_DIR)/$(GSTLAL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTLAL) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTLAL)/config.log : $(INSTALL_DIR)/bin/dmtdq_seg_insert $(INSTALL_DIR)/etc/pylal-user-env.sh
+	tar -xzf $(TARDIR)/$(GSTLAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTLAL) && \
+		wget 'https://ligo-vcs.phys.uwm.edu/cgit/gstlal/patch/?id=7c9a96b450647ac2c38d67340d9d4a077815121c' --output-document 7c9a96b450647ac2c38d67340d9d4a077815121c.patch && \
+		patch -p2 < 7c9a96b450647ac2c38d67340d9d4a077815121c.patch && \
+		./configure --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/bin/dmtdq_seg_insert : $(INSTALL_DIR)/bin/lalapps_psinject
+	tar -xzf $(TARDIR)/$(GLUE).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GLUE) && \
+		CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" python setup.py install --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/etc/pylal-user-env.sh : $(INSTALL_DIR)/bin/lalapps_psinject
+	tar -xzf $(TARDIR)/$(PYLAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(PYLAL) && \
+		CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" python setup.py install --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/bin/lalapps_psinject : $(INSTALL_FILES_DIR)/$(LALAPPS)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALAPPS) && make -j32 && make install -j32
+
+## FIXME --enable-gcc-flags set to no on lalapps configure as work around to avoid warnings stopping install process
+## Not sure what causes the warnings
+$(INSTALL_FILES_DIR)/$(LALAPPS)/config.log : $(INSTALL_DIR)/lib/liblalstochastic.so
+	tar -xzf $(TARDIR)/$(LALAPPS).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALAPPS) && \
+		./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalstochastic.so : $(INSTALL_FILES_DIR)/$(LALSTOCHASTIC)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALSTOCHASTIC) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALSTOCHASTIC)/config.log : $(INSTALL_DIR)/lib/liblalinference.so
+	tar -xzf $(TARDIR)/$(LALSTOCHASTIC).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALSTOCHASTIC) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalinference.so : $(INSTALL_FILES_DIR)/$(LALINFERENCE)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALINFERENCE) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALINFERENCE)/config.log : $(INSTALL_DIR)/lib/liblalpulsar.so
+	tar -xzf $(TARDIR)/$(LALINFERENCE).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALINFERENCE) && \
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_FILES_DIR)/$(LALPULSAR)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALPULSAR) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALPULSAR)/config.log : $(INSTALL_DIR)/lib/liblaldetchar.so 
+	tar -xzf $(TARDIR)/$(LALPULSAR).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALPULSAR) && \
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++"  --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblaldetchar.so : $(INSTALL_FILES_DIR)/$(LALDETCHAR)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALDETCHAR) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALDETCHAR)/config.log : $(INSTALL_DIR)/lib/liblalburst.so
+	tar -xzf $(TARDIR)/$(LALDETCHAR).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALDETCHAR) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalburst.so : $(INSTALL_FILES_DIR)/$(LALBURST)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALBURST) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALBURST)/config.log : $(INSTALL_DIR)/lib/liblalinspiral.so
+	tar -xzf $(TARDIR)/$(LALBURST).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALBURST) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalinspiral.so : $(INSTALL_FILES_DIR)/$(LALINSPIRAL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALINSPIRAL) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALINSPIRAL)/config.log : $(INSTALL_DIR)/lib/liblalsimulation.so
+	tar -xzf $(TARDIR)/$(LALINSPIRAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALINSPIRAL) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalsimulation.so : $(INSTALL_FILES_DIR)/$(LALSIMULATION)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALSIMULATION) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALSIMULATION)/config.log : $(INSTALL_DIR)/lib/liblalmetaio.so
+	tar -xzf $(TARDIR)/$(LALSIMULATION).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALSIMULATION) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalmetaio.so : $(INSTALL_FILES_DIR)/$(LALMETAIO)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALMETAIO) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALMETAIO)/config.log : $(INSTALL_DIR)/lib/liblalframe.so 
+	tar -xzf $(TARDIR)/$(LALMETAIO).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALMETAIO) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblalframe.so : $(INSTALL_FILES_DIR)/$(LALFRAME)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALFRAME) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALFRAME)/config.log : $(INSTALL_DIR)/lib/liblal.so
+	tar -xzf $(TARDIR)/$(LALFRAME).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LALFRAME) && \
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(INSTALL_DIR)/lib/liblal.so : $(INSTALL_FILES_DIR)/$(LAL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LAL) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LAL)/config.log : $(DEP_INSTALL_DIR)/lib/libmetaio.so $(DEP_INSTALL_DIR)/bin/swig \
+		$(DEP_INSTALL_DIR)/lib/libFrame.so $(DEP_INSTALL_DIR)/lib/libframecpp.so
+	tar -xzf $(TARDIR)/$(LAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LAL) && \
+		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libframecpp.so : $(INSTALL_FILES_DIR)/$(LDASTOOLS)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLS) && make && make install 
+
+#FIXME Use gcc for ldas-tools since it won't compile with icc
+$(INSTALL_FILES_DIR)/$(LDASTOOLS)/config.log : $(DEP_INSTALL_DIR)/lib/libgdsbase.so
+	tar -xzf $(TARDIR)/$(LDASTOOLS).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLS) && \
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libgdsbase.so : $(INSTALL_FILES_DIR)/$(GDS)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GDS) && make && make install 
+
+#FIXME Use gcc for gds
+$(INSTALL_FILES_DIR)/$(GDS)/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xzf $(TARDIR)/$(GDS).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GDS) && \
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --enable-online --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/bin/swig : $(INSTALL_FILES_DIR)/swig-2.0.11/config.log
+	cd $(INSTALL_FILES_DIR)/swig-2.0.11 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/swig-2.0.11/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xzf $(TARDIR)/swig-2.0.11.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/swig-2.0.11 && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libmetaio.so : $(INSTALL_FILES_DIR)/metaio-8.4.0/config.log
+	cd $(INSTALL_FILES_DIR)/metaio-8.4.0 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/metaio-8.4.0/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xzf $(TARDIR)/metaio-8.4.0.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/metaio-8.4.0 && \
+		./configure --prefix=$(DEP_INSTALL_DIR) --with-matlab=no
+	# Needed with-matlab option for intel_haswell test
+
+$(DEP_INSTALL_DIR)/lib/libFrame.so : $(INSTALL_FILES_DIR)/libframe-8.21/config.log
+	cd $(INSTALL_FILES_DIR)/libframe-8.21 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/libframe-8.21/config.log: $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xzf $(TARDIR)/libframe-8.21.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/libframe-8.21 && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_FILES_DIR)/oprofile-0.9.9/config.log
+	cd $(INSTALL_FILES_DIR)/oprofile-0.9.9 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/oprofile-0.9.9/config.log : $(DEP_INSTALL_DIR)/lib/gstreamer-0.10/libgstpython.so
+	tar -xzf $(TARDIR)/oprofile-0.9.9.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/oprofile-0.9.9/ && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/gstreamer-0.10/libgstpython.so : $(INSTALL_FILES_DIR)/gst-python-0.10.22/config.log
+	cd $(INSTALL_FILES_DIR)/gst-python-0.10.22 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/gst-python-0.10.22/config.log : $(DEP_INSTALL_DIR)/lib/gstreamer-0.10/libgstannodex.so
+	tar -xzf $(TARDIR)/gst-python-0.10.22.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/gst-python-0.10.22 && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/gstreamer-0.10/libgstannodex.so : $(INSTALL_FILES_DIR)/gst-plugins-good-0.10.31/config.log
+	cd $(INSTALL_FILES_DIR)/gst-plugins-good-0.10.31 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/gst-plugins-good-0.10.31/config.log : $(DEP_INSTALL_DIR)/lib/libgstapp-0.10.so
+	tar -xzf $(TARDIR)/gst-plugins-good-0.10.31.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/gst-plugins-good-0.10.31 && \
+		./configure --disable-gst_v4l2 --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libgstapp-0.10.so : $(INSTALL_FILES_DIR)/gst-plugins-base-0.10.36/config.log
+	cd $(INSTALL_FILES_DIR)/gst-plugins-base-0.10.36 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/gst-plugins-base-0.10.36/config.log : $(DEP_INSTALL_DIR)/lib/libgstreamer-0.10.so
+	tar -xzf $(TARDIR)/gst-plugins-base-0.10.36.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/gst-plugins-base-0.10.36 && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libgstreamer-0.10.so : $(INSTALL_FILES_DIR)/gstreamer-0.10.36/config.log
+	cd $(INSTALL_FILES_DIR)/gstreamer-0.10.36 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/gstreamer-0.10.36/config.log : $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
+	        tar -xzf $(TARDIR)/gstreamer-0.10.36.tar.gz -C $(INSTALL_FILES_DIR)
+		        cd $(INSTALL_FILES_DIR)/gstreamer-0.10.36 && \
+				                ./configure --prefix=$(DEP_INSTALL_DIR)
+
+## FIXME Hack to make gsl default to mkl for blas
+$(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
+	        cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@ 
+		        sed 's/-lgslcblas/-lmkl_intel_ilp64 -lmkl_core -lmkl_sequential -lpthread -lm/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+
+$(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/gsl-1.15/config.log
+	cd $(INSTALL_FILES_DIR)/gsl-1.15 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/gsl-1.15/config.log : $(DEP_INSTALL_DIR)/lib/liborc-0.4.so
+	tar -xzf $(TARDIR)/gsl-1.15.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/gsl-1.15 && \
+		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" \
+		GSL_CBLAS_LIB='-lmkl_intel_ilp64 -lmkl_core -lmkl_sequential'
+
+$(DEP_INSTALL_DIR)/lib/liborc-0.4.so : $(INSTALL_FILES_DIR)/orc-0.4.18/config.log
+	cd $(INSTALL_FILES_DIR)/orc-0.4.18 && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/orc-0.4.18/config.log : $(DEP_INSTALL_DIR)/lib/libfftw3.so
+	tar -xzf $(TARDIR)/orc-0.4.18.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/orc-0.4.18 && \
+		cd $(INSTALL_FILES_DIR)/orc-0.4.18 && ./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libfftw3.so : TAR.txt
+	tar -xzf $(TARDIR)/fftw-3.3.4.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/fftw-3.3.4 && \
+		cd $(INSTALL_FILES_DIR)/fftw-3.3.4 && ./configure --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --prefix=$(DEP_INSTALL_DIR) && \
+		make -j32 && make install -j32 && make clean && \
+		./configure --enable-shared --enable-sse2 --enable-avx --prefix=$(DEP_INSTALL_DIR) && \
+		make -j32 && make install -j32
+		
+		
+
+
+#
+# Download all of the software
+#
+
+TAR.txt :  $(TARDIR)/orc-0.4.18.tar.gz $(TARDIR)/gsl-1.15.tar.gz $(TARDIR)/gstreamer-0.10.36.tar.gz $(TARDIR)/gst-plugins-base-0.10.36.tar.gz $(TARDIR)/gst-plugins-good-0.10.31.tar.gz $(TARDIR)/gst-python-0.10.22.tar.gz $(TARDIR)/oprofile-0.9.9.tar.gz $(TARDIR)/libframe-8.21.tar.gz $(TARDIR)/metaio-8.4.0.tar.gz $(TARDIR)/$(GLUE).tar.gz $(TARDIR)/$(GSTLAL).tar.gz $(TARDIR)/$(GSTLALCALIBRATION).tar.gz $(TARDIR)/$(GSTLALINSPIRAL).tar.gz $(TARDIR)/$(GSTLALUGLY).tar.gz $(TARDIR)/$(PYLAL).tar.gz $(TARDIR)/$(LAL).tar.gz $(TARDIR)/$(LALAPPS).tar.gz $(TARDIR)/$(LALBURST).tar.gz $(TARDIR)/$(LALDETCHAR).tar.gz $(TARDIR)/$(LALFRAME).tar.gz $(TARDIR)/$(LALINFERENCE).tar.gz $(TARDIR)/$(LALINSPIRAL).tar.gz $(TARDIR)/$(LALMETAIO).tar.gz $(TARDIR)/$(LALPULSAR).tar.gz $(TARDIR)/$(LALSIMULATION).tar.gz $(TARDIR)/$(LALSTOCHASTIC).tar.gz $(TARDIR)/$(LALXML).tar.gz $(TARDIR)/swig-2.0.11.tar.gz $(TARDIR)/$(LDASTOOLS).tar.gz $(TARDIR)/$(GDS).tar.gz $(TARDIR)/fftw-3.3.4.tar.gz
+	echo $^ > $@
+
+$(TARDIR) :
+	mkdir -p $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR)
+	wget http://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/profile/patches/gstreamer-bison.patch --directory-prefix=$(PATCH_DIR) -nc
+	mkdir -p $(TARDIR)
+
+
+$(TARDIR)/orc-0.4.18.tar.gz : $(TARDIR)
+	wget http://gstreamer.freedesktop.org/src/orc/orc-0.4.18.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/gsl-1.15.tar.gz : $(TARDIR)
+	wget http://ftp.gnu.org/gnu/gsl/gsl-1.15.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/gstreamer-0.10.36.tar.gz : $(TARDIR)
+	wget http://gstreamer.freedesktop.org/src/gstreamer/gstreamer-0.10.36.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/gst-plugins-base-0.10.36.tar.gz : $(TARDIR)
+	wget http://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-0.10.36.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/gst-plugins-good-0.10.31.tar.gz : $(TARDIR)
+	wget http://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-0.10.31.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/gst-python-0.10.22.tar.gz : $(TARDIR)
+	wget http://gstreamer.freedesktop.org/src/gst-python/gst-python-0.10.22.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/oprofile-0.9.9.tar.gz : $(TARDIR) 
+	wget http://prdownloads.sourceforge.net/oprofile/oprofile-0.9.9.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/libframe-8.21.tar.gz : $(TARDIR)
+	wget http://lappweb.in2p3.fr/virgo/FrameL/libframe-8.21.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/metaio-8.4.0.tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/metaio-8.4.0.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GLUE).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GLUE).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTLAL).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLAL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTLALCALIBRATION).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTLALINSPIRAL).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TARDIR)  -nc
+
+$(TARDIR)/$(GSTLALUGLY).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TARDIR) -nc
+
+test:
+	echo $(TARDIR)/$(PYLAL).tar.gz
+
+$(TARDIR)/$(PYLAL).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(PYLAL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LAL).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LAL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALAPPS).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALAPPS).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALBURST).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALBURST).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALDETCHAR).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALDETCHAR).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALFRAME).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALFRAME).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALINFERENCE).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALINFERENCE).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALINSPIRAL).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALINSPIRAL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALMETAIO).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALMETAIO).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALPULSAR).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALPULSAR).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALSIMULATION).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALSIMULATION).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALSTOCHASTIC).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALSTOCHASTIC).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALXML).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALXML).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/swig-2.0.11.tar.gz : $(TARDIR)
+	wget http://downloads.sourceforge.net/project/swig/swig/swig-2.0.11/swig-2.0.11.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LDASTOOLS).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LDASTOOLS).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GDS).tar.gz : $(TARDIR)
+	wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GDS).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/fftw-3.3.4.tar.gz : $(TARDIR)
+	wget http://www.fftw.org/fftw-3.3.4.tar.gz --directory-prefix=$(TARDIR) -nc
+## Backup link of ldas-tools in case new version doesn't work, haven't checked yet: http://www.lsc-group.phys.uwm.edu/daswg/download/software/source/ldas-tools-1.19.38.tar.gz \
