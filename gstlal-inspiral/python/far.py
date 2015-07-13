@@ -889,8 +889,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				return NegInf
 			if lnP_noise > 0. and lnP_signal > 0.:
 				return PosInf
-		lnP_signal += math.log(.99)
-		lnP_noise += math.log(0.01)
+		lnP_signal += -0.010050335853501451	# math.log(.99)
+		lnP_noise += -4.6051701859880909	# math.log(0.01)
 		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
