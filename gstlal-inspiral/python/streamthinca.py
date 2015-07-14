@@ -91,18 +91,6 @@ def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, d
 
 
 #
-# gstlal_inspiral's triggers cause a divide-by-zero error in the effective
-# SNR method attached to the triggers, so we replace it with one that works
-# for the duration of the ligolw_thinca() call.  this is the function with
-# which we replace it
-#
-
-
-def get_effective_snr(self, fac):
-	return self.snr
-
-
-#
 # InspiralEventList customization making use of the fact that we demand
 # exact template co-incidence to increase performance.  NOTE:  the use of
 # this class defeats ligolw_thinca()'s ability to apply veto segments.  We
@@ -290,9 +278,6 @@ class StreamThinca(object):
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 
-		# swap .get_effective_snr() method on trigger class
-		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
-
 		# find coincs
 		ligolw_thinca.ligolw_thinca(
 			xmldoc,
@@ -307,9 +292,6 @@ class StreamThinca(object):
 			# light-crossing time for the Earth
 			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
 		)
-
-		# restore .get_effective_snr() method on trigger class
-		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
 		# assign the FAP and FAR if provided with the data to do so
 		if fapfar is not None:
