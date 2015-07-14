@@ -189,7 +189,7 @@ if options.data_source == "frames" and options.frame_cache is None:
 if options.wings is not None and options.data_source != "frames":
 	raise ValueError("--wings can only be set when --data-source=frames")
 
-if options.wings % (options.frames_per_file * options.frame_duration):
+if options.wings is not None and (options.wings % (options.frames_per_file * options.frame_duration)):
 	raise ValueError("--wings must be an integer multiple of --frames-per-file * --frame-duration")
 
 if options.ifo is None:
