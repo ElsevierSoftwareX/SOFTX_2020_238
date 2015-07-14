@@ -128,7 +128,7 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		for events in self.index.values():
 			events.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns))
 
-	def get_coincs(self, event_a, offset_a, light_travel_time, e_thinca_parameter, comparefunc):
+	def get_coincs(self, event_a, offset_a, light_travel_time, delta_t, comparefunc):
 		#
 		# event_a's end time, with the time shift applied
 		#
@@ -153,7 +153,7 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		# a subset of the full list)
 		#
 
-		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, e_thinca_parameter)]
+		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, delta_t)]
 
 
 #
