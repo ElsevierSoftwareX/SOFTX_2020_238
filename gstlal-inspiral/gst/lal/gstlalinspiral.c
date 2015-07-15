@@ -56,6 +56,8 @@
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_blcbc_triggergen.h>
 #include <gstlal_itac.h>
+/* spearman plugin*/
+#include <gstlal_itac_spearman.h>
 
 
 /*
@@ -79,6 +81,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
 		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
 		{"lal_itac", GSTLAL_ITAC_TYPE},
+		{"lal_itac_spearman", GSTLAL_ITAC_SPEARMAN_TYPE},
 		{NULL, 0},
 	};
 

@@ -67,14 +67,28 @@ from gstlal import cbc_template_iir
 # SPIIR many instruments, many template banks
 #
 
+def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
+	properties = {
+		"n": n,
+		"bank_filename": bank,
+		"snr_thresh": snr_thresh
+	}
+	if autocorrelation_matrix is not None:
+		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)
+	if mask_matrix is not None:
+		properties["autocorrelation_mask"] = mask_matrix
+	if sigmasq is not None:
+		properties["sigmasq"] = sigmasq
+	return pipeparts.mkgeneric(pipeline, src, "lal_itac_spearman", **properties)
+
 
 def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
 	#
 	# check for recognized value of chisq_type
 	#
 
-	if chisq_type not in ['autochisq']:
-		raise ValueError("chisq_type must be either 'autochisq', given %s" % chisq_type)
+	if chisq_type not in ['autochisq' or 'autochisq_spearman']:
+		raise ValueError("chisq_type must be either 'autochisq' or 'autochisq_spearman', given %s" % chisq_type)
 
 	#
 	# extract segments from the injection file for selected reconstruction
@@ -140,6 +154,15 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
+		elif chisq_type == 'autochisq_spearman':
+			# FIXME don't hardcode
+			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			# FIXME: bank.snr_thresh is removed, use peak_thresh instead
+			head = mkitac_spearman(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			triggersrcs[instrument].add(head)
+
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		if nxydump_segment is not None:
@@ -193,8 +216,8 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	# check for recognized value of chisq_type
 	#
 
-	if chisq_type not in ['autochisq']:
-		raise ValueError("chisq_type must be either 'autochisq', given %s" % chisq_type)
+	if chisq_type not in ['autochisq', 'autochisq_spearman']:
+		raise ValueError("chisq_type must be either 'autochisq' or 'autochisq_spearman', given %s" % chisq_type)
 
 	#
 	# extract segments from the injection file for selected reconstruction
@@ -264,6 +287,14 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			head = pipeparts.mkitac(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			triggersrcs[instrument].add(head)
+		elif chisq_type == 'autochisq_spearman':
+			# FIXME don't hardcode
+			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			head = pipeparts.mkqueue(pipeline, snr, max_size_buffers=1)
+			head = mkitac_spearman(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_spearman_%s" % suffix)
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank_struct.autocorrelation_bank

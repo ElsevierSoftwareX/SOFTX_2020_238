@@ -158,7 +158,7 @@ def parse_command_line():
   parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
   parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
   parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
-  parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
+  parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq|autochisq_spearman). The default is autochisq.")
   parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
   parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
   parser.add_option("--comment",  metavar="str")
@@ -246,8 +246,8 @@ def parse_command_line():
   if missing_files:
     raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
 
-  if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-    raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
+  if options.chisq_type not in ["autochisq", "timeslicechisq", "autochisq_spearman"]:
+    raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq|autochisq_spearman), given %s" % (options.chisq_type)
 
   # do this before converting option types
   process_params = options.__dict__.copy() 
@@ -282,8 +282,6 @@ def parse_command_line():
     raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
   if options.local_frame_caching and not options.data_source == "frames":
     raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
-  if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-    raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 
   if options.reference_likelihood_file:
     likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(None, options.reference_likelihood_file)]

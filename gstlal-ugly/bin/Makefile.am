@@ -24,7 +24,6 @@ dist_bin_SCRIPTS = \
 	gstlal_recolor_frames_pipe \
 	gstlal_inj_frames \
 	gstlal_cache_to_segments \
-	gstlal_veto_timeseries_to_frames \
 	gstlal_parse_frame_segment_logs \
 	gstlal_postcoh_skymap2fits \
 	gstlal_ll_iir_inspiral_pipe

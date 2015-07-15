@@ -11,5 +11,4 @@ pkgpython_PYTHON = \
 	httpinterface.py \
 	servicediscovery.py \
 	spiirparts.py \
-	uni_datasource.py \
-	idq_vetosrc.py
+	uni_datasource.py
