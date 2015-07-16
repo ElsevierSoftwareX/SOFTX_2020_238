@@ -14,15 +14,7 @@ from gstlal.pipeutil import *
 
 import gstlal.pipeparts as pipeparts
 from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
-from glue.ligolw import lsctables
-from glue.ligolw import utils
 from itertools import groupby
-
-# FIXME Python < 2.5 compatibility
-try:
-	any
-except NameError:
-	from glue.iterutils import any
 
 
 class CoincTestFixture(PipelineTestFixture):
