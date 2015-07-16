@@ -89,6 +89,7 @@ def parse_command_line():
         parser.add_option("--compression-scheme", default = 6, type = "int", help = "compression_scheme (optional)")
         parser.add_option("--frames-per-file", default = 1, type = "int", help = "frames_per_file (optional)")
         parser.add_option("--frame-duration", default = 4, metavar= "frame duration in seconds" , type = "int", help = "frame_duration (optional)")        
+        parser.add_option("--gracedb-server", default = "https://simdb.cgca.uwm.edu/api/", type = "string", help = "name of gracedb or simdb server")        
 
         options, filenames = parser.parse_args()
 
@@ -214,7 +215,7 @@ class GraceDBThread ( threading.Thread ):
        # fake_file.write("Hello world.")
         print "fake_file: [", fake_file.getvalue(), "]"
         print "Talking to GraceDB"
-        gracedb = GraceDb("https://simdb.phys.uwm.edu/api/")
+        gracedb = GraceDb(options.gracedb_server)
         try:
             r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
             #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
