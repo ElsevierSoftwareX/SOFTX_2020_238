@@ -845,7 +845,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# lnP_signal(), and friends methods.
 		#
 
-		params.horizons = self.horizon_history.getdict(float(events[0].get_end()))
+		params.horizons = self.horizon_history.getdict(float(events[0].end))
 		# for instruments that provided triggers,
 		# use the trigger effective distance and
 		# SNR to provide the horizon distance.

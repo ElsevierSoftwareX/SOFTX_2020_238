@@ -856,7 +856,7 @@ class Data(object):
 				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
 				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
-				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
+				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
 				#
@@ -930,11 +930,11 @@ class Data(object):
 				latency = coinc_inspiral.minimum_duration
 				self.latency_histogram[latency,] += 1
 				if latency_val is None:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					t = float(coinc_inspiral_index[coinc_event_id].end)
 					latency_val = (t, latency)
 				snr = coinc_inspiral_index[coinc_event_id].snr
 				if snr >= snr_val[1]:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					t = float(coinc_inspiral_index[coinc_event_id].end)
 					snr_val = (t, snr)
 			if latency_val is not None:
 				self.latency_history.append(latency_val)

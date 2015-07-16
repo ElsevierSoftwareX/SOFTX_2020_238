@@ -87,7 +87,7 @@ def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, d
 	# match, but the InspiralEventList class ensures that all event
 	# pairs that make it this far are from the same template so we
 	# don't need to explicitly test for that here.
-	return float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t
+	return float(abs(event_a.end + offset_a - event_b.end - offset_b)) > light_travel_time + delta_t
 
 
 #
@@ -114,14 +114,14 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		for event in self:
 			self.index.setdefault(self.template(event), []).append(event)
 		for events in self.index.values():
-			events.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns))
+			events.sort(key = lambda event: event.end)
 
 	def get_coincs(self, event_a, offset_a, light_travel_time, delta_t, comparefunc):
 		#
 		# event_a's end time, with the time shift applied
 		#
 
-		end = event_a.get_end() + offset_a - self.offset
+		end = event_a.end + offset_a - self.offset
 
 		#
 		# all events sharing event_a's template
@@ -246,8 +246,8 @@ class StreamThinca(object):
 		# internal sngl_inspiral table.  save any that were never
 		# used in coincidences
 		discard_boundary = self.last_boundary - coincidence_back_off
-		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.get_end() < discard_boundary and row.event_id not in self.ids]
-		iterutils.inplace_filter(lambda row: row.get_end() >= discard_boundary, self.sngl_inspiral_table)
+		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.ids]
+		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
 		# we need our own copies of these other tables because
 		# sometimes ligolw_thinca wants to modify the attributes of
@@ -306,7 +306,7 @@ class StreamThinca(object):
 				# abuse minimum_duration column to store
 				# the latency.  NOTE:  this is nonsensical
 				# unless running live.
-				coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.get_end())
+				coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.end)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects

@@ -368,7 +368,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if approximant in templates.gstlal_IMR_approximants:
 			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
 			# record the new end times for the waveforms (since we performed the shifts)
-			row.set_end(laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max))
+			row.end = laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
 		else:
 			data *= tukeywindow(data, samps = 32)
 
