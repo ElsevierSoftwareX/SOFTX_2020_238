@@ -797,7 +797,7 @@ class Data(object):
 
 	def __do_gracedb_alerts(self):
 		if self.stream_thinca.last_coincs:
-			gracedb_client = gracedb.Client(url=self.gracedb_service_url)
+			gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 			gracedb_ids = []
 			common_messages = []
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
