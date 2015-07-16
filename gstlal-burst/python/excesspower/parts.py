@@ -504,17 +504,16 @@ class EPHandler(Handler):
         Retrieve triggers from the appsink element and postprocess them, adding them to our current list.
 		"""
 
-		buffer = appsink.emit("pull-buffer")
+		buf = appsink.emit("pull-buffer")
 
 		if not self.output:
-			del buffer
 			return # We don't want event information
 
-		# What comes out of the sngl_bursts_from_buffer is a
+		# What comes out of SnglBurst.from_buffer is a
 		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
 		# all the trappings of its glue.ligolw.lsctables cousin, so we
 		# convert it here first
-		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in SnglBurst.from_buffer(buffer)]:
+		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in SnglBurst.from_buffer(buf)]:
 
 			# FIXME: Determine "magic number" or remove it
 			event.confidence = -lnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
@@ -540,11 +539,9 @@ class EPHandler(Handler):
 
 		# Update the timestamps which tell us how far along in the trigger
 		# streams we are
-		buf_ts = buffer.timestamp*1e-9 / self.units
-		buf_dur = buffer.duration*1e-9 / self.units
+		buf_ts = buf.timestamp*1e-9 / self.units
+		buf_dur = buf.duration*1e-9 / self.units
 		self.stop = (buf_ts + buf_dur)
-
-		del buffer
 
 		# Check if clustering reduces the amount of events
 		if len(self.triggers) >= self.max_events and self._clustering:
