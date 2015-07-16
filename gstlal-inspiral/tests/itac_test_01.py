@@ -11,7 +11,7 @@ import numpy
 import sys, os
 from gstlal import pipeparts
 import test_common, gst
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
+from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 
 #
 # =============================================================================
@@ -60,7 +60,7 @@ def peak_test_01a(pipeline):
 	outfile = open("itac_test_01a_out.dump", "w")
 
 	def dump_triggers(elem, output = outfile):
-		for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
+		for row in SnglInspiralTable.from_buffer(elem.emit("pull-buffer")):
 			print >>outfile, row.end_time + row.end_time_ns*1e-9, row.snr, row.chisq, row.chisq_dof
 
 	a.connect_after("new-buffer", dump_triggers)
