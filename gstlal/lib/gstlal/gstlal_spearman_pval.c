@@ -240,6 +240,9 @@ unsigned gstlal_spearman_float(
 			input++;
 		}
 	}
+	free(data1);
+	free(data2);
+	free(work);
 
 	/*
 	 * done
