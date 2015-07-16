@@ -211,13 +211,8 @@ class StreamThinca(object):
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
 
-		# convert the new row objects to the type required by
-		# ligolw_thinca(), and append to our sngl_inspiral table
-		for old_event in events:
-			new_event = ligolw_thinca.SnglInspiral()
-			for col in self.sngl_inspiral_table.columnnames:
-				setattr(new_event, col, getattr(old_event, col))
-			self.sngl_inspiral_table.append(new_event)
+		# append the new row objects to our sngl_inspiral table
+		self.sngl_inspiral_table.extend(events)
 
 		# run coincidence, return non-coincident sngls.  no-op if
 		# no new events

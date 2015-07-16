@@ -55,7 +55,7 @@ from pylal import snglcluster
 from pylal import ligolw_bucluster
 
 from pylal import datatypes as laltypes
-from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
+from pylal.xlal.datatypes.snglburst import SnglBurst
 from lalburst import lnOneMinusChisqCdf
 
 import pygtk
@@ -514,7 +514,7 @@ class EPHandler(Handler):
 		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
 		# all the trappings of its glue.ligolw.lsctables cousin, so we
 		# convert it here first
-		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in sngl_bursts_from_buffer(buffer)]:
+		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in SnglBurst.from_buffer(buffer)]:
 
 			# FIXME: Determine "magic number" or remove it
 			event.confidence = -lnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)

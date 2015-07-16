@@ -51,7 +51,7 @@ import pygst
 pygst.require('0.10')
 import gst
 
-from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
+from pylal.xlal.datatypes.snglburst import SnglBurst
 from gstlal import pipeio
 from gstlal.pipeutil import gstlal_element_register
 from gstlal import pipeparts
@@ -109,7 +109,7 @@ mainloop.run()
 def get_triggers(elem):
 	print "get triggers called"
 	buffer = elem.emit("pull-buffer")
-	for row in sngl_bursts_from_buffer(buffer):	
+	for row in SnglBurst.from_buffer(buffer):
 		print row.channel
 
 appsink = gst.element_factory_make("appsink")

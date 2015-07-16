@@ -78,7 +78,6 @@ from pylal import datatypes as laltypes
 from pylal import rate
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 from gstlal import bottle
 from gstlal import reference_psd
@@ -560,7 +559,7 @@ class Data(object):
 		with self.lock:
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-buffer")
-			events = sngl_inspirals_from_buffer(buf)
+			events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(buf)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_")[0]
 
