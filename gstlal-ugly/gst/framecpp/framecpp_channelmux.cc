@@ -254,7 +254,7 @@ static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 
 static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstClockTime gwf_t_start, GstClockTime gwf_t_end)
 {
-	GstBuffer *outbuf;
+	GstBuffer *outbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert_cmpuint(gwf_t_start, <=, gwf_t_end);
@@ -491,6 +491,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 	 */
 
 done:
+	gst_buffer_unref(outbuf);
 	return result;
 }
 
