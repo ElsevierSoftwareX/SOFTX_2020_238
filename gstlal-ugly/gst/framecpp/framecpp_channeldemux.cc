@@ -178,6 +178,9 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
 	gint width = vect->GetTypeSize() * 8;
 	*rate = round(1.0 / vect->GetDim(0).GetDx());
 
+	/* check that the sample period corresponds exactly to an integer
+	 * sample rate */
+
 	g_assert(1.0 / *rate == vect->GetDim(0).GetDx());
 
 	switch(vect->GetType()) {
