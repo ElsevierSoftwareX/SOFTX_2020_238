@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Meta program to generate offline style summary pages from online runs."""
+
+
+import sys, os, subprocess, re, time
+from optparse import OptionParser
+from glue.text_progress_bar import ProgressBar
+from pylal.datatypes import LIGOTimeGPS
+import lal
+
+def now():
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+
+parser = OptionParser()
+parser.add_option("--directory", default = ".", help = "directory to start looking for results")
+parser.add_option("--injection-file", default = ".", help = "The injection xml file that corresponds to the low latency injections")
+parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
+options, filenames = parser.parse_args()
+
+# FIXME should be more clever than this
+# Match 5 digit directories
+dir_pattern = re.compile('[0-9]{5}')
+
+# FIXME we really have to change this hacky convention for injections to start at 1000
+non_inj_pattern = re.compile('.*-0[0-9]{3}_LLOID-.*.xml.gz')
+inj_pattern = re.compile('.*-1[0-9]{3}_LLOID-.*.xml.gz')
+
+noninj_files_to_merge = []
+inj_files_to_merge = []
+
+result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
+for n, d in enumerate(result_dirs):
+	print >> sys.stderr, "processing directory %d of %d: %s" % (n+1, len(result_dirs), d)
+	# FIXME don't hard code H1L1
+	# FIXME assumes 10 digit GPS
+	noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s00000-100000-ALL_LLOID.sqlite.tmp' % d)
+	injdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s00000-100000-ALL_LLOID_INJ.sqlite.tmp' % d)
+	noninjdbfinal = noninjdb.replace(".tmp","")
+	injdbfinal = injdb.replace(".tmp","")
+
+	# see if this directory has been processed and is old enough to not have to worry about it any more
+	if float(now()) - float("%s00000" % d) > 125000 and os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
+		print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
+		noninj_files_to_merge.append(noninjdbfinal)
+		inj_files_to_merge.append(injdbfinal)
+		continue
+
+	# First do non injections
+	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if non_inj_pattern.match(xml)])
+	progressbar = ProgressBar("Non injection files processed", len(files))
+	for f in files:
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
+		progressbar.increment()
+	del progressbar
+
+	# Then injections
+	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if inj_pattern.match(xml)])
+	progressbar = ProgressBar("Injection files processed", len(files))
+	for f in files:
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
+		progressbar.increment()
+	del progressbar
+
+
+	# rename files
+	for db,dbf in ((noninjdb, noninjdbfinal), (injdb, injdbfinal)):
+		if os.path.exists(db):
+			os.rename(db, dbf)
+
+	if os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
+		noninj_files_to_merge.append(noninjdbfinal)
+		inj_files_to_merge.append(injdbfinal)
+
+
+# FIXME only add *new* files
+
+noninjdb = os.path.join(options.directory, 'H1L1-%s00000-%d-ALL_LLOID.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+injdb = os.path.join(options.directory, 'H1L1-%s00000-%d-ALL_LLOID_INJ.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+
+progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
+for f in noninj_files_to_merge:
+	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
+	progressbar.increment()
+del progressbar
+
+progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge))
+for f in noninj_files_to_merge:
+	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
+	progressbar.increment()
+del progressbar
+
+# Find injections
+progressbar = ProgressBar("Find injections", 4)
+subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % options.injection_file])
+progressbar.increment()
+subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "--extract", "%s.xml" % injdb])
+progressbar.increment()
+subprocess.check_call(["ligolw_inspinjfind", "%s.xml" % injdb])
+progressbar.increment()
+subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "--replace", "%s.xml" % injdb])
+progressbar.increment()
+
+
+# copy the working files back
+os.rename(noninjdb, noninjdb.replace(".tmp",""))
+os.rename(injdb, injdb.replace(".tmp",""))
+
+
+# Make plots and such
+subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+
+subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
