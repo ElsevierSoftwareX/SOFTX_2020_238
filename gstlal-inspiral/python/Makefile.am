@@ -20,6 +20,7 @@ pkgpython_PYTHON = \
 	lloidparts.py \
 	lloidplots.py \
 	llweb.py \
+	lvalert_helper.py \
 	plotfar.py \
 	plotsegments.py \
 	rate_estimation.py \
