@@ -12,7 +12,9 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_iir_bank_pipe \
 	gstlal_inspiral_followups_from_gracedb \
+	gstlal_inspiral_lvalert_omegascan \
 	gstlal_inspiral_lvalert_psd_plotter \
+	gstlal_inspiral_lvalert_sngls_plotter \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_pipe \
@@ -29,6 +31,7 @@ dist_bin_SCRIPTS = \
 	gstlal_llcbcsummary \
 	gstlal_ll_inspiral_create_prior_diststats \
 	gstlal_ll_inspiral_daily_page \
+	gstlal_ll_inspiral_daily_page_online \
 	gstlal_ll_inspiral_get_urls \
 	gstlal_ll_inspiral_gracedb_threshold \
 	gstlal_ll_inspiral_pipe \
