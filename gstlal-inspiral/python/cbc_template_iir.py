@@ -373,7 +373,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
 
 
-	#pdb.set_trace()
+	# The following code will plot the original autocorrelation function
 	#ori_amp, ori_phase = calc_amp_phase(hc.data.data, hp.data.data)
 	#ori_wave = ori_amp * numpy.exp(1j * ori_phase)
        	#auto_ori = numpy.zeros(working_length * 1, dtype=numpy.cdouble)
@@ -406,7 +406,9 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 
 		if psd is not None:
        			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
-			# FIXME: which interpolation method should we choose, currently we are using linear interpolation, splrep will generate negative values at the edge of psd. pchip is too slow
+			# FIXME: which interpolation method should we choose,
+			# currently we are using linear interpolation, splrep 
+			# will generate negative values at the edge of psd. pchip is too slow
 			#psd_interp = interpolate.splrep(fsampling, psd.data)
 			#newpsd = interpolate.splev(f, psd_interp)
 			#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
@@ -414,6 +416,8 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 			newpsd = psd_interp(f)
 			amp[0:len(f)] /= newpsd ** 0.5
 
+		# The following code will plot the original (phase,amp) and
+		# whitened (phase,amp)
 		#import matplotlib.pyplot as plt
 		#axis_x = numpy.linspace(0, len(phase), len(phase))
 		#f, axarr = plt.subplots(2, sharex = True)
@@ -448,7 +452,7 @@ class Bank(object):
 		self.flower = None
 		self.epsilon = None
 
-	def build_from_tmpltbank(self, filename, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, all_psd = None, autocorrelation_length = 201, downsample = False, verbose = False, contenthandler = DefaultContentHandler):
+	def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.1, epsilon = 0.02, alpha = .99, beta = 0.25, pnorder = 4, flower = 40, all_psd = None, autocorrelation_length = 201, downsample = False, req_min_match = 0.0, verbose = False, contenthandler = DefaultContentHandler):
 		# Open template bank file
 		self.template_bank_filename = filename
 		tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
@@ -459,9 +463,6 @@ class Bank(object):
 		self.alpha = alpha
 		self.beta = beta
 
-		#FIXME: Sorry for not doing these properly! Pass in as argument
-		req_minimum_match = True
-		minimum_match = 0.99
 		epsilon_increment = 0.001
 
 		if sampleRate is None:
@@ -525,7 +526,8 @@ class Bank(object):
 	        for tmp, row in enumerate(sngl_inspiral_table):
 		    spiir_match = -1
 		    epsilon = original_epsilon
-		    while(spiir_match < minimum_match and epsilon > 0 and req_minimum_match):
+
+		    while(spiir_match < req_min_match and epsilon > 0):
 			m1 = row.mass1
 			m2 = row.mass2
 			
@@ -574,21 +576,19 @@ class Bank(object):
 	                h_pad /= norm_h
 			self.sigmasq.append(1.0 * norm_h / sampleRate)
 
-			#pdb.set_trace()
 
-        	        #FIXME this is actually the cross correlation between the original waveform and this approximation
+        	        # This is actually the cross correlation between the original waveform and this approximation
 			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
-			#self.autocorrelation_bank[tmp,:] = normalized_convolv(h_pad, u_pad, autocorrelation_length)
 
 			
 			# compute the SNR
 			spiir_match = abs(numpy.dot(u_rev_pad, h_pad))
-			if(original_epsilon==epsilon):
+			if(abs(original_epsilon - epsilon) < 1e-5):
 			    original_match = spiir_match
 			    original_filters = len(a1)
 
-			if(spiir_match < 0.99):
-				epsilon = epsilon-epsilon_increment
+			if(spiir_match < req_minimum_match):
+				epsilon -= epsilon_increment
 
 		    self.matches.append(spiir_match)
 		    self.sigmasq.append(1.0 * norm_h / sampleRate)
@@ -602,12 +602,10 @@ class Bank(object):
 		    delaydict = {}
 
 		    if downsample:
-			    #min_M = 2**numpy.ceil(log2(sampleRate/ 2/ flower))
 			    min_M = 1
 			    # iterate over the frequencies and put them in the right downsampled bin
 			    for i, f in enumerate(fs):
-				    M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
-				    M = max(min_M, M)
+				    M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
 				    a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 				    newdelay = numpy.ceil((delay[i]+1)/(float(M)))
 				    b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
@@ -704,7 +702,6 @@ class Bank(object):
 		xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
-#			self.A, self.B, self.D, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq = get_matrices_from_xml(tmpltbank_xmldoc)
 			# FIXME: not Read sngl inspiral table
 
 			# Read root-level scalar parameters
