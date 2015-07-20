@@ -49,8 +49,8 @@ for n, d in enumerate(result_dirs):
 	print >> sys.stderr, "processing directory %d of %d: %s" % (n+1, len(result_dirs), d)
 	# FIXME don't hard code H1L1
 	# FIXME assumes 10 digit GPS
-	noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s00000-100000-ALL_LLOID.sqlite.tmp' % d)
-	injdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s00000-100000-ALL_LLOID_INJ.sqlite.tmp' % d)
+	noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite.tmp' % d)
+	injdb = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID_INJ-%s00000-100000.sqlite.tmp' % d)
 	noninjdbfinal = noninjdb.replace(".tmp","")
 	injdbfinal = injdb.replace(".tmp","")
 
@@ -92,8 +92,8 @@ for n, d in enumerate(result_dirs):
 
 # FIXME only add *new* files
 
-noninjdb = os.path.join(options.directory, 'H1L1-%s00000-%d-ALL_LLOID.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
-injdb = os.path.join(options.directory, 'H1L1-%s00000-%d-ALL_LLOID_INJ.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
 
 progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
 for f in noninj_files_to_merge:
@@ -121,12 +121,11 @@ subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database",
 progressbar.increment()
 
 
+# Make plots and such
+subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+
+
 # copy the working files back
 os.rename(noninjdb, noninjdb.replace(".tmp",""))
 os.rename(injdb, injdb.replace(".tmp",""))
-
-
-# Make plots and such
-subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
-
-subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
