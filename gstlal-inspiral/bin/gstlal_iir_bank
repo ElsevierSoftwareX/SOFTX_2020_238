@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Copyright (C) 2011-2012  Shaun Hooper
+# Copyright (C) 2013-2015  Qi Chu
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -23,14 +24,15 @@
 #
 #	+ `--flow` [Hz] (float): Set the template low-frequency cut-off (default = 40.0).
 #	+ `--sampleRate` [Hz] (float): Set the sample rate of the IIR template bank (optional).
-#	+ `--padding` [pad] (float): Fractional amount to pad time slices (default = 1.1).
+#	+ `--padding` [pad] (float): Fractional amount to pad time slices (default = 1.3).
 #	+ `--epsilon` [pad] (float): Second order correction factor (default = 0.02).
+#	+ `--req-min-match` [pad] (float): Set the SPIIR approximation minimal match (default = 0.0).
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
 #	+ `--instrument` [ifo]: Set the instrument.
 #	+ `--output` [filename]: Set the filename in which to save the template bank (required).
+#	+ `--downsample`: Choose if you want to downsample IIR bank to multirate(recommended).
 #	+ `--verbose`: Be verbose.
-#	+ `--downsample`: Choose if you want to downsample IIR bank (recommended).
 
 
 import sys
@@ -38,10 +40,20 @@ import scipy
 import numpy
 from optparse import OptionParser
 
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+
+from glue.ligolw import utils, lsctables
+from pylal.series import read_psd_xmldoc
+from gstlal.cbc_template_iir import Bank
+
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
-parser.add_option("--sampleRate", metavar = "Hz", type = "float", help = "Set the sample rate of the IIR template bank (optional).")
-parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
+parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
+parser.add_option("--padding", metavar = "pad", type = "float", default = 1.3, help = "Fractional amount to pad time slices.")
 parser.add_option("--autocorrelation-length", metavar = "len", type = "float", default = 201, help = "Autocorrelation length for chisq.")
 parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
 parser.add_option("--req-min-match", metavar = "match", type = "float", default = 0.0, help = "Set the SPIIR approximation minimal match (default = 0.0).")
@@ -62,17 +74,6 @@ missing_options = [option for option in required_options if getattr(options, opt
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
-
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from gstlal.cbc_template_iir import Bank
-from pylal.series import read_psd_xmldoc
-from glue.ligolw import utils, lsctables
-
 # read psd file
 if options.reference_psd:
 	ALLpsd = read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=ligolw.LIGOLWContentHandler))
@@ -80,14 +81,11 @@ else:
 	ALLpsd = None
 
 
-# get the iir coefficients
+# generate the iir coefficients and write to xml
 bank = Bank()
 
-bank.build_from_tmpltbank(options.template_bank, sampleRate = 4096, all_psd = ALLpsd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, epsilon = options.epsilon, autocorrelation_length = options.autocorrelation_length, req_min_match = options.req_min_match)
+bank.build_from_tmpltbank(options.template_bank, sampleRate = options.sampleRate, all_psd = ALLpsd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, epsilon = options.epsilon, autocorrelation_length = options.autocorrelation_length, req_min_match = options.req_min_match)
 
 bank.write_to_xml(options.output)
 
-#import pylab
-#pylab.hist(snrs)
-#pylab.show()
 
