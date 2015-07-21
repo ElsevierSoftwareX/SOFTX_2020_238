@@ -455,6 +455,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
+				if options.record_singles is not None:
+					merge_nodes[-1].set_pre_script("store_raw.sh")
+					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
 			# Merging all the dbs from the same sub bank
 			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
@@ -477,6 +480,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
+				if options.record_singles is not None:
+					merge_nodes[-1].set_pre_script("store_raw.sh")
+					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
 			# Merging all the dbs from the same sub bank and injection run
 			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
@@ -670,6 +676,7 @@ def parse_command_line():
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
+	parser.add_option("--record-singles", default=None, action = "store", metavar="THRESH", help = "Record all (including non-coincident) single detector triggers above the specified SNR threshold. By default, this feature is disabled; only single detector triggers found in coincidence with other single detector triggers are recorded.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	# Override the datasource injection option
@@ -739,6 +746,17 @@ f = open("gzip_test.sh", "w")
 f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
 f.close()
 os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
+
+#
+# A pre script to backup data before feeding to lossy programs
+# (e.g. clustering routines)
+#
+
+f = open("store_raw.sh", "w")
+f.write("""#!/bin/bash
+for f in $@;do mkdir -p $(dirname $f)/raw;cp $f $(dirname $f)/raw/$(basename $f);done""")
+f.close()
+os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
 
 #
 # setup the job classes
