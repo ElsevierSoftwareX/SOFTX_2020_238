@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+
+import subprocess
+import os
+from pylal.datatypes import LIGOTimeGPS
+
+gps = LIGOTimeGPS(1117938773)
+out = "omega"
+
+# run datafind
+frametypes = ["H1_HOFT_C00", "L1_HOFT_C00"]
+
+for frame_type in frametypes:
+	subprocess.check_call(["gw_data_find", "-o", frame_type[:1], "-t", frame_type, "-u", "file", "-W", "-s", str(int(gps - 1000)), "-e", str(int(gps + 1000)), "-O", os.path.join(out, frame_type+".cache")])
+	print ["gw_data_find", "-o", frame_type[:1], "-t", frame_type, "-u", "file", "-W", "-s", str(int(gps - 1000)), "-e", str(int(gps + 1000)), "-O", os.path.join(out, frame_type+".cache")]
+
+
+#/home/omega/opt/omega/bin/wpipeline scan -r -c ${config} -f ${cachefile} -o ${outputdir} ${time} > ${TMPDIR}/STDOUT.$$.txt 2> ${TMPDIR}/STDERR.$$.txt
