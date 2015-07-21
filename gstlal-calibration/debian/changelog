@@ -1,3 +1,9 @@
+gstlal-calibration (0.3.3-1) unstable; urgency=low
+
+  * Another bug fix release for the --wings option (again)
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 20 July 2015 16:03:00 -0500
+
 gstlal-calibration (0.3.2-1) unstable; urgency=low
 
   * Another bug fix release for the --wings option

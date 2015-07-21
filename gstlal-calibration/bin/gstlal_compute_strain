@@ -756,9 +756,9 @@ if options.wings is not None:
 	def clip_wings(pad, obj, (wings, start, end)):
 		if isinstance(obj, gst.Buffer):
 			startts = lal.LIGOTimeGPS(0, obj.timestamp)
-			if startts >= (start + wings) and startts <= (end - wings):
+			if startts >= (start + wings) and startts < (end - wings):
 				return True
-			elif startts < (start + wings) or startts > (end - wings):
+			elif startts < (start + wings) or startts >= (end - wings):
 				return False
 		elif isinstance(obj, gst.Event):
 			return True
