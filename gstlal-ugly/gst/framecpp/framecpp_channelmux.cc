@@ -481,6 +481,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 	GST_LOG_OBJECT(mux, "pushing frame file spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 	result = gst_pad_push(mux->srcpad, outbuf);
+	outbuf = NULL;	/* gst_pad_push() took ownership */
 	if(result != GST_FLOW_OK) {
 		GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_push() failed (%s)", gst_flow_get_name(result)));
 		goto done;
@@ -491,7 +492,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 	 */
 
 done:
-	gst_buffer_unref(outbuf);
+	if(outbuf)
+		gst_buffer_unref(outbuf);
 	return result;
 }
 
