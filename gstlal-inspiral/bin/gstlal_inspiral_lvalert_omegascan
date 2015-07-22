@@ -1,18 +1,119 @@
 #!/usr/bin/env python
+#
+# Copyright (C) 2015 Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to request an omega scan from ligodv web based on gracedb submissions notified by lvalert
 
 import subprocess
 import os
+import re
 from pylal.datatypes import LIGOTimeGPS
+import sys
+import tempfile
+import urllib
+from optparse import OptionParser
+from glue.ligolw import ligolw
+from glue.ligolw import table
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from gstlal import lvalert_helper
+from ligo.gracedb import rest as gracedb
+"""
+Usage: gstlal_inspiral_lvalert_omegascan <albert.einstein> <GPS TIME>
+"""
 
-gps = LIGOTimeGPS(1117938773)
-out = "omega"
-
-# run datafind
-frametypes = ["H1_HOFT_C00", "L1_HOFT_C00"]
-
-for frame_type in frametypes:
-	subprocess.check_call(["gw_data_find", "-o", frame_type[:1], "-t", frame_type, "-u", "file", "-W", "-s", str(int(gps - 1000)), "-e", str(int(gps + 1000)), "-O", os.path.join(out, frame_type+".cache")])
-	print ["gw_data_find", "-o", frame_type[:1], "-t", frame_type, "-u", "file", "-W", "-s", str(int(gps - 1000)), "-e", str(int(gps + 1000)), "-O", os.path.join(out, frame_type+".cache")]
+# define a content handler
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
 
 
-#/home/omega/opt/omega/bin/wpipeline scan -r -c ${config} -f ${cachefile} -o ${outputdir} ${time} > ${TMPDIR}/STDOUT.$$.txt 2> ${TMPDIR}/STDERR.$$.txt
+def now():
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--gracedb-service-url", default = "%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--channel-name", action = "append", default = ["H1:GDS-CALIB_STRAIN", "L1:GDS-CALIB_STRAIN"], help = 'Chanel names, e.g., H1:GDS-CALIB_STRAIN. Can be given more than once. Default to ["H1:GDS-CALIB_STRAIN", "L1:GDS-CALIB_STRAIN"]')
+	parser.add_option("--duration", type = int, default=10, help="Omega scan duration in seconds. Default=10")
+	parser.add_option("--albert-einstein")
+
+	options, gid_list = parser.parse_args()
+	
+	if len(gid_list) > 1:
+		raise ValueError("%d graceids specified, no more than one allowed" % len(gid_list))
+
+	if len(gid_list) == 0:
+		lvalert_data = json.loads(sys.stdin.read())
+		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+		logging.info("lvalert data: %s" % repr(lvalert_data))
+		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+		if filename not in (u"psd.xml.gz",):
+			logging.info("filename is not 'psd.xml.gz'.  skipping")
+			sys.exit()
+		gid = str(lvalert_data["uid"])
+	else:
+		gid = gid_list[0]
+
+	return options, gid
+
+
+options, graceid = parse_command_line()
+
+
+def curl(url, outfile):
+	subprocess.check_call(["curl", "--insecure", "-c", "/tmp/${USER}_cookies", "-b", "/tmp/${USER}_cookies", "--negotiate", "--user", ":", "--location-trusted", "-o", outfile, url])
+
+
+# Connect to gracedb and extract the coinc document
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
+coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+gps = coinc_inspiral.get_end()
+
+
+# Kinit - if a keytab exists use it: User must set the KERBEROS_KEYTAB variable.
+# FIXME is there a standard key tab env. variable?
+if os.environ["KERBEROS_KEYTAB"]:
+	subprocess.check_call(["kinit", "%s@LIGO.ORG" % options.albert_einstein,  "-k", "-t", os.environ["KERBEROS_KEYTAB"]])
+else:
+	subprocess.check_call(["kinit", "%s@LIGO.ORG" % options.albert_einstein])
+
+
+# FIXME don't hard code service URL, expose more of Joe's API?
+url = "https://ldvw.ligo.caltech.edu/ldvw/view?act=doplot&chanName=%s&strtTime=%s&duration=%s&doWplot=1" % ("&chanName=".join(options.channel_name), str(gps), str(options.duration))
+
+
+# Request that figures be made
+outfile = tempfile.NamedTemporaryFile().name
+curl(url, outfile)
+
+
+# grep for the figures and download them too
+patt = re.compile('.*imgId=(?P<id>[0-9]*).*')
+for l in open(outfile):
+	m = patt.match(l)
+	if m:
+		print l
+		imgid = m.group("id")
+		url = "https://ldvw.ligo.caltech.edu/ldvw/view?act=getImg&imgId=%s" % imgid
+		outfile = "ldvw_%s.png" % imgid
+		curl(url, outfile)
+		lvalert_helper.upload_file(gracedb_client, graceid, outfile, log_message = "Omega Scan", tagname = "data_quality")
+		os.remove(outfile)
