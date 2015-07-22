@@ -38,7 +38,7 @@ import logging
 import os.path
 import StringIO
 import time
-
+import io
 
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
@@ -77,5 +77,12 @@ def upload_fig(fig, gracedb_client, graceid, filename = "psd.png", log_message =
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
 	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = plotfile.getvalue(), tagname = tagname)
+	if response.status != httplib.CREATED:
+		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
+
+
+def upload_file(gracedb_client, graceid, filename, log_message = "A file", tagname = None):
+	logging.info("uploading \"%s\" for %s" % (filename, graceid))
+	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = io.FileIO(filename).readall(), tagname = tagname)
 	if response.status != httplib.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
