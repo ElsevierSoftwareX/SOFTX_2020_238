@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-burst],[0.0.3],[gstlal-discuss@ligo.org],[gstlal-burst])
+AC_INIT([gstlal-burst],[0.0.4],[gstlal-discuss@ligo.org],[gstlal-burst])
 AC_COPYRIGHT([Copyright (C) 2011-2014 Chris Pankow])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
