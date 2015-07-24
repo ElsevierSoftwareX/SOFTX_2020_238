@@ -76,12 +76,11 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
 	gboolean success = TRUE;
 
 	if(element->last_segment) {
-		GstSegment *segment;
 
         /* 1.0 code gst_event_copy_segment doesn't exist
+		GstSegment *segment;
 		gst_event_copy_segment(element->last_segment, &segment);
 		*/
-        segment = gst_segment_copy(element->last_segment);
         gboolean update;
         gdouble rate;
         GstFormat format;
@@ -116,8 +115,8 @@ static gboolean do_new_segment(GstAudioRateFaker *element)
         /* 1.0 Code
         * copy_segment requires free_segment
         g_free(segment);
-        */
         gst_segment_free(segment);
+        */
 
 		element->need_new_segment = FALSE;
 	}
