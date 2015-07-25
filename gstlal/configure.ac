@@ -264,7 +264,17 @@ AS_IF([test "x$HAVE_LAL_PTHREAD_LOCK" != "xyes"], [
 	AC_MSG_FAILURE([lal must be built with pthread locking enabled])
 ])
 
-AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+AC_DEFUN([AX_PYTHON_SYMBOL], [
+	AC_MSG_CHECKING([python module: from $1 import $2])
+	AS_IF([$PYTHON -c "from $1 import $2"], [
+		AC_MSG_RESULT(success)
+	], [
+		AC_MSG_ERROR([fail: are swig bindings missing?])
+	])
+])
+
+AX_PYTHON_MODULE([lal], fatal)
+AX_PYTHON_SYMBOL([lal], [LIGOTimeGPS])
 
 
 #
