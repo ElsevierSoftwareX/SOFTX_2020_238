@@ -22,7 +22,7 @@
 """Meta program to generate offline style summary pages from online runs."""
 
 
-import sys, os, subprocess, re, time
+import sys, os, subprocess, re, time, shutil
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
 from pylal.datatypes import LIGOTimeGPS
@@ -97,8 +97,15 @@ for n, d in enumerate(result_dirs):
 
 # FIXME only add *new* files
 
-noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
-injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+#noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+#injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
+noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-0-2000000000.sqlite.tmp')
+injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-0-2000000000.sqlite.tmp')
+
+if os.path.exists(noninjdb):
+	os.remove(noninjdb)
+if os.path.exists(injdb):
+	os.remove(injdb)
 
 progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
 for f in noninj_files_to_merge:
@@ -128,9 +135,9 @@ progressbar.increment()
 
 # Make plots and such
 if os.path.exists(os.path.join(options.directory, "plots")):
-	os.rename(os.path.join(options.directory, "plots"), os.path.join(options.directory, "plots.bk"))
-else:
-	os.mkdir(os.path.join(options.directory, "plots"))
+	shutil.rmtree(os.path.join(options.directory, "plots"))
+os.mkdir(os.path.join(options.directory, "plots"))
+
 pattern = re.compile("(?P<id>[0-9]{4})_prior.xml.gz")
 for d in os.listdir(options.directory):
 	m = pattern.match(d)
@@ -138,7 +145,7 @@ for d in os.listdir(options.directory):
 		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
 subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
-subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--tmp-space /dev/shm", "--veto-segments-name", "vetoes", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "datasegments", injdb])
+subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--tmp-space", "/dev/shm", "--veto-segments-name", "vetoes", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "datasegments", injdb])
 
 subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 
