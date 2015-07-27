@@ -95,7 +95,7 @@ except OSError:
 	pass
 
 gracedb = gracedb.GraceDb(options.gracedb_service_url)
-xmldoc, checksum = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
+xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
