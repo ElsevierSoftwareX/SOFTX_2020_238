@@ -122,6 +122,8 @@ https://wiki.ligo.org/AuthProject/LIGOCARobotCertificate
 - You will need your own lv alert account
   https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lvalert-howto.html
 
+- You will need a kerberos keytab and to point the KERBEROS_KEYTAB environment variable to it: https://wiki.ligo.org/AuthProject/CommandLineLIGOAuth
+
 \section Banks Preparing the template banks
 
 \subsection Instructions
