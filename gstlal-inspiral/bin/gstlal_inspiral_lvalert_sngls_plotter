@@ -22,6 +22,7 @@ import os
 import subprocess
 import re
 import time
+import json
 from optparse import OptionParser
 import numpy
 import matplotlib
@@ -129,10 +130,10 @@ except OSError:
 	print "The directory for this event already exists, continuing anyway."
 
 
-# FIXME hardcodes gps digits
-# FIXME add a check that the gps time isn't near a boundary, we might have to
-# read the gps directory before or after this one
+# FIXME hardcodes gps digits to 5 to match current
 subprocess.call(["ls %s/* | lalapps_path2cache > %s/%s.cache" % (str(gps)[:5], wd, str(gps))], shell=True)
+subprocess.call(["ls %s/* | lalapps_path2cache >> %s/%s.cache" % (str(gps - 100000)[:5], wd, str(gps))], shell=True)
+subprocess.call(["ls %s/* | lalapps_path2cache >> %s/%s.cache" % (str(gps + 100000)[:5], wd, str(gps))], shell=True)
 
 
 # Parse the files in many threads
