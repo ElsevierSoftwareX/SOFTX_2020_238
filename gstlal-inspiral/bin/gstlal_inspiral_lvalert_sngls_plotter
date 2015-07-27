@@ -182,7 +182,7 @@ for n, ifo in enumerate(["H1", "L1"]):
 		pyplot.xlabel("$\mathrm{Time \, since \, %d}$" % int(gps))
 	pyplot.ylabel("$\mathrm{%s} \, \mathcal{M}$ $(M_{\odot})$" % ifo)
 pyplot.minorticks_on()
-lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = "snrheatmap.png", log_message = "SNR heat map", tagname = "background")
+lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = "snrheatmap.png", log_message = "SNR heat map: Computed from single detector triggers plus/minus 600 seconds around the event", tagname = "background")
 
 
 # chisq vs SNR
@@ -197,4 +197,4 @@ for n, ifo in enumerate(["H1", "L1"]):
 	pyplot.ylim(minchisq, maxchisq)
 	pyplot.grid()
 pyplot.minorticks_on()
-lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = "chisqvsSNR.png", log_message = "Chi-squared vs. SNR", tagname = "background")
+lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = "chisqvsSNR.png", log_message = "Chi-squared vs. SNR: Computed from single detector triggers plus/minus 600 seconds around the event", tagname = "background")
