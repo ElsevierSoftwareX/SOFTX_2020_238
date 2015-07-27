@@ -48,6 +48,7 @@
   - \ref gstlal_play
 
 ### References
+- <a href=@gstlalinspiraldoc> gstlal_inspiral documentation</a>
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
 - \ref gstlal_review_main_page
 - \ref gstlalteleconspage

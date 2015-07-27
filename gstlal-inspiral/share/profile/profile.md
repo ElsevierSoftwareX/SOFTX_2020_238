@@ -26,6 +26,7 @@ Where \f$ N_t = \f$ the number of parallel templates (800 times the number of pa
 
 -# \ref gstlalinspiralprofileXeon_E5-1660v3_SL7_icc_page
 -# \ref gstlalinspiralprofileXeon_E3-1241_SL7_icc_profile_page
+-# \ref gstlalinspiralprofileXeon_E3-1241_SL6_icc_profile_page
 -# \ref gstlalinspiralprofileXeon_E3-1270_SL6_icc_page
 -# \ref gstlalinspiralprofileXeon_E3-1231_Deb_7_8_profile_page
 -# \ref gstlalinspiralprofileXeon_E3-1271_Ubuntu-14_04_page

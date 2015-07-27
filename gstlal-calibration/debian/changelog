@@ -1,3 +1,21 @@
+gstlal-calibration (0.3.3-1) unstable; urgency=low
+
+  * Another bug fix release for the --wings option (again)
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 20 July 2015 16:03:00 -0500
+
+gstlal-calibration (0.3.2-1) unstable; urgency=low
+
+  * Another bug fix release for the --wings option
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Sat, 14 July 2015 10:54:00 -0500
+
+gstlal-calibration (0.3.1-1) unstable; urgency=low
+
+  * ER7 bug fix release for proper clipping with wings option
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Sat, 8 July 2015 11:14:240 -0500
+
 gstlal-calibration (0.3.0-1) unstable; urgency=low
 
   * ER7 release including updates to GDS-CALIB_STATE_VECTOR and \gamma

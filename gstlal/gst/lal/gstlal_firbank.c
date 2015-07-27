@@ -82,6 +82,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/controller/gstcontroller.h>
 
 
 /*
@@ -1491,6 +1492,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 
+	gst_object_sync_values(G_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+
 	/*
 	 * wait for FIR matrix
 	 */
@@ -1958,7 +1961,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
 	g_object_class_install_property(
@@ -1969,7 +1972,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			"Latency",
 			"Filter latency in samples.",
 			G_MININT64, G_MAXINT64, DEFAULT_LATENCY,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
 		)
 	);
 

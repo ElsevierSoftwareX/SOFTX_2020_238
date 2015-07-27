@@ -29,6 +29,7 @@ import numpy
 import copy
 from gstlal import far
 from gstlal import plotfar
+from gstlal import lvalert_helper
 import time
 from glue.ligolw import ligolw, lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -70,19 +71,6 @@ def parse_command_line():
 	return options, gid
 	
 
-def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 10.0, ignore_404 = False):
-	for i in range(retries):
-		logging.info("retrieving \"%s\" for %s" % (filename, graceid))
-		response = gracedb_client.files(graceid, filename)
-		if response.status == httplib.OK:
-			return response
-		if response.status == httplib.NOT_FOUND and ignore_404:
-			logging.warning("retrieving \"%s\" for %s: (%d) %s.  skipping ..." % (filename, graceid, response.status, response.reason))
-			return None
-		logging.warning("retrieving \"%s\" for %s: (%d) %s.  pausing ..." % (filename, graceid, response.status, response.reason))
-		time.sleep(retry_delay)
-	raise Exception("retrieving \"%s\" for %s: (%d) %s" % (filename, graceid, response.status, response.reason))
-
 def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
 	for i, ifo in enumerate(['H1', 'L1', 'V1']):
 		snrm, chisqm = snr_chisq_dict[ifo]
@@ -107,8 +95,7 @@ except OSError:
 	pass
 
 gracedb = gracedb.GraceDb(options.gracedb_service_url)
-filename = get_filename(gracedb, gid, "coinc.xml", retries = 3, retry_delay = 10.0, ignore_404 = False)
-xmldoc, checksum = ligolw_utils.load_fileobj(filename, contenthandler = LIGOLWContentHandler)
+xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
@@ -125,26 +112,9 @@ node, = [r.node for r in lsctables.ProcessTable.get_table(xmldoc) if r.program =
 
 url = open("%s_registry.txt" % tag).readline().strip()
 
-#
-# SNR / Time plot
-#
-
-#FIXME don't hardcode port number
-t,snr = numpy.loadtxt(urllib.urlopen("%ssnr_history.txt" % url), unpack = True)
-t -= coinc_inspiral_row.get_end()
-pylab.figure()
-pylab.semilogy(t, snr)
-pylab.ylabel('SNR')
-pylab.xlabel('Time from event (s)')
-fname = 'gracedb/%s/%s_snrtime.png' % (gid, gid)
-pylab.ylim([min(snr), max(snr)])
-pylab.xlim([min(t), max(t)])
-pylab.grid()
-pylab.savefig(fname)
-gracedb.writeLog(gid, "SNR vs time", filename = fname, filecontents = open(fname).read(), tagname = "background")
 
 #
-# SNR / Chisq plots
+# Background plots
 #
 
 coinc_param_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
@@ -176,47 +146,3 @@ fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_in
 fname = 'gracedb/%s/%s_horizon_distances.png' % (gid, gid)
 fig.savefig(fname)
 gracedb.writeLog(gid, "Horizon Distances", filename = fname, filecontents = open(fname).read(), tagname = "psd")
-
-sys.exit()
-
-#
-# QScans
-# FIXME currently broken
-#
-
-for r in sngl_inspiral_table:
-	cachefile = "%s/%sframes.cache" % (gid, r.ifo)
-	subprocess.call(["createframecache.pl", cachefile, "/scratch/llcache/llhoft/%s" % r.ifo])
-	conffile = "%s/%sconfig.txt" % (gid, r.ifo)
-	f = open(conffile , "w")
-	channel = "%s:%s" % (r.ifo, r.channel)
-	f.write("""[%s,%s]
-
-{
-   channelName:                 '%s'
-   frameType:                   '%s_llhoft'
-   sampleFrequency:             16384
-   searchFrequencyRange:        [10 2048]
-   #searchChirpRange:            [+0 +0]
-   searchTimeRange:              64
-   searchQRange:                [4 64]
-   searchMaximumEnergyLoss:     0.2
-   searchWindowDuration:        0.25
-   whiteNoiseFalseRate:         1e-3
-   plotTimeRanges:              10
-   plotFrequencyRange:          []
-   plotNormalizedEnergyRange:   [0 25.5]
-   alwaysPlotFlag:               1
-} """ % (channel, channel, channel, r.ifo))
-	f.close()
-
-	tstr = str(r.get_end())
-
-	# actually run the scan
-	subprocess.call(["dmt_wscan", str(r.get_end()), conffile, cachefile, gid, "1", "1"])
-
-# upload some plots to gracedb
-for f in glob.glob("%s/*_spectrogram_autoscaled.png" % gid):
-	gracedb.writeLog(gid, "DMT omega scan", filename = f, filecontents = open(f).read(), tagname = "background")
-	
-sys.exit()

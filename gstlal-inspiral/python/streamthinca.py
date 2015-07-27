@@ -87,19 +87,7 @@ def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, d
 	# match, but the InspiralEventList class ensures that all event
 	# pairs that make it this far are from the same template so we
 	# don't need to explicitly test for that here.
-	return float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t
-
-
-#
-# gstlal_inspiral's triggers cause a divide-by-zero error in the effective
-# SNR method attached to the triggers, so we replace it with one that works
-# for the duration of the ligolw_thinca() call.  this is the function with
-# which we replace it
-#
-
-
-def get_effective_snr(self, fac):
-	return self.snr
+	return float(abs(event_a.end + offset_a - event_b.end - offset_b)) > light_travel_time + delta_t
 
 
 #
@@ -126,14 +114,14 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		for event in self:
 			self.index.setdefault(self.template(event), []).append(event)
 		for events in self.index.values():
-			events.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns))
+			events.sort(key = lambda event: event.end)
 
-	def get_coincs(self, event_a, offset_a, light_travel_time, e_thinca_parameter, comparefunc):
+	def get_coincs(self, event_a, offset_a, light_travel_time, delta_t, comparefunc):
 		#
 		# event_a's end time, with the time shift applied
 		#
 
-		end = event_a.get_end() + offset_a - self.offset
+		end = event_a.end + offset_a - self.offset
 
 		#
 		# all events sharing event_a's template
@@ -153,7 +141,7 @@ class InspiralEventList(ligolw_thinca.InspiralEventList):
 		# a subset of the full list)
 		#
 
-		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, e_thinca_parameter)]
+		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, delta_t)]
 
 
 #
@@ -225,13 +213,8 @@ class StreamThinca(object):
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
 
-		# convert the new row objects to the type required by
-		# ligolw_thinca(), and append to our sngl_inspiral table
-		for old_event in events:
-			new_event = ligolw_thinca.SnglInspiral()
-			for col in self.sngl_inspiral_table.columnnames:
-				setattr(new_event, col, getattr(old_event, col))
-			self.sngl_inspiral_table.append(new_event)
+		# append the new row objects to our sngl_inspiral table
+		self.sngl_inspiral_table.extend(events)
 
 		# run coincidence, return non-coincident sngls.  no-op if
 		# no new events
@@ -258,8 +241,8 @@ class StreamThinca(object):
 		# internal sngl_inspiral table.  save any that were never
 		# used in coincidences
 		discard_boundary = self.last_boundary - coincidence_back_off
-		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.get_end() < discard_boundary and row.event_id not in self.ids]
-		iterutils.inplace_filter(lambda row: row.get_end() >= discard_boundary, self.sngl_inspiral_table)
+		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.ids]
+		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
 		# we need our own copies of these other tables because
 		# sometimes ligolw_thinca wants to modify the attributes of
@@ -290,9 +273,6 @@ class StreamThinca(object):
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 
-		# swap .get_effective_snr() method on trigger class
-		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
-
 		# find coincs
 		ligolw_thinca.ligolw_thinca(
 			xmldoc,
@@ -308,9 +288,6 @@ class StreamThinca(object):
 			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
 		)
 
-		# restore .get_effective_snr() method on trigger class
-		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
-
 		# assign the FAP and FAR if provided with the data to do so
 		if fapfar is not None:
 			coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
@@ -324,7 +301,7 @@ class StreamThinca(object):
 				# abuse minimum_duration column to store
 				# the latency.  NOTE:  this is nonsensical
 				# unless running live.
-				coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.get_end())
+				coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.end)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects

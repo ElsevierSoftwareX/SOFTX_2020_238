@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.8.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
-AC_COPYRIGHT([Copyright (C) 2008--2014 Kipp Cannon])
+AC_INIT([gstlal-ugly],[0.9.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -387,8 +387,8 @@ AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.48])
-AC_SUBST([MIN_PYLAL_VERSION], [0.7.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.49])
+AC_SUBST([MIN_PYLAL_VERSION], [0.8.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
@@ -398,7 +398,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.9.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.10.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

@@ -66,8 +66,39 @@ Some quick facts:
  - /home/gstlalcbc/review/s6replay/offline
  - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay>Makefile which contains rules for every offline analysis</a>
 
+\section status status as of Jul 1
+
+		1573929.0   gstlalcbc       6/23 17:45   7+15:39:10 R  0   0.0  gstlal_inspiral_ma
+		1573930.0   gstlalcbc       6/23 17:45   7+15:39:05 R  0   0.0  gstlal_ll_inspiral
+		1573931.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573932.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573933.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
+		1573934.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573935.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
+		1573936.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573937.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
+		1573938.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573939.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
+		1573940.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573941.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
+		1573942.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
+		1573943.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
+		1573944.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573945.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
+		1573946.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573947.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
+		1573948.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573949.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   9765.6 gstlal_inspiral --
+		1573950.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573951.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573952.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
+		1573953.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   9765.6 gstlal_inspiral --
+		1573954.0   gstlalcbc       6/23 17:46   7+15:38:14 R  0   9765.6 gstlal_inspiral --
+		1573955.0   gstlalcbc       6/23 17:46   7+15:38:38 R  0   0.0  lvalert_listen --u
+
 
 \section Results Results
+ - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary?id=0000,0011&dir=/home/gstlalcbc/review/s6replay/online/trigs&ifos=H1,L1> online summary page </a>
  - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201119131821..1120341421">GraceDb query</a>
  - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201119131821..1120341421">SimDb query</a>
  - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/range.png">Low latency sensitivity plots</a>

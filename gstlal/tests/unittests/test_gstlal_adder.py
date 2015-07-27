@@ -42,8 +42,6 @@ import gst
 from gstlal import simplehandler
 from gstlal import pipeparts
 
-#from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
-
 import unittest
 import random
 

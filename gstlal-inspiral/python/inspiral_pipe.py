@@ -103,6 +103,20 @@ def log_path():
 		raise KeyError("$TMPDIR is not set and I don't recognize this environment")
 
 
+def webserver_url():
+	"""!
+	The stupid pet tricks to find webserver on the LDG.
+	"""
+	host = socket.getfqdn()
+	#FIXME add more hosts as you need them
+	if "cit" in host or "ligo.caltech.edu" in host:
+		return "https://ldas-jobs.ligo.caltech.edu"
+	if "phys.uwm.edu" in host or "cgca.uwm.edu" in host:
+		return "https://ldas-jobs.cgca.uwm.edu"
+
+	raise NotImplementedError("I don't know where the webserver is for this environment")
+
+
 #
 # DAG class
 #

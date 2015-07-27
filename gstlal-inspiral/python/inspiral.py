@@ -104,7 +104,6 @@ from pylal import rate
 from pylal.datatypes import LALUnit
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 from gstlal import bottle
 from gstlal import reference_psd
@@ -597,7 +596,7 @@ class Data(object):
 		with self.lock:
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-buffer")
-			events = sngl_inspirals_from_buffer(buf)
+			events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(buf)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_")[0]
 
@@ -798,9 +797,9 @@ class Data(object):
 
 	def __do_gracedb_alerts(self):
 		if self.stream_thinca.last_coincs:
-			gracedb_client = gracedb.Client(url=self.gracedb_service_url)
+			gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 			gracedb_ids = []
-			psdmessage = None
+			common_messages = []
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 
 			# This appears to be a silly for loop since
@@ -817,10 +816,10 @@ class Data(object):
 					continue
 
 				#
-				# retrieve PSDs
+				# retrieve PSDs and ranking data
 				#
 
-				if psdmessage is None:
+				if not common_messages:
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
@@ -839,8 +838,16 @@ class Data(object):
 							sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
 							data = numpy.array(elem.get_property("mean-psd"))
 						)
-					psdmessage = StringIO.StringIO()
-					reference_psd.write_psd_fileobj(psdmessage, psddict, gz = True, trap_signals = None)
+					fobj = StringIO.StringIO()
+					reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+					common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
+
+					if self.verbose:
+						print >>sys.stderr, "generating ranking_data.xml.gz ..."
+					fobj = StringIO.StringIO()
+					ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
+					common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
+					del fobj
 
 				#
 				# fake a filename for end-user convenience
@@ -849,7 +856,7 @@ class Data(object):
 				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
 				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
-				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].get_end())
+				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
 				#
@@ -897,13 +904,13 @@ class Data(object):
 				message.close()
 
 			#
-			# do PSD file uploads
+			# do PSD and ranking data file uploads
 			#
 
-			if psdmessage is not None:
-				filename = "psd.xml.gz"
+			while common_messages:
+				message, filename, tag, contents = common_messages.pop()
 				for gracedb_id in gracedb_ids:
-					resp = gracedb_client.writeLog(gracedb_id, "strain spectral densities", filename = filename, filecontents = psdmessage.getvalue(), tagname = "psd")
+					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
@@ -923,11 +930,11 @@ class Data(object):
 				latency = coinc_inspiral.minimum_duration
 				self.latency_histogram[latency,] += 1
 				if latency_val is None:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					t = float(coinc_inspiral_index[coinc_event_id].end)
 					latency_val = (t, latency)
 				snr = coinc_inspiral_index[coinc_event_id].snr
 				if snr >= snr_val[1]:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					t = float(coinc_inspiral_index[coinc_event_id].end)
 					snr_val = (t, snr)
 			if latency_val is not None:
 				self.latency_history.append(latency_val)

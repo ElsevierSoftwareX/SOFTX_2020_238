@@ -29,7 +29,6 @@
 # #### Action items
 #
 # - Consider changing the order of interpolation and smoothing the PSD
-# - Remove Jolien's function and get the new flow from lalsimulation to use XLALSimInspiralChirpStartFrequencyBound() and friends
 # - move sigma squared calculation somewhere and get them updated dynamically
 # - possibly use ROM stuff, possibly use low-order polynomial approx computed on the fly from the template as it's generated
 # - remove lefttukeywindow()
@@ -252,61 +251,6 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	return psd
 
 
-def joliens_function(f, template_table):
-	"""
-	A function to compute the padding needed to gaurantee well behaved waveforms
-
-	@param f The target low frequency starting point
-	@param template_table The sngl_inspiral table containing all the template parameters for this bank
-
-	Returns the extra padding in time (tx) and the new low frequency cut
-	off that should be used (f_new) as a tuple: (tx, f_new)
-	"""
-	def _chirp_duration(f, m1, m2):
-		"""
-		@returns the Newtonian chirp duration in seconds
-		@param f the starting frequency in Hertz
-		@param m1 mass of one component in solar masses
-		@param m2 mass of the other component in solar masses
-		"""
-		G = 6.67e-11
-		c = 3e8
-		m1 *= 2e30 # convert to kg
-		m2 *= 2e30 # convert to kg
-		m1 *= G / c**3 # convert to s
-		m2 *= G / c**3 # convert to s
-		M = m1 + m2
-		nu = m1 * m2 / M**2
-		v = (numpy.pi * M * f)**(1.0/3.0)
-		return 5.0 * M / (256.0 * nu * v**8)
-
-	def _chirp_start_frequency(t, m1, m2):
-		"""
-		@returns the Newtonian chirp start frequency in Hertz
-		@param t the time before coalescence in seconds
-		@param m1 mass of one component in solar masses
-		@param m2 mass of the other component in solar masses
-		"""
-		G = 6.67e-11
-		c = 3e8
-		m1 *= 2e30 # convert to kg
-		m2 *= 2e30 # convert to kg
-		m1 *= G / c**3 # convert to s
-		m2 *= G / c**3 # convert to s
-		M = m1 + m2
-		nu = m1 * m2 / M**2
-		theta = (nu * t / (5.0 * M))**(-1.0/8.0)
-		return theta**3 / (8.0 * numpy.pi * M)
-
-	minmc = min(template_table.getColumnByName('mchirp'))
-	row = [t for t in template_table if t.mchirp == minmc][0]
-	m1, m2 = row.mass1, row.mass2
-	tc = _chirp_duration(f, m1, m2)
-	tx = .1 * tc + 1.0
-	f_new = _chirp_start_frequency(tx + tc, m1, m2)
-	return tx, f_new
-	
-
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
 	"""!
 	Generate a bank of templates, which are
@@ -318,8 +262,22 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
 
-	# working f_low to actually use for generating the waveform
-	working_f_low_extra_time, working_f_low = joliens_function(f_low, template_table)
+	# Some input checking to avoid incomprehensible error messages
+	if not template_table:
+		raise ValueError("template list is empty")
+	if f_low < 0.:
+		raise ValueError("f_low must be >= 0.: %s" % repr(f_low))
+
+	# working f_low to actually use for generating the waveform.  pick
+	# template with lowest chirp mass, compute its duration starting
+	# from f_low;  the extra time is 10% of this plus 3 cycles (3 /
+	# f_low);  invert to obtain f_low corresponding to desired padding.
+	# NOTE:  because SimInspiralChirpStartFrequencyBound() does not
+	# account for spin, we set the spins to 0 in the call to
+	# SimInspiralChirpTimeBound() regardless of the component's spins.
+	template = min(template_table, key = lambda row: row.mchirp)
+	tchirp = lalsim.SimInspiralChirpTimeBound(f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
+	working_f_low = lalsim.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
 	# Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
 	working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
@@ -410,7 +368,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if approximant in templates.gstlal_IMR_approximants:
 			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
 			# record the new end times for the waveforms (since we performed the shifts)
-			row.set_end(laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max))
+			row.end = laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
 		else:
 			data *= tukeywindow(data, samps = 32)
 

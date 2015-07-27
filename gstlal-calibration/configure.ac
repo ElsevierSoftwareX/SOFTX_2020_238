@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-calibration],[0.3.0],[gstlal-discuss@ligo.org],[gstlal-calibration])
-AC_COPYRIGHT([Copyright (C) 2008--2014 Madeline Wade])
+AC_INIT([gstlal-calibration],[0.3.3],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_COPYRIGHT([Copyright (C) 2008--2015 Madeline Wade])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
