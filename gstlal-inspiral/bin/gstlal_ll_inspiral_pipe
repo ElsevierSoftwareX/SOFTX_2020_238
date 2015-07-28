@@ -401,6 +401,11 @@ dag.write_cache()
 
 shutil.copy2(dagparts.which('gstlalcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
 shutil.copy2(dagparts.which('gstlalcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
-print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+query = "id=%s,%s&dir=%s&ifos=%s" % (jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+# Write the analysis to a special file that the summary page can find by default
+webfile = open(os.path.join(os.path.expanduser("~/public_html/cgi-bin"), "gstlalcbc_analysis.txt"), "w")
+webfile.write(query)
+webfile.close()
+print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], query)
 if inj_jobTags:
 	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
