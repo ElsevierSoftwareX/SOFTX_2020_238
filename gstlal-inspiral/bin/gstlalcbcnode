@@ -63,7 +63,7 @@ print """
 <hr>
 </div>
 <div class="tabs">
-""" % (",".join(web.registry.keys()), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status())
+""" % (",".join(web.registry.keys()), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status()[1])
 
 cnt = 0
 for (label, plot) in(
