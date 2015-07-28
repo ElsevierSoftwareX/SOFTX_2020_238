@@ -20,7 +20,6 @@
 // In Array Node, No Dim sub node should appear after Stream sub node
 void readArray(xmlTextReaderPtr reader, void *data)
 {
-    printf("I'm Array\n");
     int i, rows, ntoken, ret, nodeType;
     size_t bytes;
     xmlChar *delimiter, *type;
@@ -147,8 +146,6 @@ void freeArraydata(XmlArray *array)
 
 void readParam(xmlTextReaderPtr reader, void *data)
 {
-    printf("I'm Param\n");
-
     xmlChar *type;
     const xmlChar *name, *content; 
     int nodeType;
@@ -211,8 +208,6 @@ void freeParam(XmlParam *param)
 
 void readTable(xmlTextReaderPtr reader, void *data)
 {
-    printf("I'm Table\n");
-
     XmlTable *xmlTable = (XmlTable*)data;
 
     // init the table structure
@@ -412,7 +407,7 @@ parseFile(const char *filename, XmlNodeStruct *xns, int len) {
     xmlTextReaderPtr reader;
     int ret;
 
-    reader = xmlReaderForFile(filename, NULL, 0);
+    reader = xmlReaderForFile(filename, NULL, XML_PARSE_HUGE);
     if (reader != NULL) {
         ret = xmlTextReaderRead(reader);
         while (ret == 1) {
