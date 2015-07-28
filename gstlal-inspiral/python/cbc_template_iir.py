@@ -495,10 +495,21 @@ class Bank(object):
 
 
 		# working f_low to actually use for generating the waveform
-		working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(flower, sngl_inspiral_table)
+		# joliens_function is now replaced by lalsimulation calls
+		# working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(flower, sngl_inspiral_table)
+		if not sngl_inspiral_table:
+		  raise ValueError("template list is empty")
+
+		if flower < 0:
+		  raise ValueError("flow must be >= 0.: %s" % repr(flower))
+
+		template = min(sngl_inspiral_table, key = lambda row: row.mchirp)
+		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
+		working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
 		# FIXME: This is a hack to calculate the maximum length of given table, we 
 		# know that working_f_low_extra_time is about 1/10 of the maximum duration
+		working_f_low_extra_time = .1 * tchirp + 1.0
 		length_max = working_f_low_extra_time * 10 * sampleRate
 
 		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
@@ -587,7 +598,7 @@ class Bank(object):
 			    original_match = spiir_match
 			    original_filters = len(a1)
 
-			if(spiir_match < req_minimum_match):
+			if(spiir_match < req_min_match):
 				epsilon -= epsilon_increment
 
 		    self.matches.append(spiir_match)
