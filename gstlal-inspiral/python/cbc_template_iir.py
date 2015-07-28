@@ -736,7 +736,7 @@ class Bank(object):
 			self.sigmasq = array.get_array(root, 'sigmasq').array
 
 			# Read the SPIIR coeffs
-			self.sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
+			self.sample_rates = [int(float(r)) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
 			for sr in self.sample_rates:
 				self.A[sr] = repack_real_array_to_complex(array.get_array(root, 'a_%d' % (sr,)).array)
 				self.B[sr] = repack_real_array_to_complex(array.get_array(root, 'b_%d' % (sr,)).array)
@@ -746,7 +746,7 @@ class Bank(object):
 
 	def get_rates(self, contenthandler = DefaultContentHandler, verbose = False):
 		bank_xmldoc = utils.load_filename(self.bank_filename, contenthandler = contenthandler, verbose = verbose)
-		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
+		return [int(float(r)) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
 
 	# FIXME: remove set_bank_filename when no longer needed
 	# by trigger generator element
@@ -772,7 +772,7 @@ def get_maxrate_from_xml(filename, contenthandler = DefaultContentHandler, verbo
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
 
-		sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
+		sample_rates = [int(float(r)) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
 	
 	return max(sample_rates)
 
