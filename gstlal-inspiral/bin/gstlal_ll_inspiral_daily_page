@@ -115,7 +115,7 @@ for f in noninj_files_to_merge:
 del progressbar
 
 progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge))
-for f in noninj_files_to_merge:
+for f in inj_files_to_merge:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
 	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
 	progressbar.increment()
