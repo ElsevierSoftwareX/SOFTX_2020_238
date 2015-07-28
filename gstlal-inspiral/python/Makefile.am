@@ -24,7 +24,6 @@ pkgpython_PYTHON = \
 	plotfar.py \
 	plotsegments.py \
 	rate_estimation.py \
-	spiirparts.py \
 	streamthinca.py \
 	svd_bank.py \
 	templates.py
