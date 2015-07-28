@@ -287,7 +287,7 @@ def iir_inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_node
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 		
 		# FIXME choose better splitting?
-		numchunks = 10
+		numchunks = 4
 
 		for seg in segsdict[ifos]:
 			
@@ -318,7 +318,7 @@ def iir_inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_node
 							"coincidence-threshold":options.coincidence_threshold,
 							"fir-stride":options.fir_stride,
 							"data-source":"frames",
-							"local-frame-caching":""
+							"gpu-acc":options.gpu_acc
 							},
 						input_files = {	"time-slide-file":options.time_slide_file,
 								"frame-cache":options.frame_cache,
@@ -364,7 +364,7 @@ def iir_inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, iir_node
 								"coincidence-threshold":options.coincidence_threshold,
 								"fir-stride":options.fir_stride,
 								"data-source":"frames",
-								"local-frame-caching":""
+								"gpu-acc":options.gpu_acc
 								},
 							input_files = {	"frame-cache":options.frame_cache,
 									"frame-segments-file":options.frame_segments_file,
@@ -819,6 +819,7 @@ def parse_command_line():
 	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
 	parser.add_option("--epsilon", metavar = "float", type = "float", default = 0.02, help = "set the epsilon for IIR filter generation.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+	parser.add_option("--gpu-acc", metavar = "on|off", default = "off", help = "Turn on gpu acceleration code or not")
 
 	# Override the datasource injection option
 	parser.remove_option("--injections")
