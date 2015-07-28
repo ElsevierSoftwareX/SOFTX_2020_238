@@ -614,9 +614,15 @@ class Bank(object):
 
 		    if downsample:
 			    min_M = 1
+			    max_M = int( 2**numpy.floor(numpy.log2(sampleRate/flower)))
 			    # iterate over the frequencies and put them in the right downsampled bin
 			    for i, f in enumerate(fs):
 				    M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
+				    M = max(min_M, M)
+
+				    if M > max_M:
+				      continue
+
 				    a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 				    newdelay = numpy.ceil((delay[i]+1)/(float(M)))
 				    b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
