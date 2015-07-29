@@ -36,10 +36,6 @@ Some quick facts:
  - Online: 96 HT cores (48 physical cores) on three nodes: execute1000, execute1001, execute1002
  - Offline: CIT Cluster (does not need to be as specific as online)
 
-\subsection Analysis Analysis
-
- - online UWM: /home/gstlalcbc/review/s6replay/online/trigs
- - offline UWM: /home/gstlalcbc/review/s6replay/offline/
 
 \subsection AnalysisCodes Analysis codes
 
@@ -68,13 +64,13 @@ Some quick facts:
 
  - At CIT
  - /home/gstlalcbc/s6replay_bigdog/offline_one_month_no_stochastic_injections
- - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay>Makefile/a>
+ - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay> Makefile </a>
 
 \subsection Results Results
 
  - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary> online status page </a>
  - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201122174187..1124174187">GraceDb query</a>
- - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201122174187..1124174187">SimDb query</a>
+ - <a href="https://simdb.cgca.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201122174187..1124174187">SimDb query</a>
  - <a href="https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/offline_s6_replay_1monrun/">Offline analysis results</a>
 
 
