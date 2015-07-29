@@ -14,34 +14,37 @@ simulation run.
  - Establish the accuracy of False Alarm Rate/False Alarm Probability (FAR/FAP) calculations in online analysis for low mass systems
  - Establish the online analysis has the appropriate sensitivity
 
-\section Proposal Proposed Approach
+\subsection Proposal Proposed Approach
 
 The gstlal analysis team proposes to use two weeks of S6 data replayed in an
 online environment.  Details can be found
 <a href="https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/140812103550GeneralData%20broadcasting">here</a>
 
-\subsection Data Data
+\section Data 1 Month Data
 
 Some quick facts:
 
- - GPS Start: 967161687 -> 1119131821
- - GPS End:   968371287 -> 1120341421
+ - Data GPS Start: 968543943 -> 1120766224
+ - Data GPS End:   971622087 -> 1125226624
  - IFOs: H1, L1
+ - Analysis GPS Start: ~1122174187
+ - Broadcast status: http://soapbox.cgca.uwm.edu:33655/index_auto_reload.html
+
 
 \subsection Resources Resources
 
  - Online: 96 HT cores (48 physical cores) on three nodes: execute1000, execute1001, execute1002
- - Offline: NEMO Cluster (does not need to be as specific as online)
+ - Offline: CIT Cluster (does not need to be as specific as online)
 
-\section Analysis Analysis
+\subsection Analysis Analysis
 
  - online UWM: /home/gstlalcbc/review/s6replay/online/trigs
  - offline UWM: /home/gstlalcbc/review/s6replay/offline/
 
 \subsection AnalysisCodes Analysis codes
 
- - gstlal 1a44f7af0cf69293f4b0883e4e4142ce263e86f4
- - all other dependencies from ER7 releases
+ - gstlal: 7466e2bfe87adef273574e9068eced0be683dc9a
+ - lalsuite: 3dc971a085afdbf06b44fb463ed08036270bf377
 
 \subsection Injections Injection Parameters
 
@@ -63,10 +66,66 @@ Some quick facts:
 
 \subsection Offline Offline Analysis
 
- - /home/gstlalcbc/review/s6replay/offline
- - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay>Makefile which contains rules for every offline analysis</a>
+ - At CIT
+ - /home/gstlalcbc/s6replay_bigdog/offline_one_month_no_stochastic_injections
+ - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay>Makefile/a>
 
-\section status status as of Jul 1
+\subsection Results Results
+
+ - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary> online status page </a>
+ - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201122174187..1124174187">GraceDb query</a>
+ - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201122174187..1124174187">SimDb query</a>
+ - <a href="https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/offline_s6_replay_1monrun/">Offline analysis results</a>
+
+
+\subsection status status as of 1122210960 
+
+	-- Submitter: pcdev3.nemo.phys.uwm.edu : <192.168.5.3:41523> : pcdev3.nemo.phys.uwm.edu
+	 ID      OWNER            SUBMITTED     RUN_TIME ST PRI SIZE CMD               
+	1708701.0   gstlalcbc       7/28 22:02   0+10:13:07 R  0   0.3  condor_dagman -f -
+	1708707.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_ll_inspiral
+	1708708.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_inspiral_ma
+	1708709.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_ll_inspiral
+	1708710.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4882.8 gstlal_inspiral --
+	1708711.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4150.4 gstlal_inspiral --
+	1708712.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
+	1708713.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4638.7 gstlal_inspiral --
+	1708714.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
+	1708715.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4394.5 gstlal_inspiral --
+	1708716.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
+	1708717.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4394.5 gstlal_inspiral --
+	1708718.0   gstlalcbc       7/28 22:03   0+10:12:34 R  0   4638.7 gstlal_inspiral --
+	1708719.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   3906.2 gstlal_inspiral --
+	1708720.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4882.8 gstlal_inspiral --
+	1708721.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4638.7 gstlal_inspiral --
+	1708722.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
+	1708723.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4882.8 gstlal_inspiral --
+	1708724.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
+	1708725.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
+	1708726.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
+	1708727.0   gstlalcbc       7/28 22:03   0+10:12:08 R  0   4882.8 gstlal_inspiral --
+	1708728.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
+	1708729.0   gstlalcbc       7/28 22:03   0+10:12:08 R  0   7324.2 gstlal_inspiral --
+	1708730.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
+	1708731.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
+	1708732.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
+	1708733.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
+	1708735.0   gstlalcbc       7/28 22:03   0+10:12:18 R  0   0.0  lvalert_listen --u
+
+
+\section TwoWeeks Two Week testing run
+
+
+\subsection TwoWeekData Two Week Data
+
+Some quick facts:
+
+ - GPS Start: 967161687 -> 1119131821
+ - GPS End:   968371287 -> 1120341421
+ - IFOs: H1, L1
+
+
+\subsection twoweekstatus status as of Jul 1
 
 		1573929.0   gstlalcbc       6/23 17:45   7+15:39:10 R  0   0.0  gstlal_inspiral_ma
 		1573930.0   gstlalcbc       6/23 17:45   7+15:39:05 R  0   0.0  gstlal_ll_inspiral
@@ -98,10 +157,6 @@ Some quick facts:
 
 
 \section Results Results
- - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary?id=0000,0011&dir=/home/gstlalcbc/review/s6replay/online/trigs&ifos=H1,L1> online summary page </a>
+
  - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201119131821..1120341421">GraceDb query</a>
  - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201119131821..1120341421">SimDb query</a>
- - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/range.png">Low latency sensitivity plots</a>
-   - Covers the last 48 hours
-   - Updated every 5-10 minutes
- - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/offline_s6_replay/">Offline analysis results</a>
