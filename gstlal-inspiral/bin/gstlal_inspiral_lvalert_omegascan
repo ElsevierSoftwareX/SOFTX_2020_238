@@ -22,6 +22,7 @@
 import subprocess
 import os
 import re
+import json
 from pylal.datatypes import LIGOTimeGPS
 import sys
 import tempfile
@@ -87,6 +88,8 @@ coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
 coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
 gps = coinc_inspiral.get_end()
 
+if not options.albert_einstein:
+	options.albert_einstein = os.environ["KERBEROS_USER"]
 
 # Kinit - if a keytab exists use it: User must set the KERBEROS_KEYTAB variable.
 # FIXME is there a standard key tab env. variable?
