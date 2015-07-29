@@ -211,22 +211,6 @@ page.subpages["background"].div("""
 This page shows the ingredients that go into ranking events and determining the False alarm probability.
 """)
 page.subpages["background"].add_section("snrchi","SNR and chi-squared")
-page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNRCHI2*.png'))
-page.subpages["background"].sections["snrchi"].add_table(imgtable, "","")
-
-page.subpages["background"].add_section("snrsnr","SNR ratios")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'))
-page.subpages["background"].sections["snrsnr"].add_table(imgtable, "","")
-
-page.subpages["background"].add_section("rates","Rates")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'))
-page.subpages["background"].sections["rates"].add_table(imgtable, "","")
-
-page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
-page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LIKELIHOOD_RATIO_*.png'))
-page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
 
 
 #
@@ -234,6 +218,10 @@ page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
 #
 
 if not opts.open_box:
+
+	page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*[D,N]_PDF_SNRCHI2*.png'))
+	page.subpages["background"].sections["snrchi"].add_table(imgtable, "","")
 	
 	### CHISQ ###
 	page.add_subpage("chisq","Chi-squared", "Chi-squared")
@@ -272,6 +260,10 @@ This section provides the detection statistic plots and a summary of the loudest
 
 else:
 	print >>sys.stderr, "WARNING: OPENING THE BOX"
+
+	page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNRCHI2*.png'))
+	page.subpages["background"].sections["snrchi"].add_table(imgtable, "","")
 	
 	### CHISQ ###
 	page.add_subpage("chisq","Chi-squared", "Chi-squared")
@@ -305,44 +297,19 @@ This section provides the detection statistic plots and a summary of the loudest
 	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%ssummary_table.txt' % opts.output_user_tag[0]))
 	page.subpages["money"].sections["table"].add_table(tab[0], "Summary Table", "Loudest Events")
 
-	### UPPER LIMIT PLOTS ###
-	#page.add_subpage("ul","Upper Limit Plots", "Upper Limit Plots")
-	#page.subpages["ul"].div("""
-#<big><b>OVERVIEW:</b></big><br><br>
-#This section describes the upperlimit calculation which is a 90% confidence upper limit on the rate of mergers with units mergers/Mpc^3/year as a function of mass.  Various 
-#quantities go into this calculation.  They are shown here. 
-#""")
+# BACKGROUND CONTD. FIXME this is a stupid way to make open vs. closed plots
+page.subpages["background"].add_section("snrsnr","SNR ratios")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'))
+page.subpages["background"].sections["snrsnr"].add_table(imgtable, "","")
 
-	#range_summs = glob.glob(base_name+'-*_range_summary.txt')
-	#for rs in range_summs:
-	#	tag = rs.replace('_',' ').replace('.txt','')
-	#	page.subpages["ul"].add_section(tag,rs)
-	#	tab,name = cbcwebpage.wiki_table_parse(rs)
-	#	page.subpages["ul"].sections[tag].add_table(tab[0], "Range Summary", "Range summary")
+page.subpages["background"].add_section("rates","Rates")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'))
+page.subpages["background"].sections["rates"].add_table(imgtable, "","")
 
-	#page.subpages["ul"].add_section("vt","Volume x time")
-	#imgtable = cbcwebpage.image_glob(base_name+'-*_volume_time.png')
-	#page.subpages["ul"].sections["vt"].add_table(imgtable, "Volume x time", "mass1 mass2 volume x time")
-
-	#page.subpages["ul"].add_section("evt","Error on Volume x time")
-	#imgtable = cbcwebpage.image_glob(base_name+'-*_fractional_error.png')
-	#page.subpages["ul"].sections["evt"].add_table(imgtable, "Error on Volume x time", "Error on mass1 mass2 volume x time")
-
-	#page.subpages["ul"].add_section("l","Lambda")
-	#imgtable = cbcwebpage.image_glob(base_name+'-*_lambda.png')
-	#page.subpages["ul"].sections["l"].add_table(imgtable, "Lambda", "likelihood fg/bg @ loudest event")
-
-	#page.subpages["ul"].add_section("p","Posterior")
-	#imgtable = cbcwebpage.image_glob(base_name+'-*_posterior.png')
-	#page.subpages["ul"].sections["p"].add_table(imgtable, "Posterior", "Poseterior on the rate")
-
-	#page.subpages["ul"].add_section("ul","90% Upper limit")
-	#imgtable = cbcwebpage.image_glob(base_name+'-*_upper_limit.png')
-	#page.subpages["ul"].sections["ul"].add_table(imgtable, "90% Upper limit", "90% upper limit")
-
-	#page.subpages["ul"].add_section("cul","Combined 90% Upper limit")
-	#imgtable = [[cbcwebpage._imagelinkcpy(base_name+'upper_limit.png'), cbcwebpage._imagelinkcpy(base_name+'posterior.png')]]
-	#page.subpages["ul"].sections["cul"].add_table(imgtable, "Combined 90% Upper limit", "Combined 90% upper limit")
+page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
+page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LIKELIHOOD_RATIO_*.png'))
+page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
 
 
 if opts.open_box:
