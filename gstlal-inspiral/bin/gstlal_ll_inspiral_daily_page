@@ -22,7 +22,7 @@
 """Meta program to generate offline style summary pages from online runs."""
 
 
-import sys, os, subprocess, re, time
+import sys, os, subprocess, re, time, glob
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
 from pylal.datatypes import LIGOTimeGPS
@@ -55,9 +55,11 @@ for n, d in enumerate(result_dirs):
 
 	# FIXME assume first directory contains segment files (true because segments are cumulative)
 	if n == 0:
-		seg_pattern = re.compile('.*-0[0-9]{3}_SEGMENTS-.*.xml.gz')
-		# FIXME assume last file in alphabetical order contains the "correct" segments.  Should be roughly true since segments are cumulative and each node should see the same segments if the analysis is running properly.
-		seg_file = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if seg_pattern.match(xml)])[-1]
+		# FIXME assume the first mass bin contains the "correct" segments
+		# Should be roughly true since segments are cumulative and each
+		# node should see the same segments if the analysis is running
+		# properly.
+		seg_files = glob.glob('%s/*-0000_SEGMENTS*.xml.gz' % os.path.join(options.directory, d))
 
 	# FIXME don't hard code H1L1
 	# FIXME assumes 10 digit GPS
@@ -114,15 +116,15 @@ if os.path.exists(noninjdb):
 if os.path.exists(injdb):
 	os.remove(injdb)
 
-progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + 1)
-for f in noninj_files_to_merge + [seg_file]:
+progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
+for f in noninj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
 	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
 	progressbar.increment()
 del progressbar
 
-progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + 1)
-for f in inj_files_to_merge + [seg_file]:
+progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + len(seg_files))
+for f in inj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
 	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
 	progressbar.increment()
