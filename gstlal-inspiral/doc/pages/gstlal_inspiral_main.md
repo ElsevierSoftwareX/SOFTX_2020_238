@@ -1,4 +1,4 @@
-\mainpage gstlal-inspiral welcome page
+\mainpage Welcome
 
 ## Getting started
 
