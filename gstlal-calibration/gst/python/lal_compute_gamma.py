@@ -50,6 +50,8 @@ class lal_compute_gamma(gst.Bin):
 	olgI_default = 1.0
 	wR_default = 1.0
 	wI_default = 1.0
+	wmod_default = 1.0
+	olgmod_default = 1.0
 	sr_default = 16384
 	time_domain_default = True
 
@@ -89,6 +91,20 @@ class lal_compute_gamma(gst.Bin):
 			-gobject.G_MAXDOUBLE, gobject.G_MAXDOUBLE, wI_default,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		),
+		'wmod' : (
+			gobject.TYPE_DOUBLE,
+			'wmod',
+			'modulus of darm_ctrl whitening filter at calibration line frequency',
+			0.0, gobject.G_MAXDOUBLE, wmod_default,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		'olgmod' : (
+			gobject.TYPE_DOUBLE,
+			'olgmod',
+			'modulus of open loop gain at calibration line frequency',
+			0.0, gobject.G_MAXDOUBLE, olgmod_default,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT,
+		),
 		'sr' : (
 			gobject.TYPE_UINT,
 			'sr',
@@ -108,16 +124,62 @@ class lal_compute_gamma(gst.Bin):
 	def do_set_property(self, prop, val):
 		if prop.name == 'sr':
 			self.sr = val
+			self.excR_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
+			self.excI_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
+			self.dctrlR_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
+			self.dctrlI_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
+			self.excR_firbank.set_property("fir-matrix", [numpy.hanning(val)])
+			self.excI_firbank.set_property("fir-matrix", [numpy.hanning(val)])
+			self.dctrlR_firbank.set_property("fir-matrix", [numpy.hanning(val)])
+			self.dctrlI_firbank.set_property("fir-matrix", [numpy.hanning(val)])
 		elif prop.name == 'time-domain':
 			self.time_domain = val
+			self.excR_firbank.set_property("time-domain", val)
+			self.excI_firbank.set_property("time-domain", val)
+			self.dctrlR_firbank.set_property("time-domain", val)
+			self.dctrlI_firbank.set_property("time-domain", val)
 		elif prop.name == 'olgR':
 			self.olgR = val
+			self.dctrl_mod_w_mod_olgR.set_property("amplification", val)
+			self.dctrlR_excI_olgR.set_property("amplification", val)
+			self.dctrlI_excR_olgR.set_property("amplification", val)
+			self.dctrlI_excI_olgR.set_property("amplification", val)
+			self.dctrlR_excR_olgR.set_property("amplification", val)
 		elif prop.name == 'olgI':
 			self.olgI = val
+			self.dctrl_mod_w_mod_olgI.set_property("amplification", val)
+			self.dctrlR_excI_olgI.set_property("amplification", val)
+			self.dctrlI_excR_olgI.set_property("amplification", val)
+			self.dctrlI_excI_olgI.set_property("amplification", val)
+			self.dctrlR_excR_olgI.set_property("amplification", val)
 		elif prop.name == 'wR':
 			self.wR = val
+			self.dctrlR_excI_olgI_wR.set_property("amplification", val)
+			self.dctrlR_excI_olgR_wR.set_property("amplification", val)
+			self.dctrlI_excR_olgI_wR.set_property("amplification", val)
+			self.dctrlI_excR_olgR_wR.set_property("amplification", val)
+			self.dctrlI_excI_olgR_wR.set_property("amplification", val)
+			self.dctrlI_excI_olgI_wR.set_property("amplification", val)
+			self.dctrlR_excR_olgR_wR.set_property("amplification", val)
+			self.dctrlR_excR_olgI_wR.set_property("amplification", val)
 		elif prop.name == 'wI':
 			self.wI = val
+			self.dctrlR_excI_olgI_wI.set_property("amplification", val)
+			self.dctrlR_excI_olgR_wI.set_property("amplification", val)
+			self.dctrlI_excR_olgI_wI.set_property("amplification", val)
+			self.dctrlI_excR_olgR_wI.set_property("amplification", val)
+			self.dctrlI_excI_olgR_wI.set_property("amplification", val)
+			self.dctrlI_excI_olgI_wI.set_property("amplification", val)
+			self.dctrlR_excR_olgR_wI.set_property("amplification", val)
+			self.dctrlR_excR_olgI_wI.set_property("amplification", val)
+		elif prop.name == 'wmod':
+			self.wmod = val
+			self.dctrl_mod_w_mod.set_property("amplification", val)
+		elif prop.name == 'olgmod':
+			self.olgmod = val
+			self.dctrl_mod_w_mod_olg_mod.set_property("amplification", val)
+		else:
+			raise AssertionError
 
 	def do_get_property(self, prop):
 		if prop.name == 'sr':
@@ -132,17 +194,17 @@ class lal_compute_gamma(gst.Bin):
 			return self.wR
 		elif prop.name == 'wI':
 			return self.wI
+		elif prop.name == 'wmod':
+			return self.wmod
+		elif prop.name == 'olgmod':
+			return self.olgmod
+		else:
+			raise AssertionError
 
 
 	def __init__(self):
 		super(lal_compute_gamma, self).__init__()
 		
-		self.sr, self.time_domain, self.olgR, self.olgI, self.wR, self.wI = lal_compute_gamma.sr_default, lal_compute_gamma.time_domain_default, lal_compute_gamma.olgR_default, lal_compute_gamma.olgI_default, lal_compute_gamma.wR_default, lal_compute_gamma.wI_default
-
-		self.w_mod = self.wR*self.wR + self.wI*self.wI
-		self.olg_mod = self.olgR*self.olgR + self.olgI*self.olgI
-		self.window = numpy.hanning(self.sr)
-
 		# Make an oscillator at calibration line frequency for computation of gamma factors
 		cos = gst.element_factory_make("tee")
 		self.add(cos)
@@ -166,7 +228,9 @@ class lal_compute_gamma(gst.Bin):
 		self.add(excR)
 		pipeparts.mkqueue(self, exc).link(excR)
 		pipeparts.mkqueue(self, cos).link(excR)
-		excR = pipeparts.mkfirbank(self, excR, fir_matrix = [self.window], time_domain = self.time_domain)
+		excR = pipeparts.mkresample(self, excR, quality=9)
+		self.excR_capsfilter = excR = pipeparts.mkgeneric(self, excR, "capsfilter")
+		self.excR_firbank = excR = pipeparts.mkfirbank(self, excR)
 		excR = pipeparts.mktee(self, excR)
 
 		excI = gst.element_factory_make("lal_multiplier")
@@ -174,7 +238,9 @@ class lal_compute_gamma(gst.Bin):
 		self.add(excI)
 		pipeparts.mkqueue(self, exc).link(excI)
 		pipeparts.mkqueue(self, sin).link(excI)
-		excI = pipeparts.mkfirbank(self, excI, fir_matrix = [self.window], time_domain = self.time_domain)
+		excI = pipeparts.mkresample(self, excI, quality=9)
+		self.excI_capsfilter = excI = pipeparts.mkgeneric(self, excI, "capsfilter")
+		self.excI_firbank = excI = pipeparts.mkfirbank(self, excI)
 		excI = pipeparts.mktee(self, excI)
 
 		# DARM_CTRL branch for gamma
@@ -183,7 +249,9 @@ class lal_compute_gamma(gst.Bin):
 		self.add(dctrlR)
 		pipeparts.mkqueue(self, dctrl).link(dctrlR)
 		pipeparts.mkqueue(self, cos).link(dctrlR)
-		dctrlR = pipeparts.mkfirbank(self, dctrlR, fir_matrix = [self.window], time_domain = self.time_domain)
+		dctrlR = pipeparts.mkresample(self, dctrlR, quality=9)
+		self.dctrlR_capsfilter = dctrlR = pipeparts.mkgeneric(self, dctrlR, "capsfilter")
+		self.dctrlR_firbank = dctrlR = pipeparts.mkfirbank(self, dctrlR)
 		dctrlR = pipeparts.mktee(self, dctrlR)
 
 		dctrlI = gst.element_factory_make("lal_multiplier")
@@ -191,7 +259,9 @@ class lal_compute_gamma(gst.Bin):
 		self.add(dctrlI)
 		pipeparts.mkqueue(self, dctrl).link(dctrlI)
 		pipeparts.mkqueue(self, sin).link(dctrlI)
-		dctrlI = pipeparts.mkfirbank(self, dctrlI, fir_matrix = [self.window], time_domain = self.time_domain)
+		dctrlI = pipeparts.mkresample(self, dctrlI, quality=9)
+		self.dctrlI_capsfilter = dctrlI = pipeparts.mkgeneric(self, dctrlI, "capsfilter")
+		self.dctrlI_firbank = dctrlI = pipeparts.mkfirbank(self, dctrlI)
 		dctrlI = pipeparts.mktee(self, dctrlI)
 
 		# Make useful combos of channels for calculating gamma
@@ -200,10 +270,12 @@ class lal_compute_gamma(gst.Bin):
 		self.add(dctrl_mod)
 		pipeparts.mkqueue(self, pipeparts.mkpow(self, dctrlR, exponent = 2.0)).link(dctrl_mod)
 		pipeparts.mkqueue(self, pipeparts.mkpow(self, dctrlI, exponent = 2.0)).link(dctrl_mod)
-		dctrl_mod = pipeparts.mktee(self, dctrl_mod)
 
-		dctrl_mod_w_mod_olgR = pipeparts.mkaudioamplify(self, dctrl_mod, -1.0 * self.olgR * self.w_mod)
-		dctrl_mod_w_mod_olgI = pipeparts.mkaudioamplify(self, dctrl_mod, self.olgI * self.w_mod)
+		self.dctrl_mod_w_mod = dctrl_mod_w_mod = pipeparts.mkgeneric(self, dctrl_mod, "audioamplify")
+		dctrl_mod_w_mod = pipeparts.mktee(self, dctrl_mod_w_mod)
+		self.dctrl_mod_w_mod_olgR = dctrl_mod_w_mod_olgR = pipeparts.mkgeneric(self, dctrl_mod_w_mod, "audioamplify")
+		self.dctrl_mod_w_mod_olgI = dctrl_mod_w_mod_olgI = pipeparts.mkgeneric(self, dctrl_mod_w_mod, "audioamplify")
+		self.dctrl_mod_w_mod_olg_mod = dctrl_mod_w_mod_olg_mod = pipeparts.mkgeneric(self, dctrl_mod_w_mod, "audioamplify")
 	
 		dctrlR_excI = gst.element_factory_make("lal_multiplier")
 		dctrlR_excI.set_property("sync", True)
@@ -212,10 +284,15 @@ class lal_compute_gamma(gst.Bin):
 		pipeparts.mkqueue(self, excI).link(dctrlR_excI)
 		dctrlR_excI = pipeparts.mktee(self, dctrlR_excI)
 
-		dctrlR_excI_olgI_wI = pipeparts.mkaudioamplify(self, dctrlR_excI, -1.0 * self.olgI * self.wI)
-		dctrlR_excI_olgI_wR = pipeparts.mkaudioamplify(self, dctrlR_excI, self.olgI * self.wR)
-		dctrlR_excI_olgR_wI = pipeparts.mkaudioamplify(self, dctrlR_excI, self.olgR * self.wI)
-		dctrlR_excI_olgR_wR = pipeparts.mkaudioamplify(self, dctrlR_excI, self.olgR * self.wR)
+		self.dctrlR_excI_olgI = dctrlR_excI_olgI = pipeparts.mkgeneric(self, dctrlR_excI, "audioamplify")
+		dctrlR_excI_olgI = pipeparts.mktee(self, dctrlR_excI_olgI)
+		self.dctrlR_excI_olgI_wI = dctrlR_excI_olgI_wI = pipeparts.mkgeneric(self, dctrlR_excI_olgI, "audioamplify")
+		self.dctrlR_excI_olgI_wR = dctrlR_excI_olgI_wR = pipeparts.mkgeneric(self, dctrlR_excI_olgI, "audioamplify")
+
+		self.dctrlR_excI_olgR = dctrlR_excI_olgR = pipeparts.mkgeneric(self, dctrlR_excI, "audioamplify")
+		dctrlR_excI_olgR = pipeparts.mktee(self, dctrlR_excI_olgR)
+		self.dctrlR_excI_olgR_wI = dctrlR_excI_olgR_wI = pipeparts.mkgeneric(self, dctrlR_excI_olgR, "audioamplify")
+		self.dctrlR_excI_olgR_wR = dctrlR_excI_olgR_wR = pipeparts.mkgeneric(self, dctrlR_excI_olgR, "audioamplify")
 
 		dctrlI_excR = gst.element_factory_make("lal_multiplier")
 		dctrlI_excR.set_property("sync", True)
@@ -224,10 +301,15 @@ class lal_compute_gamma(gst.Bin):
 		pipeparts.mkqueue(self, excR).link(dctrlI_excR)
 		dctrlI_excR = pipeparts.mktee(self, dctrlI_excR)
 
-		dctrlI_excR_olgI_wR = pipeparts.mkaudioamplify(self, dctrlI_excR, -1.0 * self.olgI * self.wR)
-		dctrlI_excR_olgI_wI = pipeparts.mkaudioamplify(self, dctrlI_excR, self.olgI * self.wI)
-		dctrlI_excR_olgR_wI = pipeparts.mkaudioamplify(self, dctrlI_excR, -1.0 * self.olgR * self.wI)
-		dctrlI_excR_olgR_wR = pipeparts.mkaudioamplify(self, dctrlI_excR, -1.0 * self.olgR * self.wR)
+		self.dctrlI_excR_olgI = dctrlI_excR_olgI = pipeparts.mkgeneric(self, dctrlI_excR, "audioamplify")
+		dctrlI_excR_olgI = pipeparts.mktee(self, dctrlI_excR_olgI)
+		self.dctrlI_excR_olgI_wR = dctrlI_excR_olgI_wR = pipeparts.mkgeneric(self, dctrlI_excR_olgI, "audioamplify")
+		self.dctrlI_excR_olgI_wI = dctrlI_excR_olgI_wI = pipeparts.mkgeneric(self, dctrlI_excR_olgI, "audioamplify")
+
+		self.dctrlI_excR_olgR = dctrlI_excR_olgR = pipeparts.mkgeneric(self, dctrlI_excR, "audioamplify")
+		dctrlI_excR_olgR = pipeparts.mktee(self, dctrlI_excR_olgR)
+		self.dctrlI_excR_olgR_wI = dctrlI_excR_olgR_wI = pipeparts.mkgeneric(self, dctrlI_excR_olgR, "audioamplify")
+		self.dctrlI_excR_olgR_wR = dctrlI_excR_olgR_wR = pipeparts.mkgeneric(self, dctrlI_excR_olgR, "audioamplify")
 
 		dctrlI_excI = gst.element_factory_make("lal_multiplier")
 		dctrlI_excI.set_property("sync", True)
@@ -236,10 +318,15 @@ class lal_compute_gamma(gst.Bin):
 		pipeparts.mkqueue(self, excI).link(dctrlI_excI)
 		dctrlI_excI = pipeparts.mktee(self, dctrlI_excI)
 
-		dctrlI_excI_olgR_wR = pipeparts.mkaudioamplify(self, dctrlI_excI, self.olgR * self.wR)
-		dctrlI_excI_olgR_wI = pipeparts.mkaudioamplify(self, dctrlI_excI, -1.0 * self.olgR * self.wI)
-		dctrlI_excI_olgI_wI = pipeparts.mkaudioamplify(self, dctrlI_excI, -1.0 * self.olgI * self.wI)
-		dctrlI_excI_olgI_wR = pipeparts.mkaudioamplify(self, dctrlI_excI, -1.0 * self.olgI * self.wR)
+		self.dctrlI_excI_olgR = dctrlI_excI_olgR = pipeparts.mkgeneric(self, dctrlI_excI, "audioamplify")
+		dctrlI_excI_olgR = pipeparts.mktee(self, dctrlI_excI_olgR)
+		self.dctrlI_excI_olgR_wR = dctrlI_excI_olgR_wR = pipeparts.mkgeneric(self, dctrlI_excI_olgR, "audioamplify")
+		self.dctrlI_excI_olgR_wI = dctrlI_excI_olgR_wI = pipeparts.mkgeneric(self, dctrlI_excI_olgR, "audioamplify")
+
+		self.dctrlI_excI_olgI = dctrlI_excI_olgI = pipeparts.mkgeneric(self, dctrlI_excI, "audioamplify")
+		dctrlI_excI_olgI = pipeparts.mktee(self, dctrlI_excI_olgI)
+		self.dctrlI_excI_olgI_wI = dctrlI_excI_olgI_wI = pipeparts.mkgeneric(self, dctrlI_excI_olgI, "audioamplify")
+		self.dctrlI_excI_olgI_wR = dctrlI_excI_olgI_wR = pipeparts.mkgeneric(self, dctrlI_excI_olgI, "audioamplify")
 
 		dctrlR_excR = gst.element_factory_make("lal_multiplier")
 		dctrlR_excR.set_property("sync", True)
@@ -248,38 +335,42 @@ class lal_compute_gamma(gst.Bin):
 		pipeparts.mkqueue(self, excR).link(dctrlR_excR)
 		dctrlR_excR = pipeparts.mktee(self, dctrlR_excR)
 
-		dctrlR_excR_olgR_wR = pipeparts.mkaudioamplify(self, dctrlR_excR, self.olgR * self.wR)
-		dctrlR_excR_olgR_wI = pipeparts.mkaudioamplify(self, dctrlR_excR, -1.0 * self.olgR * self.wI)
-		dctrlR_excR_olgI_wI = pipeparts.mkaudioamplify(self, dctrlR_excR, -1.0 * self.olgI * self.wI)
-		dctrlR_excR_olgI_wR = pipeparts.mkaudioamplify(self, dctrlR_excR, -1.0 * self.olgI * self.wR)
+		self.dctrlR_excR_olgR = dctrlR_excR_olgR = pipeparts.mkgeneric(self, dctrlR_excR, "audioamplify")
+		dctrlR_excR_olgR = pipeparts.mktee(self, dctrlR_excR_olgR)
+		self.dctrlR_excR_olgR_wR = dctrlR_excR_olgR_wR = pipeparts.mkgeneric(self, dctrlR_excR_olgR, "audioamplify")
+		self.dctrlR_excR_olgR_wI = dctrlR_excR_olgR_wI = pipeparts.mkgeneric(self, dctrlR_excR_olgR, "audioamplify")
+
+		self.dctrlR_excR_olgI = dctrlR_excR_olgI = pipeparts.mkgeneric(self, dctrlR_excR, "audioamplify")
+		dctrlR_excR_olgI = pipeparts.mktee(self, dctrlR_excR_olgI)
+		self.dctrlR_excR_olgI_wI = dctrlR_excR_olgI_wI = pipeparts.mkgeneric(self, dctrlR_excR_olgI, "audioamplify")
+		self.dctrlR_excR_olgI_wR = dctrlR_excR_olgI_wR = pipeparts.mkgeneric(self, dctrlR_excR_olgI, "audioamplify")
 
 		# Combine all of these branches into real and imaginary gamma
-		denom = pipeparts.mkaudioamplify(self, dctrl_mod, self.olg_mod * self.w_mod)
-		denom = pipeparts.mktee(self, denom)
+		denom = pipeparts.mktee(self, dctrl_mod_w_mod_olg_mod)
 
 		gammaI_num = gst.element_factory_make("lal_adder")
 		gammaI_num.set_property("sync", True)
 		self.add(gammaI_num)
 		pipeparts.mkqueue(self, dctrl_mod_w_mod_olgI).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlR_excI_olgI_wI).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlR_excI_olgI_wI, -1.0)).link(gammaI_num)
 		pipeparts.mkqueue(self, dctrlI_excR_olgI_wI).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlI_excI_olgR_wI).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlR_excR_olgR_wI).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlI_excI_olgI_wR).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlR_excR_olgI_wR).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excI_olgR_wI, -1.0)).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlR_excR_olgR_wI, -1.0)).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excI_olgI_wR, -1.0)).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlR_excR_olgI_wR, -1.0)).link(gammaI_num)
 		pipeparts.mkqueue(self, dctrlR_excI_olgR_wR).link(gammaI_num)
-		pipeparts.mkqueue(self, dctrlI_excR_olgR_wR).link(gammaI_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excR_olgR_wR, -1.0)).link(gammaI_num)
 
 		gammaR_num = gst.element_factory_make("lal_adder")
 		gammaR_num.set_property("sync", True)
 		self.add(gammaR_num)
-		pipeparts.mkqueue(self, dctrl_mod_w_mod_olgR).link(gammaR_num)
-		pipeparts.mkqueue(self, dctrlI_excI_olgI_wI).link(gammaR_num)
-		pipeparts.mkqueue(self, dctrlR_excR_olgI_wI).link(gammaR_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrl_mod_w_mod_olgR, -1.0)).link(gammaR_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excI_olgI_wI, -1.0)).link(gammaR_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlR_excR_olgI_wI, -1.0)).link(gammaR_num)
 		pipeparts.mkqueue(self, dctrlR_excI_olgR_wI).link(gammaR_num)
-		pipeparts.mkqueue(self, dctrlI_excR_olgR_wI).link(gammaR_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excR_olgR_wI, -1.0)).link(gammaR_num)
 		pipeparts.mkqueue(self, dctrlR_excI_olgI_wR).link(gammaR_num)
-		pipeparts.mkqueue(self, dctrlI_excR_olgI_wR).link(gammaR_num)
+		pipeparts.mkqueue(self, pipeparts.mkaudioamplify(self, dctrlI_excR_olgI_wR, -1.0)).link(gammaR_num)
 		pipeparts.mkqueue(self, dctrlI_excI_olgR_wR).link(gammaR_num)
 		pipeparts.mkqueue(self, dctrlR_excR_olgR_wR).link(gammaR_num)
 
