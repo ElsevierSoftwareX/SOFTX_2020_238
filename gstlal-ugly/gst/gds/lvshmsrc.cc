@@ -496,14 +496,34 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	gboolean success = TRUE;
 
 	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_FORMATS:
+		gst_query_set_formats(query, 1, GST_FORMAT_TIME);
+		break;
+
 	case GST_QUERY_LATENCY:
 		gst_query_set_latency(query, gst_base_src_is_live(basesrc), element->min_latency, element->max_latency);
 		break;
+
+	case GST_QUERY_POSITION:
+		/* timestamp of next buffer */
+		gst_query_set_position(query, GST_FORMAT_TIME, element->next_timestamp);
+		break;
+
+#if 0
+	case GST_QUERY_SEGMENT:
+		gst_query_set_segment(query, 1.0, GST_FORMAT_TIME, GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE);
+		break;
+#endif
 
 	default:
 		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
 		break;
 	}
+
+	if(success)
+		GST_DEBUG_OBJECT(element, "result: %" GST_PTR_FORMAT, query);
+	else
+		GST_ERROR_OBJECT(element, "query failed");
 
 	return success;
 }
