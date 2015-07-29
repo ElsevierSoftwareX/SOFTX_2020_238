@@ -1,6 +1,6 @@
-\mainpage gstlalinspiralmainpage gstlal-inspiral welcome page
+\mainpage gstlal-inspiral welcome page
 
-### Getting started
+## Getting started
 
 - You can get a development copy of the gstlal software suite from git via:
 
@@ -8,21 +8,21 @@
 
 - Release tar balls and some binary packages are available <a href=https://www.lsc-group.phys.uwm.edu/daswg/download/repositories.html>here</a>.
 
-### Searches for Compact Binary Coalescence
+## Searches for Compact Binary Coalescence
 
 - \ref gstlalinspirallowlatencysearchpage
 - \ref gstlalinspiralofflinesearchpage
 
-### Useful Links
+## Useful Links
 
 - \ref gstlalinspiralprofilepage
 
-### Studies
+## Studies
 
 - \ref gstlal_inspiral_BNS_MDC_study
 - \ref gstlalinspirals6replaypage
 
-### References
+## References
 
 - <a href=@gstlaldoc> gstlal documentation</a>
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
