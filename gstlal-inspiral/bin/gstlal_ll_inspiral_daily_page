@@ -52,6 +52,13 @@ inj_files_to_merge = []
 result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
 for n, d in enumerate(result_dirs):
 	print >> sys.stderr, "processing directory %d of %d: %s" % (n+1, len(result_dirs), d)
+
+	# FIXME assume first directory contains segment files (true because segments are cumulative)
+	if n == 0:
+		seg_pattern = re.compile('.*-0[0-9]{3}_SEGMENTS-.*.xml.gz')
+		# FIXME assume last file in alphabetical order contains the "correct" segments.  Should be roughly true since segments are cumulative and each node should see the same segments if the analysis is running properly.
+		seg_file = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if seg_pattern.match(xml)])[-1]
+
 	# FIXME don't hard code H1L1
 	# FIXME assumes 10 digit GPS
 	noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite.tmp' % d)
@@ -107,15 +114,15 @@ if os.path.exists(noninjdb):
 if os.path.exists(injdb):
 	os.remove(injdb)
 
-progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
-for f in noninj_files_to_merge:
+progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + 1)
+for f in noninj_files_to_merge + [seg_file]:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
 	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
 	progressbar.increment()
 del progressbar
 
-progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge))
-for f in inj_files_to_merge:
+progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + 1)
+for f in inj_files_to_merge + [seg_file]:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
 	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
 	progressbar.increment()
@@ -143,9 +150,9 @@ for d in os.listdir(options.directory):
 	m = pattern.match(d)
 	if m:
 		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
-subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
-subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--tmp-space", "/dev/shm", "--veto-segments-name", "vetoes", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "datasegments", injdb])
+subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--tmp-space", "/dev/shm",  "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
 
 subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 
