@@ -47,6 +47,8 @@ Some quick facts:
  - Component mass normally distributed with mean mass of 1.4 \f$M_\odot\f$ and standard deviation of 0.01 \f$M_\odot\f$
  - Sources uniformly distributed in interval [5,45] Mpc
  - Spinless
+ - Injected every 20 &plusmn; 3 seconds
+ - https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Software%20Online%20injections#injections_parameters
 
 \subsection Online Online Analysis
 
@@ -156,3 +158,32 @@ Some quick facts:
 
  - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201119131821..1120341421">GraceDb query</a>
  - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201119131821..1120341421">SimDb query</a>
+
+
+\section Review
+
+
+\subsection day1  July 29, 2015
+
+In attendance: Chad, Edward Maros, Gareth Tomas, Jolien Creighton, Kent Blackburn, Laleh Sadeghian, Les Wade, Maddie Wade, Sathyaprakash, Sarah Caudill, Tjonnie Li
+
+
+\subsubsection day1actions Actions
+
+ - Produce b/g plots with and without the candidates
+
+ - Use a smoothing kernel with a larger (try 2, 4) scale to smoothen the likelihood and probability plots.
+
+ - If possible label on the contours on these plots
+
+ - Money plot here looks strange (dominated by priors, insufficient data, ...); it would be good if release versions can fix this: <https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online-test/Images/H1L1V1-GSTLAL_INSPIRAL_PLOTSUMMARY_ALL_LLOID_COMBINED_05_count_vs_ifar_openbox-1121652724-550359.png>.  Note, I think this is the expected behavior, lets wait to see how it evolves during the replay
+
+\subsubsection day1completed Completed Actions
+
+ - fix the missed found plot in the iHope pages: <https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online-test/Images/H1L1V1-GSTLAL_INSPIRAL_PLOTSUMMARY_ALL_LLOID_COMBINED_01_deff_vs_t_H1L1_closedbox-1121652724-550359.png>. Done, see: 1ea0df6af5ec219db95c0784ca186e40acfb91d0
+ 
+ - Remove candidate event(s) from closed box results. Done see: a886f41349ee2369615cb49455dfcfb7695bcc7a
+
+ - Make the information about injection rate available on the summary pages along side the parameters used for injections: Done see above
+ 
+ - Instead of overwriting online iHope pages it would be good to save the old one (with a time stamp) and start afresh but with all the data so that we can have the history available to look at. Done, see: 43cc68e42c882a4710196ebe51633432b0ad2bca
