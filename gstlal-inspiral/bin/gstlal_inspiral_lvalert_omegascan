@@ -27,7 +27,10 @@ from pylal.datatypes import LIGOTimeGPS
 import sys
 import tempfile
 import urllib
+import logging
+import time
 from optparse import OptionParser
+import lal
 from glue.ligolw import ligolw
 from glue.ligolw import table
 from glue.ligolw import lsctables
@@ -87,6 +90,10 @@ gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
 coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
 coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
 gps = coinc_inspiral.get_end()
+
+# Wait a little while in the hopes that NDS2 has caught up
+if abs(now() - gps) < 180:
+	time.sleep(180)
 
 if not options.albert_einstein:
 	options.albert_einstein = os.environ["KERBEROS_USER"]
