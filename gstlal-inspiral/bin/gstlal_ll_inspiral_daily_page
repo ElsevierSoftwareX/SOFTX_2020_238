@@ -22,7 +22,7 @@
 """Meta program to generate offline style summary pages from online runs."""
 
 
-import sys, os, subprocess, re, time, shutil
+import sys, os, subprocess, re, time
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
 from pylal.datatypes import LIGOTimeGPS
@@ -142,7 +142,7 @@ progressbar.increment()
 
 # Make plots and such
 if os.path.exists(os.path.join(options.directory, "plots")):
-	shutil.rmtree(os.path.join(options.directory, "plots"))
+	os.rename(os.path.join(options.directory, "plots"), "%s.%s" % (os.path.join(options.directory, "plots"), str(now())))
 os.mkdir(os.path.join(options.directory, "plots"))
 
 pattern = re.compile("(?P<id>[0-9]{4})_prior.xml.gz")
