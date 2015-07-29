@@ -25,14 +25,93 @@ These elements had general action items which have been moved to their source co
 	- lal_itac
 -->
 
+\section completed_action Completed action items
+
+- Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there) & Generate plots of the various segment output and come up with sanity checks.
+	- *Done:* (not pushed yet, but PR open https://bugs.ligo.org/redmine/issues/2051)
+
+- Background estimations should have more informative plots e.g., smoothed likelihood functions
+	- *Done:* see 33b29f8b653c1bb10fdec477e05644ed6b46da0d 
+
+- Test delta function input to LLOID algorithm (e.g with and without SVD)
+	- *Done:* see \gstlalmeeting20150112page
+
+- Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
+- *Chad this will not be done right now*: The SNR threshold is tied to many
+   histogramming objects.  Currently the value is set at 4 which is at the
+saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
+about once per second.  A user can  change this only after the histograming
+saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
+about once per second.  A user can  change this only after the histograming
+code is generalized. It will be left for a future feature request.  Things to consider:
+   - Change the histogram boundaries
+   - Change the composite detection statistic threshold
+   - Change the peak time on lal_itac
+   - Study the dependence of coincidence triggers on SNR threshold
+- Test robustness of fixed bank (start by figuring out the right question!)
+ - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
+ - *Marcel: Done* His thesis makes conclusions that it is okay: https://dcc.ligo.org/LIGO-L1400140
+
+- Add synopses for all programs in documentation
+ - *Chad: Done*
+- Document offline pipeline including graphs of workflows
+ - *Chad: Done*, see \ref gstlalinspiralofflinesearchpage
+- Test pipeline with control peak times set to different values
+ - *Chad: Done* see \ref gstlalinspiralcontrolpeaktimestudypage
+
+- put iterutils.randindex() test plot into minutes for 2014-11-05 telecon
+
+- added check to svd_bank that the command line option matches snr_min in
+  far.py
+
+- added test of behaviour of sampler generators to glues test suite
+
+- expanded docstring for NDBins.volumes() so that this method is covered by
+  pylals test suite
+
+- removed ImportError path for speed of light from snglcoinc.py
+
+- see if P(instruments | signal) can be included in P(snr, ... |
+  instruments):  yes it can be, like the SNR PDFs it depends only on the
+  ratios of the horizon distances;  have not made this improvement yet but
+  have put a FIXME in the code to remind me that this is how to achieve the
+  tracking of the time dependence of the instrument combination factor
+
+- see if the noise coinc rates can be recomputed on the fly by factoring
+  out the rates:  yes, they can be;  have not made this improvement because
+  it would require tinkering with the code a bit and we are about to do a
+  release, but I have added a FIXME to remind me that this performance
+  improvement is possible.
+
+nightly build:
+	- turned off SL6 until it works
+	- got nightly build running on debian:
+		- includes all gstlal-packages, all documentation, all unit tests
+
+- Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
+ - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
+
+- Write joint likelihood ranking and FAP calculation (paper in progress)
+ - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
+
+- show histogram of horizon distance history
+ - *Cody: Done* 54368d058460d37473e78bf26776a4929db01433
+
 
 \section telecon2015_03_11 March 11, 2015 telecon
 \ref gstlaltelecons20150311page
 
-- For Cody: Check that changes in compilers have not caused problems. Check that a temporary variable was used when checking gps_time_now value. Do another sanity check that the times are actually valid. Try replacing code with code to return random struct with times that have failed in the past.
-* For Jolien: Check the behavior of gstreamer and lals raise function. Change siminspiralFDTD routine to take df.
+- For Jolien: Check the behavior of gstreamer and lals raise function. Change siminspiralFDTD routine to take df.
 - For Kipp: Change swig code so it just copies values in SWIGPython.i
 - For discussion next time: Should likelihood ranking stat include triggers found in coincidence? Question based on rates/significance group discussion.
+
+\subsection telecon2015_03_11_completed Completed actions
+
+- For Cody: Check that changes in compilers have not caused problems. Check
+  that a temporary variable was used when checking gps_time_now value. Do
+  another sanity check that the times are actually valid. Try replacing code with
+  code to return random struct with times that have failed in the past
+  *Done:* See: https://bugs.ligo.org/redmine/issues/1916
 	
 \section meeting2015_01_12 January 12-18, 2015 meeting
 \ref gstlalmeeting20150112page
@@ -42,23 +121,29 @@ These elements had general action items which have been moved to their source co
 - Figure out why multiple low-SNR events get the same likelihood (these constitute about a quarter of all events)
 - Review of Summary pages at:
 <https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/MDC/BNS/Summer2014/recolored/nonspin/966384015-971384015-pipe-compare-CAT2/ALL_LLOID_COMBINED_openbox.html?ALL_LLOID_COMBINED_openbox_summary.html>
-- Make zoomed versions for accuracy plots
-- Make Histogram of accuracies
-- Make accuracy plots as a function of FAR
-- Plot accuracy as a function of SNR
-- Injections are found with `pi` time-shift; probably coming from one time-slide (check and fix)
-- What is the reason for close-by missed injections in missed-found plot (as a function of Mchirp)?
-- Perpahs the prefactors_range (0.0, 0.10) might be too narrow
-- Figure out the reason for the dip in the foreground plot (in SNR-Chisq section)
-- Make efficiency plots (efficiency as a function of distance, effective distance and chirp distance)
-- Compute the Range as a function of network for an IDEAL pipeline (T1200458, Figure 2 would be a good example)
-- Update the online instructions including Makefile
+ - Make zoomed versions for accuracy plots
+ - Make accuracy plots as a function of FAR
+ - Plot accuracy as a function of SNR
+ - Injections are found with `pi` time-shift; probably coming from one time-slide (check and fix)
+ - What is the reason for close-by missed injections in missed-found plot (as a function of Mchirp)?
+ - Make efficiency plots (efficiency as a function of distance, effective distance and chirp distance)
+ - Compute the Range as a function of network for an IDEAL pipeline (T1200458, Figure 2 would be a good example)
 
 - Review of GRACE-DB:
  - Check live times.
  - It would be useful to have a Table of CPU usage rather than for individual nodes.
  - Currently, on-line analysis requests a headroom of 20% CPU. Can this be defended? Explore running some `nice` jobs in the background and see if this affects performace
  - The particular event we saw had a 17 minute latency for producing sky-map: https://gracedb.ligo.org/events/view/T124866
+
+\subsection meeting2015_01_12_completed Completed actions
+
+- Review of Summary pages at:
+<https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/MDC/BNS/Summer2014/recolored/nonspin/966384015-971384015-pipe-compare-CAT2/ALL_LLOID_COMBINED_openbox.html?ALL_LLOID_COMBINED_openbox_summary.html>
+ - Make Histogram of accuracies
+ - Perpahs the prefactors_range (0.0, 0.10) might be too narrow: This was broadened: https://bugs.ligo.org/redmine/issues/2045
+- Update the online instructions including Makefile
+- Figure out the reason for the dip in the foreground plot (in SNR-Chisq section): *tracked to a scipy bug*: afab0d97a75e935cdf2526b30da4603922fad745
+
 
 \section telecon2015_01_21 January 21, 2015 telecon
 \ref gstlaltelecons20150121page
@@ -252,74 +337,3 @@ Chads Actions
 - make dot graph get dumped by env variable. Commit: 434a2d61eb5611817444309398d0859018dfed86
 
 
-\section completed_action Completed action items
-
-- Verify that all the segments are being tracked in online mode via the Handler (this is coupled to the inspiral.Data class, so it will come up again there) & Generate plots of the various segment output and come up with sanity checks.
-	- *Done:* (not pushed yet, but PR open https://bugs.ligo.org/redmine/issues/2051)
-
-- Background estimations should have more informative plots e.g., smoothed likelihood functions
-	- *Done:* see 33b29f8b653c1bb10fdec477e05644ed6b46da0d 
-
-- Test delta function input to LLOID algorithm (e.g with and without SVD)
-	- *Done:* see \gstlalmeeting20150112page
-
-- Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
-- *Chad this will not be done right now*: The SNR threshold is tied to many
-   histogramming objects.  Currently the value is set at 4 which is at the
-saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
-about once per second.  A user can  change this only after the histograming
-saturation point for Gaussian noise, e.g., we expect to get an SNR 4 trigger
-about once per second.  A user can  change this only after the histograming
-code is generalized. It will be left for a future feature request.  Things to consider:
-   - Change the histogram boundaries
-   - Change the composite detection statistic threshold
-   - Change the peak time on lal_itac
-   - Study the dependence of coincidence triggers on SNR threshold
-- Test robustness of fixed bank (start by figuring out the right question!)
- - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
- - *Marcel: Done* His thesis makes conclusions that it is okay: https://dcc.ligo.org/LIGO-L1400140
-
-- Add synopses for all programs in documentation
- - *Chad: Done*
-- Document offline pipeline including graphs of workflows
- - *Chad: Done*, see \ref gstlalinspiralofflinesearchpage
-- Test pipeline with control peak times set to different values
- - *Chad: Done* see \ref gstlalinspiralcontrolpeaktimestudypage
-
-- put iterutils.randindex() test plot into minutes for 2014-11-05 telecon
-
-- added check to svd_bank that the command line option matches snr_min in
-  far.py
-
-- added test of behaviour of sampler generators to glues test suite
-
-- expanded docstring for NDBins.volumes() so that this method is covered by
-  pylals test suite
-
-- removed ImportError path for speed of light from snglcoinc.py
-
-- see if P(instruments | signal) can be included in P(snr, ... |
-  instruments):  yes it can be, like the SNR PDFs it depends only on the
-  ratios of the horizon distances;  have not made this improvement yet but
-  have put a FIXME in the code to remind me that this is how to achieve the
-  tracking of the time dependence of the instrument combination factor
-
-- see if the noise coinc rates can be recomputed on the fly by factoring
-  out the rates:  yes, they can be;  have not made this improvement because
-  it would require tinkering with the code a bit and we are about to do a
-  release, but I have added a FIXME to remind me that this performance
-  improvement is possible.
-
-nightly build:
-	- turned off SL6 until it works
-	- got nightly build running on debian:
-		- includes all gstlal-packages, all documentation, all unit tests
-
-- Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
- - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
-
-- Write joint likelihood ranking and FAP calculation (paper in progress)
- - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
-
-- show histogram of horizon distance history
- - *Cody: Done* 54368d058460d37473e78bf26776a4929db01433
