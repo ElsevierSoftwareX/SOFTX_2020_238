@@ -1,8 +1,8 @@
 <doxygenlayout version="1.0">
   <!-- Navigation index tabs for HTML output -->
   <navindex>
-    <tab type="mainpage" visible="yes" title=""/>
-    <tab type="pages" visible="yes" title=""/>
+    <tab type="mainpage" visible="yes" title="Home"/>
+    <tab type="pages" visible="no" title=""/>
     <tab type="modules" visible="no" title=""/>
     <tab type="namespaces" visible="no" title="">
       <tab type="namespaces" visible="no" title=""/>
