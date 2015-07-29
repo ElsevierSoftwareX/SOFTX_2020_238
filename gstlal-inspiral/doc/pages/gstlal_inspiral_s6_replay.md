@@ -70,94 +70,53 @@ Some quick facts:
 
 \subsection Results Results
 
- - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary> online status page </a>
+ - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary> Online Status Page </a>
+ - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online-test/ALL_LLOID_COMBINED_openbox.html">Online Summary Page</a>
  - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201122174187..1124174187">GraceDb query</a>
  - <a href="https://simdb.cgca.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201122174187..1124174187">SimDb query</a>
- - <a href="https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/offline_s6_replay_1monrun/">Offline analysis results</a>
+ - <a href="https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/offline_s6_replay_1monrun/">Offline Analysis Page</a>
 
 
-\subsection status status as of 1122210960 
+\subsection status status as of July 29 
+
+\subsubsection nagios Nagios monitor
+
+https://dashboard.ligo.org/
+
+\subsection condor Condor Status
+
 
 	-- Submitter: pcdev3.nemo.phys.uwm.edu : <192.168.5.3:41523> : pcdev3.nemo.phys.uwm.edu
 	 ID      OWNER            SUBMITTED     RUN_TIME ST PRI SIZE CMD               
-	1708701.0   gstlalcbc       7/28 22:02   0+10:13:07 R  0   0.3  condor_dagman -f -
-	1708707.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_ll_inspiral
-	1708708.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_inspiral_ma
-	1708709.0   gstlalcbc       7/28 22:02   0+10:12:49 R  0   0.0  gstlal_ll_inspiral
-	1708710.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4882.8 gstlal_inspiral --
-	1708711.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4150.4 gstlal_inspiral --
-	1708712.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
-	1708713.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4638.7 gstlal_inspiral --
-	1708714.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
-	1708715.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   4394.5 gstlal_inspiral --
-	1708716.0   gstlalcbc       7/28 22:02   0+10:12:34 R  0   7324.2 gstlal_inspiral --
-	1708717.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4394.5 gstlal_inspiral --
-	1708718.0   gstlalcbc       7/28 22:03   0+10:12:34 R  0   4638.7 gstlal_inspiral --
-	1708719.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   3906.2 gstlal_inspiral --
-	1708720.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4882.8 gstlal_inspiral --
-	1708721.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4638.7 gstlal_inspiral --
-	1708722.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
-	1708723.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   4882.8 gstlal_inspiral --
-	1708724.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
-	1708725.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
-	1708726.0   gstlalcbc       7/28 22:03   0+10:12:33 R  0   7324.2 gstlal_inspiral --
-	1708727.0   gstlalcbc       7/28 22:03   0+10:12:08 R  0   4882.8 gstlal_inspiral --
-	1708728.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
-	1708729.0   gstlalcbc       7/28 22:03   0+10:12:08 R  0   7324.2 gstlal_inspiral --
-	1708730.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
-	1708731.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
-	1708732.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
-	1708733.0   gstlalcbc       7/28 22:03   0+10:12:07 R  0   7324.2 gstlal_inspiral --
-	1708735.0   gstlalcbc       7/28 22:03   0+10:12:18 R  0   0.0  lvalert_listen --u
-
-
-\section TwoWeeks Two Week testing run
-
-
-\subsection TwoWeekData Two Week Data
-
-Some quick facts:
-
- - GPS Start: 967161687 -> 1119131821
- - GPS End:   968371287 -> 1120341421
- - IFOs: H1, L1
-
-
-\subsection twoweekstatus status as of Jul 1
-
-		1573929.0   gstlalcbc       6/23 17:45   7+15:39:10 R  0   0.0  gstlal_inspiral_ma
-		1573930.0   gstlalcbc       6/23 17:45   7+15:39:05 R  0   0.0  gstlal_ll_inspiral
-		1573931.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573932.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573933.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
-		1573934.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573935.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
-		1573936.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573937.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
-		1573938.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573939.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
-		1573940.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573941.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   9765.6 gstlal_inspiral --
-		1573942.0   gstlalcbc       6/23 17:45   7+15:38:42 R  0   7324.2 gstlal_inspiral --
-		1573943.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
-		1573944.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573945.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
-		1573946.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573947.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   9765.6 gstlal_inspiral --
-		1573948.0   gstlalcbc       6/23 17:45   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573949.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   9765.6 gstlal_inspiral --
-		1573950.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573951.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573952.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   7324.2 gstlal_inspiral --
-		1573953.0   gstlalcbc       6/23 17:46   7+15:38:41 R  0   9765.6 gstlal_inspiral --
-		1573954.0   gstlalcbc       6/23 17:46   7+15:38:14 R  0   9765.6 gstlal_inspiral --
-		1573955.0   gstlalcbc       6/23 17:46   7+15:38:38 R  0   0.0  lvalert_listen --u
-
-
-\section Results Results
-
- - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201119131821..1120341421">GraceDb query</a>
- - <a href="https://simdb.phys.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201119131821..1120341421">SimDb query</a>
+	1708701.0   gstlalcbc       7/28 22:02   0+16:12:28 R  0   0.3  condor_dagman -f -
+	1708708.0   gstlalcbc       7/28 22:02   0+16:12:10 R  0   0.0  gstlal_inspiral_ma
+	1708709.0   gstlalcbc       7/28 22:02   0+16:12:10 R  0   0.0  gstlal_ll_inspiral
+	1708710.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   7324.2 gstlal_inspiral --
+	1708711.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   4394.5 gstlal_inspiral --
+	1708712.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   7324.2 gstlal_inspiral --
+	1708713.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   4882.8 gstlal_inspiral --
+	1708714.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   7324.2 gstlal_inspiral --
+	1708715.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   4394.5 gstlal_inspiral --
+	1708716.0   gstlalcbc       7/28 22:02   0+16:11:55 R  0   7324.2 gstlal_inspiral --
+	1708717.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   4394.5 gstlal_inspiral --
+	1708718.0   gstlalcbc       7/28 22:03   0+16:11:55 R  0   4882.8 gstlal_inspiral --
+	1708719.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   4150.4 gstlal_inspiral --
+	1708720.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   4882.8 gstlal_inspiral --
+	1708721.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   4638.7 gstlal_inspiral --
+	1708722.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   7324.2 gstlal_inspiral --
+	1708723.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   4882.8 gstlal_inspiral --
+	1708724.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   7324.2 gstlal_inspiral --
+	1708725.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   7324.2 gstlal_inspiral --
+	1708726.0   gstlalcbc       7/28 22:03   0+16:11:54 R  0   7324.2 gstlal_inspiral --
+	1708727.0   gstlalcbc       7/28 22:03   0+16:11:29 R  0   7324.2 gstlal_inspiral --
+	1708728.0   gstlalcbc       7/28 22:03   0+16:11:28 R  0   7324.2 gstlal_inspiral --
+	1708729.0   gstlalcbc       7/28 22:03   0+16:11:29 R  0   7324.2 gstlal_inspiral --
+	1708730.0   gstlalcbc       7/28 22:03   0+16:11:28 R  0   7324.2 gstlal_inspiral --
+	1708731.0   gstlalcbc       7/28 22:03   0+16:11:28 R  0   7324.2 gstlal_inspiral --
+	1708732.0   gstlalcbc       7/28 22:03   0+16:11:28 R  0   7324.2 gstlal_inspiral --
+	1708733.0   gstlalcbc       7/28 22:03   0+16:11:28 R  0   7324.2 gstlal_inspiral --
+	1708735.0   gstlalcbc       7/28 22:03   0+16:11:39 R  0   0.0  lvalert_listen --u
+	1713104.0   gstlalcbc       7/29 13:54   0+00:20:33 R  0   0.0  gstlal_ll_inspiral
 
 
 \section Review
