@@ -164,7 +164,7 @@ for n,ifo in enumerate(["H1", "L1"]):
 	snrs[ifo] = numpy.array([r.snr for r in sngl if r.ifo == ifo])
 	chisqs[ifo] = numpy.array([r.chisq for r in sngl if r.ifo == ifo])
 	mchirps[ifo] = numpy.array([mchirp(r.mass1, r.mass2) for r in sngl if r.ifo == ifo])
-	ba[ifo] = rate.BinnedArray(rate.NDBins((rate.LinearBins(-600,600,1201), rate.LogarithmicBins(minmchirp, maxmchirp, 200))))
+	ba[ifo] = rate.BinnedArray(rate.NDBins((rate.LinearBins(-600,600,401), rate.LogarithmicBins(minmchirp, maxmchirp, 100))))
 	ba[ifo].array[:] = 4.0
 	for t,s,m in zip(times[ifo], snrs[ifo], mchirps[ifo]):
 		if ba[ifo][t, m] < s:
