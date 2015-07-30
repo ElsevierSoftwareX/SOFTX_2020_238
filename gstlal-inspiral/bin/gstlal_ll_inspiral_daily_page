@@ -49,6 +49,10 @@ inj_pattern = re.compile('.*-1[0-9]{3}_LLOID-.*.xml.gz')
 noninj_files_to_merge = []
 inj_files_to_merge = []
 
+# FIXME assume that the correct low latency cluster file is in the working
+# directory. Perhaps this should be a command line argument.
+cluster_file = os.path.join(options.directory, "ll_simplify_and_cluster.sql")
+
 result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
 for n, d in enumerate(result_dirs):
 	print >> sys.stderr, "processing directory %d of %d: %s" % (n+1, len(result_dirs), d)
@@ -80,7 +84,7 @@ for n, d in enumerate(result_dirs):
 	progressbar = ProgressBar("Non injection files processed", len(files))
 	for f in files:
 		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % noninjdb])
 		progressbar.increment()
 	del progressbar
 
@@ -89,7 +93,7 @@ for n, d in enumerate(result_dirs):
 	progressbar = ProgressBar("Injection files processed", len(files))
 	for f in files:
 		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % injdb])
 		progressbar.increment()
 	del progressbar
 
@@ -119,14 +123,14 @@ if os.path.exists(injdb):
 progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
 for f in noninj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
-	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % noninjdb])
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % noninjdb])
 	progressbar.increment()
 del progressbar
 
 progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + len(seg_files))
 for f in inj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
-	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", "/usr/share/gstlal/simplify_and_cluster.sql",  "%s" % injdb])
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % injdb])
 	progressbar.increment()
 del progressbar
 
