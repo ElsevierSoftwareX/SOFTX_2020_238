@@ -50,14 +50,10 @@ def create_expression(inbuf, outbuf, caps, expression):
 	rate = caps[0]["rate"]
 	dt = 1.0/float(rate)
 	t_start = float(inbuf.timestamp) / float(gst.SECOND)
-	print t_start
 	dur = float(inbuf.duration) / float(gst.SECOND)
-	print dur
 	t_end = t_start + dur
 	t = numpy.arange(t_start, t_end, dt)
 	y = eval(expression, numpy.__dict__, {'t': t})
-	print len(y)
-	print len(t)
 
 	unitsize = pipeio.get_unit_size(caps)
 	bufsize = unitsize * len(t)

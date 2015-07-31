@@ -454,7 +454,9 @@ if not options.no_gamma:
 	
 	deltat = 1.0 / float(sr)
 	cos = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq))
+	cos = pipeparts.mkaudiorate(pipeline, cos, skip_to_first = True, silent = False)
 	sin = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq))
+	sin = pipeparts.mkaudiorate(pipeline, sin, skip_to_first = True, silent = False)
 
 	if options.full_calibration:
 		ctrl_for_gamma = pipeparts.mkqueue(pipeline, ctrltee, max_size_time = gst.SECOND * 100)
@@ -481,6 +483,7 @@ if not options.no_gamma:
 		gamma_modify_derr = pipeparts.mkcapsfilter(pipeline, gamma_modify_derr, "audio/x-raw-float, width=64, rate=%d" % sr)
 		gamma_modify_derr = pipeparts.mkaudiorate(pipeline, gamma_modify_derr, skip_to_first = True, silent = False)
 		gamma_modify_derr = pipeparts.mkgeneric(pipeline, gamma_modify_derr, "lal_check_calib_factors", min=options.gamma_real_min, max=options.gamma_real_max, default=1.0)
+		gamma_modify_derr = pipeparts.mkaudiorate(pipeline, gamma_modify_derr, skip_to_first = True, silent = False)
 		res_gamma = gst.element_factory_make("lal_multiplier")
 		res_gamma.set_property("sync", True)
 		pipeline.add(res_gamma)
@@ -488,6 +491,7 @@ if not options.no_gamma:
 		pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gamma_modify_derr, exponent = -1.0), max_size_time = gst.SECOND*100).link(res_gamma)
 		res = pipeparts.mkaudioconvert(pipeline, res_gamma)
 		res = pipeparts.mkcapsfilter(pipeline, res, "audio/x-raw-float, width=64, rate=%d" % sr)
+		res = pipeparts.mkaudiorate(pipeline, res, skip_to_first = True, silent = False)
 
 # Add control and residual chains and divide by L to make h(t)
 strain = gst.element_factory_make("lal_adder")
