@@ -320,17 +320,6 @@ demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True,
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
-if not options.no_gamma and options.data_source == "lvshm":
-	def seekeventnow(pad, obj):
-        	if isinstance(obj, gst.Buffer):
-			print obj.timestamp
-			seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, obj.timestamp, gst.SEEK_TYPE_SET, -1)		
-			coshead.send_event(seekevent)
-			sinhead.send_event(seekevent)
-                        return True
-        	elif isinstance(obj, gst.Event):
-                	return True
-	demux.connect("pad-added", demux.get_pad("src").add_data_probe(seekeventnow))  
 
 ctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 res = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
