@@ -450,18 +450,17 @@ ctrl = pipeparts.mkcapsfilter(pipeline, ctrl, "audio/x-raw-float, rate=%d" % sr)
 
 # Compute the gamma factors, if applicable
 if not options.no_gamma:
+	exctee = pipeparts.mktee(pipeline, exc)
+	
 	deltat = 1.0 / float(sr)
-	coshead = cos = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr * 4)
-	cos = pipeparts.mkcapsfilter(pipeline, cos, "audio/x-raw-float, width=64, rate=%d" % sr) 
-
-	sinhead = sin = pipeparts.mkgeneric(pipeline, None, "lal_numpy_functiongenerator", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq), blocksize = sr * 4)
-	sin = pipeparts.mkcapsfilter(pipeline, sin, "audio/x-raw-float, width=64, rate=%d" % sr)
+	cos = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq))
+	sin = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, cal_line_freq))
 
 	if options.full_calibration:
 		ctrl_for_gamma = pipeparts.mkqueue(pipeline, ctrltee, max_size_time = gst.SECOND * 100)
 	elif options.partial_calibration:
 		ctrl_for_gamma = pipeparts.mkqueue(pipeline, darm_ctrl, max_size_time = gst.SECOND * 100)
-	compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, ctrl_for_gamma, pipeparts.mkqueue(pipeline, exc, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = options.compute_gamma_sr, time_domain = True, wI = wI, wR = wR, wmod = wmod, olgmod = olgmod)
+	compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, ctrl_for_gamma, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = options.compute_gamma_sr, time_domain = True, wI = wI, wR = wR, wmod = wmod, olgmod = olgmod)
 	gammaR = compute_gamma_bin.get_pad("gammaR")
 	gammaR = pipeparts.mkaudioconvert(pipeline, gammaR)
 	gammaR = pipeparts.mkcapsfilter(pipeline, gammaR, "audio/x-raw-float, width=64, rate=%d" % options.compute_gamma_sr)
@@ -753,25 +752,9 @@ if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
 
 # Seek the pipeline when necessary.  Note: The seekevent for frames is set above when command line is being parsed/sanity checked.
-
-# FIXME: This scheme assumes that the shared memory partitions are keeping up with real time when the data source is lvshm. This is probably not a good assumption outside of the DMT environment.
-# FIXME: This also leads to differences between online vs. offline running, since the sine/cosine waves initiate at slightly different GPS times.  Maybe this is a non-issue if \gamma(t) will only be calculated in offline use.
-if options.data_source == "lvshm" and not options.no_gamma:
-	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, NOW, gst.SEEK_TYPE_SET, -1)
 if options.data_source == "frames":
 	datasource.do_seek(pipeline, seekevent)	
 	print >>sys.stderr, "seeking GPS start and stop times ..."
-if not options.no_gamma:
-	if coshead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError("Element %s did not want to enter ready state" % coshead.get_name())
-	if not coshead.send_event(seekevent):
-		raise RuntimeError("Element %s did not handle seek event" % coshead.get_name())
-			
-	if sinhead.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError("Element %s did not want to enter ready state" % sinhead.get_name())
-	if not sinhead.send_event(seekevent):
-		raise RuntimeError("Element %s did not handle seek event" % sinhead.get_name())
-		
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
