@@ -307,11 +307,15 @@ def parse_command_line():
 	#
 	
 	if options.svd_bank_cache:
+		#FIXME Use Ordered Dictionary when we use python 2.7
 		svd_bank_dict = {}
+		descriptions = []
 		for line in open(options.svd_bank_cache):
 			svd_bank_cache_entry = CacheEntry(line)
+			if svd_bank_cache_entry.description not in descriptions:
+				descriptions.append(svd_bank_cache_entry.description)
 			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
-		options.svd_bank.extend([",".join(svd_string) for svd_string in svd_bank_dict.itervalues()])
+		options.svd_bank.extend([",".join(svd_bank_dict[description]) for description in descriptions])
 
 	if options.output_cache:
 		options.output.extend([CacheEntry(line).url for line in open(options.output_cache)])
