@@ -1,3 +1,9 @@
+gstlal-calibration (0.4.0-1) unstable; urgency=low
+
+  * First pre-ER8 release
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 31 July 2015 15:47:00 -0500
+
 gstlal-calibration (0.3.3-1) unstable; urgency=low
 
   * Another bug fix release for the --wings option (again)

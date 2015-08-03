@@ -167,6 +167,7 @@ parser.add_option("--no-gamma", action = "store_true", help = "Set this to turn 
 parser.add_option("--apply-gamma", action = "store_true", help = "Set this to have the \gamma factors multiply the sensing chain.")
 parser.add_option("--compute-gamma-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which \gamma(t) is computed. (Default = 2048 Hz)")
 parser.add_option("--record-gamma-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which \gamma(t) is recorded. (Default = 16 Hz)")
+parser.add_option("--gamma-integration-time", metavar = "sec", type = float, default = 1.0, help = "Integration time for \gamma(t) computation. (Default = 1 s)")
 parser.add_option("--gamma-real-min", metavar = "float", type = float, default = 0.5, help = "Minimum acceptable value for real part of \gamma(t).")
 parser.add_option("--gamma-real-max", metavar = "float", type = float, default = 1.5, help = "Maximum acceptable value for real part of \gamma(t).")
 parser.add_option("--gamma-imag-min", metavar = "float", type = float, default = -0.5, help = "Minimum acceptable value for imaginary part of \gamma(t).")
@@ -377,11 +378,16 @@ if not options.no_gamma:
 	cal_line_freq = 1144.300000
 	"""
 	# If you have a filters file with all of the info in it, uncomment the following lines
-	olgR = float(filters["olg_re"])
-	olgI = float(filters["olg_im"])
-	wR = float(filters["whitener_re"])
-	wI = float(filters["whitener_im"])
-	cal_line_freq = float(filters["cal_line_freq"])
+	#olgR = float(filters["olg_re"])
+	#olgI = float(filters["olg_im"])
+	#wR = float(filters["whitener_re"])
+	#wI = float(filters["whitener_im"])
+	#cal_line_freq = float(filters["cal_line_freq"])
+	olgR = -1.00075
+	olgI = 0.00075569
+	wR = 1.6177e-5
+	wI = -1.8659e-4
+	cal_line_freq = 535.1
 	wmod = wR * wR + wI * wI
 	olgmod = olgR * olgR + olgI * olgI
 
@@ -462,7 +468,7 @@ if not options.no_gamma:
 		ctrl_for_gamma = pipeparts.mkqueue(pipeline, ctrltee, max_size_time = gst.SECOND * 100)
 	elif options.partial_calibration:
 		ctrl_for_gamma = pipeparts.mkqueue(pipeline, darm_ctrl, max_size_time = gst.SECOND * 100)
-	compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, ctrl_for_gamma, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), olgI = olgI, olgR = olgR, sr = options.compute_gamma_sr, time_domain = True, wI = wI, wR = wR, wmod = wmod, olgmod = olgmod)
+	compute_gamma_bin = pipeparts.mkcomputegamma(pipeline, ctrl_for_gamma, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, cos, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, sin, max_size_time = gst.SECOND * 100), integration_samples = int(options.compute_gamma_sr*options.gamma_integration_time), olgI = olgI, olgR = olgR, sr = options.compute_gamma_sr, time_domain = True, wI = wI, wR = wR, wmod = wmod, olgmod = olgmod)
 	gammaR = compute_gamma_bin.get_pad("gammaR")
 	gammaR = pipeparts.mkaudioconvert(pipeline, gammaR)
 	gammaR = pipeparts.mkcapsfilter(pipeline, gammaR, "audio/x-raw-float, width=64, rate=%d" % options.compute_gamma_sr)
