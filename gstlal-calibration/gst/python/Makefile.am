@@ -8,4 +8,5 @@ pkgpython_PYTHON = \
 	lal_logical_undersampler.py \
 	lal_compute_gamma.py \
 	lal_check_calib_factors.py \
-	lal_numpy_fx_transform.py
+	lal_numpy_fx_transform.py \
+	lal_add_constant.py
