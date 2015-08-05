@@ -72,7 +72,6 @@ pygst.require("0.10")
 import sys
 import os
 import numpy
-import time
 
 from optparse import OptionParser, Option
 
@@ -94,6 +93,7 @@ else:
 import lal
 
 from gstlal import pipeparts
+from gstlal import calibration_parts
 from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import datasource
@@ -108,17 +108,6 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue import segments
-
-def psd_resolution_changed(elem, pspec, psd):
-	# get frequency resolution and number of bins
-	delta_f = elem.get_property("delta-f")
-	n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
-	# interpolate and install PSD
-	psd = reference_psd.interpolate_psd(psd, delta_f)
-	elem.set_property("mean-psd", psd.data[:n])
-
-def write_graph(demux):
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
 	
 parser = OptionParser(description = __doc__)
 
@@ -164,15 +153,58 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 # These are options specific to the calibration procedure
 parser.add_option("--filters-file", metavar="filename", help = "Name of file containing filters (in npz format)")
 parser.add_option("--no-gamma", action = "store_true", help = "Set this to turn off the calculation of \gamma from calibration lines.")
+parser.add_option("--no-kappaa", action = "store_true", help = "Set this to turn off the calculation of \kappa_a.")
+parser.add_option("--no-kappac", action = "store_true", help = "Set this to turn off the calculation of \kappa_c.")
+parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn off the calculation of f_cc.")
 parser.add_option("--apply-gamma", action = "store_true", help = "Set this to have the \gamma factors multiply the sensing chain.")
+parser.add_option("--apply-kappaa", action = "store_true", help = "Set this to have the \kappa_a factors multiply the actuation chain.")
+parser.add_option("--apply-kappac", action = "store_true", help = "Set this to have the \kappa_c factors multiply the sensing chain.")
 parser.add_option("--compute-gamma-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which \gamma(t) is computed. (Default = 2048 Hz)")
+parser.add_option("--compute-kappaa-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which \kappa_a is computed. (Default = 2048 Hz)")
+parser.add_option("--compute-kappac-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which \kappa_c is computed. (Default = 2048 Hz)")
+parser.add_option("--compute-fcc-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which f_cc is computed. (Default = 2048 Hz)")
 parser.add_option("--record-gamma-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which \gamma(t) is recorded. (Default = 16 Hz)")
-parser.add_option("--gamma-integration-time", metavar = "sec", type = float, default = 1.0, help = "Integration time for \gamma(t) computation. (Default = 1 s)")
-parser.add_option("--gamma-real-min", metavar = "float", type = float, default = 0.5, help = "Minimum acceptable value for real part of \gamma(t).")
-parser.add_option("--gamma-real-max", metavar = "float", type = float, default = 1.5, help = "Maximum acceptable value for real part of \gamma(t).")
-parser.add_option("--gamma-imag-min", metavar = "float", type = float, default = -0.5, help = "Minimum acceptable value for imaginary part of \gamma(t).")
-parser.add_option("--gamma-imag-max", metavar = "float", type = float, default = 0.5, help = "Maximum acceptable value for imaginary part of \gamma(t).")
+parser.add_option("--record-kappaa-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which \kappa_a is recorded. (Default = 16 Hz)")
+parser.add_option("--record-kappac-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which \kappa_c is recorded. (Default = 16 Hz)")
+parser.add_option("--record-fcc-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which f_cc is recorded. (Default = 16 Hz)")
+parser.add_option("--gamma-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for \gamma(t) computation. (Default = 10 s)")
+parser.add_option("--kappaa-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for \kappa_a computation. (Default = 10 s)")
+parser.add_option("--kappac-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for \kappa_c computation. (Default = 10 s)")
+parser.add_option("--fcc-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for f_cc computation. (Default = 10 s)")
+parser.add_option("--gamma-real-min", metavar = "float", type = float, default = 0.5, help = "Minimum acceptable value for real part of \gamma(t). (Default = 0.5)")
+parser.add_option("--kappaa-real-min", metavar = "float", type = float, default = 0.5, help = "Minimum acceptable value for real part of \kappa_a. (Default = 0.5)")
+parser.add_option("--kappac-real-min", metavar = "float", type = float, default = 0.5, help = "Minimum acceptable value for real part of \kappa_c. (Default = 0.5)")
+parser.add_option("--gamma-real-max", metavar = "float", type = float, default = 1.5, help = "Maximum acceptable value for real part of \gamma(t). (Default = 1.5)")
+parser.add_option("--kappaa-real-max", metavar = "float", type = float, default = 1.5, help = "Maximum acceptable value for real part of \kappa_a. (Default = 1.5)")
+parser.add_option("--kappac-real-max", metavar = "float", type = float, default = 1.5, help = "Maximum acceptable value for real part of \kappa_c. (Default = 1.5)")
+parser.add_option("--gamma-imag-min", metavar = "float", type = float, default = -0.5, help = "Minimum acceptable value for imaginary part of \gamma(t). (Default = -0.5)")
+parser.add_option("--kappaa-imag-min", metavar = "float", type = float, default = -0.5, help = "Minimum acceptable value for imaginary part of \kappa_a. (Default = -0.5)")
+parser.add_option("--kappac-imag-min", metavar = "float", type = float, default = -0.5, help = "Minimum acceptable value for imaginary part of \kappa_c. (Default = -0.5)")
+parser.add_option("--gamma-imag-max", metavar = "float", type = float, default = 0.5, help = "Maximum acceptable value for imaginary part of \gamma(t). (Default = 0.5)")
+parser.add_option("--kappaa-imag-max", metavar = "float", type = float, default = 0.5, help = "Maximum acceptable value for imaginary part of \kappa_a.(Default = 0.5)")
+parser.add_option("--kappac-imag-max", metavar = "float", type = float, default = 0.5, help = "Maximum acceptable value for imaginary part of \kappa_c.(Default = 0.5)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "Set the name of the excitation channel.  This is only necessary when the \gamma factors computation is turned on, which is the default behavior. (Default = CAL-CS_LINE_SUM_DQ)")
+parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
+parser.add_option("--ref-channels-sr", metavar = "Hz", default = 16384, help = "Set the sample rate for the reference model channels used in the calibration factors calculation. (Default = 16384 Hz)")
+parser.add_option("--kappaa-esd-ref-A-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_REAL", help = "Set the name of the channel containing the real part of A at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_REAL)")
+parser.add_option("--kappaa-esd-ref-A-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_IMAG", help = "Set the name of the channel containing the imaginary part of A at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_IMAG")
+parser.add_option("--kappaa-esd-ref-C-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_C_REAL", help = "Set the name of the channel containing the real part of C at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_C_REAL")
+parser.add_option("--kappaa-esd-ref-C-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_C_IMAG", help = "Set the name of the channel containing the imaginary part of C at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_C_IMAG")
+parser.add_option("--kappaa-esd-ref-D-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_D_REAL")
+parser.add_option("--kappaa-esd-ref-D-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_D_IMAG", help = "Set the name of the channel containing the imaginary part of D at the ESD line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_ESD_LINE1_REF_D_IMAG")
+parser.add_option("--kappaa-pcal-ref-C-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_C_REAL", help = "Set the name of the channel containing the real part of C at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_C_REAL")
+parser.add_option("--kappaa-pcal-ref-C-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_C_IMAG", help = "Set the name of the channel containing the imaginary part of C at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_C_IMAG")
+parser.add_option("--kappaa-pcal-ref-A-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_A_REAL", help = "Set the name of the channel containing the real part of A at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_A_REAL")
+parser.add_option("--kappaa-pcal-ref-A-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_A_IMAG", help = "Set the name of the channel containing the imaginary part of A at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_A_IMAG")
+parser.add_option("--kappaa-pcal-ref-D-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_D_REAL")
+parser.add_option("--kappaa-pcal-ref-D-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE1_REF_D_IMAG", help = "Set the name of the channel containing the imaginary part of D at the PCal line used for the \kappa_a calculation. (Default = CAL-CS_TDEP_PCALY_LINE1_REF_D_IMAG")
+parser.add_option("--kappac-pcal-ref-Cres-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_REAL", help = "Set the name of the channel containing the real part of C_res at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_REAL")
+parser.add_option("--kappac-pcal-ref-Cres-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_IMAG", help = "Set the name of the channel containing the imaginary part of C_res at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_IMAG")
+parser.add_option("--kappac-pcal-ref-D-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_D_REAL")
+parser.add_option("--kappac-pcal-ref-D-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG", help = "Set the name of the channel containing the real part of D at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG")
+parser.add_option("--kappac-pcal-ref-A-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_REAL", help = "Set the name of the channel containing the real part of A at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_REAL")
+parser.add_option("--kappac-pcal-ref-A-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_IMAG", help = "Set the name of the channel containing the real part of A at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_IMAG")
+
 
 # These options are specific to the full calibration mode
 parser.add_option("--full-calibration", action = "store_true", help = "Set this to run the pipeline in full calibration mode.")
@@ -222,6 +254,9 @@ if options.partial_calibration and (options.deltal_ctrl_channel_name is None or 
 if not options.no_gamma and (options.exc_channel_name is None or options.darm_ctrl_channel_name is None):
 	raise ValueError("must specify --exc-channel-name and --darm-ctrl-channel-name when computing gamma")
 
+if (not options.no_kappaa or not options.no_kappac or not options.no_fcc) and (options.exc_channel_name is None or options.darm_err_channel_name is None or options.pcal_channel_name is None):
+	raise ValueError("must specify --exc-channel-name and --pcal-channel-name and --darm-err-channel-name when computing calibration factors")
+
 if options.frame_segments_file is not None and options.data_source != "frames":
 	raise ValueError("can only give --frame-segments-file if --data-source=frames")
 
@@ -236,6 +271,15 @@ if options.full_calibration is None and options.partial_calibration is None:
 
 if int(options.record_gamma_sr) > int(options.compute_gamma_sr):
 	raise ValueError("--record-gamma-sr must be less than or equal to --compute-gamma-sr")
+
+if int(options.record_kappaa_sr) > int(options.compute_kappaa_sr):
+	raise ValueError("--record-kappaa-sr must be less than or equal to --compute-kappaa-sr")
+
+if int(options.record_kappac_sr) > int(options.compute_kappac_sr):
+	raise ValueError("--record-kappac-sr must be less than or equal to --compute-kappac-sr")
+
+if int(options.record_fcc_sr) > int(options.compute_fcc_sr):
+	raise ValueError("--record-fcc-sr must be less than or equal to --compute-fcc-sr")
 
 if options.gps_start_time is not None:
 	if options.gps_end_time is None:
@@ -275,8 +319,6 @@ else:
 sr = options.sample_rate
 dqsr = options.dq_sample_rate
 caps = "audio/x-raw-float, width=64, rate=%d" % sr # = 8 bytes, a double
-tm = time.gmtime()
-NOW = lal.UTCToGPS(tm) * gst.SECOND
 
 #
 # Setup the pipeline
@@ -313,6 +355,28 @@ if not options.no_gamma:
 	if options.partial_calibration:
 		channel_list.append((instrument, options.darm_ctrl_channel_name))
 
+if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+	channel_list.append((instrument, options.pcal_channel_name))
+	channel_list.append((instrument, options.exc_channel_name))
+	channel_list.append((instrument, options.kappaa_esd_ref_A_real))
+	channel_list.append((instrument, options.kappaa_esd_ref_A_imag))
+	channel_list.append((instrument, options.kappaa_esd_ref_C_real))
+	channel_list.append((instrument, options.kappaa_esd_ref_C_imag))
+	channel_list.append((instrument, options.kappaa_esd_ref_D_real))
+	channel_list.append((instrument, options.kappaa_esd_ref_D_imag))
+	channel_list.append((instrument, options.kappaa_pcal_ref_C_real))
+	channel_list.append((instrument, options.kappaa_pcal_ref_C_imag))
+	channel_list.append((instrument, options.kappaa_pcal_ref_A_real))
+	channel_list.append((instrument, options.kappaa_pcal_ref_A_imag))
+	channel_list.append((instrument, options.kappaa_pcal_ref_D_real))
+	channel_list.append((instrument, options.kappaa_pcel_ref_D_imag))
+	channel_list.append((instrument, options.kappac_pcal_ref_Cres_real))
+	channel_list.append((instrument, options.kappac_pcal_ref_Cres_imag))
+	channel_list.append((instrument, options.kappac_pcal_ref_D_real))
+	channel_list.append((instrument, options.kappac_pcal_ref_D_imag))
+	channel_list.append((instrument, options.kappac_pcal_ref_A_real))
+	channel_list.append((instrument, options.kappac_pcal_ref_A_imag))
+
 if not options.no_dq_vector:
 	channel_list.append((instrument, options.dq_channel_name))
 	
@@ -320,36 +384,43 @@ if not options.no_dq_vector:
 demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
-	demux.connect("no-more-pads", write_graph)	
+	demux.connect("no-more-pads", calibration_parts.write_graph, options.write_pipeline)	
 
-ctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-res = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-if not options.no_gamma:
-	exc = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-	if options.partial_calibration:
-		darm_ctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-if not options.no_dq_vector:
-	odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
-
-# Get everything hooked up and blocked off to no more than 1 second buffers
 if options.full_calibration:
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_ctrl_channel_name), ctrl.get_pad("sink"))
-	ctrl = pipeparts.mkreblock(pipeline, ctrl, block_duration = gst.SECOND)
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_err_channel_name), res.get_pad("sink"))
-	res = pipeparts.mkreblock(pipeline, res, block_duration = gst.SECOND)
+	ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_ctrl_channel_name, instrument)
+	res = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_err_channel_name, instrument)
 elif options.partial_calibration:
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.deltal_ctrl_channel_name), ctrl.get_pad("sink"))
-	ctrl = pipeparts.mkreblock(pipeline, ctrl, block_duration = gst.SECOND)
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.deltal_res_channel_name), res.get_pad("sink"))
-	res = pipeparts.mkreblock(pipeline, res, block_duration = gst.SECOND)
+	ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.deltal_ctrl_channel_name, instrument)
+	res = calibration_parts.hook_up_and_reblock(pipeline, demux, options.deltal_res_channel_name, instrument)
 if not options.no_gamma:
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.exc_channel_name), exc.get_pad("sink"))
-	exc = pipeparts.mkreblock(pipeline, exc, block_duration = gst.SECOND)
+	exc = calibration_parts.hook_up_and_reblock(pipeline, demux, options.exc_channel_name, instrument)
 	if options.partial_calibration:
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_ctrl_channel_name), darm_ctrl.get_pad("sink"))
-		darm_ctrl = pipeparts.mkreblock(pipeline, darm_ctrl, block_duration = gst.SECOND)
+		darm_ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_ctrl_channel_name, instrument)
+if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+	exc = calibration_parts.hook_up_and_reblock(pipeline, demux, options.exc_channel_name, instrument)
+	pcal = calibration_parts.hook_up_and_reblock(pipeline, demux, options.pcal_channel_name, instrument)
+	if options.partial_calibration:
+		darm_err = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_err_channel_name, instrument)
+	ka_esd_A_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_A_real, instrument)
+	ka_esd_A_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_A_imag, instrument)
+	ka_esd_C_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_C_real, instrument)
+	ka_esd_C_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_C_imag, instrument)
+	ka_esd_D_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_D_real, instrument)
+	ka_esd_D_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_esd_ref_D_imag, instrument)
+	ka_pcal_C_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_C_real, instrument)
+	ka_pcal_C_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_C_imag, instrument)
+	ka_pcal_A_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_A_real, instrument)
+	ka_pcal_A_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_A_imag, instrument)
+	ka_pcal_D_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_D_real, instrument)
+	ka_pcal_D_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappaa_pcal_ref_D_imag, instrument)
+	kc_pcal_Cres_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_Cres_real, instrument)
+	kc_pcal_Cres_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_Cres_imag, instrument)
+	kc_pcal_D_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_D_real, instrument)
+	kc_pcal_D_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_D_imag, instrument)
+	kc_pcal_A_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_A_real, instrument)
+	kc_pcal_A_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_A_imag, instrument)
 if not options.no_dq_vector:
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.dq_channel_name), odcstatevector.get_pad("sink"))
+	odcstatevector = calibration_parts.hook_up_and_reblock(pipeline, demux, odcstatevector, options.dq_channel_name, instrument)
 	# FIXME: When the ODC is written as unsigned ints, this piece can be removed
 	odcstatevector = pipeparts.mkaudioconvert(pipeline, odcstatevector)
 	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, "audio/x-raw-int, signed=false")
@@ -362,6 +433,29 @@ if options.data_source == "frames" and frame_segments is not None:
 		exc = pipeparts.mkgate(pipeline, exc, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 		if options.partial_calibration:
 			darm_ctrl = pipeparts.mkgate(pipeline, darm_ctrl, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+	if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+		exc = pipeparts.mkgate(pipeline, exc, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		pcal = pipeparts.mkgate(pipeline, pcal, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		if options.partial_calibration:
+			darm_err = pipeparts.mkgate(pipeline, darm_err, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_A_real = pipeparts.mkgate(pipeline, ka_esd_A_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_A_imag = pipeparts.mkgate(pipeline, ka_esd_A_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_C_real = pipeparts.mkgate(pipeline, ka_esd_C_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_C_imag = pipeparts.mkgate(pipeline, ka_esd_C_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_D_real = pipeparts.mkgate(pipeline, ka_esd_D_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_esd_D_imag = pipeparts.mkgate(pipeline, ka_esd_D_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_C_real = pipeparts.mkgate(pipeline, ka_pcal_C_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_C_imag = pipeparts.mkgate(pipeline, ka_pcal_C_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_A_real = pipeparts.mkgate(pipeline, ka_pcal_A_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_A_imag = pipeparts.mkgate(pipeline, ka_pcal_A_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_D_real = pipeparts.mkgate(pipeline, ka_pcal_D_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		ka_pcal_D_imag = pipeparts.mkgate(pipeline, ka_pcal_D_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_Cres_real = pipeparts.mkgate(pipeline, kc_pcal_Cres_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_Cres_imag = pipeparts.mkgate(pipeline, kc_pcal_Cres_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_D_real = pipeparts.mkgate(pipeline, kc_pcal_D_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_D_imag = pipeparts.mkgate(pipeline, kc_pcal_D_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_A_real = pipeparts.mkgate(pipeline, kc_pcal_A_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
+		kc_pcal_A_imag = pipeparts.mkgate(pipeline, kc_pcal_A_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))	
 	if not options.no_dq_vector:
 		odcstatevector = pipeparts.mkgate(pipeline, odcstatevector, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 
@@ -378,19 +472,19 @@ if not options.no_gamma:
 	cal_line_freq = 1144.300000
 	"""
 	# If you have a filters file with all of the info in it, uncomment the following lines
-	#olgR = float(filters["olg_re"])
-	#olgI = float(filters["olg_im"])
-	#wR = float(filters["whitener_re"])
-	#wI = float(filters["whitener_im"])
-	#cal_line_freq = float(filters["cal_line_freq"])
-	olgR = -1.00075
-	olgI = 0.00075569
-	wR = 1.6177e-5
-	wI = -1.8659e-4
-	cal_line_freq = 535.1
+	olgR = float(filters["olg_re"])
+	olgI = float(filters["olg_im"])
+	wR = float(filters["whitener_re"])
+	wI = float(filters["whitener_im"])
+	cal_line_freq = float(filters["cal_line_freq"])
 	wmod = wR * wR + wI * wI
 	olgmod = olgR * olgR + olgI * olgI
-
+if not options.no_kappaa or not options.no_kappac or not options.fcc:
+	ka_esd_line_freq = float(filters["ka_esd_line_freq"])
+	ka_pcal_line_freq = float(filters["ka_pcal_line_freq"])
+	kc_pcal_line_freq = float(filters["kc_pcal_line_freq"])
+	wR = float(filters["whitener_re"])
+	wI = float(filters["whitener_im"])
 if options.full_calibration:
 	ctrlchainsr = int(filters["actuation_sr"])
 	ctrldewhitensr = int(filters["dewhiten_ctrl_sr"])
@@ -414,23 +508,39 @@ elif options.partial_calibration:
 	ctrldewhitendelay = filters["deltal_ctrl_dewhiten_delay"]
 	ctrldewhiten = filters["deltal_ctrl_dewhiten"]
 
-# EXC branch
+# Calibration factors branches
 if not options.no_gamma:
-	exc = pipeparts.mkaudiorate(pipeline, exc, skip_to_first = True, silent = False)
-	exc = pipeparts.mkaudioconvert(pipeline, exc)
-	exc = pipeparts.mkcapsfilter(pipeline, exc, caps)
-	exc = pipeparts.mkprogressreport(pipeline, exc, "progress_src_exc_%s" % instrument)
+	exc = calibration_parts.caps_and_progress(pipeline, exc, caps, "exc")
 	if options.partial_calibration:
-		darm_ctrl = pipeparts.mkaudiorate(pipeline, darm_ctrl, skip_to_first = True, silent = False)
-		darm_ctrl = pipeparts.mkaudioconvert(pipeline, darm_ctrl)
-		darm_ctrl = pipeparts.mkcapsfilter(pipeline, darm_ctrl, caps)
-		darm_ctrl = pipeparts.mkprogressreport(pipeline, darm_ctrl, "progress_src_darm_ctrl_%s" % instrument)
+		darm_ctrl = calibration_parts.caps_and_progress(pipeline, darm_ctrl, caps, "darm_ctrl")
+if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+	exc = calibration_parts.caps_and_progress(pipeline, exc, caps, "exc")
+	pcal = calibration_parts.caps_and_progress(pipeline, exc, caps, "pcal")
+	if options.partial_calibration:
+		darm_err = calibration_parts.caps_and_progress(pipeline, darm_err, caps, "darm_err")
+	ka_caps = "audio/x-raw-float, width=64, rate=%d" % options.ref_channels_sr
+	ka_esd_A_real = calibration_parts.caps_and_progress(pipeline, ka_esd_A_real, ka_caps, "ka_esd_A_real")
+	ka_esd_A_imag = calibration_parts.caps_and_progress(pipeline, ka_esd_A_imag, ka_caps, "ka_esd_A_imag")
+	ka_esd_C_real = calibration_parts.caps_and_progress(pipeline, ka_esd_C_real, ka_caps, "ka_esd_C_real")
+	ka_esd_C_imag = calibration_parts.caps_and_progress(pipeline, ka_esd_C_imag, ka_caps, "ka_esd_C_imag")
+	ka_esd_D_real = calibration_parts.caps_and_progress(pipeline, ka_esd_D_real, ka_caps, "ka_esd_D_real")
+	ka_esd_D_imag = calibration_parts.caps_and_progress(pipeline, ka_esd_D_imag, ka_caps, "ka_esd_D_imag")
+	ka_pcal_C_real = calibration_parts.caps_and_progress(pipeline, ka_pcal_C_real, ka_caps, "ka_pcal_C_real")
+	ka_pcal_C_imag = calibration_parts.caps_and_progress(pipeline, ka_pcal_C_imag, ka_caps, "ka_pcal_C_imag")
+	ka_pcal_A_real = calibration_parts.caps_and_progress(pipeline, ka_pcal_A_real, ka_caps, "ka_pcal_A_real")
+	ka_pcal_A_real = calibration_parts.caps_and_progress(pipeline, ka_pcal_A_real, ka_caps, "ka_pcal_A_imag")
+	ka_pcal_D_real = calibration_parts.caps_and_progress(pipeline, ka_pcal_D_real, ka_caps, "ka_pcal_D_real")
+	ka_pcal_D_imag = calibration_parts.caps_and_progress(pipeline, ka_pcal_D_imag, ka_caps, "ka_pcal_D_imag")
+	kc_caps = "audio/x-raw-float, width=64, rate=%d" % options.ref_channels_sr
+	kc_pcal_Cres_real = calibration_parts.caps_and_progress(pipeline, kc_pcal_Cres_real, kc_caps, "kc_pcal_Cres_real")
+	kc_pcal_Cres_imag = calibration_parts.caps_and_progress(pipeline, kc_pcal_Cres_imag, kc_caps, "kc_pcal_Cres_imag")
+	kc_pcal_D_real = calibration_parts.caps_and_progress(pipeline, kc_pcal_D_real, kc_caps, "kc_pcal_D_real")
+	kc_pcal_D_imag = calibration_parts.caps_and_progress(pipeline, kc_pcal_D_imag, kc_caps, "kc_pcal_D_imag")
+	kc_pcal_A_real = calibration_parts.caps_and_progress(pipeline, kc_pcal_A_real, kc_caps, "kc_pcal_A_real")
+	kc_pcal_A_imag = calibration_parts.caps_and_progress(pipeline, kc_pcal_A_imag, kc_caps, "kc_pcal_A_imag")
 
 # Residual branch
-res = pipeparts.mkaudiorate(pipeline, res, skip_to_first = True, silent = False)
-res = pipeparts.mkaudioconvert(pipeline, res)
-res = pipeparts.mkcapsfilter(pipeline, res, caps)
-res = pipeparts.mkprogressreport(pipeline, res, "progress_src_res_%s" % instrument)
+res = calibration_parts.caps_and_progress(pipeline, res, caps, "res")
 
 # The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
 res = pipeparts.mkfirbank(pipeline, res, latency = -int(options.error_chain_delay), fir_matrix = [[0,1]], time_domain = True)
@@ -438,10 +548,7 @@ res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matri
 res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = True)
 	
 # Control branch
-ctrl = pipeparts.mkaudiorate(pipeline, ctrl, skip_to_first = True, silent = False)
-ctrl = pipeparts.mkaudioconvert(pipeline, ctrl)
-ctrl = pipeparts.mkcapsfilter(pipeline, ctrl, caps)
-ctrl = pipeparts.mkprogressreport(pipeline, ctrl, "progress_src_ctrl_%s" % instrument)
+ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, caps, "ctrl")
 ctrltee = pipeparts.mktee(pipeline, ctrl)
 
 ctrl = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, ctrltee, max_size_time = gst.SECOND * 100), latency = -int(options.control_chain_delay), fir_matrix = [[0,1]], time_domain = True)
@@ -483,21 +590,33 @@ if not options.no_gamma:
 	gammaItee = pipeparts.mktee(pipeline, gammaI)			
 	gammaIout = pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100)
 
-	# Mulitiply the derr branch by 1/gamma
+	# Mulitiply the derr branch by 1/gamma, if applicable
 	if options.apply_gamma:
 		gamma_modify_derr = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100), quality = 9)
 		gamma_modify_derr = pipeparts.mkcapsfilter(pipeline, gamma_modify_derr, "audio/x-raw-float, width=64, rate=%d" % sr)
 		gamma_modify_derr = pipeparts.mkaudiorate(pipeline, gamma_modify_derr, skip_to_first = True, silent = False)
 		gamma_modify_derr = pipeparts.mkgeneric(pipeline, gamma_modify_derr, "lal_check_calib_factors", min=options.gamma_real_min, max=options.gamma_real_max, default=1.0)
 		gamma_modify_derr = pipeparts.mkaudiorate(pipeline, gamma_modify_derr, skip_to_first = True, silent = False)
-		res_gamma = gst.element_factory_make("lal_multiplier")
-		res_gamma.set_property("sync", True)
-		pipeline.add(res_gamma)
-		pipeparts.mkqueue(pipeline, res, max_size_time = gst.SECOND*100).link(res_gamma)
-		pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gamma_modify_derr, exponent = -1.0), max_size_time = gst.SECOND*100).link(res_gamma)
-		res = pipeparts.mkaudioconvert(pipeline, res_gamma)
-		res = pipeparts.mkcapsfilter(pipeline, res, "audio/x-raw-float, width=64, rate=%d" % sr)
-		res = pipeparts.mkaudiorate(pipeline, res, skip_to_first = True, silent = False)
+		res_gamma = calibration_parts.mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, res, max_size_time = gst.SECOND*100), pipeparts.mkqueue(pipeline, pipeparts.mkpow(pipeline, gamma_modify_derr, exponent = -1.0), max_size_time = gst.SECOND*100)))
+		#res = pipeparts.mkaudioconvert(pipeline, res_gamma)
+		#res = pipeparts.mkcapsfilter(pipeline, res, "audio/x-raw-float, width=64, rate=%d" % sr)
+		#res = pipeparts.mkaudiorate(pipeline, res, skip_to_first = True, silent = False)
+
+# Compute \kappa_a, if applicable
+if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+	pcaltee = pipeparts.mktee(pipeline, pcal)
+	ka_demod_caps = "audio/x-raw-float, rate=%d" % options.compute_kappaa_sr
+	ka_integration_samples = int(options.kappaa_integration_time) * options.compute_kappaa_sr
+	ka_excR, ka_excI = calibration_parts.demodulate(pipeline, exc, sr, ka_esd_line_freq, ka_demod_caps, ka_integration_samples)
+	ka_pcalR, ka_pcalI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipline, pcaltee, max_size_time = gst.SECOND * 100), sr, ka_pcal_line_freq, ka_demod_caps, ka_integration_samples)
+	kc_demod_caps = "audio/x-raw-float, rate=%d" % options.compute_kappac_sr
+	kc_integration_samples = int(options.kappac_integration_time) * options.compute_kappac_sr
+	kc_pcalR, kc_pcalI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipeline, pcaltee, max_size_time = gst.SECOND * 100), sr, kc_pcal_line_freq, kc_demod_caps, kc_integration_samples)
+
+	# FIXME: Make sure all of the model reference channels are at the right sample rate
+	ka_esd_olgR, ka_esd_olgI = calibration_parts.compute_olg_from_ACD(pipeline, ka_esd_A_real, ka_esd_C_real, ka_esd_D_real, ka_esd_A_imag, ka_esd_C_imag, ka_esd_D_imag)
+	ka_pcal_olgR, ka_pcal_olgI = calibration_parts.compute_olg_from_ACD(pipeline, ka_pcal_A_real, ka_pcal_C_real, ka_pcal_D_real, ka_pcal_A_imag, ka_pcal_C_imag, ka_pcal_D_imag)
+	kc_pcal_olgR, kc_pcal_olgI = calibration_parts.compute_olg_from_ACD(pipeline, kc_pcal_A_real, kc_pcal_C_real, kc_pcal_D_real, kc_pcal_A_imag, kc_pcal_C_imag, kc_pcal_D_imag)
 
 # Add control and residual chains and divide by L to make h(t)
 strain = gst.element_factory_make("lal_adder")
