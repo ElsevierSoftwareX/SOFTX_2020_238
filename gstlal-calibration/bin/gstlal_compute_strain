@@ -677,7 +677,7 @@ if not options.no_kappatst:
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappatst:
 	pcaltee = pipeparts.mktee(pipeline, pcal)
 	derrtee = pipeparts.mktee(pipeline, darm_err)
-	ka_pcalR, ka_pcalI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipline, pcaltee, max_size_time = gst.SECOND * 100), sr, ka_pcal_line_freq, ka_demod_caps, ka_integration_samples)
+	ka_pcalR, ka_pcalI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipeline, pcaltee, max_size_time = gst.SECOND * 100), sr, ka_pcal_line_freq, ka_demod_caps, ka_integration_samples)
 	ka_derrfpR, ka_derrfpI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipeline, derrtee, max_size_time = gst.SECOND * 100), sr, ka_pcal_line_freq, ka_demod_caps, ka_integration_samples)
 
 if not options.no_kappatst and (not options.no_kappac or not options.no_fcc):
