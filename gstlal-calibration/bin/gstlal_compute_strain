@@ -634,7 +634,7 @@ if not options.no_gamma:
 # Set up all of the inputs for the calibration factors
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappac:
 	# FIXME: Check what the pcal channel sample rate is
-	pcal = calibration_parts.caps_and_progress(pipeline, exc, caps, "pcal")
+	pcal = calibration_parts.caps_and_progress(pipeline, pcal, caps, "pcal")
 	if options.partial_calibration:
 		darm_err = calibration_parts.caps_and_progress(pipeline, darm_err, caps, "darm_err")
 	ka_caps = "audio/x-raw-float, width=64, rate=%d" % options.ref_channels_sr
@@ -675,6 +675,8 @@ if not options.no_kappatst:
 	ktst_esd_G_imag = calibration_parts.caps_and_progress_and_resample(pipeline, ktst_esd_G_imag, ktst_caps, "ktst_esd_G_imag", ktst_calc_caps)
 # Compute \kappa_a, \kappa_tst,\kappa_c, f_cc, if applicable
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappatst:
+	ka_demod_caps = "audio/x-raw-float, rate=%d" % options.compute_kappaa_sr
+	ka_integration_samples = int(options.kappaa_integration_time) * options.compute_kappaa_sr
 	pcaltee = pipeparts.mktee(pipeline, pcal)
 	derrtee = pipeparts.mktee(pipeline, darm_err)
 	ka_pcalR, ka_pcalI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipeline, pcaltee, max_size_time = gst.SECOND * 100), sr, ka_pcal_line_freq, ka_demod_caps, ka_integration_samples)
@@ -945,10 +947,10 @@ if not options.no_dq_vector:
 		kaRdq = pipeparts.mkgeneric(pipeline, kaRdq, "lal_add_constant", constant = -options.expected_kappaa_real)
 		kaRdq = pipeparts.mkaudiorate(pipeline, kaRdq, skip_to_first = True, silent = False)
 		
-		kaok = pipeparts.mkbitvectorgen(pipeline, kaRdq, threshold = options.kappaa_real_var_ok, invert_control = True, bit_vector = 64)
+		kaok = pipeparts.mkbitvectorgen(pipeline, kaRdq, threshold = options.kappaa_real_ok_var, invert_control = True, bit_vector = 64)
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kaok = pipeparts.mkaudiorate(pipeline, kaok, skip_to_first = True, silent = False)
-		kaok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, kaok, max_size_time = gst.SECOND * 100), threshold = options.kappaa_imag_var_ok, invert_control = True, control = pipeparts.mkqueue(pipeline, kaIdq, max_size_time = gst.SECOND * 100))
+		kaok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, kaok, max_size_time = gst.SECOND * 100), threshold = options.kappaa_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, kaIdq, max_size_time = gst.SECOND * 100))
 		kaok = pipeparts.mkbitvectorgen(pipeline, kaok, bit_vector = 64, nongap_is_control = True)
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kaok = pipeparts.mkaudiorate(pipeline, kaok, skip_to_first = True, silent = False)

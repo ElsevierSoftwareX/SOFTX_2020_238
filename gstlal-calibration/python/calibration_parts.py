@@ -18,6 +18,7 @@
 
 from gstlal import pipeparts
 import gst
+import numpy
 
 def write_graph(demux, name):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
@@ -67,16 +68,16 @@ def list_srcs(pipeline, *args):
 def demodulate(pipeline, head, sr, freq, caps, integration_samples):
 	headtee = pipeparts.mktee(pipeline, head)
 	deltat = 1.0/float(sr)
-	cos = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_generator", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
+	cos = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 	cos = pipeparts.mkaudiorate(pipeline, cos, skip_to_first = True, silent = False)
 	sin = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 
-	headR = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, head), pipeparts.mkqueue(pipeline, cos)))
+	headR = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, headtee), pipeparts.mkqueue(pipeline, cos)))
 	headR = pipeparts.mkresample(pipeline, headR, quality=9)
 	headR = pipeparts.mkcapsfilter(pipeline, headR, caps)
 	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
 
-	headI = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, head), pipeparts.mkqueue(pipeline, sin)))
+	headI = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, headtee), pipeparts.mkqueue(pipeline, sin)))
 	headI = pipeparts.mkresample(pipeline, headI, quality=9)
 	headI = pipeparts.mkcapsfilter(pipeline, headI, caps)
 	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
@@ -164,22 +165,22 @@ def compute_kappaa(pipeline, A0fxR, A0fxI, derrfxR, derrfxI, derrfpR, derrfpI, e
 	#	Im[e] = [-C0fxI + (C0fxR * G0fxI) - (C0fxI * G0fxR)] / |C0fx|^2
 
 	# Compute real and imaginary parts of a
-	A0fx2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A0fxRtee, A0fxRtee)), mkmultiplier(pipeline, list_srcs(pieline, A0fxItee, A0fxItee)))))
-	aR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0fxRtee, -1.0), pipeparts.mkpow(pipeline, A0fx2, -1.0))))
-	aI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A0fxItee, pipeparts.mkpow(pipeline, A0fx2, -1.0))))
+	A0fx2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A0fxRtee, A0fxRtee)), mkmultiplier(pipeline, list_srcs(pipeline, A0fxItee, A0fxItee)))))
+	aR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0fxRtee, amplification=-1.0), pipeparts.mkpow(pipeline, A0fx2, exponent=-1.0))))
+	aI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A0fxItee, pipeparts.mkpow(pipeline, A0fx2, exponent=-1.0))))
 
 	# Compute the real and imaginary parts of b
 	excfx2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, excfxRtee, excfxRtee)), mkmultiplier(pipeline, list_srcs(pipeline, excfxItee, excfxItee)))))
-	bR1 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxItee)), WfxI)
-	bR2 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxRtee)), WfxI)
-	bR3 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxItee)), WfxR)
-	bR4 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxRtee)), WfxR)
-	bR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, bR1, pipeparts.mkaudioamplify(pipeline, bR2, -1.0), bR3, bR4)), pipeparts.mkpow(pipeline, excfx2, -1.0))))
-	bI1 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxItee)), WfxI)
+	bR1 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxItee)), amplification=WfxI)
+	bR2 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxRtee)), amplification=WfxI)
+	bR3 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxItee)), amplification=WfxR)
+	bR4 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxRtee)), amplification=WfxR)
+	bR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, bR1, pipeparts.mkaudioamplify(pipeline, bR2, amplification=-1.0), bR3, bR4)), pipeparts.mkpow(pipeline, excfx2, exponent=-1.0))))
+	bI1 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxItee)), amplification=WfxI)
 	bI2 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxRtee)), WfxI)
 	bI3 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxRtee, excfxItee)), WfxR)
 	bI4 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfxItee, excfxRtee)), WfxR)
-	bI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, bI1, bI2, pipeparts.mkaudioamplify(pipeline, bI3, -1.0), bI4)), pipeparts.mkpow(pipeline, excfx2, -1.0))))
+	bI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, bI1, bI2, pipeparts.mkaudioamplify(pipeline, bI3, -1.0), bI4)), pipeparts.mkpow(pipeline, excfx2, exponent=-1.0))))
 
 	# Compute the real and imaginary parts of c
 	derrfp2 = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, derrfpRtee)), mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, derrfpItee))))
@@ -189,23 +190,23 @@ def compute_kappaa(pipeline, A0fxR, A0fxI, derrfxR, derrfxI, derrfpR, derrfpI, e
 	cR2 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpRtee)), WfpI)
 	cR3 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpItee)), WfpR)
 	cR4 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpRtee)), WfpR)
-	cR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, cR1, pipeparts.mkaudioamplify(pipeline, cR2, -1.0), cR3, cR4)), pipeparts.mkpow(pipeline, derrfp2Wfp2, -1.0))))
+	cR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, cR1, pipeparts.mkaudioamplify(pipeline, cR2, -1.0), cR3, cR4)), pipeparts.mkpow(pipeline, derrfp2Wfp2, exponent=-1.0))))
 	cI1 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpItee)), WfpI)
 	cI2 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpRtee)), WfpI)
 	cI3 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpItee)), WfpR)
 	cI4 = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpRtee)), WfpR)
-	cI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, cR1, -1.0), pipeparts.mkaudioamplify(pipeline, cR2, -1.0), cR3, pipeparts.mkaudioamplify(pipeline, cR4, -1.0))), pipeparts.mkpow(pipeline, derrfp2Wfp2, -1.0))))
+	cI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, cI1, -1.0), pipeparts.mkaudioamplify(pipeline, cI2, -1.0), cI3, pipeparts.mkaudioamplify(pipeline, cI4, -1.0))), pipeparts.mkpow(pipeline, derrfp2Wfp2, exponent=-1.0))))
 
 	# Compute the real and imaginary parts of d
 	oneplusG0fpR = pipeparts.mktee(pipeline, pipeparts.mkgeneric(pipeline, G0fpRtee, "lal_add_constant", constant = 1.0))
-	onepG0fx2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, G0fpItee, G0fpItee)), mkmultiplier(pipeline, list_srcs(pipeline, oneplusG0fpR, oneplusG0fpR)))))
-	dR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fpRtee, mkmultiplier(pipeline, list_srcs(pipeline, C0fpItee, G0fpItee)), mkmultiplier(pipeline, list_srcs(pipeline, C0fpRtee, G0fpRtee)))), pipeparts.mkpow(pipeline, onepG0fp2, -1.0))))
-	dI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fpItee, pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, C0fpRtee, G0fpItee)), -1.0), mkmultiplier(pipeline, list_srcs(pipeline, C0fpItee, G0fpRtee)))), pipeparts.mkpow(pipeline, onepG0fp2, -1.0))))
+	onepG0fp2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, G0fpItee, G0fpItee)), mkmultiplier(pipeline, list_srcs(pipeline, oneplusG0fpR, oneplusG0fpR)))))
+	dR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fpRtee, mkmultiplier(pipeline, list_srcs(pipeline, C0fpItee, G0fpItee)), mkmultiplier(pipeline, list_srcs(pipeline, C0fpRtee, G0fpRtee)))), pipeparts.mkpow(pipeline, onepG0fp2, exponent=-1.0))))
+	dI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fpItee, pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, C0fpRtee, G0fpItee)), -1.0), mkmultiplier(pipeline, list_srcs(pipeline, C0fpItee, G0fpRtee)))), pipeparts.mkpow(pipeline, onepG0fp2, exponent=-1.0))))
 
 	# Compute the real and imaginary parts of e
 	C0fx2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, C0fxItee, C0fxItee)), mkmultiplier(pipeline, list_srcs(pipeline, C0fxRtee, C0fxRtee))))) 
-	eR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fxRtee, mkmultiplier(pipeline, list_srcs(pipeline, C0fxItee, G0fxItee)), mkmultiplier(pipeline, list_srcs(pipeline, C0fxRtee, G0fxRtee)))), pipeparts.mkpow(pipeline, C0fx2, -1.0))))
-	eI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, C0fxItee, -1.0), mkmultiplier(pipeline, list_srcs(pipeline, C0fxRtee, G0fxItee)), pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, C0fxItee, G0fxRtee)), -1.0))), pipeparts.mkpow(pipeline, C0fx2, -1.0))))
+	eR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, C0fxRtee, mkmultiplier(pipeline, list_srcs(pipeline, C0fxItee, G0fxItee)), mkmultiplier(pipeline, list_srcs(pipeline, C0fxRtee, G0fxRtee)))), pipeparts.mkpow(pipeline, C0fx2, exponent=-1.0))))
+	eI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, C0fxItee, -1.0), mkmultiplier(pipeline, list_srcs(pipeline, C0fxRtee, G0fxItee)), pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, C0fxItee, G0fxRtee)), -1.0))), pipeparts.mkpow(pipeline, C0fx2, exponent=-1.0))))
 
 	# Combine all the pieces to form Re[\kappa_A] and Im[\kappa_A]
 	# Re[\kappa_A] = -aR * eI * (-bI*cI*dI + bR*cR*dI + bR*cI*dR + bI*cR*dR) + 
@@ -223,14 +224,14 @@ def compute_kappaa(pipeline, A0fxR, A0fxI, derrfxR, derrfxI, derrfpR, derrfpI, e
 	bI_cR_dR = mkmultiplier(pipeline, list_srcs(pipeline, bI, cR, dR))
 	bR_cI_dI = mkmultiplier(pipeline, list_srcs(pipeline, bR, cI, dI))
 	bI_cR_dI = mkmultiplier(pipeline, list_srcs(pipeline, bI, cR, dI))
-	bI_cI_dI = mkmultiplier(pipeline, list_srcs(pipeline, bI, cI, dR))
+	bI_cI_dR = mkmultiplier(pipeline, list_srcs(pipeline, bI, cI, dR))
 	bR_cR_dR = mkmultiplier(pipeline, list_srcs(pipeline, bR, cR, dR))
 
 	combo1 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, bI_cI_dI, -1.0), bR_cR_dI, bR_cI_dR, bI_cR_dR)))
 	combo2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, bR_cI_dI, bI_cR_dI, bI_cI_dR, pipeparts.mkaudioamplify(pipeline, bR_cR_dR, -1.0))))
 
 	kaR = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aR, -1.0), eI, combo1)), mkmultiplier(pipeline, list_srcs(pipeline, aI, eI, combo2)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aI, -1.0), eR, combo1)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aR, -1.0), eR, combo2))))
-	kaI = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aI, -1.0), eI, combo1)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioapmlify(pipeline, aI, -1.0), eR, combo2)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aR, -1.0), eI, combo2)), mkmultiplier(pipeline, list_srcs(pipeline, aR, eR, combo1))))
+	kaI = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aI, -1.0), eI, combo1)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aI, -1.0), eR, combo2)), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, aR, -1.0), eI, combo2)), mkmultiplier(pipeline, list_srcs(pipeline, aR, eR, combo1))))
 
 	return kaR, kaI
 	
@@ -264,8 +265,8 @@ def compute_S(pipeline, CresR, CresI, pcalR, pcalI, derrR, derrI, kaR, kaI, D0R,
 	
 	# Compute the real and imaginary parts of a
 	Cres2 = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, CresR, CresR)), mkmultiplier(pipeline, list_srcs(pipeline, CresI, CresI)))))
-	aR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, CresR, pipeparts.mkpow(pipeline, Cres2, -1.0))))
-	aI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, CresI, -1.0), pipeparts.mkpow(pipeline, Cres2, -1.0))))
+	aR = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, CresR, pipeparts.mkpow(pipeline, Cres2, exponent=-1.0))))
+	aI = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, CresI, -1.0), pipeparts.mkpow(pipeline, Cres2, exponent=-1.0))))
 
 	# Compute the real and imaginary parts of b
 	derr2 = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrR, derrR)), mkmultiplier(pipeline, list_srcs(pipeline, derrI, derrI))))
@@ -279,7 +280,7 @@ def compute_S(pipeline, CresR, CresI, pcalR, pcalI, derrR, derrI, kaR, kaI, D0R,
 	derrI_pcalR_WI = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrI, pcalR)), WI)
 	derrI_pcalI_WR = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrI, pcalI)), WR)
 	derrR_pcalR_WR = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrR, pcalR)), WR)
-	bR = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, A0R_D0I_kaI, A0I_D0R_kaI, A0I_D0I_kaR, pipeparts.mkaudioamplify(pipeline, A0R_D0R_kaR, -1.0), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, derrR_pcalI_WI, pipeparts.mkaudioamplify(pipeline, derrI_pcalR_WI, -1.0), derrI_pcalI_WR, derrR_pcalR_WR)), pipeparts.mkpow(pipeline, derr2W2, -1.0))))))
+	bR = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, A0R_D0I_kaI, A0I_D0R_kaI, A0I_D0I_kaR, pipeparts.mkaudioamplify(pipeline, A0R_D0R_kaR, -1.0), mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, derrR_pcalI_WI, pipeparts.mkaudioamplify(pipeline, derrI_pcalR_WI, -1.0), derrI_pcalI_WR, derrR_pcalR_WR)), pipeparts.mkpow(pipeline, derr2W2, exponent=-1.0))))))
 
 	A0R_D0R_kaI = mkmultiplier(pipeline, list_srcs(pipeline, A0R, D0R, kaI))
 	A0R_D0I_kaR = mkmultiplier(pipeline, list_srcs(pipeline, A0R, D0I, kaR))
@@ -289,7 +290,7 @@ def compute_S(pipeline, CresR, CresI, pcalR, pcalI, derrR, derrI, kaR, kaI, D0R,
 	derrR_pcalR_WI = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrR, pcalR)), WI)
 	derrR_pcalI_WR = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrR, pcalI)), WR)
 	derrI_pcalR_WR = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, derrI, pcalR)), WR)
-	bI = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0R_D0R_kaI, -1.0), pipeparts.mkaudiamplify(pipeline, A0R_D0I_kaR, -1.0), A0I_D0I_kaI, pipeparts.mkaudioamplify(pipeline, A0I_D0R_kaR, -1.0), pipeparts.mkaudioamplify(pipeline, mkmultplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, derrI_pcalI_WI, derrR_pcalR_WI, pipeparts.mkaudioamplify(pipeline, derrR_pcalI_WR, -1.0), derrI_pcalR_WR)), pipeparts.mkpow(pipeline, derr2W2, -1.0))), -1.0))))
+	bI = pipeparts.mktee(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0R_D0R_kaI, -1.0), pipeparts.mkaudiamplify(pipeline, A0R_D0I_kaR, -1.0), A0I_D0I_kaI, pipeparts.mkaudioamplify(pipeline, A0I_D0R_kaR, -1.0), pipeparts.mkaudioamplify(pipeline, mkmultplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, derrI_pcalI_WI, derrR_pcalR_WI, pipeparts.mkaudioamplify(pipeline, derrR_pcalI_WR, -1.0), derrI_pcalR_WR)), pipeparts.mkpow(pipeline, derr2W2, exponent=-1.0))), -1.0))))
 
 	# Combine parts to make the real and imaginary parts of S
 	# Re[S] = (aI*bI + aR*bR) / |b|^2
@@ -300,8 +301,8 @@ def compute_S(pipeline, CresR, CresI, pcalR, pcalI, derrR, derrI, kaR, kaI, D0R,
 	aR_bR = mkmultiplier(pipeline, list_srcs(pipeline, aR, bR))
 	aI_bR = mkmultiplier(pipeline, list_srcs(pipeline, aI, bR))
 	aR_bI = mkmultiplier(pipeline, list_srcs(pipeline, aR, bI))
-	SR = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, aI_bI, aR_bR)), pipeparts.mkpow(pipeline, b2, -1.0)))
-	SI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, aI_bR, pipeparts.mkaudioamplify(pipeline, aR_bI, -1.0))), pipeparts.mkpow(pipeline, b1, -1.0)))
+	SR = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, aI_bI, aR_bR)), pipeparts.mkpow(pipeline, b2, exponent=-1.0)))
+	SI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkadder(pipeline, list_srcs(pipeline, aI_bR, pipeparts.mkaudioamplify(pipeline, aR_bI, -1.0))), pipeparts.mkpow(pipeline, b1, exponent=-1.0)))
 
 	return SR, SI
 
@@ -312,13 +313,13 @@ def compute_kappac(pipeline, SR, SI):
 	SR = pipeparts.mktee(pipeline, SR)
 	SI = pipeparts.mktee(pipeline, SI)
 	S2 = pipeparts.mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, SR, SR)), mkmultiplier(pipeline, list_srcs(pipeline, SI, SI))))
-	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, SR, -1.0)))
+	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, SR, exponent=-1.0)))
 	return kc
 
 def compute_fcc(pipeline, SR, SI, fpcal):
 	#
 	# f_cc = - (Re[S]/Im[S]) * fpcal
 	#
-	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, SI, -1.0)))
+	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, SI, exponent=-1.0)))
 	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal)
 	return fcc

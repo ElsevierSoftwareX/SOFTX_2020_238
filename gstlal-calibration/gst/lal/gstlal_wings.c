@@ -209,7 +209,7 @@ static void gst_lalwings_class_init(GstLalwingsClass *klass)
  */
 static void gst_lalwings_init(GstLalwings *elem, GstLalwingsClass *g_class)
 {
-    gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(elem), TRUE);
+    //gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(elem), TRUE);
     gst_element_create_all_pads(GST_ELEMENT(elem));
 
     /* Pad through which data comes in to the element (sink pad) */
