@@ -434,7 +434,7 @@ if not options.no_dq_vector:
 demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
-	demux.connect("no-more-pads", calibration_parts.write_graph, options.write_pipeline)	
+	demux.connect("no-more-pads", calibration_parts.write_graph, pipeline, options.write_pipeline)	
 
 if options.full_calibration:
 	ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_ctrl_channel_name, instrument)
@@ -707,7 +707,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 		exctee = exc
 	if not options.no_gamma:
 		exctee = pipeparts.mktee(pipeline, exc)
-		exc = pipeparts.mkqueue(pipeline, extee, max_size_time = gst.SECOND * 100) # make exc available to gamma computation below
+		exc = pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100) # make exc available to gamma computation below
 	ka_demod_caps = "audio/x-raw-float, rate=%d" % options.compute_kappaa_sr
 	ka_integration_samples = int(options.kappaa_integration_time) * options.compute_kappaa_sr
 	ka_excR, ka_excI = calibration_parts.demodulate(pipeline, pipeparts.mkqueue(pipeline, exctee, max_size_time = gst.SECOND * 100), sr, ka_esd_line_freq, ka_demod_caps, ka_integration_samples)
