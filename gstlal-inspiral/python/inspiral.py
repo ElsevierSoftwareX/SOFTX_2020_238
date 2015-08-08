@@ -520,7 +520,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -528,6 +528,7 @@ class Data(object):
 		self.lock = threading.Lock()
 		self.pipeline = pipeline
 		self.verbose = verbose
+		self.upload_auxiliary_data_to_gracedb = upload_auxiliary_data_to_gracedb
 		# None to disable likelihood ratio assignment, otherwise a filename
 		self.marginalized_likelihood_file = marginalized_likelihood_file
 		self.likelihood_files_namedtuple = likelihood_files_namedtuple
@@ -818,7 +819,7 @@ class Data(object):
 				# retrieve PSDs and ranking data
 				#
 
-				if not common_messages:
+				if not common_messages and self.upload_auxiliary_data_to_gracedb:
 					if self.verbose:
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}

@@ -691,6 +691,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in en
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,
 		gracedb_service_url = options.gracedb_service_url,
+		upload_auxiliary_data_to_gracedb = (options.gracedb_service_url == "https://gracedb.ligo.org/api/"),
 		verbose = options.verbose
 	)
 	if options.verbose:
