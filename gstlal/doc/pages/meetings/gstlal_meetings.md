@@ -1,4 +1,4 @@
-\page gstlalmeetingspage Review Meetings Page
+\page gstlalmeetingspage Meetings Page
 
 [TOC]
 
