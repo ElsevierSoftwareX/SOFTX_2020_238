@@ -88,8 +88,8 @@ Makefiles for various runs:
 
 - Note that some of the variables in the Makefile are defined in Makefile.offline_analysis_rules
 
-- --sort can choose almost any parameters in the template bank params (masses, chirp mass, etc.) Changes would be needed in gstlal__bank__splitter_source if you need to sort on other parameters.
+- \--sort can choose almost any parameters in the template bank params (masses, chirp mass, etc.) Changes would be needed in gstlal__bank__splitter_source if you need to sort on other parameters.
 
-- --bank-cache You would need to know the string that specified the way the bank was made
+- \--bank-cache You would need to know the string that specified the way the bank was made
 
-- --peak-time used to be 8 s but for MDC it is turned off (i.e. uses 0) (computational cost could be reduced by tens of percents by using a peak time of 4s or 8s without significantly changing the efficiency).
+- \--peak-time used to be 8 s but for MDC it is turned off (i.e. uses 0) (computational cost could be reduced by tens of percents by using a peak time of 4s or 8s without significantly changing the efficiency).
