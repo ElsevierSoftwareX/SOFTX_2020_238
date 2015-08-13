@@ -46,13 +46,13 @@ form = cgi.FieldStorage()
 # This program is never meant to be executed by a user, but rather on a
 # webserver via a url such as:
 # 
-#	 	https://hostname.domain/path/to/cgi-bin/gstlal_llcbcsummary?id=<start>,<stop>&dir=/path/to/analysis/directory
+#	 	https://hostname.domain/path/to/cgi-bin/gstlal_llcbcsummary?id=\<start\>,\<stop\>&dir=/path/to/analysis/directory
 #
 # e.g.,
 #
 # 		https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0010&dir=/home/gstlalcbc/engineering/5/bns_trigs_40Hz
 #
-# <start> and <stop> are the 4 digit id numbers corresponding to the first and
+# \<start\> and \<stop\> are the 4 digit id numbers corresponding to the first and
 # last job, respectively.  
 # 
 # ## Interpretation of the output page
