@@ -19,7 +19,7 @@
 
 ## Studies
 
-- \ref gstlal_inspiral_BNS_MDC_study
+- \ref gstlalinspiralbnsmdcstudypage
 - \ref gstlalinspirals6replaypage
 
 ## References

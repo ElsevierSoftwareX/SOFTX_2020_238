@@ -170,7 +170,7 @@ elements:
 
 \section studies Studies
 
-- \ref gstlal_inspiral_BNS_MDC_study
+- \ref gstlalinspiralbnsmdcstudypage
 - \ref gstlalinspiralcontrolpeaktimestudypage
 - \ref gstlalinspiralautochisqlenstudypage
 - \ref gstlal_inspiral_impulse_response_study
