@@ -19,8 +19,10 @@
  - Updated online running
    - \ref gstlalinspirallowlatencysearchpage
    - Experimental monitoring pages (no PR yet)
+     <!--- FIXME Where are these links supposed to point?
      - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbc
      - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbcnode?dir=/mnt/qfs3/gstlalcbc/engineering/6/pre7_2&id=0003,0003&url=/mnt/qfs3/gstlalcbc/engineering/6/pre7_2/0003/likelihood.xml&ifos=H1,L1,V1
+     --->
    - Codes to review:
      - \ref gstlal_inspiral_svd_bank_pipe
      - \ref gstlal_ll_inspiral_pipe
