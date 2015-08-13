@@ -63,7 +63,7 @@ The image below shows the injection of a TaylorF2 into "silence":
   - Live time etc. can be found at: https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online_analysis_node03.html
   - The review committee should come up with a list of items that should go on the summary pages on GRACE-DB. (Consult with Detection Committee and the CBC group).
 
-Jan 14
+\subsection jan14 Jan 14
 
   - Discussed program to compare FAR threshold with an equivalent SNR threshold efficiency program.
    * \ref gstlal_inspiral_BNS_MDC_study
@@ -97,7 +97,7 @@ Jan 14
    4. Run this through `gstlal_inspiral`
 -->
 
-Jan 15
+\subsection jan15 Jan 15
 
   - **Action**: What we want:
    1. Regular impulse response test with SVD
@@ -123,7 +123,7 @@ Jan 15
      in order for subbanks to overlap.  Discussed alternatives for how this could
      be handled.
 
-Jan 16
+\subsection jan16 Jan 16
 
   - Chad added various histograms in the Injection Accuracy section.
   - Looked at some of the new histograms for the S6-recolored-spinning-BNS MDC.
@@ -148,7 +148,8 @@ Jan 16
       - Claim is it drops one filter length at the beginning.
    2. What happens at the boundaries of two contiguous segments in the offline pipeline?
 
-Jan 17
+\subsection jan17 Jan 17
+
   - Suggestions for summary pages. I have borrowed some of the ideas from pyCBC summary pages an example of which can be found at: https://sugar-jobs.phy.syr.edu/~kent/cbc_review1/openbox/970012743-971622087/
     - For missed found plots report the FAR used in making those plots (1/30 days is what was used for the summary pages linked at the top of this page)
     - Better still, use a colorbar to show the FAR of found injections over a FAR range of 1e-12 (~ one per 10,000 years) to 1e-5 (~ one per day). It would be better to use different symbols for found found (filled colored circles) and missed (red crosses) injections.
@@ -171,7 +172,7 @@ Jan 17
        and use `lalsim-inspiral` to generate that exact waveform for injection.  This should
        give an unambiguous determination if there is an off-by-one-sample error in the filtering code.
 
-Jan 18
+\subsection jan18 Jan 18
 
  - Fixed bug in computing chisq vs. snr likelihood factor for high snr values.
    - Bug was scipy.stats.ncx2.pdf gave nonsense results for large snr and non-central parameter values.
