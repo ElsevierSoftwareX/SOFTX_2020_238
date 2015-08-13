@@ -20,7 +20,7 @@
   - framesrc:  feeds a group of frame files into framecpp_channeldemux to see what happens.  hard-coded to my home directory, not yet useful as part of a general test suite
   - lal_checktimestamps:  uses lal_shift element to add 1 ns of offset to buffer timestamps on user input to stimulate a response from lal_checktimestamps.  cannot yet be used as part of an automated test suite.
   - lal_reblock
- - unit tests make use of "cmp_nxydumps.py" (https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal/tests/cmp_nxydumps.py) which contains the logic for "smart" (a.k.a., sloppy) comparison of time series data.
+ - unit tests make use of [cmp_nxydumps.py](https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal/tests/cmp_nxydumps.py) which contains the logic for "smart" (a.k.a., sloppy) comparison of time series data.
 
 \section minutes minutes
 
