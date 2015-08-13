@@ -11,7 +11,7 @@ Condor DAGs that can generate months of fake data suitable for MDC studies.
 
 \section DetNoise Basic LIGO/ALIGO colored Gaussian noise on the command line
 
-Consult gstlal_fake_frames for more details
+Consult \ref gstlal_fake_frames for more details
 
 The basic steps to generate and validate LIGO colored noise are:
 
@@ -25,7 +25,7 @@ An example PSD plot:
 
 \section CustomNoise Custom colored noise, i.e. simulate your own detector
 
-Consult gstlal_fake_frames for more details
+Consult \ref gstlal_fake_frames for more details
 
 -# Start by obtaining a reference PSD that you wish to have as the target for
 recoloring. If you actually have a text file ASD such as this one: e.g. <a
@@ -40,7 +40,7 @@ in the documentation include this)
 
 \section RecoloredNoise Recolored noise
 
-Consult gstlal_fake_frames for more details
+Consult \ref gstlal_fake_frames for more details
 
 This procedure assumes you are on an LDG cluster which has the data you wish to
 recolor.  Note that some of the tools required on not gstlal based.  Please
