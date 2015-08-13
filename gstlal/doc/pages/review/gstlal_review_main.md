@@ -4,7 +4,6 @@
 
 - \ref gstlal_review_howto_page
 - \ref gstlal_review_codes_page
-- \ref gstlalmeetingspage
 - \ref gstlalactionitemspage
 
 \section Team Review Team 2014
