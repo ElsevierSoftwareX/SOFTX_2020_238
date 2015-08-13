@@ -64,7 +64,7 @@ Patrick
     - Cody: I have also tried a stress test with UTCtoGPS.
     - Jolien: You could also try replacing code with code to return random struct with one's that have failed in the past.
     - Kipp: Code fails on line 201 of lal/swig/SWIGPython.i equivalent pylal code is here: https://ligo-vcs.phys.uwm.edu/cgit/lalsuite/tree/pylal/src/xlal/date.c#n52
-   - Jolien: XLALFillBrokenDownTime defined here: https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/_x_l_a_l_civil_time_8c_source.html#l00347
+    - Jolien: XLALFillBrokenDownTime defined here: https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/_x_l_a_l_civil_time_8c_source.html#l00347
     - Kipp: May be place where it's not threadsafe in swig bindings
     - Jolien: We could change swig code so it just copies values in SWIGPython.i
   - BBH Search

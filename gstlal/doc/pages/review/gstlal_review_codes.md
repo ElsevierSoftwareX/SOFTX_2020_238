@@ -51,7 +51,7 @@ Redundant entries are omitted
 <tr><td> @ref gstlal_llcbcnode					</td><td>                               </td><td> 318	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_lvalert_psd_plotter		</td><td>                               </td><td> 240	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_get_urls			</td><td>                               </td><td> 30	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_inspiral_followups_from_gracedb		</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_lvalert_background_plotter	</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_recompute_online_far_from_gracedb	</td><td>                    </td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> @ref gstlal_inspiral_recompute_online_far		</td><td>                    		</td><td> 92	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> @ref gstlal_inspiral_calc_likelihood			</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \stable </td></tr>

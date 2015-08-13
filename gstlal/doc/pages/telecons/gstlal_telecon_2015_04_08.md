@@ -19,7 +19,7 @@ Duncan Meacher, Kipp C., Laleh, Patricia S., Steve P., Surabhi S., Kent B., Joli
 \section minutes Minutes
 
  - Re PR 2020, Chad asks that the patches be split into smaller pieces that can be proposed, discussed, tested, separately.
- - there was a discussion about change to how \chi is clipped
+ - there was a discussion about change to how @f$ \chi @f$ is clipped
  - there was a discussion about the change to the "add 32 seconds to template length" code:  tieing to PSD resolution speeds code up quite a bit when low resolution PSDs are used
  - Re PR 2018, Chad and Cody draw our attention to the patch, nobody has comments yet
  - Re PR 1990, some of the new job sizes look reasonable, some are surprising, Chad will look at them with Kent offline

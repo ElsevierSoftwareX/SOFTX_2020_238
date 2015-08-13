@@ -11,7 +11,7 @@
 - figure out what the PE people want to present and when;  it should be
   related to this subject matter of this review meeting
 - get documentation generated and installed
-- explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with \chi distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
+- explain why approximating transition from signals invisible to the next most sensitive instrument to certainly visible by convolving hard edge with @f$ \chi @f$ distribution with hard edge at detection threshold is a good idea for joint SNR PDFs
 - Run the pipeline with Gaussian noise with the color expected in O1/O2/O3/aLIGO Design (no need to run on all, one or two will do) with BNS template waveforms with and without spin
 - Write as many unit tests as possible
 
@@ -34,7 +34,7 @@ These elements had general action items which have been moved to their source co
 	- *Done:* see 33b29f8b653c1bb10fdec477e05644ed6b46da0d 
 
 - Test delta function input to LLOID algorithm (e.g with and without SVD)
-	- *Done:* see \gstlalmeeting20150112page
+	- *Done:* see \ref gstlalmeeting20150112page
 
 - Consider how to let the user change SNR threshold consistently (if at all).  Note this is tied to SNR bins in far.py
 - *Chad this will not be done right now*: The SNR threshold is tied to many
@@ -83,13 +83,15 @@ code is generalized. It will be left for a future feature request.  Things to co
   release, but I have added a FIXME to remind me that this performance
   improvement is possible.
 
-nightly build:
-	- turned off SL6 until it works
-	- got nightly build running on debian:
-		- includes all gstlal-packages, all documentation, all unit tests
+- nightly build:
+ - turned off SL6 until it works
+ - got nightly build running on debian:
+  -# all gstlal-packages
+  -# all documentation
+  -# all unit tests
 
 - Analysis Makefiles should be documented (e.g., parameters); Do we want them to be made more generic?
- - *Chad: Done*.  \ref gstlalinspiralofflinesearchpage
+ - *Chad: Done* \ref gstlalinspiralofflinesearchpage
 
 - Write joint likelihood ranking and FAP calculation (paper in progress)
  - *Kipp: Done* LIGO P1400175 http://arxiv.org/abs/1504.04632
@@ -219,7 +221,7 @@ consider that part of the gstlal review or "Waveform" review group.
 - Action: Kipp/Chad -> Perform auto-correlation test.
 
 - Action: Kipp/Chad -> Template bank test -> Do a bunch of injections and look at the distribution
-of SNR/<SNR>.
+of SNR.
 
 - Action: Reviewers to interact with DQ team to make sure statevectors
 are compatible.
