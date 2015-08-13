@@ -6,11 +6,11 @@
 
 \section agenda Agenda
 
-  - https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/python/inspiral.py
-  - https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/python/streamthinca.py
+  - \ref inspiral.py
+  - \ref streamthinca.py
 
 We could only review the two codes above. The following items will be looked at the next (f2f) review.
-  - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/doc/gstlal-inspiral-0.4.1/html/gstlalinspiralautochisqlenstudypage.html
+  - \ref gstlalinspiralautochisqlenstudypage
   - https://ldas-jobs.phys.uwm.edu/~gstlalcbc/MDC/
 
 
@@ -39,15 +39,15 @@ Action items on streamthinca.py
 
 \section minutes minutes
 
-1. inspiral.py: 
+-# inspiral.py: 
   - L379: In principal it will be possible to use inspiral.py to do a number of time slides by giving a pre-specified time slides table.
 
   - It will be possible to change SNR threshold 
 
   - L536: thinca_interval can be reduced to improve latency; changing it won't change the result but increasing it will increase latency. Chad has used an interval of 1 s  (triggers are produced every second) to get lowest latency.
 
-2. snglcoinc.py and ligolw_thinca.py
+-# snglcoinc.py and ligolw_thinca.py
 
-No comments:
+  - No comments:
 
-3. streamthinca.py
+-# \ref streamthinca.py
