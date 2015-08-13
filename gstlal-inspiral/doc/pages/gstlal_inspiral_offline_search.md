@@ -39,7 +39,7 @@ Running elsewhere reuquires dynamic Condor slots and modifcations to the gstlal_
 
 - \ref gstlal_bank_splitter
 - \ref gstlal_inspiral_pipe
-- \ref gstlal_cache_to_segments
-- \ref gstlal_segments_operations
-- \ref gstlal_segments_trim
+- gstlal_cache_to_segments
+- gstlal_segments_operations
+- gstlal_segments_trim
 
