@@ -31,12 +31,15 @@ Redundant entries are omitted
 <tr><td> @ref gstlal_svd_bank					</td><td>                               </td><td> 164	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> svd_bank.py			</td><td> 363	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> cbc_template_fir.py		</td><td> 443	</td><td> \reviewed with actions</td><td> \stable </td></tr>
+<tr><td>							</td><td> chirptime.py			</td><td> 159	</td><td> \notreviewed </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_create_prior_diststats		</td><td>                               </td><td> 125	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_ll_inspiral_create_prior_diststats		</td><td>                               </td><td> 241	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> far.py			</td><td> 1714	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.inject			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.rate			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.snglcoinc		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_marginalize_likelihood		</td><td>                               </td><td> 167	</td><td> \reviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_marginalize_likelihoods_online	</td><td>                               </td><td> 96	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_pipe				</td><td>                               </td><td> -	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td> @ref gstlal_inspiral					</td><td>                               </td><td> 707	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> lloidparts.py			</td><td> 826	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
@@ -47,12 +50,20 @@ Redundant entries are omitted
 <tr><td>							</td><td> pylal.ligolw_thinca		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td>							</td><td> httpinterface.py		</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> hoftcache.py			</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_llcbcsummary				</td><td>                               </td><td> 450	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_llcbcnode					</td><td>                               </td><td> 318	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_inspiral_lvalert_psd_plotter		</td><td>                               </td><td> 240	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlalcbcsummary					</td><td>                               </td><td> 416	</td><td> \notreviewed	</td><td> \moddev </td></tr>
+<tr><td>							</td><td> llweb.py                      </td><td> 554	</td><td> \notreviewed	</td><td> \moddev </td></tr>
+<tr><td> @ref gstlalcbcnode					</td><td>                               </td><td> 400	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_get_urls			</td><td>                               </td><td> 30	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_inspiral_lvalert_background_plotter	</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td> @ref gstlal_inspiral_recompute_online_far_from_gracedb	</td><td>                    </td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
+<tr><td> @ref gstlal_ll_inspiral_daily_page			</td><td>                               </td><td> 168	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_ll_inspiral_daily_page_online		</td><td>                               </td><td> 22	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_lvalert_psd_plotter		</td><td>                               </td><td> 240	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> 							</td><td> lvalert_helper.py             </td><td> 88	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_lvalert_background_plotter	</td><td>                               </td><td> 148	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> 							</td><td> plotfar.py                    </td><td> 148	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> 							</td><td> plotsegments.py               </td><td> 148	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_lvalert_sngls_plotter		</td><td>                               </td><td> 202	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_lvalert_omegascan			</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_recompute_online_far_from_gracedb	</td><td>                 		</td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> @ref gstlal_inspiral_recompute_online_far		</td><td>                    		</td><td> 92	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> @ref gstlal_inspiral_calc_likelihood			</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.burca2			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
