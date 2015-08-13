@@ -8,9 +8,9 @@
 
 We discussed how to organise the review next week and what aspects of the pipeline to test so that we can make the best use of the available time. The schedule for each day (except Sunday and Tuesday) is the following:
 
-10 am-1 pm: Understanding and reviewing the algorithm used gstlal inspiral
-1 pm-3 pm: Lunch
-3 pm-6 pm: Technical review of the pipeline elements (we can stay longer if necessary)
+- 10 am-1 pm: Understanding and reviewing the algorithm used gstlal inspiral
+- 1 pm-3 pm: Lunch
+- 3 pm-6 pm: Technical review of the pipeline elements (we can stay longer if necessary)
 
 On Sunday we will meet at 11 am and go on until 5 pm with 1 hour break for lunch. On Tuesday we will meet at 11 am but otherwise the programme will remain the same. 
 
