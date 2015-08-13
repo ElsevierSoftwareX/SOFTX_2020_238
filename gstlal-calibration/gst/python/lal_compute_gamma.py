@@ -54,7 +54,6 @@ class lal_compute_gamma(gst.Bin):
 	olgmod_default = 1.0
 	sr_default = 16384
 	time_domain_default = True
-	integration_samples_default = sr_default
 
 	__gstdetails__ = (
 		'Compute Gamma',
@@ -119,13 +118,6 @@ class lal_compute_gamma(gst.Bin):
 			'set to True to perform FIR filtering in the time domain',
 			time_domain_default,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
-		),
-		'integration-samples' : (
-			gobject.TYPE_UINT,
-			'integration time',
-			'number of samples in integration',
-			0, gobject.G_MAXUINT, integration_samples_default,
-			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		)
 	}
 
@@ -136,18 +128,16 @@ class lal_compute_gamma(gst.Bin):
 			self.excI_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
 			self.dctrlR_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
 			self.dctrlI_capsfilter.set_property("caps", gst.Caps("audio/x-raw-float, rate=%d" % val))
+			self.excR_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
+			self.excI_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
+			self.dctrlR_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
+			self.dctrlI_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
 		elif prop.name == 'time-domain':
 			self.time_domain = val
 			self.excR_firbank.set_property("time-domain", val)
 			self.excI_firbank.set_property("time-domain", val)
 			self.dctrlR_firbank.set_property("time-domain", val)
 			self.dctrlI_firbank.set_property("time-domain", val)
-		elif prop.name == 'integration-samples': 
-			self.integration_samples = val
-			self.excR_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
-			self.excI_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
-			self.dctrlR_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
-			self.dctrlI_firbank.set_property("fir-matrix", [numpy.hanning(val+1)])
 		elif prop.name == 'olgR':
 			self.olgR = val
 			self.dctrl_mod_w_mod_olgR.set_property("amplification", val)
@@ -196,8 +186,6 @@ class lal_compute_gamma(gst.Bin):
 			return self.sr
 		elif prop.name == 'time-domain':
 			return self.time_domain
-		elif prop.name == 'integration-samples':
-			return self.integration_samples
 		elif prop.name == 'olgR':
 			return self.olgR
 		elif prop.name == 'olgI':
@@ -240,10 +228,9 @@ class lal_compute_gamma(gst.Bin):
 		self.add(excR)
 		pipeparts.mkqueue(self, exc).link(excR)
 		pipeparts.mkqueue(self, cos).link(excR)
-		#excR = pipeparts.mkresample(self, excR, quality=9)
-		excR = pipeparts.mkaudioundersample(self, excR)
+		excR = pipeparts.mkresample(self, excR, quality=9)
 		self.excR_capsfilter = excR = pipeparts.mkgeneric(self, excR, "capsfilter")
-		self.excR_firbank = excR = pipeparts.mkfirbank(self, excR)	
+		self.excR_firbank = excR = pipeparts.mkfirbank(self, excR)
 		excR = pipeparts.mktee(self, excR)
 
 		excI = gst.element_factory_make("lal_multiplier")
@@ -251,8 +238,7 @@ class lal_compute_gamma(gst.Bin):
 		self.add(excI)
 		pipeparts.mkqueue(self, exc).link(excI)
 		pipeparts.mkqueue(self, sin).link(excI)
-		#excI = pipeparts.mkresample(self, excI, quality=9)
-		excI = pipeparts.mkaudioundersample(self, excI)
+		excI = pipeparts.mkresample(self, excI, quality=9)
 		self.excI_capsfilter = excI = pipeparts.mkgeneric(self, excI, "capsfilter")
 		self.excI_firbank = excI = pipeparts.mkfirbank(self, excI)
 		excI = pipeparts.mktee(self, excI)
