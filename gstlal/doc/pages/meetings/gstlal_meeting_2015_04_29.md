@@ -22,9 +22,9 @@
      - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbc
      - https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbcnode?dir=/mnt/qfs3/gstlalcbc/engineering/6/pre7_2&id=0003,0003&url=/mnt/qfs3/gstlalcbc/engineering/6/pre7_2/0003/likelihood.xml&ifos=H1,L1,V1
    - Codes to review:
-     - gstlal_svd_bank_pipe
-     - gstlal_ll_inspiral_pipe
-     - gstlal_inspiral_marginalize_likelihoods_online
-     - gstlal_inspiral_marginalize_likelihood
-     - gstlal_inspiral_calc_rank_pdfs
-     - gstlal_ll_inspiral_create_prior_diststats
+     - \ref gstlal_inspiral_svd_bank_pipe
+     - \ref gstlal_ll_inspiral_pipe
+     - \ref gstlal_inspiral_marginalize_likelihoods_online
+     - \ref gstlal_inspiral_marginalize_likelihood
+     - \ref gstlal_inspiral_calc_rank_pdfs
+     - \ref gstlal_ll_inspiral_create_prior_diststats
