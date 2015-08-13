@@ -39,6 +39,8 @@ from ConfigParser import SafeConfigParser
 
 import numpy
 
+from scipy.stats import chi2
+
 from glue import datafind
 
 from glue.ligolw import ligolw, lsctables
@@ -56,7 +58,6 @@ from pylal import ligolw_bucluster
 
 from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import SnglBurst
-from lalburst import lnOneMinusChisqCdf
 
 import pygtk
 pygtk.require("2.0")
@@ -516,7 +517,7 @@ class EPHandler(Handler):
 		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in SnglBurst.from_buffer(buf)]:
 
 			# FIXME: Determine "magic number" or remove it
-			event.confidence = -lnOneMinusChisqCdf(event.snr * 0.62, event.chisq_dof * 0.62)
+			event.confidence = -math.log(chi2.sf(event.snr * 0.62, event.chisq_dof * 0.62))
 
 			# This is done here so that the current PSD is used rather than what
 			# might be there when the triggers are actually output
