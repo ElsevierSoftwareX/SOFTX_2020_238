@@ -100,14 +100,14 @@ code is generalized. It will be left for a future feature request.  Things to co
  - *Cody: Done* 54368d058460d37473e78bf26776a4929db01433
 
 
-\section telecon2015_03_11 March 11, 2015 telecon
+\subsection telecon2015_03_11 March 11, 2015 telecon
 \ref gstlaltelecons20150311page
 
 - For Jolien: Check the behavior of gstreamer and lals raise function. Change siminspiralFDTD routine to take df.
 - For Kipp: Change swig code so it just copies values in SWIGPython.i
 - For discussion next time: Should likelihood ranking stat include triggers found in coincidence? Question based on rates/significance group discussion.
 
-\subsection telecon2015_03_11_completed Completed actions
+\subsubsection telecon2015_03_11_completed Completed actions
 
 - For Cody: Check that changes in compilers have not caused problems. Check
   that a temporary variable was used when checking gps_time_now value. Do
@@ -115,7 +115,7 @@ code is generalized. It will be left for a future feature request.  Things to co
   code to return random struct with times that have failed in the past
   *Done:* See: https://bugs.ligo.org/redmine/issues/1916
 	
-\section meeting2015_01_12 January 12-18, 2015 meeting
+\subsection meeting2015_01_12 January 12-18, 2015 meeting
 \ref gstlalmeeting20150112page
 
 - Compute the actual expected SNR (instead of from average PSD) and plot the SNR histograms again
@@ -137,7 +137,7 @@ code is generalized. It will be left for a future feature request.  Things to co
  - Currently, on-line analysis requests a headroom of 20% CPU. Can this be defended? Explore running some `nice` jobs in the background and see if this affects performace
  - The particular event we saw had a 17 minute latency for producing sky-map: https://gracedb.ligo.org/events/view/T124866
 
-\subsection meeting2015_01_12_completed Completed actions
+\subsubsection meeting2015_01_12_completed Completed actions
 
 - Review of Summary pages at:
 <https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/MDC/BNS/Summer2014/recolored/nonspin/966384015-971384015-pipe-compare-CAT2/ALL_LLOID_COMBINED_openbox.html?ALL_LLOID_COMBINED_openbox_summary.html>
@@ -147,7 +147,7 @@ code is generalized. It will be left for a future feature request.  Things to co
 - Figure out the reason for the dip in the foreground plot (in SNR-Chisq section): *tracked to a scipy bug*: afab0d97a75e935cdf2526b30da4603922fad745
 
 
-\section telecon2015_01_21 January 21, 2015 telecon
+\subsection telecon2015_01_21 January 21, 2015 telecon
 \ref gstlaltelecons20150121page
 
 - Chad will run BBH Makefile and converse with Tjonnie about stalling processes.
@@ -155,7 +155,7 @@ code is generalized. It will be left for a future feature request.  Things to co
 - Les and Tjonnie will coordinate computational requirements calculations for BBH and IMBH searches
 
 
-\section meeting2014_12_03 December 3, 2014 meeting
+\subsection meeting2014_12_03 December 3, 2014 meeting
 \ref gstlalmeeting20141203page
 
 -Action items added to inspiral.py
@@ -163,7 +163,7 @@ code is generalized. It will be left for a future feature request.  Things to co
 -Action items added to streamthinca.py
 
 
-\section meeting2014_11_05 November 5, 2014 meeting
+\subsection meeting2014_11_05 November 5, 2014 meeting
 \ref gstlalmeeting20141105page
 
 - Chad: To amend the documentation to warn about fixed SNR threshold of 4.  At some point in the future consider making SNR threshold an adjustable parameter
@@ -184,7 +184,7 @@ code is generalized. It will be left for a future feature request.  Things to co
 
 - Chad: Makefile for NSBH and BNS-spinning on the documentation page all point to the BNS Makefile; please correct them.
 
-\section meeting2014_10_22 October 10, 2014 meeting
+\subsection meeting2014_10_22 October 10, 2014 meeting
 \ref gstlalmeeting20141022page
 
 iterutils.py: randindex()
@@ -195,7 +195,7 @@ This is in glue. Someone please move and address this
   - Beware of the change in LAL constants.
 
 
-\section meeting2014_08_15 August 15, 2014 meeting
+\subsection meeting2014_08_15 August 15, 2014 meeting
 \ref gstlalmeeting20140815page
 
 - At some time soon we should review gstreamer elements associated with
@@ -257,12 +257,12 @@ at some point.
 - gds_lvshmsrc
 
 
-\section meeting2014_06_18 June 18, 2014 meeting
+\subsection meeting2014_06_18 June 18, 2014 meeting
 \ref gstlalmeeting20140618page
 
 - Sathya to contact Marcel Kehl to enquire about goals of testing constant template banks.
 
-\section meeting2014_04_09 April 9, 2014 meeting
+\subsection meeting2014_04_09 April 9, 2014 meeting
 \ref gstlalmeeting20140409page
 
 - Chad: Please provide instructions on how to make the review pages appear online. At the moment the pages dont seem to appear even after several days and no one knows how to do this apart from Chad.
@@ -278,7 +278,7 @@ at some point.
 - Kipp: Explore why the codes runs slower with smaller sampling rates (e.g. 10 Hz as opposed to 1 kHz takes longer).
 
 
-\section meeting2014_03_26 March 26, 2014 meeting
+\subsection meeting2014_03_26 March 26, 2014 meeting
 \ref gstlalmeeting20140326page
 
 - Now that everyone is an expert on how to run gstlal_fake_frames how about the following: each reviewer take a usage case from the gstlal_fake_frames documentation
@@ -288,7 +288,7 @@ at some point.
  - Florent: Usage case 4
 	- each person should run the case and use the information in the "Debug" section of the documentation to write out the pipeline.  Also, try making plots of the output, etc.  Examine it critically and figure out what questions you have and what you would like to see answered in order to validate each piece.  We will go over each case next week.
 
-\section meeting2014_03_05 March 5, 2014 meeting
+\subsection meeting2014_03_05 March 5, 2014 meeting
 \ref gstlalmeeting20140305page
 
 - Kipp or Chad to create a separate gstlal_debug directory to host test codes and packges.
@@ -297,12 +297,12 @@ at some point.
 - Kipp should send instructions/pipeline to test gstlal_whiten
 - Review should at some point go through XLALPSDRegressor codes (there quite a few but in this category that have been written solely for gstlal).
 
-\section meeting2014_02_26 February 26, 2014 meeting
+\subsection meeting2014_02_26 February 26, 2014 meeting
 \ref gstlalmeeting20140226page
 
 - Chad to fix lal_shift to properly set discont: Fixed in f9c5b20e1f2e13ad20d48da8ea83cbdf5a4d226f
 
-\section meeting2014_02_19 February 19, 2014 meeting
+\subsection meeting2014_02_19 February 19, 2014 meeting
 \ref gstlalmeeting20140219page
 
 <!---
@@ -323,7 +323,7 @@ at some point.
 	Note how the first ctrl+C only gives a warning since 1 ns is within the "fuzz".  But after the second ctrl+C there is an error. If this test is useful we can add it to the lal_checktimestamps documentation directly.  
 
 
-\section meeting2014_01_20 January 20, 2014 Meeting
+\subsection meeting2014_01_20 January 20, 2014 Meeting
 \ref gstlalmeeting20140120page
 
 - update links in project page (springboard): done.
