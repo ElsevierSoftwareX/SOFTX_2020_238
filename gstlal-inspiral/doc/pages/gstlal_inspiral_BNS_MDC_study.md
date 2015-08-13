@@ -1,4 +1,4 @@
-\page gstlal_inspiral_BNS_MDC_study Study of the BNS MDC
+\page gstlalinspiralbnsmdcstudypage Study of the BNS MDC
 
 \section intro Introduction
 
