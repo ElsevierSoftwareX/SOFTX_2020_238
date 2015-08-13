@@ -19,6 +19,60 @@
 ## @file
 
 ## @package gstlalcbcnode
+# This program will monitor the output of a single job in the gstlal inspiral
+# low latency analysis; See gstlal_llcbcnode for help and usage.
+#
+# ## USAGE:
+# This program is never meant to be executed by a user, but rather on a
+# webserver via a url such as:
+# 
+#               https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcnode?dir=/path/to/analysis/dir/&id=<jobids>&url=/path/to/likelihood.xml&ifos=<IFOS>
+#
+# e.g.,
+#
+#               https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcnode?dir=/mnt/qfs3/gstlalcbc/engineering/5/bns_trigs_40Hz&id=0009,0009&url=/mnt/qfs3/gstlalcbc/engineering/5/bns_trigs_40Hz/0009_likelihood.xml&ifos=H1,L1,V1
+#
+#
+# ## Interpretation of the output page
+#
+# ### Trigger stats
+#
+# \image html gstlal_llcbcnode01.png
+#
+# - The leftmost plot is trigger latency vs time.  It should be flat. If it is
+# rising as a function of time that indicates that the job may be falling
+# behind.  Occasional spikes are expected 
+#
+# - The next plot is a trigger latency histogram over the entire duration of
+# the run.
+#
+# - The next plot is a SNR vs time. It should be relatively flat and below 10
+# for well behaved noise.  An occasional spike might be caused from a signal or
+# a glitch, but long term features indicate poor data quality
+#
+# - The rightmost plot is the maximum RAM usage history. It can only ever go
+# up, but it is a problem if it nears the maximum RAM available on the machine.
+#
+# ### Live time
+#
+# \image html gstlal_llcbcnode02.png
+#
+# These per IFO pie charts indicate time when the detectors were on (white) off (gray) and times when the data was missing (MIA) blue.  The blue fraction should be << 1%
+#
+# ### PSDs
+#
+# \image html gstlal_llcbcnode03.png
+#
+# These represent the instantaneous PSD estimates of the running job.  The horizon distance is also computed.
+#
+# ### SNR / Chi-squared stats
+#
+# \image html gstlal_llcbcnode04.png
+#
+# These represent the instantaneous, cumulative SNR/chi-squared statistics for the job as well as the likelihood ranking plot.
+#
+
+
 import sys
 import cgi
 import cgitb
