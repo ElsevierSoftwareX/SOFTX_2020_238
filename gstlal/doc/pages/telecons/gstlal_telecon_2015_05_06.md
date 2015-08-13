@@ -8,7 +8,7 @@
 
 - Announcments  
   - New releases soon for ER7
-- bugs.ligo.org
+- [bugs.ligo.org](bugs.ligo.org)
   - https://bugs.ligo.org/redmine/issues/2051
   - https://bugs.ligo.org/redmine/issues/2045
   - https://bugs.ligo.org/redmine/issues/2020

@@ -4,7 +4,8 @@
 
 [TOC]
 
-Agenda
+\section agend Agenda
+
 1. Things needed for pre-release
 2. S6VSR3Replay 
    1. https://ldas-jobs.phys.uwm.edu/~gstlalcbc/online_analysis.html

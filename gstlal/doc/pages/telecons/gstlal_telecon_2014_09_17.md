@@ -6,9 +6,9 @@
 
 \section agenda Agenda
 
-  1. <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/>S6VSR3Replay</a>
-  1. Optimization efforts
-    1. <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50/> Optimisation wiki entry for BBH </a>
+-# <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/>S6VSR3Replay</a>
+-# Optimization efforts
+    -# <a href=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50/> Optimisation wiki entry for BBH </a>
 
 
 \section attendance Attendance

@@ -4,16 +4,14 @@
 
 [TOC]
 
-Agenda
-1. Optimization efforts
-2. S6VSR3Replay 
-3. AOB
+\section agenda Agenda
 
-Attendance
-Chad, Chris P., Cody, Duncan, Ian, Kent, Laleh (minutes), Larne, Les, Maddie, Patrick Brady, Ryan, Stephen P.,  Surabhi, Tjonnie, UWM
+- Optimization efforts
+- S6VSR3Replay
 
-Minutes  
-1. Optimization efforts
+\subsection optimazationefforst Optimization efforts
+
+\section minutes Minutes  
 
 Chad: It’s computationally expensive to up-sample from 128 to 1024. It might sound counterintuitive but it might cost less to use higher sample rate in the second slice. We might have to add some code to control how the time-slice decomposition is done for high-mass signals, maybe simply just specifying minimum sample rate but probably something more than that to balance the cost of resampling versus the cost of filtering at higher sample rate.
 
@@ -41,8 +39,13 @@ Les has done same follow-up as Tjonnie’s and has got same results.
 Chad: It would be good if Jolien and Les prepare a patch that changes the command line option for the auto-correlation length to be in time instead of samples. Stephen P. had worked on that before and has written a code.
 
 
-2. S6VSR3Replay 
+\subsection s6vsr3replay S6VSR3Replay 
 
 - Statues of data broadcasting at UWM: Patrick Brockill and Chris P. are working on cleaning up the gaps in the data that cause the broadcasting code to fail. 
 
 - Laleh and Chris P. have got the code for doing the injections on the server and then piping them as a duplicate channel which has the injections in it. The signal set that they are going to start with is 1 to 3 solar masses injectionis, no spin and uniformly distributed in mass space.
+
+\subsection aob AOB
+
+\section attendance Attendance
+Chad, Chris P., Cody, Duncan, Ian, Kent, Laleh (minutes), Larne, Les, Maddie, Patrick Brady, Ryan, Stephen P.,  Surabhi, Tjonnie, UWM

@@ -13,7 +13,7 @@
   - We need to plan an ER7 code release and subsequently an O1 release
     - I (chad) would like to propose that we start an ER7 branch at the face-to-face and that it evolves towards the O1 release with just critical bug fixes and features that are absolutely needed for O1.  Regular development will commence on master
 - Bugs
-  - bugs.ligo.org
+  - [bugs.ligo.org](bugs.ligo.org)
 
 \section attendance Attendance
 
