@@ -135,7 +135,7 @@ in sink nor is a function available for type casting 64 bits (line 1322).
 to the review page outputs of unit tests using points for the plot and
 zoommed in version.
 
-<---
+<!---
 ##gstlal_drop
 
 - Reviewed with actions: Write some unit tests and show them to reviewers;
