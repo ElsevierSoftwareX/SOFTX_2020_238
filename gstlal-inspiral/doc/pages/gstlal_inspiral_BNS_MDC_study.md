@@ -6,7 +6,7 @@ This page describes a study of the BNS MDC described here:
 
  - https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/BNS/MDC/SpinMDC/
 
-The goal is to establish if the results of this MDC are reasonable.  The following aspects were checke
+The goal is to establish if the results of this MDC are reasonable.  The following aspects were checked
 
  -# Are the recovered SNRs as expected?
  -# How are the recovered SNRs related to the FARs?
