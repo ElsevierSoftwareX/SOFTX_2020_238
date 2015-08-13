@@ -11,8 +11,8 @@
   -# New gstlal-burst package
 -# Status of audioresample bug fix and lscsoft
 -# Any other business
-  -# [[https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/|S6VSR3Replay]]
-  -# [[https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50 | Optimisation wiki entry (BBH)]]
+  -# [S6VSR3Replay](https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/)
+  -# [Optimisation wiki entry (BBH)](https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50)
 
 
 \section attendance Attendance
