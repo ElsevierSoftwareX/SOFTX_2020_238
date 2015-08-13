@@ -1,3 +1,9 @@
+gstlal-burst (0.0.5) unstable; urgency=low
+
+  * Compatibility update
+
+ -- Chris Pankow <chris.pankow@ligo.org>  Thu, 13 Aug 2015 13:36:00 -0500
+
 gstlal-burst (0.0.4) unstable; urgency=low
 
   * Updates for fftw locking compatibility and possible buffer handling badness
