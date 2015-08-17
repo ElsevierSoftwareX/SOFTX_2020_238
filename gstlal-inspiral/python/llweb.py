@@ -121,7 +121,7 @@ td {
 
 .tabs {
   position: relative;   
-  min-height: 7in; /* This part sucks */
+  min-height: 10in; /* This part sucks */
   clear: both;
   margin: 25px 0;
 }
@@ -549,6 +549,6 @@ class GstlalWebSummary(object):
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			seglistdicts = self.found["cumulative_segments"][id]
-			fig = plotsegments.plot_segments_history(seglistdicts)
+			fig, h = plotsegments.plot_segments_history(seglistdicts)
 			out += self.to_png(fig = fig)
 		return out

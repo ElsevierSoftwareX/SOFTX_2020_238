@@ -1,0 +1,209 @@
+#!/bin/bash
+#
+# Copyright (C) 2015  Chad Hanna, Cody Messick
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file gstlal_ll_inspiral_calculate_range
+#
+# This program queries simdb and uses the results to plot information about the
+# effective range of the analysis in a while True loop.
+#
+# This program is not meant to be executed standalone by a user. It should be
+# part of a DAG managing a running gstlal_inspiral online analysis.
+#
+# This program takes nine arguments;
+#
+# - The path of the injection xml file
+# - The path of the cumulative segments xml file
+# - The path of the marginalized likelihood xml file
+# - The simdb service URL
+# - The gracedb pipeline
+# - The gracedb group
+# - The gracedb search
+# - The minimum injection distance in Mpc
+# - The maximum injection distance in Mpc
+
+#
+# Collect input arguments
+#
+
+for VAR in INJ_FILE CUMULATIVE_SEG_FILE MARGINALIZED_LIKELIHOOD_FILE SIMDB_SERVICE_URL PIPELINE GROUP SEARCH MIN_INJ_DIST MAX_INJ_DIST; do
+        eval $(echo "${VAR}=\"${1}\"")
+        shift
+done
+
+#
+# Set necessary variables
+# 
+
+WORKINGDIR=$(dirname ${MARGINALIZED_LIKELIHOOD_FILE})
+TMP_LIGOLW_XML=${WORKINGDIR}/tmp_sensitivity_plot_data.xml.gz
+LIGOLW_XML=${WORKINGDIR}/sensitivity_plot_data.xml.gz
+LIGOLW_SQLITE=${WORKINGDIR}/sensitivity_plot_data.sqlite
+TOTAL_SEG_XML=${WORKINGDIR}/total_cumulative_segments.xml.gz
+TMP_TOTAL_SEG_XML=${WORKINGDIR}/tmp_total_cumulative_segments.xml.gz
+STATEVECTOR_SEG_XML=${WORKINGDIR}/tmp_statevector_segments.xml.gz
+WHITEHT_SEG_XML=${WORKINGDIR}/tmp_whiteht_segments.xml.gz
+TRIGGER_SEG_XML=${WORKINGDIR}/tmp_trigger_segments.xml.gz
+TMP_QUERY_XML=${WORKINGDIR}/tmp.xml
+
+#
+# Do not start until cumulative segments file is created
+# 
+
+while ! [ -s ${CUMULATIVE_SEG_FILE} ]; do
+	echo sleeping...
+	sleep 300
+done
+
+#
+# Find start time of analysis
+#
+
+# FIXME find a less hacky way to get the start time. This method assumes that
+# the trigger segments for both H1 and L1 start at essentially the same time.
+# If this ever changes this method may stop working
+if [ -s ${TOTAL_SEG_XML} ]; then
+	START_FILE=${TOTAL_SEG_XML}
+else
+	START_FILE=${CUMULATIVE_SEG_FILE}
+fi
+
+SEGMENT_DEF_ID=$(ligolw_print --table segment_definer --column name --column segment_def_id ${START_FILE} | grep triggersegments | sed -e 's/,/\n/g' | grep segment_definer | head -n 1)
+START=$(ligolw_print --table segment --column start_time --column segment_def_id ${START_FILE} | grep ${SEGMENT_DEF_ID} | sed -e 's/,/\n/g' | sed -e '/segment_definer/d' | sort -g | head -n 1)
+echo ${START}
+
+while true; do 
+	#
+	# Set end time of simdb query
+	#
+
+	QUERYSTOP=$(lalapps_tconvert)
+
+	#
+	# Write file that will keep track of segments through entire analysis
+	# 
+
+	if ! [ -s ${TOTAL_SEG_XML} ]; then
+		cp ${CUMULATIVE_SEG_FILE} ${TOTAL_SEG_XML}
+	else
+		# FIXME This can be improved by modifying
+		# gstlal_segments_operations gstlal-ugly to take multiple
+		# segment names
+		gstlal_segments_operations --union --segment-file1 ${CUMULATIVE_SEG_FILE} --segment-file2 ${TOTAL_SEG_XML} --output-file ${STATEVECTOR_SEG_XML} --segment-name1 statevectorsegments --segment-name2 statevectorsegments --output-segment-name statevectorsegments --verbose
+		gstlal_segments_operations --union --segment-file1 ${CUMULATIVE_SEG_FILE} --segment-file2 ${TOTAL_SEG_XML} --output-file ${WHITEHT_SEG_XML} --segment-name1 whitehtsegments --segment-name2 whitehtsegments --output-segment-name whitehtsegments --verbose
+		gstlal_segments_operations --union --segment-file1 ${CUMULATIVE_SEG_FILE} --segment-file2 ${TOTAL_SEG_XML} --output-file ${TRIGGER_SEG_XML} --segment-name1 triggersegments --segment-name2 triggersegments --output-segment-name triggersegments --verbose
+		SEG_FILES=""
+		for SEG_FILE in ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML}; do
+			if [ $(ligolw_print --table segment ${SEG_FILE} | wc -l) -gt 0 ]; then
+				SEG_FILES="${SEG_FILE} ${SEG_FILES}"
+			fi
+		done
+		ligolw_add ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML}
+		mv ${TMP_TOTAL_SEG_XML} ${TOTAL_SEG_XML}
+		rm ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML}
+	fi
+
+	#
+	# Set the simdb query start time and create the events+injections file if first time through loop
+	# 
+
+	if ! [ -s ${LIGOLW_XML} ]; then
+		QUERYSTART=${START}
+		cp ${INJ_FILE} ${LIGOLW_XML}
+	else
+		if [ $(ligolw_print --table coinc_inspiral --column end_time ${LIGOLW_XML} | wc -l) -eq 0 ]; then
+			QUERYSTART=${START}
+		else
+			# QUERYSTART is chosen so that the simdb query will
+			# always begin at the time of the last event which was
+			# downloaded. This way we avoid any potential issues
+			# with the asynchronous nature of the simdb queries and
+			# the segment updates
+			QUERYSTART=$(ligolw_print --table coinc_inspiral --column end_time ${LIGOLW_XML} | sort -g | tail -n 1)
+		fi
+	fi
+
+	#
+	# Download simdb file to a temporary file and then add it to the the
+	# events+injections file, but using atomic operations in case something
+	# goes wrong
+	# 
+
+	echo querying simdb from ${QUERYSTART} to ${QUERYSTOP}...
+	gracedb --ligolw --service-url=${SIMDB_SERVICE_URL} search ${QUERYSTART}..${QUERYSTOP} ${PIPELINE} ${GROUP} ${SEARCH} > ${TMP_QUERY_XML}
+
+	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_QUERY_XML} | wc -l) -gt 0 ]; then
+		ligolw_add ${LIGOLW_XML} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML}
+	fi
+
+	rm ${TMP_QUERY_XML}
+
+	if [ -s ${TMP_LIGOLW_XML} ]; then
+		mv ${TMP_LIGOLW_XML} ${LIGOLW_XML}
+	fi
+
+	#
+	# If events have been downloaded since the analysis has begun, clean up
+	# the events+injections file and then generate the range plot
+	#
+
+	if [ $(ligolw_print --table coinc_inspiral --column end_time ${LIGOLW_XML} | wc -l) -gt 0 ]; then
+
+		# 
+		# Delete old segments from events+injections file, then add new
+		# segments, again using atomic operations
+		# 
+		if [ $(ligolw_print --table segment ${LIGOLW_XML} | wc -l) -gt 0 ]; then 
+			lalapps_run_sqlite --verbose --sql='DELETE FROM segment; DELETE FROM segment_definer' ${LIGOLW_XML}
+		fi
+		ligolw_add --verbose ${LIGOLW_XML} ${TOTAL_SEG_XML} --output ${TMP_LIGOLW_XML}
+		mv ${TMP_LIGOLW_XML} ${LIGOLW_XML}
+
+		# FIXME Find a better way to get the location of simplify_and_cluster.sql
+		lalapps_run_sqlite --verbose --sql-file=$(dirname $(dirname $(which gstlal_inspiral)))/share/gstlal/simplify_and_cluster.sql ${LIGOLW_XML}
+
+		# Get rid of duplicate events, of which there should only be one or two
+		lalapps_run_sqlite --verbose --sql='CREATE TEMPORARY TABLE _idmap_ AS 
+			SELECT old.coinc_event_id AS old_id, 
+			MIN(new.coinc_event_id) AS new_id
+		FROM 
+			coinc_inspiral AS old JOIN 
+			coinc_inspiral AS new ON 
+			(new.end_time == old.end_time AND old.end_time >= '"${QUERYSTART}"') 
+		GROUP BY 
+			old.coinc_event_id; 
+		CREATE INDEX tmpindex ON _idmap_(old_id);
+		DELETE FROM sngl_inspiral WHERE event_id IN (SELECT event_id FROM coinc_event_map WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id));
+		DELETE FROM coinc_event_map WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id); 
+		DELETE FROM coinc_inspiral WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id); 
+		DELETE FROM coinc_event WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id); 
+		DROP INDEX tmpindex; 
+		DROP TABLE _idmap_;' ${LIGOLW_XML}
+
+		ligolw_inspinjfind --verbose --revert ${LIGOLW_XML}
+		ligolw_inspinjfind --verbose ${LIGOLW_XML}
+
+		ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} --replace ${LIGOLW_XML}
+
+		gstlal_inspiral_plot_sensitivity --data-segments-name=statevectorsegments --bin-by-chirp-mass --verbose ${LIGOLW_SQLITE}
+		echo plotting...
+		gstlal_ll_inspiral_plot_sensitivity --base64 --cumulative-segment-file ${TOTAL_SEG_XML} --marginalized-likelihood-file ${MARGINALIZED_LIKELIHOOD_FILE} --min-inj-distance ${MIN_INJ_DIST} --max-inj-distance ${MAX_INJ_DIST} --simdb-query-end-time ${QUERYSTOP} --verbose ${LIGOLW_SQLITE}
+	fi
+
+	echo sleeping...
+	sleep 600
+done
