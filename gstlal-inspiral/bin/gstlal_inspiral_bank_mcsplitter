@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 Sarah Caudill
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to split a template bank into two xml files based on a cut on mchirp.
+
+from optparse import OptionParser
+
+import sys
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import table
+from glue.ligolw import utils as ligolw_utils
+
+from pylal import git_version
+
+__author__ = "Sarah Caudill <sarah.caudill@ligo.org>"
+__version__ = "git id %s" % git_version.id
+__date__ = git_version.date
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "",
+		usage = "%prog [options] [file ...]",
+		description = "%prog splits a template bank xml into two xml files based on a cut on mchirp.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-t", "--output-tag", action = "store", type="string", help = "Set the output file tag.")
+	parser.add_option("-m", "--mchirp-split", action = "store", type="float", help = "Split into two banks based on this mchirp threshold.")
+	options, filenames = parser.parse_args()
+
+	return options, (filenames or [None])
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+lsctables.use_in(LIGOLWContentHandler)
+
+options, tmpltbanks = parse_command_line()
+
+outputrows = []
+
+for banknum, filename in enumerate(tmpltbanks):
+	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
+	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+	sngl_inspiral_table.sort(key = lambda row: row.mchirp)
+
+	tmpltlist1 = []
+	tmpltlist2 = []
+
+	[tmpltlist1.append(tmplt) if tmplt.mchirp <= options.mchirp_split else tmpltlist2.append(tmplt) for tmplt in sngl_inspiral_table]
+
+	outputrows = [tmpltlist1, tmpltlist2]
+
+	print >>sys.stderr, "The first output bank will contain templates with mchirp less than or equal to threshold."
+	print >>sys.stderr, "The second output bank will contain templates with mchirp greater than threshold."
+
+	for rownum, rows in enumerate(outputrows):
+		sngl_inspiral_table[:] = rows
+		ligolw_utils.write_filename(xmldoc, "bank_%02d_%s_%02d.xml.gz" % (banknum, options.output_tag, rownum,), verbose=True, gz=True)
