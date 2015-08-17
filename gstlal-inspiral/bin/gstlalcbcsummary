@@ -200,14 +200,16 @@ for ifo in web.ifos:
 	</div>
 		""" % (cnt, cnt, dt.replace("_", " "), web.plot(dt, ifo = ifo))
 		cnt+=1
-print """
-	<div class=tab>
-		<input type="radio" id="tab-%d" name="tab-group-1">
-		<label for="tab-%d">%s</label>
-		<div class="content"><img src="data:image/png;base64,%s"></img></div>
-	</div>
-		""" % (cnt, cnt, 'Analysis Sensitivity', open('%s/sensitivity_base64.txt' % web.directory).readline())
-cnt+=1
+
+if os.path.isfile("%s/sensitivity_base64.txt" % web.directory):
+	print """
+		<div class=tab>
+			<input type="radio" id="tab-%d" name="tab-group-1">
+			<label for="tab-%d">%s</label>
+			<div class="content"><img src="data:image/png;base64,%s"></img></div>
+		</div>
+			""" % (cnt, cnt, 'Analysis Sensitivity', open("%s/sensitivity_base64.txt" % web.directory).readline())
+	cnt+=1
 
 # This plot takes too long to load for a summary page.
 #print """
