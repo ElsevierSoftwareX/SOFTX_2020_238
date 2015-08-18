@@ -27,6 +27,7 @@
 #		--write-likelihood-basename, metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
 #		--write-likelihood-cache, metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
 #		--segment-and-horizon, action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
+#		--override-background-prior, metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
 #		--background-prefactors, metavar = "s,e", default = "0.5,20.", help = "Set the range of prefactors on the chi-squared distribution for the background model: default 0.5,20.")
 #		--injection-prefactors, metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
 
@@ -65,6 +66,7 @@ def parse_command_line():
 	parser.add_option("--write-likelihood-basename", metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
 	parser.add_option("--write-likelihood-cache", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
+	parser.add_option("--override-background-prior", metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
 	parser.add_option("--background-prefactors", metavar = "s,e", default = "0.5,20.", help = "Set the range of prefactors on the chi-squared distribution for the background model: default 0.5,20.")
 	parser.add_option("--injection-prefactors", metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
 	options, filenames = parser.parse_args()
@@ -95,8 +97,8 @@ def parse_command_line():
 options, process_params, instruments, segs, horizon_history, bankcachedict = parse_command_line()
 
 if options.verbose:
-	print "Livetime: ", abs(segs)
-	print "Extent: ", segs.extent_all()
+	print >> sys.stderr, "Livetime: ", abs(segs)
+	print >> sys.stderr, "Extent: ", segs.extent_all()
 
 #
 # quantities derived from input
@@ -118,10 +120,10 @@ n_background = dict(((ifo, float(abs(seg)) * options.num_templates) for ifo, seg
 #
 # This is calculated assuming the following
 # 1) Only coincident events go into the zero_lag histograms
-# 2) The coincidence rate is 100 times lower than background rate for each detector
+# 2) The coincidence rate is 50 times lower than background rate for each detector
 #
 
-n_zerolag = dict(((ifo, float(abs(seg)) * options.num_templates / 100.) for ifo, seg in segs.items()))
+n_zerolag = dict(((ifo, float(abs(seg)) * options.num_templates / 50.) for ifo, seg in segs.items()))
 
 #
 # Initialize an empty ThincaCoincParamsDistributions class
@@ -150,7 +152,7 @@ diststats.horizon_history.update(horizon_history)
 
 for i in range(2, len(instruments) + 1):
 	for ifos in [frozenset(x) for x in iterutils.choices(tuple(instruments), i)]:
-		diststats.zero_lag_rates["instruments"][diststats.instrument_categories.category(ifos),] = min(n_background[ifo] for ifo in ifos) / 100.**(i-1)
+		diststats.zero_lag_rates["instruments"][diststats.instrument_categories.category(ifos),] = min(n_background[ifo] for ifo in ifos) / 50.**(i-1)
 
 diststats.add_instrument_combination_counts(segs = segs, verbose = options.verbose)
 
@@ -212,6 +214,20 @@ for instruments in ranking_data.background_likelihood_rates:
 
 ranking_data._compute_combined_rates()
 ranking_data.finish()
+
+#
+# Override the background SNR/chisq priors if requested
+# This can help the ranking to converge more quickly
+# 
+
+if options.override_background_prior is not None:
+	prior = dict(((ifo, options.override_background_prior) for ifo, seg in segs.items()))
+	for ba in ("background_rates", "zero_lag_rates"):
+		for instrument, number_of_events in prior.items():
+			binarr = getattr(diststats, ba)["%s_snr_chi" % instrument]
+			binarr.array *= number_of_events / binarr.array.sum()
+			if options.verbose:
+				print >> sys.stderr, "Overriding the %s background snr / chisq priors to: %.2f" % (instrument, binarr.array.sum())
 
 #
 # record results in output file
