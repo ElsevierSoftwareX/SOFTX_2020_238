@@ -31,6 +31,7 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 
 import sys, os, copy, stat
 import shutil
+import socket
 
 #
 # import the modules we need to build the pipeline
@@ -175,6 +176,7 @@ class lvalert_listen_node(pipeline.CondorDAGNode):
 		self.add_var_opt("password", raw_input("lvalert password: "))
 		self.add_var_opt("server", "lvalert.cgca.uwm.edu")
 		self.add_var_opt("config-file", "lvalert.ini")
+		self.add_var_opt("resource", "%s:%s" % (socket.getfqdn(), os.getcwd()))
 		self.add_var_opt("dont-wait", "")
 		dag.add_node(self)
 
@@ -246,8 +248,8 @@ def parse_command_line():
 	if options.injection_file:
 		# FIXME Dont hardcode program name
 		inj_xmldoc = ligolw_utils.load_filename(options.injection_file, contenthandler = ligolwcontenthandler)
-		min_max_inj_dist_list.append(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--min-distance")[0]/1000.)
-		min_max_inj_dist_list.append(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--max-distance")[0]/1000.)
+		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--min-distance")[0]/1000.))
+		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--max-distance")[0]/1000.))
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
