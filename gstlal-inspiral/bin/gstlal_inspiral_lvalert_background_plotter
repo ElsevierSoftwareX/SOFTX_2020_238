@@ -60,9 +60,9 @@ def parse_command_line():
 		lvalert_data = json.loads(sys.stdin.read())
 		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 		logging.info("lvalert data: %s" % repr(lvalert_data))
-		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-		if filename not in (u"psd.xml.gz",):
-			logging.info("filename is not 'psd.xml.gz'.  skipping")
+		alert_type = lvalert_data["alert_type"]
+		if alert_type != "new":
+			logging.info("not a new-type alert.  skipping")
 			sys.exit()
 		gid = str(lvalert_data["uid"])
 	else:
