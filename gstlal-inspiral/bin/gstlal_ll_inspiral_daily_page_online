@@ -16,6 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+## @file
+
 while true ; do
 	gstlal_ll_inspiral_daily_page --directory $1 --injection-file $2 --web-dir $3
 	sleep 3600
