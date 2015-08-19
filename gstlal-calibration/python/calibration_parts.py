@@ -43,6 +43,7 @@ def caps_and_progress_and_resample(pipeline, head, caps, progress_name, new_caps
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
+	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	return head
 
 def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps):
@@ -52,9 +53,11 @@ def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
+	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	return head
 
 def resample(pipeline, head, caps):
+	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
@@ -80,7 +83,6 @@ def mkadder(pipeline, srcs, caps, sync = True):
 	if srcs is not None:
 		for src in srcs:
 			pipeparts.mkcapsfilter(pipeline, src, caps).link(elem)
-			#src.link(elem)
 	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
@@ -147,8 +149,8 @@ def filter_at_line(pipeline, chanR, chanI, WR, WI, caps):
 	chanR_WI = pipeparts.mkaudioamplify(pipeline, chanR, WI)
 	chanI_WR = pipeparts.mkaudioamplify(pipeline, chanI, WR)
 
-	outR = mkadder(pipeline, (pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, chanI, max_size_time = gst.SECOND * 100), -1.0 * WI), pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, chanR, max_size_time = gst.SECOND * 100), WR)), caps)
-	outI = mkadder(pipeline, (pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, chanR, max_size_time = gst.SECOND * 100), WI), pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, chanI, max_size_time = gst.SECOND * 100), WR)), caps)
+	outR = mkadder(pipeline, list_srcs(pipeline, chanI_WI, chanR_WR), caps)
+	outI = mkadder(pipeline, list_srcs(pipeline, chanR_WI, chanI_WR), caps)
 	return outR, outI
 
 def compute_pcalfp_over_derrfp(pipeline, derrfpR, derrfpI, pcalfpR, pcalfpI, caps):
