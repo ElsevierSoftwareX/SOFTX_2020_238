@@ -27,3 +27,4 @@
 - \ref gstlaltelecons20150520page
 - \ref gstlaltelecons20150603page
 - \ref gstlaltelecons20150701page
+- \ref gstlaltelecons20150819page

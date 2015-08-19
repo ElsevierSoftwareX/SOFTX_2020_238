@@ -284,12 +284,43 @@ issue here might be different.
 
 
 Do we want to consider a cold restart with some action items addressed?
- - Get the range vs time (realtime) plot working
- - Disable rankind data uploads
- - Start with a less aggressive prior to see if FAR converges more quickly.
-
 \subsubsection day7news News
 
 \subsubsection day7actions Actions
+
+\subsubsection day7completed Completed Actions
+ 
+ - Get the range vs time (realtime) plot working
+ - Disable ranking data uploads to relieve stress on simdb
+ - Start with a less aggressive prior to see if FAR converges more quickly.
+
+
+
+\subsection day8 August 19, 2015
+
+\subsubsection day7news News
+
+After a hiatus, we decided to take some steps to try to get the FAR calculation to converge faster.  As a reminder of hte situation
+
+ - The FARs are being over reported (i.g., events are ranked less significantly than they should be) by about a factor of 4.
+
+ - This has very little effect on sensitivity. We recover the big dog fine.  The software injection recovery seems reasonable.   
+
+ - However we might produce fewer events in gracedb than we want.
+
+Our hythosis is this:  We used an agressive prior to seed the analysis to prevent significance from being *over* estimated - i.e., we were trying to be conservative. We think that this was too agressive.  Since then we have taken a step to try to tone down the prior 
+
+<a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/commit/gstlal-inspiral/bin/gstlal_ll_inspiral_create_prior_diststats?id=d94163250b45e1f544a6a8cf754dd4bb9a7a2e02>d94163250b45e1f544a6a8cf754dd4bb9a7a2e02</a>
+
+We took the liberty to also try out the proposed kde patch described here:
+
+https://bugs.ligo.org/redmine/issues/2339
+
+The analysis has been running for less than one day.  The IFAR plot has not yet converged, but it is still too early to decide if it is working.
+
+Additionally, Cody is rerunning the offline analysis with the new KDE patch applied.
+
+\subsubsection day7actions Actions
+
 
 \subsubsection day7completed Completed Actions
