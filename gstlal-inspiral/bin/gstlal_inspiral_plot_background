@@ -138,9 +138,10 @@ def load_search_results(filenames, tmp_path = None, verbose = False):
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for participating_instruments, ln_likelihood_ratio, is_background in connection.cursor().execute("""
+		for participating_instruments, fap, ln_likelihood_ratio, is_background in connection.cursor().execute("""
 SELECT
 	coinc_inspiral.ifos,
+	coinc_inspiral.false_alarm_rate,
 	coinc_event.likelihood,
 	EXISTS (
 		SELECT
@@ -161,9 +162,9 @@ WHERE
 		""", (definer_id,)):
 			participating_instruments = frozenset(lsctables.instrument_set_from_ifos(participating_instruments))
 			if is_background:
-				background_ln_likelihood_ratios.setdefault(participating_instruments, []).append(ln_likelihood_ratio)
+				background_ln_likelihood_ratios.setdefault(participating_instruments, []).append((ln_likelihood_ratio, fap))
 			else:
-				zerolag_ln_likelihood_ratios.setdefault(participating_instruments, []).append(ln_likelihood_ratio)
+				zerolag_ln_likelihood_ratios.setdefault(participating_instruments, []).append((ln_likelihood_ratio, fap))
 
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
@@ -290,7 +291,7 @@ if ranking_data is not None:
 		fig.savefig(plotname)
 
 	ranking_stats = sum(zerolag_ln_likelihood_ratios.values(), []) if zerolag_ln_likelihood_ratios is not None else None
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), "Noise")
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), "Noise", zerolag_ln_likelihood_ratios = ranking_stats)
 	plotname = inspiral_pipe.T050017_filename("NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
