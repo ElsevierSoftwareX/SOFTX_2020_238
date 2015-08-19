@@ -156,6 +156,7 @@ for d in os.listdir(options.directory):
 	m = pattern.match(d)
 	if m:
 		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
+subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
 subprocess.check_call(["gstlal_inspiral_plotsummary", "--tmp-space", "/dev/shm", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
 subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--tmp-space", "/dev/shm",  "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
