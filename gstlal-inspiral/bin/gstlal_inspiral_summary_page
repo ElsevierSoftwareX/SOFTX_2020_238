@@ -308,7 +308,7 @@ page.subpages["background"].sections["rates"].add_table(imgtable, "","")
 
 page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
 page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LIKELIHOOD_RATIO_*.png'))
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*NOISE_LIKELIHOOD_RATIO_CCDF*.png'))
 page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
 
 
