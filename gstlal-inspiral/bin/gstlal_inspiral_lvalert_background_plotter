@@ -77,11 +77,18 @@ def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
 		if snrm is None:
 			continue
 		fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, ifo, plot_type, 400, event_snr = snrm, event_chisq = chisqm)
-		try:
-			fig.tight_layout()
-		except AttributeError:
-			# not in old matplotlibs
-			pass
+		# FIXME For some reason the tight_layout() function in the
+		# current version of matplotlib at UWM, 1.1.1rc2, causes the
+		# color bar to overlap with the plot. Not including
+		# tight_layout causes the bottom of the letters in the SNR
+		# label to be cut off, but that is preferable. Once matplotlib
+		# gets updated the code should be tested with the below lines
+		# not commented out
+		#try:
+		#	fig.tight_layout()
+		#except AttributeError:
+		#	# not in old matplotlibs
+		#	pass
 		fname = 'gracedb/%s/%s_%s_%s_snrchi.png' % (gid, gid, ifo, plot_type)
 		fig.savefig(fname)
 		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = {"background_pdf":"background", "injection_pdf":"background", "zero_lag_pdf":"background", "LR":"background"}[plot_type])

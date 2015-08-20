@@ -303,10 +303,11 @@ margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_onl
 listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
 # get urls job 
 urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
-# Summary page job
-pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
-# Sensitivity plots job
-sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+if options.injection_file:
+	# Summary page job
+	pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+	# Sensitivity plots job
+	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 if options.state_backup_destination:
 	# State saving job 
 	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
@@ -401,8 +402,9 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 
 urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags + inj_jobTags)}, output_files = {})
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
-pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]}, output_files = {})
-sensNode = inspiral_pipe.generic_node(sensJob, dag, [], opts = {}, input_files = {"":[options.injection_file, "%s/0000/cumulative_segments.xml" % os.getcwd(), options.marginalized_likelihood_file,  options.inj_gracedb_service_url, options.inj_gracedb_pipeline, options.inj_gracedb_group, options.inj_gracedb_search, min_max_inj_dist_list[0], min_max_inj_dist_list[1]]}, output_files = {})
+if options.injection_file:
+	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]}, output_files = {})
+	sensNode = inspiral_pipe.generic_node(sensJob, dag, [], opts = {}, input_files = {"":[options.injection_file, "%s/0000/cumulative_segments.xml" % os.getcwd(), options.marginalized_likelihood_file,  options.inj_gracedb_service_url, options.inj_gracedb_pipeline, options.inj_gracedb_group, options.inj_gracedb_search, min_max_inj_dist_list[0], min_max_inj_dist_list[1]]}, output_files = {})
 if options.state_backup_destination:
 	stateNode = inspiral_pipe.generic_node(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
 
