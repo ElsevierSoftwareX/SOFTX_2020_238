@@ -63,11 +63,11 @@ def parse_sensitivity_docs(database, cumulative_segments_file, simdb_query_end_t
 	missed_inj.extend([f[1] for f in found_inj if f[0] > 3.86e-7])
 	found_inj = sorted([f for f in found_inj if f[0] <= 3.86e-7], key=lambda f: f[1].geocent_end_time)
 
-	# Throw away any found events that have been downloaded before their
-	# segment information was updated (this is caused by the asynchronous
-	# nature of the cumulative_segments.xml downloads and the simdb
-	# queries)
+	# Throw away any events that have been downloaded before their segment
+	# information was updated (this is caused by the asynchronous nature of
+	# the cumulative_segments.xml downloads and the simdb queries)
 	found_inj = [f for f in found_inj if f[1].geocent_end_time < seg_bins[-1]]
+	missed_inj = [m for m in missed_inj if m.geocent_end_time < seg_bins[-1]]
 
 	return found_inj, missed_inj, seglistdicts, seg_bins
 
