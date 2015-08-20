@@ -230,7 +230,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
-	parser.add_option("--injection-file", default = ".", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
+	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
 	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 
