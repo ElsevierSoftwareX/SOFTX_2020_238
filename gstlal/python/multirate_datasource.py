@@ -194,6 +194,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max(rates)))
 
+	# make the buffers going downstream smaller, this can really help with
+	# RAM
+	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+
 	if psd is None:
 		# use running average PSD
 		whiten.set_property("psd-mode", 0)
