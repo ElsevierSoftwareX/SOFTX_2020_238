@@ -129,7 +129,6 @@ for (label, plot) in(
 	("Rates", web.rateplot()),
 	("Latency history", web.plothistory("latency_history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")),
 	("SNR history", web.plothistory('snr_history', ylabel = "SNR", xlabel = "Time since last trigger (s)")),
-	("likelihood CCDF", web.plotccdf()),
 	("Segment History", web.plotcumulativesegments()),
 	):
 	print """
@@ -140,6 +139,25 @@ for (label, plot) in(
 </div>
 	""" % (cnt, cnt, label, plot)
 	cnt+=1
+try:
+	print """
+<div class=tab>
+        <input type="radio" id="tab-%d" name="tab-group-1">
+        <label for="tab-%d">%s</label>
+        <div class="content">%s</div>
+</div>
+        """ % (cnt, cnt, "likelihood CCDF", web.plotccdf())
+        cnt+=1
+except ValueError:
+	print """
+<div class=tab>
+        <input type="radio" id="tab-%d" name="tab-group-1">
+        <label for="tab-%d">%s</label>
+        <div class="content">Not enough counts to generate likelihood ccdf</div>
+</div>
+        """ % (cnt, cnt, "likelihood CCDF")
+        cnt+=1
+	
 
 print """
 </div>
