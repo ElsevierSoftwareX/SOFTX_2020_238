@@ -177,7 +177,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 #
 
 
-AC_SUBST([MIN_NDS_VERSION], [0.11.2])
+AC_SUBST([MIN_NDS_VERSION], [0.11.5])
 AC_ARG_WITH(
 	[nds],
 	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
