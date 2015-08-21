@@ -214,6 +214,8 @@ parser.add_option("--kappac-pcal-ref-Apu-real", metavar = "name", default = "CAL
 parser.add_option("--kappac-pcal-ref-Apu-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG", help = "Set the name of the channel containing the real part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG")
 parser.add_option("--kappatst-ref-facs-real", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL", help = "Set the name of the channel containing the real part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL)")
 parser.add_option("--kappatst-ref-facs-imag", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG", help = "Set the name of the channel containing the imaginary part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG)")
+parser.add_option("--split-actuation-chain", action = "store_true", help = "Set this to split the actuation chain into PUM, UIM, TST.")
+parser.add_option("--different-control-whitening", action = "store_true", help = "Set when the whitening filters on each section of control chain are different. Only relevant in --split-actuation-chain mode") 
 
 # These options are specific to the full calibration mode
 parser.add_option("--full-calibration", action = "store_true", help = "Set this to run the pipeline in full calibration mode.")
@@ -224,7 +226,6 @@ parser.add_option("--error-chain-delay", metavar = "samples", type = int, defaul
 
 # These options are specific to the partial calibration mode
 parser.add_option("--partial-calibration", action = "store_true", help = "Set this to run the pipeline in partial calibraiton mode.")
-parser.add_option("--split-actuation-chain", action = "store_true", help = "Set this to split the actuation chain into PUM, UIM, TST.")
 parser.add_option("--deltal-ctrl-channel-name", metavar = "name", default = "CAL-DELTAL_CTRL_DQ", help = "Set the name of the partially calibrated control channel. (Default = CAL-DELTAL_CTRL_DQ)")
 parser.add_option("--deltal-tst-channel-name", metavar = "name", default = "CAL-DELTAL_CTRL_TST_DQ", help = "Set the name of the partially calibrated control channel for the TST branch of the actuation. (Default = CAL-DELTAL_CTRL_TST_DQ)")
 parser.add_option("--deltal-pum-channel-name", metavar = "name", default = "CAL-DELTAL_CTRL_PUM_DQ", help = "Set the name of the partially calibrated control channel for the PUM/UIM branch of the actuation. (Default = CAL-DELTAL_CTRL_PUM_DQ)")
@@ -777,8 +778,9 @@ if options.split_actuation_chain:
 	if options.partial_calibration:
 		tst = calibration_parts.caps_and_progress(pipeline, tst, ctrl_caps, "tst")
 		tst = pipeparts.mkfirbank(pipeline, tst, fir_matrix = [[0,1]], time_domain = True)
-		tst = calibration_parts.resample(pipeline, tst, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % tstdewhitensr)
-		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = True)
+		if options.different_control_whitening:
+			tst = calibration_parts.resample(pipeline, tst, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % tstdewhitensr)
+			tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = True)
 		tst = calibration_parts.resample(pipeline, tst, ctrlcorrcaps)
 	
 		pum = calibration_parts.caps_and_progress(pipeline, pum, ctrl_caps, "pum")
@@ -787,8 +789,9 @@ if options.split_actuation_chain:
 		pumuim = pipeparts.mkaudioconvert(pipeline, pumuim)
 		pumuim = pipeparts.mkcapsfilter(pipeline, pumuim, ctrl_caps) 
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, fir_matrix = [[0,1]], time_domain = True)
-		pumuim = calibration_parts.resample(pipeline, pumuim, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % pumuimdewhitensr) 
-		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = True)
+		if options.different_control_whitening:
+			pumuim = calibration_parts.resample(pipeline, pumuim, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % pumuimdewhitensr) 
+			pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = True)
 		pumuim = calibration_parts.resample(pipeline, pumuim, ctrlcorrcaps)
 
 	if options.full_calibration:
@@ -834,6 +837,10 @@ if options.split_actuation_chain:
 		ctrl = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, ctrl, ka_modify_ctrl), ctrlcorrcaps)
 		ctrl = pipeparts.mkaudioconvert(pipeline, ctrl)
 		ctrl = pipeparts.mkcapsfilter(pipeline, ctrl, ctrlcorrcaps)
+	if not options.different_control_whitening and options.partial_calibration:
+		ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % pumuimdewhitensr) 
+		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = True)
+		ctrl = calibration_parts.resample(pipeline, ctrl, ctrlcorrcaps)
 	ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrlcorrdelay), fir_matrix = [ctrlcorrfilt[::-1]], time_domain = True)
 elif not options.split_actuation_chain:
 	ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, ctrl_caps, "ctrl")
