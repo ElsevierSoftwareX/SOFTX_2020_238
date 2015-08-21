@@ -412,21 +412,10 @@ demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True,
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
 
-ctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-res = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-if not options.no_gamma:
-	exc = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-	if options.partial_calibration:
-		darm_ctrl = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
-if not options.no_dq_vector:
-	odcstatevector = pipeparts.mkreblock(pipeline, None, block_duration = gst.SECOND)
-
 # Get everything hooked up and blocked off to no more than 1 second buffers
 if options.full_calibration:
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_ctrl_channel_name), ctrl.get_pad("sink"))
-	ctrl = pipeparts.mkreblock(pipeline, ctrl, block_duration = gst.SECOND)
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, options.darm_err_channel_name), res.get_pad("sink"))
-	res = pipeparts.mkreblock(pipeline, res, block_duration = gst.SECOND)
+	ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_ctrl_channel_name, instrument)
+	res = calibration_parts.hook_up_and_reblock(pipeline, res, options.darm_err_channel_name, instrument)
 elif options.partial_calibration:
 	if options.split_actuation_chain:
 		tst = calibration_parts.hook_up_and_reblock(pipeline, demux, options.deltal_tst_channel_name, instrument)
@@ -591,40 +580,27 @@ elif not options.split_actuation_chain:
 		ctrldewhitensr = int(filters["dewhiten_ctrl_sr"])
 	if options.partial_calibration:
 		ctrldewhitensr = int(filters["deltal_ctrl_dewhiten_sr"])
+		print ctrldewhitensr
 		ctrldewhitendelay = filters["deltal_ctrl_dewhiten_delay"]
+		print ctrldewhitendelay
 		ctrldewhiten = filters["deltal_ctrl_dewhiten"]
 		ctrlfiltsr = int(filters["ctrl_corr_sr"])
 		ctrlchaindelay = filters["ctrl_corr_delay"]
 		ctrlchainfilt = filters["ctrl_corr_filter"]
 if options.full_calibration:
-	ctrlfiltsr = int(filters["actuation_sr"])
-	ctrldewhitensr = int(filters["dewhiten_ctrl_sr"])
 	reschaindelay = filters["inv_sens_delay"]
 	reschainfilt = filters["inv_sensing"]
 	resdewhitendelay = filters["dewhiten_err_delay"]
 	resdewhiten = filters["dewhiten_err"]
-	ctrlchaindelay = filters["actuation_delay"]
-	ctrlchainfilt = filters["actuation"]
-	ctrldewhitendelay = filters["dewhiten_ctrl_delay"]
-	ctrldewhiten = filters["dewhiten_ctrl"]
 elif options.partial_calibration:
-	ctrlfiltsr = int(filters["ctrl_corr_sr"])
-	ctrldewhitensr = int(filters["deltal_ctrl_dewhiten_sr"])
 	reschaindelay = filters["res_corr_delay"]
 	reschainfilt = filters["res_corr_filter"]
 	resdewhitendelay = filters["deltal_res_dewhiten_delay"]
 	resdewhiten = filters["deltal_res_dewhiten"]
-	ctrlchaindelay = filters["ctrl_corr_delay"]
-	ctrlchainfilt = filters["ctrl_corr_filter"]
-	ctrldewhitendelay = filters["deltal_ctrl_dewhiten_delay"]
-	ctrldewhiten = filters["deltal_ctrl_dewhiten"]
 
 # EXC branch
 if not options.no_gamma:
-	exc = pipeparts.mkaudiorate(pipeline, exc, skip_to_first = True, silent = False)
-	exc = pipeparts.mkaudioconvert(pipeline, exc)
-	exc = pipeparts.mkcapsfilter(pipeline, exc, caps)
-	exc = pipeparts.mkprogressreport(pipeline, exc, "progress_src_exc_%s" % instrument)
+	exc = calibration_parts.caps_and_progress(pipeline, exc, caps, "exc")
 	if options.partial_calibration:
 		darm_ctrl = calibration_parts.caps_and_progress(pipeline, darm_ctrl, caps, "darm_ctrl")
 # Set up all of the inputs for the calibration factors
@@ -923,8 +899,6 @@ res = pipeparts.mkaudiorate(pipeline, res, skip_to_first = True, silent = False)
 		
 # Add control and residual chains and divide by L to make h(t)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, res, ctrl), caps)
-strain = pipeparts.mkaudioconvert(pipeline, strain)
-strain = pipeparts.mkcapsfilter(pipeline, strain, caps)
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
