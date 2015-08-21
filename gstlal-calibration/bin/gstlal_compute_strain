@@ -580,9 +580,7 @@ elif not options.split_actuation_chain:
 		ctrldewhitensr = int(filters["dewhiten_ctrl_sr"])
 	if options.partial_calibration:
 		ctrldewhitensr = int(filters["deltal_ctrl_dewhiten_sr"])
-		print ctrldewhitensr
 		ctrldewhitendelay = filters["deltal_ctrl_dewhiten_delay"]
-		print ctrldewhitendelay
 		ctrldewhiten = filters["deltal_ctrl_dewhiten"]
 		ctrlfiltsr = int(filters["ctrl_corr_sr"])
 		ctrlchaindelay = filters["ctrl_corr_delay"]
@@ -658,7 +656,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 
 	pcalfp_derrfpR, pcalfp_derrfpI = calibration_parts.compute_pcalfp_over_derrfp(pipeline, ka_derrWfpR, ka_derrWfpI, ka_pcalR, ka_pcalI, compute_calib_factors_caps)
 
-if not options.no_kappatst and (not options.no_kappac or not options.no_fcc or not options.no_kappapu):
+if not options.no_kappatst and (not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_kappaa):
 	pcalfp_derrfpR = pipeparts.mktee(pipeline, pcalfp_derrfpR)
 	pcalfp_derrfpI = pipeparts.mktee(pipeline, pcalfp_derrfpI)
 
