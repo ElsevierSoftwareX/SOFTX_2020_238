@@ -18,9 +18,9 @@ int generate_three_dets()
 	strcpy(ifos[1], str2);
 	strcpy(ifos[2], str3);
 
-	horizons[0] = 200;
-	horizons[1] = 200;
-	horizons[2] = 180;
+	horizons[0] = 430;
+	horizons[1] = 430;
+	horizons[2] = 320;
 
 	for(i=0;i<nifo;i++)
 		printf("ifo%d %s\n", i, ifos[i]);
@@ -57,7 +57,7 @@ int generate_two_dets()
 
 int main()
 {
-#if 0
+#if 1
 	generate_three_dets();
 #endif
 	generate_two_dets();
