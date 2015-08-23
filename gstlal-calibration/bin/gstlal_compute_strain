@@ -399,7 +399,7 @@ if not options.no_kappac or not options.no_fcc:
 	channel_list.append((instrument, options.kappac_pcal_ref_Apu_real))
 	channel_list.append((instrument, options.kappac_pcal_ref_Apu_imag))
 
-if not options.no_kappatst:
+if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 	channel_list.append((instrument, options.tst_exc_channel_name))
 	channel_list.append((instrument, options.kappatst_ref_facs_real))
 	channel_list.append((instrument, options.kappatst_ref_facs_imag))
@@ -455,7 +455,7 @@ if not options.no_kappac or not options.no_fcc:
 	kc_pcal_Atst_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_Atst_imag, instrument)
 	kc_pcal_Apu_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_Apu_real, instrument)
 	kc_pcal_Apu_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappac_pcal_ref_Apu_imag, instrument)
-if not options.no_kappatst:
+if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 	tstexc = calibration_parts.hook_up_and_reblock(pipeline, demux, options.tst_exc_channel_name, instrument)
 	ktst_facs_real = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappatst_ref_facs_real, instrument)
 	ktst_facs_imag = calibration_parts.hook_up_and_reblock(pipeline, demux, options.kappatst_ref_facs_imag, instrument)
@@ -503,7 +503,7 @@ if options.data_source == "frames" and frame_segments is not None:
 		kc_pcal_Atst_imag = pipeparts.mkgate(pipeline, kc_pcal_Atst_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))	
 		kc_pcal_Apu_real = pipeparts.mkgate(pipeline, kc_pcal_Apu_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 		kc_pcal_Apu_imag = pipeparts.mkgate(pipeline, kc_pcal_Apu_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))	
-	if not options.no_kappatst:
+	if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 		tstexc = pipeparts.mkgate(pipeline, tstexc, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 		ktst_facs_real = pipeparts.mkgate(pipeline, ktst_facs_real, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 		ktst_facs_imag = pipeparts.mkgate(pipeline, ktst_facs_imag, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
@@ -546,7 +546,7 @@ if not options.no_kappac or not options.no_fcc:
 	kc_pcal_W_imag = float(filters["kc_pcal_whitener_im"])
 	kc_pcal_corr_real = float(filters["kc_pcal_corr_re"])
 	kc_pcal_corr_imag = float(filters["kc_pcal_corr_im"])
-if not options.no_kappatst:
+if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 	ktst_esd_line_freq = float(filters["ktst_esd_line_freq"])
 	ktst_esd_W_real = float(filters["ktst_esd_whitener_re"])
 	ktst_esd_W_imag = float(filters["ktst_esd_whitener_im"])
@@ -632,7 +632,7 @@ if not options.no_kappac or not options.no_fcc:
 	kc_pcal_Atst_imag = calibration_parts.caps_and_progress_and_resample(pipeline, kc_pcal_Atst_imag, ref_factors_caps, "kc_pcal_Atst_imag", compute_calib_factors_caps)
 	kc_pcal_Apu_real = calibration_parts.caps_and_progress_and_resample(pipeline, kc_pcal_Apu_real, ref_factors_caps, "kc_pcal_Apu_real", compute_calib_factors_caps)
 	kc_pcal_Apu_imag = calibration_parts.caps_and_progress_and_resample(pipeline, kc_pcal_Apu_imag, ref_factors_caps, "kc_pcal_Apu_imag", compute_calib_factors_caps)
-if not options.no_kappatst:
+if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 	tstexccaps = "audio/x-raw-float, rate=%d, channels=1, width=64, endianness=1234" % options.tst_exc_sample_rate
 	tstexc = calibration_parts.caps_and_progress(pipeline, tstexc, tstexccaps, "tstexc")
 	ktst_facs_real = calibration_parts.caps_and_progress_and_upsample(pipeline, ktst_facs_real, ref_factors_caps, "ktst_facs_real", compute_calib_factors_caps)
