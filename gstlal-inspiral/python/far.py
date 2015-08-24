@@ -933,10 +933,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					progressbar.increment()
 				new_binarr.array[snrindices, rcossindices] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
 
+			# apply a bit of smoothing (5 bins in each
+			# direction) to soften the stair steps caused by
+			# the limited set of discrete prefactors
+			rate.filter_array(new_binarr.array, rate.gaussian_window(5., 5., sigma = 10.))
+
 			# Add an SNR power law in with the differentials
 			dsnrdchi2 = numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
 			new_binarr.array[snrindices, rcossindices] *= dsnrdchi2
 			new_binarr.array[snrindices, rcossindices] *= number_of_events / new_binarr.array.sum()
+
 			# add to raw counts
 			binarr += new_binarr
 
@@ -1123,31 +1129,38 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 10., chisq_kernel_width = 0.1,  sigma = 10.):
 		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
-		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
-		# construct the density estimation kernel
-		snr_bins = binnedarray.bins[0]
-		chisq_bins = binnedarray.bins[1]
-		snr_per_bin_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.]]
-		chisq_per_bin_at_0_02 = (chisq_bins.upper() - chisq_bins.lower())[chisq_bins[0.02]]
 
-		# Apply Silverman's rule so that the width scales with numsamples**(-1./6.) for a 2D PDF
-		snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8 / numsamples**(1./6.)
-		chisq_kernel_bins = chisq_kernel_width / chisq_per_bin_at_0_02 / numsamples**(1./6.)
+		# if this is not the numerator, convolve with density
+		# estimation kernel (numerator is known analytically).
+		if pdf_dict is not self.injection_pdf:
+			# total number of samples.  be conservative and
+			# assume only 1 in 10 samples are independent.
+			numsamples = binnedarray.array.sum() / 10. + 1.
 
-		# check the size of the kernel. We don't ever let it get
-		# smaller than the 2.5 times the bin size
-		if  snr_kernel_bins < 2.5:
-			snr_kernel_bins = 2.5
-			warnings.warn("Replacing snr kernel bins with 2.5")
-		if  chisq_kernel_bins < 2.5:
-			chisq_kernel_bins = 2.5
-			warnings.warn("Replacing chisq kernel bins with 2.5")
+			# construct the density estimation kernel.  apply
+			# Silverman's rule so that the width scales with
+			# numsamples**(-1./6.) for a 2D PDF.  don't let the
+			# kernel get smaller than the 2.5 times the bin
+			# size.
+			snr_bins = binnedarray.bins[0]
+			chisq_bins = binnedarray.bins[1]
+			snr_per_bin_at_8 = (snr_bins.upper() - snr_bins.lower())[snr_bins[8.]]
+			chisq_per_bin_at_0_02 = (chisq_bins.upper() - chisq_bins.lower())[chisq_bins[0.02]]
 
-		# Compute the KDE
-		kernel = rate.gaussian_window(snr_kernel_bins, chisq_kernel_bins, sigma = sigma)
+			snr_kernel_bins = snr_kernel_width_at_8 / snr_per_bin_at_8 / numsamples**(1./6.)
+			chisq_kernel_bins = chisq_kernel_width / chisq_per_bin_at_0_02 / numsamples**(1./6.)
 
-		# convolve with the bin count data
-		rate.filter_array(binnedarray.array, kernel)
+			if  snr_kernel_bins < 2.5:
+				snr_kernel_bins = 2.5
+				warnings.warn("Replacing snr kernel bins with 2.5")
+			if  chisq_kernel_bins < 2.5:
+				chisq_kernel_bins = 2.5
+				warnings.warn("Replacing chisq kernel bins with 2.5")
+
+			kernel = rate.gaussian_window(snr_kernel_bins, chisq_kernel_bins, sigma = sigma)
+
+			# convolve with the bin count data
+			rate.filter_array(binnedarray.array, kernel)
 
 		# zero everything below the SNR cut-off.  need to do the
 		# slicing ourselves to avoid zeroing the at-threshold bin
