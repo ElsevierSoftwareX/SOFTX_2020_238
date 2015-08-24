@@ -1,3 +1,9 @@
+gstlal-calibration (0.5.0-1) unstable; urgency=low
+
+  * ER8 release, including computation of new factors
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 24 Aug 2015 16:03:00 -0500
+
 gstlal-calibration (0.4.1-1) unstable; urgency=low
 
   * pre-ER8 bug fix release
