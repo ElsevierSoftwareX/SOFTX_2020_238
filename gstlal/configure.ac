@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.10.0],[gstlal-discuss@ligo.org],[gstlal])
+AC_INIT([gstlal],[0.10.2],[gstlal-discuss@ligo.org],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -246,11 +246,11 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.14.0])
+AC_SUBST([MIN_LAL_VERSION], [6.15.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
-AC_SUBST([MIN_LALSIMULATION_VERSION], [1.3.0])
-AC_SUBST([MIN_LALBURST_VERSION], [1.3.0])
-AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.6.5])
+AC_SUBST([MIN_LALSIMULATION_VERSION], [1.4.0])
+AC_SUBST([MIN_LALBURST_VERSION], [1.4.0])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalsimulation >= ${MIN_LALSIMULATION_VERSION} lalburst >= ${MIN_LALBURST_VERSION} lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -264,7 +264,17 @@ AS_IF([test "x$HAVE_LAL_PTHREAD_LOCK" != "xyes"], [
 	AC_MSG_FAILURE([lal must be built with pthread locking enabled])
 ])
 
-AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+AC_DEFUN([AX_PYTHON_SYMBOL], [
+	AC_MSG_CHECKING([python module: from $1 import $2])
+	AS_IF([$PYTHON -c "from $1 import $2"], [
+		AC_MSG_RESULT(success)
+	], [
+		AC_MSG_ERROR([fail: are swig bindings missing?])
+	])
+])
+
+AX_PYTHON_MODULE([lal], fatal)
+AX_PYTHON_SYMBOL([lal], [LIGOTimeGPS])
 
 
 #

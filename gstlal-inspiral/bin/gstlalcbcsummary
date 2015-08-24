@@ -19,6 +19,100 @@
 ## @file
 
 ## @package gstlalcbcsummary
+# This program is designed to be placed in the cgi-bin directory of the user's
+# public_html directory on the cluster that is running the gstlal inspiral low
+# latency analysis
+#
+# ## USAGE:
+# This program is never meant to be executed by a user, but rather on a
+# webserver via a url such as:
+# 
+#	 	https://hostname.domain/path/to/cgi-bin/gstlal_llcbcsummary?id=<start>,<stop>&dir=/path/to/analysis/directory&ifos=<IFOS>
+#
+# e.g.,
+#
+# 		https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0010&dir=/home/gstlalcbc/engineering/5/bns_trigs_40Hz&ifos=H1,L1,V1
+#
+# <start> and <stop> are the 4 digit id numbers corresponding to the first and
+# last job, respectively.  
+# 
+# ## Interpretation of the output page
+#
+# General remarks.  Red bars indicate that no data is available for the job in
+# question.  If you are sure the url is correct, this could mean that a job has
+# failed.  Each bar contains the node and job number.
+# 
+# ### Header information
+#
+# \image html gstlal_llcbcsummary01.png
+#
+# This displays the current ifos involved ("H1L1V1") as well as the current GPS
+# time and local time
+#
+# ### Latency
+#
+# \image html gstlal_llcbcsummary02.png
+#
+# This plot indicates the time since the last event (gray) as well as the
+# latency of the last event (white).  If things are behaving well the latency
+# should be ~60 seconds and the time since last event should be no more than
+# ~300 seconds. 
+#
+# #### Reasons that this might not be the case:
+#  
+# -# At least two detectors are not functioning
+# -# The gstlal inspiral jobs are in a period "update" mode where they pause to
+# update background statistics.  This should only last for a few minutes every
+# 4 hours and should not cause more than a few hundred seconds of delay
+# -# Something more serious is wrong, e.g. the jobs are not able to keep up with the data.
+#
+# ### SNR
+#
+# \image html gstlal_llcbcsummary03.png
+#
+# This plot indicates the coincident SNR (root-sum-squares) of the last 1000
+# events.  The median SNR is white and the maximum SNR is gray.  The median SNR
+# should typically be small (< 8), however the maximum SNR might be large due
+# to the presence of a glitch or a signal.
+#
+# 
+# ### Livetime plots
+# 
+# \image html gstlal_llcbcsummary04.png
+#
+# These IFO specific plots can be used to infer the ammount of up-time,
+# down-time and periods of lost data for a given job.  This is *only* since the
+# job has been running.  Thus it is an indicator of how long the job has been
+# running without crashing.  Ideally jobs would only be restarted during
+# maintenance periods.  If the livetime is low for one or more jobs it could
+# indicate instability that is causing crashes
+# 
+# ### Template Parameters
+#
+# \image html gstlal_llcbcsummary05.png
+# 
+# \image html gstlal_llcbcsummary06.png
+#
+# These plots give the chirp mass and template duration bins of the given job.
+# 
+# ### RAM usage
+#
+# \image html gstlal_llcbcsummary07.png
+#
+# This plot gives the maximum RAM usage seen over the duration of the job. If
+# it is near the limit of the resource it might indicate that the jobs are
+# "swapping" and could be related to problems such as falling behind.
+# 
+# ### Links to more information about a given job
+# 
+# \image html gstlal_llcbcsummary08.png
+#
+# To drill down into specific information of a job click on the links at the
+# bottom of the screen.  These will bring up pages created by gstlal_llcbcnode.
+# Please see gstlal_llcbcnode for more information
+
+
+
 import sys
 import cgi
 import cgitb
@@ -29,16 +123,21 @@ import time
 import urlparse
 from gstlal import llweb
 
+form = cgi.parse()
+
+if "dir" not in form and "nagios" in form:
+	form = urlparse.parse_qs(open("gstlalcbc_analysis.txt").readline().strip())
+	web = llweb.GstlalWebSummary(form = form)
+	web.nagios()
+	sys.exit()
+elif not form:
+	form = urlparse.parse_qs(open("gstlalcbc_analysis.txt").readline().strip())
+web = llweb.GstlalWebSummary(form = form)
+
 # Header
 print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
 print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
 print >>sys.stdout, 'Content-type: text/html\r\n'
-
-form = cgi.parse()
-if not form:
-	form = urlparse.parse_qs(open("gstlalcbc_analysis.txt").readline().strip())
-
-web = llweb.GstlalWebSummary(form = form)
 
 print """
 <html>
@@ -60,15 +159,34 @@ print """
         </table>
 <hr>
 </div>
-""" % (",".join([min(web.registry.keys()), max(web.registry.keys())]), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status())
+""" % (",".join([min(web.registry.keys()), max(web.registry.keys())]), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status()[1])
 
 
 cnt = 0
 
-print """
-<div class="tabs">
+if os.path.isfile("%s/sensitivity_base64.txt" % web.directory):
+	print """
+	<div class="tabs">
+		<div class=tab>
+			<input type="radio" id="tab-%d" name="tab-group-1" checked>
+			<label for="tab-%d">%s</label>
+			<div class="content"><img src="data:image/png;base64,%s"></img></div>
+		</div>
+	""" % (cnt, cnt, 'Analysis Sensitivity', open("%s/sensitivity_base64.txt" % web.directory).readline())
+	cnt+=1
+
+	print """
 	<div class=tab>
-		<input type="radio" id="tab-%d" name="tab-group-1" checked>
+		<input type="radio" id="tab-%d" name="tab-group-1">
+	""" % cnt
+else:
+	print """
+	<div class="tabs">
+		<div class=tab>
+			<input type="radio" id="tab-%d" name="tab-group-1" checked>
+	""" % cnt
+
+print """
 		<label for="tab-%d">Summary</label>
 		<div class="content">
 			<table>
@@ -77,7 +195,7 @@ print """
 			</table>
 		</div>
 	</div>
-""" % (cnt, cnt, web.latency(), web.time_since_last(), web.average_up_time())
+""" % (cnt, web.latency(), web.time_since_last(), web.average_up_time())
 
 cnt+=1
 

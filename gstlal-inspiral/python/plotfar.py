@@ -270,19 +270,13 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 	x = numpy.linspace(xlo, xhi, 10000)
 	y = numpy.array([far.fap_after_trials(ccdf(likelihood), fapfar.zero_lag_total_count) for likelihood in x])
 	axes.semilogy(x, y, color = "k")
-	yhi = y.max()
-	ylo = max(yhi * 1e-40, y.min())
+	ylo, yhi = 1e-20, 10.
 	if zerolag_ln_likelihood_ratios is not None:
-		x = numpy.array(sorted(zerolag_ln_likelihood_ratios), dtype = "double")
-		y = numpy.arange(len(zerolag_ln_likelihood_ratios), 0, -1, dtype = "double")
-		y *= (1. - 1. / math.e) / y[0]
-		axes.semilogy(x, y, color = "k", linestyle = "--")
-		yhi = max(yhi, y.max())
-		ylo = min(ylo, y.min())
-		ylo = max(ylo, yhi * (y.min() / yhi)**1.5)
+		x,y = numpy.array([l[0] for l in zerolag_ln_likelihood_ratios]), numpy.array([l[1] for l in zerolag_ln_likelihood_ratios])
+		axes.semilogy(x, y, color = "k", linewidth = 6, alpha = 0.3)
 	if event_likelihood is not None:
 		axes.axvline(event_likelihood, ylo, yhi)
-	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
+	axes.set_ylim(ylo, yhi)
 	axes.set_xlim((xlo, xhi))
 	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
 	axes.set_title(r"%s Log Likelihood Ratio CCDF" % tag)

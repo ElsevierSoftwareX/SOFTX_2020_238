@@ -23,6 +23,7 @@ pkgpython_PYTHON = \
 	lvalert_helper.py \
 	plotfar.py \
 	plotsegments.py \
+	plotsensitivity.py \
 	rate_estimation.py \
 	streamthinca.py \
 	svd_bank.py \

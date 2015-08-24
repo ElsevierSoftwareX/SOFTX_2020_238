@@ -38,7 +38,10 @@ plugins and programs.
 
 %build
 . /opt/lscsoft/gst/gstenvironment.sh
-%configure
+# FIXME:  enable doxygen when we can rely on a platform with a new-enough
+# version.  don't forget to uncomment the documentation entries in the
+# files section
+%configure --without-doxygen
 %{__make}
 
 
@@ -79,6 +82,9 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_datadir}/gstlal/*
+# commented out until RPM-based reference platform can be relied upon to
+# have a new-enough doxygen installed
+#%{_docdir}/gstlal-*
 %{_libdir}/gstreamer-0.10/*.so
 %{_libdir}/gstreamer-0.10/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal

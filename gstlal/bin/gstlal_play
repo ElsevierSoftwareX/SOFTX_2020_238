@@ -40,6 +40,7 @@ param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import datasource
+from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw.utils import segments as ligolw_segments
@@ -215,7 +216,7 @@ head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose 
 
 # if whitening, leverage mkwhitened_multirate_src() otherwise just resample
 if options.whiten:
-	head = mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd)[options.rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd)[options.rate]
 else:
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % options.rate)

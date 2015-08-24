@@ -248,21 +248,24 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
  */
 
 
+static void vectdata_free(FrameCPP::FrVect::data_type *ptr)
+{
+	delete ptr;
+}
+
+
 static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
 {
 	GstBuffer *buffer;
+	FrameCPP::FrVect::data_type *data = new FrameCPP::FrVect::data_type;
 
-	/*
-	 * trigger data decompression before calling GetNBytes()
-	 */
-
-	vect->GetDataUncompressed();
+	g_assert_cmpuint(vect->GetNDim(), ==, 1);
 
 	/*
 	 * allocate buffer
 	 */
 
-	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
+	buffer = gst_buffer_new();
 	if(!buffer) {
 		/* silence possibly-uninitialized warnings */
 		*rate = *unit_size = 0;
@@ -270,14 +273,16 @@ static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect>
 	}
 
 	/*
-	 * copy data into buffer
-	 * FIXME:  it would be nice to remove the memcpy() by hooking the
-	 * GstBuffer's clean-up into framecpp's reference counting
-	 * machinery
+	 * point buffer to data
 	 */
 
-	g_assert_cmpuint(vect->GetNDim(), ==, 1);
-	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
+	GST_BUFFER_MALLOCDATA(buffer) = (guint8 *) data;
+	buffer->free_func = (GFreeFunc) vectdata_free;
+
+	*data = vect->GetDataUncompressed();
+
+	GST_BUFFER_DATA(buffer) = data->get();
+	GST_BUFFER_SIZE(buffer) = vect->GetNBytes();
 
 	/*
 	 * set buffer format

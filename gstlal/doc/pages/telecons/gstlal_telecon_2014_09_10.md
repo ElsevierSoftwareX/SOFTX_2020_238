@@ -6,13 +6,13 @@
 
 \section agenda Agenda
 
- 1. Code status
-  1. Ranking statistic work on master
-  1. New gstlal-burst package
- 1. Status of audioresample bug fix and lscsoft
- 1. Any other business
-  1. [[https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/|S6VSR3Replay]]
-  1. [[https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50 | Optimisation wiki entry (BBH)]]
+-# Code status
+  -# Ranking statistic work on master
+  -# New gstlal-burst package
+-# Status of audioresample bug fix and lscsoft
+-# Any other business
+  -# [S6VSR3Replay](https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/S6VSR3ReplayMDC/)
+  -# [Optimisation wiki entry (BBH)](https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Optimization/O1/GSTLALAllSkyOffline3x3,Mt50)
 
 
 \section attendance Attendance

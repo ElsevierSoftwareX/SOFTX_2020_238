@@ -7,4 +7,4 @@ pass_through () {
 	smkill $smname 2>/dev/null
 }
 
-pass_through <lvshmsinksrc_test_01.sh | cmp lvshmsinksrc_test_01.sh
+pass_through <${srcdir:-.}/lvshmsinksrc_test_01.sh | cmp ${srcdir:-.}/lvshmsinksrc_test_01.sh

@@ -21,11 +21,11 @@ APPROXIMANT = TaylorF2
 # The detectors to analyze
 IFOS = H1 L1
 # The GPS start time of the S6 replay
-START = 967161687
+START = 968543943
 # The GPS end time of the S6 replay
-STOP = 968371287
+STOP = 971622087
 # A user tag for the run
-TAG = offline_s6_replay
+TAG = offline_s6_replay_1monrun
 # A web directory for output
 WEBDIR = ~/public_html/$(TAG)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
@@ -65,7 +65,7 @@ SEG_SERVER=https://segdb.ligo.caltech.edu
 VETO_SERVER=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbc/public/segments/S6/
 #LIGO_FRAME_TYPE='$*_LDAS_C02_L2'
 LIGO_SEGMENTS="$*:DMT-SCIENCE:4"
-LIGO_VETOES="$*:DMT-INJECTION_BURST,$*:DMT-INJECTION_INSPIRAL"
+LIGO_VETOES="$*:DMT-INJECTION_BURST,$*:DMT-INJECTION_INSPIRAL,$*:DCH-INJECTION_STOCHASTIC"
 
 # The LIGO and Virgo frame types
 LIGO_FRAME_TYPE_SUFFIX='LDAS_C02_L2'
@@ -110,7 +110,7 @@ vetoes.xml.gz: $(VETOES_FILES)
 	
 
 H1-TMPLTBANK-871147516-2048.xml :
-	cp ../online/bank/H1-TMPLTBANK-871147516-2048.xml .
+	cp ../H1-TMPLTBANK-871147516-2048.xml .
 
 %_split_bank.cache : H1-TMPLTBANK-871147516-2048.xml
 	mkdir -p $*_split_bank
@@ -129,10 +129,6 @@ tisi.xml :
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
 	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS)
-
-V1_frame.cache:
-	# FIXME force the observatory column to actually be instrument
-	ligo_data_find -o V -t $(VIRGO_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" V1_"$$2" "$$3" "$$4" "$$5}' > $@
 
 %_frame.cache:
 	# FIXME horrible hack to get the observatory, not guaranteed to work

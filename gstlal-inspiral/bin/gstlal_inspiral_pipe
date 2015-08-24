@@ -277,6 +277,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							"track-psd":"",
 							"control-peak-time":options.control_peak_time,
 							"coincidence-threshold":options.coincidence_threshold,
+							"singles-threshold":options.singles_threshold,
 							"fir-stride":options.fir_stride,
 							"data-source":"frames",
 							"local-frame-caching":""
@@ -323,6 +324,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"track-psd":"",
 								"control-peak-time":options.control_peak_time,
 								"coincidence-threshold":options.coincidence_threshold,
+								"singles-threshold":options.singles_threshold,
 								"fir-stride":options.fir_stride,
 								"data-source":"frames",
 								"local-frame-caching":""
@@ -455,7 +457,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
-				if options.record_singles is not None:
+				if options.copy_raw_results:
 					merge_nodes[-1].set_pre_script("store_raw.sh")
 					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
@@ -480,7 +482,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
-				if options.record_singles is not None:
+				if options.copy_raw_results:
 					merge_nodes[-1].set_pre_script("store_raw.sh")
 					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
@@ -676,7 +678,8 @@ def parse_command_line():
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
-	parser.add_option("--record-singles", default=None, action = "store", metavar="THRESH", help = "Record all (including non-coincident) single detector triggers above the specified SNR threshold. By default, this feature is disabled; only single detector triggers found in coincidence with other single detector triggers are recorded.")
+	parser.add_option("--singles-threshold", default=8, action = "store", metavar="THRESH", help = "Record all (including non-coincident) single detector triggers above the specified SNR threshold (by default = 8).")
+	parser.add_option("--copy-raw-results", default=False, action = "store_true", help = "Copy raw gstlal_inspiral results before applying clustering and other lossy operations.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	# Override the datasource injection option

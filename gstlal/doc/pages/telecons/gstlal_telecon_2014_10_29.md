@@ -6,11 +6,10 @@
 
 \section agenda Agenda
 
-0. Some reorganization
- - \ref gstlal_review_main_page
-1. Status of pre-release
-2. S6VSR3Replay 
-3. AOB
+-# Some reorganization of \ref gstlal_review_main_page
+-# Status of pre-release
+-# S6VSR3Replay 
+-# AOB
 
 \section attendance Attendance
 

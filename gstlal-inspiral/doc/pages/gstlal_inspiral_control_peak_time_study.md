@@ -8,7 +8,7 @@ The purpose of this page is to investigate the effect of using a composite detec
 
 *This is preliminary and shouldn't be considered a final answer about whether or not this is a good idea.*
 
-Two gstlal_inspiral analyses were run.  The first did not use a control peak time.  The second did not, e.g.,
+Two gstlal_inspiral analyses were run.  The first did not use a control peak time.  The second did, e.g.,
 
 		channa@pcdev1:~/MDC_new/test$ diff -u Makefile ../test_2s/Makefile
 		--- Makefile	2014-06-17 20:35:16.969869229 -0500

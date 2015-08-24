@@ -4,3 +4,7 @@
 # on e.g. CentOS.
 pkgpythondir = $(pkgpyexecdir)
 
+pkgpython_PYTHON = \
+	calibration_parts.py
+
+

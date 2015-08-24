@@ -9,6 +9,7 @@ dist_bin_SCRIPTS = \
 	gstlal_postcohspiir_inspiral \
 	gstlal_postcohspiir_pipe \
 	gstlal_inspiral \
+	gstlal_inspiral_bank_mcsplitter \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
@@ -31,14 +32,15 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_recompute_online_far_from_gracedb \
 	gstlal_inspiral_reset_likelihood \
 	gstlal_inspiral_svd_bank_pipe \
-	gstlal_llcbcnode \
-	gstlal_llcbcsummary \
+	gstlal_ll_inspiral_calculate_range \
 	gstlal_ll_inspiral_create_prior_diststats \
 	gstlal_ll_inspiral_daily_page \
 	gstlal_ll_inspiral_daily_page_online \
 	gstlal_ll_inspiral_get_urls \
 	gstlal_ll_inspiral_gracedb_threshold \
 	gstlal_ll_inspiral_pipe \
+	gstlal_ll_inspiral_plot_sensitivity \
+	gstlal_ll_inspiral_save_state \
 	gstlal_inspiral_summary_page \
 	gstlalcbcnode \
 	gstlalcbcsummary \

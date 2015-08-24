@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.9.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[0.9.1],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -177,7 +177,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 #
 
 
-AC_SUBST([MIN_NDS_VERSION], [0.11.2])
+AC_SUBST([MIN_NDS_VERSION], [0.11.5])
 AC_ARG_WITH(
 	[nds],
 	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
@@ -373,13 +373,13 @@ AC_SUBST([gds_framexmit_LIBS])
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.14.0])
+AC_SUBST([MIN_LAL_VERSION], [6.15.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
-AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+AX_PYTHON_MODULE([lal], fatal)
 
 
 #

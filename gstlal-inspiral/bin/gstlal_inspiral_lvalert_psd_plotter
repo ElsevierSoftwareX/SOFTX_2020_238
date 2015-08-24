@@ -22,7 +22,8 @@
 # ### Command line interface
 #
 #	+ `--no-upload`: Write plots to disk.
-#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort).
+#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort)
+#	+ `--gracedb-service-url`: GraceDb service url to upload (default is gracedb.DEFAULT_SERVICE_URL)
 #	+ `--verbose`: Be verbose.
 #
 # =============================================================================
@@ -33,15 +34,10 @@
 #
 
 
-import httplib
 import logging
-import math
-import numpy
 from optparse import OptionParser
 import os.path
-import StringIO
 import sys
-import time
 import urlparse
 import json
 
@@ -51,7 +47,7 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from gstlal.reference_psd import horizon_distance
+from gstlal import lvalert_helper
 from gstlal import plotpsd
 from ligo.gracedb import rest as gracedb
 from pylal import series as lal_series
@@ -87,38 +83,11 @@ plotpsd.matplotlib.rcParams.update({
 #
 
 
-def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 10.0, ignore_404 = False):
-	for i in range(retries):
-		logging.info("retrieving \"%s\" for %s" % (filename, graceid))
-		response = gracedb_client.files(graceid, filename)
-		if response.status == httplib.OK:
-			return response
-		if response.status == httplib.NOT_FOUND and ignore_404:
-			logging.warning("retrieving \"%s\" for %s: (%d) %s.  skipping ..." % (filename, graceid, response.status, response.reason))
-			return None
-		logging.warning("retrieving \"%s\" for %s: (%d) %s.  pausing ..." % (filename, graceid, response.status, response.reason))
-		time.sleep(retry_delay)
-	raise Exception("retrieving \"%s\" for %s: (%d) %s" % (filename, graceid, response.status, response.reason))
-
-
 def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = False):
-	response = get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
+	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
 	if response is None:
 		return None
 	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = LIGOLWContentHandler)[0])
-
-
-def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
-	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), contenthandler = LIGOLWContentHandler)[0]
-
-
-def upload_fig(fig, gracedb_client, graceid, filename = "psd.png"):
-	plotfile = StringIO.StringIO()
-	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
-	logging.info("uploading \"%s\" for %s" % (filename, graceid))
-	response = gracedb_client.writeLog(graceid, "strain spectral density plot", filename = filename, filecontents = plotfile.getvalue(), tagname = "psd")
-	if response.status != httplib.CREATED:
-		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
 
 #
@@ -182,7 +151,7 @@ for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plotpsd.plot_psds(psds, get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1024)
+	fig = plotpsd.plot_psds(psds, lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1024)
 	try:
 		fig.tight_layout()
 	except AttributeError:
@@ -193,5 +162,5 @@ for graceid in graceids:
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
 	else:
-		upload_fig(fig, gracedb_client, graceid)
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid)
 	logging.info("finished processing %s" % graceid)

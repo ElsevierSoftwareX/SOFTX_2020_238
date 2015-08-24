@@ -179,7 +179,6 @@ ligolw_param.use_in(LIGOLWContentHandler)
 # ### Review
 # 
 # 
-# @cond
 
 ##
 # Return the number of digits in a number
@@ -359,5 +358,3 @@ if "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
 	sighandler = SigHandler(pipeline)
 
 mainloop.run()
-
-## @endcond

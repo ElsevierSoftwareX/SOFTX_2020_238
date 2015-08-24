@@ -26,6 +26,8 @@ import cgitb
 import os
 import bisect
 import math
+import json
+import re
 
 # This will run on a web server
 os.environ["MPLCONFIGDIR"] = "/tmp"
@@ -119,7 +121,7 @@ td {
 
 .tabs {
   position: relative;   
-  min-height: 7in; /* This part sucks */
+  min-height: 10in; /* This part sucks */
   clear: both;
   margin: 25px 0;
 }
@@ -233,15 +235,25 @@ class GstlalWebSummary(object):
 
 	def status(self):
 		if self.oldest_data() > 1800:
-			return "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
+			return 2, "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
 		if not self.found["latency_history"]:
-			return "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
+			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
-			return "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
+			return 3, "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
 		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 180]
 		if lat:
-			return "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
-		return "<em class=green>OK</em>"
+			return 1, "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
+		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 300]
+		if lat:
+			return 2, "<em class=red>%s NODES ARE MORE THAN 5 MIN BEHIND!</em>" % len(lat)
+		return 0, "<em class=green>OK</em>"
+
+	def nagios(self):
+		print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
+		print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
+		print >>sys.stdout, 'Content-type: text/json\r\n'
+		num, txt = self.status()
+		print >>sys.stdout, json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": num, "txt_status": re.sub('<[^<]+?>', '', txt)}]}, sort_keys=True, indent=4, separators=(',', ': '))
 
 	def latency(self):
 		out = [l[-1,1] for l in self.found["latency_history"].values()]
@@ -537,6 +549,6 @@ class GstlalWebSummary(object):
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			seglistdicts = self.found["cumulative_segments"][id]
-			fig = plotsegments.plot_segments_history(seglistdicts)
+			fig, h = plotsegments.plot_segments_history(seglistdicts)
 			out += self.to_png(fig = fig)
 		return out

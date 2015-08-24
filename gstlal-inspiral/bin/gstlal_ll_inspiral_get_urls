@@ -17,6 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 ## @file
+# This program queries running gstlal inspiral jobs in the low latency analysis and downloads pertinent data, e.g., SNR trigger history, segment files, etc.
 
 #
 # ### Review status

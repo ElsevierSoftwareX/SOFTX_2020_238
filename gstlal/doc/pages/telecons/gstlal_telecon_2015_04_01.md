@@ -18,7 +18,7 @@
      - Do we have volunteers to work on dynamic reporting pages that provide, e.g.,
        - Missed found plots (will require connection to seg db I guess, will require having "missed" injections represented in gracedb)
        - VT vs FAR (or range vs FAR)
-       - Other summary information to compare with background, e.g., \$\chi^2\$ plots, etc.
+       - Other summary information to compare with background, e.g., @f$ \chi^2 @f$ plots, etc.
      - Will we run (most) of gdb procesor on these events?
  - Planning review
 

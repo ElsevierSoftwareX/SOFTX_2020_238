@@ -1,6 +1,6 @@
-\mainpage Welcome page
+\mainpage Welcome
 
-\section gstlalmainpagegettingstarted Getting Started
+## Getting Started
 
 - You can get a development copy of the gstlal software suite from git via:
 
@@ -8,7 +8,7 @@
 
 - Release tar balls and some binary packages are available <a href=https://www.lsc-group.phys.uwm.edu/daswg/download/repositories.html>here</a>.
 
-- Installation.  This follows the normal GNU buildsystem procedures involving 1) ./00init.sh 2) ./configure 3) make 4) make install.  You should build the packages in order of gstlal, gstlal-ugly, gstlal-calibration, gstlal-inspiral.  If you ar building to a non FHS place (e.g. your home directory) you will need something like the following environment to be set before building and when using the software.  Please make sure your environment is sane and cruft free otherwise.
+- Installation.  This follows the normal GNU buildsystem procedures involving 1) ./00init.sh 2) ./configure 3) make 4) make install.  You should build the packages in order of gstlal, gstlal-ugly, gstlal-calibration, gstlal-inspiral.  If you are building to a non FHS place (e.g. your home directory) you will need something like the following environment to be set before building and when using the software.  Please make sure your environment is sane and cruft free otherwise.
 
 		# This is an install prefix that does not get used anywhere but this script, it is not exported !!!
 		INSTALLPATH=/home/channa/gstlocal
@@ -21,34 +21,38 @@
 
 		export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
 
-### Documentation for gstlal elements
+## Documentation for gstlal elements
 
 - <a href="@gstlalgtkdoc/">See here for more details</a>
 
-### Making fake data
+## Making fake data
 
 - \ref gstlalfakedataoverviewpage
 - Relevant programs
   - \ref gstlal_fake_frames
   - \ref gstlal_fake_frames_pipe
 
-### Measuring PSDs
+## Measuring PSDs
 
-- Relevant programs
+### Relevant programs
+
   - \ref gstlal_reference_psd
   - \ref gstlal_plot_psd
   - \ref gstlal_plot_psd_horizon
   - \ref gstlal_psd_polyfit
   - \ref gstlal_psd_xml_from_asd_txt
 
-### Data interaction
+## Data interaction
 
-- Relevant programs
+### Relevant programs
+
   - \ref gstlal_spectrum_movie
   - \ref gstlal_play
 
-### References
+## References
+
 - <a href=@gstlalinspiraldoc> gstlal_inspiral documentation</a>
 - <a href=http://gstreamer.freedesktop.org/> gstreamer home page </a>
 - \ref gstlal_review_main_page
+- \ref gstlalmeetingspage
 - \ref gstlalteleconspage

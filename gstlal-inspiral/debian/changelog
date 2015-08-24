@@ -1,3 +1,9 @@
+gstlal-inspiral (0.6.1-1) unstable; urgency=low
+
+  * remove check for lal swig bindings (rely on gstlal package to have done this)
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Sat, 25 Jul 2015 13:37:18 -0500
+
 gstlal-inspiral (0.6.0-1) unstable; urgency=low
 
   * New version 0.6.0

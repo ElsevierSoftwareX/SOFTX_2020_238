@@ -197,7 +197,7 @@ TAB_SIZE               = 4
 # will result in a user-defined paragraph with heading "Side Effects:".
 # You can put \n's in the value part of an alias to insert newlines.
 
-ALIASES                = gstlalinspiraldoc=../../gstlal-inspiral-0.5.2/html/ gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/ reviewed="\htmlonly &#x2713; \endhtmlonly: YES" notreviewed="\htmlonly &#x2717; \endhtmlonly: NO" stable="\image html go.png" moddev="\image html yellow.png" hidev="\image html stop.png" gstlal_cgit_diff=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/diff/gstlal/
+ALIASES                = gstlalinspiraldoc=../../gstlal-inspiral-0.6.1/html/ gstlalgtkdoc=../../../gtk-doc/html/@PACKAGE_NAME@-@PACKAGE_VERSION@/ gstpluginsgooddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/ gstdoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/ gstpluginsbasedoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/ gstpluginsbaddoc=http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-bad-plugins/html/ cgit=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/ reviewed="\htmlonly &#x2713; \endhtmlonly: YES" notreviewed="\htmlonly &#x2717; \endhtmlonly: NO" stable="\image html go.png" moddev="\image html yellow.png" hidev="\image html stop.png" gstlal_cgit_diff=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/diff/gstlal/
 
 # This tag can be used to specify a number of word-keyword mappings (TCL only).
 # A mapping has the form "name=value". For example adding
@@ -613,7 +613,7 @@ WARNINGS               = YES
 # for undocumented members. If EXTRACT_ALL is set to YES then this flag will
 # automatically be disabled.
 
-WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_UNDOCUMENTED   = NO
 
 # If WARN_IF_DOC_ERROR is set to YES, doxygen will generate warnings for
 # potential errors in the documentation, such as not documenting some
@@ -700,7 +700,7 @@ EXCLUDE_SYMLINKS       = NO
 # against the file with absolute path, so to exclude all test directories
 # for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */gst/lal/* */bin/Makefile* */python/bottle.py */share/Makefile */share/Makefile.in */share/Makefile.am */pages/images*
+EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */gst/lal/* */bin/Makefile* */python/bottle.py */share/Makefile* */share/*asd.txt */pages/images*
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -917,7 +917,7 @@ HTML_STYLESHEET        =
 # robust against future updates. Doxygen will copy the style sheet file to
 # the output directory.
 
-HTML_EXTRA_STYLESHEET  =
+HTML_EXTRA_STYLESHEET  = gstlal.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1624,12 +1624,12 @@ SKIP_FUNCTION_MACROS   = YES
 # doxygen is run, you must also specify the path to the tagfile here.
 # FIXME don't hard code this version number, get it from configure
 
-TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.5.2/html
+TAGFILES               = ../../gstlal-inspiral/doc/gstlalinspiraldoxy.tag=../../gstlal-inspiral-0.6.1/html
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.
 
-GENERATE_TAGFILE       = gstlaldoxy.tag
+GENERATE_TAGFILE       =
 
 # If the ALLEXTERNALS tag is set to YES all external classes will be listed
 # in the class index. If set to NO only the inherited external classes

@@ -1,0 +1,103 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 Cody Messick
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import base64
+import matplotlib
+matplotlib.use('agg')
+from optparse import OptionParser
+import StringIO
+
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import segments as ligolw_segments
+from gstlal import far
+from gstlal import plotsensitivity
+from lal import GPSTimeNow
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+def parse_command_line():
+	parser = OptionParser(usage="%prog [options] database.sqlite")
+	parser.add_option("--png-output", metavar = "filename", help = "Path (including filename) of output png")
+	parser.add_option("--base64", action = "store_true", help = "Save image as sensitivity_base64.txt in directory program is run from, for use by gstlalcbcsummary in online analysis")
+	parser.add_option("--cumulative-segment-file", metavar = "filename", help = "Path of cumulative segments file")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Path of marginalized likelihood file")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+	parser.add_option("--min-inj-distance", type = "float", help = "Minimum injection distance in Mpc")
+	parser.add_option("--max-inj-distance", type = "float", help = "Maximum injection distance in Mpc")
+	parser.add_option("--simdb-query-end-time", type = "float", help = "The end of the last interval of time which a simdb query was downloaded for")
+	parser.add_option("--plot-length", metavar = "seconds", type = "float", default = 86400., help = "Length in seconds of time to plot (warning: not tested) [default 86400]")
+	parser.add_option("--width", metavar = "inches", default = 7.5, help = "width of output image in inches. [Default: 7.5]")
+	parser.add_option("--height", metavar = "inches", default = 4.5, help = "height of output image in inches. [Default: 4.5]")
+
+	options, database = parser.parse_args()
+
+	if len(database) != 1:
+		raise ValueError("must provide one and only one database, %d appear to have been provided" % len(database))
+
+	if options.max_inj_distance <= options.min_inj_distance:
+		raise ValueError("--max-inj-distance must be larger than --min-inj-distance")
+
+	found_inj, missed_inj, seglistdicts, seg_bins = plotsensitivity.parse_sensitivity_docs(database[0], options.cumulative_segment_file, options.simdb_query_end_time)
+
+	horizon_history = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.marginalized_likelihood_file, contenthandler=far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))[0].horizon_history
+
+	return options, horizon_history, found_inj, missed_inj, seglistdicts, seg_bins
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+#
+# Parse command line
+#
+
+options, horizon_history, found_inj, missed_inj, seglistdicts, seg_bins = parse_command_line()
+
+#
+# Plot
+#
+
+thi = float(GPSTimeNow())
+tlo = thi - options.plot_length
+# FIXME The figure must be made 1.5 inches shorter in width than the ending
+# width in order for the hacky save method needed for the legends to work
+fig = matplotlib.pyplot.figure(figsize = (options.width-1.5, options.height))
+fig, lgd1, lgd2 = plotsensitivity.plot_missedfound_range_segments(found_inj, missed_inj, seglistdicts, seg_bins, (tlo, thi), (options.min_inj_distance, options.max_inj_distance), horizon_history, fig = fig)
+
+# FIXME This is a hacky way to force matplotlib to save the image with legends
+# outside of the plots. tight_layout() may negate the need for this
+if options.png_output:
+	fig.savefig(options.png_output, format="png", additional_artists=[lgd1, lgd2], bbox_inches=matplotlib.transforms.Bbox([[0.,0.],[options.width,options.height]]))
+
+if options.base64:
+	f = StringIO.StringIO()
+	fig.savefig(f, format="png", additional_artists=[lgd1, lgd2], bbox_inches=matplotlib.transforms.Bbox([[0.,0.],[options.width,options.height]]))
+	with open('./sensitivity_base64.txt','w') as sensitivity_file:
+		sensitivity_file.write(base64.b64encode(f.getvalue()))
+	f.close()

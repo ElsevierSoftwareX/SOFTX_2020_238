@@ -614,7 +614,7 @@ WARNINGS               = YES
 # for undocumented members. If EXTRACT_ALL is set to YES then this flag will
 # automatically be disabled.
 
-WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_UNDOCUMENTED   = NO
 
 # If WARN_IF_DOC_ERROR is set to YES, doxygen will generate warnings for
 # potential errors in the documentation, such as not documenting some
@@ -701,7 +701,7 @@ EXCLUDE_SYMLINKS       = NO
 # against the file with absolute path, so to exclude all test directories
 # for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */tests/* */gst/* */bin/Makefile* */python/bottle.py */share/Makefile */share/Makefile.in */share/Makefile.am */pages/images/* */share/profile/*.gz *.gz
+EXCLUDE_PATTERNS       = */autom4te.cache/* */debian/* */gnuscripts/* */tests/* */gst/* */bin/Makefile* */python/bottle.py */share/Makefile* */pages/images/* */share/profile/*.gz */share/profile/patches/* *.gz
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -918,7 +918,7 @@ HTML_STYLESHEET        =
 # robust against future updates. Doxygen will copy the style sheet file to
 # the output directory.
 
-HTML_EXTRA_STYLESHEET  =
+HTML_EXTRA_STYLESHEET  = ../../gstlal/doc/gstlal.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1624,7 +1624,7 @@ SKIP_FUNCTION_MACROS   = YES
 # NOT include the path). If a tag file is not located in the directory in which
 # doxygen is run, you must also specify the path to the tagfile here.
 
-TAGFILES               = ../../gstlal/doc/gstlaldoxy.tag=../../gstlal-@GSTLAL_VERSION@/html
+TAGFILES               =
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create
 # a tag file that is based on the input files it reads.

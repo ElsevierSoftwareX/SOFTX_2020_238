@@ -178,6 +178,7 @@ import socket
 import time
 import tempfile
 import math
+import subprocess
 from collections import namedtuple
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -307,11 +308,15 @@ def parse_command_line():
 	#
 	
 	if options.svd_bank_cache:
+		#FIXME Use Ordered Dictionary when we use python 2.7
 		svd_bank_dict = {}
+		descriptions = []
 		for line in open(options.svd_bank_cache):
 			svd_bank_cache_entry = CacheEntry(line)
+			if svd_bank_cache_entry.description not in descriptions:
+				descriptions.append(svd_bank_cache_entry.description)
 			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
-		options.svd_bank.extend([",".join(svd_string) for svd_string in svd_bank_dict.itervalues()])
+		options.svd_bank.extend([",".join(svd_bank_dict[description]) for description in descriptions])
 
 	if options.output_cache:
 		options.output.extend([CacheEntry(line).url for line in open(options.output_cache)])
@@ -542,7 +547,22 @@ else:
 #
 
 
-for svd_bank, output_filename, likelihood_namedtuple in zip(svd_banks, options.output, likelihood_namedtuples_list):
+for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in enumerate(zip(svd_banks, options.output, likelihood_namedtuples_list)):
+	#
+	# Checkpointing only supported for gzip files in offline analysis
+	# FIXME Is there a better way to check if a file is corrupted? Implement a means by which to check for sqlite file validity
+	#
+
+	if options.data_source not in ("lvshm", "framexmit") and output_filename.endswith('.gz'):
+		try:
+			subprocess.check_call(["gzip", "--test", output_filename])
+			# File is OK and there is no need to process it, skip ahead in the loop
+			continue
+		except subprocess.CalledProcessError:
+			# File does not exist or is corrupted, need to reprocess
+			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_filename))
+			pass
+
 	#
 	# create a new, empty, Bottle application and make it the current
 	# default, then start http server(s) to serve it up
@@ -671,6 +691,7 @@ for svd_bank, output_filename, likelihood_namedtuple in zip(svd_banks, options.o
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,
 		gracedb_service_url = options.gracedb_service_url,
+		upload_auxiliary_data_to_gracedb = (options.gracedb_service_url == "https://gracedb.ligo.org/api/"),
 		verbose = options.verbose
 	)
 	if options.verbose:

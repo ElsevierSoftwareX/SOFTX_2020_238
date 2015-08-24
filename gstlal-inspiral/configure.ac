@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-inspiral],[0.6.0],[gstlal-discuss@ligo.org],[gstlal-inspiral])
+AC_INIT([gstlal-inspiral],[0.6.1],[gstlal-discuss@ligo.org],[gstlal-inspiral])
 AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -235,14 +235,14 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.14.0])
+AC_SUBST([MIN_LAL_VERSION], [6.15.0])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
-AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.6.5])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
-AX_PYTHON_MODULE([lal ; lal.LIGOTimeGPS], fatal)
+AX_PYTHON_MODULE([lal], fatal)
 
 
 #

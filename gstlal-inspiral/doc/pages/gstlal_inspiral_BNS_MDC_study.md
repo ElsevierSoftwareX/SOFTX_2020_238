@@ -1,4 +1,4 @@
-\page gstlal_inspiral_BNS_MDC_study Study of the BNS MDC
+\page gstlalinspiralbnsmdcstudypage Study of the BNS MDC
 
 \section intro Introduction
 
@@ -6,7 +6,7 @@ This page describes a study of the BNS MDC described here:
 
  - https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/BNS/MDC/SpinMDC/
 
-The goal is to establish if the results of this MDC are reasonable.  The following aspects were checke
+The goal is to establish if the results of this MDC are reasonable.  The following aspects were checked
 
  -# Are the recovered SNRs as expected?
  -# How are the recovered SNRs related to the FARs?
@@ -371,9 +371,9 @@ And it is invoked like this:
 
 @image html FAR_H1L1-ALL_LLOID_BNS_SpinMDC_ALIGNED-966384015-5000000.png "Recovered FAR versus SNR: This plot indicates the recovered FAR versus SNR. It provides insight into how a FAR threshold maps to an SNR threshold"
 
-@image html efficiency_H1L1-ALL_LLOID_BNS_SpinMDC_ALIGNED-966384015-5000000.png "Efficiency:  This plot tries compares the efficiency of the search by FAR (solid lines) with a prediction of the efficiency based on applying a single detector EXPECTED SNR threshold of \$\rho\$ "
+@image html efficiency_H1L1-ALL_LLOID_BNS_SpinMDC_ALIGNED-966384015-5000000.png "Efficiency:  This plot tries to compare the efficiency of the search by FAR (solid lines) with a prediction of the efficiency based on applying a single detector EXPECTED SNR threshold"
 
-@image html efficiency_by_recovered_SNR_H1L1-ALL_LLOID_BNS_SpinMDC_ALIGNED-966384015-5000000.png "Efficiency:  This plot compares the efficiency of the search by FAR (solid lines) with a prediction of the efficiency based on applying a single detector RECOVERED SNR threshold of \$\rho\$ "
+@image html efficiency_by_recovered_SNR_H1L1-ALL_LLOID_BNS_SpinMDC_ALIGNED-966384015-5000000.png "Efficiency:  This plot compares the efficiency of the search by FAR (solid lines) with a prediction of the efficiency based on applying a single detector RECOVERED SNR threshold"
 
 A sensible question to ask is, what false alarm rate do we expect from Gaussian noise with a single detector SNR threshold of 6.8 in each of two detectors.  The following python code attempts to predict this:
 
