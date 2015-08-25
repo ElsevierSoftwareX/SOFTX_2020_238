@@ -32,6 +32,9 @@ import math
 import matplotlib
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+matplotlib.rcParams.update({
+	"text.usetex": True
+})
 import numpy
 from gstlal import plotutil
 from gstlal import far
