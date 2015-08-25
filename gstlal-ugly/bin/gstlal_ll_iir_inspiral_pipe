@@ -38,12 +38,26 @@ import shutil
 
 from glue import pipeline
 from glue import lal
-import glue.ligolw.utils as utils
+from glue.ligolw import lsctables
+from glue.ligolw.ligolw import LIGOLWContentHandler
+import glue.ligolw.utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 from optparse import OptionParser
 from gstlal import inspiral
 from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
+
+
+#
+# set up a content handler to open the injection file
+#
+
+class ligolwcontenthandler(LIGOLWContentHandler):
+	pass
+
+lsctables.use_in(ligolwcontenthandler)
+
 
 ##
 # ### Graph of the HTCondor DAG
@@ -219,6 +233,11 @@ def parse_command_line():
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
 	parser.add_option("--gpu-acc", metavar = "on|off", default = "on", help = "Turn on gpu acceleration code or not")
 
+	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
+	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
+	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
+
+
 	options, filenames = parser.parse_args()
 
 	fail = ""
@@ -226,6 +245,14 @@ def parse_command_line():
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
+
+	min_max_inj_dist_list = []
+	if options.injection_file:
+		# FIXME Dont hardcode program name
+		inj_xmldoc = ligolw_utils.load_filename(options.injection_file, contenthandler = ligolwcontenthandler)
+		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--min-distance")[0]/1000.))
+		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--max-distance")[0]/1000.))
+
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
@@ -244,7 +271,7 @@ def parse_command_line():
 
 	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 
-	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, min_max_inj_dist_list
 
 
 #
@@ -252,7 +279,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, min_max_inj_dist_list = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -282,6 +309,16 @@ margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_onl
 listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
 # get urls job 
 urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
+if options.injection_file:
+	# Summary page job
+	pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+	# Sensitivity plots job
+	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+if options.state_backup_destination:
+	# State saving job 
+	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
 
 
 #
@@ -389,6 +426,12 @@ for num_insp_nodes, (iir_banks, likefile) in enumerate(zip(iirbank_groups, corre
 urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags + inj_jobTags)}, output_files = {})
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
+if options.injection_file:
+	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]}, output_files = {})
+	sensNode = inspiral_pipe.generic_node(sensJob, dag, [], opts = {}, input_files = {"":[options.injection_file, "%s/0000/cumulative_segments.xml" % os.getcwd(), options.marginalized_likelihood_file,  options.inj_gracedb_service_url, options.inj_gracedb_pipeline, options.inj_gracedb_group, options.inj_gracedb_search, min_max_inj_dist_list[0], min_max_inj_dist_list[1]]}, output_files = {})
+if options.state_backup_destination:
+	stateNode = inspiral_pipe.generic_node(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
+
 
 #
 # Write out the dag and other flies
@@ -414,6 +457,12 @@ dag.write_cache()
 
 shutil.copy2(dagparts.which('gstlal_llcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
 shutil.copy2(dagparts.which('gstlal_llcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
-print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (os.environ['USER'], jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+query = "id=%s,%s&dir=%s&ifos=%s" % (jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+# Write the analysis to a special file that the summary page can find by default
+webfile = open(os.path.join(os.path.expanduser("~/public_html/cgi-bin"), "gstlalcbc_analysis.txt"), "w")
+webfile.write(query)
+webfile.close()
+print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], query)
+
 if inj_jobTags:
 	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: https://ldas-jobs.ligo.caltech.edu/~%s/cgi-bin/gstlal_llcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
