@@ -20,15 +20,15 @@
 
 ## @package gstlal_ll_inspiral_save_state
 
-DESTINATION="{1}"
+DESTINATION="${1}"
 shift
 
 echo sleeping...
 sleep 3600
 
-while true ; do
-	for f in $@; do
-		gsicp ${f} ${DESTINATION} || { grid-proxy-init && gsicp ${f} ${DESTINATION} }
+while true; do
+	for f in "$@"; do
+		gsiscp ${f} ${DESTINATION} || { grid-proxy-init && gsiscp ${f} ${DESTINATION}; }
 	done
 	echo sleeping...
 	sleep 3600
