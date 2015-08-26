@@ -1184,16 +1184,16 @@ WHERE
 	def finish(self):
 		livetime = far.get_live_time(self.farsegs)
 
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \mathcal{L}$")
 		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
+		axes.set_title(r"$\ln \mathcal{L}$ vs.\ SNR Scatter Plot (Closed Box)")
 		yield fig, "lr_vs_snr", False
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \mathcal{L}$")
 		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.loglog(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
 		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
+		axes.set_title(r"$\ln \mathcal{L}$ vs.\ SNR Scatter Plot")
 		yield fig, "lr_vs_snr", True
 
 		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
@@ -1243,7 +1243,7 @@ WHERE
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
-				axes.set_xlabel(r"$\ln \Lambda$")
+				axes.set_xlabel(r"$\ln \mathcal{L}$")
 				yield fig, "count_vs_lr", is_open_box
 
 
