@@ -83,15 +83,25 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	y = y[binnedarray.bins[xlo:xhi, ylo:yhi][1]]
 	z = z[binnedarray.bins[xlo:xhi, ylo:yhi]]
 
-	# matplotlib's colour bar seems to rely on being able to store the
-	# ratio of the lowest and highest value in a double so the range
-	# cannot be more than about 300 orders of magnitude.  experiments
-	# show it starts to go wrong before that but 250 orders of
-	# magnitude seems to be OK
-	numpy.clip(z, z.max() * dynamic_range_factor, float("+inf"), out = z)
+	if binnedarray_string == "LR":
+		# because it's usually more convenient to display the
+		# natural log of the likelihood ratio, it's helpful to plot
+		# that here.  if we relied on a logarithmic colour bar we
+		# end up with power-of-10 contours instead of power-of-e
+		# contours, so we can't do that.
+		z = numpy.log(z)
+		norm = matplotlib.colors.Normalize()
+	else:
+		# matplotlib's colour bar seems to rely on being able to
+		# store the ratio of the lowest and highest value in a
+		# double so the range cannot be more than about 300 orders
+		# of magnitude.  experiments show it starts to go wrong
+		# before that but 250 orders of magnitude seems to be OK
+		numpy.clip(z, z.max() * dynamic_range_factor, float("+inf"), out = z)
+		norm = matplotlib.colors.LogNorm()
 
-	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z.T, norm = norm, colors = "k", linewidths = .5)
 	if event_snr is not None and event_chisq is not None:
 		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
 	axes.loglog()
@@ -106,7 +116,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	elif tag.lower() in ("noise", "candidates"):
 		axes.set_title(r"%s %s $P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % (instrument, tag))
 	elif tag.lower() in ("lr",):
-		axes.set_title(r"%s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise} )$" % instrument)
+		axes.set_title(r"%s $\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise} )$" % instrument)
 	else:
 		raise ValueError(tag)
 	return fig
