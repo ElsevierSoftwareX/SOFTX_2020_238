@@ -74,6 +74,7 @@ def parse_command_line():
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Write output to this directory (default = \".\").")
 	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by choosen the filename extension (default = \".png\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -91,7 +92,7 @@ def parse_command_line():
 	return options, filenames
 
 
-def load_distributions(filenames, verbose = False):
+def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
 	coinc_params_distributions, ranking_data, seglists = None, None, None
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -116,6 +117,17 @@ def load_distributions(filenames, verbose = False):
 	if coinc_params_distributions is not None:
 		coinc_params_distributions.finish(verbose = verbose)
 	if ranking_data is not None:
+		if ln_likelihood_ratio_threshold is not None:
+			# affect the zeroing of the PDFs below threshold by
+			# hacking the histograms before running .finish().
+			# do the indexing ourselves to not 0 the bin @
+			# threshold
+			for binnedarray in ranking_data.background_likelihood_rates.values():
+				binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+			for binnedarray in ranking_data.signal_likelihood_rates.values():
+				binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+			for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
+				binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
 		ranking_data.finish(verbose = verbose)
 	# FIXME:  hack to fake some segments so we can generate file names
 	# if the input files didn't provide segment information
@@ -126,7 +138,7 @@ def load_distributions(filenames, verbose = False):
 	return coinc_params_distributions, ranking_data, seglists
 
 
-def load_search_results(filenames, tmp_path = None, verbose = False):
+def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
 	if not filenames:
 		return None, None
 
@@ -163,7 +175,8 @@ FROM
 	)
 WHERE
 	coinc_event.coinc_def_id == ?
-		""", (definer_id,)):
+	AND (? ISNULL OR coinc_event.likelihood >= ?)
+		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)):
 			participating_instruments = frozenset(lsctables.instrument_set_from_ifos(participating_instruments))
 			if is_background:
 				background_ln_likelihood_ratios.setdefault(participating_instruments, []).append((ln_likelihood_ratio, fap))
@@ -238,14 +251,14 @@ options, filenames = parse_command_line()
 #
 
 
-coinc_params_distributions, ranking_data, seglists = load_distributions(filenames, verbose = options.verbose)
+coinc_params_distributions, ranking_data, seglists = load_distributions(filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 if ranking_data is not None:
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
 	fapfar = None
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(options.database, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
