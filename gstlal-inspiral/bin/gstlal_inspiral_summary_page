@@ -247,9 +247,9 @@ The chi-squared test checks that the snr accumulated matches expectation.
 <big><b>OVERVIEW:</b></big><br><br>
 This section provides the detection statistic plots and a summary of the loudest event.
 """)
-	page.subpages["money"].add_section("ifar","Rate vs. IFAR Threshold")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_ifar*closedbox*.png'))
-	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. IFAR Threshold", "Comparison of observed zero-lag event rate to event rate expected from background as a function of inverse false-alarm rate (IFAR) threshold.")
+	page.subpages["money"].add_section("ifar","Rate vs. Threshold")
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
+	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. Threshold", "Comparison of observed event rate to event rate expected from background as a function of threshold.")
 	page.subpages["money"].add_section("table","Loudest Table")
 	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%sbgsummary_table.txt' % opts.output_user_tag[0]))
 	page.subpages["money"].sections["table"].add_table(tab[0], "Closed Box Summary Table", "Loudest Events")
@@ -290,9 +290,9 @@ FIXME
 <big><b>OVERVIEW:</b></big><br><br>
 This section provides the detection statistic plots and a summary of the loudest event.
 """)
-	page.subpages["money"].add_section("ifar","Rate vs. IFAR Threshold")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_ifar*openbox*.png'))
-	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. IFAR Threshold", "Comparison of observed zero-lag event rate to event rate expected from background as a function of inverse false-alarm rate (IFAR) threshold.")
+	page.subpages["money"].add_section("ifar","Rate vs. Threshold")
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
+	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. Threshold", "Comparison of observed event rate to event rate expected from background as a function of threshold.")
 	page.subpages["money"].add_section("table","Loudest Table")
 	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%ssummary_table.txt' % opts.output_user_tag[0]))
 	page.subpages["money"].sections["table"].add_table(tab[0], "Summary Table", "Loudest Events")
