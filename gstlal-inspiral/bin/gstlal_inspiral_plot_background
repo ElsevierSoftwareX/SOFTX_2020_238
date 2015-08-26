@@ -113,6 +113,10 @@ def load_distributions(filenames, verbose = False):
 			seglists |= this_seglists
 	if coinc_params_distributions is None and ranking_data is None:
 		raise ValueError("no parameter distribution data loaded")
+	if coinc_params_distributions is not None:
+		coinc_params_distributions.finish(verbose = verbose)
+	if ranking_data is not None:
+		ranking_data.finish(verbose = verbose)
 	# FIXME:  hack to fake some segments so we can generate file names
 	# if the input files didn't provide segment information
 	try:
@@ -235,10 +239,7 @@ options, filenames = parse_command_line()
 
 
 coinc_params_distributions, ranking_data, seglists = load_distributions(filenames, verbose = options.verbose)
-if coinc_params_distributions is not None:
-	coinc_params_distributions.finish(verbose = options.verbose)
 if ranking_data is not None:
-	ranking_data.finish(verbose = options.verbose)
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
 	fapfar = None
