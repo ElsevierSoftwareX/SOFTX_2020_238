@@ -296,6 +296,7 @@ for (instruments, horizon_distances) in sorted(coinc_params_distributions.snr_jo
 		fig.savefig(plotname)
 
 
+# ranking statistic PDFs and CCDFs
 if ranking_data is not None:
 	for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
 		fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
@@ -306,7 +307,7 @@ if ranking_data is not None:
 
 	ranking_stats = sum(zerolag_ln_likelihood_ratios.values(), []) if zerolag_ln_likelihood_ratios is not None else None
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), "Noise", zerolag_ln_likelihood_ratios = ranking_stats)
-	plotname = inspiral_pipe.T050017_filename("NONE", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
