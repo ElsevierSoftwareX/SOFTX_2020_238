@@ -744,7 +744,7 @@ FROM
 			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$) / Injected $M_{\mathrm{chirp}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.mchirp for sim, sngl in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl in pairs], "kx")
-			yield fig, "mchirp_acc_frac_%s_%s" % (waveform, instrument), False
+			yield fig, "mchirp_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)) / Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
@@ -764,7 +764,7 @@ FROM
 			fig, axes = create_plot(r"Injected $\eta$", r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.eta for sim, sngl in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl in pairs], "kx")
-			yield fig, "eta_acc_frac_%s_%s" % (waveform, instrument), False
+			yield fig, "eta_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$", "Number")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
@@ -774,7 +774,7 @@ FROM
 			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Recovered End Time - Injection End Time (s)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim_end_time(sim, instrument) for sim, sngl in pairs], [sngl.get_end() - sim_end_time(sim, instrument) for sim, sngl in pairs], "kx")
-			yield fig, "t_acc_%s_%s" % (waveform, instrument), False
+			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Recovered End Time - Injection End Time (s)", "Number")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
@@ -784,7 +784,7 @@ FROM
 			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs], "kx")
-			yield fig, "deff_acc_frac_%s_%s" % (waveform, instrument), False
+			yield fig, "deff_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
@@ -799,7 +799,7 @@ FROM
 			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.chi for sim, sngl in pairs], [sngl.chi for sim, sngl in pairs], "kx")
-			yield fig, "chi_acc_%s_%s" % (waveform, instrument), False
+			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
 
 
 #
@@ -817,7 +817,11 @@ class BackgroundVsInjectionPlots(object):
 			self.snr = []
 			self.chi2 = []
 			self.bankveto = []
+			self.mchirp = []
+			self.eta = []
+			self.chieff = []
 			self.spin = []
+			self.end_time = []
 
 	def __init__(self):
 		self.injections = {}
@@ -827,12 +831,9 @@ class BackgroundVsInjectionPlots(object):
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
 			# non-injections file
-			for instrument, snr, chi2, bankveto, is_background in contents.connection.cursor().execute("""
+			for values in contents.connection.cursor().execute("""
 SELECT
-	sngl_inspiral.ifo,
-	sngl_inspiral.snr,
-	sngl_inspiral.chisq,
-	sngl_inspiral.bank_chisq / bank_chisq_dof,
+	sngl_inspiral.*,
 	EXISTS (
 		SELECT
 			*
@@ -854,27 +855,36 @@ FROM
 WHERE
 	coinc_event.coinc_def_id == ?
 			""", (contents.ii_definer_id,)):
+				sngl = contents.sngl_inspiral_table.row_from_cols(values)
+				eta = sngl.mass1 * sngl.mass2 / (sngl.mass1 + sngl.mass2)**2
+				mtot = sngl.mass1 + sngl.mass2
+				chieff = (sngl.mass1*sngl.spin1z + sngl.mass2*sngl.spin2z)/mtot
+				instrument = sngl.ifo
+				is_background = values[-1]
 				if is_background:
 					if instrument not in self.background:
 						self.background[instrument] = BackgroundVsInjectionPlots.Points()
-					self.background[instrument].snr.append(snr)
-					self.background[instrument].chi2.append(chi2)
-					self.background[instrument].bankveto.append(bankveto)
+					self.background[instrument].snr.append(sngl.snr)
+					self.background[instrument].chi2.append(sngl.chisq)
+					self.background[instrument].bankveto.append(sngl.bank_chisq)
+					self.background[instrument].mchirp.append( mtot*eta**(3./5) )
+					self.background[instrument].eta.append(eta)
+					self.background[instrument].chieff.append(chieff)
+					self.background[instrument].end_time.append(sngl.end_time + 1e-9*sngl.end_time_ns)
 				else:
 					if instrument not in self.zerolag:
 						self.zerolag[instrument] = BackgroundVsInjectionPlots.Points()
-					self.zerolag[instrument].snr.append(snr)
-					self.zerolag[instrument].chi2.append(chi2)
-					self.zerolag[instrument].bankveto.append(bankveto)
+					self.zerolag[instrument].snr.append(sngl.snr)
+					self.zerolag[instrument].chi2.append(sngl.chisq)
+					self.zerolag[instrument].bankveto.append(sngl.bank_chisq)
+					self.zerolag[instrument].mchirp.append( mtot*eta**(3./5) )
+					self.zerolag[instrument].eta.append(eta)
+					self.zerolag[instrument].chieff.append(chieff)
 		else:
 			# injections file
-			for instrument, snr, chi2, bankveto, end_time, spin in contents.connection.cursor().execute("""
+			for values in contents.connection.cursor().execute("""
 SELECT
-	sngl_inspiral.ifo,
-	sngl_inspiral.snr,
-	sngl_inspiral.chisq,
-	sngl_inspiral.bank_chisq / bank_chisq_dof,
-	sngl_inspiral.end_time + sngl_inspiral.end_time_ns * 1e-9,
+	sngl_inspiral.*,
 	sim.spin1x * sim.spin1x + sim.spin1y * sim.spin1y + sim.spin1z * sim.spin1z + sim.spin2x * sim.spin2x + sim.spin2y * sim.spin2y + sim.spin2z * sim.spin2z
 FROM
 	sim_coinc_map
@@ -887,12 +897,22 @@ FROM
 	)
 	JOIN sim_inspiral AS sim ON sim.simulation_id == sim_coinc_map.simulation_id
 			"""):
+				sngl = contents.sngl_inspiral_table.row_from_cols(values)
+				eta = sngl.mass1 * sngl.mass2 / (sngl.mass1 + sngl.mass2)**2
+				mtot = sngl.mass1 + sngl.mass2
+				chieff = (sngl.mass1*sngl.spin1z + sngl.mass2*sngl.spin2z)/mtot
+				instrument = sngl.ifo
+				end_time = sngl.end_time + 1e-9 * sngl.end_time_ns
+				spin = values[-1]
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
 						self.injections[instrument] = BackgroundVsInjectionPlots.Points()
-					self.injections[instrument].snr.append(snr)
-					self.injections[instrument].chi2.append(chi2)
-					self.injections[instrument].bankveto.append(bankveto)
+					self.injections[instrument].snr.append(sngl.snr)
+					self.injections[instrument].chi2.append(sngl.chisq)
+					self.injections[instrument].bankveto.append(sngl.bank_chisq)
+					self.injections[instrument].mchirp.append( mtot*eta**(3./5) )
+					self.injections[instrument].eta.append(eta)
+					self.injections[instrument].chieff.append(chieff)
 					self.injections[instrument].spin.append((spin / 2.)**.5)
 
 	def finish(self):
@@ -908,7 +928,6 @@ FROM
 				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
 				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
 				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
-
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
 			yield fig, "chi2_vs_rho_%s" % instrument, False
@@ -923,6 +942,44 @@ FROM
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
 			axes.legend(loc = "upper left")
 			yield fig, "chi2_vs_rho_%s" % instrument, True
+
+			# for the following plots, sort injections by SNR -- descending
+			sortable = numpy.array(self.injections[instrument].snr).argsort()[::-1]
+			inj_mcs = numpy.array(self.injections[instrument].mchirp)[sortable]
+			inj_etas = numpy.array(self.injections[instrument].eta)[sortable]
+			inj_snrs = numpy.array(self.injections[instrument].snr)[sortable]
+			inj_chisq = numpy.array(self.injections[instrument].chi2)[sortable]
+
+			# sort background triggers by SNR -- ascending
+			sortable = numpy.array(self.background[instrument].snr).argsort()
+			bg_mcs = numpy.array(self.background[instrument].mchirp)[sortable]
+			bg_etas = numpy.array(self.background[instrument].eta)[sortable]
+			bg_snrs = numpy.array(self.background[instrument].snr)[sortable]
+			bg_chisq = numpy.array(self.background[instrument].chi2)[sortable]
+			bg_chieffs = numpy.array(self.background[instrument].chieff)[sortable]
+
+			# mass dependence of chisq
+			fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi^{2}/\rho^2$")
+			coll = axes.scatter(inj_mcs, inj_chisq/inj_snrs**2, c=inj_snrs, label="Injections", vmax=20, linewidth=0.2, alpha=0.8)
+			fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+			axes.scatter(bg_mcs, bg_chisq/bg_snrs**2, edgecolor='k', c=bg_snrs, marker='x', label="Background")
+			axes.legend(loc = "upper left")
+			axes.semilogy()
+			yield fig, "chi2_vs_mc_vs_rho_%s" % instrument, False
+
+			# background parameter distributions
+			fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\eta$")
+			axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
+			coll = axes.scatter(bg_mcs, bg_etas, c=bg_snrs, linewidth=0.2, alpha=0.8)
+			fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+			yield fig, "bgparams_mchirp_vs_eta_vs_snr_%s" % instrument, False
+
+			# background parameter distributions
+			fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi_\mathrm{eff}$")
+			axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
+			coll = axes.scatter(bg_mcs, bg_chieffs, c=bg_snrs, linewidth=0.2, alpha=0.8)
+			fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+			yield fig, "bgparams_mchirp_vs_chieff_vs_snr_%s" % instrument, False
 
 
 #
@@ -942,7 +999,15 @@ class BackgroundVsInjectionPlotsMulti(object):
 			self.zerolag_snreff = []
 			self.background_deff = []
 			self.injections_deff = []
+			self.injections_mchirp = []
+			self.injections_chieff = []
+			self.injections_dt = []
 			self.zerolag_deff = []
+			self.background_mchirp = []
+			self.background_mtot = []
+			self.background_eta = []
+			self.background_chieff = []
+			self.background_dt = []
 
 	def __init__(self, snrfactor):
 		self.snrfactor = snrfactor
@@ -996,6 +1061,13 @@ WHERE
 				if is_background:
 					self.points[instrument_pair].background_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 					self.points[instrument_pair].background_deff.append((x.eff_distance, y.eff_distance))
+					eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
+					mtot = x.mass1 + x.mass2
+					self.points[instrument_pair].background_eta.append(eta)
+					self.points[instrument_pair].background_mtot.append(mtot)
+					self.points[instrument_pair].background_mchirp.append( mtot*eta**(3./5) )
+					self.points[instrument_pair].background_chieff.append( (x.mass1*x.spin1z + x.mass2*x.spin2z)/mtot )
+					self.points[instrument_pair].background_dt.append(x.end_time - y.end_time + 1e-9*(x.end_time_ns - y.end_time_ns) + 3.14)
 				else:
 					self.points[instrument_pair].zerolag_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 					self.points[instrument_pair].zerolag_deff.append((x.eff_distance, y.eff_distance))
@@ -1031,6 +1103,12 @@ WHERE
 					self.points[instrument_pair] = BackgroundVsInjectionPlotsMulti.Points()
 				self.points[instrument_pair].injections_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
+				self.points[instrument_pair].injections_dt.append(x.end_time - y.end_time + 1e-9*(x.end_time_ns - y.end_time_ns))
+				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
+				mtot = x.mass1 + x.mass2
+				self.points[instrument_pair].injections_mchirp.append( mtot*eta**(3./5) )
+				self.points[instrument_pair].injections_chieff.append( (x.mass1*x.spin1z + x.mass2*x.spin2z)/mtot )
+
 
 	def finish(self):
 		for (x_instrument, y_instrument), points in self.points.items():
@@ -1063,6 +1141,26 @@ WHERE
 			axes.loglog([x for x, y in points.zerolag_deff], [y for x, y in points.zerolag_deff], "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "lower right")
 			yield fig, "deff_%s_vs_%s" % (y_instrument, x_instrument), True
+
+
+			fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\Delta t$", aspect = 1.0)
+			axes.set_title(r"Background Triggers in %s-%s Coincidence" % (y_instrument, x_instrument))
+			coll = axes.hexbin(points.background_mchirp, points.background_dt, gridsize=(5,20))
+			fig.colorbar(coll, ax=axes).set_label("Count")
+			yield fig, "bgparams_multi_mchirp_vs_dt_%s%s" % (y_instrument, x_instrument), False
+
+			fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\Delta t$", aspect = 1.0)
+			axes.set_title(r"Injection Triggers in %s-%s Coincidence" % (y_instrument, x_instrument))
+			coll = axes.hexbin(points.injections_mchirp, points.injections_dt, gridsize=(5,20))
+			fig.colorbar(coll, ax=axes).set_label("Count")
+			yield fig, "bgparams_multi_injections_mchirp_vs_dt_%s%s" % (y_instrument, x_instrument), False
+
+			fig, axes = create_plot(r"$\Delta t$", r"Rate of Triggers (a.u.)", aspect = 1.0)
+			axes.set_title(r"Background Triggers in %s-%s Coincidence" % (y_instrument, x_instrument))
+			n, bins, patches = axes.hist(points.background_dt, label="background", normed=True, bins=20, alpha=0.8)
+			n, bins, patches = axes.hist(points.injections_dt, label="Injections", bins=bins, normed=True, alpha=0.8)
+			axes.legend()
+			yield fig, "bgparams_multi_dt_hist_%s%s" % (y_instrument, x_instrument), False
 
 
 #
