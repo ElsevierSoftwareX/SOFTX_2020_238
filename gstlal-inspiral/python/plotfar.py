@@ -281,7 +281,7 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	x = numpy.linspace(xlo, xhi, 10000)
-	y = numpy.array([far.fap_after_trials(ccdf(likelihood), fapfar.zero_lag_total_count) for likelihood in x])
+	y = far.fap_after_trials_arr(ccdf(x), fapfar.zero_lag_total_count)
 	axes.semilogy(x, y, color = "k")
 	ylo, yhi = 1e-20, 10.
 	if zerolag_ln_likelihood_ratios is not None:
