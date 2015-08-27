@@ -83,25 +83,29 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	y = y[binnedarray.bins[xlo:xhi, ylo:yhi][1]]
 	z = z[binnedarray.bins[xlo:xhi, ylo:yhi]]
 
-	if binnedarray_string == "LR":
-		# because it's usually more convenient to display the
-		# natural log of the likelihood ratio, it's helpful to plot
-		# that here.  if we relied on a logarithmic colour bar we
-		# end up with power-of-10 contours instead of power-of-e
-		# contours, so we can't do that.
+	# because it's usually more convenient to display the natural log
+	# of the likelihood ratio, it's helpful to plot that here.  if we
+	# relied on a logarithmic colour bar we end up with power-of-10
+	# contours instead of power-of-e contours, so we can't do that.
+	with numpy.errstate(divide = "ignore"):
 		z = numpy.log(z)
-		norm = matplotlib.colors.Normalize()
+
+	if binnedarray_string == "LR":
+		norm = matplotlib.colors.Normalize(vmin = -80., vmax = +200.)
+		levels = numpy.linspace(-80., +200, 141)
+	elif binnedarray_string == "zero_lag_pdf":
+		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
+		levels = 50
 	else:
-		# matplotlib's colour bar seems to rely on being able to
-		# store the ratio of the lowest and highest value in a
-		# double so the range cannot be more than about 300 orders
-		# of magnitude.  experiments show it starts to go wrong
-		# before that but 250 orders of magnitude seems to be OK
-		numpy.clip(z, z.max() * dynamic_range_factor, float("+inf"), out = z)
-		norm = matplotlib.colors.LogNorm()
+		norm = matplotlib.colors.Normalize(vmin = -60., vmax = z.max())
+		levels = 50
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, norm = norm, colors = "k", linewidths = .5)
+	if binnedarray_string == "LR":
+		cs = axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linewidths = .5, alpha = .3)
+		axes.clabel(cs, [-20., -10., 0., +10., +20.], fmt = "%g", fontsize = 8)
+	else:
+		axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if event_snr is not None and event_chisq is not None:
 		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
 	axes.loglog()
@@ -112,11 +116,11 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	axes.set_xlabel(r"$\mathrm{SNR}$")
 	axes.set_ylabel(r"$\chi^{2} / \mathrm{SNR}^{2}$")
 	if tag.lower() in ("signal",):
-		axes.set_title(r"%s %s $P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR})$" % (instrument, tag))
+		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{%s})$ in %s" % (tag.lower(), instrument))
 	elif tag.lower() in ("noise", "candidates"):
-		axes.set_title(r"%s %s $P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2})$" % (instrument, tag))
+		axes.set_title(r"$\ln P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{%s})$ in %s" % (tag.lower(), instrument))
 	elif tag.lower() in ("lr",):
-		axes.set_title(r"%s $\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise} )$" % instrument)
+		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % instrument)
 	else:
 		raise ValueError(tag)
 	return fig
