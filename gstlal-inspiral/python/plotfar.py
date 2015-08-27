@@ -215,21 +215,19 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
 	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
 
-	# don't try to plot blank PDFs (it upsets older matplotlibs)
-	if z.max() == 0.:
-		return None
-
-	# these plots only require about 20 orders of magnitude of dynamic
-	# range
-	numpy.clip(z, z.max() * 1e-20, float("+inf"), out = z)
-
 	# one last check for craziness to make error messages more
 	# meaningful
 	assert not numpy.isnan(z).any()
-	assert not (z <= 0.).any()
+	assert not (z < 0.).any()
 
-	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	# plot the natural logarithm of the PDF
+	with numpy.errstate(divide = "ignore"):
+		z = numpy.log(z)
+
+	norm = matplotlib.colors.Normalize()
+
+	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
+	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if ifo_snr:
 		axes.plot(ifo_snr[instruments[0]], ifo_snr[instruments[1]], 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
 	axes.loglog()
@@ -240,7 +238,7 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	# co-ordinates are in alphabetical order
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
 	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
-	axes.set_title(r"$P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
+	axes.set_title(r"$\ln P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
 
 	return fig
 	
