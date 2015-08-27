@@ -276,7 +276,7 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	except AttributeError:
 		return fig
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ratios = None, event_likelihood = None):
+def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_likelihood = None):
 	ccdf = fapfar.ccdf_interpolator
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
@@ -292,9 +292,9 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), tag, zerolag_ln_likelihood_ra
 	axes.set_ylim(ylo, yhi)
 	axes.set_xlim((xlo, xhi))
 	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
-	axes.set_title(r"%s Log Likelihood Ratio CCDF" % tag)
+	axes.set_title(r"False Alarm Probability vs.\ Log Likelihood Ratio")
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
-	axes.set_ylabel(r"$P(\geq \ln \mathcal{L} | \mathrm{%s})$" % tag.lower())
+	axes.set_ylabel(r"$P(\mathrm{one\ or\ more\ candidates} \geq \ln \mathcal{L} | \mathrm{noise})$")
 	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
 	try:	
 		fig.tight_layout(pad = .8)

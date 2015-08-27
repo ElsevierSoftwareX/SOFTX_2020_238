@@ -442,7 +442,7 @@ class GstlalWebSummary(object):
 		likelihood, ranking_data, nu = found
 		ranking_data.finish()
 		fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(nu))
-		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "Noise")
+		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25))
 		f = StringIO.StringIO()
 		fig.savefig(f, format="png")
 		out = '<img src="data:image/png;base64,' + base64.b64encode(f.getvalue()) + '"></img>'
@@ -540,7 +540,7 @@ class GstlalWebSummary(object):
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
-			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), "Noise")
+			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25))
 			out += self.to_png(fig = fig)
 		return out
 

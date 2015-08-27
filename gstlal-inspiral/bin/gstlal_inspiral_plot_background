@@ -306,7 +306,7 @@ if ranking_data is not None:
 		fig.savefig(plotname)
 
 	ranking_stats = sum(zerolag_ln_likelihood_ratios.values(), []) if zerolag_ln_likelihood_ratios is not None else None
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), "Noise", zerolag_ln_likelihood_ratios = ranking_stats)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), zerolag_ln_likelihood_ratios = ranking_stats)
 	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
