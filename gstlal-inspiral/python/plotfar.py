@@ -277,9 +277,9 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 		return fig
 
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_likelihood = None):
-	ccdf = fapfar.ccdf_interpolator
-
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
+
+	ccdf = fapfar.ccdf_interpolator
 	x = numpy.linspace(xlo, xhi, 10000)
 	y = far.fap_after_trials_arr(ccdf(x), fapfar.zero_lag_total_count)
 	axes.semilogy(x, y, color = "k")
@@ -289,8 +289,9 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 		axes.semilogy(x, y, color = "k", linewidth = 6, alpha = 0.3)
 	if event_likelihood is not None:
 		axes.axvline(event_likelihood, ylo, yhi)
-	axes.set_ylim(ylo, yhi)
+
 	axes.set_xlim((xlo, xhi))
+	axes.set_ylim((ylo, yhi))
 	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
 	axes.set_title(r"False Alarm Probability vs.\ Log Likelihood Ratio")
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
