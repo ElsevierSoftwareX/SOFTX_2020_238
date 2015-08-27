@@ -139,7 +139,7 @@ likely = copy.deepcopy(inj)
 for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
 	plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type)
 
-fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5., 60.), event_likelihood = coinc_table.likelihood)
+fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5., max(25., coinc_table.likelihood + 5. - coinc_table.likelihood % 5.)), event_likelihood = coinc_table.likelihood)
 fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
 try:
 	fig.tight_layout()
