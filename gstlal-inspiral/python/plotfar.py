@@ -285,8 +285,11 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 	axes.semilogy(x, y, color = "k")
 	ylo, yhi = 1e-20, 10.
 	if zerolag_ln_likelihood_ratios is not None:
-		x,y = numpy.array([l[0] for l in zerolag_ln_likelihood_ratios]), numpy.array([l[1] for l in zerolag_ln_likelihood_ratios])
-		axes.semilogy(x, y, color = "k", linewidth = 6, alpha = 0.3)
+		zerolag_ln_likelihood_ratios = numpy.array(zerolag_ln_likelihood_ratios)
+		x = zerolag_ln_likelihood_ratios[:,0]
+		y = zerolag_ln_likelihood_ratios[:,1]
+		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+")
+
 	if event_likelihood is not None:
 		axes.axvline(event_likelihood, ylo, yhi)
 
