@@ -63,6 +63,7 @@ shift
 #
 
 LIKELIHOOD_PATH="likelihood.xml"
+ZEROLAG_COUNTS_PATH="zero_lag_ranking_stats.xml"
 
 #
 # pause for each iteration (seconds)
@@ -84,7 +85,7 @@ while true ; do
 		SERVER=$(cat ${REG})
 		RANKING_PDF_FILE=$(mktemp)
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
-		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} --samples-file ${SERVER}${LIKELIHOOD_PATH} ${SERVER}${LIKELIHOOD_PATH} || break
+		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} --samples-file ${SERVER}${ZEROLAG_COUNTS_PATH} ${SERVER}${LIKELIHOOD_PATH} || break
 	done || break
 	# fold the new ranking statistic samples into the total
 	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${OUTPUT} ${RANKING_PDF_FILES} || break

@@ -144,6 +144,7 @@
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
 #	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided).
 #	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided).
+#	+ `--zero-lag-ranking-stat-file` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.  Can be given multiple times.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
@@ -286,6 +287,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", default = [], help = "Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided)")
 	parser.add_option("--likelihood-file-cache", metavar = "filename", help = "Cache file for likelihood ratio data to use for ranking events")
 	parser.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided)")
+	parser.add_option("--zero-lag-ranking-stat-file", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
@@ -461,6 +463,9 @@ def parse_command_line():
 	else:
 		reconstruction_segment_list = None
 
+	if options.zero_lag_ranking_stat_file is None and likelihood_namedtuples_list:
+		options.zero_lag_ranking_stat_file = [None] * len(likelihood_namedtuples_list)
+
 	# we're done
 	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list
 
@@ -547,7 +552,7 @@ else:
 #
 
 
-for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in enumerate(zip(svd_banks, options.output, likelihood_namedtuples_list)):
+for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_lag_ranking_stats_file) in enumerate(zip(svd_banks, options.output, likelihood_namedtuples_list, options.zero_lag_ranking_stat_file)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Is there a better way to check if a file is corrupted? Implement a means by which to check for sqlite file validity
@@ -653,12 +658,19 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in en
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 		assert set(seglists) == set(detectors.channel_dict)
 		if coinc_params_distributions is None:
 			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
 	else:
-		coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
+		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+
+	if zero_lag_ranking_stats_file is None:
+		zero_lag_ranking_stats = None
+	else:
+		_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zero_lag_ranking_stats_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		if zero_lag_ranking_stats is None:
+			raise Valueerror("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
 
 
 	#
@@ -676,7 +688,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in en
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 		coincidence_threshold = options.coincidence_threshold,
 		coinc_params_distributions = coinc_params_distributions,
-		ranking_data = ranking_data,
+		zero_lag_ranking_stats = zero_lag_ranking_stats,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
 		likelihood_files_namedtuple = likelihood_namedtuple,
 		injection_filename = options.injections,
@@ -697,7 +709,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple) in en
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
+	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file, verbose = options.verbose)
 
 
 	if options.verbose:

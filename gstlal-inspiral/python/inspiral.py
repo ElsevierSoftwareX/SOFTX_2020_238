@@ -520,7 +520,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, ranking_data, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -552,6 +552,7 @@ class Data(object):
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
+		bottle.route("/zero_lag_ranking_stats.xml")(self.web_get_zero_lag_ranking_stats_file)
 		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
 		bottle.route("/sngls_snr_threshold.txt", method = "GET")(self.web_get_sngls_snr_threshold)
@@ -575,12 +576,24 @@ class Data(object):
 
 		#
 		# setup likelihood ratio book-keeping.  seglistsdicts to be
-		# populated the pipeline handler
+		# populated the pipeline handler.  zero_lag_ranking_stats
+		# is a RankingData object that is used to accumulate a
+		# histogram of the likelihood ratio values assigned to
+		# zero-lag candidates.  this is required to implement the
+		# extinction model for low-significance events during
+		# online running but otherwise is optional.  ranking_data
+		# contains the RankingData object used to initialize the
+		# FAPFAR object for on-the-fly FAP and FAR assignment.
+		# except to initialize the FAPFAR object it is not used for
+		# anything, but is retained so that it can be exposed
+		# through the web interface for diagnostic purposed and
+		# uploaded to gracedb with candidates.
 		#
 
 		self.coinc_params_distributions = coinc_params_distributions
-		self.ranking_data = ranking_data
+		self.ranking_data = None
 		self.seglistdicts = None
+		self.zero_lag_ranking_stats = None
 		self.fapfar = None
 
 		#
@@ -670,11 +683,11 @@ class Data(object):
 					# been updated asynchronously and
 					# initialize a FAP/FAR assignment
 					# machine from it.
-					ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
-					if ranking_data is None:
+					self.ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
+					if self.ranking_data is None:
 						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
-					ranking_data.finish(verbose = self.verbose)
-					self.fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+					self.ranking_data.finish(verbose = self.verbose)
+					self.fapfar = far.FAPFAR(self.ranking_data, livetime = far.get_live_time(seglists))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
@@ -707,15 +720,16 @@ class Data(object):
 			if self.stream_thinca.last_coincs:
 				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
-			# Add events to the observed likelihood histogram post "clustering"
-			# FIXME proper clustering is really needed (see above)
-			if self.stream_thinca.last_coincs:
+			# Add events to the observed likelihood histogram
+			# post "clustering"
+			# FIXME proper clustering is really needed (see
+			# above)
+			if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-					#IFOS come from coinc_inspiral not coinc_event
-					ifos = self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].ifos
+					instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
 					if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
-						self.ranking_data.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(ifos))][coinc_event.likelihood,] += 1
+						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -760,6 +774,25 @@ class Data(object):
 			output.close()
 			return outstr
 
+	def __get_zero_lag_ranking_stats_file(self):
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
+		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
+		# FIXME:  now that we've got all kinds of segment lists
+		# being collected, decide which of them should go here.
+		far.gen_likelihood_control_doc(xmldoc, process, None, self.zero_lag_ranking_stats, self.seglistdicts["triggersegments"])
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_zero_lag_ranking_stats_file(self):
+		with self.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_file(), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+			return outstr
+
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
@@ -784,15 +817,16 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
-		# Add events to the observed likelihood histogram post "clustering"
+		# Add events to the observed likelihood histogram post
+		# "clustering"
 		# FIXME proper clustering is really needed (see above)
-		if self.stream_thinca.last_coincs:
+		if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				#IFOS come from coinc_inspiral not coinc_event
-				ifos = self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].ifos
+				instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
 				if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
-					self.ranking_data.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(ifos))][coinc_event.likelihood,] += 1
+					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
+
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
@@ -1047,6 +1081,9 @@ class Data(object):
 			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
 			shutil.copy(os.path.join(path,filename), os.path.join(subdir_from_T050017_filename(fname), fname))
 
+	def __write_zero_lag_ranking_stats_file(self, filename, verbose = False):
+		ligolw_utils.write_filename(self.__get_zero_lag_ranking_stats_file(), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+
 	def write_output_file(self, filename = None, description = "", verbose = False):
 		with self.lock:
 			self.__write_output_file(filename = filename, verbose = verbose)
@@ -1056,7 +1093,7 @@ class Data(object):
 			# can't be used anymore
 			del self.coincs_document
 
-	def snapshot_output_file(self, description, extension, verbose = False):
+	def snapshot_output_file(self, description, extension, zero_lag_ranking_stats_filename = None, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
 			# We require the likelihood file to have the same name
@@ -1067,6 +1104,8 @@ class Data(object):
 			self.__write_output_file(filename = fname, verbose = verbose)
 			if self.likelihood_files_namedtuple.likelihood_file:
 				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, snapshot = True, verbose = verbose)
+			if zero_lag_ranking_stats_filename is not None:
+				self.__write_zero_lag_ranking_stats_file(filename, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document

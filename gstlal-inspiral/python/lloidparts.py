@@ -207,7 +207,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, segment_history_duration = 2592000., verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = 2592000., verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -220,6 +220,7 @@ class Handler(simplehandler.Handler):
 		self.dataclass = dataclass
 
 		self.tag = tag
+		self.zero_lag_ranking_stats_filename = zero_lag_ranking_stats_filename
 		self.segment_history_duration = segment_history_duration
 		self.verbose = verbose
 
@@ -393,7 +394,7 @@ class Handler(simplehandler.Handler):
 		# buffer would be an especially bad choice.
 		self.flush_segments_to_disk(timestamp)
 		try:
-			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
+			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
 		except TypeError as te:
 			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 

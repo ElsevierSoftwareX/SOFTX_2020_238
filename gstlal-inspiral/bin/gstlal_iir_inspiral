@@ -44,6 +44,7 @@
 #	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds (default = 8).
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required"
 #	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.
+#	+ `--zero-lag-ranking-stat-file` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.  Can be given multiple times.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
@@ -187,6 +188,7 @@ def parse_command_line():
 	#FIXME: do not consider online paramters yet
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
+	parser.add_option("--zero-lag-ranking-stat-file", metavar = "filename", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
@@ -404,10 +406,17 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+	coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 	assert set(seglists) == set(detectors.channel_dict)
 else:
-	coinc_params_distributions, ranking_data, seglists = far.ThincaCoincParamsDistributions(), None, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
+	coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict) 
+
+if options.zero_lag_ranking_stat_file is None:
+	zero_lag_ranking_stats = None
+else:
+	_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zero_lag_ranking_stat_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+	if zero_lag_ranking_stats is None:
+		raise Valueerror("\"%s\" does not contain ranking statistic PDF data" % options.zero_lag_ranking_stat_file)
 
 
 #
@@ -425,7 +434,7 @@ output = inspiral.Data(
 	seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
 	coincidence_threshold = options.coincidence_threshold,
 	coinc_params_distributions = coinc_params_distributions,
-	ranking_data = ranking_data,
+	zero_lag_ranking_stats = zero_lag_ranking_stats,
 	marginalized_likelihood_file = options.marginalized_likelihood_file,
 	likelihood_file = options.likelihood_file,
 	injection_filename = options.injections,
@@ -443,7 +452,7 @@ output = inspiral.Data(
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
-handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, verbose = options.verbose)
+handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, zero_lag_ranking_stats_filename = options.zero_lag_ranking_stat_file, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
