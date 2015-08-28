@@ -621,23 +621,9 @@ class Data(object):
 			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 
-				# smooth the distributions.  re-populates
-				# PDF arrays from raw counts
-				self.coinc_params_distributions.finish(verbose = self.verbose)
-
-				# post a checkpoint message.  FIXME:  make
-				# sure this triggers
-				# self.snapshot_output_file() to be
-				# invoked.  lloidparts takes care of that
-				# for now, but spreading the program logic
-				# around like that isn't a good idea, this
-				# code should be responsible for it
-				# somehow, no?
-				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
-
-				# If a reference likelihood file is given, load
-				# data coinc_params_distributions data before
-				# smoothing distributions
+				# if a reference likelihood file is given,
+				# overwrite coinc_params_distributions with
+				# its contents
 				# FIXME There is currently no guarantee that
 				# the reference_likelihood_file on disk will
 				# have updated since the last snapshot, but for
@@ -646,7 +632,28 @@ class Data(object):
 				# older than the snapshot before last
 				if self.likelihood_files_namedtuple.reference_likelihood_file is not None:
 					self.coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-					self.coinc_params_distributions.finish(verbose = self.verbose)
+
+				# smooth the distributions.  re-populates
+				# PDF arrays from raw counts
+				self.coinc_params_distributions.finish(verbose = self.verbose)
+
+				# post a checkpoint message.
+				# FIXME:  make sure this triggers
+				# self.snapshot_output_file() to be
+				# invoked.  lloidparts takes care of that
+				# for now, but spreading the program logic
+				# around like that isn't a good idea, this
+				# code should be responsible for it
+				# somehow, no?  NOTE:
+				# self.snapshot_output_file() does not
+				# write the coinc_params_distributions
+				# object to disk if a reference likelihood
+				# file is given, so the the thing that was
+				# just read in is not written back out
+				# again.  see the comment in that function
+				# about turning it into two handlers and
+				# only hooking up which ones are needed.
+				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
 				if self.marginalized_likelihood_file is not None:
 					# FIXME:  must set horizon
