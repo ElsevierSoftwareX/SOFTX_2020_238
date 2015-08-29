@@ -77,6 +77,8 @@ SLEEP="600"
 while true ; do
 	echo "... sleeping for ${SLEEP} seconds ..."
 	sleep ${SLEEP}
+	# collect the current coinc parameter PDF data from each job, and
+	# run some iterations of the ranking statistic sampler
 	RANKING_PDF_FILES=
 	for REG in "$@" ; do
 		SERVER=$(cat ${REG})
@@ -84,7 +86,8 @@ while true ; do
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
 		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} --samples-file ${SERVER}${LIKELIHOOD_PATH} ${SERVER}${LIKELIHOOD_PATH} || break
 	done || break
-	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${RANKING_PDF_FILES} || break 
+	# fold the new ranking statistic samples into the total
+	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${OUTPUT} ${RANKING_PDF_FILES} || break
 	rm -vf ${RANKING_PDF_FILES}
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
 done
