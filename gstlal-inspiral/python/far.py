@@ -764,7 +764,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	max_cached_snr_joint_pdfs = int(5**3 * 4)
 	snr_joint_pdf_cache = {}
 
-	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
+	def snr_joint_pdf_keyfunc(self, instruments, horizon_distances):
 		#
 		# key for cache:  two element tuple, first element is
 		# frozen set of instruments for which this is the PDF,
@@ -774,13 +774,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# largest among them and then the fractions aquantized to
 		# integer powers of a common factor
 		#
+		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
 
-		key = frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
-
+	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
 		#
 		# retrieve cached PDF, or build new one
 		#
 
+		key = self.snr_joint_pdf_keyfunc(instruments, horizon_distances)
 		try:
 			pdf = self.snr_joint_pdf_cache[key][0]
 		except KeyError:
