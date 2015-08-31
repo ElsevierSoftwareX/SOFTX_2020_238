@@ -837,124 +837,127 @@ class Data(object):
 			self.__flush()
 
 	def __do_gracedb_alerts(self):
-		if self.stream_thinca.last_coincs:
-			gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
-			gracedb_ids = []
-			common_messages = []
-			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+		# no-op short circuit
+		if not self.stream_thinca.last_coincs:
+			return
 
-			# This appears to be a silly for loop since
-			# coinc_event_index will only have one value, but we're
-			# future proofing this at the point where it could have
-			# multiple clustered events
-			for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values():
-				#
-				# continue if the false alarm rate is not low
-				# enough, or is nan.
-				#
+		gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
+		gracedb_ids = []
+		common_messages = []
+		coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 
-				if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
-					continue
+		# This appears to be a silly for loop since
+		# coinc_event_index will only have one value, but we're
+		# future proofing this at the point where it could have
+		# multiple clustered events
+		for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values():
+			#
+			# continue if the false alarm rate is not low
+			# enough, or is nan.
+			#
 
-				#
-				# retrieve PSDs and ranking data
-				#
+			if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
+				continue
 
-				if not common_messages and self.upload_auxiliary_data_to_gracedb:
-					if self.verbose:
-						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
-					psddict = {}
-					for instrument in self.seglistdicts["triggersegments"]:
-						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
-						# FIXME:  remove
-						# LIGOTimeGPS type cast
-						# when we port to swig
-						# version of
-						# REAL8FrequencySeries
-						psddict[instrument] = REAL8FrequencySeries(
-							name = "PSD",
-							epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
-							f0 = 0.0,
-							deltaF = elem.get_property("delta-f"),
-							sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
-							data = numpy.array(elem.get_property("mean-psd"))
-						)
-					fobj = StringIO.StringIO()
-					reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
-					common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
+			#
+			# retrieve PSDs and ranking data
+			#
 
-					if self.verbose:
-						print >>sys.stderr, "generating ranking_data.xml.gz ..."
-					fobj = StringIO.StringIO()
-					ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
-					common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
-					del fobj
-
-				#
-				# fake a filename for end-user convenience
-				#
-
-				observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
-				instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
-				end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
-				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
-
-				#
-				# construct message and send to gracedb.
-				# we go through the intermediate step of
-				# first writing the document into a string
-				# buffer incase there is some safety in
-				# doing so in the event of a malformed
-				# document;  instead of writing directly
-				# into gracedb's input pipe and crashing
-				# part way through.
-				#
+			if not common_messages and self.upload_auxiliary_data_to_gracedb:
+				if self.verbose:
+					print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
+				psddict = {}
+				for instrument in self.seglistdicts["triggersegments"]:
+					elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
+					# FIXME:  remove
+					# LIGOTimeGPS type cast
+					# when we port to swig
+					# version of
+					# REAL8FrequencySeries
+					psddict[instrument] = REAL8FrequencySeries(
+						name = "PSD",
+						epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
+						f0 = 0.0,
+						deltaF = elem.get_property("delta-f"),
+						sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
+						data = numpy.array(elem.get_property("mean-psd"))
+					)
+				fobj = StringIO.StringIO()
+				reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+				common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
 
 				if self.verbose:
-					print >>sys.stderr, "sending %s to gracedb ..." % filename
-				message = StringIO.StringIO()
-				xmldoc = self.stream_thinca.last_coincs[coinc_event.coinc_event_id]
-				# give the alert all the standard inspiral
-				# columns (attributes should all be
-				# populated).  FIXME:  ugly.
-				sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-				for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
-					try:
-						sngl_inspiral_table.appendColumn(standard_column)
-					except ValueError:
-						# already has it
-						pass
-				ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
-				xmldoc.unlink()
-				# FIXME: make this optional from command line?
-				if True:
-					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
-					resp_json = resp.json()
-					if resp.status != httplib.CREATED:
-						print >>sys.stderr, "gracedb upload of %s failed" % filename
-					else:
-						if self.verbose:
-							print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
-						gracedb_ids.append(resp_json["graceid"])
+					print >>sys.stderr, "generating ranking_data.xml.gz ..."
+				fobj = StringIO.StringIO()
+				ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
+				common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
+				del fobj
+
+			#
+			# fake a filename for end-user convenience
+			#
+
+			observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
+			instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
+			description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
+			end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
+			filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
+
+			#
+			# construct message and send to gracedb.
+			# we go through the intermediate step of
+			# first writing the document into a string
+			# buffer incase there is some safety in
+			# doing so in the event of a malformed
+			# document;  instead of writing directly
+			# into gracedb's input pipe and crashing
+			# part way through.
+			#
+
+			if self.verbose:
+				print >>sys.stderr, "sending %s to gracedb ..." % filename
+			message = StringIO.StringIO()
+			xmldoc = self.stream_thinca.last_coincs[coinc_event.coinc_event_id]
+			# give the alert all the standard inspiral
+			# columns (attributes should all be
+			# populated).  FIXME:  ugly.
+			sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+			for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
+				try:
+					sngl_inspiral_table.appendColumn(standard_column)
+				except ValueError:
+					# already has it
+					pass
+			ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
+			xmldoc.unlink()
+			# FIXME: make this optional from command line?
+			if True:
+				resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+				resp_json = resp.json()
+				if resp.status != httplib.CREATED:
+					print >>sys.stderr, "gracedb upload of %s failed" % filename
 				else:
-					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
-					proc.stdin.write(message.getvalue())
-					proc.stdin.flush()
-					proc.stdin.close()
-				message.close()
+					if self.verbose:
+						print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+					gracedb_ids.append(resp_json["graceid"])
+			else:
+				proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+				proc.stdin.write(message.getvalue())
+				proc.stdin.flush()
+				proc.stdin.close()
+			message.close()
 
-			#
-			# do PSD and ranking data file uploads
-			#
+		#
+		# do PSD and ranking data file uploads
+		#
 
-			while common_messages:
-				message, filename, tag, contents = common_messages.pop()
-				for gracedb_id in gracedb_ids:
-					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
-					resp_json = resp.json()
-					if resp.status != httplib.CREATED:
-						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
+		while common_messages:
+			message, filename, tag, contents = common_messages.pop()
+			for gracedb_id in gracedb_ids:
+				resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+				resp_json = resp.json()
+				if resp.status != httplib.CREATED:
+					print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
 
 	def do_gracedb_alerts(self):
 		with self.lock:
