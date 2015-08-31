@@ -1,0 +1,304 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2014  Laleh Sadeghian
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+from optparse import OptionParser
+import os
+import numpy
+import sys
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
+from glue.ligolw import utils as ligolw_utils
+
+# modules for uploading to GraceDB
+import threading
+from glue.ligolw.utils import process as ligolw_process
+import urllib2  # for HTTPError:
+import StringIO
+
+# This mess is to make gstreamer stop eating our help messages.
+if "--help" in sys.argv or "-h" in sys.argv:
+        try:
+                del sys.argv[ sys.argv.index( "--help" ) ]
+        except ValueError:
+                pass
+        try:
+                del sys.argv[ sys.argv.index( "-h" ) ]
+        except ValueError:
+                pass
+
+        import gst
+        sys.argv.append( "--help" )
+else:
+        import gst
+
+from gstlal import pipeparts
+from gstlal import pipeutil
+from gstlal import simplehandler
+
+usage = """
+This help mssage help you to get started. Examples of given options is as the following:
+For LHO:
+./gstlal_inj_frames --channel H1:GDS-CALIB_STRAIN --shared-memory-read LHO_Data --injections-file ER7_bns_injs.xml --shared-memory-write LHO_Data_Inj --channel-inj H1:GDS-CALIB_STRAIN_INJ --dqv-channel H1:GDS-CALIB_STATE_VECTOR --save-channel H1:ODC-MASTER_CHANNEL_OUT_DQ --upload-to-gracedb --group Test --search LowMassInj
+"""
+
+def write_graph(demux):
+         pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
+
+parser = OptionParser( usage = usage, description = __doc__ )
+
+def parse_command_line():
+        parser.add_option("--shared-memory-read", default = None, type = "string", help = "Give the shared memory section name to read the frames from")
+        parser.add_option("--shared-memory-write", default = None, type = "string", help = "Give the shared memory section name to write the frames with injections into it.")
+        parser.add_option("--channel", default = None, type = "string", help = "Give the name of the original channel that the injetions will be injected into it.")
+        parser.add_option("--channel-inj", default = None, type = "string", help = "Give a new name to the channel that has the injections.")
+        parser.add_option("--dqv-channel", default = None, type = "string", help = "Give the name of the data quality vector channel of the of the original frame file.")
+        parser.add_option("--save-channel", default = None, type = "string", help = "Give the name of the channel of the original frame file which should be carried on to the final frame files.")
+        parser.add_option("--injections-file", default = None, type = "string", help = "Give the injections xml file to be injected to the data.") 
+        parser.add_option("--upload-to-gracedb", action = "store_true", help = "upload the paramters of the added injections to GraceDB/SimDB (optional).")
+        parser.add_option("--group", default = None, type = "string", help = "Give the group name to be uploaded to GraceDB e.g. Test")
+        parser.add_option("--search", default = None, type = "string", help = "Give the search name to be uploaded to GraceDB e.g. LowMassInjReplay.")
+        parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
+        parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
+        parser.add_option("--compression-level", default = 3, type = "int", help = "compression_level (optional)")
+        parser.add_option("--compression-scheme", default = 6, type = "int", help = "compression_scheme (optional)")
+        parser.add_option("--frames-per-file", default = 1, type = "int", help = "frames_per_file (optional)")
+        parser.add_option("--frame-duration", default = 4, metavar= "frame duration in seconds" , type = "int", help = "frame_duration (optional)")        
+        parser.add_option("--gracedb-server", default = "https://simdb.cgca.uwm.edu/api/", type = "string", help = "name of gracedb or simdb server")        
+        parser.add_option("--instrument", default = None, type = "string", help = "name of the instrument e.g. H1 etc")        
+        parser.add_option("--virtualenv-activator", default = None, type = "string", help = "Give the path to the virtualenv-activator if you want to use virtual environment installation instead of system installation")        
+        
+        options, filenames = parser.parse_args()
+
+        required_options = ["shared_memory_read", "shared_memory_write", "channel", "channel_inj", "dqv_channel", "injections_file", "instrument"]
+
+        missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+        if missing_options:
+                raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
+
+        required_options_for_gracedb = ["group", "search"]
+
+        missing_options_for_gracedb = ["--%s" % option.replace("_", "-") for option in required_options_for_gracedb if getattr(options, option) is None]
+        if options.upload_to_gracedb is not None:
+            if missing_options_for_gracedb:
+                    raise ValueError("missing required option(s) to be able to upload to graedb %s" % ", ".join(sorted(missing_options_for_gracedb)))
+
+        return options, filenames
+
+# debugging options
+parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parse_command_line()
+
+# activate the virtual environment in the case that the user wants to use a different installation than system installation:
+if options.virtualenv_activator is not None:
+    VIRTUALENV_ACTIVATOR = options.virtualenv_activator
+    execfile(VIRTUALENV_ACTIVATOR, dict(__file__ = VIRTUALENV_ACTIVATOR))
+
+# PB: temporary solution for virtual environment (not sure why virtual
+# environment not working)
+# See e.g. http://stackoverflow.com/questions/10095037/why-use-sys-path-appendpath-instead-of-sys-path-insert1-path
+sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
+
+# Now that we have the virtual environment loaded, load up GraceDb
+from ligo.gracedb.rest import GraceDb
+
+# setup the pipeline
+pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
+
+# main loop 
+mainloop = gobject.MainLoop()
+
+# reading from shared memory
+src = pipeparts.mklvshmsrc(pipeline, shm_name = options.shared_memory_read)
+
+# demuxer
+demux = src = pipeparts.mkframecppchanneldemux(pipeline, src)
+
+if options.write_pipeline is not None:
+        demux.connect("no-more-pads", write_graph)
+
+# original channel
+inj = pipeparts.mkaudioconvert(pipeline, None)
+pipeparts.src_deferred_link(src, options.channel, inj.get_pad("sink"))
+#inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
+inj = pipeparts.mkqueue(pipeline, inj, max_size_buffers = 0 , max_size_time = 0, max_size_bytes = 0)
+
+
+channel_src_map = {}
+
+# giving a new tag and fix the units 
+inst, channel = options.channel_inj.split(":")
+inj = pipeparts.mktaginject(pipeline, inj, "instrument=%s,channel-name=%s,units=\"strain\"" % (inst, channel))
+
+# adding the injections
+inj = pipeparts.mkinjections(pipeline, inj, options.injections_file)
+channel_src_map[options.channel_inj] = inj
+
+# Data Quality Vector channel
+dqv = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
+pipeparts.src_deferred_link(src, options.dqv_channel, dqv.get_pad("sink"))
+channel_src_map[options.dqv_channel] = dqv
+
+
+if options.save_channel is not None:
+    saved_channel = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
+    pipeparts.src_deferred_link(src, options.save_channel, saved_channel.get_pad("sink"))
+    channel_src_map[options.save_channel] = saved_channel
+
+# muxer
+# The compression level, frames_per_file and frame_duration are set when broadcasting using DMTGen
+# To get these values, we have to look at the DMTGen configuration file.
+# This file (DMTGen-LHO_Data.cfg in Patrick's home directory) currently (6 Aug 2014) looks like:
+# Parameter Compression "zero-suppress-or-gzip"
+# Parameter OutputDirectory /online/LHO_Data
+# Parameter FrameLength 4
+# To figure out the numerical compression level, do a "gst-inspect framecpp_channelmux"
+mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, compression_scheme=options.compression_scheme , frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
+
+# to read and remove past injs from sim_inspiral_table and put the injs that have been added to the broadcasting data  addto GraceDB
+## define a content handler
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+        pass
+lsctables.use_in(LIGOLWContentHandler)
+
+xmldoc = ligolw_utils.load_filename(options.injections_file, contenthandler = LIGOLWContentHandler, verbose = True)
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
+sim_inspiral_table.sort(key = lambda row: -row.get_end())
+
+for i in range(0, len(sim_inspiral_table)-11):
+    if sim_inspiral_table[i].get_end() < sim_inspiral_table[i+10].get_end() + lsctables.LIGOTimeGPS(60.0):
+        print "There are more than 10 injections per minute."
+        sys.exit(-1)
+
+#######################################################
+
+# http://www.devshed.com/c/a/python/basic-threading-in-python/
+# NOTE: we may have to kill this thread if it still exists after, say,
+# two minutes. In that case, we may have to read up on this at e.g.
+# https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread-in-python
+# https://stackoverflow.com/questions/919897/how-to-find-a-thread-id-in-python
+# as indicated in this last link, maybe the 'logging' module?
+
+class GraceDBThread ( threading.Thread ):
+    def __init__ ( self, inj ):
+        self.inj = inj
+        threading.Thread.__init__ ( self )
+    def run ( self ):
+       # This follows the code at the end of lalsuite/glue/glue/ligolw/utils/process.py
+        print 'Notifying GraceDB now'
+       # Create an empty XML document to send to GraceDB
+        xmldoc = ligolw.Document()
+        xmldoc.appendChild(ligolw.LIGO_LW())
+       # Add in the metadata for this injection process
+        process = ligolw_process.register_to_xmldoc(xmldoc, "gstinjector", {"verbose": True, "server": "127.0.0.1"})
+        self.inj.process_id = process.process_id
+       # Make a very small sim inspiral table with just this one event
+        sim_inspiral_table_one_injection = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimInspiralTable))
+       # Now add in the injection
+        sim_inspiral_table_one_injection.append(self.inj)
+       # Get string representation
+       # use StringIO to make in-ram file, write to it with xmldoc.write(fileobj)
+        fake_file = StringIO.StringIO()
+        xmldoc.write(fake_file)
+       # fake_file.write("Hello world.")
+        print "fake_file: [", fake_file.getvalue(), "]"
+        print "Talking to GraceDB"
+        gracedb = GraceDb(options.gracedb_server)
+        try:
+            r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search, instrument = options.instrument, source_channel = options.channel, destination_channel = options.channel_inj)
+            #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
+            rdict = r.json()
+            graceid = rdict['graceid']
+            print "Success: GraceID = %s" % graceid
+            inst, channel = options.channel.split(":")
+            inst_inj, channel_inj = options.channel_inj.split(":")
+            try:
+                r = gracedb.writeLog(graceid, "Injected from " + options.channel + " into " + options.channel_inj)
+            except urllib2.HTTPError as e:
+                pass
+        except urllib2.HTTPError as e:
+            pass
+       # discard the xml string
+        fake_file.close()
+
+#######################################################
+# add a probe to the pipeline
+def watch_data(pad, obj, sim_inspiral_table):
+    if isinstance(obj, gst.Buffer):
+        timestamp = lal.LIGOTimeGPS(0, obj.timestamp)
+        duration = lal.LIGOTimeGPS(0, obj.duration)
+        print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
+            sim = sim_inspiral_table.pop()
+            if options.upload_to_gracedb is not None:
+                print "upload sim to gracedb" 
+                GraceDBThread(sim).start()
+    elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_NEWSEGMENT:
+        update, rate, format, start, stop, position = obj.parse_new_segment()
+        start = lal.LIGOTimeGPS(0, start)
+        print "data starts at %s" % start
+        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
+            sim_inspiral_table.pop()
+    return True
+mux.get_pad("src").add_data_probe(watch_data, sim_inspiral_table)
+
+#######################################################
+
+# writing to the shared memory
+mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
+# NOTE: to get the num_buffers and blocksize values, do a "smlist" on soapbox or peloton
+#     num_buffers = nBuf; blocksize = lBuf
+# ALSO note: if they are not exactly correct, the system complains that it cannot write to
+# the shared memory.
+
+pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2)
+
+if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
+
+# state playing
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError( "pipeline failed to enter PLAYING state" )
+else:
+        print "set to playing successfully"
+
+handler = simplehandler.Handler(mainloop, pipeline)
+print 'running mainloop...'
+
+try:
+    mainloop.run()
+
+# I put the plotting part here to get all the pads as they have been hoocked. The plot will get generated when we intrupt the code by "Conrel c"
+except KeyboardInterrupt:
+    if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
+#
+#
+#
+#
