@@ -891,6 +891,22 @@ class Data(object):
 				fobj = StringIO.StringIO()
 				ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
 				common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
+
+				# FIXME:  stop doing this when
+				# .new_with_extinction() patch is applied.
+				# right now the ranking statistic PDF and
+				# CCDF uploaded to gracedb is missing the
+				# extinction model and and the zero-lag
+				# histogram is required to construct it.
+				# after .new_with_extinction() what gest
+				# uploaded will have had the extinction
+				# model applied and this auxiliary
+				# information will no longer be required
+				if self.verbose:
+					print >>sys.stderr, "generating zero_lag_ranking_stats.xml.gz ..."
+				fobj = StringIO.StringIO()
+				ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_file(), fobj, gz = True, trap_signals = None)
+				common_messages.append(("zero-lag ranking statistic histogram", "zero_lag_ranking_stats.xml.gz", "ranking statistic", fobj.getvalue()))
 				del fobj
 
 			#
