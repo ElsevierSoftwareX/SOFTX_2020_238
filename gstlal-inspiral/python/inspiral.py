@@ -836,7 +836,7 @@ class Data(object):
 		with self.lock:
 			self.__flush()
 
-	def __do_gracedb_alerts(self):
+	def __do_gracedb_alerts(self, retries = 5, retry_delay = 5.):
 		# no-op short circuit
 		if not self.stream_thinca.last_coincs:
 			return
@@ -948,14 +948,18 @@ class Data(object):
 			xmldoc.unlink()
 			# FIXME: make this optional from command line?
 			if True:
-				resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
-				resp_json = resp.json()
-				if resp.status != httplib.CREATED:
-					print >>sys.stderr, "gracedb upload of %s failed" % filename
+				for attempt in range(1, retries + 1):
+					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+					resp_json = resp.json()
+					if resp.status == httplib.CREATED:
+						if self.verbose:
+							print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+						gracedb_ids.append(resp_json["graceid"])
+						break
+					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d: %d: %s"  % (filename, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+					time.sleep(random.lognormal(math.log(retry_delay), .5))
 				else:
-					if self.verbose:
-						print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
-					gracedb_ids.append(resp_json["graceid"])
+					print >>sys.stderr, "gracedb upload of %s failed" % filename
 			else:
 				proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
 				proc.stdin.write(message.getvalue())
@@ -970,9 +974,14 @@ class Data(object):
 		while common_messages:
 			message, filename, tag, contents = common_messages.pop()
 			for gracedb_id in gracedb_ids:
-				resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
-				resp_json = resp.json()
-				if resp.status != httplib.CREATED:
+				for attempt in range(1, retries + 1):
+					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+					resp_json = resp.json()
+					if resp.status == httplib.CREATED:
+						break
+					print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d: %d: %s"  % (filename, gracedb_id, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+					time.sleep(random.lognormal(math.log(retry_delay), .5))
+				else:
 					print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
 
 	def do_gracedb_alerts(self):
