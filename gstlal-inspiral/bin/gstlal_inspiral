@@ -593,11 +593,11 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 		server_address = "http://%s:%d" % (host, httpservers[0][0].port)
 		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+			# don't create links back to this page
 			if route.rule in ("/", "/index.html"):
-				# don't create links back to this page
 				continue
+			# only create links for GET methods
 			if route.method != "GET":
-				# only create links for GET methods
 				continue
 			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
 		yield "</p>\n</body></html>"
