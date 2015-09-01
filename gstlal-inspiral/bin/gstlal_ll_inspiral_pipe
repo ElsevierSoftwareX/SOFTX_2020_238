@@ -100,6 +100,7 @@ lsctables.use_in(ligolwcontenthandler)
 #		"--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 #		"--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
 #		"--likelihood-cache", help = "set the cache containin likelihood files")	
+#		"--zerolag-likelihood-cache", help = "set the cache containin zerolag likelihood files")	
 #		"--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
 #		"--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
 #		"--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
@@ -203,6 +204,7 @@ def parse_command_line():
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
 	parser.add_option("--likelihood-cache", help = "set the cache containin likelihood files")	
+	parser.add_option("--zerolag-likelihood-cache", help = "set the cache containin zerolag likelihood files")	
 	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
 	parser.add_option("--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
 	parser.add_option("--fir-stride", default = 4, metavar = "secs", help = "set the fir bank stride, default 4")
@@ -267,6 +269,7 @@ def parse_command_line():
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 
 	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
+	options.zerolag_likelihood_files = [lal.CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
 	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, min_max_inj_dist_list
 
@@ -327,7 +330,7 @@ bank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_
 if len(options.likelihood_files) != len(bank_groups):
 	raise ValueError("Likelihood files must correspond 1:1 with bank files")
 
-for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.likelihood_files)):
+for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_groups, options.likelihood_files, options.zerolag_likelihood_files)):
 	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
 	jobTags.append("%04d" % num_insp_nodes)
 
@@ -358,7 +361,8 @@ for num_insp_nodes, (svd_banks, likefile) in enumerate(zip(bank_groups, options.
 			},
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
-				"likelihood-file":likefile
+				"likelihood-file":likefile,
+				"zero-lag-ranking-stat-file":zerolikefile,
 			}
 		)
 
