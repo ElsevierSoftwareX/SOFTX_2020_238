@@ -593,7 +593,7 @@ class Data(object):
 		self.coinc_params_distributions = coinc_params_distributions
 		self.ranking_data = None
 		self.seglistdicts = None
-		self.zero_lag_ranking_stats = None
+		self.zero_lag_ranking_stats = zero_lag_ranking_stats
 		self.fapfar = None
 
 		#
@@ -1124,7 +1124,7 @@ class Data(object):
 			if self.likelihood_files_namedtuple.likelihood_file:
 				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, snapshot = True, verbose = verbose)
 			if zero_lag_ranking_stats_filename is not None:
-				self.__write_zero_lag_ranking_stats_file(filename, verbose = verbose)
+				self.__write_zero_lag_ranking_stats_file(zero_lag_ranking_stats_filename, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document
