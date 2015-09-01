@@ -2076,7 +2076,7 @@ class FAPFAR(object):
 		zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[None]
 
 		# Disregard events above the 2% loudest to help with clustering effects
-		likethresh = numpy.argmax(zlagcounts_ba.array[::-1].cumsum()[::-1] <= 0.02 * zlagcounts_ba.array[::-1].sum())
+		likethresh = numpy.argmax(zlagcounts_ba.array[::-1].cumsum()[::-1] <= 0.05 * zlagcounts_ba.array[::-1].sum())
 		bgcounts_ba.array[:likethresh] = 0.
 		bgpdf_ba.array[:likethresh] = 0.
 		zlagcounts_ba.array[:likethresh] = 0.
