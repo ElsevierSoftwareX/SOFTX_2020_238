@@ -2063,12 +2063,6 @@ class FAPFAR(object):
 		# we also need the zero lag counts to build the extinction model
 		zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[None]
 
-		# Disregard events above the 2% loudest to help with clustering effects
-		likethresh = numpy.argmax(zlagcounts_ba.array[::-1].cumsum()[::-1] <= 0.02 * zlagcounts_ba.array[::-1].sum())
-		bgcounts_ba.array[:likethresh] = 0.
-		bgpdf_ba.array[:likethresh] = 0.
-		zlagcounts_ba.array[:likethresh] = 0.
-
 		# safety checks
 		assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
 		assert not (bgcounts_ba.array < 0.0).any(), "log likelihood ratio rate contains negative values"
@@ -2080,17 +2074,10 @@ class FAPFAR(object):
 		ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
 		drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
-		# figure out the minimum rank
-		self.fit_min_rank = ranks[likethresh]
-
 		# whittle down the arrays of counts and pdfs
 		bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
 		bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
 		zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
-
-		# Issue a warning if we have less than 100,000 events
-		if zlagcounts_ba_array.sum() < 100000:
-			warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated.")
 
 		# get the extincted background PDF
 		self.zero_lag_total_count = zlagcounts_ba_array.sum()
@@ -2140,20 +2127,24 @@ class FAPFAR(object):
 
 		# Fit for the number of preclustered, independent coincs by
 		# only considering the observed counts safely in the bulk of
-		# the distribution.  Only do the fit above 10 counts if there
-		# are enough events.
-		rank_range = numpy.logical_and(zero_lag_compcumcount <= max(zero_lag_compcumcount), zero_lag_compcumcount >= min(10, 0.001 * max(zero_lag_compcumcount)))
+		# the distribution.  Only do the fit above 10 counts and below
+		# 10000, unless that can't be met and trigger a warning
+		fit_min_rank = 1.
+		fit_min_counts = min(10., self.zero_lag_total_count / 10. + 1)
+		fit_max_counts = min(10000., self.zero_lag_total_count / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
+		rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
+		if fit_max_counts < 10000.:
+			warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
+		if zero_lag_compcumcount.compress(rank_range).size < 1:
+			raise ValueError("not enough zero lag data to fit background")
 
 		# Use curve fit to find the predicted total preclustering
 		# count. First we need an interpolator of the counts
 		obs_counts = interpolate.interp1d(ranks, bg_compcumcount)
 		bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
 
-		def extincted_counts(x, N_ratio, num_clustered = max(zero_lag_compcumcount), norm = obs_counts(self.fit_min_rank)):
-			out = num_clustered * (1. - numpy.exp(-obs_counts(x) * N_ratio))
-			# This normalization ensures that the left edge does go to num_clustered
-			if (1. - numpy.exp(-norm * N_ratio)) > 0:
-				out /= (1. - numpy.exp(-norm * N_ratio))
+		def extincted_counts(x, N_ratio):
+			out = max(zero_lag_compcumcount) * (1. - numpy.exp(-obs_counts(x) * N_ratio))
 			out[~numpy.isfinite(out)] = 0.
 			return out
 
@@ -2169,10 +2160,10 @@ class FAPFAR(object):
 			ranks[rank_range],
 			zero_lag_compcumcount.compress(rank_range),
 			sigma = zero_lag_compcumcount.compress(rank_range)**.5,
-			p0 = [1e-4, max(zero_lag_compcumcount)]
+			p0 = 1e-4
 		)
 
-		N_ratio, total_num = precluster_normalization
+		N_ratio = precluster_normalization[0]
 
 		return extincted_pdf(ranks, N_ratio)
 
