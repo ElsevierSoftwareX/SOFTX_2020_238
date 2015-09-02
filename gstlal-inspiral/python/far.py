@@ -2076,7 +2076,7 @@ class FAPFAR(object):
 		# we also need the zero lag counts to build the extinction model
 		zlagcounts_ba = ranking_stats.zero_lag_likelihood_rates[None]
 
-		# Disregard events above the 5% loudest to help with clustering effects
+		# Disregard events above the 2% loudest to help with clustering effects
 		likethresh = numpy.argmax(zlagcounts_ba.array[::-1].cumsum()[::-1] <= 0.05 * zlagcounts_ba.array[::-1].sum())
 		bgcounts_ba.array[:likethresh] = 0.
 		bgpdf_ba.array[:likethresh] = 0.
