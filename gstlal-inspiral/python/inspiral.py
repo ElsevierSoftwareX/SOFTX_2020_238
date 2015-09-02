@@ -949,13 +949,17 @@ class Data(object):
 			# FIXME: make this optional from command line?
 			if True:
 				for attempt in range(1, retries + 1):
-					resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
-					resp_json = resp.json()
-					if resp.status == httplib.CREATED:
-						if self.verbose:
-							print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
-						gracedb_ids.append(resp_json["graceid"])
-						break
+					try:
+						resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+					except gracedb.rest.HTTPError as resp:
+						pass
+					else:
+						resp_json = resp.json()
+						if resp.status == httplib.CREATED:
+							if self.verbose:
+								print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+							gracedb_ids.append(resp_json["graceid"])
+							break
 					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d: %d: %s"  % (filename, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
 					time.sleep(random.lognormal(math.log(retry_delay), .5))
 				else:
@@ -975,10 +979,13 @@ class Data(object):
 			message, filename, tag, contents = common_messages.pop()
 			for gracedb_id in gracedb_ids:
 				for attempt in range(1, retries + 1):
-					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
-					resp_json = resp.json()
-					if resp.status == httplib.CREATED:
-						break
+					try:
+						resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+					except gracedb.rest.HTTPError as resp:
+						pass
+					else:
+						if resp.status == httplib.CREATED:
+							break
 					print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d: %d: %s"  % (filename, gracedb_id, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
 					time.sleep(random.lognormal(math.log(retry_delay), .5))
 				else:
