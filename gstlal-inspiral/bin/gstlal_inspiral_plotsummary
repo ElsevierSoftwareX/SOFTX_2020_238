@@ -1167,6 +1167,8 @@ FROM
 	JOIN coinc_event ON (
 		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
 	)
+WHERE
+	coinc_event.likelihood >= 0.
 		"""):
 			if is_background:
 				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
@@ -1202,11 +1204,7 @@ FROM
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
 				expected_count_x = livetime / expected_count_y
-				# NOTE we only model the background in the top
-				# 5%. You start to see clustering effects even
-				# at around the top 1% because of this.  So
-				# restrict the plot to the loudest 0.5%
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime), max_events = 0.005 * len(zerolag_stats))
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1240,11 +1238,7 @@ FROM
 				expected_count_x = numpy.array(expected_count_x)[order]
 				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
 
-				# NOTE we only model the background in the top
-				# 5%. You start to see clustering effects even
-				# at around the top 1% because of this.  So
-				# restrict the plot to the loudest 0.5%
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 0.005 * len(zerolag_stats))
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
