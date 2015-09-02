@@ -24,6 +24,7 @@ Streaming with gstreamer
 Immediate development tasks in no particular order
 ==================================================
 
+* revert reverts 2878f98fea97ad1148f1f847b7a2d3c827227dfb 10e1a0c7881eba52387706474ca659c46ee2efc1 8b2089258581050bf9e7c5b0b5b456b2da345bde 026505ac1dfe0ce6bd67347da47e69efa1c010ce and test and make them work.
 * streamthinca/thinca.  ligolw_thinca requires sngl_inspiral objects with a .get_effective_snr() method.  we are now the only users of ligolw_thinca, and we don't use effective snr, so strip all that stuff out of ligolw_thinca, then move the remaining basic access methods to the C code in pylal so that ligolw_thinca can work with the bare pylal type, *then* remove the sngl_inspiral row object duplication loop from streamthinca so that we only ever work with the original triggers from the pipeline and never (possibly incomplete) copies of them.  this will fix the "mchirp=0" bug in the gracedb uploads.
 * Audit all import statements:  there's a lot of useless imports, especially in gstlal-inspiral/bin/
 * Upload segment lists with events; this might mean keeping track of "old" segments in the online jobs (for the previous 4 hours to cover boundary effects)
