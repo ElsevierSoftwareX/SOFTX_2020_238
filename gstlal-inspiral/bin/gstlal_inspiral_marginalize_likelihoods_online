@@ -59,7 +59,7 @@ OUTPUT="${1}"
 shift
 
 #
-# path on the web server to the trigger parameter file
+# paths to data objects on each job's web management interface
 #
 
 LIKELIHOOD_PATH="likelihood.xml"
@@ -75,26 +75,50 @@ SLEEP="600"
 # loop forever
 #
 
+BACKGROUND_COUNTS=$(mktemp --suffix .xml.gz)
 while true ; do
 	echo "... sleeping for ${SLEEP} seconds ..."
 	sleep ${SLEEP}
+
 	# collect the current coinc parameter PDF data from each job, and
-	# run some iterations of the ranking statistic sampler
+	# run some iterations of the ranking statistic sampler to generate
+	# noise and signal model ranking statistic histograms for each job.
+	# NOTE:  the zero-lag ranking statistic histograms in the files
+	# generated here are all 0.
 	RANKING_PDF_FILES=
 	for REG in "$@" ; do
-		SERVER=$(cat ${REG})
-		RANKING_PDF_FILE=$(mktemp)
+		SERVER=$(cat ${REG}) || break
+		RANKING_PDF_FILE=$(mktemp --suffix .xml.gz) || break
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
-		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} --samples-file ${SERVER}${ZEROLAG_COUNTS_PATH} ${SERVER}${LIKELIHOOD_PATH} || break
+		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} ${SERVER}${LIKELIHOOD_PATH} || break
 	done || break
-	# fold the new ranking statistic samples into the total
-	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${OUTPUT} ${RANKING_PDF_FILES} || break
+
+	# sum the noise and signal model ranking statistic histograms
+	# across jobs, and include the sum from the previous iteration to
+	# build up statistics over time.
+	gstlal_inspiral_marginalize_likelihood --verbose --output ${BACKGROUND_COUNTS} ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
 	rm -vf ${RANKING_PDF_FILES}
+
+	# collect and sum the current observed zero-lag ranking statistic
+	# histograms from all jobs and combine with the noise and signal
+	# model ranking statistic histograms.  instead of overwriting the
+	# target file, write to a separate file then use mv to replace the
+	# target file atomically.  NOTE:  the noise and signal model
+	# ranking statistic histograms in the zero-lag counts files
+	# downloaded from the jobs must be all 0!!!
+	ZEROLAG_COUNTS_URLS=
+	for REG in "$@" ; do
+		SERVER=$(cat ${REG}) || break
+		ZEROLAG_COUNTS_URLS="${ZEROLAG_COUNTS_URLS} ${SERVER}${ZEROLAG_COUNTS_PATH}"
+	done || break
+	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${BACKGROUND_COUNTS} ${ZEROLAG_COUNTS_URLS} || break
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
+	rm -vf ${ZEROLAG_COUNTS}
 done
+rm -vf ${BACKGROUND_COUNTS}
 
 #
-# this program ends its an error, always, so condor will restart it
+# if this program ends its an error, always, so condor will restart it
 #
 
 exit 1
