@@ -256,27 +256,14 @@ cachefile.close()
 
 
 #
-# Delete ranking data for the zerolag likelihood files
-#
-
-
-for instruments in ranking_data.background_likelihood_rates:
-	ranking_data.background_likelihood_rates[instruments].array[:] = 0.
-	ranking_data.background_likelihood_pdfs[instruments].array[:] = 0.
-	ranking_data.zero_lag_likelihood_rates[instruments].array[:] = 0.
-	ranking_data.zero_lag_likelihood_pdfs[instruments].array[:] = 0.
-
-
-#
-# record background results in output file
+# create all-zero ranking statistic histograms to seed zero-lag counts
 #
 
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
-
-far.gen_likelihood_control_doc(xmldoc, process, diststats, ranking_data, segs, comment = u"zerolag priors (no real data)")
+far.gen_likelihood_control_doc(xmldoc, process, None, RankingData(None, options.instruments, process_id = process.process_id), segs, comment = u"zerolag priors (no real data)")
 cachefile = open(options.write_zerolag_likelihood_cache, "w")
 for n in range(options.num_banks):
 	this_name = "%04d_zerolag_%s" % (n, options.write_likelihood_basename)
