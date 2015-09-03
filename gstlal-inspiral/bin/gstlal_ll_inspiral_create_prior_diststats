@@ -85,6 +85,8 @@ def parse_command_line():
 			horizon_history.setdefault(ifo, far.NearestLeafTree())[LIGOTimeGPS(float(stop))] = float(horizon)
 		return seglistdict, horizon_history
 
+	if options.segment_and_horizon is None:
+		raise ValueError("--segment-and-horizon required")
 	seglistdict, horizon_history = parse_segment_and_horizon(options)
 
 	options.instruments = frozenset(seglistdict)
