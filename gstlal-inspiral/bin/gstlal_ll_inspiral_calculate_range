@@ -57,11 +57,13 @@ done
 # 
 
 WORKINGDIR=$(dirname ${MARGINALIZED_LIKELIHOOD_FILE})
-TMP_LIGOLW_XML=${WORKINGDIR}/tmp_sensitivity_plot_data.xml.gz
-LIGOLW_XML=${WORKINGDIR}/sensitivity_plot_data.xml.gz
+TMP_LIGOLW_XML_GZ=${WORKINGDIR}/tmp_sensitivity_plot_data.xml.gz
+LIGOLW_XML_GZ=${WORKINGDIR}/sensitivity_plot_data.xml.gz
+LIGOLW_XML=${WORKINGDIR}/sensitivity_plot_data.xml
 LIGOLW_SQLITE=${WORKINGDIR}/sensitivity_plot_data.sqlite
-TOTAL_SEG_XML=${WORKINGDIR}/total_cumulative_segments.xml.gz
-TMP_TOTAL_SEG_XML=${WORKINGDIR}/tmp_total_cumulative_segments.xml.gz
+TMP_TOTAL_SEG_XML_GZ=${WORKINGDIR}/tmp_total_cumulative_segments.xml.gz
+TOTAL_SEG_XML_GZ=${WORKINGDIR}/total_cumulative_segments.xml.gz
+TOTAL_SEG_XML=${WORKINGDIR}/total_cumulative_segments.xml
 STATEVECTOR_SEG_XML=${WORKINGDIR}/tmp_statevector_segments.xml.gz
 WHITEHT_SEG_XML=${WORKINGDIR}/tmp_whiteht_segments.xml.gz
 TRIGGER_SEG_XML=${WORKINGDIR}/tmp_trigger_segments.xml.gz
@@ -84,8 +86,8 @@ done
 # FIXME find a less hacky way to get the start time. This method assumes that
 # the trigger segments for both H1 and L1 start at essentially the same time.
 # If this ever changes this method may stop working
-if [ -s ${TOTAL_SEG_XML} ] && [ $(gzip --test ${TOTAL_SEG_XML}; echo $?) -eq 0 ]; then
-	START_FILE=${TOTAL_SEG_XML}
+if [ -s ${TOTAL_SEG_XML_GZ} ] && [ $(gzip --test ${TOTAL_SEG_XML_GZ}; echo $?) -eq 0 ]; then
+	START_FILE=${TOTAL_SEG_XML_GZ}
 else
 	START_FILE=${CUMULATIVE_SEG_FILE}
 fi
@@ -102,38 +104,40 @@ while true; do
 	QUERYSTOP=$(lalapps_tconvert)
 
 	#
-	# Write TOTAL_SEG_XML, which will keep track of segments through entire analysis
+	# Write TOTAL_SEG_XML_GZ, which will keep track of segments through entire analysis
 	# 
 
-	# First check if TMP_TOTAL_SEG_XML exists and is uncorrupted
-	if [ -s ${TMP_TOTAL_SEG_XML} ] && [ $(gzip --test ${TMP_TOTAL_SEG_XML}; echo $?) -eq 0 ]; then
-		mv ${TMP_TOTAL_SEG_XML} ${TOTAL_SEG_XML}
+	# First check if TMP_TOTAL_SEG_XML_GZ exists and is uncorrupted
+	if [ -s ${TMP_TOTAL_SEG_XML_GZ} ] && [ $(gzip --test ${TMP_TOTAL_SEG_XML_GZ}; echo $?) -eq 0 ]; then
+		mv ${TMP_TOTAL_SEG_XML_GZ} ${TOTAL_SEG_XML_GZ}
 	fi
 
-	if ! [ -s ${TOTAL_SEG_XML} ] || ! [ $(gzip --test ${TOTAL_SEG_XML}; echo $?) -eq 0 ]; then
-		# If TOTAL_SEG_XML exists but is corrupted, then something went
+	if ! [ -s ${TOTAL_SEG_XML_GZ} ] || ! [ $(gzip --test ${TOTAL_SEG_XML_GZ}; echo $?) -eq 0 ]; then
+		# If TOTAL_SEG_XML_GZ exists but is corrupted, then something went
 		# wrong and we will need to copy the cumulative segments file
-		# again. If TOTAL_SEG_XML doesn't exist, then obviously we need
+		# again. If TOTAL_SEG_XML_GZ doesn't exist, then obviously we need
 		# to copy the cumulative segments file
-		echo creating ${TOTAL_SEG_XML}, either because it does not already exist or it is a corrupt file
+		echo creating ${TOTAL_SEG_XML_GZ}, either because it does not already exist or it is a corrupt file
 		cp ${CUMULATIVE_SEG_FILE} ${TOTAL_SEG_XML}
-		while ! [ $(gzip --test ${TOTAL_SEG_XML}; echo $?) -eq 0 ]; do
+		gzip ${TOTAL_SEG_XML}
+		while ! [ $(gzip --test ${TOTAL_SEG_XML_GZ}; echo $?) -eq 0 ]; do
 			# The reason for this while loop is that the cumulative
 			# segments file is updated periodically by the
 			# analysis, so this prevents issues where this program
 			# tries to copy the cumulative segments file when it is
 			# in the middle of being updated, resulting in a
-			# corrupted TOTAL_SEG_XML
+			# corrupted TOTAL_SEG_XML_GZ
 			sleep 15
 			cp ${CUMULATIVE_SEG_FILE} ${TOTAL_SEG_XML}
+			gzip ${TOTAL_SEG_XML}
 		done
-		cp ${TOTAL_SEG_XML} ${TMP_TOTAL_SEG_XML}
+		cp ${TOTAL_SEG_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ}
 	else
-		cp ${TOTAL_SEG_XML} ${TMP_TOTAL_SEG_XML}
+		cp ${TOTAL_SEG_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ}
 
 		# Make a copy of the cumulative segments file to ensure that it
 		# doesn't get updated in the middle of being coalesced with
-		# TMP_TOTAL_SEG_XML
+		# TMP_TOTAL_SEG_XML_GZ
 		# FIXME The copy process can be skipped and the coalescing
 		# process can be improved by modifying
 		# gstlal_segments_operations gstlal-ugly to take multiple
@@ -145,40 +149,45 @@ while true; do
 			cp ${CUMULATIVE_SEG_FILE} ${TMP_CUMULATIVE_SEG_XML}
 			gzip ${TMP_CUMULATIVE_SEG_XML}
 		done
-		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML} --output-file ${STATEVECTOR_SEG_XML} --segment-name1 statevectorsegments --segment-name2 statevectorsegments --output-segment-name statevectorsegments --verbose
-		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML} --output-file ${WHITEHT_SEG_XML} --segment-name1 whitehtsegments --segment-name2 whitehtsegments --output-segment-name whitehtsegments --verbose
-		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML} --output-file ${TRIGGER_SEG_XML} --segment-name1 triggersegments --segment-name2 triggersegments --output-segment-name triggersegments --verbose
+		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML_GZ} --output-file ${STATEVECTOR_SEG_XML} --segment-name1 statevectorsegments --segment-name2 statevectorsegments --output-segment-name statevectorsegments --verbose
+		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML_GZ} --output-file ${WHITEHT_SEG_XML} --segment-name1 whitehtsegments --segment-name2 whitehtsegments --output-segment-name whitehtsegments --verbose
+		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML_GZ} --output-file ${TRIGGER_SEG_XML} --segment-name1 triggersegments --segment-name2 triggersegments --output-segment-name triggersegments --verbose
 		SEG_FILES=""
 		for SEG_FILE in ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML}; do
 			if [ $(ligolw_print --table segment ${SEG_FILE} | wc -l) -gt 0 ]; then
 				SEG_FILES="${SEG_FILE} ${SEG_FILES}"
 			fi
 		done
-		ligolw_add ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML}
+		ligolw_add ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML_GZ}
 		rm ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML} ${TMP_CUMULATIVE_SEG_XML}.gz
 	fi
 
 	#
 	# Set the simdb query start time and create the events+injections file
-	# if first time through loop or if LIGOLW_XML file has been corrupted
+	# if first time through loop or if LIGOLW_XML_GZ file has been corrupted
 	# 
 
-	# First check if TMP_LIGOLW_XML exists and is uncorrupted
-	if [ -s ${TMP_LIGOLW_XML} ] && [ $(gzip --test ${TMP_LIGOLW_XML}; echo $?) -eq 0 ]; then
-		mv ${TMP_LIGOLW_XML} ${LIGOLW_XML}
+	# First check if TMP_LIGOLW_XML_GZ exists and is uncorrupted
+	if [ -s ${TMP_LIGOLW_XML_GZ} ] && [ $(gzip --test ${TMP_LIGOLW_XML_GZ}; echo $?) -eq 0 ]; then
+		mv ${TMP_LIGOLW_XML_GZ} ${LIGOLW_XML_GZ}
 	fi
 
-	if ! [ -s ${LIGOLW_XML} ] || ! [ $(gzip --test ${LIGOLW_XML}; echo $?) -eq 0 ]; then
-		# If LIGOLW_XML exists but is corrupted, then something went
+	if ! [ -s ${LIGOLW_XML_GZ} ] || ! [ $(gzip --test ${LIGOLW_XML_GZ}; echo $?) -eq 0 ]; then
+		# If LIGOLW_XML_GZ exists but is corrupted, then something went
 		# wrong and it will need to be remade
-		echo creating ${LIGOLW_XML}, either because it does not already exist or it is a corrupt file
+		echo creating ${LIGOLW_XML_GZ}, either because it does not already exist or it is a corrupt file
 		QUERYSTART=${START}
-		cp ${INJ_FILE} ${LIGOLW_XML}
-		cp ${LIGOLW_XML} ${TMP_LIGOLW_XML}
+		if [[ ${INJ_FILE} = *".gz" ]]; then
+			cp ${INJ_FILE} ${LIGOLW_XML_GZ}
+		else
+			cp ${INJ_FILE} ${LIGOLW_XML}
+			gzip ${LIGOLW_XML}
+		fi
+		cp ${LIGOLW_XML_GZ} ${TMP_LIGOLW_XML_GZ}
 	else
-		cp ${LIGOLW_XML} ${TMP_LIGOLW_XML}
+		cp ${LIGOLW_XML_GZ} ${TMP_LIGOLW_XML_GZ}
 
-		if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML} | wc -l) -eq 0 ]; then
+		if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -eq 0 ]; then
 			QUERYSTART=${START}
 		else
 			# QUERYSTART is chosen so that the simdb query will
@@ -186,7 +195,7 @@ while true; do
 			# downloaded. This way we avoid any potential issues
 			# with the asynchronous nature of the simdb queries and
 			# the segment updates
-			QUERYSTART=$(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML} | sort -g | tail -n 1)
+			QUERYSTART=$(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | sort -g | tail -n 1)
 		fi
 	fi
 
@@ -200,7 +209,7 @@ while true; do
 	gracedb --ligolw --service-url=${SIMDB_SERVICE_URL} search ${QUERYSTART}..${QUERYSTOP} ${PIPELINE} ${GROUP} ${SEARCH} > ${TMP_QUERY_XML}
 
 	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_QUERY_XML} | wc -l) -gt 0 ]; then
-		ligolw_add ${TMP_LIGOLW_XML} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML}
+		ligolw_add ${TMP_LIGOLW_XML_GZ} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML_GZ}
 	fi
 
 	rm ${TMP_QUERY_XML}
@@ -210,19 +219,19 @@ while true; do
 	# the events+injections file and then generate the range plot
 	#
 
-	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML} | wc -l) -gt 0 ]; then
+	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
 
 		# 
 		# Delete old segments from events+injections file, then add new
 		# segments, again using atomic operations
 		# 
-		if [ $(ligolw_print --table segment ${TMP_LIGOLW_XML} | wc -l) -gt 0 ]; then 
-			lalapps_run_sqlite --verbose --sql='DELETE FROM segment; DELETE FROM segment_definer' ${TMP_LIGOLW_XML}
+		if [ $(ligolw_print --table segment ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
+			lalapps_run_sqlite --verbose --sql='DELETE FROM segment; DELETE FROM segment_definer' ${TMP_LIGOLW_XML_GZ}
 		fi
-		ligolw_add --verbose ${TMP_LIGOLW_XML} ${TMP_TOTAL_SEG_XML} --output ${TMP_LIGOLW_XML}
+		ligolw_add --verbose ${TMP_LIGOLW_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ} --output ${TMP_LIGOLW_XML_GZ}
 
 		# FIXME Find a better way to get the location of simplify_and_cluster.sql
-		lalapps_run_sqlite --verbose --sql-file=$(dirname $(dirname $(which gstlal_inspiral)))/share/gstlal/simplify_and_cluster.sql ${TMP_LIGOLW_XML}
+		lalapps_run_sqlite --verbose --sql-file=$(dirname $(dirname $(which gstlal_inspiral)))/share/gstlal/simplify_and_cluster.sql ${TMP_LIGOLW_XML_GZ}
 
 		# Get rid of duplicate events, of which there should only be one or two
 		lalapps_run_sqlite --verbose --sql='CREATE TEMPORARY TABLE _idmap_ AS 
@@ -240,16 +249,19 @@ while true; do
 		DELETE FROM coinc_inspiral WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id); 
 		DELETE FROM coinc_event WHERE coinc_event_id IN (SELECT old_id FROM _idmap_ WHERE old_id != new_id); 
 		DROP INDEX tmpindex; 
-		DROP TABLE _idmap_;' ${TMP_LIGOLW_XML}
+		DROP TABLE _idmap_;' ${TMP_LIGOLW_XML_GZ}
 
-		ligolw_inspinjfind --verbose --revert ${TMP_LIGOLW_XML}
-		ligolw_inspinjfind --verbose ${TMP_LIGOLW_XML}
+		ligolw_inspinjfind --verbose --revert ${TMP_LIGOLW_XML_GZ}
+		ligolw_inspinjfind --verbose ${TMP_LIGOLW_XML_GZ}
 
-		ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML}
+		# Try to generate the sqlite database, but if something goes
+		# wrong then delete the database and try again. This should fix
+		# issues with the database locking
+		ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML_GZ} || { rm ${LIGOLW_SQLITE} && ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} ${TMP_LIGOLW_XML_GZ}; }
 
 		gstlal_inspiral_plot_sensitivity --data-segments-name=statevectorsegments --bin-by-chirp-mass --verbose ${LIGOLW_SQLITE}
 		echo plotting...
-		gstlal_ll_inspiral_plot_sensitivity --base64 --cumulative-segment-file ${TOTAL_SEG_XML} --marginalized-likelihood-file ${MARGINALIZED_LIKELIHOOD_FILE} --min-inj-distance ${MIN_INJ_DIST} --max-inj-distance ${MAX_INJ_DIST} --simdb-query-end-time ${QUERYSTOP} --verbose ${LIGOLW_SQLITE}
+		gstlal_ll_inspiral_plot_sensitivity --base64 --cumulative-segment-file ${TMP_TOTAL_SEG_XML_GZ} --marginalized-likelihood-file ${MARGINALIZED_LIKELIHOOD_FILE} --min-inj-distance ${MIN_INJ_DIST} --max-inj-distance ${MAX_INJ_DIST} --simdb-query-end-time ${QUERYSTOP} --verbose ${LIGOLW_SQLITE}
 	fi
 
 	echo sleeping...
