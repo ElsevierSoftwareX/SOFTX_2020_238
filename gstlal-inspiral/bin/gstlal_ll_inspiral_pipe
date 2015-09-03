@@ -404,7 +404,8 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 				}
 			)
 
-urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags + inj_jobTags)}, output_files = {})
+urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(jobTags)}, output_files = {})
+urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(inj_jobTags)}, output_files = {})
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 if options.injection_file:
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]}, output_files = {})
