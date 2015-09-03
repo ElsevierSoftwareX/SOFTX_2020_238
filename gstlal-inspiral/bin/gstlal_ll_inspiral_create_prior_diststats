@@ -265,7 +265,7 @@ cachefile.close()
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
-far.gen_likelihood_control_doc(xmldoc, process, None, RankingData(None, options.instruments, process_id = process.process_id), segs, comment = u"zerolag priors (no real data)")
+far.gen_likelihood_control_doc(xmldoc, process, None, far.RankingData(None, options.instruments, process_id = process.process_id), segs, comment = u"zerolag priors (no real data)")
 cachefile = open(options.write_zerolag_likelihood_cache, "w")
 for n in range(options.num_banks):
 	this_name = "%04d_zerolag_%s" % (n, options.write_likelihood_basename)
