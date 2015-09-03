@@ -87,16 +87,16 @@ def parse_command_line():
 
 	seglistdict, horizon_history = parse_segment_and_horizon(options)
 
-	instruments = frozenset(seglistdict)
-	if len(instruments) < 2:
+	options.instruments = frozenset(seglistdict)
+	if len(options.instruments) < 2:
 		raise ValueError("must specify at least two distinct instrument")
 
         bankcachedict = None #inspiral_pipe.parse_cache_str(options.bank_cache)
 
-	return options, process_params, instruments, seglistdict, horizon_history, bankcachedict
+	return options, process_params, seglistdict, horizon_history, bankcachedict
 
 
-options, process_params, instruments, segs, horizon_history, bankcachedict = parse_command_line()
+options, process_params, segs, horizon_history, bankcachedict = parse_command_line()
 
 if options.verbose:
 	print >> sys.stderr, "Livetime: ", abs(segs)
@@ -152,8 +152,8 @@ diststats.horizon_history.update(horizon_history)
 # FIXME Derive these from the segment lists!!! Use Kipp's code??
 #
 
-for i in range(2, len(instruments) + 1):
-	for ifos in [frozenset(x) for x in iterutils.choices(tuple(instruments), i)]:
+for i in range(2, len(options.instruments) + 1):
+	for ifos in [frozenset(x) for x in iterutils.choices(tuple(options.instruments), i)]:
 		diststats.zero_lag_rates["instruments"][diststats.instrument_categories.category(ifos),] = min(n_background[ifo] for ifo in ifos) / 50.**(i-1)
 
 diststats.add_instrument_combination_counts(segs = segs, verbose = options.verbose)
@@ -195,13 +195,13 @@ diststats.finish()
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = instruments, paramdict = process_params)
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
 
 #
 # Instantiate a new RankingData class from our distribution stats
 #
 
-ranking_data = far.RankingData(diststats, instruments = instruments, process_id = process.process_id, nsamples = 100000, verbose = options.verbose)
+ranking_data = far.RankingData(diststats, instruments = options.instruments, process_id = process.process_id, nsamples = 100000, verbose = options.verbose)
 
 #
 # Simulate a measured coincident trigger likelihood histogram by just using the background one with a lower normalized count
@@ -274,7 +274,7 @@ for instruments in ranking_data.background_likelihood_rates:
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = instruments, paramdict = process_params)
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
 
 far.gen_likelihood_control_doc(xmldoc, process, diststats, ranking_data, segs, comment = u"zerolag priors (no real data)")
 cachefile = open(options.write_zerolag_likelihood_cache, "w")
