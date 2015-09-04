@@ -193,7 +193,7 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	except AttributeError:
 		return fig
 
-def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr):
+def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr, ifo_snr = {}):
 	if len(instruments) > 2:
 		# FIXME:  figure out how to plot 3D PDFs
 		return None
@@ -230,6 +230,8 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = matplotlib.colors.LogNorm(), cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z.T, norm = matplotlib.colors.LogNorm(), colors = "k", linewidths = .5)
+	if ifo_snr:
+		axes.plot(ifo_snr[instruments[0]], ifo_snr[instruments[1]], 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
 	axes.loglog()
 	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
 	#axes.set_xlim((xlo, xhi))
