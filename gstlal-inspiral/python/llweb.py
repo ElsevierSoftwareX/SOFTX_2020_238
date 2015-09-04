@@ -48,6 +48,7 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import lsctables
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
+from lal import GPSTimeNow
 from pylal import series as lalseries
 from gstlal import far
 cgitb.enable()
@@ -498,6 +499,21 @@ class GstlalWebSummary(object):
 			for ifo in self.ifos:
 				fig = plotfar.plot_snr_chi_pdf(likelihood, ifo, binnedarray_string, 400)
 				out += self.to_png(fig = fig)
+		return out
+
+	def jointsnrplot(self):
+		out = ""
+		for id in self.registry:
+			likelihood, nu, nu = self.found["likelihood"][id]
+			# FIXME dont hardcode IFOs
+			instruments = (u"H1",u"L1")
+			timenow = GPSTimeNow()
+			horizon_distances = {}
+			for ifo in instruments:
+				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]
+			instruments, horizon_distances = likelihood.snr_joint_pdf_keyfunc(instruments, horizon_distances)
+			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 400)
+			out += self.to_png(fig = fig)
 		return out
 
 	def rateplot(self):

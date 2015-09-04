@@ -126,6 +126,7 @@ for (label, plot) in(
 	("SNR/chi Noise", web.snrchiplot("background_pdf")), 
 	("SNR/chi Signal", web.snrchiplot("injection_pdf")), 
 	("SNR/chi LR", web.snrchiplot("LR")),
+	("Joint SNR", web.jointsnrplot()),
 	("Rates", web.rateplot()),
 	("Latency history", web.plothistory("latency_history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")),
 	("SNR history", web.plothistory('snr_history', ylabel = "SNR", xlabel = "Time since last trigger (s)")),
