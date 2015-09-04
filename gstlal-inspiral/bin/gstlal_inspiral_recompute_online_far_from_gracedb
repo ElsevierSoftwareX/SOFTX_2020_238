@@ -1,20 +1,144 @@
-#!/bin/bash
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 Cody Messick, Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 ## @file
-# This program might be deprecated; do not use for now
-GID=$1
-mkdir ${GID}
-echo "Recomputing far with data from GPS " $(lalapps_tconvert)
-gracedb --ligolw search ${GID} > ${GID}/${GID}.xml
-LIKE=$(ligolw_print -t process_params -c value ${GID}/${GID}.xml | grep -e '0.*likelihood.xml.gz')
-ligolw_sqlite -d ${GID}/${GID}.sqlite -r ${GID}/${GID}.xml
-echo 'FAR before:'
-sqlite3 ${GID}/${GID}.sqlite 'SELECT combined_far FROM coinc_inspiral;'
-echo 'likelihood before:'
-sqlite3 ${GID}/${GID}.sqlite 'SELECT likelihood FROM coinc_event;'
-gstlal_inspiral_calc_likelihood --likelihood-file ${LIKE} ${GID}/${GID}.sqlite
-echo 'likelihood after:'
-sqlite3 ${GID}/${GID}.sqlite 'SELECT likelihood FROM coinc_event;'
-MARG=$(echo $LIKE | sed 's|\(.*\)/.*|\1|')/marginalized_likelihood.xml.gz
-gstlal_inspiral_recompute_online_far --background-bins-file $MARG --verbose --non-injection-db ${GID}/${GID}.sqlite
-echo 'FAR after:'
-sqlite3 ${GID}/${GID}.sqlite 'SELECT combined_far FROM coinc_inspiral;'
+# A program to recalculate likelihood values and FARs of gracedb events
+
+from optparse import OptionParser
+
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import lsctables
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.ligolw import LIGOLWContentHandler
+from glue.ligolw.utils import process as ligolw_process
+from glue import segments
+from gstlal import far
+from gstlal import lvalert_helper
+from ligo.gracedb import rest as gracedb
+from pylal import ligolw_burca2
+from pylal import ligolw_thinca
+from pylal import snglcoinc
+
+#
+# =============================================================================
+#
+#                                Content Handler
+#
+# =============================================================================
+#
+
+class ligolwcontenthandler(LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--with-zerolag", action = "store_true", help = "Add zerolag events to background events before re-assigning likelihood ratios (default: False)")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (default: False)")
+
+	options, gid_list = parser.parse_args()
+
+	return options, gid_list
+
+#
+# =============================================================================
+#
+#                              Function Definitions
+#
+# =============================================================================
+#
+
+def get_likelihood_files(gid_list, gracedb):
+	likelihood_files_dict = {}
+	marg_files_dict = {}
+	for gid in gid_list:
+		coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
+		likelihood_files_dict.setdefault(ligolw_process.get_process_params(coinc_xmldoc, "gstlal_inspiral", "--likelihood-file")[0], []).append([gid, coinc_xmldoc])
+		marg_files_dict.setdefault(ligolw_process.get_process_params(coinc_xmldoc, "gstlal_inspiral", "--marginalized-likelihood-file")[0], []).append(gid)
+
+	if len(marg_files_dict.keys()) > 1:
+		raise ValueError("the gracedb events specified have different marginalized likelihood files, all specified events need to come from the same analysis and thus share the same marginalized likelihood file")
+	
+	ranking_data, seglistsdict = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_files_dict.keys()[0], contenthandler = ligolwcontenthandler))[1:]
+	ranking_data.finish()
+	fapfar = far.FAPFAR(ranking_data, far.get_live_time(seglistsdict))
+	return likelihood_files_dict, fapfar
+
+def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, options):
+	# 
+	# Get necesary information from likelihood file, add zero lag rates to
+	# background rates if necessary and then re-make discrete and
+	# interpolated PDFs
+	#
+	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler=ligolwcontenthandler))[0]
+	if options.with_zerolag:
+		for key, ba in coinc_params_distributions.background_rates.items():
+			ba.array += coinc_params_distributions.zero_lag_rates[key].array
+	coinc_params_distributions.finish()
+	likelihood_params_func = coinc_params_distributions.coinc_params
+	ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+
+	#
+	# Go through each coinc xmldoc and reassign the likelihood ratio value
+	#
+	for [gid, coinc_xmldoc] in list_of_gid_xmldoc_pairs:
+		print "likelihood ratio of %s before: %.6f\nFAR of %s before: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, lsctables.CoincInspiralTable.get_table(coinc_xmldoc)[0].combined_far)
+		coinc_def_id = lsctables.CoincDefTable.get_table(coinc_xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+		coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_def_id)
+		for row in lsctables.CoincMapTable.get_table(coinc_xmldoc):
+			coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
+
+		ligolw_burca2.assign_likelihood_ratios_xml(coinc_xmldoc, 
+			coinc_def_id = coinc_def_id, 
+			offset_vectors = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict(), 
+			vetoseglists = segments.segmentlistdict(), 
+			events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id], 
+			veto_func = lambda event, vetoseglists: True, # Obviously you would never veto the single gracedb event 
+			ln_likelihood_ratio_func = ln_likelihood_ratio_func, 
+			likelihood_params_func = likelihood_params_func, 
+			verbose = options.verbose)
+
+		print "likelihood ratio of %s after: %.6f\nFAR of %s after: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, fapfar.far_from_rank(lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood))
+
+#
+# =============================================================================
+#
+#                                   Main
+#
+# =============================================================================
+#
+
+options, gid_list = parse_command_line()
+gracedb = gracedb.GraceDb(options.gracedb_service_url)
+likelihood_files_dict, fapfar = get_likelihood_files(gid_list, gracedb)
+for likelihood_file, list_of_gid_xmldoc_pairs in likelihood_files_dict.items():
+	reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, options)
