@@ -34,6 +34,7 @@ import time
 from glue.ligolw import ligolw, lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
+from lal import GPSTimeNow
 import urllib
 import urlparse
 import httplib
@@ -139,7 +140,23 @@ likely = copy.deepcopy(inj)
 for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
 	plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type)
 
-fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5., max(25., coinc_table.likelihood + 5. - coinc_table.likelihood % 5.)), event_likelihood = coinc_table.likelihood)
+# FIXME dont hardcode ifos
+instruments = (u"H1",u"L1")
+horizon_distances = {}
+ifo_snr = {}
+timenow = lal.GPSTimeNow()
+for ifo in instruments:
+	horizon_distances[ifo] = coinc_param_distributions.horizon_history[ifo][timenow]
+	ifo_snr[ifo] = snr_chisq_dict[ifo][0]
+instruments, horizon_distances = coinc_param_distributions.snr_joint_pdf_keyfunc(instruments, horizon_distances)
+fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, 200, ifo_snr = ifo_snr)
+fname = 'gracedb/%s/%s_%s_%s_jointsnr_pdf.png' % (gid, gid, ifo_snr.keys()[0], ifo_snr.keys()[1])
+# FIXME Add fig.tight_layout() once the version of matplotlib at UWM
+# has been updated
+fig.savefig(fname)
+gracedb.writeLog(gid, "%s%s Joint SNR PDF" % (ifo_snr.keys()[0], ifo_snr.keys()[1]), filename = fname, filecontents = open(fname).read(), tagname = "background")
+
+fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,100.), event_likelihood = coinc_table.likelihood)
 fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
 try:
 	fig.tight_layout()
