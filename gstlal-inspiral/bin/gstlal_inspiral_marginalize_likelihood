@@ -71,6 +71,8 @@ def parse_command_line():
 	parser = OptionParser(
 	)
 	parser.add_option("--ignore-missing", action = "store_true", help = "Ignore and skip missing input documents.")
+	parser.add_option("--require-coinc-param-data", action = "store_true", help = "Require input documents to contain candidate parameter PDF data (default = data is optional).")
+	parser.add_option("--require-ranking-stat-data", action = "store_true", help = "Require input documents to contain ranking statistic PDF data (default = data is optional).")
 	parser.add_option("-o", "--output", metavar = "filename", help = "Set the output file name (default = write to stdout).")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Set the cache file name from which to read likelihood files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
@@ -148,9 +150,9 @@ for n, url in enumerate(urls, start = 1):
 	this_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(in_xmldoc)
 	in_xmldoc.unlink()
 
-	if this_distributions is None:
+	if this_distributions is None and options.require_coinc_param_data:
 		raise ValueError("\"%s\" contains no parameter PDF data" % url)
-	if this_ranking_data is None:
+	if this_ranking_data is None and options.require_ranking_stat_data:
 		raise ValueError("\"%s\" contains no ranking statistic PDF data" % url)
 
 	if distributions is None:
@@ -162,6 +164,9 @@ for n, url in enumerate(urls, start = 1):
 	else:
 		ranking_data += this_ranking_data
 	seglists |= this_seglists
+
+if distributions is None and ranking_data is None:
+	raise ValueError("no data loaded from input documents")
 
 
 #
