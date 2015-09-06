@@ -1,3 +1,9 @@
+gstlal-inspiral (0.6.4-1) unstable; urgency=low
+
+  * initial O1 release.
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Sun, 6 Sep 2015 10:13:41 -0500
+
 gstlal-inspiral (0.6.3-1) unstable; urgency=low
 
   * place-holder version to allow a tar ball to be rolled without creating
