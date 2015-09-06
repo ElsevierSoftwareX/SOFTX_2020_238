@@ -144,7 +144,7 @@ for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
 instruments = (u"H1",u"L1")
 horizon_distances = {}
 ifo_snr = {}
-timenow = lal.GPSTimeNow()
+timenow = GPSTimeNow()
 for ifo in instruments:
 	horizon_distances[ifo] = coinc_param_distributions.horizon_history[ifo][timenow]
 	ifo_snr[ifo] = snr_chisq_dict[ifo][0]
