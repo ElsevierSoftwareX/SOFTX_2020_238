@@ -155,13 +155,13 @@ for n, url in enumerate(urls, start = 1):
 	if this_ranking_data is None and options.require_ranking_stat_data:
 		raise ValueError("\"%s\" contains no ranking statistic PDF data" % url)
 
-	if distributions is None:
+	if distributions is None and this_distributions is not None:
 		distributions = this_distributions
-	else:
+	elif this_distributions is not None:
 		distributions += this_distributions
-	if ranking_data is None:
+	if ranking_data is None and this_ranking_data is not None:
 		ranking_data = this_ranking_data
-	else:
+	elif this_ranking_data is not None:
 		ranking_data += this_ranking_data
 	seglists |= this_seglists
 
