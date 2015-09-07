@@ -160,6 +160,7 @@ def compute_pcalfp_over_derrfp(pipeline, derrfpR, derrfpI, pcalfpR, pcalfpI, cap
 	derrfpRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, derrfpR, caps))
 	derrfpItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, derrfpI, caps))
 	derrfp2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, derrfpRtee, exponent=2.0), pipeparts.mkpow(pipeline, derrfpItee, exponent=2.0)), caps))
+
 	cR1 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpItee), caps)
 	cR2 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpRtee), caps)
 	cR = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cR1, cR2), caps), pipeparts.mkpow(pipeline, derrfp2, exponent=-1.0)), caps)
@@ -167,6 +168,36 @@ def compute_pcalfp_over_derrfp(pipeline, derrfpR, derrfpI, pcalfpR, pcalfpI, cap
 	cI2 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpRtee), caps)
 	cI = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cI1, pipeparts.mkaudioamplify(pipeline, cI2, -1.0)), caps), pipeparts.mkpow(pipeline, derrfp2, exponent=-1.0)), caps)
 	return cR, cI
+
+def compute_gamma(pipeline, excR, excI, ctrlR, ctrlI, olgR, olgI, WR, WI, real_caps):
+
+	ctrlR, ctrlI = filter_at_line(pipeline, ctrlR, ctrlI, WR, WI, real_caps)
+
+	ctrlR = pipeparts.mktee(pipeline, ctrlR)
+	ctrlI = pipeparts.mktee(pipeline, ctrlI)
+
+	exc_over_ctrlR, exc_over_ctrlI = compute_pcalfp_over_derrfp(pipeline, ctrlR, ctrlI, excR, excI, real_caps)
+	exc_over_ctrlR = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlR)
+	exc_over_ctrlR = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlR, real_caps)
+
+	exc_over_ctrlI = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlI)
+	exc_over_ctrlI = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlI, real_caps)
+
+	exc_over_ctrlR_minus_one = pipeparts.mkgeneric(pipeline, exc_over_ctrlR, "lal_add_constant", constant = -1.0)
+	exc_over_ctrlR_minus_one = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlR_minus_one)
+	exc_over_ctrlR_minus_one = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlR_minus_one, real_caps)
+
+	olginvR = olgR / (olgR*olgR + olgI*olgI)
+	olginvI = -olgI /(olgR*olgR + olgI*olgI)
+
+	gammaR, gammaI = filter_at_line(pipeline, exc_over_ctrlR_minus_one, exc_over_ctrlI, olginvR, olginvI, real_caps)
+	gammaR = pipeparts.mkaudioconvert(pipeline, gammaR)
+	gammaR = pipeparts.mkcapsfilter(pipeline, gammaR, real_caps)
+	gammaI = pipeparts.mkaudioconvert(pipeline, gammaI)
+	gammaI = pipeparts.mkcapsfilter(pipeline, gammaI, real_caps)
+
+	return gammaR, gammaI
+	
 
 def compute_kappatst(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR, pcalfp_derrfpI,  ktstfacR, ktstfacI, real_caps, complex_caps):
 

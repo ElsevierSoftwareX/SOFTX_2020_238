@@ -943,6 +943,17 @@ if not options.no_dq_vector:
 	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector, "progress_odc_%s" % instrument)
 	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
+	#
+	# GAP BIT BRANCH
+	#	
+
+	nogap = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), threshold = 0)
+	nogap = pipeparts.mkbitvectorgen(pipeline, nogap, bit_vector = 16384, nongap_is_control = True)
+	nogap = pipeparts.mkcapsfilter(pipeline, nogap, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % odcsr)
+	nogap = pipeparts.mkaudiorate(pipeline, nogap, skip_to_first = True, silent = False)
+	nogap = pipeparts.mkgeneric(pipeline, nogap, "lal_logical_undersampler", required_on = 16384, status_out = 16384)
+	nogap = pipeparts.mkcapsfilter(pipeline, nogap, "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % dqsr)
+
 	# 
 	# SCIENCE-INTENT BIT BRANCH
 	#
@@ -1024,7 +1035,6 @@ if not options.no_dq_vector:
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kaok = pipeparts.mkaudiorate(pipeline, kaok, skip_to_first = True, silent = False)
 		kaok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, kaok, max_size_time = gst.SECOND * 100), threshold = options.kappaa_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, kaIdq, max_size_time = gst.SECOND * 100))
-		kaok = pipeparts.mkbitvectorgen(pipeline, kaok, bit_vector = 512, nongap_is_control = True)
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kaok = pipeparts.mkaudiorate(pipeline, kaok, skip_to_first = True, silent = False)
 
@@ -1043,7 +1053,6 @@ if not options.no_dq_vector:
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kpuok = pipeparts.mkaudiorate(pipeline, kpuok, skip_to_first = True, silent = False)
 		kpuok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, kpuok, max_size_time = gst.SECOND * 100), threshold = options.kappapu_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, kpuIdq, max_size_time = gst.SECOND * 100))
-		kpuok = pipeparts.mkbitvectorgen(pipeline, kpuok, bit_vector = 1024, nongap_is_control = True)
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kpuok = pipeparts.mkaudiorate(pipeline, kpuok, skip_to_first = True, silent = False)
 
@@ -1062,7 +1071,6 @@ if not options.no_dq_vector:
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		ktstok = pipeparts.mkaudiorate(pipeline, ktstok, skip_to_first = True, silent = False)
 		ktstok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, ktstok, max_size_time = gst.SECOND * 100), threshold = options.kappatst_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, ktstIdq, max_size_time = gst.SECOND * 100))
-		ktstok = pipeparts.mkbitvectorgen(pipeline, ktstok, bit_vector = 2048, nongap_is_control = True)
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		ktstok = pipeparts.mkaudiorate(pipeline, ktstok, skip_to_first = True, silent = False)
 
@@ -1120,7 +1128,7 @@ if not options.no_dq_vector:
 	#
 
 	dqcaps = "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % dqsr
-	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbitstee, scienceintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar), dqcaps)
+	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, higherbitstee, scienceintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar), dqcaps)
 	if not options.no_gamma:
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, gammaok), dqcaps)
 	if not options.no_kappaa:
@@ -1201,6 +1209,16 @@ if not options.no_fcc:
 	fccout = pipeparts.mkaudioconvert(pipeline, fccout)
 	fccout = pipeparts.mkcapsfilter(pipeline, fccout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.compute_factors_sr)
 	fccout = calibration_parts.resample(pipeline, fccout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
+
+# If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
+calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
+kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
+
+strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+
+calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
 
 # Gate the strain channel with all of the channels we want in frames
 if not options.no_dq_vector:

@@ -113,7 +113,7 @@ class lal_add_constant(gst.BaseTransform):
 			return self.constant
 	
 	def do_start(self):
-		self.constant = 0.0
+	#	self.constant = 0.0
 		return True
 	
 	def do_transform(self, inbuf, outbuf):
