@@ -10,11 +10,11 @@ FFTW=fftw-3.3.4
 GDS=gds-2.17.2
 GLUE=glue-1.49.1
 GSL=gsl-1.15
-GSTLAL=gstlal-0.10.1
+GSTLAL=gstlal-0.10.2
 # Not on software.ligo.org/lscsoft/source/
 # GSTLALBUSRT=gstlal-busrt-0.0.4.tar.gz
-GSTLALCALIBRATION=gstlal-calibration-0.4.0
-GSTLALINSPIRAL=gstlal-inspiral-0.6.1
+GSTLALCALIBRATION=gstlal-calibration-0.5.0
+GSTLALINSPIRAL=gstlal-inspiral-0.6.4
 GSTLALUGLY=gstlal-ugly-0.9.1
 # Not on software.ligo.org/lscsoft/source/
 GSTPLUGINSBASE=gst-plugins-base-0.10.36
@@ -33,10 +33,10 @@ LALINFERENCE=lalinference-1.5.1
 LALINSPIRAL=lalinspiral-1.7.0
 LALMETAIO=lalmetaio-1.2.6
 LALPULSAR=lalpulsar-1.12.0
-LALSIMULATION=lalsimulation-1.4.0
+LALSIMULATION=lalsimulation-1.4.1
 LALSTOCHASTIC=lalstochastic-1.1.16
 LALXML=lalxml-1.2.0
-LDASTOOLS=ldas-tools-2.4.0
+LDASTOOLS=ldas-tools-2.4.1
 # Not up to date on software.ligo.org/lscsoft/source/
 LIBFRAME=libframe-8.21
 METAIO=metaio-8.4.0
@@ -152,7 +152,7 @@ $(INSTALL_DIR)/lib/liblalinference.so : $(INSTALL_FILES_DIR)/$(LALINFERENCE)/con
 $(INSTALL_FILES_DIR)/$(LALINFERENCE)/config.log : $(INSTALL_DIR)/lib/liblalpulsar.so
 	tar -xzf $(TARDIR)/$(LALINFERENCE).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(LALINFERENCE) && \
-		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --disable-lalxml --prefix=$(INSTALL_DIR)
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --prefix=$(INSTALL_DIR)
 
 $(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_FILES_DIR)/$(LALPULSAR)/config.log
 	cd $(INSTALL_FILES_DIR)/$(LALPULSAR) && make -j32 && make install -j32
@@ -208,7 +208,7 @@ $(INSTALL_DIR)/lib/liblalframe.so : $(INSTALL_FILES_DIR)/$(LALFRAME)/config.log
 $(INSTALL_FILES_DIR)/$(LALFRAME)/config.log : $(INSTALL_DIR)/lib/liblal.so
 	tar -xzf $(TARDIR)/$(LALFRAME).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(LALFRAME) && \
-		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --enable-swig-python --disable-framec --prefix=$(INSTALL_DIR)
+		./configure CFLAGS="-fPIC -O3 -march=native" CC="gcc" CXX="g++" --enable-swig-python --prefix=$(INSTALL_DIR)
 
 $(INSTALL_DIR)/lib/liblal.so : $(INSTALL_FILES_DIR)/$(LAL)/config.log
 	cd $(INSTALL_FILES_DIR)/$(LAL) && make -j32 && make install -j32
