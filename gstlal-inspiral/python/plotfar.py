@@ -313,6 +313,8 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 		return fig
 
 def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
+	tlo, thi = float(tlo), float(thi)
+
 	horizon_history = coinc_param_distributions.horizon_history
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
