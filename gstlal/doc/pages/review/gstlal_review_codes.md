@@ -6,19 +6,8 @@ Redundant entries are omitted
 
 <table>
 <tr><th> Program						</th><th> Sub programs or modules	</th><th> Lines	</th><th> Review status	</th><th> Stability </th></tr>
-<tr><td> @ref gstlal_fake_frames				</td><td>				</td><td> 360	</td><td> \notreviewed: But not used for production analysis	</td><td> \stable </td></tr>
-<tr><td>							</td><td> pipeparts/__init__.py		</td><td> 965	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td>							</td><td> reference_psd.py		</td><td> 648	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>							</td><td> simplehandler.py		</td><td> 143	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>							</td><td> datasource.py			</td><td> 749	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>							</td><td> multirate_datasource.py	</td><td> 291	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>							</td><td> glue.segments			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td>							</td><td> glue.ligolw*			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
-<tr><td>							</td><td> pylal.datatypes		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
-<tr><td>							</td><td> pylal.series			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
-<tr><td> lalapps_tmpltbank					</td><td>                               </td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_bank_splitter				</td><td>                               </td><td> 187	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
-<tr><td>							</td><td> pylal.spawaveform		</td><td> 1244	</td><td> \notreviewed: only gsl SVD used, rest switched to LAL swig </td><td> \stable </td></tr>
+<tr><td>							</td><td> pylal.spawaveform		</td><td> 1244	</td><td> \notreviewed: Not needed. Switched to LAL swig (except for gsl SVD wrapper) </td><td> \stable </td></tr>
 <tr><td>							</td><td> glue.lal			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> templates.py			</td><td> 299	</td><td> \reviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> inspiral_pipe.py		</td><td> 279	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
@@ -32,7 +21,6 @@ Redundant entries are omitted
 <tr><td>							</td><td> svd_bank.py			</td><td> 363	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> cbc_template_fir.py		</td><td> 443	</td><td> \reviewed with actions</td><td> \stable </td></tr>
 <tr><td>							</td><td> chirptime.py			</td><td> 159	</td><td> \notreviewed </td><td> \stable </td></tr>
-<tr><td> @ref gstlal_inspiral_create_prior_diststats		</td><td>                               </td><td> 125	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_create_prior_diststats		</td><td>                               </td><td> 241	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> far.py			</td><td> 1714	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.inject			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
@@ -42,6 +30,15 @@ Redundant entries are omitted
 <tr><td> @ref gstlal_inspiral_marginalize_likelihoods_online	</td><td>                               </td><td> 96	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_pipe				</td><td>                               </td><td> -	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td> @ref gstlal_inspiral					</td><td>                               </td><td> 707	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
+<tr><td>							</td><td> pipeparts/__init__.py		</td><td> 965	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td>							</td><td> reference_psd.py		</td><td> 648	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
+<tr><td>							</td><td> simplehandler.py		</td><td> 143	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
+<tr><td>							</td><td> datasource.py			</td><td> 749	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
+<tr><td>							</td><td> multirate_datasource.py	</td><td> 291	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
+<tr><td>							</td><td> glue.segments			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
+<tr><td>							</td><td> glue.ligolw*			</td><td> NA	</td><td> \reviewed	</td><td> \stable </td></tr>
+<tr><td>							</td><td> pylal.datatypes		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
+<tr><td>							</td><td> pylal.series			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td>							</td><td> lloidparts.py			</td><td> 826	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pipeio.py			</td><td> 239	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> simulation.py			</td><td> 72	</td><td> \reviewed	</td><td> \stable </td></tr>
@@ -49,7 +46,6 @@ Redundant entries are omitted
 <tr><td>							</td><td> streamthinca.py		</td><td> 387	</td><td> \reviewed with actions	</td><td> \stable </td></tr>
 <tr><td>							</td><td> pylal.ligolw_thinca		</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td>							</td><td> httpinterface.py		</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td>							</td><td> hoftcache.py			</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlalcbcsummary					</td><td>                               </td><td> 416	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td>							</td><td> llweb.py                      </td><td> 554	</td><td> \notreviewed	</td><td> \moddev </td></tr>
 <tr><td> @ref gstlalcbcnode					</td><td>                               </td><td> 400	</td><td> \notreviewed	</td><td> \stable </td></tr>
@@ -75,13 +71,16 @@ Redundant entries are omitted
 
 <table>
 <tr><th> Program						</th><th> Sub programs or modules       </th><th> Lines </th><th> Review status </th><th> Stability </th></tr>
+<tr><td> @ref gstlal_fake_frames				</td><td>				</td><td> 360	</td><td> \notreviewed: But not used for production analysis	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_pipe				</td><td>                               </td><td> 729   </td><td> \notreviewed  </td><td> \stable </td></tr>
+<tr><td>							</td><td> hoftcache.py			</td><td> 110	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td>							</td><td> dagparts.py                   </td><td> 196   </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_compute_far_from_snr_chisq_histograms	</td><td>                         </td><td> 249   </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_plot_background			</td><td>                               </td><td> 541   </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_plot_sensitivity			</td><td>                               </td><td> 587   </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_plotsummary			</td><td>                               </td><td> 1244  </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_summary_page			</td><td>                               </td><td> 344   </td><td> \notreviewed  </td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_create_prior_diststats		</td><td>                               </td><td> 125	</td><td> \notreviewed	</td><td> \stable </td></tr>
 </table>
 
 \section gsttable gstreamer elements
