@@ -324,9 +324,9 @@ def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, c
 		yhi = max(y.max()+5., yhi)
 	axes.set_ylim((0,yhi))
 	axes.set_xlim((round(tlo), round(thi)))
-	axes.set_ylabel('D_H (Mpc)')
+	axes.set_ylabel('Horizon Distance (Mpc)')
 	axes.set_xlabel('GPS Time (s)')
-	axes.set_title('Horizon Distance')
+	axes.set_title('Horizon Distance vs.\ Time')
 	axes.legend(loc = "lower left")
 	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
 	try:	
