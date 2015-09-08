@@ -19,153 +19,218 @@
 ## @file
 # A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
 
-import sys, os
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import json
 import logging
+from optparse import OptionParser
+import os
+import sys
+
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
-import pylab
-import numpy
-import copy
-from gstlal import far
-from gstlal import plotfar
-from gstlal import lvalert_helper
-import time
-from glue.ligolw import ligolw, lsctables
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
-from lal import GPSTimeNow
-import urllib
-import urlparse
-import httplib
-import subprocess
-from ligo.gracedb import rest as gracedb
-import glob
-import json
-from optparse import OptionParser
 
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(LIGOLWContentHandler)
+
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from ligo.gracedb import rest as gracedb
+from pylal.ligolw_thinca import InspiralCoincDef
+
+
+from gstlal import far
+from gstlal import lvalert_helper
+from gstlal import plotfar
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
 
 def parse_command_line():
-	parser = OptionParser()
-	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser = OptionParser(
+		usage = "%prog [options] [graceID ...]",
+		description = "%prog generates a suite of plots displaying the data used to assess the significance of a candidate event in gracedb.  This program can be run manually with one more more gracedb IDs provided on the command line.  If no gracedb IDs are given on the command line, the tool assumes it is being run as an lvalert_listen client, and retrieves the candidate ID to process from a json blob ingested from stdin."
+	)
+	parser.add_option("--gracedb-service-url", metavar = "URL", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
+	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
+	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
 	options, gid_list = parser.parse_args()
-	
-	if len(gid_list) > 1:
-		raise ValueError("%d graceids specified, no more than one allowed" % len(gid_list))
 
-	if len(gid_list) == 0:
+	if not gid_list:
 		lvalert_data = json.loads(sys.stdin.read())
 		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 		logging.info("lvalert data: %s" % repr(lvalert_data))
-		alert_type = lvalert_data["alert_type"]
-		if alert_type != "new":
-			logging.info("not a new-type alert.  skipping")
+		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+		if filename not in (u"ranking_data.xml.gz",):
+			logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
 			sys.exit()
-		gid = str(lvalert_data["uid"])
-	else:
-		gid = gid_list[0]
+		gid_list = [str(lvalert_data["uid"])]
 
-	return options, gid
+	return options, gid_list
+
+
+#
+# =============================================================================
+#
+#                                Local Library
+#
+# =============================================================================
+#
+
+
+def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml.gz"):
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+
+	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = ranking_data_filename)
+	ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)[0]
+
+	# NOTE:  do not invoke .finish() on coinc_param_distributions!  the
+	# PDFs are uploaded to gracedb in the desired state.
+	coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+	ranking_data.finish()
+
+	# FIXME Is this livetime correct?
+	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+
+	return coinc_xmldoc, coinc_param_distributions, ranking_data, fapfar
+
+
+def plot_snrchisq(instrument, coinc_param_distributions, plot_type, max_snr, snrchisq = None):
+	if snrchisq is None:
+		snr, chisq = None, None
+	else:
+		snr, chisq = snrchisq
+
+	fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
+	# FIXME For some reason the tight_layout() function in the
+	# current version of matplotlib at UWM, 1.1.1rc2, causes the
+	# color bar to overlap with the plot. Not including
+	# tight_layout causes the bottom of the letters in the SNR
+	# label to be cut off, but that is preferable. Once matplotlib
+	# gets updated the code should be tested with the below lines
+	# not commented out
+	#try:
+	#	fig.tight_layout()
+	#except AttributeError:
+	#	# not in old matplotlibs
+	#	pass
+	return fig
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
 	
 
-def plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type):
-	for i, ifo in enumerate(['H1', 'L1', 'V1']):
-		snrm, chisqm = snr_chisq_dict[ifo]
-		if snrm is None:
-			continue
-		fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, ifo, plot_type, 400, event_snr = snrm, event_chisq = chisqm)
-		# FIXME For some reason the tight_layout() function in the
-		# current version of matplotlib at UWM, 1.1.1rc2, causes the
-		# color bar to overlap with the plot. Not including
-		# tight_layout causes the bottom of the letters in the SNR
-		# label to be cut off, but that is preferable. Once matplotlib
-		# gets updated the code should be tested with the below lines
-		# not commented out
-		#try:
-		#	fig.tight_layout()
-		#except AttributeError:
-		#	# not in old matplotlibs
-		#	pass
-		fname = 'gracedb/%s/%s_%s_%s_snrchi.png' % (gid, gid, ifo, plot_type)
-		fig.savefig(fname)
-		gracedb.writeLog(gid, "%s SNR/Chisq" % ifo, filename = fname, filecontents = open(fname).read(), tagname = {"background_pdf":"background", "injection_pdf":"background", "zero_lag_pdf":"background", "LR":"background"}[plot_type])
+#
+# command line
+#
 
 
-options, gid = parse_command_line()
-
-try:
-	os.mkdir("gracedb/" + gid)
-except OSError:
-	pass
-
-gracedb = gracedb.GraceDb(options.gracedb_service_url)
-xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
-coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
-sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-coinc_table = lsctables.CoincTable.get_table(xmldoc)[0]
-snr_chisq_dict = dict(((ifo,(None,None)) for ifo in ['H1','L1', 'V1']))
-for r in sngl_inspiral_table:
-	snr_chisq_dict[r.ifo] = (r.snr, r.chisq)
-try:
-	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--likelihood-file")
-except ValueError:
-	path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--reference-likelihood-file")
-marg_path, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--marginalized-likelihood-file")
-tag, = ligolw_process.get_process_params(xmldoc, "gstlal_inspiral", "--job-tag")
-node, = [r.node for r in lsctables.ProcessTable.get_table(xmldoc) if r.program == "gstlal_inspiral"]
-
-url = open("%s_registry.txt" % tag).readline().strip()
+options, gid_list = parse_command_line()
 
 
 #
-# Background plots
+# connect to gracedb, loop over IDs
 #
 
-coinc_param_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-ranking_data, seglistsdict = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_path, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
-ranking_data.finish()
-# FIXME Is this livetime correct?
-fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglistsdict))
 
-counts = coinc_param_distributions.background_rates
-inj = coinc_param_distributions.injection_rates
+gracedb_client = gracedb.GraceDb(options.gracedb_service_url)
 
-bgcol = (224/255.,224/255.,224/255.)
 
-likely = copy.deepcopy(inj)
-for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
-	plot_snrchisq(snr_chisq_dict, coinc_param_distributions, plot_type)
+for gid in gid_list:
+	#
+	# download candidate's data
+	#
 
-# FIXME dont hardcode ifos
-instruments = (u"H1",u"L1")
-horizon_distances = {}
-ifo_snr = {}
-timenow = GPSTimeNow()
-for ifo in instruments:
-	horizon_distances[ifo] = coinc_param_distributions.horizon_history[ifo][timenow]
-	ifo_snr[ifo] = snr_chisq_dict[ifo][0]
-fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, 200, ifo_snr = ifo_snr)
-fname = 'gracedb/%s/%s_%s_%s_jointsnr_pdf.png' % (gid, gid, ifo_snr.keys()[0], ifo_snr.keys()[1])
-# FIXME Add fig.tight_layout() once the version of matplotlib at UWM
-# has been updated
-fig.savefig(fname)
-gracedb.writeLog(gid, "%s%s Joint SNR PDF" % (ifo_snr.keys()[0], ifo_snr.keys()[1]), filename = fname, filecontents = open(fname).read(), tagname = "background")
 
-fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,100.), event_likelihood = coinc_table.likelihood)
-fname = 'gracedb/%s/%s_likehoodratio_ccdf.png' % (gid, gid)
-try:
-	fig.tight_layout()
-except AttributeError:
-	# not in old matplotlibs
-	pass
-fig.savefig(fname)
-gracedb.writeLog(gid, "Likelihood Ratio CCDF", filename = fname, filecontents = open(fname).read(), tagname = "background")
+	coinc_xmldoc, coinc_param_distributions, ranking_data, fapfar = get_files(gracedb_client, gid)
+	coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
+	coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+	try:
+		coinc_event, = coinc_event_table
+		coinc_inspiral, = coinc_inspiral_table
+	except ValueError:
+		raise ValueError("document does not contain exactly one candidate")
+	if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
+		raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
+	offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
+	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+	# the instruments that were being analyzed
+	instruments, = [row.instruments for row in lsctables.ProcessTable.get_table(coinc_xmldoc) if row.process_id == coinc_event.process_id]
 
-fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral_row.get_end() - 14400.,coinc_inspiral_row.get_end()), 241)
-fname = 'gracedb/%s/%s_horizon_distances.png' % (gid, gid)
-fig.savefig(fname)
-gracedb.writeLog(gid, "Horizon Distances", filename = fname, filecontents = open(fname).read(), tagname = "psd")
+
+	#
+	# generate plots
+	#
+
+
+	for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
+		for instrument in instruments:
+			if instrument in sngl_inspirals:
+				# place marker on plot
+				fig = plot_snrchisq(instrument, coinc_param_distributions, plot_type, options.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
+			else:
+				# no sngl for this instrument
+				fig = plot_snrchisq(instrument, coinc_param_distributions, plot_type, options.max_snr)
+			filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
+			if not options.no_upload:
+				lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
+			if options.output_path is not None:
+				fig.savefig(os.path.join(options.output_path, filename))
+
+
+	# function returns None if it can't make a plot, e.g., if there are
+	# more than 2 instruments involved (don't know how to make 3D PDF
+	# plots yet)
+	fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions, sngl_inspirals.keys(), coinc_param_distributions.horizon_history.getdict(coinc_inspiral.end), options.max_snr, ifo_snr = dict((row.ifo, row.snr) for row in sngl_inspirals.values()))
+	if fig is not None:
+		# FIXME Add fig.tight_layout() once the version of
+		# matplotlib at UWM has been updated
+		filename = "%s_%s_jointsnr_pdf.png" % (gid, "_".join(sorted(sngl_inspirals.keys())))
+		if not options.no_upload:
+			lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR PDF" % ", ".join(sorted(sngl_inspirals.keys())), tagname = "background")
+		if options.output_path is not None:
+			fig.savefig(os.path.join(options.output_path, filename))
+
+
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,max(25., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), event_ln_likelihood_ratio = coinc_event.likelihood)
+	try:
+		fig.tight_layout()
+	except AttributeError:
+		# not in old matplotlibs
+		pass
+	filename = "%s_likehoodratio_ccdf.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+	if options.output_path is not None:
+		fig.savefig(os.path.join(options.output_path, filename))
+
+
+	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), 241)
+	filename = "%s_horizon_distances.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
+	if options.output_path is not None:
+		fig.savefig(os.path.join(options.output_path, filename))
