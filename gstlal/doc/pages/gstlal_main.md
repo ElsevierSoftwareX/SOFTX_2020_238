@@ -49,6 +49,9 @@
   - \ref gstlal_spectrum_movie
   - \ref gstlal_play
 
+## Profiling
+  - \ref gstlalo1profiling
+
 ## References
 
 - <a href=@gstlalinspiraldoc> gstlal_inspiral documentation</a>
