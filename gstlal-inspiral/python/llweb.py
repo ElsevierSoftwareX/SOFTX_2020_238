@@ -511,7 +511,6 @@ class GstlalWebSummary(object):
 			horizon_distances = {}
 			for ifo in instruments:
 				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]
-			instruments, horizon_distances = likelihood.snr_joint_pdf_keyfunc(instruments, horizon_distances)
 			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 400)
 			out += self.to_png(fig = fig)
 		return out

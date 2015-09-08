@@ -148,7 +148,6 @@ timenow = GPSTimeNow()
 for ifo in instruments:
 	horizon_distances[ifo] = coinc_param_distributions.horizon_history[ifo][timenow]
 	ifo_snr[ifo] = snr_chisq_dict[ifo][0]
-instruments, horizon_distances = coinc_param_distributions.snr_joint_pdf_keyfunc(instruments, horizon_distances)
 fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, 200, ifo_snr = ifo_snr)
 fname = 'gracedb/%s/%s_%s_%s_jointsnr_pdf.png' % (gid, gid, ifo_snr.keys()[0], ifo_snr.keys()[1])
 # FIXME Add fig.tight_layout() once the version of matplotlib at UWM

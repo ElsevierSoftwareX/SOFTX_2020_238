@@ -197,7 +197,7 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	if len(instruments) > 2:
 		# FIXME:  figure out how to plot 3D PDFs
 		return None
-	ignored, binnedarray, ignored = coinc_param_distributions.snr_joint_pdf_cache[(instruments, horizon_distances)]
+	ignored, binnedarray, ignored = coinc_param_distributions.snr_joint_pdf_cache[coinc_param_distributions.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
 	instruments = sorted(instruments)
 	horizon_distances = dict(horizon_distances)
 	fig, axes = init_plot((5, 4))
