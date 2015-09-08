@@ -72,7 +72,7 @@ def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
 	return ligolw_utils.load_fileobj(get_filename(gracedb_client, graceid, filename = filename), contenthandler = LIGOLWContentHandler)[0]
 
 
-def upload_fig(fig, gracedb_client, graceid, filename = "psd.png", log_message = "strain spectral density plot", tagname = "psd"):
+def upload_fig(fig, gracedb_client, graceid, filename, log_message, tagname = "psd"):
 	plotfile = StringIO.StringIO()
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))

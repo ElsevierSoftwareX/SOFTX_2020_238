@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2013  Kipp Cannon
+# Copyright (C) 2013--2015  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -16,6 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
 ## @file gstlal_inspiral_lvalert_psd_plotter
 # A program to listen to lvalerts, download the psd from gstlal gracedb events, plot it, and upload the results
 #
@@ -25,6 +26,8 @@
 #	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort)
 #	+ `--gracedb-service-url`: GraceDb service url to upload (default is gracedb.DEFAULT_SERVICE_URL)
 #	+ `--verbose`: Be verbose.
+
+
 #
 # =============================================================================
 #
@@ -162,5 +165,5 @@ for graceid in graceids:
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
 	else:
-		lvalert_helper.upload_fig(fig, gracedb_client, graceid)
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, log_message = "strain spectral density plot")
 	logging.info("finished processing %s" % graceid)
