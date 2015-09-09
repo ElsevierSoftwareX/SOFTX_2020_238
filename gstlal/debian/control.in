@@ -6,48 +6,48 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
+ fakeroot,
  gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
+ liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  libfftw3-dev (>= 3),
  gstlal-dep (>= 2.2) | gstenvironment,
- python-gobject-dev,
- python-numpy-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
  lal-python (>= @MIN_LAL_VERSION@),
- lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
- lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
  lalburst-dev (>= @MIN_LALBURST_VERSION@),
  lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
+ lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
+ lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
  libgsl0-dev (>= 1.9),
- fakeroot,
+ libxml2-dev,
  pkg-config,
- libxml2-dev
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python-gobject-dev,
+ python-numpy-dev
 
 Package: gstlal
 Architecture: any
 Replaces: gstlal-ugly (<< 0.4.0)
 Breaks: gstlal-ugly (<< 0.4.0)
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
+ gstlal-dep (>= 2.2) | gstenvironment,
+ libfftw3-3,
+ liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
+ lal (>= @MIN_LAL_VERSION@),
+ lal-python (>= @MIN_LAL_VERSION@),
+ lalburst (>= @MIN_LALBURST_VERSION@),
+ lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
+ lalmetaio (>= @MIN_LALMETAIO_VERSION@),
+ lalsimulation (>= @MIN_LALSIMULATION_VERSION@),
+ libgsl0ldbl (>= 1.9),
+ libxml2,
  python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
- python-pylal (>= @MIN_PYLAL_VERSION@),
- libfftw3-3,
- liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
- gstlal-dep (>= 2.2) | gstenvironment,
  python-gobject,
  python-numpy,
- python-scipy,
- lal (>= @MIN_LAL_VERSION@),
- lal-python (>= @MIN_LAL_VERSION@),
- lalmetaio (>= @MIN_LALMETAIO_VERSION@),
- lalsimulation (>= @MIN_LALSIMULATION_VERSION@),
- lalburst (>= @MIN_LALBURST_VERSION@),
- lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
- libgsl0ldbl (>= 1.9),
- libxml2
+ python-pylal (>= @MIN_PYLAL_VERSION@),
+ python-scipy
 Description: GStreamer for GW data analysis (core stable parts)
  This package provides a variety of GStreamer elements for
  gravitational-wave data analysis and some libraries to help write such
@@ -61,18 +61,18 @@ Package: gstlal-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  gstlal (= ${binary:Version}),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- libfftw3-dev (>= 3),
- libgsl0-dev (>= 1.9),
- liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
- liborc-0.4-0 (>=1:@MIN_ORC_VERSION@),
  gstlal-dep (>= 2.2) | gstenvironment,
- python-gobject-dev,
  lal-dev (>= @MIN_LAL_VERSION@),
+ lalburst-dev (>= @MIN_LALBURST_VERSION@),
+ lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
- lalburst-dev (>= @MIN_LALBURST_VERSION@),
- lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@)
+ libfftw3-dev (>= 3),
+ libgsl0-dev (>= 1.9),
+ liborc-0.4-0 (>=1:@MIN_ORC_VERSION@),
+ liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python-gobject-dev
 Description: Files and documentation needed for compiling gstlal based plugins and programs.
  This package contains the files needed for building gstlal-based plugins
  and programs.

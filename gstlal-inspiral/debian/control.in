@@ -6,45 +6,45 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
+ fakeroot,
  gtk-doc-tools,
- python-all-dev (>= @MIN_PYTHON_VERSION@),
  gstlal-dep (>= 2.2) | gstenvironment,
- python-gobject-dev,
+ gstlal-dev (>= @MIN_GSTLAL_VERSION@),
+ gstlal-ugly-dev (>= @MIN_GSTLALUGLY_VERSION@),
  lal-dev (>= @MIN_LAL_VERSION@),
  lal-python (>= @MIN_LAL_VERSION@),
- lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
  lalinspiral-python (>= @MIN_LALINSPIRAL_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
+ lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  libgsl0-dev (>= 1.9),
- fakeroot,
- pkg-config,
  libxml2-dev,
- gstlal-dev (>= @MIN_GSTLAL_VERSION@),
- gstlal-ugly-dev (>= @MIN_GSTLALUGLY_VERSION@)
+ pkg-config,
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python-glue (>= @MIN_GLUE_VERSION@),
+ python-gobject-dev
 
 Package: gstlal-inspiral
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
+ gstlal (>= @MIN_GSTLAL_VERSION@),
+ gstlal-dep (>= 0.2.2),
+ gstlal-ugly (>= @MIN_GSTLALUGLY_VERSION@),
+ lal (>= @MIN_LAL_VERSION@),
+ lal-python (>= @MIN_LAL_VERSION@),
+ lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
+ lalinspiral-python (>= @MIN_LALINSPIRAL_VERSION@),
+ lalmetaio (>= @MIN_LALMETAIO_VERSION@),
+ libgsl0ldbl (>= 1.9),
+ libxml2,
  python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
- python-ligo-gracedb (>= 1.11),
- python-pylal (>= @MIN_PYLAL_VERSION@),
- gstlal-dep (>= 0.2.2),
  python-gobject,
  python-h5py,
+ python-ligo-gracedb (>= 1.11),
  python-numpy,
- python-scipy,
- lal (>= @MIN_LAL_VERSION@),
- lal-python (>= @MIN_LAL_VERSION@),
- lalmetaio (>= @MIN_LALMETAIO_VERSION@),
- lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
- lalinspiral-python (>= @MIN_LALINSPIRAL_VERSION@),
- libgsl0ldbl (>= 1.9),
- libxml2,
- gstlal (>= @MIN_GSTLAL_VERSION@),
- gstlal-ugly (>= @MIN_GSTLALUGLY_VERSION@)
+ python-pylal (>= @MIN_PYLAL_VERSION@),
+ python-scipy
 Recommends:
  ligo-gracedb
 Description: GStreamer for GW data analysis (inspiral parts)
@@ -59,15 +59,15 @@ Description: GStreamer for GW data analysis (inspiral parts)
 Package: gstlal-inspiral-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-gobject-dev,
- lal-dev (>= @MIN_LAL_VERSION@),
- lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
- lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
- libgsl0-dev (>= 1.9),
- gstlal-inspiral (= ${binary:Version}),
  gstlal-dev (>= @MIN_GSTLAL_VERSION@),
+ gstlal-inspiral (= ${binary:Version}),
+ lal-dev (>= @MIN_LAL_VERSION@),
+ lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
+ lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
+ libgsl0-dev (>= 1.9),
+ python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python-glue (>= @MIN_GLUE_VERSION@),
+ python-gobject-dev
 Description: Files and documentation needed for compiling gstlal-inspiral based plugins and programs.
  This package contains the files needed for building gstlal-inspiral based
  plugins and programs.
