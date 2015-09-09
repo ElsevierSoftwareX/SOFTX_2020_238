@@ -28,8 +28,9 @@
 # This program takes two or more arguments;
 #
 # - The path of the output file name
-# - One or more root URLs of the web servers from which to retrieve event
-#   parameter distribution data (e.g., "http://node001.ligo.caltech.edu")
+# - One or more paths to text files each containing a single line giving
+#   the root URL of a web server from which to retrieve event parameter
+#   distribution data (e.g., "http://node001.ligo.caltech.edu")
 #
 # This program queries each running gstlal_inspiral job via the URL,
 # computes PDFs of the likelihood ratio ranking statistics from the
