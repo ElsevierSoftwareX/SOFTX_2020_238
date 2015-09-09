@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2009-2011  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -15,10 +15,16 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-## @file
-# may be deprecated soon; do not use at this time
-
+#
+## @file gstlal_ll_inspiral_reset_likelihood
+# A program to reset likelihood data after a burn in
+#
+# ### Command line interface
+#
+#		--verbose, action = "store_true", help = "Be verbose."
+#		--likelihood-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file."
+#		--zerolag-likelihood-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file."
+#
 #
 # =============================================================================
 #
@@ -29,111 +35,39 @@
 
 
 import sys
+from gstlal import far
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw import ligolw
 from optparse import OptionParser
 
 
-from glue import segments
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import search_summary as ligolw_search_summary
-
-
-from gstlal import far
-from gstlal.inspiral import gen_likelihood_control_doc
-
-## @file gstlal_inspiral_reset_likelihood
-# This program resets the trials table and segments from files containing the distribution statistics for gstlal_inspiral jobs; see gstlal_inspiral_reset_likelihood for help and usage
-
-## @package gstlal_inspiral_reset_likelihood
-# 
-
-
-#
-# =============================================================================
-#
-#                                 Command Line
-#
-# =============================================================================
-#
-
-
 def parse_command_line():
-	parser = OptionParser()
-	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the xml file containing the marginalized likelihood")
-	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
-	options, urls = parser.parse_args()
-	return options, urls
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--background-ranking-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
+	parser.add_option("--zerolag-ranking-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
+	options, filenames = parser.parse_args()
+
+	process_params = dict(options.__dict__)
+
+	return options, process_params
+
+options, process_params = parse_command_line()
 
 
-#
-# =============================================================================
-#
-#                                     Main
-#
-# =============================================================================
-#
+_, like_rd, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+_, zlike_rd, zlike_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 
+# Make the observed counts match the background sample but with the correct normalization
+for instruments in zlike_rd.background_likelihood_rates:
+	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:] / like_rd.background_likelihood_rates[instruments].array.sum() * zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
 
-#
-# parse command line
-#
-
-
-options, urls = parse_command_line()
-
-
-#
-# loop over input documents
-#
-
-
-for url in urls:
-	#
-	# load input document
-	#
-
-	in_xmldoc = utils.load_url(url, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
-	likelihood_data = far.LocalRankingData.from_xml(in_xmldoc)
-	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == likelihood_data.distributions.process_id)
-	ifos = search_summary_row.instruments
-	# reset the clock to None
-	likelihood_data.livetime_seg = segments.segment(None,None)
-	# reset the trials table to 0
-	for k in likelihood_data.trials_table:
-		likelihood_data.trials_table[k].count = 0
-		likelihood_data.trials_table[k].count_below_thresh = 0
-
-	xmldoc = gen_likelihood_control_doc(likelihood_data, ifos)
-
-	utils.write_filename(xmldoc, url, gz = url.endswith(".gz"), verbose = options.verbose)
-
-# Reset the marginalized likelihood file if it exists too
-if options.marginalized_likelihood_file is not None:
-	
-	marg, procid = far.RankingData.from_xml(utils.load_filename(options.marginalized_likelihood_file, contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
-	
-	for k in marg.trials_table:
-		marg.trials_table[k].count = 0
-		marg.trials_table[k].count_below_thresh = 0
-	
-	marg.livetime_seg = segments.segment(None,None)
-
-	xmldoc = ligolw.Document()
-	node = xmldoc.appendChild(ligolw.LIGO_LW())
-	node.appendChild(lsctables.New(lsctables.ProcessTable))
-	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
-	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_reset_likelihood", options.__dict__)
-	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
-	search_summary.out_segment = marg.livetime_seg
-	xmldoc.childNodes[-1].appendChild(marg.to_xml(process, search_summary))
-	ligolw_process.set_process_end_time(process)
-	outname = options.marginalized_likelihood_file
-	utils.write_filename(xmldoc, outname, gz = outname.endswith(".gz"), verbose = options.verbose)
+# write out the zerolag file
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = zlike_segs.keys(), paramdict = process_params)
+far.gen_likelihood_control_doc(xmldoc, process, None, zlike_rd, zlike_segs, comment = u"reset zerolag")
+ligolw_utils.write_filename(xmldoc, options.zerolag_ranking_file, gz = options.zerolag_ranking_file.endswith(".gz"), verbose = options.verbose)
