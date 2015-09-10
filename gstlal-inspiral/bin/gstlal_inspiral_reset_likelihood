@@ -75,6 +75,13 @@ for ifo in like_segs.keys():
 # Make the observed counts match the background sample but with the correct normalization
 for instruments in zlike_rd.background_likelihood_rates:
 	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:] / like_rd.background_likelihood_rates[instruments].array.sum() * zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() / far.get_live_time(like_segs) * far.get_live_time(new_like_segs)
+	# make the counts integers
+	zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
+	if options.verbose:
+		print >> sys.stderr, "replacing %s with %d zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
+	if zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() <= 100:
+		raise ValueError("Must have greater than 100 counts in zero lag, have: %d" % zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()) 
+
 
 # write out the background file
 xmldoc = ligolw.Document()
