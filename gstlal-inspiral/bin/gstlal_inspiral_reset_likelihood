@@ -39,6 +39,8 @@ from gstlal import far
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
+from glue.lal import LIGOTimeGPS
+from glue import segments
 from optparse import OptionParser
 
 
@@ -49,6 +51,8 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--background-ranking-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
 	parser.add_option("--zerolag-ranking-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
+	parser.add_option("--gps-start-time", metavar = "GPS", type = "int", help = "replace the live time segments with this GPS start time")
+	parser.add_option("--gps-end-time", metavar = "GPS", type = "int", help = "replace the live time segments with this GPS end time")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
@@ -58,16 +62,30 @@ def parse_command_line():
 options, process_params = parse_command_line()
 
 
-_, like_rd, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+like_cpd, like_rd, like_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 _, zlike_rd, zlike_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+
+# replace thae live time with the user specified live time
+new_like_segs = segments.segmentlistdict()
+new_zlike_segs = segments.segmentlistdict()
+for ifo in like_segs.keys():
+	new_like_segs[ifo]  = segments.segmentlist([segments.segment([LIGOTimeGPS(float(options.gps_start_time)), LIGOTimeGPS(float(options.gps_end_time))])])
+	new_zlike_segs[ifo] = segments.segmentlist([segments.segment([LIGOTimeGPS(float(options.gps_start_time)), LIGOTimeGPS(float(options.gps_end_time))])])
 
 # Make the observed counts match the background sample but with the correct normalization
 for instruments in zlike_rd.background_likelihood_rates:
-	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:] / like_rd.background_likelihood_rates[instruments].array.sum() * zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
+	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:] / like_rd.background_likelihood_rates[instruments].array.sum() * zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() / far.get_live_time(like_segs) * far.get_live_time(new_like_segs)
+
+# write out the background file
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = like_segs.keys(), paramdict = process_params)
+far.gen_likelihood_control_doc(xmldoc, process, like_cpd, like_rd, new_like_segs, comment = u"reset background")
+ligolw_utils.write_filename(xmldoc, options.background_ranking_file, gz = options.background_ranking_file.endswith(".gz"), verbose = options.verbose)
 
 # write out the zerolag file
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = zlike_segs.keys(), paramdict = process_params)
-far.gen_likelihood_control_doc(xmldoc, process, None, zlike_rd, zlike_segs, comment = u"reset zerolag")
+far.gen_likelihood_control_doc(xmldoc, process, None, zlike_rd, new_zlike_segs, comment = u"reset zerolag")
 ligolw_utils.write_filename(xmldoc, options.zerolag_ranking_file, gz = options.zerolag_ranking_file.endswith(".gz"), verbose = options.verbose)
