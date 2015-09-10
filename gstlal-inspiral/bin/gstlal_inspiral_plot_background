@@ -287,10 +287,10 @@ fig.savefig(plotname)
 
 # SNR PDFs
 for (instruments, horizon_distances) in sorted(coinc_params_distributions.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+	horizon_distances = dict(horizon_distances)	# stored as frozen set of key/value pairs in cache key
 	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions, instruments, horizon_distances, options.max_snr)
 	if fig is not None:
-		hd_dict = dict(horizon_distances)
-		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, hd_dict[k]) for k in sorted(hd_dict)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
