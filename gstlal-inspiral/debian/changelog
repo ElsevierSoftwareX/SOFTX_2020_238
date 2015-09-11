@@ -1,3 +1,9 @@
+gstlal-inspiral (0.6.5-1) unstable; urgency=low
+
+  * adjust initialization procedure for online analysis
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Fri, 11 Sep 2015 14:37:55 -0500
+
 gstlal-inspiral (0.6.4-1) unstable; urgency=low
 
   * initial O1 release.
