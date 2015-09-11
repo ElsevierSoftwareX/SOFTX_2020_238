@@ -95,14 +95,8 @@ while true ; do
 	done || break
 
 	# sum the noise and signal model ranking statistic histograms
-	# across jobs, and include the sum from the previous iteration to
-	# build up statistics over time.
-	if [-s ${BACKGROUND_COUNTS}]
-	then
-		gstlal_inspiral_marginalize_likelihood --verbose --output ${BACKGROUND_COUNTS} ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
-	else
-		gstlal_inspiral_marginalize_likelihood --verbose --output ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
-	fi
+	# across jobs
+	gstlal_inspiral_marginalize_likelihood --verbose --output ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
 	rm -vf ${RANKING_PDF_FILES}
 
 	# collect and sum the current observed zero-lag ranking statistic
