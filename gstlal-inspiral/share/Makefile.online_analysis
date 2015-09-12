@@ -29,7 +29,7 @@ L1PRIORRANGE=60
 
 # use --inj-state-vector-on-bits=ifo=387 so that we can look at CBC HW injections and possibly provide feedback
 
-dag : marginalized_likelihood.xml.gz prior.cache plots
+dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql
 	gstlal_ll_inspiral_pipe \
 		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE) \
 		--max-jobs 1000 \
@@ -87,6 +87,9 @@ dag : marginalized_likelihood.xml.gz prior.cache plots
 		--web-dir $(WEBDIR) \
 		--injection-file $(INJFILE) \
 		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/engineering/8/state_backup 
+
+ll_simplify_and_cluster.sql:
+	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql
 
 plots:
 	mkdir plots
