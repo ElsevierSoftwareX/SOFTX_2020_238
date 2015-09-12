@@ -35,10 +35,10 @@ online environment.  Details can be found
 
 Some quick facts:
 
- - Data GPS Start: 968543943 -> 1120766224
- - Data GPS End:   971622087 -> 1125226624
+ - Data GPS Start: 968543943 -> 1125803595
+ - Data GPS End:   971622087 -> 1128881739
  - IFOs: H1, L1
- - Analysis GPS Start: ~1122174187
+ - Analysis GPS Start: ~1125838327
  - Broadcast status: http://soapbox.cgca.uwm.edu:33655/index_auto_reload.html
 
 
@@ -52,7 +52,7 @@ Some quick facts:
 \subsection AnalysisCodes Analysis Codes
 
 
- - gstlal: 7466e2bfe87adef273574e9068eced0be683dc9a
+ - gstlal: 
  - lalsuite: 3dc971a085afdbf06b44fb463ed08036270bf377
 
 
@@ -72,12 +72,10 @@ Some quick facts:
 \subsubsection OnlineBanks Template Banks
 
  - /home/gstlalcbc/review/s6replay/online/bank
- - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay_bank>Makefile to make the template banks</a>
 
 \subsubsection OnlineTriggers Online Triggers
 
- - /home/gstlalcbc/review/s6replay/online/trigs
- - <a href=https://ligo-vcs.phys.uwm.edu/cgit/gstlal/tree/gstlal-inspiral/share/Makefile.s6_replay_online>Makefile to make the analysis dag</a>
+ - /home/gstlalcbc/review/s6replay/online/O1_release_trigs
 
 
 \subsection Offline Offline Analysis
@@ -93,8 +91,8 @@ Some quick facts:
 
  - <a href=https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary> Online Status Page </a>
  - <a href="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/online-test/ALL_LLOID_COMBINED_openbox.html">Online Summary Page</a>
- - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201122174187..1124174187">GraceDb query</a>
- - <a href="https://simdb.cgca.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201122174187..1124174187">SimDb query</a>
+ - <a href="https://gracedb.ligo.org/events/search/?query=test%20gstlal%20lowmass%201125803595.0..1128881739.0">GraceDb query</a>
+ - <a href="https://simdb.cgca.uwm.edu/events/search/?query=cbc%20gstlal%20replaylowmassinj%201125803595.0..1128881739.0">SimDb query</a>
  - <a href="https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/offline_s6_replay_1monrun/">Offline Analysis Page</a>
 
 
@@ -107,37 +105,39 @@ https://dashboard.ligo.org/
 
 \subsubsection condor Condor Status
 
-	-- Submitter: pcdev3.nemo.phys.uwm.edu : <192.168.5.3:41523> : pcdev3.nemo.phys.uwm.edu
+	-- Submitter: pcdev3.nemo.phys.uwm.edu : <192.168.5.3:51007> : pcdev3.nemo.phys.uwm.edu
 	 ID      OWNER            SUBMITTED     RUN_TIME ST PRI SIZE CMD               
-	1708701.0   gstlalcbc       7/28 22:02   5+09:05:39 R  0   0.3  condor_dagman -f -
-	1708708.0   gstlalcbc       7/28 22:02   5+09:05:21 R  0   0.0  gstlal_inspiral_ma
-	1708711.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   7324.2 gstlal_inspiral --
-	1708712.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   9765.6 gstlal_inspiral --
-	1708713.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   7324.2 gstlal_inspiral --
-	1708714.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   9765.6 gstlal_inspiral --
-	1708715.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   7324.2 gstlal_inspiral --
-	1708716.0   gstlalcbc       7/28 22:02   5+09:05:06 R  0   9765.6 gstlal_inspiral --
-	1708717.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   7324.2 gstlal_inspiral --
-	1708719.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   7324.2 gstlal_inspiral --
-	1708721.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   7324.2 gstlal_inspiral --
-	1708722.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   9765.6 gstlal_inspiral --
-	1708723.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   9765.6 gstlal_inspiral --
-	1708725.0   gstlalcbc       7/28 22:03   5+09:05:05 R  0   9765.6 gstlal_inspiral --
-	1708727.0   gstlalcbc       7/28 22:03   5+09:04:40 R  0   9765.6 gstlal_inspiral --
-	1708729.0   gstlalcbc       7/28 22:03   5+09:04:40 R  0   9765.6 gstlal_inspiral --
-	1708731.0   gstlalcbc       7/28 22:03   5+09:04:39 R  0   9765.6 gstlal_inspiral --
-	1708733.0   gstlalcbc       7/28 22:03   5+09:04:39 R  0   9765.6 gstlal_inspiral --
-	1708735.0   gstlalcbc       7/28 22:03   5+09:04:50 R  0   0.0  lvalert_listen --u
-	1714098.0   gstlalcbc       7/30 08:27   3+22:41:14 R  0   0.0  gstlal_ll_inspiral
-	1717602.0   gstlalcbc       7/31 20:43   2+10:24:48 R  0   0.0  gstlal_ll_inspiral
-	1717610.0   gstlalcbc       7/31 22:02   2+09:06:00 R  0   7324.2 gstlal_inspiral --
-	1717643.0   gstlalcbc       8/1  03:00   2+04:07:52 R  0   9765.6 gstlal_inspiral --
-	1717652.0   gstlalcbc       8/1  04:57   2+02:11:08 R  0   9765.6 gstlal_inspiral --
-	1717653.0   gstlalcbc       8/1  04:58   2+02:09:38 R  0   9765.6 gstlal_inspiral --
-	1717669.0   gstlalcbc       8/1  07:37   1+23:31:13 R  0   7324.2 gstlal_inspiral --
-	1717671.0   gstlalcbc       8/1  07:37   1+23:30:28 R  0   9765.6 gstlal_inspiral --
-	1717820.0   gstlalcbc       8/1  16:08   1+14:59:47 R  0   7324.2 gstlal_inspiral --
-	1717823.0   gstlalcbc       8/1  16:23   1+14:44:48 R  0   9765.6 gstlal_inspiral --
+	1916113.0   gstlalcbc       9/9  07:47   0+02:50:23 R  0   0.3  condor_dagman -f -
+	1916116.0   gstlalcbc       9/9  07:47   0+02:50:08 R  0   0.0  gstlal_ll_inspiral
+	1916117.0   gstlalcbc       9/9  07:47   0+02:50:08 R  0   0.0  gstlal_ll_inspiral
+	1916118.0   gstlalcbc       9/9  07:47   0+02:50:08 R  0   0.0  gstlal_inspiral_ma
+	1916119.0   gstlalcbc       9/9  07:47   0+02:50:08 R  0   0.0  gstlal_ll_inspiral
+	1916120.0   gstlalcbc       9/9  07:47   0+02:50:08 R  0   0.0  gstlal_ll_inspiral
+	1916121.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1464.8 gstlal_inspiral --
+	1916122.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1220.7 gstlal_inspiral --
+	1916123.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   2197.3 gstlal_inspiral --
+	1916124.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1953.1 gstlal_inspiral --
+	1916125.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   2197.3 gstlal_inspiral --
+	1916126.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1709.0 gstlal_inspiral --
+	1916127.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   2197.3 gstlal_inspiral --
+	1916128.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1709.0 gstlal_inspiral --
+	1916129.0   gstlalcbc       9/9  07:47   0+02:49:50 R  0   1953.1 gstlal_inspiral --
+	1916130.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   1709.0 gstlal_inspiral --
+	1916131.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   1953.1 gstlal_inspiral --
+	1916132.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   1464.8 gstlal_inspiral --
+	1916133.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   1953.1 gstlal_inspiral --
+	1916134.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   1953.1 gstlal_inspiral --
+	1916135.0   gstlalcbc       9/9  07:47   0+02:49:49 R  0   2197.3 gstlal_inspiral --
+	1916137.0   gstlalcbc       9/9  07:47   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916138.0   gstlalcbc       9/9  07:47   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916139.0   gstlalcbc       9/9  07:47   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916140.0   gstlalcbc       9/9  07:47   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916141.0   gstlalcbc       9/9  07:47   0+02:49:26 R  0   1709.0 gstlal_inspiral --
+	1916143.0   gstlalcbc       9/9  07:48   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916144.0   gstlalcbc       9/9  07:48   0+02:49:26 R  0   1953.1 gstlal_inspiral --
+	1916145.0   gstlalcbc       9/9  07:48   0+02:49:26 R  0   2441.4 gstlal_inspiral --
+	1916146.0   gstlalcbc       9/9  07:48   0+02:49:25 R  0   1953.1 gstlal_inspiral --
+	1916147.0   gstlalcbc       9/9  07:48   0+02:49:38 R  0   0.0  lvalert_listen --u
 
 
 
@@ -298,7 +298,7 @@ Do we want to consider a cold restart with some action items addressed?
 
 \subsection day8 August 19, 2015
 
-\subsubsection day7news News
+\subsubsection day8news News
 
 After a hiatus, we decided to take some steps to try to get the FAR calculation to converge faster.  As a reminder of hte situation
 
@@ -320,7 +320,44 @@ The analysis has been running for less than one day.  The IFAR plot has not yet 
 
 Additionally, Cody is rerunning the offline analysis with the new KDE patch applied.
 
-\subsubsection day7actions Actions
+\subsubsection day8actions Actions
 
 
-\subsubsection day7completed Completed Actions
+
+\subsection day9 September 9, 2015
+
+\subsubsection day9news News
+
+The following has been done to improve the convergence of FAR estimation on line
+
+ - We have reduced the prior count for the SNR/chisq distribution at startup.  This means that data starts to dominate sooner
+ - We have found an fixed a bug in how zero lag events were being counted and histogramed. This has been fixed in the gstlal-inspiral release 0.6.4
+ - We have lowered the wait time from 4 hours to 15 minutes at the start of the online DAG in order to have the convergence time improve.
+
+\subsubsection day9actions Actions
+
+
+\subsubsection day9completed Completed Actions
+
+
+
+\subsection day10 September 10, 2015
+
+
+\subsubsection day10news News
+
+ - We have updated a script to reset the likelihood distribution after a cold
+   start. It addresses the fact that when we start from scratch the likelihood
+ratio does not have real data to work with and it assigns incorrect likelihood
+values to events for the first ~1 day.  We need to be able to purge those
+events to reset the FAR/FAP estimation.
+
+ - It is now part of our plan going forward to always start an online analysis with a ~1day run and then a reboot any time there is a significant change to the template bank.
+
+ - FTR, the first "burn in" phase started on: ~1125838300
+ - We reset the likelihood after a few hours at: 1125877400 and let it run again to see if even with very little data we could e.g., detect the big dog.  This was detected quite reliablly as T182998.
+ - We reset the likelihood again at 1125952213 (after about 1 day) and are now settled into a long run.
+
+\subsubsection day9actions Actions
+
+\subsubsection day9completed Completed Actions
