@@ -22,6 +22,17 @@
 # This program will monitor the output of a single job in the gstlal inspiral
 # low latency analysis; See gstlal_llcbcnode for help and usage.
 #
+# ### Review Status
+#
+# | Names                                              | Hash                                        | Date       | Diff to Head of Master      |
+# | ---------------------------------------------------| ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Sarah Caudill, Jolien, Kipp, Chad | bd05ad3ba0617073f48d9be97b8784d8ab18ddb8    | 2015-09-11 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=bd05ad3ba0617073f48d9be97b8784d8ab18ddb8">gstlalcbcnode</a> |
+#
+# #### Actions
+#
+# - Documentation at beginning of source code is incomplete.
+# - The plot under the rates tab looks particularly badly formatted for me (perhaps even beyond a browser/screensize issue).
+#
 # ## USAGE:
 # This program is never meant to be executed by a user, but rather on a
 # webserver via a url such as:
