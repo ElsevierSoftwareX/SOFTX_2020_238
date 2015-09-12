@@ -23,6 +23,17 @@
 # public_html directory on the cluster that is running the gstlal inspiral low
 # latency analysis
 #
+# ### Review Status
+#
+# | Names                                              | Hash                                        | Date       | Diff to Head of Master      |
+# | ---------------------------------------------------| ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Sarah Caudill, Jolien, Kipp, Chad | 9d1ef72ae9530cefbfb822260e4391a181a17c0d    | 2015-09-11 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral?id=HEAD&id2=9d1ef72ae9530cefbfb822260e4391a181a17c0d">gstlalcbcsummary</a> |
+#
+# #### Actions
+# - Documentation at beginning of source code is outdated. Tabs have changed and there is no longer a template duration plot.
+# - Calls to urlparse.parse_qs() could take an optional strict_parsing argument to help with parsing errors.
+# - On line 162, llweb.now() function could be updated.
+#
 # ## USAGE:
 # This program is never meant to be executed by a user, but rather on a
 # webserver via a url such as:
