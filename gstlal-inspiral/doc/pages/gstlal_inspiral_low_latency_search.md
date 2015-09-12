@@ -20,13 +20,14 @@ phenomena.
 
 Matched filtering is the baseline method to detect compact binaries. It is
 typically implemented in the frequency domain using fast Fourier transforms
-that are several times longer than the duration of the underlying signal (<a href=http://arxiv.org/abs/gr-qc/0509116>Phys. Rev. D 85, 122006 (2012)</a>).  Binary
-neutron stars may be observable for more than 30 minutes in the advanced LIGO
-band, which implies that the standard matched filtering paradigm incurs a  O(1)
-hr latency.  Naively implementing a time-domain matched filtering algorithm
-through brute force convolution would achieve the latency goals, but it would
-require O(10) GFLOPS per gravitational wave template
-(<a href=http://arxiv.org/abs/1107.2665>ApJ 748 136 (2012)</a>), which is not
+that are several times longer than the duration of the underlying signal (<a
+href=http://arxiv.org/abs/gr-qc/0509116>Phys. Rev. D 85, 122006 (2012)</a>).
+Binary neutron stars may be observable for more than 30 minutes in the advanced
+LIGO band, which implies that the standard matched filtering paradigm incurs a
+O(1) hr latency.  Naively implementing a time-domain matched filtering
+algorithm through brute force convolution would achieve the latency goals, but
+it would require O(10) GFLOPS per gravitational wave template (<a
+href=http://arxiv.org/abs/1107.2665>ApJ 748 136 (2012)</a>), which is not
 feasible.
 
 \subsubsection LLOID The Low Latency Online Inspiral Detection (LLOID) algorithm
@@ -111,9 +112,9 @@ published.  The 6th engineering run will be the first to use the new procedure.
 
 - Start by making a directory where you will run the analysis:
 
-		$ mkdir /home/gstlalcbc/engineering/7
+		$ mkdir /home/gstlalcbc/observing/1
 
-\subsection Gotchas Gotchas:
+\subsection Gotchas Gotchas for automated services, e.g., gracedb submission, ligoDV web, etc.:
 
 - You will need a robot certificate in order to communicate with gracedb and
   other services requiring authentication.
@@ -122,7 +123,8 @@ https://wiki.ligo.org/AuthProject/LIGOCARobotCertificate
 - You will need your own lv alert account
   https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lvalert-howto.html
 
-- You will need a kerberos keytab and to point the KERBEROS_KEYTAB environment variable to it: https://wiki.ligo.org/AuthProject/CommandLineLIGOAuth
+- You will need a kerberos keytab and to point the KERBEROS_KEYTAB environment
+  variable to it: https://wiki.ligo.org/AuthProject/CommandLineLIGOAuth
 
 \section Banks Preparing the template banks
 
@@ -130,7 +132,7 @@ https://wiki.ligo.org/AuthProject/LIGOCARobotCertificate
 
 - First make a directory for the template banks, e.g.,
 
-		$ mkdir /home/gstlalcbc/engineering/7/bns_bank
+		$ mkdir /home/gstlalcbc/observing/1/svd_bank
 
 - Next obtain a Makefile to automate the bank generation, e.g. : <a href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_bank>this
 example</a>
@@ -154,8 +156,6 @@ example</a>
 \subsection Resources Resources used 
 
 - gstlal_bank_splitter
-- gstlal_psd_xml_from_asd_txt
-- ligolw_add
 - gstlal_inspiral_svd_bank_pipe
 
 \section Analysis Setting up the analysis dag
@@ -163,25 +163,35 @@ example</a>
 A makefile automates the construction of a HTCondor DAG.  The dag requires the
 template banks set up in the previous section.
 
+**NOTE: There is a burn-in phase to online analysis.  You will need to run for
+a day or two (at least) to gather background statistics, reset some components,
+and start a new analysis derived from the burn-in results.**
 
 - Begin by making a directory for the analysis dag to run, e.g.,
 
-		$ mkdir /home/gstlalcbc/engineering/7/analysis
+		$ mkdir /home/gstlalcbc/observing/1/trigs.burnin
 
 - Next obtain a makefile to automate the dag generation, e.g., <a
-  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_analysis>this example</a>
+  href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/Makefile.online_analysis>this
+example</a>
 
-- Modify the makefile to your liking (make sure it knows where the files you made with the bank dag are) and then run make
+- Modify the makefile to your liking. **NOTE:*It is critical that you disable
+  uploads to gracedb and simdb when doing this burn-in phase.  You must set:** 
+
+		--gracedb-far-threshold -1
+		--inj-gracedb-far-threshold -1
+
+- Then you can run make
 
 		$ make Makefile.online_analysis
 
-	Note that you will be prompted during the dag creation stage for your
-lvalert username and password.  The password for lvalert is **not** secure. It
-will show up in plain text on the submit node.  You should not use any password
-that is used elsewhere (like your ligo.org password)  Since this dag is for
-running on LDG resources, the plain text should not be much of a problem.  One
-should not check in any code or makefiles that contain this information (hence
-why you are asked for it).  lvalert is a thin layer only sending announcments.
+- Note that you will be prompted during the dag creation stage for your lvalert
+username and password.  The password for lvalert is **not** secure. It will
+show up in plain text on the submit node.  You should not use any password that
+is used elsewhere (like your ligo.org password)  Since this dag is for running
+on LDG resources, the plain text should not be much of a problem.  One should
+not check in any code or makefiles that contain this information (hence why you
+are asked for it).  lvalert is a thin layer only sending announcments.
 gracedb, where the real data is stored, still requires proper ligo
 authentication.
 
@@ -189,11 +199,9 @@ authentication.
   url where you can monitor the output (described below).  It should look
 something like this:
 
-		NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlal_llcbcsummary?id=0001,0009&dir=/mnt/qfs3/gstlalcbc/engineering/5/bns_trigs_40Hz
+		NOTE! You can monitor the analysis at this url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary?id=0001,0009&dir=/mnt/qfs3/gstlalcbc/observing/1/trigs&ifos=H1,L1
 
-- Pay attention to the gracedb far threshold. When set to -1 
-
-\section Running Running the analysis dag
+\section Running Running the analysis dag in burn-in phase
 
 - Once make is finished condor submit the dag
 
@@ -206,17 +214,25 @@ rather than a hard kill (sig 9).  The jobs intercept signal 15 and perform some
 cleanup steps to shutdown the analysis and write out the final output files.
 This is a necessary step, otherwise data will be lost.**
 
-- Next you can remake the dag with a positive gracedb far threshold, e.g., 0.0001.
+\section Reconfiguring the dag after the burn in phase
+
+- Make a new directory e.g, 
+
+		$ mkdir /home/gstlalcbc/observing/1/trigs
+
+- Copy the makefile and *prior.xml.gz from your burn-in directory
+
+- Reset some of the likelihood data with
+
+		$ make -f Makefile.online_analysis reset-likelihood
+
+- Then remake the dag
 
 		$ make -f Makefile.online_analysis
 
-- This will overwrite your dag file, but not other files, like logs, so you
-  will need to force resubmission
+- And condor submit it
 
 		$ condor_submit_dag -f trigger_pipe.dag
-
-- Now gracedb event uploading will be enbabled and the analysis is in
-  production mode
 
 The running dag topology looks like this:
 
@@ -239,13 +255,25 @@ the triggers directory with
 - gstlal_ll_trigger_pipe
 - gstlal_ll_inspiral_gracedb_threshold
 - gstlal_inspiral_ll_create_prior_diststats
+- gstlal_inspiral_reset_likelihood
 - gstlal_inspiral_marginalize_likelihood
 - gstlal_inspiral_marginalize_likelihoods_online
 
 		
 \section monitor Monitoring the output
 
-As mentioned above you can monitor the output.  Please see the
-gstlal_llcbcsummary for more information. 
+Output is available on these timescales
 
-Events are uploaded to https://gracedb.ligo.org
+- Seconds:
+	- uploads to gracedb.ligo.org
+	- uploads to simdb.cgca.uwm.edu
+
+- Minutes:
+	- Monitoring pages at e.g., https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/cgi-bin/gstlalcbcsummary
+	- The corresponding "node" links at the bottom of the page above
+
+- Hours:
+	- An offline style page that summarizes the cumulative run in the directory specified in the Makefile as: 
+
+		WEBDIR=
+
