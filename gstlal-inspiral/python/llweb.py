@@ -19,6 +19,24 @@
 ## @file
 
 ## @package llweb
+#
+# ### Review Status
+#
+# | Names                                              | Hash                                        | Date       | Diff to Head of Master      |
+# | ---------------------------------------------------| ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Sathya, Sarah Caudill, Jolien, Kipp, Chad | bd05ad3ba0617073f48d9be97b8784d8ab18ddb8    | 2015-09-11 | <a href="@gstlal_inspiral_cgit_diff/python/llweb.py?id=bd05ad3ba0617073f48d9be97b8784d8ab18ddb8">llweb.py</a> |
+#
+# #### Actions
+#
+# - This code has very little commenting and documenting in general.
+# - On line 123, the tabs formatting does not work for small windows. They end up overlapping and being unreadable.
+# - On line 171, the function now() can be updated or deprecated. Refer to comment above in gstlalcbcsummary.
+# - There are FIXMEs for dealing with the 16Hz sample rate for LIGO vs the 1Hz sample rate for Virgo.
+# - There is a FIXME for hardcoded IFOs H1 and L1.
+#
+# #### Complete Actions
+#
+# - On line 237, the function status() is defined to populate the status in the summary webpage header. You should probably have a second look at this function. In particular, it has a problem in that it will never catch the "MORE THAN 5 MIN BEHIND" case because the "MORE THAN 3 MIN BEHIND" case will catch it first.
 
 import sys
 import cgi
