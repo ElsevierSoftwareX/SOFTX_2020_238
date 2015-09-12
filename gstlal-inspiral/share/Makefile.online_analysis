@@ -120,9 +120,9 @@ marginalized_likelihood.xml.gz : prior.cache
 
 reset-likelihood:
 	for f in 0*_zerolag_prior.xml.gz; do gstlal_inspiral_calc_rank_pdfs $${f/zerolag_prior/prior} --ranking-stat-samples 100000 --verbose --output $${f/zerolag_prior/prior} && gstlal_inspiral_reset_likelihood --background-ranking-file $${f/zerolag_prior/prior} --zerolag-ranking-file $${f} --gps-start-time $(H1PRIORSTART) --gps-end-time $(H1PRIORSTOP) --verbose; done
+	ls *[0-9]_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > prior.cache
+	ls *[0-9]_zerolag_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > zerolag_prior.cache
 	gstlal_inspiral_marginalize_likelihood --verbose --output marginalized_likelihood.xml.gz 0*prior.xml.gz
-	ls *[0-9]_prior.xml.gz | lalapps_path2cache > prior.cache
-	ls *[0-9]_zerolag_prior.xml.gz | lalapps_path2cache -a > zerolag_prior.cache
 	
 
 clean :
