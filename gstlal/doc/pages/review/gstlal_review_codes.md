@@ -61,8 +61,6 @@ Redundant entries are omitted
 <tr><td> @ref gstlal_inspiral_lvalert_omegascan			</td><td>                               </td><td> 177	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_recompute_online_far_from_gracedb	</td><td>                 		</td><td> 18	</td><td> \notreviewed	</td><td> \hidev </td></tr>
 <tr><td> @ref gstlal_inspiral_recompute_online_far		</td><td>                    		</td><td> 92	</td><td> \notreviewed	</td><td> \hidev </td></tr>
-<tr><td> @ref gstlal_inspiral_calc_likelihood			</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \stable </td></tr>
-<tr><td>							</td><td> pylal.burca2			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 <tr><td> @ref gstlal_ll_inspiral_gracedb_threshold		</td><td>                               </td><td> 106	</td><td> \notreviewed	</td><td> \stable </td></tr>
 <tr><td> lvalert_listen						</td><td>                               </td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 </table>
@@ -81,6 +79,8 @@ Redundant entries are omitted
 <tr><td> @ref gstlal_inspiral_plotsummary			</td><td>                               </td><td> 1244  </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_summary_page			</td><td>                               </td><td> 344   </td><td> \notreviewed  </td><td> \stable </td></tr>
 <tr><td> @ref gstlal_inspiral_create_prior_diststats		</td><td>                               </td><td> 125	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td> @ref gstlal_inspiral_calc_likelihood			</td><td>                    		</td><td> 409	</td><td> \notreviewed	</td><td> \stable </td></tr>
+<tr><td>							</td><td> pylal.burca2			</td><td> ?	</td><td> ?		</td><td> \stable </td></tr>
 </table>
 
 \section gsttable gstreamer elements
