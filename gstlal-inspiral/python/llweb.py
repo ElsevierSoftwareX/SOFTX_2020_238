@@ -241,9 +241,6 @@ class GstlalWebSummary(object):
 			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
 			return 3, "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
-		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 180]
-		if lat:
-			return 1, "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
 		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 300]
 		if lat:
 			return 2, "<em class=red>%s NODES ARE MORE THAN 5 MIN BEHIND!</em>" % len(lat)
