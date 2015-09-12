@@ -19,24 +19,6 @@
 ## @file
 
 ## @package llweb
-#
-# ### Review Status
-#
-# | Names                                              | Hash                                        | Date       | Diff to Head of Master      |
-# | ---------------------------------------------------| ------------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Sarah Caudill, Jolien, Kipp, Chad | bd05ad3ba0617073f48d9be97b8784d8ab18ddb8    | 2015-09-11 | <a href="@gstlal_inspiral_cgit_diff/python/llweb.py?id=bd05ad3ba0617073f48d9be97b8784d8ab18ddb8">llweb.py</a> |
-#
-# #### Actions
-#
-# - This code has very little commenting and documenting in general.
-# - On line 123, the tabs formatting does not work for small windows. They end up overlapping and being unreadable.
-# - On line 171, the function now() can be updated or deprecated. Refer to comment above in gstlalcbcsummary.
-# - There are FIXMEs for dealing with the 16Hz sample rate for LIGO vs the 1Hz sample rate for Virgo.
-# - There is a FIXME for hardcoded IFOs H1 and L1.
-#
-# #### Complete Actions
-#
-# - On line 237, the function status() is defined to populate the status in the summary webpage header. You should probably have a second look at this function. In particular, it has a problem in that it will never catch the "MORE THAN 5 MIN BEHIND" case because the "MORE THAN 3 MIN BEHIND" case will catch it first.
 
 import sys
 import cgi
@@ -259,6 +241,9 @@ class GstlalWebSummary(object):
 			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
 			return 3, "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
+		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 180]
+		if lat:
+			return 1, "<em class=red>%s NODES ARE MORE THAN 3 MIN BEHIND!</em>" % len(lat)
 		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 300]
 		if lat:
 			return 2, "<em class=red>%s NODES ARE MORE THAN 5 MIN BEHIND!</em>" % len(lat)
@@ -507,20 +492,12 @@ class GstlalWebSummary(object):
 			out += self.to_png(fig = fig)
 		return out
 
-	def get_mchirp_string(self, id):
-		if id == "0000":
-			return "$(\mathcal{M} < %s M_\odot)$" % self.found["bank"][id][0][2]
-		else:
-			mchirp_lo = self.found["bank"].setdefault(str(int(id)-1).zfill(4), numpy.loadtxt("%s/%s/bank.txt" % (self.directory, str(int(id)-1).zfill(4))))[2]
-			return "$(\mathcal{M} = [%s,%s) M_\odot)$" % (mchirp_lo, self.found["bank"][id][0][2])
-			
-
 	def snrchiplot(self, binnedarray_string):
 		out = ""
 		for id in self.registry:
 			likelihood, nu, nu = self.found["likelihood"][id]
 			for ifo in self.ifos:
-				fig = plotfar.plot_snr_chi_pdf(likelihood, ifo, binnedarray_string, 400, suffix_tag = self.get_mchirp_string(id))
+				fig = plotfar.plot_snr_chi_pdf(likelihood, ifo, binnedarray_string, 400)
 				out += self.to_png(fig = fig)
 		return out
 
@@ -534,7 +511,7 @@ class GstlalWebSummary(object):
 			horizon_distances = {}
 			for ifo in instruments:
 				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]
-			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 400, suffix_tag = self.get_mchirp_string(id))
+			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 400)
 			out += self.to_png(fig = fig)
 		return out
 
@@ -542,7 +519,7 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
-			fig = plotfar.plot_rates(likelihood, ranking_data, suffix_tag = self.get_mchirp_string(id))
+			fig = plotfar.plot_rates(likelihood, ranking_data)
 			out += self.to_png(fig = fig)
 		return out
 
@@ -578,7 +555,7 @@ class GstlalWebSummary(object):
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
-			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25), suffix_tag = self.get_mchirp_string(id))
+			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25))
 			out += self.to_png(fig = fig)
 		return out
 
