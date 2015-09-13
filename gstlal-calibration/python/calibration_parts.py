@@ -30,37 +30,34 @@ def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 	return head
 
 def caps_and_progress(pipeline, head, caps, progress_name):
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	return head
 
 def caps_and_progress_and_resample(pipeline, head, caps, progress_name, new_caps):
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
 	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
+	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 	return head
 
 def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps):
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	return head
 
 def resample(pipeline, head, caps):
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
+	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):
@@ -96,7 +93,8 @@ def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
 	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag), real_caps)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float")
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
+	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False) # This audiorate is necessary! Probaly once lal_interleave gets fixed it won't be
+	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 	head = pipeparts.mktogglecomplex(pipeline,head)
 	head = pipeparts.mkcapsfilter(pipeline, head, complex_caps)
 	return head
@@ -109,11 +107,10 @@ def split_into_real(pipeline, complex, real_caps, complex_caps):
 	real = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src0", real.get_pad("sink"))
 	real = pipeparts.mkcapsfilter(pipeline, real, real_caps)
-	real = pipeparts.mkaudiorate(pipeline, real, skip_to_first = True, silent = False)
+	
 	imag = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src1", imag.get_pad("sink"))
 	imag = pipeparts.mkcapsfilter(pipeline, imag, real_caps)
-	imag = pipeparts.mkaudiorate(pipeline, imag, skip_to_first = True, silent = False)
 	return real, imag
 
 def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_samples):
@@ -126,13 +123,11 @@ def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_sample
 	headR = pipeparts.mkresample(pipeline, headR, quality=9)
 	headR = pipeparts.mkcapsfilter(pipeline, headR, new_caps)
 	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
-	headR = pipeparts.mkaudiorate(pipeline, headR, skip_to_first = True, silent = False)
 
 	headI = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), sin), orig_caps)
 	headI = pipeparts.mkresample(pipeline, headI, quality=9)
 	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
 	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
-	headI = pipeparts.mkaudiorate(pipeline, headI, skip_to_first = True, silent = False)
 
 	return headR, headI
 
@@ -230,18 +225,18 @@ def compute_kappapu(pipeline, A0pufxinvR, A0pufxinvI, AfctrlR, AfctrlI, ktstR, k
 def compute_kappaa(pipeline, AfxR, AfxI, A0tstfxR, A0tstfxI, A0pufxR, A0pufxI,real_caps, complex_caps):
 	Afx = merge_into_complex(pipeline, AfxR, AfxI, real_caps, complex_caps)
 	A0tstfx = merge_into_complex(pipeline, A0tstfxR, A0tstfxI, real_caps, complex_caps)
-	A0pufx = merge_into_complex(pipeline, pipeparts.mkaudioamplify(pipeline, A0pufxR, -1.0), pipeparts.mkaudioamplify(pipeline, A0pufxI, -1.0), real_caps, complex_caps)
+	A0pufx = merge_into_complex(pipeline, A0pufxR, A0pufxI, real_caps, complex_caps)
 
-	#\kappa_a = A0fx / (A0tstfx - A0pufx)
+	#\kappa_a = A0fx / (A0tstfx + A0pufx)
 
-	A0tstfx_minus_A0pufx = mkadder(pipeline, list_srcs(pipeline, A0tstfx, A0pufx), complex_caps)
-	A0tstfx_minus_A0pufxR, A0tstfx_minus_A0pufxI = split_into_real(pipeline, A0tstfx_minus_A0pufx, real_caps, complex_caps)
-	A0tstfx_minus_A0pufxR = pipeparts.mktee(pipeline, A0tstfx_minus_A0pufxR)
-	A0tstfx_minus_A0pufxI = pipeparts.mktee(pipeline, A0tstfx_minus_A0pufxI)
-	den2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, A0tstfx_minus_A0pufxR, exponent=2.0), pipeparts.mkpow(pipeline, A0tstfx_minus_A0pufxI, exponent=2.0)), real_caps)
+	A0tstfx_plus_A0pufx = mkadder(pipeline, list_srcs(pipeline, A0tstfx, A0pufx), complex_caps)
+	A0tstfx_plus_A0pufxR, A0tstfx_plus_A0pufxI = split_into_real(pipeline, A0tstfx_plus_A0pufx, real_caps, complex_caps)
+	A0tstfx_plus_A0pufxR = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxR)
+	A0tstfx_plus_A0pufxI = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxI)
+	den2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxR, exponent=2.0), pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxI, exponent=2.0)), real_caps)
 	den2 = pipeparts.mktee(pipeline, pipeparts.mkpow(pipeline, den2, exponent = -1.0))
-	denR = mkmultiplier(pipeline, list_srcs(pipeline, A0tstfx_minus_A0pufxR, den2), real_caps)
-	denI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0tstfx_minus_A0pufxI, -1.0), den2), real_caps)
+	denR = mkmultiplier(pipeline, list_srcs(pipeline, A0tstfx_plus_A0pufxR, den2), real_caps)
+	denI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0tstfx_plus_A0pufxI, -1.0), den2), real_caps)
 
 	den = merge_into_complex(pipeline, denR, denI, real_caps, complex_caps)
 	ka = mkmultiplier(pipeline, list_srcs(pipeline, Afx, den), complex_caps)
