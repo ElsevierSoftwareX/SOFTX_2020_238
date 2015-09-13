@@ -549,8 +549,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	ka_pcal_line_freq = float(filters["ka_pcal_line_freq"])
 	ka_pcal_W_real = float(filters["ka_pcal_whitener_re"])
 	ka_pcal_W_imag = float(filters["ka_pcal_whitener_im"])
-	ka_pcal_corr_real = -float(filters["ka_pcal_corr_re"])
-	ka_pcal_corr_imag = -float(filters["ka_pcal_corr_im"])
+	ka_pcal_corr_real = float(filters["ka_pcal_corr_re"])
+	ka_pcal_corr_imag = float(filters["ka_pcal_corr_im"])
 if not options.no_kappaa or not options.no_kappac or not options.no_kappatst or not options.no_kappapu:
 	ka_esd_line_freq = float(filters["ka_esd_line_freq"])
 	ka_esd_W_real = float(filters["ka_esd_whitener_re"])
@@ -559,8 +559,8 @@ if not options.no_kappac or not options.no_fcc:
 	kc_pcal_line_freq = float(filters["kc_pcal_line_freq"])
 	kc_pcal_W_real = float(filters["kc_pcal_whitener_re"])
 	kc_pcal_W_imag = float(filters["kc_pcal_whitener_im"])
-	kc_pcal_corr_real = -float(filters["kc_pcal_corr_re"])
-	kc_pcal_corr_imag = -float(filters["kc_pcal_corr_im"])
+	kc_pcal_corr_real = float(filters["kc_pcal_corr_re"])
+	kc_pcal_corr_imag = float(filters["kc_pcal_corr_im"])
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 	ktst_esd_line_freq = float(filters["ktst_esd_line_freq"])
 	ktst_esd_W_real = float(filters["ktst_esd_whitener_re"])
