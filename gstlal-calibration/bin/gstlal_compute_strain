@@ -424,7 +424,10 @@ if not options.no_dq_vector:
 	channel_list.append((instrument, options.dq_channel_name))
 	
 # Hook up the relevant channels to the demuxer
-demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+if options.data_source == "lvshm":
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+elif options.data_source == "frames":
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = False, channel_list = map("%s:%s".__mod__, channel_list))
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
