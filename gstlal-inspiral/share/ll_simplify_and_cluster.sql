@@ -1,4 +1,4 @@
--- Copyright (C) 2011--2012,2014  Kipp Cannon, Chad Hanna
+-- Copyright (C) 2011--2012,2014,2015  Kipp Cannon, Chad Hanna
 --
 -- This program is free software; you can redistribute it and/or modify it
 -- under the terms of the GNU General Public License as published by the
@@ -111,7 +111,7 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 	SELECT
 		coinc_event.coinc_event_id AS coinc_event_id,
 		coinc_event.time_slide_id AS category,
-		(coinc_inspiral.end_time - (SELECT MIN(end_time) FROM coinc_inspiral)) + 1e-9 * coinc_inspiral.end_time_ns AS end_time,
+		coinc_inspiral.end_time AS end_time,	--- only keep the integer part
 		coinc_event.likelihood AS ranking_stat
 	FROM
 		coinc_event
@@ -122,9 +122,8 @@ CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
 CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, ranking_stat);
 
 --
--- delete coincs that are within 0.5 s of coincs with higher SNR in the same
--- category to match the 1 second thinca interval used internally in online
--- running
+-- delete all but the highest-ranked coinc in each integer second to match
+-- the 1 second thinca interval used internally in online running
 --
 
 DELETE FROM
@@ -137,7 +136,7 @@ WHERE
 			_cluster_info_ AS _cluster_info_a_
 			JOIN _cluster_info_ AS _cluster_info_b_ ON (
 				_cluster_info_b_.category == _cluster_info_a_.category
-				AND (_cluster_info_b_.end_time BETWEEN _cluster_info_a_.end_time - 0.5 AND _cluster_info_a_.end_time + 0.5)
+				AND _cluster_info_b_.end_time == _cluster_info_a_.end_time
 				AND _cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat
 			)
 		WHERE
