@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2000,2001,2008--2011,2013,2014  Kipp C. Cannon
+ * Copyright (C) 2000,2001,2008--2011,2013--2015  Kipp C. Cannon
  * Copyrigth (C) 2010  Leo Singer
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -67,6 +67,27 @@ G_BEGIN_DECLS
 
 
 #define GSTLAL_TAG_SLOPE "adc-slope"
+
+
+/**
+ * GSTLAL_TAG_PHASE:
+ *
+ * Phase (in radian) of heterodyning signal at start of dataset.
+ */
+
+
+#define GSTLAL_TAG_PHASE "adc-phase"
+
+
+/**
+ * GSTLAL_TAG_DATAVALID:
+ *
+ * Data valid flag:  dataValid = 0 -> ADC data valid; dataValid != 0 -> ADC
+ * data suspect/not valid.
+ */
+
+
+#define GSTLAL_TAG_DATAVALID "adc-datavalid"
 
 
 /**
