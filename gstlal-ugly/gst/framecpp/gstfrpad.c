@@ -1,7 +1,7 @@
 /*
  * GstFrPad
  *
- * Copyright (C) 2012--2014  Kipp Cannon
+ * Copyright (C) 2012--2015  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,6 +87,8 @@ GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
 #define DEFAULT_UNITS ""
 #define DEFAULT_BIAS 0.0
 #define DEFAULT_SLOPE 1.0
+#define DEFAULT_PHASE 0.0
+#define DEFAULT_DATAVALID 0
 
 
 /*
@@ -178,7 +180,7 @@ static void update_tag_list(GstFrPad *pad)
 	}
 
 	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
-		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, NULL);
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, GSTLAL_TAG_PHASE, pad->phase, GSTLAL_TAG_DATAVALID, pad->datavalid, NULL);
 
 	if(bitrate >= 0)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
@@ -242,6 +244,8 @@ enum property {
 	PROP_HISTORY,
 	PROP_BIAS,
 	PROP_SLOPE,
+	PROP_PHASE,
+	PROP_DATAVALID,
 };
 
 
@@ -322,6 +326,22 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 	}
 
+	case PROP_PHASE: {
+		gfloat phase = g_value_get_float(value);
+		if(phase != pad->phase)
+			need_new_tags = TRUE;
+		pad->phase = phase;
+		break;
+	}
+
+	case PROP_DATAVALID: {
+		guint datavalid = g_value_get_uint(value);
+		if(datavalid != pad->datavalid)
+			need_new_tags = TRUE;
+		pad->datavalid = datavalid;
+		break;
+	}
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -387,6 +407,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case PROP_SLOPE:
 		g_value_set_float(value, pad->slope);
+		break;
+
+	case PROP_PHASE:
+		g_value_set_float(value, pad->phase);
+		break;
+
+	case PROP_DATAVALID:
+		g_value_set_uint(value, pad->datavalid);
 		break;
 
 	default:
@@ -530,6 +558,28 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 			"Slope",
 			"ADC calibration (units/count).  Validity:  FrAdcData.",
 			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_SLOPE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_PHASE,
+		g_param_spec_float(
+			"phase",
+			"Phase",
+			"Phase (in radian) of heterodyning signal at start of dataset.  Validity:  FrAdcData.",
+			-G_MAXFLOAT, G_MAXFLOAT, DEFAULT_PHASE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_DATAVALID,
+		g_param_spec_uint(
+			"datavalid",
+			"Data valid flag",
+			"0 -> ADC data valid; != 0 -> ADC data suspect/not valid.  Validity:  FrAdcData.",
+			0, G_MAXUINT16, DEFAULT_DATAVALID,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
