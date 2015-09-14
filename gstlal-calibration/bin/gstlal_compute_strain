@@ -216,6 +216,7 @@ parser.add_option("--kappac-pcal-ref-Apu-real", metavar = "name", default = "CAL
 parser.add_option("--kappac-pcal-ref-Apu-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG", help = "Set the name of the channel containing the real part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG")
 parser.add_option("--kappatst-ref-facs-real", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL", help = "Set the name of the channel containing the real part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL)")
 parser.add_option("--kappatst-ref-facs-imag", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG", help = "Set the name of the channel containing the imaginary part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG)")
+parser.add_option("--kappatst-facs-fudge", action = "store_true", help = "Apply a fudge factor to the \kappa_tst EP1 factors.")
 parser.add_option("--split-actuation-chain", action = "store_true", help = "Set this to split the actuation chain into PUM, UIM, TST.")
 parser.add_option("--different-control-whitening", action = "store_true", help = "Set when the whitening filters on each section of control chain are different. Only relevant in --split-actuation-chain mode") 
 
@@ -548,6 +549,9 @@ if not options.no_gamma:
 	cal_line_freq = float(filters["cal_line_freq"])
 	wmod = wR * wR + wI * wI
 	olgmod = olgR * olgR + olgI * olgI
+if options.kappatst_facs_fudge:
+	ktst_facs_fudge_real = float(filters["ktst_facs_fudge_real"])
+	ktst_facs_fudge_imag = float(filters["ktst_facs_fudge_imag"])
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu:
 	ka_pcal_line_freq = float(filters["ka_pcal_line_freq"])
 	ka_pcal_W_real = float(filters["ka_pcal_whitener_re"])
@@ -661,6 +665,8 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 	tstexc = calibration_parts.caps_and_progress(pipeline, tstexc, tstexccaps, "tstexc")
 	ktst_facs_real = calibration_parts.caps_and_progress_and_upsample(pipeline, ktst_facs_real, ref_factors_caps, "ktst_facs_real", compute_calib_factors_caps)
 	ktst_facs_imag = calibration_parts.caps_and_progress_and_upsample(pipeline, ktst_facs_imag, ref_factors_caps, "ktst_facs_imag", compute_calib_factors_caps)
+	if options.kappatst_facs_fudge:
+		ktst_facs_real, ktst_facs_imag = calibration_parts.filter_at_line(pipeline, pipeparts.mkqueue(pipeline, ktst_facs_real, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, ktst_facs_imag, max_size_time = gst.SECOND * 100), ktst_facs_fudge_real, ktst_facs_fudge_imag, compute_calib_factors_caps)
 # Compute \kappa_a, \kappa_tst,\kappa_c, f_cc, if applicable
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu:
 	factors_integration_samples = int(options.factors_integration_time) * options.compute_factors_sr
@@ -1223,25 +1229,6 @@ if not options.no_fcc:
 	fccout = pipeparts.mkcapsfilter(pipeline, fccout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.compute_factors_sr)
 	fccout = calibration_parts.resample(pipeline, fccout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
 
-# If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
-# FIXME: The code below just locks up the pipeline. Think of another way to do this
-#if not options.no_dq_vector:
-#	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
-#	if options.apply_kappatst:
-		#ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
-#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-#	if options.apply_kappac:
-#		kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
-#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-#	if options.apply_kappapu:
-#		kpubadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1028)
-#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-
-#	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
-
 # Gate the strain channel with all of the channels we want in frames
 if not options.no_dq_vector:
 	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
@@ -1276,6 +1263,26 @@ if not options.no_gamma:
 	gammaIout = pipeparts.mkaudiorate(pipeline, gammaIout, skip_to_first = True, silent = False)
 	gammaIout = pipeparts.mkreblock(pipeline, gammaIout, block_duration = gst.SECOND)
 
+# If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
+# FIXME: The code below just locks up the pipeline. Think of another way to do this
+strain = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100)
+#if not options.no_dq_vector:
+#	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+#	if options.apply_kappatst:
+#		ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+#	if options.apply_kappac:
+#		kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+#	if options.apply_kappapu:
+#		kpubadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1028)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+#
+#	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
+
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
 #
@@ -1295,7 +1302,7 @@ if not options.no_dq_vector:
 	pipeparts.mkqueue(pipeline, odcstatevectorout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
-pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STRAIN" % (instrument)))
+strain.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STRAIN" % (instrument)))
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma:
