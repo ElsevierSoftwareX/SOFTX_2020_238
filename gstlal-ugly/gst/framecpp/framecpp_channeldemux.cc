@@ -1,7 +1,7 @@
 /*
  * framecpp channel demultiplexor
  *
- * Copyright (C) 2011--2014  Kipp Cannon, Ed Maros
+ * Copyright (C) 2011--2015  Kipp Cannon, Ed Maros
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1047,6 +1047,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 						"nbits", (*current)->GetNBits(),	/* FIXME:  set depth in caps */
 						"bias", (*current)->GetBias(),
 						"slope", (*current)->GetSlope(),
+						"phase", (*current)->GetPhase(),
+						"datavalid", (*current)->GetDataValid(),
 						NULL
 					);
 					if(!gst_pad_is_linked(srcpad)) {
