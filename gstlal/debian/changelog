@@ -1,3 +1,9 @@
+gstlal (0.10.3-1) unstable; urgency=low
+
+  * Add "phase" and "datavalid" tags
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 14 Sep 2015 14:36:12 -0500
+
 gstlal (0.10.2-1) unstable; urgency=low
 
   * Add a reblock after the whitener

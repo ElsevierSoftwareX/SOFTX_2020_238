@@ -1,3 +1,9 @@
+gstlal-ugly (0.9.2-1) unstable; urgency=low
+
+  * framecpp plugin:  Add support for phase and dataValid attributes of ADC channels
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 14 Sep 2015 14:37:04 -0500
+
 gstlal-ugly (0.9.1-1) unstable; urgency=low
 
   * remove check for lal swig bindings (rely on gstlal package having done this)
