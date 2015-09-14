@@ -355,7 +355,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				switch(frpad->pad_type) {
 				case GST_FRPAD_TYPE_FRADCDATA: {
-					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset);
+					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
 					adc_data.AppendComment(frpad->comment);
 					GST_LOG_OBJECT(data->pad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
 					if(!frame->GetRawData()) {
@@ -801,6 +801,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		GstTagList *tag_list;
 		gchar *value_s = NULL;
 		gfloat value_f;
+		guint value_u;
 
 		/* FIXME:  should the GstFrPad's tags property be writable,
 		 * instead? */
@@ -832,6 +833,12 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 		if(gst_tag_list_get_float(tag_list, GSTLAL_TAG_SLOPE, &value_f))
 			g_object_set(pad, "slope", value_f, NULL);
+
+		if(gst_tag_list_get_float(tag_list, GSTLAL_TAG_PHASE, &value_f))
+			g_object_set(pad, "phase", value_f, NULL);
+
+		if(gst_tag_list_get_uint(tag_list, GSTLAL_TAG_DATAVALID, &value_u))
+			g_object_set(pad, "datavalid", value_u, NULL);
 
 		gst_event_unref(event);
 		goto done;
