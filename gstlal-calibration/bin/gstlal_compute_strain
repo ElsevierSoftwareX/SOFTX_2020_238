@@ -1224,19 +1224,23 @@ if not options.no_fcc:
 	fccout = calibration_parts.resample(pipeline, fccout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
 
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
-if not options.no_dq_vector:
-	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
-	if options.apply_kappatst:
-		ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
-		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-	if options.apply_kappac:
-		kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
-		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-	if options.apply_kappapu:
-		kpubadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1028)
-		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+# FIXME: The code below just locks up the pipeline. Think of another way to do this
+#if not options.no_dq_vector:
+#	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+#	if options.apply_kappatst:
+		#ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+#	if options.apply_kappac:
+#		kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+#	if options.apply_kappapu:
+#		kpubadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1028)
+#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 
-	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
+#	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
 
 # Gate the strain channel with all of the channels we want in frames
 if not options.no_dq_vector:
