@@ -915,6 +915,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return params
 
 	def lnP_signal(self, params):
+		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
+		# omit the factor P(horizon distance) = 1/T because it is
+		# identical in the numerator and denominator and so factors
+		# out of the ranking statistic, and because it is constant
+		# and so equivalent to an irrelevant normalization factor
+		# in the ranking statistic PDF sampler code.
+
 		# (instrument, snr) pairs sorted alphabetically by
 		# instrument name
 		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
