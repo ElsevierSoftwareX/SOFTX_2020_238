@@ -272,7 +272,6 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	ylo = pdf[xlo:xhi,].min()
 	if zerolag_pdf is not None:
 		yhi = max(yhi, zerolag_pdf[xlo:xhi,].max())
-		ylo = min(ylo, zerolag_pdf[xlo:xhi,].min())
 	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
