@@ -414,7 +414,7 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 if options.injection_file:
 	for g in groups(inj_jobTags, 10):
 		urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
-	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]}, output_files = {})
+	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {}, input_files = {"":[os.getcwd(), options.injection_file, options.web_dir]+jobTags}, output_files = {})
 	sensNode = inspiral_pipe.generic_node(sensJob, dag, [], opts = {}, input_files = {"":[options.injection_file, "%s/0000/cumulative_segments.xml" % os.getcwd(), options.marginalized_likelihood_file,  options.inj_gracedb_service_url, options.inj_gracedb_pipeline, options.inj_gracedb_group, options.inj_gracedb_search, min_max_inj_dist_list[0], min_max_inj_dist_list[1]]}, output_files = {})
 if options.state_backup_destination:
 	stateNode = inspiral_pipe.generic_node(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
