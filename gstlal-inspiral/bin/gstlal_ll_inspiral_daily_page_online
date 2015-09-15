@@ -18,7 +18,14 @@
 
 ## @file
 
+DIRECTORY=$1
+shift
+INJFILE=$1
+shift
+WEBDIR=$1
+shift
+
 while true ; do
-	gstlal_ll_inspiral_daily_page --directory $1 --injection-file $2 --web-dir $3
-	sleep 3600
+	/home/gstlalcbc/review/s6replay/git/gstlal/gstlal-inspiral/bin/gstlal_ll_inspiral_daily_page --directory ${DIRECTORY} --injection-file ${INJFILE} --web-dir ${WEBDIR} "$@"
+	sleep 60
 done
