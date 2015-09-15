@@ -1223,11 +1223,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			chisq_kernel_bins = 2.5
 			warnings.warn("Replacing chisq kernel bins with 2.5")
 
-		# Compute the KDE
-		kernel = rate.gaussian_window(snr_kernel_bins, chisq_kernel_bins, sigma = sigma)
-
-		# convolve with the bin count data
-		rate.filter_array(binnedarray.array, kernel)
+		# convolve bin count with density estimation kernel
+		rate.filter_array(binnedarray.array, rate.gaussian_window(snr_kernel_bins, chisq_kernel_bins, sigma = sigma))
 
 		# zero everything below the SNR cut-off.  need to do the
 		# slicing ourselves to avoid zeroing the at-threshold bin
