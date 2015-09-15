@@ -306,6 +306,12 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 
 	#
+	# do this before messing with options object
+	#
+
+	process_params = options.__dict__.copy()
+
+	#
 	# check for options, files that are always required
 	#
 	
@@ -318,13 +324,16 @@ def parse_command_line():
 			if svd_bank_cache_entry.description not in descriptions:
 				descriptions.append(svd_bank_cache_entry.description)
 			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
-		options.svd_bank.extend([",".join(svd_bank_dict[description]) for description in descriptions])
+		# do this out-of-place to preserve process_params' contents
+		options.svd_bank = options.svd_bank + [",".join(svd_bank_dict[description]) for description in descriptions]
 
 	if options.output_cache:
-		options.output.extend([CacheEntry(line).url for line in open(options.output_cache)])
+		# do this out-of-place to preserve process_params' contents
+		options.output = options.output + [CacheEntry(line).url for line in open(options.output_cache)]
 
 	if options.likelihood_file_cache:
-		options.likelihood_file.extend([CacheEntry(line).url for line in open(options.likelihood_file_cache)])
+		# do this out-of-place to preserve process_params' contents
+		options.likelihood_file = options.likelihood_file + [CacheEntry(line).url for line in open(options.likelihood_file_cache)]
 
 	missing_options = ["--%s" % option.replace("_", "-") for option in ["svd_bank", "output"] if getattr(options, option) is None]
 	if options.likelihood_file is None and options.reference_likelihood_file is None:
@@ -355,6 +364,7 @@ def parse_command_line():
 
 	if missing_files:
 		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
+
 	#
 	# check for mutually exclusive options
 	#
@@ -418,14 +428,11 @@ def parse_command_line():
 	# Option checks complete
 	#
 
-	# do this before converting option types
-	process_params = options.__dict__.copy()
-
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	if options.blind_injections is not None:
 		detectors.injection_filename = options.blind_injections
-	
+
 	# Setup local caching
 	if options.local_frame_caching:
 		f, fname = tempfile.mkstemp(".cache")
@@ -456,7 +463,7 @@ def parse_command_line():
 
 		# the injections are now present in the data so we don't want to do them twice
 		detectors.injection_filename = None
-	
+
 	# Choose to optionally reconstruct segments around injections (not blind injections!)
 	if options.injections:
 		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections)

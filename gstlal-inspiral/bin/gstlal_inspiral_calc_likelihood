@@ -88,7 +88,7 @@ def parse_command_line():
 	parser.add_option("-w", "--write-rates", metavar = "filename", help = "Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.")
 	options, filenames = parser.parse_args()
 
-	paramdict = options.__dict__
+	paramdict = options.__dict__.copy()
 
 	options.likelihood_urls = []
 	if options.likelihood_url is not None:
