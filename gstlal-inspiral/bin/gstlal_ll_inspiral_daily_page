@@ -35,16 +35,14 @@ parser = OptionParser()
 parser.add_option("--directory", default = ".", help = "directory to start looking for results")
 parser.add_option("--injection-file", default = ".", help = "The injection xml file that corresponds to the low latency injections")
 parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
-options, filenames = parser.parse_args()
+options, massbins = parser.parse_args()
 
 
 # FIXME should be more clever than this
 # Match 5 digit directories
 dir_pattern = re.compile('[0-9]{5}')
 
-# FIXME we really have to change this hacky convention for injections to start at 1000
-non_inj_pattern = re.compile('.*-0[0-9]{3}_LLOID-.*.xml.gz')
-inj_pattern = re.compile('.*-1[0-9]{3}_LLOID-.*.xml.gz')
+seg_files = glob.glob('%s/total_cumulative_segments.xml.gz' % options.directory)
 
 noninj_files_to_merge = []
 inj_files_to_merge = []
@@ -52,66 +50,64 @@ inj_files_to_merge = []
 # FIXME assume that the correct low latency cluster file is in the working
 # directory. Perhaps this should be a command line argument.
 cluster_file = os.path.join(options.directory, "ll_simplify_and_cluster.sql")
+simplify_file = os.path.join(options.directory, "ll_simplify.sql")
 
 result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
+
 for n, d in enumerate(result_dirs):
-	print >> sys.stderr, "processing directory %d of %d: %s" % (n+1, len(result_dirs), d)
 
-	# FIXME assume first directory contains segment files (true because segments are cumulative)
-	if n == 0:
-		# FIXME assume the first mass bin contains the "correct" segments
-		# Should be roughly true since segments are cumulative and each
-		# node should see the same segments if the analysis is running
-		# properly.
-		seg_files = glob.glob('%s/*-0000_SEGMENTS*.xml.gz' % os.path.join(options.directory, d))
+	for num_massbin, massbin in enumerate(massbins):
+	
+		print >> sys.stderr, "processing mass bin %d of %d in directory %d of %d: %s" % (num_massbin, len(massbins), n+1, len(result_dirs), d)
 
-	# FIXME don't hard code H1L1
-	# FIXME assumes 10 digit GPS
-	noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite.tmp' % d)
-	injdb = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID_INJ-%s00000-100000.sqlite.tmp' % d)
-	noninjdbfinal = noninjdb.replace(".tmp","")
-	injdbfinal = injdb.replace(".tmp","")
+		# FIXME don't hard code H1L1
+		# FIXME assumes 10 digit GPS
+		noninjdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s_ALL_LLOID-%s00000-100000.sqlite.tmp' % (massbin, d))
+		injdb = os.path.join(os.path.join(options.directory, d), 'H1L1-%s_ALL_LLOID_INJ-%s00000-100000.sqlite.tmp' % (massbin, d))
+		noninjdbfinal = noninjdb.replace(".tmp","")
+		injdbfinal = injdb.replace(".tmp","")
 
-	# see if this directory has been processed and is old enough to not have to worry about it any more
-	if float(now()) - float("%s00000" % d) > 125000 and os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
-		print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
-		noninj_files_to_merge.append(noninjdbfinal)
-		inj_files_to_merge.append(injdbfinal)
-		continue
+		# see if this directory has been processed and is old enough to not have to worry about it any more
+		if float(now()) - float("%s00000" % d) > 125000 and os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
+			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
+			noninj_files_to_merge.append(noninjdbfinal)
+			inj_files_to_merge.append(injdbfinal)
+			continue
 
-	# First do non injections
-	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if non_inj_pattern.match(xml)])
-	progressbar = ProgressBar("Non injection files processed", len(files))
-	for f in files:
-		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % noninjdb])
-		progressbar.increment()
-	del progressbar
+		# FIXME we really have to change this hacky convention for injections to start at 1000
+		non_inj_pattern = re.compile('.*-%s_LLOID-.*.xml.gz' % massbin)
+		inj_pattern = re.compile('.*-1%s_LLOID-.*.xml.gz' % massbin[1:])
 
-	# Then injections
-	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if inj_pattern.match(xml)])
-	progressbar = ProgressBar("Injection files processed", len(files))
-	for f in files:
-		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % injdb])
-		progressbar.increment()
-	del progressbar
+		# First do non injections
+		files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if non_inj_pattern.match(xml)])
+		progressbar = ProgressBar("Non injection files processed", len(files))
+		for f in files:
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
+			subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % noninjdb])
+			progressbar.increment()
+		del progressbar
+
+		# Then injections
+		files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if inj_pattern.match(xml)])
+		progressbar = ProgressBar("Injection files processed", len(files))
+		for f in files:
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
+			subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % injdb])
+			progressbar.increment()
+		del progressbar
 
 
-	# rename files
-	for db,dbf in ((noninjdb, noninjdbfinal), (injdb, injdbfinal)):
-		if os.path.exists(db):
-			os.rename(db, dbf)
+		# rename files
+		for db,dbf in ((noninjdb, noninjdbfinal), (injdb, injdbfinal)):
+			if os.path.exists(db):
+				os.rename(db, dbf)
 
-	if os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
-		noninj_files_to_merge.append(noninjdbfinal)
-		inj_files_to_merge.append(injdbfinal)
+		if os.path.exists(noninjdbfinal) and os.path.exists(injdbfinal):
+			noninj_files_to_merge.append(noninjdbfinal)
+			inj_files_to_merge.append(injdbfinal)
 
 
 # FIXME only add *new* files
-
-#noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
-#injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-%s00000-%d.sqlite.tmp' % (result_dirs[0], (int(result_dirs[-1]) - int(result_dirs[0])) * 100000))
 noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-0-2000000000.sqlite.tmp')
 injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-0-2000000000.sqlite.tmp')
 
@@ -123,14 +119,16 @@ if os.path.exists(injdb):
 progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
 for f in noninj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % noninjdb, "%s" % f])
-	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % noninjdb])
+	# Do not cluster! the online analysis doesn't do a global clustering stage!!
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", simplify_file,  "%s" % noninjdb])
 	progressbar.increment()
 del progressbar
 
 progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + len(seg_files))
 for f in inj_files_to_merge + seg_files:
 	subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % injdb, "%s" % f])
-	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % injdb])
+	# Do not cluster! the online analysis doesn't do a global clustering stage!!
+	subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", simplify_file,  "%s" % injdb])
 	progressbar.increment()
 del progressbar
 
