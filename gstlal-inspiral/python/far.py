@@ -729,6 +729,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
 
+	# with what weight to include the denominator PDFs in the
+	# numerator.  numerator will be
+	#
+	# numerator =
+	#   (1 - accidental_weight) * (measured numerator) +
+	#   accidental_weight * (measured denominator)
+	numerator_accidental_weight = 0.
+
 	# if two horizon distances, D1 and D2, differ by less than
 	#
 	#	| ln(D1 / D2) | <= log_distance_tolerance
@@ -936,19 +944,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		lnP_signal += super(ThincaCoincParamsDistributions, self).lnP_signal(params)
-
-		# return logarithm of (.99 P(..|signal) + 0.01 P(..|noise))
-		# FIXME:  investigate how to determine correct mixing ratio
-		lnP_noise = self.lnP_noise(params)
-		if math.isinf(lnP_noise) and math.isinf(lnP_signal):
-			if lnP_noise < 0. and lnP_signal < 0.:
-				return NegInf
-			if lnP_noise > 0. and lnP_signal > 0.:
-				return PosInf
-		lnP_signal += -0.010050335853501451	# math.log(.99)
-		lnP_noise += -4.6051701859880909	# math.log(0.01)
-		return max(lnP_signal, lnP_noise) + math.log1p(math.exp(-abs(lnP_signal - lnP_noise)))
+		return lnP_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(params)
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
@@ -1177,10 +1173,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
 			binnedarray.array += self.zero_lag_rates[key].array
 
-		# instrument combos are probabilities, not densities.  be
-		# sure the single-instrument categories are zeroed.
+		# be sure the single-instrument categories are zeroed.
 		for category in self.instrument_categories.values():
 			binnedarray[category,] = 0
+
+		# optionally mix denominator into numerator
+		if pdf_dict is self.injection_pdf and self.numerator_accidental_weight:
+			denom = self.background_rates[key].array.copy()
+			if self.zero_lag_in_background:
+				denom += self.zero_lag_rates[key].array
+			for category in self.instrument_categories.values():
+				denom[category,] = 0
+			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
+
+		# instrument combos are probabilities, not densities.
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.array /= binnedarray.array.sum()
 
@@ -1192,6 +1198,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# background counts
 		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
 			binnedarray.array += self.zero_lag_rates[key].array
+
+		# optionally mix denominator into numerator
+		if pdf_dict is self.injection_pdf and self.numerator_accidental_weight:
+			denom = self.background_rates[key].array.copy()
+			if self.zero_lag_in_background:
+				denom += self.zero_lag_rates[key].array
+			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
 
 		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
 		# construct the density estimation kernel
