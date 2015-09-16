@@ -112,7 +112,8 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		coinc_event.coinc_event_id AS coinc_event_id,
 		coinc_event.time_slide_id AS category,
 		coinc_inspiral.end_time AS end_time,	--- only keep the integer part
-		coinc_event.likelihood AS ranking_stat
+		coinc_event.likelihood AS ranking_stat,
+		coinc_inspiral.snr AS snr
 	FROM
 		coinc_event
 		JOIN coinc_inspiral ON (
@@ -137,7 +138,9 @@ WHERE
 			JOIN _cluster_info_ AS _cluster_info_b_ ON (
 				_cluster_info_b_.category == _cluster_info_a_.category
 				AND _cluster_info_b_.end_time == _cluster_info_a_.end_time
-				AND _cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat
+				AND (_cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat OR
+					_cluster_info_b_.ranking_stat == _cluster_info_a_.ranking_stat AND (_cluster_info_b_.snr >  _cluster_info_a_.snr OR _cluster_info_b_.snr == _cluster_info_a_.snr AND (_cluster_info_b_.coinc_event_id >  _cluster_info_a_.coinc_event_id))
+				)
 			)
 		WHERE
 			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id

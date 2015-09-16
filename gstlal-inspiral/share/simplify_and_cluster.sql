@@ -1,4 +1,4 @@
--- Copyright (C) 2011--2012,2014  Kipp Cannon, Chad Hanna
+-- Copyright (C) 2011--2012,2014,2015  Kipp Cannon, Chad Hanna
 --
 -- This program is free software; you can redistribute it and/or modify it
 -- under the terms of the GNU General Public License as published by the
@@ -112,7 +112,8 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		coinc_event.coinc_event_id AS coinc_event_id,
 		coinc_event.time_slide_id AS category,
 		(coinc_inspiral.end_time - (SELECT MIN(end_time) FROM coinc_inspiral)) + 1e-9 * coinc_inspiral.end_time_ns AS end_time,
-		coinc_event.likelihood AS ranking_stat
+		coinc_event.likelihood AS ranking_stat,
+		coinc_inspiral.snr AS snr
 	FROM
 		coinc_event
 		JOIN coinc_inspiral ON (
@@ -122,8 +123,9 @@ CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
 CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, ranking_stat);
 
 --
--- delete coincs that are within 4 s of coincs with higher SNR in the same
--- category
+-- delete coincs that are within 4 s of coincs with higher ranking
+-- statistic in the same category.  break ties by root-sum-square of SNRs,
+-- break ties by coinc_event_id
 --
 
 DELETE FROM
@@ -137,7 +139,9 @@ WHERE
 			JOIN _cluster_info_ AS _cluster_info_b_ ON (
 				_cluster_info_b_.category == _cluster_info_a_.category
 				AND (_cluster_info_b_.end_time BETWEEN _cluster_info_a_.end_time - 4.0 AND _cluster_info_a_.end_time + 4.0)
-				AND _cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat
+				AND (_cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat OR
+					_cluster_info_b_.ranking_stat == _cluster_info_a_.ranking_stat AND (_cluster_info_b_.snr >  _cluster_info_a_.snr OR _cluster_info_b_.snr == _cluster_info_a_.snr AND (_cluster_info_b_.coinc_event_id >  _cluster_info_a_.coinc_event_id))
+				)
 			)
 		WHERE
 			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id
