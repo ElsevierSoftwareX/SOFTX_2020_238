@@ -39,9 +39,12 @@ struct _PostcohFilesink {
   FILE *file;
 
   gint compress;
+  gint snapshot_interval;
   xmlTextWriterPtr writer;
   XmlTable *xtable;
   
+  GstClockTime t_start;
+  GString cur_filename;
 };
 
 struct _PostcohFilesinkClass {
