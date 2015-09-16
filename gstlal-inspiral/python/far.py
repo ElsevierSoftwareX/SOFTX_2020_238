@@ -140,6 +140,69 @@ def ncx2pdf(x, k, l):
 #
 # =============================================================================
 #
+#                                Poisson Stuff
+#
+# =============================================================================
+#
+
+
+def poisson_p_not_0(l):
+	"""
+	Return the probability that a Poisson process with a mean rate of l
+	yields a non-zero count.  = 1 - exp(-l).
+	"""
+	assert l >= 0.
+
+	# need -l everywhere
+
+	l = -l
+
+	#
+	# result is closer to 1 than to 0.  use direct evaluation.
+	#
+
+	if l < -0.69314718055994529:
+		return 1. - math.exp(l)
+
+	#
+	# result is closer to 0 than to 1.  use Taylor expansion for exp()
+	# with leading term removed to avoid having to subtract from 1 to
+	# get answer.
+	#
+	# 1 - exp x = -(x + x^2/2! + x^3/3! + ...)
+	#
+
+	s = [l]
+	term = l
+	threshold = -1e-20 * l
+	for n in itertools.count(2):
+		term *= l / n
+		s.append(term)
+		if abs(term) <= threshold:
+			# smallest term was added last, want to compute sum
+			# from smallest to largest
+			s.reverse()
+			s = -sum(s)
+			# if the sum was identically 0 then we've ended up
+			# with -0.0 which we add a special case for to make
+			# positive.
+			assert s >= 0.
+			return s if s else 0.
+
+poisson_p_not_0 = numpy.frompyfunc(poisson_p_not_0, 1, 1)
+
+
+def poisson_p_0(l):
+	"""
+	Return the probability that a Poisson process with a mean rate of l
+	yields a zero count.  = exp(-l).
+	"""
+	return numpy.exp(-l)
+
+
+#
+# =============================================================================
+#
 #                                Binomial Stuff
 #
 # =============================================================================
@@ -281,7 +344,9 @@ def fap_after_trials(p, m):
 				return sum(s)
 
 	#
-	# compute result as 1 - exp(m * log(1 - p))
+	# compute result as 1 - exp(m * log(1 - p)).  use poisson_p_not_0()
+	# to evaluate 1 - exp() with an algorithm that avoids loss of
+	# precision.
 	#
 
 	try:
@@ -297,26 +362,7 @@ def fap_after_trials(p, m):
 
 		return 1.
 
-	if x > -0.69314718055994529:
-		#
-		# result is closer to 0 than to 1.  use Taylor expansion
-		# for exp() with leading term removed to avoid having to
-		# subtract from 1 to get answer.
-		#
-		# 1 - exp x = -(x + x^2/2! + x^3/3! + ...)
-		#
-
-		s = [x]
-		term = x
-		for n in itertools.count(2):
-			term *= x / n
-			s.append(term)
-			# 0th term is always negative
-			if abs(term) <= -1e-18 * s[0]:
-				s.reverse()
-				return -sum(s)
-
-	return 1. - math.exp(x)
+	return poisson_p_not_0(-x)
 
 
 fap_after_trials_arr = numpy.frompyfunc(fap_after_trials, 2, 1)
