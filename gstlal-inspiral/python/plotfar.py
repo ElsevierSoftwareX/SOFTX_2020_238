@@ -48,13 +48,22 @@ def init_plot(figsize):
 	return fig, axes
 
 
-def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, snr_max, dynamic_range_factor = 1e-10, event_snr = None, event_chisq = None):
+def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, snr_max, dynamic_range_factor = 1e-10, event_snr = None, event_chisq = None, sngls = None):
 	key = "%s_snr_chi" % instrument
 	if binnedarray_string == "LR":
 		binnedarray = getattr(coinc_param_distributions, "injection_pdf")[key]
 	else:
 		binnedarray = getattr(coinc_param_distributions, binnedarray_string)[key]
 	tag = {"background_pdf":"Noise", "injection_pdf":"Signal", "zero_lag_pdf":"Candidates", "LR":"LR"}[binnedarray_string]
+
+	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
+	# obtain the co-ordinates for a sngls scatter plot for this
+	# instrument from that.  need to handle case in which there are no
+	# singles for this instrument
+	if sngls is not None:
+		sngls = numpy.array([sngl[instrument] for sngl in sngls if instrument in sngl])
+		if not len(sngls):
+			sngls = None
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	# the last bin can have a centre at infinity, and its value is
@@ -111,6 +120,8 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if event_snr is not None and event_chisq is not None:
 		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
+	if sngls is not None:
+		axes.plot(sngls[:,0], sngls[:,1] / sngls[:,0]**2., "b.", alpha = .2)
 	axes.loglog()
 	axes.grid(which = "both")
 	#axes.set_xlim((xlo, xhi))
@@ -200,7 +211,8 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	except AttributeError:
 		return fig
 
-def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr, ifo_snr = {}):
+
+def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr, ifo_snr = {}, sngls = None):
 	if len(instruments) > 2:
 		# FIXME:  figure out how to plot 3D PDFs
 		return None
@@ -214,6 +226,15 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	if numpy.isnan(z).any():
 		warnings.warn("%s SNR PDF for %s contains NaNs" % (", ".join(instruments), ", ".join("%s=%g" % instdist for instdist in sorted(horizon_distances.items()))))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
+
+	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
+	# obtain the co-ordinates for a sngls scatter plot for the
+	# instruments from that.  need to handle case in which there are no
+	# singles for this instrument
+	if sngls is not None:
+		sngls = numpy.array([(sngl[instruments[0]][0], sngl[instruments[1]][0]) for sngl in sngls if sorted(sngl) == instruments])
+		if not len(sngls):
+			sngls = None
 
 	# the range of the plots
 	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
@@ -237,6 +258,8 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if ifo_snr:
 		axes.plot(ifo_snr[instruments[0]], ifo_snr[instruments[1]], 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
+	if sngls is not None:
+		axes.plot(sngls[:,0], sngls[:,1], "b.", alpha = .2)
 	axes.loglog()
 	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
 	#axes.set_xlim((xlo, xhi))
