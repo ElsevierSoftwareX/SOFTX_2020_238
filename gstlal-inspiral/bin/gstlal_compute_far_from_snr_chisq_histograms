@@ -155,15 +155,15 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 
 
-# FIXME:  need to do this to get the combined PDFs populated.  the XML file
-# contains both bin counts and PDFs for all instrument sets but none for
-# the "combined" set.  the bin counts for the combined set are populated by
-# the .from_xml() method but the PDFs are built in the .finish() method.
-# because all the other PDFs come out of the file we normally would not
-# need to invoke the .finish() method here at all.  look into getting the
-# combined PDFs built by the .from_xml() method as well.  NOTE: that method
-# can't just call .finish() itself because that's a huge waste of time when
-# many files need to be read and summed.
+#
+# Now generate new ranking statistic PDFs by applying the clustering
+# extinction model.
+#
+# FIXME:  don't hard-code clustering window
+#
+
+
+ranking_data = far.RankingData.new_with_extinction(ranking_data)[0]
 ranking_data.finish(verbose = options.verbose)
 
 
@@ -227,8 +227,9 @@ if options.verbose:
 
 
 #
-# Rewrite parameter and ranking statistic distribution file but with
-# zero-lag counts replaced with count-above-threshold.
+# Write parameter and ranking statistic distribution file but with zero-lag
+# counts replaced with count-above-threshold and background and signal PDFs
+# replaced with result of clustering extinction model
 #
 
 
