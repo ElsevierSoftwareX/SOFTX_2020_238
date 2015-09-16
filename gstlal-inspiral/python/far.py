@@ -2227,21 +2227,20 @@ class FAPFAR(object):
 		assert not numpy.isnan(counts).any(), "background log likelihood ratio rates contain NaNs"
 		assert (counts >= 0.).all(), "background log likelihood ratio rates contain negative values"
 
-		# cumulative distribution function and its complement.
-		# it's numerically better to recompute the ccdf by
-		# reversing the array of counts than trying to subtract the
-		# cdf from 1.
-		cdf = counts.cumsum()
-		cdf /= cdf[-1]
+		# complementary cumulative distribution function
 		ccdf = counts[::-1].cumsum()[::-1]
 		ccdf /= ccdf[0]
 
-		# cdf boundary condition:  cdf = 1/e at the ranking
-		# statistic threshold so that self.far_from_rank(threshold)
-		# * livetime = observed count of events above threshold.
-		# ccdf *= 1. - 1. / math.e
-		# cdf *= 1. - 1. / math.e
-		# cdf += 1. / math.e
+		# ccdf is now P(ranking stat > threshold | a candidate), we
+		# need P(ranking stat > threshold), i.e. need to correct
+		# for the possibility that no candidate is present.
+		# specifically, the ccdf needs to =1-1/e at the candidate
+		# identification threshold, and cdf=1/e at the candidate
+		# threshold, in order for FAR(threshold) * livetime to
+		# equal the actual observed number of candidates.
+		ccdf = poisson_p_not_0(ccdf)
+		cdf = 1. - ccdf
+		cdf[:-1] = cdf[1:]
 
 		# last checks that the CDF and CCDF are OK
 		assert not numpy.isnan(cdf).any(), "log likelihood ratio CDF contains NaNs"
