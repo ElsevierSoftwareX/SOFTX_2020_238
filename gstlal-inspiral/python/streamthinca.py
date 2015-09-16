@@ -184,7 +184,7 @@ class StreamThinca(object):
 
 		# set of the event ids of triggers currently in ram that
 		# have already been used in coincidences
-		self.ids = set()
+		self.event_ids = set()
 
 
 	def set_coinc_params_distributions(self, coinc_params_distributions):
@@ -229,7 +229,8 @@ class StreamThinca(object):
 
 		# stay this far away from the boundaries of the available
 		# triggers
-		coincidence_back_off = max(abs(offset) for offset in lsctables.TimeSlideTable.get_table(xmldoc).getColumnByName("offset"))
+		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
+		coincidence_back_off = max(abs(offset) for offset in time_slide_table.getColumnByName("offset"))
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
@@ -241,7 +242,7 @@ class StreamThinca(object):
 		# internal sngl_inspiral table.  save any that were never
 		# used in coincidences
 		discard_boundary = self.last_boundary - coincidence_back_off
-		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.ids]
+		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.event_ids]
 		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
 		# we need our own copies of these other tables because
@@ -324,16 +325,28 @@ class StreamThinca(object):
 			# set of IDs of all triggers that have been used in
 			# coincs
 			index = dict((row.event_id, row) for row in self.sngl_inspiral_table)
-			self.ids &= set(index)
-			newids = set(coinc_event_map_table.getColumnByName("event_id")) - self.ids
-			self.ids |= newids
+			self.event_ids &= set(index)
+			newids = set(coinc_event_map_table.getColumnByName("event_id")) - self.event_ids
+			self.event_ids |= newids
+
+			# find zero-lag coinc event IDs
+			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in time_slide_table.as_dict().items() if not any(offsetvector.values()))
+			zero_lag_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.time_slide_id in zero_lag_time_slide_ids)
+
+			# singles used in coincs but not in zero-lag
+			# coincs.  these will be added to the
+			# "non-coincident singles" list before returning
+			background_coinc_sngl_ids = set(coinc_event_map_table.getColumnByName("event_id")) - set(row.event_id for row in coinc_event_map_table if row.coinc_event_id in zero_lag_coinc_event_ids)
+			background_coinc_sngls = map(index.__getitem__, background_coinc_sngl_ids)
 
 			# copy rows into target tables.
-			for id in newids:
-				real_sngl_inspiral_table.append(index[id])
+			for event_id in newids:
+				real_sngl_inspiral_table.append(index[event_id])
 			map(real_coinc_event_map_table.append, coinc_event_map_table)
 			map(real_coinc_event_table.append, coinc_event_table)
 			map(real_coinc_inspiral_table.append, coinc_inspiral_table)
+		else:
+			background_coinc_sngls = []
 
 		# save all sngls above the requested sngls SNR threshold
 		# (all snlgs that participated in coincs are already in the
@@ -347,8 +360,8 @@ class StreamThinca(object):
 		# record boundary
 		self.last_boundary = boundary
 
-		# return non-coincident sngls
-		return noncoinc_sngls
+		# return sngls that are not coincident in zero-lag
+		return noncoinc_sngls + background_coinc_sngls
 
 
 	def flush(self, xmldoc, process_id, fapfar = None):
@@ -366,10 +379,10 @@ class StreamThinca(object):
 		# any event that hasn't been used in a coinc by now will
 		# never be
 		if self.sngl_inspiral_table is not None:
-			noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
+			noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.event_ids)
 			self.sngl_inspiral_table.unlink()
 			self.sngl_inspiral_table = None
-		self.ids.clear()
+		self.event_ids.clear()
 
 		# last_boundary must be reset to -infinity so that it looks
 		# like a fresh copy of the stream thinca instance
