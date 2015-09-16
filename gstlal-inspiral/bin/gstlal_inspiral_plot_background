@@ -133,8 +133,8 @@ def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_pat
 	if not filenames:
 		return None, None
 
-	background_ln_likelihood_ratios = {}
-	zerolag_ln_likelihood_ratios = {}
+	background_ln_likelihood_ratios = []
+	zerolag_ln_likelihood_ratios = []
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -145,9 +145,10 @@ def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_pat
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for participating_instruments, fap, ln_likelihood_ratio, is_background in connection.cursor().execute("""
+		cursor = connection.cursor()
+
+		for fap, ln_likelihood_ratio, is_background in cursor.execute("""
 SELECT
-	coinc_inspiral.ifos,
 	coinc_inspiral.false_alarm_rate,
 	coinc_event.likelihood,
 	EXISTS (
@@ -168,14 +169,17 @@ WHERE
 	coinc_event.coinc_def_id == ?
 	AND (? ISNULL OR coinc_event.likelihood >= ?)
 		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)):
-			participating_instruments = frozenset(lsctables.instrument_set_from_ifos(participating_instruments))
 			if is_background:
-				background_ln_likelihood_ratios.setdefault(participating_instruments, []).append((ln_likelihood_ratio, fap))
+				background_ln_likelihood_ratios.append((ln_likelihood_ratio, fap))
 			else:
-				zerolag_ln_likelihood_ratios.setdefault(participating_instruments, []).append((ln_likelihood_ratio, fap))
+				zerolag_ln_likelihood_ratios.append((ln_likelihood_ratio, fap))
 
+		cursor.close()
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
+
+	background_ln_likelihood_ratios.sort()
+	zerolag_ln_likelihood_ratios.sort()
 
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
 
@@ -296,8 +300,7 @@ if ranking_data is not None:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
 
-	ranking_stats = sorted(sum(zerolag_ln_likelihood_ratios.values(), [])) if zerolag_ln_likelihood_ratios is not None else None
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), zerolag_ln_likelihood_ratios = ranking_stats)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, options.max_log_lambda), zerolag_ln_likelihood_ratios = zerolag_ln_likelihood_ratios)
 	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
