@@ -31,6 +31,7 @@
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
 #	+ `--verbose`: Be verbose.
 
+import itertools
 import math
 import matplotlib
 matplotlib.rcParams.update({
@@ -130,11 +131,10 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 
 
 def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
-	if not filenames:
-		return None, None
-
 	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
+	background_sngls = []
+	zerolag_sngls = []
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
@@ -174,6 +174,45 @@ WHERE
 			else:
 				zerolag_ln_likelihood_ratios.append((ln_likelihood_ratio, fap))
 
+		for coinc_event_id, rows in itertools.groupby(cursor.execute("""
+SELECT
+	coinc_event_map.coinc_event_id,
+	EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	),
+	sngl_inspiral.ifo,
+	sngl_inspiral.snr,
+	sngl_inspiral.chisq
+FROM
+	sngl_inspiral
+	JOIN coinc_event_map ON (
+		coinc_event_map.table_name == 'sngl_inspiral'
+		AND coinc_event_map.event_id == sngl_inspiral.event_id
+	)
+	JOIN coinc_event ON (
+		coinc_event.coinc_event_id == coinc_event_map.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND (? ISNULL OR coinc_event.likelihood >= ?)
+ORDER BY
+	coinc_event_map.coinc_event_id
+		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)), lambda row: row[0]):
+			rows = list(rows)
+			is_background = rows[0][1]
+			# {instrument: (snr, chisq)} dictionary
+			sngls = dict((row[2], (row[3], row[4])) for row in rows)
+			if is_background:
+				background_sngls.append(sngls)
+			else:
+				zerolag_sngls.append(sngls)
+
 		cursor.close()
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
@@ -181,7 +220,7 @@ WHERE
 	background_ln_likelihood_ratios.sort()
 	zerolag_ln_likelihood_ratios.sort()
 
-	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
+	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls
 
 
 class SnrChiColourNorm(matplotlib.colors.Normalize):
@@ -253,7 +292,10 @@ else:
 	fapfar = None
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+if options.database:
+	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+else:
+	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls = None, None, None, None
 
 
 #
