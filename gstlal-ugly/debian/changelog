@@ -1,6 +1,11 @@
 gstlal-ugly (0.9.2-1) unstable; urgency=low
 
-  * framecpp plugin:  Add support for phase and dataValid attributes of ADC channels
+  * framecpp plugin:  add support for phase and dataValid attributes of ADC channels
+  * framecpp plugin:  add zero-copy feature to demuxer
+  * gds plugin:  expand framexmitsrc query support
+  * gds plugin:  expand lvshmsrc query support
+  * gstlal_inj_frames:  new program
+  * lvshmsinksrc_test_01.sh:  fix out-of-tree "make check"
 
  -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 14 Sep 2015 14:37:04 -0500
 
