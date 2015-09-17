@@ -1,3 +1,9 @@
+gstlal-inspiral (0.6.7-1) unstable; urgency=low
+
+  * numpy.frompyfunc() --> numpy.vectorize()
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 16 Sep 2015 23:55:26 -0500
+
 gstlal-inspiral (0.6.6-1) unstable; urgency=low
 
   * various adjustments
