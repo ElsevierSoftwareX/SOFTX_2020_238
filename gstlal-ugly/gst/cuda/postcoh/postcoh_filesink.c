@@ -178,21 +178,18 @@ postcoh_filesink_class_init (PostcohFilesinkClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_LOCATION,
       g_param_spec_string ("location", "File Location",
-          "Location of the file to write", NULL,
+          "Location prefix of the file to write", NULL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_COMPRESS,
       g_param_spec_int ("compression", "Whether to compress or not",
-          "Compression (1), Non-compression (0)", 0, 1, 1,
+          "(0) Non-compression, (1) Compression", 0, 1, 1,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
 
   g_object_class_install_property (gobject_class, PROP_SNAPSHOT_INTERVAL,
-      g_param_spec_int ("snapshot_interval", "How often to store postcoh table",
-          "(0), At the end (N) Every N seconds", 0, G_INT_MAX, 14400,
+      g_param_spec_int ("snapshot-interval", "How often to store postcoh table",
+          "How often to store postcoh table: (0) At the end, (N) Every N seconds", 0, G_MAXINT, 0,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-
   
   gstbasesink_class->start = GST_DEBUG_FUNCPTR (postcoh_filesink_start);
   gstbasesink_class->stop = GST_DEBUG_FUNCPTR (postcoh_filesink_stop);
@@ -390,7 +387,7 @@ postcoh_filesink_set_property (GObject * object, guint prop_id,
     case PROP_COMPRESS:
       sink->compress = g_value_get_int(value);
       break;
-    case PROP_SNAPSHOT_INVERVAL:
+    case PROP_SNAPSHOT_INTERVAL:
       sink->snapshot_interval = g_value_get_int(value);
       break;
     default:
@@ -412,7 +409,7 @@ postcoh_filesink_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_COMPRESS:
       g_value_set_int (value, sink->compress);
       break;
-    case PROP_SNAPSHOT_INVERVAL:
+    case PROP_SNAPSHOT_INTERVAL:
       g_value_set_int (value, sink->snapshot_interval);
       break;
     default:
@@ -475,158 +472,8 @@ close_failed:
 }
 #endif
 
-static gboolean postcoh_filesink_end_xml(PostcohFilesink sink)
-{
-  xmlTextWriterPtr writer = sink->writer;
-    /* for stream */
-    rc = xmlTextWriterEndElement(writer);
-    if (rc < 0) {
-        printf
-            ("Error at xmlTextWriterEndElement\n");
-        return FALSE;
-    }
-
-
-
-    /* for table */
-    xmlTextWriterEndElement(writer);
-    if (rc < 0) {
-        printf
-            ("Error at xmlTextWriterEndElement\n");
-        return FALSE;
-    }
-
-
-    /* for the whole document */
-    xmlTextWriterEndDocument(writer);
-    if (rc < 0) {
-        printf
-            ("Error at xmlTextWriterEndDocument\n");
-        return FALSE;
-    }
-}
-
-/* handle events (search) */
-static gboolean
-postcoh_filesink_event (GstBaseSink * basesink, GstEvent * event)
-{
-  GstEventType type;
-  PostcohFilesink *sink;
-  int rc;
-
-  sink = POSTCOH_FILESINK (basesink);
-
-  type = GST_EVENT_TYPE (event);
-
-  switch (type) {
-    case GST_EVENT_EOS:
-//      if (fflush (sink->file))
-//        goto flush_failed;
-
-    postcoh_filesink_end_xml(sink);
-    GST_LOG_OBJECT(sink, "EVENT EOS. Finish writing document");
-
-      break;
-    default:
-      break;
-  }
-
-  return TRUE;
-
-  // return GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
-#if 0
-flush_failed:
-  {
-    GST_ELEMENT_ERROR (sink, RESOURCE, WRITE,
-        (_("Error while writing to file \"%s\"."), sink->filename),
-        GST_ERROR_SYSTEM);
-    gst_event_unref (event);
-    return FALSE;
-  }
-#endif
-}
-
-
-
-static GstFlowReturn
-postcoh_filesink_render (GstBaseSink * sink, GstBuffer * buf)
-{
-  if (!GST_CLOCK_TIME_IS_VALID(sink->t_start)) {
-    sink->t_start = GST_BUFFER_TIMESTAMP(buf);
-    // This is the filename prefix.
-    g_assert(sink->uri);
-    sink->cur_filename = g_string_new(sink->uri);
-    guint64 gps_time = sink->tstart / GST_SECOND;
-    if (sink->snapshot_interval)
-      g_string_append_printf(sink->cur_filename, "_%u_%d.xml.gz", gps_time, sink->snapshot_interval);
-    else 
-      g_string_append_printf(sink->cur_filename, "_%u.xml.gz", gps_time);
-
-    gboolean rc = postcoh_filesink_start_xml(sink);
-    if (rc == FALSE) {
-      GST_ERROR_OBJECT(sink, "postcoh xml header writing failed");
-      return GST_FLOW_ERROR;
-    }
-    GstFlowReturn rs = postcoh_filesink_write_table_from_buf(sink, buf);
-    return rs;
-  }
-
-  GstClockTime t_cur = GST_BUFFER_TIMESTAMP(buf);
-  if (sink->snapshot_interval > 0) {
-  if (t_cur - sink->t_start > sink->snapshot_interval) {
-    postcoh_filesink_end_xml(sink);
-    postcoh_filesink_cleanup_xml(sink);
-    postcoh_filesink_start_xml(sink);
-  }
-    GstFlowReturn rs = postcoh_filesink_write_table_from_buf(sink, buf);
-    return rs;
-  }
-}
-
-static GstFlowReturn
-postcoh_filesink_write_table_from_buf(PostcohFilesink sink, GstBuffer buf)
-{
-  PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buf);
-  PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
-
-  XmlTable *xtable = sink->xtable;
-  int rc;
-
-
-  for(; table<table_end; table++) {
-        GString *line = g_string_new("\t\t\t\t");
-	g_string_append_printf(line, "%d%s", table->end_time.gpsSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time.gpsNanoSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->pix_idx, xtable->delimiter->str);
-	g_string_append_printf(line, "%f%s", table->maxsnglsnr, xtable->delimiter->str);
-	g_string_append_printf(line, "%f%s", table->cohsnr, xtable->delimiter->str);
-	g_string_append_printf(line, "%f%s", table->nullsnr, xtable->delimiter->str);
-	g_string_append_printf(line, "%f%s", table->chisq, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
-	
-	g_string_append(line, "\n");
-//	printf("%s", line->str);
-        rc = xmlTextWriterWriteFormatRaw(sink->writer, line->str);
-	if (rc < 0)
-		return GST_FLOW_ERROR;
-        g_string_free(line, TRUE);
-  }
-  GST_LOG_OBJECT (sink,
-		"Writen a buffer (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
-		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
-		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
-		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
-		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
-
-  return GST_FLOW_OK;
-}
-
-static gboolean postcoh_filesink_start_xml(PostcohFilesink sink)
+static gboolean 
+postcoh_filesink_start_xml(PostcohFilesink *sink)
 {
     sink->writer = xmlNewTextWriterFilename(sink->cur_filename->str, sink->compress);
     xmlTextWriterPtr writer = sink->writer;
@@ -712,12 +559,38 @@ static gboolean postcoh_filesink_start_xml(PostcohFilesink sink)
 }
 
 
-static gboolean
-postcoh_filesink_start (GstBaseSink * basesink)
+static gboolean postcoh_filesink_end_xml(PostcohFilesink *sink)
 {
-  PostcohFilesink *sink = POSTCOH_FILESINK (basesink);
+  xmlTextWriterPtr writer = sink->writer;
+  int rc = 0;
 
-  sink->t_start = GST_CLOCK_TIME_NONE;
+  /* for stream */
+  rc = xmlTextWriterEndElement(writer);
+  if (rc < 0) {
+      printf
+          ("Error at xmlTextWriterEndElement\n");
+      return FALSE;
+  }
+
+
+
+  /* for table */
+  xmlTextWriterEndElement(writer);
+  if (rc < 0) {
+      printf
+          ("Error at xmlTextWriterEndElement\n");
+      return FALSE;
+  }
+
+
+  /* for the whole document */
+  xmlTextWriterEndDocument(writer);
+  if (rc < 0) {
+      printf
+          ("Error at xmlTextWriterEndDocument\n");
+      return FALSE;
+  }
+  return TRUE;
 }
 
 static gboolean
@@ -726,8 +599,164 @@ postcoh_filesink_cleanup_xml (PostcohFilesink * sink)
 
   xmlFreeTextWriter(sink->writer);
 //  postcoh_filesink_close_file (sink);
-  if (sink->xtable)
+  if (sink->xtable) {
 	  free(sink->xtable);
+	  sink->xtable = NULL;
+  }
+  g_string_free(sink->cur_filename, TRUE);
+  sink->cur_filename = NULL;
+  return TRUE;
+}
+
+static GstFlowReturn
+postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
+{
+  PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buf);
+  PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
+
+  XmlTable *xtable = sink->xtable;
+  int rc;
+
+
+  for(; table<table_end; table++) {
+        GString *line = g_string_new("\t\t\t\t");
+	g_string_append_printf(line, "%d%s", table->end_time.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->pix_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->maxsnglsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->cohsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->nullsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->chisq, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
+	
+	g_string_append(line, "\n");
+//	printf("%s", line->str);
+        rc = xmlTextWriterWriteFormatRaw(sink->writer, line->str);
+	if (rc < 0)
+		return GST_FLOW_ERROR;
+        g_string_free(line, TRUE);
+  }
+
+  GST_LOG_OBJECT (sink,
+		"Writen a buffer (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
+		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
+		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
+		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
+		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
+
+  return GST_FLOW_OK;
+}
+
+/* handle events (search) */
+static gboolean
+postcoh_filesink_event (GstBaseSink * basesink, GstEvent * event)
+{
+  GstEventType type;
+  PostcohFilesink *sink;
+
+  sink = POSTCOH_FILESINK (basesink);
+
+  type = GST_EVENT_TYPE (event);
+
+  switch (type) {
+    case GST_EVENT_EOS:
+//      if (fflush (sink->file))
+//        goto flush_failed;
+
+    GST_LOG_OBJECT(sink, "EVENT EOS. Finish writing document");
+
+    gboolean rt = postcoh_filesink_end_xml(sink);
+    if (rt == FALSE) {
+      GST_ERROR_OBJECT(sink, "postcoh xml end writing failed");
+      return FALSE;
+    }
+      break;
+    default:
+      break;
+  }
+
+  return TRUE;
+
+  // return GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
+#if 0
+flush_failed:
+  {
+    GST_ELEMENT_ERROR (sink, RESOURCE, WRITE,
+        (_("Error while writing to file \"%s\"."), sink->filename),
+        GST_ERROR_SYSTEM);
+    gst_event_unref (event);
+    return FALSE;
+  }
+#endif
+}
+
+
+
+static GstFlowReturn
+postcoh_filesink_render (GstBaseSink * basesink, GstBuffer * buf)
+{
+  PostcohFilesink *sink;
+  sink = POSTCOH_FILESINK (basesink);
+
+  if (!GST_CLOCK_TIME_IS_VALID(sink->t_start)) {
+    sink->t_start = GST_BUFFER_TIMESTAMP(buf);
+    // This is the filename prefix.
+    g_assert(sink->uri);
+    sink->cur_filename = g_string_new(sink->uri);
+    gint gps_time = sink->t_start / GST_SECOND;
+    if (sink->snapshot_interval)
+      g_string_append_printf(sink->cur_filename, "_%d_%d.xml.gz", gps_time, sink->snapshot_interval);
+    else 
+      g_string_append_printf(sink->cur_filename, "_%d_end.xml.gz", gps_time);
+
+    gboolean rt = postcoh_filesink_start_xml(sink);
+    if (rt == FALSE) {
+      GST_ERROR_OBJECT(sink, "postcoh xml header writing failed");
+      return GST_FLOW_ERROR;
+    }
+    GstFlowReturn rs = postcoh_filesink_write_table_from_buf(sink, buf);
+    return rs;
+  }
+
+  GstClockTime t_cur = GST_BUFFER_TIMESTAMP(buf);
+  if (sink->snapshot_interval > 0 && (t_cur - sink->t_start)/GST_SECOND > (unsigned) sink->snapshot_interval) {
+
+    gboolean rt = postcoh_filesink_end_xml(sink);
+    if (rt == FALSE) {
+      GST_ERROR_OBJECT(sink, "postcoh xml end writing failed");
+      return GST_FLOW_ERROR;
+    }
+
+    postcoh_filesink_cleanup_xml(sink);
+
+    /* Create a new xml file for postcoh table */
+    sink->t_start = t_cur;
+    // This is the filename prefix.
+    g_assert(sink->uri);
+    sink->cur_filename = g_string_new(sink->uri);
+    gint gps_time = sink->t_start / GST_SECOND;
+    g_string_append_printf(sink->cur_filename, "_%d_%d.xml.gz", gps_time, sink->snapshot_interval);
+    rt = postcoh_filesink_start_xml(sink);
+    if (rt == FALSE) {
+      GST_ERROR_OBJECT(sink, "postcoh xml header writing failed");
+      return GST_FLOW_ERROR;
+    }
+
+  }
+    GstFlowReturn rs = postcoh_filesink_write_table_from_buf(sink, buf);
+    return rs;
+}
+
+static gboolean
+postcoh_filesink_start (GstBaseSink * basesink)
+{
+  PostcohFilesink *sink = POSTCOH_FILESINK (basesink);
+  sink->t_start = GST_CLOCK_TIME_NONE;
   return TRUE;
 }
 
