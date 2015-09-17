@@ -66,6 +66,7 @@ import sys
 from optparse import OptionParser
 import signal
 import subprocess
+import multiprocessing
 import socket
 import time
 
@@ -379,7 +380,19 @@ else:
 #
 #for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, options.likelihood_file):
 
-if 1==1:
+#if 1==1:
+
+def one_pipeline(iir_bank,
+    output_filename, 
+    detectors,
+    psd,
+    options
+    ):
+  
+  if options.verbose:
+    print >>sys.stderr, "Bank file:", iir_bank
+    print >>sys.stderr, "Output file: ", output_filename
+  
   # create a new, empty, Bottle application
   bottle.default_app.push()
 
@@ -392,7 +405,7 @@ if 1==1:
   @bottle.route("/index.html")
 
   
-  def index(job_tag = options.job_tag, instruments = set(iir_banks[0].keys())):
+  def index(job_tag = options.job_tag, instruments = set(iir_bank.keys())):
     host = socket.gethostname()
     server_address = "http://%s:%d" % (host, httpservers[0][0].port)
     yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
@@ -405,12 +418,12 @@ if 1==1:
 	continue
       yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
     yield "</p>\n</body></html>"
+  # end index()
+  
   # FIXME:  get service-discovery working, then don't do this
   if "GSTLAL_LL_JOB" in os.environ:
     open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
-#  print iir_bank
-#  print output_filename
 #  print likelihood_file
 #  banks = {}
 #  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
@@ -432,10 +445,13 @@ if 1==1:
   pipeline = gst.Pipeline("gstlal_postcoh_inspiral")
   mainloop = gobject.MainLoop()
 
+  # Strange addition of square bracket to handle a complicated nested loop in spiirparts.mkPostcohSPIIR()
+  iir_bank = [iir_bank]
+
   postcohsink = spiirparts.mkPostcohSPIIR(
       pipeline,
       detectors = detectors,
-      banks = iir_banks,
+      banks = iir_bank,
       psd = psd,
       psd_fft_length = options.psd_fft_length,
       ht_gate_threshold = options.ht_gate_threshold,
@@ -448,7 +464,7 @@ if 1==1:
       peak_thresh = options.peak_thresh,
       detrsp_fname = options.detrsp_fname,
       hist_trials = options.hist_trials,
-      output_filename = options.output,
+      output_filename = output_filename,
       output_skymap = options.output_skymap
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
@@ -481,12 +497,30 @@ if 1==1:
 
 
 # Shutdown the web interface servers
-  del httpservers
   bottle.default_app.pop()
 
 #
 # done
 #
+
+jobs = []
+for iir_bank, output_filename in zip(iir_banks, options.output):
+
+  if options.verbose:
+    print >> sys.stderr, "try fork a new process"
+  
+  child = multiprocessing.Process(target = one_pipeline, 
+      args = (iir_bank, 
+	output_filename, 
+	detectors,
+	psd,
+	options
+	))
+  jobs.append(child)
+  child.start()
+
+for j in jobs:
+  j.join()
 
 
 if options.data_source in ("lvshm", "framexmit"):

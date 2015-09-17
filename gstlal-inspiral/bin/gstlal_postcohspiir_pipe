@@ -167,6 +167,44 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 				)
 	return psd_nodes
 
+def iir_node_gen(iirJob, dag, parent_nodes, psd, bank_groups, options, seg):
+	iir_nodes = {}
+	for i, bank_group in enumerate(bank_groups):
+		for ifo, files in bank_group.items():
+			# First sort out the clipleft, clipright options
+			clipleft = []
+			clipright = []
+			ids = []
+			for n, f in enumerate(files):
+				# handle template bank clipping
+				if (n == 0) and (i == 0):
+					clipleft.append(0)
+				else:
+					clipleft.append(options.overlap / 2)
+				if (i == len(bank_groups) - 1) and (n == len(files) -1):
+					clipright.append(0)
+				else:
+					clipright.append(options.overlap / 2)
+				ids.append("%d_%d" % (i, n))
+
+			iir_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_IIR' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = iirJob.output_path)
+
+			iir_nodes.setdefault(ifo, []).append(
+				inspiral_pipe.generic_node(iirJob, dag,
+				parent_nodes = parent_nodes, 
+				opts = {"downsample":"",
+					"flow":options.flow,
+					"epsilon":options.epsilon,
+					"instrument":ifo,
+					"autocorrelation-length":options.autocorrelation_length,
+					"sampleRate":options.samples_max},
+				input_files = {"template-bank":files,
+						"reference-psd":psd},
+				output_files = {"output":iir_bank_name}
+				)
+			)
+	return iir_nodes
+
 def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 	svd_nodes = {}
 	for i, bank_group in enumerate(bank_groups):
@@ -219,7 +257,7 @@ def create_iir_bank_strings(iir_nodes, instruments = None):
     for ifo in iir_nodes:
       if instruments is not None and ifo not in instruments:
 	continue
-      iir_bank_string += "%s:%s," % (ifo, iir_nodes[ifo][i].output_files["write-svd"])
+      iir_bank_string += "%s:%s," % (ifo, iir_nodes[ifo][i].output_files["output"])
     iir_bank_string = iir_bank_string.strip(",")
     outstrings.append(iir_bank_string)
   return outstrings
@@ -247,7 +285,7 @@ def postcohspiir_node_gen(postcohspiirJob, postcohspiirInjJob, dag, iir_nodes, s
     for injections in options.injections:
       postcohspiir_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 
-    numchunks = 10
+    numchunks = 4
 
     for seg in segsdict[ifos]:
       # only use a channel dict with the relevant channels
@@ -792,6 +830,7 @@ def parse_command_line():
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
+	parser.add_option("--epsilon", metavar = "float", type = "float", default = 0.02, help = "set the epsilon for IIR filter generation.")	
 	parser.add_option("--peak-thresh", type="float", help="SNR threshold")
 	parser.add_option("--hist-trials", type="int", help="Hist Trial")
 	parser.add_option("--detrsp-fname", type="str", help="Detrsp filename")
@@ -869,7 +908,7 @@ os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXG
 refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd')
 refPSDJob = inspiral_pipe.generic_job('gstlal_reference_psd', condor_commands = {"request_memory":"2048", "request_cpus":"2", "+RequiresMultipleCores":"True"})
 medianPSDJob = inspiral_pipe.generic_job('gstlal_median_of_psds')
-svdJob = inspiral_pipe.generic_job('gstlal_svd_bank')
+iirJob = inspiral_pipe.generic_job('gstlal_iir_bank', condor_commands = {"request_memory":"2GB"})
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon")
 #gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = {"request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
 gstlalPostCohSpiirJob = inspiral_pipe.generic_job('gstlal_postcohspiir_inspiral', condor_commands = {"request_memory":"16384", "request_cpus":"8", "+RequiresMultipleCores":"True"})
@@ -958,7 +997,7 @@ else:
 # Compute SVD banks
 #
 
-svd_nodes = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg)
+iir_nodes = iir_node_gen(iirJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg)
 
 
 #	
@@ -966,7 +1005,7 @@ svd_nodes = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pi
 #
 
 #inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict)
-postcohspiir_nodes = postcohspiir_node_gen(gstlalPostCohSpiirJob, gstlalPostCohSpiirInjJob, dag, svd_nodes, segsdict, options, channel_dict)
+postcohspiir_nodes = postcohspiir_node_gen(gstlalPostCohSpiirJob, gstlalPostCohSpiirInjJob, dag, iir_nodes, segsdict, options, channel_dict)
 
 #
 # Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
