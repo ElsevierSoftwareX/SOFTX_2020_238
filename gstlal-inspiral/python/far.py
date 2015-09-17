@@ -189,7 +189,7 @@ def poisson_p_not_0(l):
 			assert s >= 0.
 			return s if s else 0.
 
-poisson_p_not_0 = numpy.frompyfunc(poisson_p_not_0, 1, 1)
+poisson_p_not_0 = numpy.vectorize(poisson_p_not_0)
 
 
 def poisson_p_0(l):
@@ -365,7 +365,7 @@ def fap_after_trials(p, m):
 	return poisson_p_not_0(-x)
 
 
-fap_after_trials_arr = numpy.frompyfunc(fap_after_trials, 2, 1)
+fap_after_trials_arr = numpy.vectorize(fap_after_trials)
 
 
 def trials_from_faps(p0, p1):
