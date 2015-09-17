@@ -26,7 +26,7 @@
  * peaks from all detectors and for each peak, do null stream analysis.
  */
 
-
+#include <glib/gstdio.h>
 #include <gst/gst.h>
 #include <errno.h>
 
@@ -597,14 +597,17 @@ static gboolean
 postcoh_filesink_cleanup_xml (PostcohFilesink * sink)
 {
 
-  xmlFreeTextWriter(sink->writer);
+  if (sink->writer)
+    xmlFreeTextWriter(sink->writer);
 //  postcoh_filesink_close_file (sink);
   if (sink->xtable) {
 	  free(sink->xtable);
 	  sink->xtable = NULL;
   }
-  g_string_free(sink->cur_filename, TRUE);
-  sink->cur_filename = NULL;
+  if (sink->cur_filename) {
+    g_string_free(sink->cur_filename, TRUE);
+    sink->cur_filename = NULL;
+  }
   return TRUE;
 }
 
@@ -675,6 +678,28 @@ postcoh_filesink_event (GstBaseSink * basesink, GstEvent * event)
       GST_ERROR_OBJECT(sink, "postcoh xml end writing failed");
       return FALSE;
     }
+    /* close current file */
+    if (sink->writer) {
+      xmlFreeTextWriter(sink->writer);
+      sink->writer = NULL;
+    }
+
+    guint duration = (sink->t_end - sink->t_start) / GST_SECOND;
+    if (duration != (unsigned) sink->snapshot_interval) {
+      GString *new_filename = g_string_new(sink->uri);
+      gint gps_time = sink->t_start / GST_SECOND;
+      g_string_append_printf(new_filename, "_%d_%d.xml.gz", gps_time, duration);
+      gchar *tmp_new_filename_str = g_strdup(&(new_filename->str[7]));
+      gchar *tmp_cur_filename_str = g_strdup(&(sink->cur_filename->str[7]));
+      /* rename the current file to a proper name */
+      if(g_rename(tmp_cur_filename_str, tmp_new_filename_str) == -1) {
+        perror("Error when renaming");
+      }
+      g_string_free(new_filename, TRUE);
+      new_filename = NULL;
+      g_free(tmp_new_filename_str);
+      g_free(tmp_cur_filename_str);
+    }
       break;
     default:
       break;
@@ -702,6 +727,7 @@ postcoh_filesink_render (GstBaseSink * basesink, GstBuffer * buf)
 {
   PostcohFilesink *sink;
   sink = POSTCOH_FILESINK (basesink);
+  sink->t_end = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
 
   if (!GST_CLOCK_TIME_IS_VALID(sink->t_start)) {
     sink->t_start = GST_BUFFER_TIMESTAMP(buf);

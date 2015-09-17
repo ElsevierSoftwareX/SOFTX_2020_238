@@ -44,6 +44,7 @@ struct _PostcohFilesink {
   XmlTable *xtable;
   
   GstClockTime t_start;
+  GstClockTime t_end;
   GString *cur_filename;
 };
 

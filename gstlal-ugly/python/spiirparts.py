@@ -324,8 +324,8 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	snr.link_pads(None, elem, instrument)
 	return elem
 
-def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1):
-	properties = dict((name, value) for name, value in zip(("location", "compression", "sync", "async"), (location, compression, False, False)))
+def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapshot_interval = 0):
+	properties = dict((name, value) for name, value in zip(("location", "compression", "snapshot-interval", "sync", "async"), (location, compression, snapshot_interval, False, False)))
 	if "name" in properties:
 		elem = gst.element_factory_make("postcoh_filesink", properties.pop("name"))
 	else:
@@ -404,7 +404,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			if len(bank_list) != 1:
 				raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
-		#print autocorrelation_fname
+		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
 
 	for instrument in banks[0].keys():
@@ -434,8 +434,8 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_%s" % suffix)
-		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix, compression = 1, snapshot_interval = 0)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump")
+		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = 0)
 		triggersrcs.append(head)
 	return triggersrcs
 
@@ -536,7 +536,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_%s" % suffix)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump")
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs
