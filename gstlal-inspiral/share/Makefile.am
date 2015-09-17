@@ -1,4 +1,6 @@
 dist_pkgdata_DATA = \
+	ll_simplify_and_cluster.sql
+	ll_simplify.sql
 	Makefile.triggers_example \
 	Makefile.non_spinning_NSBH \
 	Makefile.non_spinning_BNS \
