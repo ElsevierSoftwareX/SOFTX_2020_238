@@ -434,8 +434,8 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_%s" % suffix)
-		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix, compression = 1)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump")
+		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = 0)
 		triggersrcs.append(head)
 	return triggersrcs
 
@@ -536,7 +536,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_%s" % suffix)
-		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix, compression = 1)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump")
+		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs
