@@ -26,6 +26,6 @@ WEBDIR=$1
 shift
 
 while true ; do
-	/home/gstlalcbc/review/s6replay/git/gstlal/gstlal-inspiral/bin/gstlal_ll_inspiral_daily_page --directory ${DIRECTORY} --injection-file ${INJFILE} --web-dir ${WEBDIR} "$@"
+	gstlal_ll_inspiral_daily_page --directory ${DIRECTORY} --injection-file ${INJFILE} --web-dir ${WEBDIR} "$@"
 	sleep 60
 done
