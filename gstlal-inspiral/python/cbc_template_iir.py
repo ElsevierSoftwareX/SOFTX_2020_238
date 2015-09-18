@@ -215,7 +215,12 @@ def normalized_crosscorr(a, b, autocorrelation_length = 201):
 	tmp_corr = corr
 	corr = tmp_corr / tmp_corr[max_idx]
 	auto_bank = numpy.zeros(autocorrelation_length, dtype = 'cdouble')
-	auto_bank[::-1] = numpy.concatenate((corr[-(autocorrelation_length // 2 + max_idx):],corr[:(autocorrelation_length // 2 + 1 + max_idx)]))
+	if max_idx > autocorrelation_length // 2 + 1:
+		auto_bank[::-1] = numpy.concatenate((corr[(-autocorrelation_length // 2 + max_idx):],corr[:(-autocorrelation_length // 2 + max_idx)]))
+	elif max_idx == autocorrelation_length // 2 + 1:
+		auto_bank[::-1] = numpy.copy(corr)
+	else:
+		auto_bank[::-1] = numpy.concatenate((corr[(-autocorrelation_length // 2 + max_idx):],corr[:(autocorrelation_length // 2 + 1 + max_idx)]))
 	return auto_bank
 
 def normalized_convolv(a, b, autocorrelation_length = 201):
