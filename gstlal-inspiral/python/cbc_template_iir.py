@@ -211,11 +211,11 @@ def normalized_crosscorr(a, b, autocorrelation_length = 201):
 	abs_corr = abs(corr)
 	max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
 	if max_idx != 0:
-		raise ValueError, "max of autocorrelation must happen at position [0], got [%d]" % max_idx
+		print "max of autocorrelation happen at position [%d]" % max_idx
 	tmp_corr = corr
-	corr = tmp_corr / tmp_corr[0]
+	corr = tmp_corr / tmp_corr[max_idx]
 	auto_bank = numpy.zeros(autocorrelation_length, dtype = 'cdouble')
-	auto_bank[::-1] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
+	auto_bank[::-1] = numpy.concatenate((corr[-(autocorrelation_length // 2 + max_idx):],corr[:(autocorrelation_length // 2 + 1 + max_idx)]))
 	return auto_bank
 
 def normalized_convolv(a, b, autocorrelation_length = 201):
