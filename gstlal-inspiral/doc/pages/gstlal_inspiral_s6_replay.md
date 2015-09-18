@@ -358,6 +358,22 @@ events to reset the FAR/FAP estimation.
  - We reset the likelihood after a few hours at: 1125877400 and let it run again to see if even with very little data we could e.g., detect the big dog.  This was detected quite reliablly as T182998.
  - We reset the likelihood again at 1125952213 (after about 1 day) and are now settled into a long run.
 
+\subsubsection day10actions Actions
+
+\subsubsection day10completed Completed Actions
+
+
+
+\subsection day11 September 18, 2015
+
+
+\subsubsection day11news News
+
+ - We tracked the issue with a deficit of low significance to an issue with the
+   extinction model with respect to how online clustering is done.  The replay
+was restarted at 9:00 PM CDT and Wednesday September, 16 with the release
+candidate for O1.
+
 \subsubsection day9actions Actions
 
 \subsubsection day9completed Completed Actions
