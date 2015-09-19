@@ -92,15 +92,21 @@ cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, 
 void cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, guint *num_tail_cover_samples, gint rate, guint num_depths, gint down_filtlen, gint up_filtlen)
 {
 	guint i = num_depths;
-	gint rate_start = up_filtlen, rateleft; 
+	gint rate_start = 0;
 	gboolean success = FALSE;
-	for (i=num_depths-1; i>0; i--)
-	       rate_start = rate_start * 2 + down_filtlen/2 ;
 
-	*num_head_cover_samples = rate_start;
-	*num_tail_cover_samples = rate_start - up_filtlen;
+       	if (num_depths > 1) {
+		rate_start = up_filtlen; 
+		for (i=num_depths-1; i>0; i--)
+		       rate_start = rate_start * 2 + down_filtlen/2 ;
+		*num_head_cover_samples = rate_start;
+		*num_tail_cover_samples = rate_start - up_filtlen;
 
-
+	}
+	else { /* num_depths == 1 */ 
+		*num_head_cover_samples = 0;
+		*num_tail_cover_samples = 0;
+	}
 }
 
 void cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value)

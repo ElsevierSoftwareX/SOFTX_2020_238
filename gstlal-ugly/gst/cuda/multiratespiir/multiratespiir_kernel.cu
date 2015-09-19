@@ -473,6 +473,39 @@ __global__ void cuda_iir_filter_kernel( COMPLEX_F *cudaA1,
 }
 
 
+__global__ void outdata_reshape (	const gint filt_len,
+					const gint len, /* number of samples need to to be upsampled */
+					float *mem_out,
+					const gint mem_out_len,
+					float *out_data)
+{
+	unsigned int tx = threadIdx.x, tdx = blockDim.x;
+	unsigned int by = blockIdx.y, channels = gridDim.y;
+	int	mem_out_start = mem_out_len * by + filt_len - 1;
+	float *in, *out;
+	int i;
+
+	for (i=tx; i< len; i+=tdx) {
+
+		out = &(out_data[by + 2 * i * channels]);
+
+		out[0] = mem_out[mem_out_start + 2 * i] ;
+		out[channels] = mem_out[mem_out_start + 2 * i + 1];
+	}
+
+	__syncthreads();
+
+#if 0
+	if (tx < 1 && by < 1)
+		printf("mem_out_len %d, mem_in[filt_len-1] %f, mem_out[filt_len-1] %f\n", mem_out_len, mem_in[filt_len-1], mem_out[filt_len-1]);
+	for (i=tx; i< len*2; i+=tdx) {
+		outdata[i*channels + by] = mem_out[pos_out_start + i];
+	}
+
+#endif 
+}
+
+
 __global__ void upsample2x_and_add_reshape (
 						float *sinc, 
 					const gint filt_len, 
@@ -589,8 +622,8 @@ __global__ void upsample2x_and_add (
 gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_multidown, guint num_depths, cudaStream_t stream)
 {
 	float *pos_inqueue, *pos_outqueue;
-	gint i, out_processed;
 	gint num_inchunk = num_in_multidown;
+	gint i, out_processed = num_inchunk;
 
 	GST_LOG ("multidownsample: start. in %d samples\n", num_inchunk);
 	/* make sure that unspiired samples + incoming samples won't exceed the physical queue length */
@@ -727,6 +760,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 {
 	gint num_inchunk = num_in_multiup;
 
+	gint resample_processed = num_inchunk/2, spiir_processed = num_inchunk;
 	gint i;
 	// FIXME: 0 is used;
 
@@ -861,7 +895,6 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
 	SPSTATE(i)->queue_first_sample = (SPSTATE(i)->queue_first_sample + num_inchunk) % SPSTATE(i)->queue_len;
 
-	gint resample_processed, spiir_processed;
 
 	for (i=num_depths-2; i>=0; i--) {
 
@@ -1035,6 +1068,26 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 
  
 	//CUDA_CHECK(cudaMemcpyAsync(out, SPSTATEUP(0)->d_mem,	SPSTATEUP(0)->channels * (SPSTATEUP(0)->mem_len) * sizeof(float), cudaMemcpyDeviceToHost, stream));
+	/* need reshape */
+	if (num_depths == 1) {
+
+		block.x = MIN(THREADSPERBLOCK, resample_processed);
+		grid.y = SPSTATEUP(0)->channels;
+		share_mem_sz = SPSTATEUP(0)->sinc_len * sizeof(float);
+
+
+		outdata_reshape <<<grid, block, share_mem_sz, stream>>>(
+					SPSTATEUP(0)->filt_len, 
+					resample_processed, 
+					SPSTATEUP(0)->d_mem,
+					SPSTATEUP(0)->mem_len,
+					SPSTATE(0)->d_out
+					);
+		cudaStreamSynchronize(stream);
+		CUDA_CHECK (cudaPeekAtLastError());
+	}
+
+
 	CUDA_CHECK(cudaMemcpyAsync(out, SPSTATE(0)->d_out,	SPSTATEUP(0)->channels * (spiir_processed) * sizeof(float), cudaMemcpyDeviceToHost, stream));
 	cudaStreamSynchronize(stream);
 	CUDA_CHECK (cudaPeekAtLastError());
