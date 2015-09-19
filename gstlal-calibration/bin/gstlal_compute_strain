@@ -434,6 +434,13 @@ elif options.data_source == "frames":
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
 
+def exit_on_datavalid(demux):
+	datavalid = demux.get_property("datavalid")
+	print datavalid
+
+if options.data_source == "frames":
+	demux.connect("notify::datavalid", exit_on_datavalid)
+
 # Get everything hooked up and blocked off to no more than 1 second buffers
 if options.full_calibration:
 	ctrl = calibration_parts.hook_up_and_reblock(pipeline, demux, options.darm_ctrl_channel_name, instrument)
