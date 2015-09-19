@@ -1266,12 +1266,13 @@ if not options.no_gamma:
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
 # FIXME: The code below just locks up the pipeline. Think of another way to do this
 strain = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100)
-#if not options.no_dq_vector:
-#	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
-#	if options.apply_kappatst:
-#		ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
-#		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
-#		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+if not options.no_dq_vector:
+	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
+	if options.apply_kappatst:
+		ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1)
+		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, ktstbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
+		strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = True)
+		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 #	if options.apply_kappac:
 #		kcbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 4100)
 #		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kcbadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
@@ -1281,7 +1282,7 @@ strain = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100
 #		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
 #		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 #
-#	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
+	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
