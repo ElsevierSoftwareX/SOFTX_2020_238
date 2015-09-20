@@ -625,11 +625,13 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
    /* move along */
     gst_adapter_flush (element->adapter, num_in_multidown * sizeof(float));
     in_len -= num_in_multidown;
+    /* after the first filtering, update the exe_samples to the rate */
+    cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
     num_in_multidown = MIN (in_len, element->num_exe_samples);
     last_num_out_spiirup += num_out_spiirup;
  }
 
-    g_assert(last_num_out_spiirup == out_len);
+    g_assert(last_num_out_spiirup <= out_len);
 
 
 
@@ -931,8 +933,8 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   switch (element->gap_handle) {
 
 
+    /* FIXME: case 1 may cause some bugs, have not tested it for a long time */
     case 1: // restart after gap
-	    /* may cause some bugs, have not tested it for a long time*/
   
 
   /* 
@@ -1237,7 +1239,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 		    element->num_head_cover_samples, element->num_exe_samples,
 		    element->stream);
 
-      GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_head_cover_samples, element->num_exe_samples);
+      GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_tail_cover_samples, element->num_exe_samples);
 
       if (!element->spstate) {
         GST_ERROR_OBJECT(element, "spsate could not be initialised");
