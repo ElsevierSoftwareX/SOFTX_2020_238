@@ -434,9 +434,8 @@ elif options.data_source == "frames":
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
 
-def exit_on_datavalid(demux):
-	datavalid = demux.get_property("datavalid")
-	print datavalid
+def exit_on_datavalid(demux, pad):
+	print pad.get_property("datavalid")
 
 if options.data_source == "frames":
 	demux.connect("notify::datavalid", exit_on_datavalid)
@@ -1148,14 +1147,9 @@ if not options.no_dq_vector:
 		ktstRdq = calibration_parts.resample(pipeline, pipeparts.mkqueue(pipeline, ktstRtee, max_size_time = gst.SECOND * 100), "audio/x-raw-float, rate=%d, width=64, channels=1, endianness=1234" % dqsr)
 		ktstRdq = pipeparts.mkgeneric(pipeline, ktstRdq, "lal_add_constant", constant = -options.expected_kappatst_real)
 		
-		ktstRdq = pipeparts.mktee(pipeline, ktstRdq)
-		pipeparts.mknxydumpsink(pipeline, ktstRdq, "ktstRdq.txt")
 		ktstok = pipeparts.mkbitvectorgen(pipeline, ktstRdq, threshold = options.kappatst_real_ok_var, invert_control = True, bit_vector = 2048)
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		ktstok = pipeparts.mkaudiorate(pipeline, ktstok, skip_to_first = True, silent = False)
-		ktstok = pipeparts.mktee(pipeline, ktstok)
-
-		pipeparts.mknxydumpsink(pipeline, ktstok, "ktstok.txt")
 		ktstok = pipeparts.mkreblock(pipeline, ktstok, block_duration = gst.SECOND)
 		ktstok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, ktstok, max_size_time = gst.SECOND * 100), threshold = options.kappatst_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, ktstIdq, max_size_time = gst.SECOND * 100))
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
@@ -1332,6 +1326,7 @@ if not options.no_dq_vector:
 
 	strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = True) # This makes sure the gaps get set to zero; not sure why it's needed though
 	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+	strain = pipeparts.mkreblock(pipeline, strain, block_duration = gst.SECOND)
 	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
 
 #
