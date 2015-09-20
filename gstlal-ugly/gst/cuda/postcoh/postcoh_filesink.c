@@ -356,8 +356,8 @@ postcoh_filesink_set_location (PostcohFilesink * sink, const gchar * location)
     sink->uri = gst_filename_to_uri_local (location, NULL);
 //    sink->uri = g_filename_to_uri (location, NULL, NULL);
 //    sink->uri = gst_uri_construct ("file", sink->filename);
-    printf ("filename : %s", sink->filename);
-    printf ("uri      : %s", sink->uri);
+//    printf ("filename : %s", sink->filename);
+//    printf ("uri      : %s", sink->uri);
   } else {
     sink->filename = NULL;
     sink->uri = NULL;
@@ -637,7 +637,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
 	
 	g_string_append(line, "\n");
-//	printf("%s", line->str);
+	//printf("%s", line->str);
         rc = xmlTextWriterWriteFormatRaw(sink->writer, line->str);
 	if (rc < 0)
 		return GST_FLOW_ERROR;
@@ -821,7 +821,6 @@ postcoh_filesink_uri_get_uri (GstURIHandler * handler)
 static gboolean
 postcoh_filesink_uri_set_uri (GstURIHandler * handler, const gchar * uri)
 {
-	printf("uri %s\n", uri);
   gchar *protocol, *location;
   gboolean ret;
   PostcohFilesink *sink = POSTCOH_FILESINK (handler);

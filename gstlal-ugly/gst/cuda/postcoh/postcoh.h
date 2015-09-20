@@ -185,6 +185,10 @@ struct _CudaPostcoh {
 
   /* sink event handling */
   GstPadEventFunction collect_event;
+
+  gint stream_id;
+  gint device_id;
+  cudaStream_t stream;
 };
 
 struct _CudaPostcohClass {

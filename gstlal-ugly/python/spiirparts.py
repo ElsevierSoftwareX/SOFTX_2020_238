@@ -311,15 +311,21 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	assert any(triggersrcs.values())
 	return triggersrcs
 
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1):
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
 
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval)))
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream_id"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
 	if "name" in properties:
 		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
 	else:
 		elem = gst.element_factory_make("cuda_postcoh")
+	# make sure stream_id go first
 	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
+		if name == "stream_id":
+			elem.set_property(name.replace("_", "-"), value)
+	for name, value in properties.items():
+		if name != "stream_id":
+			elem.set_property(name.replace("_", "-"), value)
+
 	pipeline.add(elem)
 	snr.link_pads(None, elem, instrument)
 	return elem
@@ -427,7 +433,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = bank_count)
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
@@ -529,7 +535,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = bank_count)
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1

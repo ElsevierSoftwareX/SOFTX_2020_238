@@ -31,12 +31,14 @@
 #include "postcoh.h"
 #include "postcoh_utils.h"
 #include "postcoh_table_utils.h"
+#include <cuda_debug.h>
 
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 1  
+#define NOT_INIT -1
 
 static void additional_initializations(GType type)
 {
@@ -90,9 +92,21 @@ enum
 	PROP_HIST_TRIALS,
 	PROP_TRIAL_INTERVAL,
 	PROP_OUTPUT_SKYMAP,
-	PROP_SNGLSNR_THRESH
+	PROP_SNGLSNR_THRESH,
+	PROP_STREAM_ID
 };
 
+static void cuda_postcoh_device_set_init(gint *pdevice_id, cudaStream_t *pstream, gint stream_id)
+{
+	if (*pdevice_id == NOT_INIT) {
+		int deviceCount;
+		cudaGetDeviceCount(&deviceCount);
+		*pdevice_id = stream_id % deviceCount;
+		printf("device for postcoh %d\n", *pdevice_id);
+//		cudaStreamCreateWithFlags(pstream, cudaStreamNonBlocking);
+	}
+
+}
 
 static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
 {
@@ -101,8 +115,12 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 	GST_OBJECT_LOCK(element);
 	switch(id) {
 		case PROP_DETRSP_FNAME:
+
+       			/* must make sure stream_id has already loaded */
 			g_mutex_lock(element->prop_lock);
 			element->detrsp_fname = g_value_dup_string(value);
+			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
+			CUDA_CHECK(cudaSetDevice(element->device_id));
 			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state);
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
@@ -110,7 +128,10 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 
 		case PROP_AUTOCORRELATION_FNAME: 
 
+       			/* must make sure stream_id has already loaded */
 			g_mutex_lock(element->prop_lock);
+			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
+			CUDA_CHECK(cudaSetDevice(element->device_id));
 			element->autocorr_fname = g_value_dup_string(value);
 			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state);
 			g_cond_broadcast(element->prop_avail);
@@ -131,15 +152,17 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			g_mutex_unlock(element->prop_lock);
 			break;
 
-
 		case PROP_OUTPUT_SKYMAP:
 			element->output_skymap = g_value_get_int(value);
 			break;
 
-
 		case PROP_SNGLSNR_THRESH:
 			element->snglsnr_thresh = g_value_get_float(value);
 			element->state->snglsnr_thresh = element->snglsnr_thresh;
+			break;
+
+		case PROP_STREAM_ID:
+			element->stream_id = g_value_get_int(value);
 			break;
 
 		default:
@@ -346,12 +369,13 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
 	PostcohState *state = postcoh->state;
 	g_mutex_lock(postcoh->prop_lock);
-	while (!state->npix || !state->autochisq_len || postcoh->hist_trials == -1) {
+	while (!state->npix || !state->autochisq_len || postcoh->hist_trials ==NOT_INIT) {
 		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
 		GST_LOG_OBJECT(postcoh, "setcaps have to wait");
 	}
 	g_mutex_unlock(postcoh->prop_lock);
 
+	CUDA_CHECK(cudaSetDevice(postcoh->device_id));
 	GList *sinkpads;
 	GstStructure *s;
 	GstPostcohCollectData *data;
@@ -406,7 +430,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d", state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe);
 
 	state->ntmplt = postcoh->channels/2;
-	cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo);
+	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
 	gint8 i = 0, j = 0, cur_ifo = 0;
@@ -427,9 +451,9 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		}
 		
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
-	       	cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size);
-		cudaMemset(state->d_snglsnr[cur_ifo], 0, mem_alloc_size);
-		cudaMemcpy(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice);
+	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
+		CUDA_CHECK(cudaMemset(state->d_snglsnr[cur_ifo], 0, mem_alloc_size));
+		CUDA_CHECK(cudaMemcpy(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice));
 
 		state->peak_list[cur_ifo] = create_peak_list(postcoh->state);
 	}
@@ -956,16 +980,16 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			/* copy the snglsnr to the right cuda memory */
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
 				/* when the snglsnr can be put in as one chunk */
-				cudaMemcpy(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice);
+				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice));
 				GST_LOG("load snr to gpu as a chunk");
 			} else {
 
 				int tail_cpy_size = (state->snglsnr_len - state->snglsnr_start_load) * postcoh->bps;
-				cudaMemcpy(pos_dd_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice);
+				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice));
 				int head_cpy_size = one_take_size - tail_cpy_size;
 				pos_dd_snglsnr = state->d_snglsnr[cur_ifo];
 				pos_in_snglsnr = snglsnr + (state->snglsnr_len - state->snglsnr_start_load) * state->ntmplt;
-				cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice);
+				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice));
 				GST_LOG("load snr to gpu as as two chunks");
 			}
 			}
@@ -979,14 +1003,14 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
 				GST_LOG("peak finder for ifo %d", cur_ifo);
 				peakfinder(state, cur_ifo);
-				cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
+				CUDA_CHECK(cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
 						state->peak_list[cur_ifo]->d_npeak, 
 						sizeof(int), 
-						cudaMemcpyDeviceToHost);
+						cudaMemcpyDeviceToHost));
 
 				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
-					GST_LOG("coherent analysis for ifo %d", cur_ifo);
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
+					GST_LOG("after coherent analysis for ifo %d", cur_ifo);
 				}
 
 				/* move along */
@@ -1019,12 +1043,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	CudaPostcoh* postcoh = CUDA_POSTCOH(user_data);
 	PostcohState *state = postcoh->state;
 	g_mutex_lock(postcoh->prop_lock);
-	while (!state->npix || !state->autochisq_len || postcoh->hist_trials == -1) {
+	while (!state->npix || !state->autochisq_len || postcoh->hist_trials == NOT_INIT) {
 		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
 		GST_LOG_OBJECT(postcoh, "collected have to wait");
 	}
 	g_mutex_unlock(postcoh->prop_lock);
 
+	CUDA_CHECK(cudaSetDevice(postcoh->device_id));
 	GstElement* element = GST_ELEMENT(postcoh);
 	GstClockTime t_latest_start;
 	GstFlowReturn res;
@@ -1233,6 +1258,19 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 		)
 	);
 
+	g_object_class_install_property(
+		gobject_class, 
+		PROP_STREAM_ID,
+		g_param_spec_int(
+			"stream-id",
+			"id for cuda stream",
+			"id for cuda stream",
+			0, G_MAXINT, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+
 }
 
 
@@ -1259,9 +1297,11 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
 	postcoh->state->autochisq_len = 0;
 	postcoh->state->npix = 0;
-	postcoh->hist_trials = -1;
+	postcoh->hist_trials = NOT_INIT;
 	postcoh->prop_lock = g_mutex_new();
 	postcoh->prop_avail = g_cond_new();
+	postcoh->stream_id = NOT_INIT;
+	postcoh->device_id = NOT_INIT;
 }
 
 
