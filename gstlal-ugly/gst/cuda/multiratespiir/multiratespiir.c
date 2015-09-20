@@ -1223,7 +1223,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
  
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
-      element->deviceID = (element->stream_id + 1) % deviceCount ;
+      element->deviceID = (element->stream_id) % deviceCount ;
       cudaSetDevice(element->deviceID);
       cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking);
 
