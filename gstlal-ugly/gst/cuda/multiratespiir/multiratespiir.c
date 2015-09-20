@@ -45,6 +45,7 @@
 #include "spiir_state_utils.h"
 
 #include <cuda_runtime.h>
+#include <cuda_debug.h>
 
 #define GST_CAT_DEFAULT cuda_multirate_spiir_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
@@ -866,7 +867,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   }
   g_mutex_unlock(element->iir_bank_lock);
 
-  cudaSetDevice(element->deviceID);
+  CUDA_CHECK(cudaSetDevice(element->deviceID));
   /* check for timestamp discontinuities;  reset if needed, and set
    * flag to resync timestamp and offset counters and send event
    * downstream */
@@ -1142,7 +1143,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
     GST_DEBUG_OBJECT(element, "EVENT NEWSEGMENT");
     /* implicit assumption: spstate has been inited */
     if (element->need_tail_drain && element->num_tail_cover_samples > 0) {
-	cudaSetDevice(element->deviceID);
+	CUDA_CHECK(cudaSetDevice(element->deviceID));
         GST_DEBUG_OBJECT(element, "NEWSEGMENT, clear tails.");
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
 		cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
@@ -1177,7 +1178,7 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
  
       GST_DEBUG_OBJECT(element, "EVENT EOS");
       if (element->need_tail_drain) {
-	cudaSetDevice(element->deviceID);
+	CUDA_CHECK(cudaSetDevice(element->deviceID));
 	if (element->num_gap_samples >= element->num_tail_cover_samples) {
           GST_DEBUG_OBJECT(element, "EOS, clear tails by pushing gap, num gap samples %" G_GUINT64_FORMAT, element->num_gap_samples);
   	  cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
@@ -1218,13 +1219,15 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
 
       GST_LOG_OBJECT (element, "obtaining bank, stream id is %d", element->stream);
       element->bank_fname = g_value_dup_string(value);
-      /* bank_id is deprecated, get the stream id directly from prop */
+      /* bank_id is deprecated, get the stream id directly from prop 
+       * must make sure stream_id has already loaded */
       //cuda_multirate_spiir_read_bank_id(element->bank_fname, &element->bank_id);
  
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
       element->deviceID = (element->stream_id) % deviceCount ;
-      cudaSetDevice(element->deviceID);
+      printf("device for spiir %s %d\n", element->bank_fname, element->deviceID);
+      CUDA_CHECK(cudaSetDevice(element->deviceID));
       cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking);
 
       cuda_multirate_spiir_read_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
