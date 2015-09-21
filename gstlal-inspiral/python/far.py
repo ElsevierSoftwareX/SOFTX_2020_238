@@ -2255,16 +2255,10 @@ class FAPFAR(object):
 		assert (counts >= 0.).all(), "zero lag log likelihood ratio rates contain negative values"
 		self.zero_lag_total_count = counts.sum()
 
-		# construct cdf and ccdf interpolators
-
-		# the interpolators won't accept infinite co-ordinates, so
-		# have to discard the last bin
-		ranks = ranking_stats.background_likelihood_rates[None].bins[0].upper()[:-1]
-		counts = ranking_stats.background_likelihood_rates[None].array[:-1]
-
-		# safety checks
-		assert not numpy.isnan(ranks).any(), "log likelihood ratio co-ordinates contain NaNs"
-		assert not numpy.isinf(ranks).any(), "log likelihood ratio co-ordinates are not all finite"
+		# get noise model ranking stat values and event counts from
+		# bins
+		ranks = ranking_stats.background_likelihood_rates[None].bins[0].upper()
+		counts = ranking_stats.background_likelihood_rates[None].array
 		assert not numpy.isnan(counts).any(), "background log likelihood ratio rates contain NaNs"
 		assert (counts >= 0.).all(), "background log likelihood ratio rates contain negative values"
 
@@ -2272,7 +2266,7 @@ class FAPFAR(object):
 		ccdf = counts[::-1].cumsum()[::-1]
 		ccdf /= ccdf[0]
 
-		# ccdf is now P(ranking stat > threshold | a candidate), we
+		# ccdf is P(ranking stat > threshold | a candidate).  we
 		# need P(ranking stat > threshold), i.e. need to correct
 		# for the possibility that no candidate is present.
 		# specifically, the ccdf needs to =1-1/e at the candidate
@@ -2280,18 +2274,19 @@ class FAPFAR(object):
 		# threshold, in order for FAR(threshold) * livetime to
 		# equal the actual observed number of candidates.
 		ccdf = poisson_p_not_0(ccdf)
-		cdf = 1. - ccdf
-		cdf[:-1] = cdf[1:]
 
-		# last checks that the CDF and CCDF are OK
-		assert not numpy.isnan(cdf).any(), "log likelihood ratio CDF contains NaNs"
+		# interpolator won't accept infinite co-ordinates so need
+		# to remove the last bin
+		ranks = ranks[:-1]
+		ccdf = ccdf[:-1]
+
+		# safety checks
+		assert not numpy.isnan(ranks).any(), "log likelihood ratio co-ordinates contain NaNs"
+		assert not numpy.isinf(ranks).any(), "log likelihood ratio co-ordinates are not all finite"
 		assert not numpy.isnan(ccdf).any(), "log likelihood ratio CCDF contains NaNs"
-		assert ((0. <= cdf) & (cdf <= 1.)).all(), "log likelihood ratio CDF failed to be normalized"
 		assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "log likelihood ratio CCDF failed to be normalized"
-		assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "log likelihood ratio CDF + CCDF != 1 (max error = %g)" % abs(1. - (cdf[:-1] + ccdf[1:])).max()
 
-		# build interpolators
-		self.cdf_interpolator = interpolate.interp1d(ranks, cdf)
+		# build interpolator.
 		self.ccdf_interpolator = interpolate.interp1d(ranks, ccdf)
 
 		# record min and max ranks so we know which end of the ccdf
@@ -2314,15 +2309,7 @@ class FAPFAR(object):
 		rank = max(self.minrank, min(self.maxrank, rank))
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		tdp = float(self.cdf_interpolator(rank))
-		try:
-			log_tdp = math.log(tdp)
-		except ValueError:
-			# TDP = 0 --> FAR = +inf
-			return PosInf
-		if log_tdp >= -1e-9:
-			# rare event:  avoid underflow by using log1p(-FAP)
-			log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+		log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
 	def assign_fapfars(self, connection):
