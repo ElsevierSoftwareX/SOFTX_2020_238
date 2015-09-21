@@ -307,9 +307,9 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     #
     # Binning options
     #
-    parser.add_option("--mass-bins", default = 4, metavar = "integer", type = "int", help = "Number of mass bins (per dimension), if mass bin boundaries are not explicitly set.") 
-    parser.add_option("--spin-bins", default = 4, metavar = "integer", type = "int", help = "Number of spin bins (per dimension), if spin bin boundaries are not explicitly set.")
-    parser.add_option("--dist-bins", default = 15, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
+    parser.add_option("--mass-bins", default = 3, metavar = "integer", type = "int", help = "Number of mass bins (per dimension), if mass bin boundaries are not explicitly set.")
+    parser.add_option("--spin-bins", default = 3, metavar = "integer", type = "int", help = "Number of spin bins (per dimension), if spin bin boundaries are not explicitly set.")
+    parser.add_option("--dist-bins", default = 50, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
 
     # injection filters
     parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 2.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
