@@ -447,7 +447,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400, postcoh_gpu_start_id = 0, num_postcoh_gpu = 4):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -504,6 +504,10 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	bank_count = 0
 	postcoh_count = 0
+	gtx750_list = range(0, 6)
+	k10_list = range(k10_gpu_start_id, k10_gpu_start_id + num_k10_gpu)
+	for ele in k10_list:
+		gtx750_list.remove(ele)
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
 		autocorrelation_fname = ""
@@ -540,9 +544,14 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count + postcoh_gpu_start_id)
-				postcoh_count += 1
-				postcoh_count = postcoh_count % num_postcoh_gpu
+				# FIXME: hard-coded to set 2 postcoh process to 2 gtx750 cards
+				if bank_count > 23:
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count])
+					postcoh_count += 1
+				else:
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count + k10_gpu_start_id)
+					postcoh_count += 1
+					postcoh_count = postcoh_count % num_k10_gpu
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
