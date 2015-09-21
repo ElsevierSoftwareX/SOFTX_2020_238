@@ -43,9 +43,7 @@ from optparse import OptionParser
 import sys
 
 
-from glue import iterutils
 from glue.lal import CacheEntry
-from glue.text_progress_bar import ProgressBar
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
