@@ -208,8 +208,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	# assign FAPs and FARs
 	#
 
-	fapfar.assign_faps(connection)
-	fapfar.assign_fars(connection)
+	fapfar.assign_fapfars(connection)
 
 	#
 	# done, restore file to original location

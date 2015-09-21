@@ -2315,12 +2315,13 @@ class FAPFAR(object):
 			log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
-	def assign_faps(self, connection):
-		# assign false-alarm probabilities
-		# FIXME:  choose a function name more likely to be unique?
-		# FIXME:  abusing false_alarm_rate column, move for a
-		# false_alarm_probability column??
+	def assign_fapfars(self, connection):
+		# assign false-alarm probabilities and false-alarm rates
+		# FIXME:  choose function names more likely to be unique?
+		# FIXME:  abusing false_alarm_rate column to store FAP,
+		# move to a false_alarm_probability column??
 		connection.create_function("fap", 1, self.fap_from_rank)
+		connection.create_function("far", 1, self.far_from_rank)
 		connection.cursor().execute("""
 UPDATE
 	coinc_inspiral
@@ -2332,17 +2333,7 @@ SET
 			coinc_event
 		WHERE
 			coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-""")
-
-	def assign_fars(self, connection):
-		# assign false-alarm rates
-		# FIXME:  choose a function name more likely to be unique?
-		connection.create_function("far", 1, self.far_from_rank)
-		connection.cursor().execute("""
-UPDATE
-	coinc_inspiral
-SET
+	),
 	combined_far = (
 		SELECT
 			far(coinc_event.likelihood)

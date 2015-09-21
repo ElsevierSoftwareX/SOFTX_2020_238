@@ -83,8 +83,7 @@ for filename in options.non_injection_db:
 	# assign FAPs and FARs
 	#
 
-	far.assign_faps(connection)
-	far.assign_fars(connection)
+	far.assign_fapfars(connection)
 
 	#
 	# done, restore file to original location
