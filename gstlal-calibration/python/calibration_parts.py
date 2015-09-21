@@ -87,7 +87,7 @@ def mkadder(pipeline, srcs, caps, sync = True):
 def list_srcs(pipeline, *args):
 	out = []
 	for src in args:
-		out.append(pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND * 100))
+		out.append(pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND * 1000))
 	return tuple(out)
 
 def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
@@ -103,7 +103,7 @@ def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
 def split_into_real(pipeline, complex, real_caps, complex_caps):
 	elem = pipeparts.mkcapsfilter(pipeline, complex, complex_caps)
 	elem = pipeparts.mktogglecomplex(pipeline, elem)
-	elem = pipeparts.mkcapsfilter(pipeline, elem, "audio/x-raw-float")
+	elem = pipeparts.mkcapsfilter(pipeline, elem, "audio/x-raw-float, channels=2")
 	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave")
 	real = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src0", real.get_pad("sink"))
@@ -304,6 +304,7 @@ def compute_S_from_filters_file(pipeline, CresR, CresI, pcal_derrR, pcal_derrI, 
 	ktstfacsR, ktstfacsI = multiply_complex_channel_complex_number(pipeline, ktstR, ktstI, CresD0A0tstR, CresD0A0tstI, real_caps)
 	kpufacsR, kpufacsI = multiply_complex_channel_complex_number(pipeline, kpuR, kpuI, CresD0A0puR, CresD0A0puI, real_caps)
 	pcal_derr_facsR, pcal_derr_facsI = multiply_complex_channel_complex_number(pipeline, pcal_derrR, pcal_derrI, CresR, CresI, real_caps)
+
 	ktstfacs = merge_into_complex(pipeline, ktstfacsR, ktstfacsI, real_caps, complex_caps)
 	kpufacs = merge_into_complex(pipeline, kpufacsR, kpufacsI, real_caps, complex_caps)
 	pcalderrfacs = merge_into_complex(pipeline, pcal_derr_facsR, pcal_derr_facsI, real_caps, complex_caps)

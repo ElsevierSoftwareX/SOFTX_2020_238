@@ -434,11 +434,11 @@ elif options.data_source == "frames":
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
 
-def exit_on_datavalid(demux, pad):
-	print pad.get_property("datavalid")
+#def exit_on_datavalid(demux, pad):
+#	print pad.get_property("datavalid")
 
-if options.data_source == "frames":
-	demux.connect("notify::datavalid", exit_on_datavalid)
+#if options.data_source == "frames":
+#	demux.connect("notify::datavalid", exit_on_datavalid)
 
 # Get everything hooked up and blocked off to no more than 1 second buffers
 if options.full_calibration:
@@ -721,8 +721,6 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	ka_derrWfpR, ka_derrWfpI = calibration_parts.filter_at_line(pipeline, pipeparts.mkqueue(pipeline, ka_derrfpR, max_size_time = gst.SECOND * 100), pipeparts.mkqueue(pipeline, ka_derrfpI, max_size_time = gst.SECOND * 100), ka_pcal_W_real, ka_pcal_W_imag, compute_calib_factors_caps)
 
 	pcalfp_derrfpR, pcalfp_derrfpI = calibration_parts.compute_pcalfp_over_derrfp(pipeline, ka_derrWfpR, ka_derrWfpI, ka_pcalR, ka_pcalI, compute_calib_factors_caps)
-
-if not options.no_kappatst and (not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_kappaa):
 	pcalfp_derrfpR = pipeparts.mktee(pipeline, pcalfp_derrfpR)
 	pcalfp_derrfpI = pipeparts.mktee(pipeline, pcalfp_derrfpI)
 
@@ -749,9 +747,13 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 	ktstR = pipeparts.mkaudioconvert(pipeline, ktstR)
 	ktstR = pipeparts.mkcapsfilter(pipeline, ktstR, compute_calib_factors_caps)
 	ktstR = pipeparts.mkgeneric(pipeline, ktstR, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
+	ktstR = pipeparts.mkaudiorate(pipeline, ktstR, skip_to_first = True, silent = False)
+	ktstR = pipeparts.mkreblock(pipeline, ktstR, block_duration = gst.SECOND)
 	ktstI = pipeparts.mkaudioconvert(pipeline, ktstI)
 	ktstI = pipeparts.mkcapsfilter(pipeline, ktstI, compute_calib_factors_caps)
 	ktstI = pipeparts.mkgeneric(pipeline, ktstI, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 1.0)
+	ktstI = pipeparts.mkaudiorate(pipeline, ktstI, skip_to_first = True, silent = False)
+	ktstI = pipeparts.mkreblock(pipeline, ktstI, block_duration = gst.SECOND)
 	ktstRtee = pipeparts.mktee(pipeline, ktstR)
 	ktstItee = pipeparts.mktee(pipeline, ktstI)
 	if not options.no_kappatst:
@@ -798,11 +800,16 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	kpuR = pipeparts.mkaudioconvert(pipeline, kpuR)
 	kpuR = pipeparts.mkcapsfilter(pipeline, kpuR, compute_calib_factors_caps)
 	kpuR = pipeparts.mkgeneric(pipeline, kpuR, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
+	kpuR = pipeparts.mkaudiorate(pipeline, kpuR, skip_to_first = True, silent = False)
+	kpuR = pipeparts.mkreblock(pipeline, kpuR, block_duration = gst.SECOND)
 	kpuRtee = pipeparts.mktee(pipeline, kpuR)
 	kpuI = pipeparts.mkaudioconvert(pipeline, kpuI)
 	kpuI = pipeparts.mkcapsfilter(pipeline, kpuI, compute_calib_factors_caps)
 	kpuI = pipeparts.mkgeneric(pipeline, kpuI, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 1.0)
+	kpuI = pipeparts.mkaudiorate(pipeline, kpuI, skip_to_first = True, silent = False)
+	kpuI = pipeparts.mkreblock(pipeline, kpuI, block_duration = gst.SECOND)
 	kpuItee = pipeparts.mktee(pipeline, kpuI)
+
 	if not options.no_kappapu:
 		kpuRout = pipeparts.mkqueue(pipeline, kpuRtee, max_size_time = gst.SECOND * 100)
 		kpuIout = pipeparts.mkqueue(pipeline, kpuItee, max_size_time = gst.SECOND * 100)
@@ -815,10 +822,14 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		kaR = pipeparts.mkaudioconvert(pipeline, kaR)
 		kaR = pipeparts.mkcapsfilter(pipeline, kaR, compute_calib_factors_caps)
 		kaR = pipeparts.mkgeneric(pipeline, kaR, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
+		kaR = pipeparts.mkaudiorate(pipeline, kaR, skip_to_first = True, silent = False)
+		kaR = pipeparts.mkreblock(pipeline, kaR, block_duration = gst.SECOND)
 		kaRtee = pipeparts.mktee(pipeline, kaR)
 		kaI = pipeparts.mkaudioconvert(pipeline, kaI)
 		kaI = pipeparts.mkcapsfilter(pipeline, kaI, compute_calib_factors_caps)
 		kaI = pipeparts.mkgeneric(pipeline, kaI, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 1.0)
+		kaI = pipeparts.mkaudiorate(pipeline, kaI, skip_to_first = True, silent = False)
+		kaI = pipeparts.mkreblock(pipeline, kaI, block_duration = gst.SECOND)
 		kaItee = pipeparts.mktee(pipeline, kaI)
 		kaRout = pipeparts.mkqueue(pipeline, kaRtee, max_size_time = gst.SECOND * 100)
 		kaIout = pipeparts.mkqueue(pipeline, kaItee, max_size_time = gst.SECOND * 100)
@@ -853,6 +864,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			kc = pipeparts.mkaudioconvert(pipeline, kc)
 			kc = pipeparts.mkcapsfilter(pipeline, kc, compute_calib_factors_caps)
 			kc = pipeparts.mkgeneric(pipeline, kc, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
+			kc = pipeparts.mkaudiorate(pipeline, kc, skip_to_first = True, silent = False)
+			kc = pipeparts.mkreblock(pipeline, kc, block_duration = gst.SECOND)
 			kctee = pipeparts.mktee(pipeline, kc)
 			kcout = pipeparts.mkqueue(pipeline, kctee, max_size_time = gst.SECOND * 100)
 		if not options.no_fcc:
@@ -860,6 +873,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			fcc = pipeparts.mkaudioconvert(pipeline, fcc)
 			fcc = pipeparts.mkcapsfilter(pipeline, fcc, compute_calib_factors_caps)
 			fcc = pipeparts.mkgeneric(pipeline, fcc, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
+			fcc = pipeparts.mkaudiorate(pipeline, fcc, skip_to_first = True, silent = False)
+			fcc = pipeparts.mkreblock(pipeline, fcc, block_duration = gst.SECOND)
 			fcctee = pipeparts.mktee(pipeline, fcc)
 			fccout = pipeparts.mkqueue(pipeline, fcctee, max_size_time = gst.SECOND * 100)
 
@@ -967,18 +982,18 @@ if not options.no_gamma:
 	gammaR = compute_gamma_bin.get_pad("gammaR")
 	gammaR = pipeparts.mkaudioconvert(pipeline, gammaR)
 	gammaR = pipeparts.mkcapsfilter(pipeline, gammaR, "audio/x-raw-float, width=64, rate=%d" % options.compute_factors_sr)
+	gammaR = pipeparts.mkgeneric(pipeline, gammaR, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
 	gammaR = pipeparts.mkaudiorate(pipeline, gammaR, skip_to_first = True, silent = False)
 	gammaR = pipeparts.mkreblock(pipeline, gammaR, sip_to_first = True, silent = False)
-	gammaR = pipeparts.mkgeneric(pipeline, gammaR, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 0.0)
 	gammaRtee = pipeparts.mktee(pipeline, gammaR)
 	gammaRout = pipeparts.mkqueue(pipeline, gammaRtee, max_size_time = gst.SECOND * 100)
 
 	gammaI = compute_gamma_bin.get_pad("gammaI")
 	gammaI = pipeparts.mkaudioconvert(pipeline, gammaI)
 	gammaI = pipeparts.mkcapsfilter(pipeline, gammaI, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % options.compute_factors_sr)
+	gammaI = pipeparts.mkgeneric(pipeline, gammaI, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 1.0)
 	gammaI = pipeparts.mkaudiorate(pipeline, gammaI, skip_to_first = True, silent = False)
 	gammaI = pipeparts.mkreblock(pipeline, gammaI, sip_to_first = True, silent = False)
-	gammaI = pipeparts.mkgeneric(pipeline, gammaI, "lal_check_calib_factors", min = -sys.float_info.max, max = sys.float_info.max, default = 1.0)
 	gammaItee = pipeparts.mktee(pipeline, gammaI)			
 	gammaIout = pipeparts.mkqueue(pipeline, gammaItee, max_size_time = gst.SECOND * 100)
 
@@ -1012,13 +1027,14 @@ try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
 except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3995.1)
+strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 strain = pipeparts.mkreblock(pipeline, strain, block_duration = gst.SECOND) 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
 	
 # Put the units back to strain before writing to frames
 straintee = pipeparts.mktee(pipeline, strain)
 straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_strain_channel_name, instrument)
-strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
+strain = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), straintagstr)
 
 #
 # MAKE THE GDS-CALIB_STATE_VECTOR
@@ -1051,6 +1067,8 @@ if not options.no_dq_vector:
 	scienceintent = pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100)
 	scienceintent = pipeparts.mkgeneric(pipeline, scienceintent, "lal_logical_undersampler", required_on = options.science_intent_bitmask, status_out = 2)
 	scienceintent = pipeparts.mkcapsfilter(pipeline, scienceintent, "audio/x-raw-int, width=32, depth=32, endianness=1234, channels=1, signed=false, rate=%d" % dqsr)
+	scienceintent = pipeparts.mkaudiorate(pipeline, scienceintent, skip_to_first = True, silent = False)
+	scienceintent = pipeparts.mkreblock(pipeline, scienceintent, block_duration = gst.SECOND)
 	scienceintenttee = pipeparts.mktee(pipeline, scienceintent)	
 
 	#
@@ -1059,6 +1077,8 @@ if not options.no_dq_vector:
 
 	sciencequality = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = options.science_quality_bitmask, status_out = 4)
 	sciencequality = pipeparts.mkcapsfilter(pipeline, sciencequality, "audio/x-raw-int, width=32, depth=32, channels=1, endianness=1234, signed=false, rate=%d" % dqsr)
+	sciencequality = pipeparts.mkaudiorate(pipeline, sciencequality, skip_to_first = True, silent = False)
+	sciencequality = pipeparts.mkreblock(pipeline, sciencequality, block_duration = gst.SECOND)
 	sciencequalitytee = pipeparts.mktee(pipeline, sciencequality)
 	
 	#
@@ -1070,6 +1090,8 @@ if not options.no_dq_vector:
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logical_undersampler", required_on = 8, status_out = 8)
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % dqsr)
+	htproduced = pipeparts.mkaudiorate(pipeline, htproduced, skip_to_first = True, silent = False)
+	htproduced = pipeparts.mkreblock(pipeline, htproduced, block_duration = gst.SECOND)
 
 	#
 	# FILTERS-OK BIT BRANCH
@@ -1135,6 +1157,8 @@ if not options.no_dq_vector:
 		
 		kpuok = pipeparts.mkbitvectorgen(pipeline, kpuRdq, threshold = options.kappapu_real_ok_var, invert_control = True, bit_vector = 1024)
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
+		kpuok = pipeparts.mkaudiorate(pipeline, kpuok, skip_to_first = True, silent = False)
+		kpuok = pipeparts.mkreblock(pipeline, kpuok, block_duration = gst.SECOND)
 		kpuok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, kpuok, max_size_time = gst.SECOND * 100), threshold = options.kappapu_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, kpuIdq, max_size_time = gst.SECOND * 100))
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 
@@ -1143,7 +1167,6 @@ if not options.no_dq_vector:
 	#
 	if not options.no_kappatst:
 		ktstIdq = calibration_parts.resample(pipeline, pipeparts.mkqueue(pipeline, ktstItee, max_size_time = gst.SECOND * 100), "audio/x-raw-float, rate=%d, width=64, channels=1, endianness=1234" % dqsr)
-		ktstIdq = pipeparts.mkgeneric(pipeline, ktstIdq, "lal_add_constant", constant = -options.expected_kappatst_imag)
 		ktstRdq = calibration_parts.resample(pipeline, pipeparts.mkqueue(pipeline, ktstRtee, max_size_time = gst.SECOND * 100), "audio/x-raw-float, rate=%d, width=64, channels=1, endianness=1234" % dqsr)
 		ktstRdq = pipeparts.mkgeneric(pipeline, ktstRdq, "lal_add_constant", constant = -options.expected_kappatst_real)
 		
@@ -1151,7 +1174,6 @@ if not options.no_dq_vector:
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		ktstok = pipeparts.mkaudiorate(pipeline, ktstok, skip_to_first = True, silent = False)
 		ktstok = pipeparts.mkreblock(pipeline, ktstok, block_duration = gst.SECOND)
-		ktstok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, ktstok, max_size_time = gst.SECOND * 100), threshold = options.kappatst_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, ktstIdq, max_size_time = gst.SECOND * 100))
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 
 	#
@@ -1189,6 +1211,8 @@ if not options.no_dq_vector:
 	# Now calculate h(t)-OK bit
 	htok = pipeparts.mkbitvectorgen(pipeline, pipeparts.mkqueue(pipeline, higherbitstee, max_size_time = gst.SECOND * 100), bit_vector = 1, threshold = 28)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
+	htok = pipeparts.mkaudiorate(pipeline, htok, skip_to_first = True, silent = False)
+	htok = pipeparts.mkreblock(pipeline, htok, block_duration = gst.SECOND)
 
 	#
 	# HW INJECTION BITS
@@ -1196,12 +1220,18 @@ if not options.no_dq_vector:
 
 	hwinjcbc = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = int(options.hw_inj_cbc_bitmask), status_out = 64)
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
+	hwinjcbc = pipeparts.mkaudiorate(pipeline, hwinjcbc, skip_to_first = True, silent = False)
+	hwinjcbc = pipeparts.mkreblock(pipeline, hwinjcbc, block_duration = gst.SECOND)
 
 	hwinjburst = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = int(options.hw_inj_burst_bitmask), status_out = 128)
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
+	hwinjburst = pipeparts.mkaudiorate(pipeline, hwinjburst, skip_to_first = True, silent = False)
+	hwinjburst = pipeparts.mkreblock(pipeline, hwinjburst, block_duration = gst.SECOND)
 
 	hwinjdetchar = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, odcstatevectortee, max_size_time = gst.SECOND * 100), "lal_logical_undersampler", required_on = int(options.hw_inj_detchar_bitmask), status_out = 256)
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
+	hwinjdetchar = pipeparts.mkaudiorate(pipeline, hwinjdetchar, skip_to_first = True, silent = False)
+	hwinjdetchar = pipeparts.mkreblock(pipeline, hwinjdetchar, block_duration = gst.SECOND)
 
 	#
 	# COMBINE ALL BITS TO MAKE GDS-CALIB_STATE_VECTOR
@@ -1312,7 +1342,7 @@ if not options.no_gamma:
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
 # FIXME: The code below just locks up the pipeline. Think of another way to do this
 strain = pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100)
-if not options.no_dq_vector:
+if not options.no_dq_vector and (options.apply_kappatst or options.apply_kappac or options.apply_kappapu):
 	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)
 	if options.apply_kappatst:
 		ktstbadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 2052)
@@ -1324,7 +1354,7 @@ if not options.no_dq_vector:
 		kpubadstate = pipeparts.mkstatevector(pipeline, pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100), required_off = 1028)
 		strain = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), control = pipeparts.mkqueue(pipeline, kpubadstate, max_size_time = gst.SECOND * 100), threshold = 1, invert_control = True)
 
-	strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = True) # This makes sure the gaps get set to zero; not sure why it's needed though
+	strain = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, strain, max_size_time = gst.SECOND * 100), fir_matrix = [[0,1]], time_domain = True) # This makes sure the gaps get set to zero; not sure why it's needed though
 	strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 	strain = pipeparts.mkreblock(pipeline, strain, block_duration = gst.SECOND)
 	calibstatevector = pipeparts.mkqueue(pipeline, calibstatevectortee, max_size_time = gst.SECOND * 100)
