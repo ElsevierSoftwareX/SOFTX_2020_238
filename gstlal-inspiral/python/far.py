@@ -779,6 +779,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			"E0_snr_chi": self.pdf_from_rates_snrchi2,
 		}
 
+		# set to True to include zero-lag histograms in background model
+		self.zero_lag_in_background = False
+
 	def __iadd__(self, other):
 		# NOTE:  because we use custom PDF constructions, the stock
 		# .__iadd__() method for this class will not result in
@@ -1159,9 +1162,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.zero_lag_lnpdf_interp["instruments"] = mkinterp(self.zero_lag_pdf["instruments"])
 
 	def pdf_from_rates_instruments(self, key, pdf_dict):
+		# get the binned array we're going to process
+		binnedarray = pdf_dict[key]
+
+		# optionally include zero-lag instrument combo counts in
+		# the background counts
+		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
+			binnedarray.array += self.zero_lag_rates[key].array
+
 		# instrument combos are probabilities, not densities.  be
 		# sure the single-instrument categories are zeroed.
-		binnedarray = pdf_dict[key]
 		for category in self.instrument_categories.values():
 			binnedarray[category,] = 0
 		with numpy.errstate(invalid = "ignore"):
@@ -1170,6 +1180,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 10., chisq_kernel_width = 0.1,  sigma = 10.):
 		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
+
+		# optionally include zero-lag (SNR,\chi^2) counts in the
+		# background counts
+		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
+			binnedarray.array += self.zero_lag_rates[key].array
+
 		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
