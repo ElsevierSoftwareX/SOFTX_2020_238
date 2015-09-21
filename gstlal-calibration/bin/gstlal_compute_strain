@@ -434,11 +434,18 @@ elif options.data_source == "frames":
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
 
-#def exit_on_datavalid(demux, pad):
-#	print pad.get_property("datavalid")
+def exit_on_nonzero_datavalid(pad, ignored):
+	datavalid = pad.get_property("datavalid")
+	if datavalid != 0:
+		print "ERROR: Non-zero dataValid flag encountered"
+		sys.exit()
 
-#if options.data_source == "frames":
-#	demux.connect("notify::datavalid", exit_on_datavalid)
+def connect_notify_datavalid_signal(demux, pad):
+	name = pad.get_name()
+	pad.connect("notify::datavalid", exit_on_nonzero_datavalid)
+
+if options.data_source == "frames":
+	demux.connect("pad-added", connect_notify_datavalid_signal)
 
 # Get everything hooked up and blocked off to no more than 1 second buffers
 if options.full_calibration:

@@ -23,9 +23,14 @@ import numpy
 def write_graph(demux, pipeline, name):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
 
+def test_function(demux, pad):
+	print pad
+
 def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 	head = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
+	#demux.get_pad("%s:%s" % (instrument, channel_name)).connect("notify::datavalid", test_function)
+	head.get_pad("sink").connect("notify::datavalid", test_function)
 	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 	return head
 
