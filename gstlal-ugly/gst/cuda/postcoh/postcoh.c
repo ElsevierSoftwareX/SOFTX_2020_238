@@ -96,14 +96,15 @@ enum
 	PROP_STREAM_ID
 };
 
-static void cuda_postcoh_device_set_init(gint *pdevice_id, cudaStream_t *pstream, gint stream_id)
+static void cuda_postcoh_device_set_init(CudaPostcoh *element)
 {
-	if (*pdevice_id == NOT_INIT) {
+	if (element->device_id == NOT_INIT) {
 		int deviceCount;
-		cudaGetDeviceCount(&deviceCount);
-		*pdevice_id = stream_id % deviceCount;
-		GST_LOG("device for postcoh %d\n", *pdevice_id);
-		cudaStreamCreateWithFlags(pstream, cudaStreamNonBlocking);
+		CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
+		element->device_id = element->stream_id % deviceCount;
+		GST_LOG("device for postcoh %d\n", element->device_id);
+		CUDA_CHECK(cudaSetDevice(element->device_id));
+		CUDA_CHECK(cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking));
 	}
 
 }
@@ -119,7 +120,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
        			/* must make sure stream_id has already loaded */
 			g_mutex_lock(element->prop_lock);
 			element->detrsp_fname = g_value_dup_string(value);
-			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
+			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state, element->stream);
 			g_cond_broadcast(element->prop_avail);
@@ -130,7 +131,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 
        			/* must make sure stream_id has already loaded */
 			g_mutex_lock(element->prop_lock);
-			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
+			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			element->autocorr_fname = g_value_dup_string(value);
 			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state, element->stream);
@@ -201,6 +202,10 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 
 		case PROP_SNGLSNR_THRESH:
 			g_value_set_float(value, element->snglsnr_thresh);
+			break;
+
+		case PROP_STREAM_ID:
+			g_value_set_int (value, element->stream_id);
 			break;
 
 		default:
@@ -451,6 +456,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		}
 		
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
+		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
@@ -1228,7 +1234,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"trial-interval",
 			"trial interval in seconds",
 			"trial interval in seconds",
-			0, G_MAXFLOAT, 1,
+			0, G_MAXFLOAT, 0.05,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

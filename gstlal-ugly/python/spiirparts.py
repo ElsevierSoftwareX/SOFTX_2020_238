@@ -435,10 +435,10 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 
 			if postcoh is None:
 				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
+				postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
-			postcoh_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
@@ -447,7 +447,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400, postcoh_gpu_start_id = 0, num_postcoh_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -538,11 +538,14 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
+				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
+				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count + postcoh_gpu_start_id)
+				postcoh_count += 1
+				postcoh_count = postcoh_count % num_postcoh_gpu
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
-			postcoh_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
