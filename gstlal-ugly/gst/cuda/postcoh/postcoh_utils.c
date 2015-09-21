@@ -6,7 +6,7 @@
 char* IFO_MAP[] = {"L1", "H1", "V1"};
 #define debug 1
 
-PeakList *create_peak_list(PostcohState *state)
+PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
 		int hist_trials = state->hist_trials;
 		g_assert(hist_trials != -1);
@@ -19,17 +19,17 @@ PeakList *create_peak_list(PostcohState *state)
 		pklist->peak_floatlen = peak_floatlen;
 		
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_tmplt_idx), sizeof(int) * peak_intlen ));
-		CUDA_CHECK(cudaMemset(pklist->d_tmplt_idx, 0, sizeof(int) * peak_intlen));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_tmplt_idx, 0, sizeof(int) * peak_intlen, stream));
 		pklist->d_pix_idx = pklist->d_tmplt_idx + exe_len;
 		pklist->d_pix_idx_bg = pklist->d_pix_idx + exe_len;
 		pklist->d_peak_pos = pklist->d_pix_idx_bg + hist_trials * exe_len;
 		pklist->d_npeak = pklist->d_peak_pos + exe_len;
 
 		//printf("d_npeak %p\n", pklist->d_npeak);
-		CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int), stream));
 
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen));
-		CUDA_CHECK(cudaMemset(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen, stream));
 		pklist->d_cohsnr = pklist->d_maxsnglsnr + exe_len;
 		pklist->d_cohsnr_bg = pklist->d_cohsnr + exe_len;
 		pklist->d_nullsnr = pklist->d_cohsnr_bg + hist_trials * exe_len;
@@ -54,10 +54,10 @@ PeakList *create_peak_list(PostcohState *state)
 		pklist->chisq_bg = pklist->chisq + exe_len;
 
 //		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
-		printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);
+		//printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);
 		/* temporary struct to store tmplt max in one exe_len data */
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
-		CUDA_CHECK(cudaMemset(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt, stream));
 
 		pklist->d_cohsnr_skymap = NULL;
 		pklist->cohsnr_skymap = NULL;
@@ -65,11 +65,11 @@ PeakList *create_peak_list(PostcohState *state)
 }
 
 void
-cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
+cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
 	// FIXME: sanity check that the size of U matrix and diff matrix for
 	// each sky pixel is consistent with number of detectors
-	printf("read map from xml\n");
+	//printf("read map from xml\n");
 	/* first get the params */
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
 	XmlParam param_gps = {0, NULL};
@@ -94,7 +94,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	xmlMemoryDump();
 
 
-	printf("test\n");
+	//printf("test\n");
 	printf("%s \n", xns[0].tag);
 
 	printf("%p\n", param_gps.data);
@@ -104,7 +104,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	state->npix = nside2npix(nside);
 	free(param_gps.data);
 	param_gps.data = NULL;
-	printf("test\n");
+	//printf("test\n");
 	free(param_order.data);
 	param_order.data = NULL;
 	free(xns);
@@ -124,7 +124,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	for (i=0; i<ngps; i++) {
 
 		sprintf((char *)xns[i].tag, "U_map_gps_%d:array", gps);
-		printf("%s\n", xns[i].tag);
+		//printf("%s\n", xns[i].tag);
 		xns[i].processPtr = readArray;
 		xns[i].data = &(array_u[i]);
 
@@ -139,9 +139,9 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 	int mem_alloc_size = sizeof(float) * array_u[0].dim[0] * array_u[0].dim[1];
 	for (i=0; i<ngps; i++) {
 		CUDA_CHECK(cudaMalloc((void **)&(state->d_U_map[i]), mem_alloc_size));
-		CUDA_CHECK(cudaMemcpy(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpyAsync(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMalloc((void **)&(state->d_diff_map[i]), mem_alloc_size));
-		CUDA_CHECK(cudaMemcpy(state->d_diff_map[i], array_diff[i].data, mem_alloc_size, cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpyAsync(state->d_diff_map[i], array_diff[i].data, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 
 	}
 	/*
@@ -160,9 +160,9 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state)
 }
 
 void
-cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
+cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
-	printf("read autocorr from xml\n");
+	//printf("read autocorr from xml\n");
 
 	int ntoken = 0;
 
@@ -190,7 +190,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 
 	end_ifo = NULL;
 	token = strtok_r(fname_cpy, ",", &end_ifo);
-	printf("fname_cpy %s\n", fname_cpy);
+	//printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_autocorr[0]);
@@ -218,7 +218,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 		ntmplt = array_autocorr[0].dim[1];
 		autochisq_len = array_autocorr[0].dim[0];
 
-		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
+		//printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt));
@@ -242,10 +242,10 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state)
 //			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
 		}
 
-		CUDA_CHECK(cudaMemcpy(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice));
-		CUDA_CHECK(cudaMemcpy(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice));
-		CUDA_CHECK(cudaMemcpy(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice));
-		CUDA_CHECK(cudaMemcpy(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(float *), cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemcpyAsync(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice, stream));
+		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, stream));
+		CUDA_CHECK(cudaMemcpyAsync(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice, stream));
+		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_autocorr_norm[match_ifo]), &(autocorr_norm[match_ifo]), sizeof(float *), cudaMemcpyHostToDevice, stream));
 
 		freeArraydata(array_autocorr);
 		freeArraydata(array_autocorr+1);
@@ -314,7 +314,7 @@ peak_list_destroy(PeakList *pklist)
 void
 state_reset_npeak(PeakList *pklist)
 {
-	printf("d_npeak %p\n", pklist->d_npeak);
+	//printf("d_npeak %p\n", pklist->d_npeak);
 	CUDA_CHECK(cudaMemset(pklist->d_npeak, 0, sizeof(int)));
 	pklist->npeak[0] = 0;
 }

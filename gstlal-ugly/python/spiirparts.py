@@ -399,6 +399,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	#			 ...]
 	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	bank_count = 0
+	postcoh_count = 0
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
 		autocorrelation_fname = ""
@@ -425,7 +426,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument,  "_%d" % bank_count)
+			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
 	
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
@@ -433,14 +434,15 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = bank_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
+			postcoh_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_%d" % i_dict)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = 0)
 		triggersrcs.append(head)
 	return triggersrcs
@@ -501,6 +503,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	#			 ...]
 	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	bank_count = 0
+	postcoh_count = 0
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
 		autocorrelation_fname = ""
@@ -527,7 +530,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument,  "_%d" % bank_count)
+			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
 	
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
@@ -535,14 +538,15 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = bank_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1
+			postcoh_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_%d" % i_dict)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)

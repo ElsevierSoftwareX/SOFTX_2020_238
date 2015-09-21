@@ -102,8 +102,8 @@ static void cuda_postcoh_device_set_init(gint *pdevice_id, cudaStream_t *pstream
 		int deviceCount;
 		cudaGetDeviceCount(&deviceCount);
 		*pdevice_id = stream_id % deviceCount;
-		printf("device for postcoh %d\n", *pdevice_id);
-//		cudaStreamCreateWithFlags(pstream, cudaStreamNonBlocking);
+		GST_LOG("device for postcoh %d\n", *pdevice_id);
+		cudaStreamCreateWithFlags(pstream, cudaStreamNonBlocking);
 	}
 
 }
@@ -121,7 +121,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			element->detrsp_fname = g_value_dup_string(value);
 			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
-			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state);
+			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state, element->stream);
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
 			break;
@@ -133,7 +133,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			cuda_postcoh_device_set_init(&element->device_id, &element->stream, element->stream_id);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			element->autocorr_fname = g_value_dup_string(value);
-			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state);
+			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state, element->stream);
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
 			break;
@@ -452,10 +452,10 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
-		CUDA_CHECK(cudaMemset(state->d_snglsnr[cur_ifo], 0, mem_alloc_size));
-		CUDA_CHECK(cudaMemcpy(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice));
+		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
+		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
 
-		state->peak_list[cur_ifo] = create_peak_list(postcoh->state);
+		state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
 	}
 
 	GST_OBJECT_UNLOCK(postcoh->collect);
@@ -980,16 +980,16 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			/* copy the snglsnr to the right cuda memory */
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
 				/* when the snglsnr can be put in as one chunk */
-				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice));
+				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as a chunk");
 			} else {
 
 				int tail_cpy_size = (state->snglsnr_len - state->snglsnr_start_load) * postcoh->bps;
-				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice));
+				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, snglsnr, tail_cpy_size, cudaMemcpyHostToDevice, postcoh->stream));
 				int head_cpy_size = one_take_size - tail_cpy_size;
 				pos_dd_snglsnr = state->d_snglsnr[cur_ifo];
 				pos_in_snglsnr = snglsnr + (state->snglsnr_len - state->snglsnr_start_load) * state->ntmplt;
-				CUDA_CHECK(cudaMemcpy(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice));
+				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as as two chunks");
 			}
 			}
@@ -1002,14 +1002,15 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
 				GST_LOG("peak finder for ifo %d", cur_ifo);
-				peakfinder(state, cur_ifo);
-				CUDA_CHECK(cudaMemcpy(	state->peak_list[cur_ifo]->npeak, 
+				peakfinder(state, cur_ifo, postcoh->stream);
+				CUDA_CHECK(cudaMemcpyAsync(	state->peak_list[cur_ifo]->npeak, 
 						state->peak_list[cur_ifo]->d_npeak, 
 						sizeof(int), 
-						cudaMemcpyDeviceToHost));
+						cudaMemcpyDeviceToHost,
+						postcoh->stream));
 
 				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
-					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap);
+					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d", cur_ifo);
 				}
 

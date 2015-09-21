@@ -723,7 +723,7 @@ __global__ void ker_coh_max_and_chisq
 	}
 }
 
-void peakfinder(PostcohState *state, int iifo)
+void peakfinder(PostcohState *state, int iifo, cudaStream_t stream)
 {
 
     int THREAD_BLOCK    = 256;
@@ -731,7 +731,7 @@ void peakfinder(PostcohState *state, int iifo)
     PeakList *pklist = state->peak_list[iifo];
 //    state_reset_npeak(pklist);
 
-    ker_max_snglsnr<<<GRID, THREAD_BLOCK>>>(state->dd_snglsnr, 
+    ker_max_snglsnr<<<GRID, THREAD_BLOCK, 0, stream>>>(state->dd_snglsnr, 
 						iifo,
 						state->snglsnr_start_exe,
 						state->snglsnr_len,
@@ -739,17 +739,20 @@ void peakfinder(PostcohState *state, int iifo)
 						state->exe_len, 
 						pklist->d_maxsnglsnr, 
 						pklist->d_tmplt_idx);
+    cudaStreamSynchronize(stream);
     CUDA_CHECK(cudaPeekAtLastError());
 
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
-    ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK>>>(	pklist->d_maxsnglsnr, 
+    ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK, 0, stream>>>(	pklist->d_maxsnglsnr, 
 		    						pklist->d_tmplt_idx, 
 								state->exe_len, 
 								state->ntmplt, 
 								pklist->d_peak_tmplt);
+
+    cudaStreamSynchronize(stream);
     CUDA_CHECK(cudaPeekAtLastError());
 
-    ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK>>>(	pklist->d_npeak,
+    ker_remove_duplicate_scan<<<GRID, THREAD_BLOCK, 0, stream>>>(	pklist->d_npeak,
 	    						pklist->d_peak_pos,	    
 		    					pklist->d_maxsnglsnr, 
 		    					pklist->d_tmplt_idx, 
@@ -757,11 +760,13 @@ void peakfinder(PostcohState *state, int iifo)
 							state->ntmplt, 
 							pklist->d_peak_tmplt,
 							state->snglsnr_thresh);
-   CUDA_CHECK(cudaPeekAtLastError());
+
+    cudaStreamSynchronize(stream);
+    CUDA_CHECK(cudaPeekAtLastError());
 }
 
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
-void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap)
+void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap, cudaStream_t stream)
 {
 	int threads = 256;
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
@@ -777,7 +782,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	pklist->cohsnr_skymap = (float *)malloc(mem_alloc_size);
 	pklist->nullsnr_skymap = pklist->cohsnr_skymap + npeak * state->npix;
 
-	ker_coh_skymap<<<npeak, threads, sharedmem>>>(			pklist->d_cohsnr_skymap,
+	ker_coh_skymap<<<npeak, threads, sharedmem, stream>>>(			pklist->d_cohsnr_skymap,
 									pklist->d_nullsnr_skymap,
 									state->dd_snglsnr,
 									iifo,	
@@ -793,16 +798,18 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->snglsnr_start_exe,
 									state->dt,
 									state->ntmplt);
+    cudaStreamSynchronize(stream);
 						
 	CUDA_CHECK(cudaPeekAtLastError());
-	CUDA_CHECK(cudaMemcpy(	pklist->cohsnr_skymap, 
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->cohsnr_skymap, 
 			pklist->d_cohsnr_skymap, 
 			mem_alloc_size,
-			cudaMemcpyDeviceToHost));
+			cudaMemcpyDeviceToHost,
+			stream));
 
 	}
 
-	ker_coh_max_and_chisq<<<npeak, threads, sharedmem>>>(	pklist->d_cohsnr,
+	ker_coh_max_and_chisq<<<npeak, threads, sharedmem, stream>>>(	pklist->d_cohsnr,
 									pklist->d_nullsnr,
 									pklist->d_chisq,
 									pklist->d_pix_idx,
@@ -827,17 +834,20 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->hist_trials,
 									state->trial_sample_inv);
 
+	cudaStreamSynchronize(stream);
 	CUDA_CHECK(cudaPeekAtLastError());
 	/* copy the snr, cohsnr, nullsnr, chisq out */
-	CUDA_CHECK(cudaMemcpy(	pklist->tmplt_idx, 
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->tmplt_idx, 
 			pklist->d_tmplt_idx, 
 			sizeof(int) * (pklist->peak_intlen), 
-			cudaMemcpyDeviceToHost));
+			cudaMemcpyDeviceToHost,
+			stream));
 
-	CUDA_CHECK(cudaMemcpy(	pklist->maxsnglsnr, 
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->maxsnglsnr, 
 			pklist->d_maxsnglsnr, 
 			sizeof(float) * (pklist->peak_floatlen), 
-			cudaMemcpyDeviceToHost));
+			cudaMemcpyDeviceToHost,
+			stream));
 
 }
 

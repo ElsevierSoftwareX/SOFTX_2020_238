@@ -1,15 +1,15 @@
 #include "postcoh.h"
 
-PeakList *create_peak_list(PostcohState *state);
+PeakList *create_peak_list(PostcohState *state, cudaStream_t stream);
 
 void
-cuda_postcoh_map_from_xml(char *fname, PostcohState *state);
+cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream);
 
 void
-cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state);
+cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream);
 
 void
-peakfinder(PostcohState *state, int iifo);
+peakfinder(PostcohState *state, int iifo, cudaStream_t stream);
 void
 state_destroy(PostcohState *state);
 
@@ -19,6 +19,6 @@ peak_list_destroy(PeakList *pklist);
 void
 state_reset_npeak(PeakList *pklist);
 
-void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap);
+void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap, cudaStream_t stream);
 
 void cohsnr_and_chisq_background(PostcohState *state, int iifo, int hist_trials , int gps_idx);
