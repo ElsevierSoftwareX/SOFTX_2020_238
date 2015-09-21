@@ -23,14 +23,9 @@ import numpy
 def write_graph(demux, pipeline, name):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
 
-def test_function(demux, pad):
-	print pad
-
 def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 	head = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
-	#demux.get_pad("%s:%s" % (instrument, channel_name)).connect("notify::datavalid", test_function)
-	head.get_pad("sink").connect("notify::datavalid", test_function)
 	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 	return head
 
@@ -239,14 +234,18 @@ def compute_kappatst(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR,
 	return ktstR, ktstI
 
 def compute_kappapu_from_filters_file(pipeline, A0pufxinvR, A0pufxinvI, AfctrlR, AfctrlI, ktstR, ktstI, A0tstfxR, A0tstfxI, real_caps, complex_caps):
-	ktstA0tstfxR, ktstA0tstfxI = multiply_complex_channel_complex_number(pipeline, ktstR, ktstI, -1.0*A0tstfxR, -1.0*A0tstfxI, real_caps)
-	ktstA0tstfx = merge_into_complex(pipeline, ktstA0tstfxR, ktstA0tstfxI, real_caps, complex_caps)
-	Afx = merge_into_complex(pipeline, AfctrlR, AfctrlI, real_caps, complex_caps)
+
+	ktstfacs = -1.0*(A0tstfxR+1j*A0tstfxI)*(A0pufxinvR+1j*A0pufxinvI)
+	ktstfacsR = numpy.real(ktstfacs)
+	ktstfacsI = numpy.imag(ktstfacs)
+
+	ktstA0tstfxR, ktstA0tstfxI = multiply_complex_channel_complex_number(pipeline, ktstR, ktstI, ktstfacsR, ktstfacsI, real_caps)
+	AfxA0pufxinvR, AfxA0pufxinvI = multiply_complex_channel_complex_number(pipeline, AfctrlR, AfctrlI, A0pufxinvR, A0pufxinvI, real_caps)
 	
 	# \kappa_pu = (1/A0pufx) * (Afx - ktst * A0tstfx)
-	part1 = mkadder(pipeline, list_srcs(pipeline, Afx, ktstA0tstfx), complex_caps)
-	part1R, part1I = split_into_real(pipeline, part1, real_caps, complex_caps)	
-	kpuR, kpuI = multiply_complex_channel_complex_number(pipeline, part1R, part1I, A0pufxinvR, A0pufxinvI, real_caps)
+	kpuR = mkadder(pipeline, list_srcs(pipeline, AfxA0pufxinvR, ktstA0tstfxR), real_caps)
+	kpuI = mkadder(pipeline, list_srcs(pipeline, AfxA0pufxinvI, ktstA0tstfxI), real_caps)	
+
 	return kpuR, kpuI
 
 def compute_kappapu(pipeline, A0pufxinvR, A0pufxinvI, AfctrlR, AfctrlI, ktstR, ktstI, A0tstfxR, A0tstfxI, real_caps, complex_caps):
@@ -273,13 +272,11 @@ def compute_kappaa_from_filters_file(pipeline, AfxR, AfxI, A0tstfxR, A0tstfxI, A
 
 def compute_kappaa(pipeline, AfxR, AfxI, A0tstfxR, A0tstfxI, A0pufxR, A0pufxI,real_caps, complex_caps):
 	Afx = merge_into_complex(pipeline, AfxR, AfxI, real_caps, complex_caps)
-	A0tstfx = merge_into_complex(pipeline, A0tstfxR, A0tstfxI, real_caps, complex_caps)
-	A0pufx = merge_into_complex(pipeline, A0pufxR, A0pufxI, real_caps, complex_caps)
 
 	#\kappa_a = A0fx / (A0tstfx + A0pufx)
 
-	A0tstfx_plus_A0pufx = mkadder(pipeline, list_srcs(pipeline, A0tstfx, A0pufx), complex_caps)
-	A0tstfx_plus_A0pufxR, A0tstfx_plus_A0pufxI = split_into_real(pipeline, A0tstfx_plus_A0pufx, real_caps, complex_caps)
+	A0tstfx_plus_A0pufxR = mkadder(pipeline, list_srcs(pipeline, A0tstfxR, A0pufxR), real_caps)
+	A0tstfx_plus_A0pufxI = mkadder(pipeline, list_srcs(pipeline, A0tstfxI, A0pufxI), real_caps)
 	A0tstfx_plus_A0pufxR = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxR)
 	A0tstfx_plus_A0pufxI = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxI)
 	den2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxR, exponent=2.0), pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxI, exponent=2.0)), real_caps)
@@ -317,7 +314,6 @@ def compute_S_from_filters_file(pipeline, CresR, CresI, pcal_derrR, pcal_derrI, 
 	SinvR, SinvI = split_into_real(pipeline, Sinv, real_caps, complex_caps)
 	SinvR = pipeparts.mktee(pipeline, SinvR)
 	SinvI = pipeparts.mktee(pipeline, SinvI)
-
 	Sinv2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SinvR, exponent = 2.0), pipeparts.mkpow(pipeline, SinvI, exponent = 2.0)), real_caps))
 	SR = mkmultiplier(pipeline, list_srcs(pipeline, SinvR, pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)
 	SI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SinvI, -1.0), pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)

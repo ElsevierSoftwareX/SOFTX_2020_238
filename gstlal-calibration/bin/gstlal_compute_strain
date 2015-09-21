@@ -1174,6 +1174,7 @@ if not options.no_dq_vector:
 	#
 	if not options.no_kappatst:
 		ktstIdq = calibration_parts.resample(pipeline, pipeparts.mkqueue(pipeline, ktstItee, max_size_time = gst.SECOND * 100), "audio/x-raw-float, rate=%d, width=64, channels=1, endianness=1234" % dqsr)
+		ktstIdq = pipeparts.mkgeneric(pipeline, ktstIdq, "lal_add_constant", constant = -options.expected_kappatst_imag)
 		ktstRdq = calibration_parts.resample(pipeline, pipeparts.mkqueue(pipeline, ktstRtee, max_size_time = gst.SECOND * 100), "audio/x-raw-float, rate=%d, width=64, channels=1, endianness=1234" % dqsr)
 		ktstRdq = pipeparts.mkgeneric(pipeline, ktstRdq, "lal_add_constant", constant = -options.expected_kappatst_real)
 		
@@ -1181,6 +1182,7 @@ if not options.no_dq_vector:
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		ktstok = pipeparts.mkaudiorate(pipeline, ktstok, skip_to_first = True, silent = False)
 		ktstok = pipeparts.mkreblock(pipeline, ktstok, block_duration = gst.SECOND)
+		ktstok = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, ktstok, max_size_time = gst.SECOND * 100), threshold = options.kappatst_imag_ok_var, invert_control = True, control = pipeparts.mkqueue(pipeline, ktstIdq, max_size_time = gst.SECOND * 100)) 
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 
 	#
