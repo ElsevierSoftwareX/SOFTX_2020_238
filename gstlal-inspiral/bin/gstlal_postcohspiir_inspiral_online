@@ -314,8 +314,6 @@ class OneTimeSignalHandler(object):
     if self.count == 1:
       print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
       try:
-	#FIXME how do I choose a timestamp?
-	self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
 	if not self.pipeline.send_event(gst.event_new_eos()):
 	  raise Exception("pipeline.send_event(EOS) returned failure")
       except Exception, e:
@@ -465,7 +463,14 @@ if 1==1:
     pipeparts.connect_appsink_dump_dot(pipeline, postcohsink, options.write_pipeline, options.verbose)
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
+  if options.data_source in ("lvshm", "framexmit"):
 
+    # setup sigint handler to shutdown pipeline. This is
+    # how the program stops gracefully.
+    # Otherwise it runs forever.
+    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+ 
    
   if options.verbose:
     print >>sys.stderr, "setting pipeline state to playing ..."
