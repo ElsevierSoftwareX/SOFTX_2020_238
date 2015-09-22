@@ -103,11 +103,11 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 			raise ValueError("%s contains no parameter distribution data" % filename)
 		if coinc_params_distributions is None:
 			coinc_params_distributions = this_coinc_params_distributions
-		else:
+		elif this_coinc_params_distributions is not None:
 			coinc_params_distributions += this_coinc_params_distributions
 		if ranking_data is None:
 			ranking_data = this_ranking_data
-		else:
+		elif this_ranking_data is not None:
 			ranking_data += this_ranking_data
 		if seglists is None:
 			seglists = this_seglists
