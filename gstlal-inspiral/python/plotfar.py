@@ -93,11 +93,14 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	if binnedarray_string == "LR":
 		norm = matplotlib.colors.Normalize(vmin = -80., vmax = +200.)
 		levels = numpy.linspace(-80., +200, 141)
-	elif binnedarray_string == "zero_lag_pdf":
+	elif binnedarray_string == "background_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
 		levels = 50
-	else:
+	elif binnedarray_string == "injection_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -60., vmax = z.max())
+		levels = 50
+	else:	# binnedarray_string == "zero_lag_pdf":
+		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
 		levels = 50
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
@@ -228,7 +231,7 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	with numpy.errstate(divide = "ignore"):
 		z = numpy.log(z)
 
-	norm = matplotlib.colors.Normalize()
+	norm = matplotlib.colors.Normalize(vmin = -40., vmax = z.max())
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
