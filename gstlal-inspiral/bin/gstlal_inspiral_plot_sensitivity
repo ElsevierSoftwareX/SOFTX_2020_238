@@ -513,8 +513,9 @@ for bin_type in opts.bin_types:
         # data to disk, it may make more sense to carry out the
         # plotting in a separate code
         #
-        fig_far_vol, fig_far_range, fig_snr_vol, fig_snr_range = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
-        figs = [fig_far_vol, fig_far_range, fig_snr_vol, fig_snr_range]
+        fig_far, fig_snr = pyplot.figure(), pyplot.figure()
+        ax_far = fig_far.add_axes([0.15, 0.15, 0.7, 0.7])
+        ax_snr = fig_snr.add_axes([0.15, 0.15, 0.7, 0.7])
 
         # plot the volume/range versus far/snr for each bin
         mbins = rate.NDBins(bins[1:])
@@ -538,70 +539,57 @@ for bin_type in opts.bin_types:
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             labels.append(label)
 
-            # volume plots
-            fig_far_vol.gca().errorbar( fars, [v[mmid] for v in vols_far], yerr = [e[mmid] for e in errs_far], label=label )
-            fig_snr_vol.gca().errorbar( snrs, [v[mmid] for v in vols_snr], yerr = [e[mmid] for e in errs_snr], label=label )
+            # sensitivity vs far
+            center = numpy.array([v[mmid] for v in vols_far])
+            err = numpy.array([e[mmid] for e in errs_far])
+            line, = ax_far.plot( fars, center, label=label )
+            ax_far.fill_between( fars, center - err, center + err, alpha=0.5, color=line.get_color() )
 
-            # range plots
-            dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols_far ]
-            derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs_far, vols_far, dist) ]
-            fig_far_range.gca().errorbar( fars, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
+            # sensitivity vs snr
+            center = numpy.array([v[mmid] for v in vols_snr])
+            err = numpy.array([e[mmid] for e in errs_snr])
+            line, = ax_snr.plot( snrs, center, label=label )
+            ax_snr.fill_between( snrs, center - err, center + err, alpha=0.5, color=line.get_color() )
 
-            dist = [ rate.BinnedArray(mbins,array = (v.array/UL.livetime[instr]/(4*numpy.pi/3))**(1./3) ) for v in vols_snr ]
-            derr = [ rate.BinnedArray(mbins,array = (d.array/3)*(e.array/v.array) ) for e,v,d in zip(errs_snr, vols_snr, dist) ]
-            fig_snr_range.gca().errorbar( snrs, [d[mmid] for d in dist], yerr = [e[mmid] for e in derr], label=label )
 
-        # customize axes
-        ax = fig_far_vol.gca()
-        ax.set_xlabel("Combined FAR (Hz)")
-        ax.set_ylabel("VT (Mpc$^3$ yr)")
-        ax.set_xscale("log")
-        ax.set_xlim([min(fars), max(fars)])
-        ax.invert_xaxis()
-        ax.set_ylim(ymin=0)
+        # sensitivity vs far
+        tx = ax_far.twinx() # map volume to distance
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in ax_far.get_yticks()] )
+        tx.set_ylabel("Range (Mpc)")
 
-        ax = fig_snr_vol.gca()
-        ax.set_xlabel("Network SNR")
-        ax.set_ylabel("VT (Mpc$^3$ yr)")
-        ax.set_xlim([min(snrs), max(snrs)])
-        ax.set_ylim(ymin=0)
+        ax_far.set_xlabel("Combined FAR (Hz)")
+        ax_far.set_ylabel("Volume (Mpc$^3$ yr)")
+        ax_far.set_yticklabels( ["%.1e" % (float(k)) for k in ax_far.get_yticks()] )
+        ax_far.set_xscale("log")
+        ax_far.set_xlim([min(fars), max(fars)])
+        ax_far.invert_xaxis()
+        ax_far.legend(loc="upper right")
+        ax_far.grid()
 
-        ax = fig_far_range.gca()
-        ax.set_xlabel("Combined FAR (Hz)")
-        ax.set_ylabel("Range (Mpc)")
-        ax.set_xscale("log")
-        ax.set_xlim([min(fars), max(fars)])
-        ax.invert_xaxis()
-        ax.set_ylim(ymin=0)
+        # sensitivity vs snr
+        tx = ax_snr.twinx() # map volume to distance
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in ax_snr.get_yticks()] )
+        tx.set_ylabel("Range (Mpc)")
 
-        ax = fig_snr_range.gca()
-        ax.set_xlabel("Network SNR")
-        ax.set_ylabel("Range (Mpc)")
-        ax.set_xlim([min(snrs), max(snrs)])
-        ax.set_ylim(ymin=0)
+        ax_snr.set_xlabel("Network SNR")
+        ax_snr.set_ylabel("Volume (Mpc$^3$ yr)")
+        ax_snr.set_xlim([min(snrs), max(snrs)])
+        ax_snr.set_ylim(ymin=0)
+        ax_snr.legend(loc="upper right")
+        ax_snr.grid()
 
-        # common to all figures
-        for fig in figs:
-            ax = fig.gca()
-            ax.grid()
-            ax.legend(loc="upper right")
-            ax.set_title("Search Sensitivity in %s Time" % "".join(sorted(list(instr))))
+        ax_snr.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
+        ax_far.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
 
         # save and close figures
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
-        fig_far_vol.savefig(tag)
+        fig_far.savefig(tag)
+        pyplot.close(fig_far)
 
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
-        fig_snr_vol.savefig(tag)
+        fig_snr.savefig(tag)
+        pyplot.close(fig_snr)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
-        fig_far_range.savefig(tag)
-
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
-        fig_snr_range.savefig(tag)
-
-        for fig in figs:
-            pyplot.close(fig)
 
 # write a cache file describing the files generated during by this program
 if opts.output_cache:
