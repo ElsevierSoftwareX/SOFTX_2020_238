@@ -452,7 +452,8 @@ for bin_type in opts.bin_types:
         #
         # compute volume by far and snr for all mass bins
         #
-        vols_far, errs_far, vols_snr, errs_snr = [], [], [], []
+        vols_lo_far, vols_far, vols_hi_far = [], [], []
+        vols_lo_snr, vols_snr, vols_hi_snr = [], [], []
         for k, far, snr in zip(range(opts.xaxis_points), fars, snrs):
 
             #
@@ -464,41 +465,63 @@ for bin_type in opts.bin_types:
             #
             # compute volume vs far
             #
-            vol, err = imr_utils.compute_search_volume_in_bins(found_by_far, UL.total_injections[instr], bins, s2b)
+            eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_by_far, UL.total_injections[instr], bins, s2b)
+            vol_lo = imr_utils.compute_search_volume(eff_lo)
+            vol_lo.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols_lo_far.append(vol_lo)
+
+            vol = imr_utils.compute_search_volume(eff)
             vol.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
-            err.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
             vols_far.append(vol)
-            errs_far.append(err)
+
+            vol_hi = imr_utils.compute_search_volume(eff_hi)
+            vol_hi.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols_hi_far.append(vol_hi)
 
             #
             # write volume and volume errors array to xml
             #
+            xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_far_%d:%s" % (k, bin_type,)})
+            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            child.appendChild(xml)
+
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_far_%d:%s" % (k, bin_type,)})
             xml.appendChild(ligolw_array.from_array(u"array", vol.array))
             child.appendChild(xml)
 
-            xml = ligolw.LIGO_LW({u"Name": u"volume_error_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", err.array))
+            xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_far_%d:%s" % (k, bin_type,)})
+            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
             child.appendChild(xml)
 
             #
             # compute volume vs snr
             #
-            vol, err = imr_utils.compute_search_volume_in_bins(found_by_snr, UL.total_injections[instr], bins, s2b)
+            eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_by_snr, UL.total_injections[instr], bins, s2b)
+            vol_lo = imr_utils.compute_search_volume(eff_lo)
+            vol_lo.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols_lo_snr.append(vol_lo)
+
+            vol = imr_utils.compute_search_volume(eff)
             vol.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
-            err.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
             vols_snr.append(vol)
-            errs_snr.append(err)
+
+            vol_hi = imr_utils.compute_search_volume(eff_hi)
+            vol_hi.array *= UL.livetime[instr] #preferred unit is Mpc^3*yr
+            vols_hi_snr.append(vol_hi)
 
             #
             # write volume and volume errors array to xml
             #
+            xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_snr_%d:%s" % (k, bin_type,)})
+            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            child.appendChild(xml)
+
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_snr_%d:%s" % (k, bin_type,)})
             xml.appendChild(ligolw_array.from_array(u"array", vol.array))
             child.appendChild(xml)
 
-            xml = ligolw.LIGO_LW({u"Name": u"volume_error_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", err.array))
+            xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_snr_%d:%s" % (k, bin_type,)})
+            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
             child.appendChild(xml)
 
         #
@@ -541,16 +564,17 @@ for bin_type in opts.bin_types:
 
             # sensitivity vs far
             center = numpy.array([v[mmid] for v in vols_far])
-            err = numpy.array([e[mmid] for e in errs_far])
-            line, = ax_far.plot( fars, center, label=label )
-            ax_far.fill_between( fars, center - err, center + err, alpha=0.5, color=line.get_color() )
+            lo = numpy.array([v[mmid] for v in vols_lo_far])
+            hi = numpy.array([v[mmid] for v in vols_hi_far])
+            line, = ax_far.plot( fars, center, label=label, linewidth=2 )
+            ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # sensitivity vs snr
             center = numpy.array([v[mmid] for v in vols_snr])
-            err = numpy.array([e[mmid] for e in errs_snr])
-            line, = ax_snr.plot( snrs, center, label=label )
-            ax_snr.fill_between( snrs, center - err, center + err, alpha=0.5, color=line.get_color() )
-
+            lo = numpy.array([v[mmid] for v in vols_lo_snr])
+            hi = numpy.array([v[mmid] for v in vols_hi_snr])
+            line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
+            ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
 
         # sensitivity vs far
         tx = ax_far.twinx() # map volume to distance
