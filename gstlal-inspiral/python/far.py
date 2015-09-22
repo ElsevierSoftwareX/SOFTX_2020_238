@@ -2058,90 +2058,98 @@ WHERE
 		# Compute the combined rates, we need them for the extinction model
 		self._compute_combined_rates()
 
-		# pull out both the bg counts and the pdfs, we need 'em both
-		bgcounts_ba = self.background_likelihood_rates[None]
-		bgpdf_ba = self.background_likelihood_pdfs[None]
-		# we also need the zero lag counts to build the extinction model
-		zlagcounts_ba = self.zero_lag_likelihood_rates[None]
+		# FIXME We extinct each instrument combination separately,
+		# HOWEVER, only the 'None' key is used, which is all
+		# instruments togther. It is an open question of whether or not
+		# looking at the extinction model separately is a useful
+		# diagnostic tool.  This could change in the future once we
+		# have 3 instruments again to correct each by-instrument PDF
+		# with the survival function
+		for key in self.background_likelihood_rates:
 
-		# Only model background above a ln(LR) of 1
-		likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], 1)
-		bgcounts_ba.array[:likethresh] = 0.
-		bgpdf_ba.array[:likethresh] = 0.
-		zlagcounts_ba.array[:likethresh] = 0.
+			# pull out both the bg counts and the pdfs, we need 'em both
+			bgcounts_ba = self.background_likelihood_rates[key]
+			bgpdf_ba = self.background_likelihood_pdfs[key]
+			# we also need the zero lag counts to build the extinction model
+			zlagcounts_ba = self.zero_lag_likelihood_rates[key]
 
-		# safety checks
-		assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
-		assert not (bgcounts_ba.array < 0.0).any(), "log likelihood ratio rate contains negative values"
-		assert not numpy.isnan(bgpdf_ba.array).any(), "log likelihood ratio pdf contains NaNs"
-		assert not (bgpdf_ba.array < 0.0).any(), "log likelihood ratio pdf contains negative values"
+			# Only model background above a ln(LR) of 1
+			likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], 1)
+			bgcounts_ba.array[:likethresh] = 0.
+			bgpdf_ba.array[:likethresh] = 0.
+			zlagcounts_ba.array[:likethresh] = 0.
 
-		# grab bins that are not infinite in size
-		finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
-		ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
-		drank = bgcounts_ba.bins.volumes().compress(finite_bins)
+			# safety checks
+			assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
+			assert not (bgcounts_ba.array < 0.0).any(), "log likelihood ratio rate contains negative values"
+			assert not numpy.isnan(bgpdf_ba.array).any(), "log likelihood ratio pdf contains NaNs"
+			assert not (bgpdf_ba.array < 0.0).any(), "log likelihood ratio pdf contains negative values"
 
-		# figure out the minimum rank
-		fit_min_rank = ranks[likethresh]
+			# grab bins that are not infinite in size
+			finite_bins = numpy.isfinite(bgcounts_ba.bins.volumes())
+			ranks = bgcounts_ba.bins.upper()[0].compress(finite_bins)
+			drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
-		# whittle down the arrays of counts and pdfs
-		bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
-		bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
-		zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
+			# figure out the minimum rank
+			fit_min_rank = ranks[likethresh]
 
-		# Issue a warning if we have less than 100,000 events
-		if zlagcounts_ba_array.sum() < 100000:
-			warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated.")
+			# whittle down the arrays of counts and pdfs
+			bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
+			bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
+			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
 
-		def extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank):
-			# Generate arrays of complementary cumulative counts
-			# for background events (monte carlo, pre clustering)
-			# and zero lag events (observed, post clustering)
-			zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
-			bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
+			# Issue a warning if we have less than 100,000 events
+			if zlagcounts_ba_array.sum() < 100000:
+				warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated.")
 
-			# Fit for the number of preclustered, independent coincs by
-			# only considering the observed counts safely in the bulk of
-			# the distribution.  Only do the fit above 10 counts if there
-			# are enough events.
-			rank_range = numpy.logical_and(zero_lag_compcumcount <= max(zero_lag_compcumcount), zero_lag_compcumcount >= min(10, 0.001 * max(zero_lag_compcumcount)))
+			def extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank):
+				# Generate arrays of complementary cumulative counts
+				# for background events (monte carlo, pre clustering)
+				# and zero lag events (observed, post clustering)
+				zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
+				bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
 
-			# Use curve fit to find the predicted total preclustering
-			# count. First we need an interpolator of the counts
-			obs_counts = interpolate.interp1d(ranks, bg_compcumcount)
-			bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
+				# Fit for the number of preclustered, independent coincs by
+				# only considering the observed counts safely in the bulk of
+				# the distribution.  Only do the fit above 10 counts if there
+				# are enough events.
+				rank_range = numpy.logical_and(zero_lag_compcumcount <= max(zero_lag_compcumcount), zero_lag_compcumcount >= min(10, 0.001 * max(zero_lag_compcumcount)))
 
-			def extincted_counts(x, N_ratio, num_clustered = max(zero_lag_compcumcount), norm = obs_counts(fit_min_rank)):
-				out = num_clustered * (1. - numpy.exp(-obs_counts(x) * N_ratio))
-				# This normalization ensures that the left edge does go to num_clustered
-				if (1. - numpy.exp(-norm * N_ratio)) > 0:
-					out /= (1. - numpy.exp(-norm * N_ratio))
-				out[~numpy.isfinite(out)] = 0.
-				return out
+				# Use curve fit to find the predicted total preclustering
+				# count. First we need an interpolator of the counts
+				obs_counts = interpolate.interp1d(ranks, bg_compcumcount)
+				bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
 
-			def extincted_pdf(x, N_ratio):
-				out = numpy.exp(numpy.log(N_ratio) - obs_counts(x) * N_ratio + numpy.log(bg_pdf_interp(x)))
-				out[~numpy.isfinite(out)] = 0.
-				return out
+				def extincted_counts(x, N_ratio, num_clustered = max(zero_lag_compcumcount), norm = obs_counts(fit_min_rank)):
+					out = num_clustered * (1. - numpy.exp(-obs_counts(x) * N_ratio))
+					# This normalization ensures that the left edge does go to num_clustered
+					if (1. - numpy.exp(-norm * N_ratio)) > 0:
+						out /= (1. - numpy.exp(-norm * N_ratio))
+					out[~numpy.isfinite(out)] = 0.
+					return out
 
-			# Fit for the ratio of unclustered to clustered triggers.
-			# Only fit N_ratio over the range of ranks decided above
-			precluster_normalization, precluster_covariance_matrix = curve_fit(
-				extincted_counts,
-				ranks[rank_range],
-				zero_lag_compcumcount.compress(rank_range),
-				sigma = zero_lag_compcumcount.compress(rank_range)**.5,
-				p0 = [1e-4, max(zero_lag_compcumcount)]
-			)
+				def extincted_pdf(x, N_ratio):
+					out = numpy.exp(numpy.log(N_ratio) - obs_counts(x) * N_ratio + numpy.log(bg_pdf_interp(x)))
+					out[~numpy.isfinite(out)] = 0.
+					return out
 
-			N_ratio, total_num = precluster_normalization
+				# Fit for the ratio of unclustered to clustered triggers.
+				# Only fit N_ratio over the range of ranks decided above
+				precluster_normalization, precluster_covariance_matrix = curve_fit(
+					extincted_counts,
+					ranks[rank_range],
+					zero_lag_compcumcount.compress(rank_range),
+					sigma = zero_lag_compcumcount.compress(rank_range)**.5,
+					p0 = [1e-4, max(zero_lag_compcumcount)]
+				)
 
-			return extincted_pdf(ranks, N_ratio)
+				N_ratio, total_num = precluster_normalization
 
-		# get the extincted background PDF
-		for binnedarray in self.background_likelihood_rates.values():
-			binnedarray.array[finite_bins] = extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank) * drank
+				return extincted_pdf(ranks, N_ratio)
 
+			# get the extincted background PDF
+			self.background_likelihood_rates[key].array[finite_bins] = extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank) * drank
+			self.zero_lag_likelihood_rates[key].array[:] = zlagcounts_ba.array[:]
 		# Make sure the PDFs are all updated
 		self.finish()
 
