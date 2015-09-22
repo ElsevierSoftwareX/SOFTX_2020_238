@@ -362,7 +362,7 @@ def fap_after_trials(p, m):
 
 		return 1.
 
-	return poisson_p_not_0(-x)
+	return float(poisson_p_not_0(-x))
 
 
 fap_after_trials_arr = numpy.vectorize(fap_after_trials)
