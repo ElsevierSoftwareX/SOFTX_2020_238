@@ -146,6 +146,18 @@ def ncx2pdf(x, k, l):
 #
 
 
+def assert_probability(f):
+	def g(*args, **kwargs):
+		p = f(*args, **kwargs)
+		if isinstance(p, numpy.ndarray):
+			assert ((0. <= p) & (p <= 1.)).all()
+		else:
+			assert 0. <= p <= 1.
+		return p
+	return g
+
+
+@assert_probability
 @numpy.vectorize
 def poisson_p_not_0(l):
 	"""
@@ -191,6 +203,7 @@ def poisson_p_not_0(l):
 			return s if s else 0.
 
 
+@assert_probability
 def poisson_p_0(l):
 	"""
 	Return the probability that a Poisson process with a mean rate of l
@@ -208,6 +221,7 @@ def poisson_p_0(l):
 #
 
 
+@assert_probability
 def fap_after_trials(p, m):
 	"""
 	Given the probability, p, that an event occurs, compute the
@@ -2291,10 +2305,12 @@ class FAPFAR(object):
 		self.minrank = min(ranks)
 		self.maxrank = max(ranks)
 
+	@assert_probability
 	def ccdf_from_rank(self, rank):
 		rank = max(self.minrank, min(self.maxrank, rank))
 		return float(self.ccdf_interpolator(rank))
 
+	@assert_probability
 	def fap_from_rank(self, rank):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718
