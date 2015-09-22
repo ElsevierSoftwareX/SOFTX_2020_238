@@ -2064,8 +2064,8 @@ WHERE
 		# we also need the zero lag counts to build the extinction model
 		zlagcounts_ba = self.zero_lag_likelihood_rates[None]
 
-		# Disregard events above the 5% loudest to help with clustering effects
-		likethresh = numpy.argmax(zlagcounts_ba.array[::-1].cumsum()[::-1] <= 0.05 * zlagcounts_ba.array[::-1].sum())
+		# Only model background above a ln(LR) of 1
+		likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], 1)
 		bgcounts_ba.array[:likethresh] = 0.
 		bgpdf_ba.array[:likethresh] = 0.
 		zlagcounts_ba.array[:likethresh] = 0.
