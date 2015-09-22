@@ -398,15 +398,29 @@ for bin_type in opts.bin_types:
 
     for instr in UL.instruments:
 
-        # check for empty injection sets
+        if opts.verbose:
+            print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
+        # check for empty injection sets. these tend to crash
+        # set_bins, so we just catch it here
         if not UL.total_injections[instr]:
             print >> sys.stderr, "No injections performed in %s time. Skipping..." % "".join(sorted(list(instr)))
             continue
 
-        if opts.verbose:
-            print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
-
+        # get bins
         bins, s2b = UL.set_bins(bin_type,instr)
+
+        # check for sufficient number of injection sets
+        nbins = 1.0
+        for bin in bins:
+            nbins *= len(bin)
+
+        if len(UL.total_injections[instr]) / nbins <= 1:
+            print >> sys.stderr, "Insufficient injections (%d) performed in %s time to compute sensitivity. Perform more injections or request fewer bins." % (len(UL.total_injections[instr]), "".join(sorted(list(instr))))
+            print >> sys.stderr, "Skipping ..."
+            continue
+
+        if opts.verbose:
+            print "\tInjections performed: %d\n" % (len(UL.total_injections[instr]))
 
         #
         # prepare output XML file. record mass bins, fars, snrs and
