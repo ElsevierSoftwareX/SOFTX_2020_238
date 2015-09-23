@@ -143,8 +143,9 @@ $(INJECTIONS):
 plots :
 	mkdir plots
 
-$(WEBDIR) : 
+$(WEBDIR) : $(MAKEFILE_LIST)
 	mkdir -p $(WEBDIR)
+	cp $(MAKEFILE_LIST) $@
 
 tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
