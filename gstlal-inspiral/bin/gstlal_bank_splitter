@@ -62,7 +62,7 @@ from gstlal import chirptime
 #	+ `--verbose`: Be verbose.
 #	+ `--approximant` [string]: Must specify an approximant
 #	+ `--f-low` [frequency] (floate): Lower frequency cutoff
-#	+ `--group-by-chi`: group templates into chi bins 0.1 in chi - helps with SVD.
+#	+ `--group-by-chi` [Number] (int): group templates into N chi bins with uniform number of templates - helps with SVD.
 #
 # ### Review status
 #
@@ -118,7 +118,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--approximant", type = "string", help = "Must specify an approximant")
 	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff")
-	parser.add_option("--group-by-chi", action = "store_true", help = "group templates into chi bins 0.1 in chi - helps with SVD.")
+	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
 	options, filenames = parser.parse_args()
 
 	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant")
@@ -134,13 +134,6 @@ def parse_command_line():
 options, filenames = parse_command_line()
 output_cache_file = open(options.output_cache, "w")
 bank_count = 0
-
-# Hacky way to bin by chi
-def chikey(chi, group_by_chi = options.group_by_chi):
-	if group_by_chi:
-		return math.floor(chi * 10) / 10.
-	else:
-		return None
 
 outputrows = []
 
@@ -184,7 +177,9 @@ for filename in filenames:
 	
 	# Bin by Chi, has no effect if option is not specified, i.e. there is only one bin.
 	chidict = {}
-	[chidict.setdefault(chikey(spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)), []).append(row) for row in sngl_inspiral_table]
+	templates_by_chi = [tmp[1] for tmp in sorted([(spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z), row) for row in sngl_inspiral_table])]
+	for i, rows in enumerate(group_templates(templates_by_chi, len(templates_by_chi) / options.group_by_chi, overlap = 0)):
+		chidict[i] = rows
 
 	for chi in chidict:
 		chirows = chidict[chi]
