@@ -274,7 +274,7 @@ void
 state_destroy(PostcohState *state)
 {
 	int i;
-	if(state->dd_snglsnr) {
+	if(state->is_member_init != NOT_INIT) {
 		for(i=0; i<state->nifo; i++) {
 			CUDA_CHECK(cudaFree(state->dd_snglsnr[i]));
 			CUDA_CHECK(cudaFree(state->dd_autocorr_matrix[i]));
@@ -284,17 +284,17 @@ state_destroy(PostcohState *state)
 		CUDA_CHECK(cudaFree(state->dd_snglsnr));
 		CUDA_CHECK(cudaFree(state->dd_autocorr_matrix));
 		CUDA_CHECK(cudaFree(state->dd_autocorr_norm));
-	}
-	int gps_end = 24*3600;
-	int ngps = gps_end/(state->gps_step);
-	for(i=0; i<ngps; i++) {
-		CUDA_CHECK(cudaFree(state->d_U_map[i]));
-		CUDA_CHECK(cudaFree(state->d_diff_map[i]));
-	}
 
-	for(i=0; i<state->nifo; i++) {
-		peak_list_destroy(state->peak_list[i]);
-		free(state->peak_list[i]);
+		int gps_end = 24*3600;
+		int ngps = gps_end/(state->gps_step);
+		for(i=0; i<ngps; i++) {
+			CUDA_CHECK(cudaFree(state->d_U_map[i]));
+			CUDA_CHECK(cudaFree(state->d_diff_map[i]));
+		}
+		for(i=0; i<state->nifo; i++) {
+			peak_list_destroy(state->peak_list[i]);
+			free(state->peak_list[i]);
+		}
 	}
 
 }

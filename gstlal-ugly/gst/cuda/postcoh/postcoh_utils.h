@@ -1,5 +1,8 @@
 #include "postcoh.h"
 
+#define NOT_INIT -1
+#define INIT 1
+
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream);
 
 void

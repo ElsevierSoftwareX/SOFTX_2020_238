@@ -38,7 +38,6 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 1  
-#define NOT_INIT -1
 
 static void additional_initializations(GType type)
 {
@@ -374,7 +373,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
 	PostcohState *state = postcoh->state;
 	g_mutex_lock(postcoh->prop_lock);
-	while (!state->npix || !state->autochisq_len || postcoh->hist_trials ==NOT_INIT) {
+	while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials ==NOT_INIT) {
 		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
 		GST_LOG_OBJECT(postcoh, "setcaps have to wait");
 	}
@@ -464,6 +463,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
 	}
 
+	state->is_member_init = INIT;
 	GST_OBJECT_UNLOCK(postcoh->collect);
 	return TRUE;
 }
@@ -1050,7 +1050,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	CudaPostcoh* postcoh = CUDA_POSTCOH(user_data);
 	PostcohState *state = postcoh->state;
 	g_mutex_lock(postcoh->prop_lock);
-	while (!state->npix || !state->autochisq_len || postcoh->hist_trials == NOT_INIT) {
+	while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials == NOT_INIT) {
 		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
 		GST_LOG_OBJECT(postcoh, "collected have to wait");
 	}
@@ -1129,6 +1129,7 @@ static void cuda_postcoh_dispose(GObject *object)
 
 	if(element->state){
 		state_destroy(element->state);
+		free(element->state);
 		element->state = NULL;
 	}
 
@@ -1302,8 +1303,9 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->samples_in = 0;
 	postcoh->samples_out = 0;
 	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
-	postcoh->state->autochisq_len = 0;
-	postcoh->state->npix = 0;
+	postcoh->state->autochisq_len = NOT_INIT;
+	postcoh->state->npix = NOT_INIT;
+	postcoh->state->is_member_init = NOT_INIT;
 	postcoh->hist_trials = NOT_INIT;
 	postcoh->prop_lock = g_mutex_new();
 	postcoh->prop_avail = g_cond_new();

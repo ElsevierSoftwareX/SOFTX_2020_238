@@ -140,6 +140,7 @@ typedef struct _PostcohState {
   gint trial_sample_inv;
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
+  gint is_member_init;
 } PostcohState;
 
 /**
