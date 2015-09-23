@@ -76,7 +76,8 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		denom_binnedarray = coinc_param_distributions.background_pdf[key]
 		assert (denom_binnedarray.bins[0].centres()[:-1] == x).all()
 		assert (denom_binnedarray.bins[1].centres()[:-1] == y).all()
-		z /= denom_binnedarray.array[:-1,:-1]
+		# note:  don't do this in-place
+		z = z / denom_binnedarray.array[:-1,:-1]
 	if numpy.isnan(z).any():
 		warnings.warn("%s PDF contains NaNs" % instrument)
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
