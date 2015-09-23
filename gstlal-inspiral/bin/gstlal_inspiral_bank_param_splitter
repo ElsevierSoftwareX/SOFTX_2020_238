@@ -40,7 +40,8 @@ def parse_command_line():
 		description = "%prog splits a template bank xml into two xml files based on a cut on mchirp.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-t", "--output-tag", action = "store", type="string", help = "Set the output file tag.")
-	parser.add_option("-m", "--mchirp-split", action = "store", type="float", help = "Split into two banks based on this mchirp threshold.")
+	parser.add_option("--value-split", action = "store", type="float", help = "Split into two banks based on this parameter value threshold.")
+	parser.add_option("--param-split", action = "store", default = "mchirp", help = "Split into two banks based on this SnglInspiral table parameter. Default: mchirp")
 	options, filenames = parser.parse_args()
 
 	return options, (filenames or [None])
@@ -57,12 +58,11 @@ outputrows = []
 for banknum, filename in enumerate(tmpltbanks):
 	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-	sngl_inspiral_table.sort(key = lambda row: row.mchirp)
 
 	tmpltlist1 = []
 	tmpltlist2 = []
 
-	[tmpltlist1.append(tmplt) if tmplt.mchirp <= options.mchirp_split else tmpltlist2.append(tmplt) for tmplt in sngl_inspiral_table]
+	[tmpltlist1.append(tmplt) if getattr(tmplt, options.param_split) <= options.value_split else tmpltlist2.append(tmplt) for tmplt in sngl_inspiral_table]
 
 	outputrows = [tmpltlist1, tmpltlist2]
 
