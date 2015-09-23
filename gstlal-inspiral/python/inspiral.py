@@ -686,11 +686,6 @@ class Data(object):
 					self.ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
 					if self.ranking_data is None:
 						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
-					# FIXME:  what clustering window to
-					# use?  note that the online
-					# version does not implement real
-					# clustering like the offline
-					# version (see below)
 					self.ranking_data = self.ranking_data.new_with_extinction(self.ranking_data)[0]
 					self.ranking_data.finish(verbose = self.verbose)
 					self.fapfar = far.FAPFAR(self.ranking_data, livetime = far.get_live_time(seglists))

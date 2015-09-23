@@ -162,8 +162,6 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 # Now generate new ranking statistic PDFs by applying the clustering
 # extinction model.
 #
-# FIXME:  don't hard-code clustering window
-#
 
 
 extincted_ranking_data = far.RankingData.new_with_extinction(ranking_data)[0]
