@@ -1235,7 +1235,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"trial-interval",
 			"trial interval in seconds",
 			"trial interval in seconds",
-			0, G_MAXFLOAT, 0.05,
+			0, G_MAXFLOAT, 0.1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
