@@ -3,6 +3,7 @@ LOW_FREQUENCY_CUTOFF = 25.0
 HIGH_FREQUENCY_CUTOFF = 1024
 SAMPLE_RATE = 2048
 NUM_SPLIT_TEMPLATES = 180
+NUM_CHI_BINS = 20 # Needs to be checked
 OVERLAP = 30
 APPROXIMANT = TaylorF2
 BANK_PROGRAM = pycbc_geom_aligned_bank
@@ -12,7 +13,7 @@ all : bank.dag
 
 %_split_bank.cache: ../template_bank/O1_EMBRIGHT/grb/BNS_NSBH_EMbright_bank_O1.xml.gz
 	mkdir -p $*_split_bank
-	gstlal_bank_splitter --group-by-chi --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $< --output-cache $@ --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM)
+	gstlal_bank_splitter --group-by-chi $(NUM_CHI_BINS) --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $< --output-cache $@ --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM)
 
 %_bank.dag : %_split_bank.cache ../template_bank/harmonicpsd.xml.gz
 	cp $< tmp

@@ -13,6 +13,8 @@ LOW_FREQUENCY_CUTOFF = 30.0
 HIGH_FREQUENCY_CUTOFF = 1024.0
 # Controls the number of templates in each SVD sub bank
 NUM_SPLIT_TEMPLATES = 100
+# Number of bins of chi to uniformly bin templates into
+NUM_CHI_BINS = 20
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
 # in the SVD.  Redundant templates will be removed
 OVERLAP = 10
@@ -99,7 +101,7 @@ $(INJECTIONS):
 
 %_split_bank.cache : BNS_Spin0.4_30Hz_earlyaLIGO.xml
 	mkdir -p $*_split_bank
-	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank --approximant $(APPROXIMANT) --bank-program $(BANK_PROGRAM) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
 
 plots :
 	mkdir plots
