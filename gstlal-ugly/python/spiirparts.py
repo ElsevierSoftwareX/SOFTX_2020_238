@@ -409,7 +409,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			autocorrelation_fname += str(bank_list[0])
 			autocorrelation_fname += "," 
 			if len(bank_list) != 1:
-				raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
+				raise ValueError("%s instrument: number of banks is not equal to 1, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
 		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
