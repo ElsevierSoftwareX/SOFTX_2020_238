@@ -117,7 +117,10 @@ if ranking_data is None:
 
 
 #
-# Count the number of above-threshold events
+# Count the number of above-threshold events.  FIXME:  don't do this.
+# write stand-alone tool to collect zero-lag counts and have this program
+# require that as input data.  also, below, don't write any ranking
+# statistic output file from this program.
 #
 
 
@@ -163,8 +166,8 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 #
 
 
-ranking_data = far.RankingData.new_with_extinction(ranking_data)[0]
-ranking_data.finish(verbose = options.verbose)
+extincted_ranking_data = far.RankingData.new_with_extinction(ranking_data)[0]
+extincted_ranking_data.finish(verbose = options.verbose)
 
 
 #
@@ -172,7 +175,7 @@ ranking_data.finish(verbose = options.verbose)
 #
 
 
-fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+fapfar = far.FAPFAR(extincted_ranking_data, livetime = far.get_live_time(seglists))
 
 
 #
@@ -229,6 +232,10 @@ if options.verbose:
 # Write parameter and ranking statistic distribution file but with zero-lag
 # counts replaced with count-above-threshold and background and signal PDFs
 # replaced with result of clustering extinction model
+#
+# FIXME:  do not write this output file, rely on stand-alone tool to
+# collect zero-lag counts before running this program, and make that
+# information available to other tools that way
 #
 
 
