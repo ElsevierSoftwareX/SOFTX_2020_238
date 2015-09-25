@@ -560,6 +560,6 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix, compression = 1, snapshot_interval = snapshot_interval)
+		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs
