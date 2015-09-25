@@ -768,6 +768,9 @@ void peakfinder(PostcohState *state, int iifo, cudaStream_t stream)
 /* calculate cohsnr, null stream, chisq of a peak list and copy it back */
 void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap, cudaStream_t stream)
 {
+	size_t freemem;
+	size_t totalmem;
+
 	int threads = 256;
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
@@ -775,6 +778,11 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	if (output_skymap) {
 	int mem_alloc_size = sizeof(float) * npeak * state->npix * 2;
 //	printf("alloc cohsnr_skymap size %d\n", mem_alloc_size);
+	
+	cudaMemGetInfo(&freemem, &totalmem);
+	printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+	printf("alloc cohsnr_skymap size %d B\n", (int) mem_alloc_size);
+
 	CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
 //	CUDA_CHECK(cudaMemset(pklist->d_cohsnr_skymap, 0, mem_alloc_size));
 

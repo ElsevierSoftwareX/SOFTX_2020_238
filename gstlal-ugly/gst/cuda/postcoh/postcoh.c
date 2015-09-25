@@ -370,6 +370,9 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 static gboolean
 cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 {
+	size_t freemem;
+	size_t totalmem;
+
 	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
 	PostcohState *state = postcoh->state;
 	g_mutex_lock(postcoh->prop_lock);
@@ -434,6 +437,10 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d", state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe);
 
 	state->ntmplt = postcoh->channels/2;
+	cudaMemGetInfo(&freemem, &totalmem);
+	printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+	printf( "Allocating %d B\n", (int) sizeof(COMPLEX_F *) * state->nifo );
+
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
@@ -456,6 +463,11 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
+		
+		cudaMemGetInfo(&freemem, &totalmem);
+		printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+		printf( "Allocating %d MB\n", (int) (mem_alloc_size / 1024 / 1024) );
+
 	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
