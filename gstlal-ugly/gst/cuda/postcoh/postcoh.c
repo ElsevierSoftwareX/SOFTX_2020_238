@@ -824,53 +824,14 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
+static void cuda_postcoh_write_table_to_buf(PostcohState *state, GstBuffer *outbuf)
 {
-	GstBuffer *outbuf = NULL;
-	GstPad *srcpad = postcoh->srcpad;
-	GstCaps *caps = GST_PAD_CAPS(srcpad);
-	GstFlowReturn ret;
-	PostcohState *state = postcoh->state;
-
-	cuda_postcoh_rm_invalid_peak(state);
-	int allnpeak = 0, iifo, ipeak, nifo = state->nifo;
-	int hist_trials = postcoh->hist_trials;
-
-	for(iifo=0; iifo<nifo; iifo++) {
-		if(is_cur_ifo_has_data(state, iifo)) {
-			if (state->cur_nifo == state->nifo)
-				allnpeak += state->peak_list[iifo]->npeak[0]* (1 + hist_trials);
-			else
-				allnpeak += state->peak_list[iifo]->npeak[0];
-		}
-	};
-
-
-	int out_size = sizeof(PostcohTable) * allnpeak ;
-
-	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
-	if (ret != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
-		return NULL;
-	}
-
-        /* set the time stamps */
-	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
-		       	postcoh->rate);
-
-        GST_BUFFER_TIMESTAMP(outbuf) = ts;
-	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, out_len, postcoh->rate);
-
-	/* set the offset */
-        GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
-        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
-
 
 	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
+	int iifo = 0, nifo = state->nifo;
 	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
-
-
 	int npeak = 0, itrial = 0, exe_len = state->exe_len;
+
 	for(iifo=0; iifo<nifo; iifo++) {
 		if (is_cur_ifo_has_data(state, iifo)) {
 		PeakList *pklist = state->peak_list[iifo];
@@ -893,7 +854,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
-			output->cohsnr = pklist->cohsnr[peak_cur];
+			output->cohsnr = sqrt(pklist->cohsnr[peak_cur]); /* the returned snr from cuda kernel is snr^2 */
 			output->nullsnr = pklist->nullsnr[peak_cur];
 			output->chisq = pklist->chisq[peak_cur];
 			output->spearman_pval = 0;
@@ -941,7 +902,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
 				output->pix_idx = pklist->pix_idx[itrial*exe_len + peak_cur];
 				output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
-				output->cohsnr = pklist->cohsnr[itrial*exe_len + peak_cur];
+				output->cohsnr = sqrt(pklist->cohsnr[itrial*exe_len + peak_cur]);
 				output->nullsnr = pklist->nullsnr[itrial*exe_len + peak_cur];
 				output->chisq = pklist->chisq[itrial*exe_len + peak_cur];
 				output->spearman_pval = 0;
@@ -954,8 +915,52 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 		}
 		}
 	}
+
+	}
+}
+
+static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
+{
+	GstBuffer *outbuf = NULL;
+	GstPad *srcpad = postcoh->srcpad;
+	GstCaps *caps = GST_PAD_CAPS(srcpad);
+	GstFlowReturn ret;
+	PostcohState *state = postcoh->state;
+
+	cuda_postcoh_rm_invalid_peak(state);
+	int allnpeak = 0, iifo, ipeak, nifo = state->nifo;
+	int hist_trials = postcoh->hist_trials;
+
+	for(iifo=0; iifo<nifo; iifo++) {
+		if(is_cur_ifo_has_data(state, iifo)) {
+			if (state->cur_nifo == state->nifo)
+				allnpeak += state->peak_list[iifo]->npeak[0]* (1 + hist_trials);
+			else
+				allnpeak += state->peak_list[iifo]->npeak[0];
+		}
+	};
+
+
+	int out_size = sizeof(PostcohTable) * allnpeak ;
+
+	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
+	if (ret != GST_FLOW_OK) {
+		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
+		return NULL;
 	}
 
+        /* set the time stamps */
+	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
+		       	postcoh->rate);
+
+        GST_BUFFER_TIMESTAMP(outbuf) = ts;
+	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, out_len, postcoh->rate);
+
+	/* set the offset */
+        GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
+        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
+
+	cuda_postcoh_write_table_to_buf(state, outbuf);
 
 	GST_LOG_OBJECT (srcpad,
 		"Processed of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
