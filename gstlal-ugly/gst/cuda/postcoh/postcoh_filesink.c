@@ -1,6 +1,6 @@
 /* 
  * Copyright (C) 2014 Qi Chu <qi.chu@ligo.org>
- * most of this file is copied from gstfilesink.c
+ * most of this file is copied from gstfilesink.c 0.10.32 and 0.10.36
  *
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2000 Wim Taymans <wtay@chello.be>
