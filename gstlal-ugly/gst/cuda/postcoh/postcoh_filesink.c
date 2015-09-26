@@ -634,6 +634,9 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	g_string_append_printf(line, "%f%s", table->cohsnr, xtable->delimiter->str);
 	g_string_append_printf(line, "%f%s", table->nullsnr, xtable->delimiter->str);
 	g_string_append_printf(line, "%f%s", table->chisq, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->spearman_pval, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->fap, xtable->delimiter->str);
+	g_string_append_printf(line, "%f%s", table->far, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
 	
 	g_string_append(line, "\n");

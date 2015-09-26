@@ -18,6 +18,9 @@ void postcoh_table_init(XmlTable *table)
     g_array_append_val(table->names, *g_string_new("postcoh:cohsnr"));
     g_array_append_val(table->names, *g_string_new("postcoh:nullsnr"));
     g_array_append_val(table->names, *g_string_new("postcoh:chisq"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spearman_pval"));
+    g_array_append_val(table->names, *g_string_new("postcoh:fap"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far"));
     g_array_append_val(table->names, *g_string_new("postcoh:skymap_fname"));
 
     table->type_names = g_array_new(FALSE, FALSE, sizeof(GString)); 
@@ -28,6 +31,8 @@ void postcoh_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("lstring"));
     g_array_append_val(table->type_names, *g_string_new("int_4s"));
     g_array_append_val(table->type_names, *g_string_new("int_4s"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));

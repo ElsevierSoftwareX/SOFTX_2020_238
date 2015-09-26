@@ -896,6 +896,9 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 			output->cohsnr = pklist->cohsnr[peak_cur];
 			output->nullsnr = pklist->nullsnr[peak_cur];
 			output->chisq = pklist->chisq[peak_cur];
+			output->spearman_pval = 0;
+			output->fap = 0;
+			output->far = 0;
 			if (postcoh->output_skymap) {
 				GString *filename = NULL;
 				FILE *file = NULL;
@@ -941,6 +944,9 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 				output->cohsnr = pklist->cohsnr[itrial*exe_len + peak_cur];
 				output->nullsnr = pklist->nullsnr[itrial*exe_len + peak_cur];
 				output->chisq = pklist->chisq[itrial*exe_len + peak_cur];
+				output->spearman_pval = 0;
+				output->fap = 0;
+				output->far = 0;
 				output->skymap_fname[0] ='\0';
 
 				output++;

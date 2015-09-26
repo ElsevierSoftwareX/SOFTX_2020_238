@@ -26,6 +26,9 @@ tagPostcohTable
   REAL4         cohsnr;
   REAL4         nullsnr;
   REAL4         chisq;
+  REAL4		spearman_pval;
+  REAL4		fap;
+  REAL4		far;
   CHAR		skymap_fname[MAX_SKYMAP_FNAME_LEN];			// location of skymap
 }
 PostcohTable;
