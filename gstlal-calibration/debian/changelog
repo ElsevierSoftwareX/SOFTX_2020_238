@@ -1,8 +1,8 @@
-gstlal-calibration (0.5.2-1) unstable; urgency=low
+gstlal-calibration (0.5.3-1) unstable; urgency=low
 
-  * ER8/O1 bug fix release for offline running
+  * Allow more general naming scheme for output channels
 
- -- Madeline Wade <madeline.wade@ligo.org>  Mon, 21 Sept 2015 09:29:00 -0500
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 25 Sept 2015 20:31:00 -0500
 
 gstlal-calibration (0.5.1-1) unstable; urgency=low
 

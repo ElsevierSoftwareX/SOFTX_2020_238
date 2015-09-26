@@ -135,7 +135,6 @@ parser.add_option("--control-sample-rate", metavar = "Hz", default = 16384, type
 parser.add_option("--odc-sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate of the ODC state vector channel. (Default = 16384 Hz)")
 parser.add_option("--dq-sample-rate", metavar = "Hz", default = 16, type = "int", help = "Sample rate for the outgoing DQ vector GDS-CALIB_STATE_VECTOR. (Default = 16 Hz)")
 parser.add_option("--tst-exc-sample-rate", metavar = "Hz", default = 512, type = "int", help = "Sample rate for the control signals being read in. (Default = 512 Hz)")
-parser.add_option("--output-strain-channel-name", metavar = "name", default="GDS-CALIB_STRAIN", help = "Output strain channel name. (Default=GDS-CALIB_STRAIN)")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
 parser.add_option("--frame-size", metavar = "bytes", type = "int", default = 405338, help = "Approximate size in bytes of frame file images; used when writing to shared memory.  (Default=405338)")
@@ -152,6 +151,8 @@ parser.add_option("--science-intent-bitmask", metavar = "bitmask", type = "int",
 parser.add_option("--hw-inj-cbc-bitmask", metavar = "bitmask", type = "int", default = 16777216, help = "Bitmask used on ODC state vector in order presence of CBC hardware injection. (Default=16777216)")
 parser.add_option("--hw-inj-burst-bitmask", metavar = "bitmask", type = "int", default = 33554432, help = "Bitmask used on ODC state vector in order presence of burst hardware injection. (Default=33554432)")
 parser.add_option("--hw-inj-detchar-bitmask", metavar = "bitmask", type = "int", default = 67108864, help = "Bitmask used on ODC state vector in order presence of DetChar hardware injection. (Default=67108864)")
+parser.add_option("--chan-prefix", metavar = "name", default = "GDS", help = "Prefix for all output channel names. (Default = GDS)") 
+parser.add_option("--chan-suffix", metavar = "name", help = "Suffix for all output channel names.") 
 
 # These are debugging options
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -333,6 +334,11 @@ odcsr = options.odc_sample_rate
 ctrlsr = options.control_sample_rate
 caps = "audio/x-raw-float, width=64, rate=%d, channels=1, endianness=1234" % sr # = 8 bytes, a double
 ctrl_caps = "audio/x-raw-float, width=64, rate=%d, channels=1, endianness=1234" % ctrlsr 
+if options.chan_suffix is not None:
+	chan_suffix = "_" + options.chan_suffix
+else:
+	chan_suffix = ""
+chan_prefix = options.chan_prefix + "-"
 
 # Make sure we have sufficient resources
 # We allocate far more memory than we need, so this is okay
@@ -1040,7 +1046,7 @@ strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instr
 	
 # Put the units back to strain before writing to frames
 straintee = pipeparts.mktee(pipeline, strain)
-straintagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_strain_channel_name, instrument)
+straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 strain = pipeparts.mktaginject(pipeline, pipeparts.mkqueue(pipeline, straintee, max_size_time = gst.SECOND * 100), straintagstr)
 
 #
@@ -1383,39 +1389,39 @@ mux.set_property("compression-level", options.compression_level)
 
 # Link the output DQ vectors up to the muxer, if applicable
 if not options.no_dq_vector:
-	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STATE_VECTOR" % instrument))
+	pipeparts.mkqueue(pipeline, calibstatevector, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_STATE_VECTOR%s" % (instrument, chan_prefix, chan_suffix)))
 	pipeparts.mkqueue(pipeline, odcstatevectorout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
-strain.get_pad("src").link(mux.get_pad("%s:GDS-CALIB_STRAIN" % (instrument)))
+strain.get_pad("src").link(mux.get_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary gammas to the muxer
 if not options.no_gamma:
-	pipeparts.mkqueue(pipeline, gammaRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_REAL" % instrument))
-	pipeparts.mkqueue(pipeline, gammaIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_GAMMA_IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, gammaRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_GAMMA_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	pipeparts.mkqueue(pipeline, gammaIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_GAMMA_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_a to the muxer
 if not options.no_kappaa:
-	pipeparts.mkqueue(pipeline, kaRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_A_REAL" % instrument))
-	pipeparts.mkqueue(pipeline, kaIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_A_IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, kaRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	pipeparts.mkqueue(pipeline, kaIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_tst to the muxer
 if not options.no_kappatst:
-	pipeparts.mkqueue(pipeline, ktstRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_TST_REAL" % instrument))
-	pipeparts.mkqueue(pipeline, ktstIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_TST_IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, ktstRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	pipeparts.mkqueue(pipeline, ktstIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_pu to the muxer
 if not options.no_kappapu:
-	pipeparts.mkqueue(pipeline, kpuRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_PU_REAL" % instrument))
-	pipeparts.mkqueue(pipeline, kpuIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_PU_IMAGINARY" % instrument))
+	pipeparts.mkqueue(pipeline, kpuRout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	pipeparts.mkqueue(pipeline, kpuIout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the \kappa_c to the muxer
 if not options.no_kappac:
-	pipeparts.mkqueue(pipeline, kcout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_KAPPA_C" % instrument))
+	pipeparts.mkqueue(pipeline, kcout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_C%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the f_cc to the muxer
 if not options.no_fcc:
-	pipeparts.mkqueue(pipeline, fccout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:GDS-CALIB_F_CC" % instrument))
+	pipeparts.mkqueue(pipeline, fccout, max_size_time = gst.SECOND * 100).get_pad("src").link(mux.get_pad("%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)))
 
 if options.wings is not None:
 	def clip_wings(pad, obj, (wings, start, end)):
