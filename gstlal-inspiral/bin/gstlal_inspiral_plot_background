@@ -79,6 +79,7 @@ def parse_command_line():
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
+	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -122,7 +123,7 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 		raise ValueError("no parameter distribution data loaded")
 	if coinc_params_distributions is not None:
 		coinc_params_distributions.finish(verbose = verbose)
-	if ranking_data is not None:
+	if ranking_data is not None and not options.dont_apply_extinction:
 		# FIXME signal PDFs are still not right.
 		ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
 		ranking_data.finish(verbose = verbose)
