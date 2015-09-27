@@ -192,8 +192,10 @@ if distributions is None and ranking_data is None:
 #
 
 
-distributions.finish(verbose = options.verbose)
-ranking_data.finish(verbose = options.verbose)
+if distributions is not None:
+	distributions.finish(verbose = options.verbose)
+if ranking_data is not None:
+	ranking_data.finish(verbose = options.verbose)
 
 
 #
@@ -201,7 +203,10 @@ ranking_data.finish(verbose = options.verbose)
 #
 
 
-distributions.process_id = ranking_data.process_id = process.process_id
+if distributions is not None:
+	distributions.process_id = process.process_id
+if ranking_data is not None:
+	ranking_data.process_id = process.process_id
 far.gen_likelihood_control_doc(xmldoc, process, distributions, ranking_data, seglists)
 search_summary.instruments = seglists.keys()
 search_summary.in_segment = search_summary.out_segment = seglists.extent_all()
