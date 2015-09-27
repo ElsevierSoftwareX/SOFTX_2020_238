@@ -145,6 +145,20 @@ WHERE
 		WHERE
 			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id
 	);
+--
+-- delete all events with LR < 1
+--
+DELETE FROM
+	coinc_event
+WHERE
+	EXISTS (
+		SELECT
+			*
+		FROM
+			_cluster_info_ AS _cluster_info_a_
+		WHERE
+			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id AND _cluster_info_a_.ranking_stat < 1.0
+	);
 DROP INDEX tmpindex1;
 DROP INDEX tmpindex2;
 DROP TABLE _cluster_info_;
