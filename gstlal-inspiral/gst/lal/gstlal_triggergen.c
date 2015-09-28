@@ -203,7 +203,7 @@ static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTim
 	dest->chisq = chisq;
 	dest->chisq_dof = 1;
 	XLALGPSAddGPS(&dest->end_time, &end_time);
-	dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
+	dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&dest->end_time);
 	dest->eff_distance = effective_distance(dest->snr, dest->sigmasq);
 
 	/*
