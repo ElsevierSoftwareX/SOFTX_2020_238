@@ -1238,7 +1238,7 @@ WHERE
 				expected_count_x = numpy.array(expected_count_x)[order]
 				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
 
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 25.))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
