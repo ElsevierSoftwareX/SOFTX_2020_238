@@ -2294,22 +2294,23 @@ class FAPFAR(object):
 		self.minrank = min(ranks)
 		self.maxrank = max(ranks)
 
+	def ccdf_from_rank(self, rank):
+		rank = max(self.minrank, min(self.maxrank, rank))
+		return float(self.ccdf_interpolator(rank))
+
 	def fap_from_rank(self, rank):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718
-		rank = max(self.minrank, min(self.maxrank, rank))
-		fap = float(self.ccdf_interpolator(rank))
-		return fap_after_trials(fap, self.zero_lag_total_count)
+		return fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718.  the return value is divided by T to
 		# convert events/experiment to events/second.
 		assert self.livetime is not None, "cannot compute FAR without livetime"
-		rank = max(self.minrank, min(self.maxrank, rank))
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+		log_tdp = math.log1p(-self.ccdf_from_rank(rank))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
 	def assign_fapfars(self, connection):
