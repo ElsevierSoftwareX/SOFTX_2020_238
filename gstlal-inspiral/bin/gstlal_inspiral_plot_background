@@ -57,6 +57,7 @@ from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue import segmentsUtils
 from pylal import ligolw_thinca
 
 
@@ -72,6 +73,7 @@ def parse_command_line():
 	parser.add_option("--max-snr", metavar = "SNR", default = 200., type = "float", help = "Plot SNR PDFs up to this value of SNR (default = 200).")
 	parser.add_option("--max-log-lambda", metavar = "value", default = 40., type = "float", help = "Plot ranking statistic CCDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 40).")
 	parser.add_option("--min-log-lambda", metavar = "value", default = -5., type = "float", help = "Plot ranking statistic CCDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -10).")
+	parser.add_option("--scatter-log-lambdas", metavar = "[low]:[high][,[low]:[high]...]", help = "Overlay scatter plots of candidate parameter co-ordinates on various PDF plots, limiting the candidates to those whose log likelihood ratios are in the given range (default = don't overlay scatter plot).  Use a range of \":\" to plot all candidates.")
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Write output to this directory (default = \".\").")
 	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by choosen the filename extension (default = \".png\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
@@ -87,6 +89,9 @@ def parse_command_line():
 
 	if options.output_format not in (".png", ".pdf", ".svg"):
 		raise ValueError("invalid --output-format \"%s\"" % options.output_format)
+
+	if options.scatter_log_lambdas is not None:
+		options.scatter_log_lambdas = segmentsUtils.from_range_strings(options.scatter_log_lambdas.split(","), boundtype = float).coalesce()
 
 	options.user_tag = options.user_tag.upper()
 
@@ -147,36 +152,15 @@ def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_pat
 
 		cursor = connection.cursor()
 
-		for fap, ln_likelihood_ratio, is_background in cursor.execute("""
-SELECT
-	coinc_inspiral.false_alarm_rate,
-	coinc_event.likelihood,
-	EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
-FROM
-	coinc_event
-	JOIN coinc_inspiral ON (
-		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
-	)
-WHERE
-	coinc_event.coinc_def_id == ?
-	AND (? ISNULL OR coinc_event.likelihood >= ?)
-		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)):
-			if is_background:
-				background_ln_likelihood_ratios.append((ln_likelihood_ratio, fap))
-			else:
-				zerolag_ln_likelihood_ratios.append((ln_likelihood_ratio, fap))
+		# subclass to allow it to carry extra attributes
+		class snglsdict(dict):
+			__slots__ = ("ln_likelihood_ratio", "fap")
 
 		for coinc_event_id, rows in itertools.groupby(cursor.execute("""
 SELECT
 	coinc_event_map.coinc_event_id,
+	coinc_event.likelihood,
+	coinc_inspiral.false_alarm_rate,
 	EXISTS (
 		SELECT
 			*
@@ -198,6 +182,9 @@ FROM
 	JOIN coinc_event ON (
 		coinc_event.coinc_event_id == coinc_event_map.coinc_event_id
 	)
+	JOIN coinc_inspiral ON (
+		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	)
 WHERE
 	coinc_event.coinc_def_id == ?
 	AND (? ISNULL OR coinc_event.likelihood >= ?)
@@ -205,9 +192,11 @@ ORDER BY
 	coinc_event_map.coinc_event_id
 		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)), lambda row: row[0]):
 			rows = list(rows)
-			is_background = rows[0][1]
+			is_background = rows[0][3]
 			# {instrument: (snr, chisq)} dictionary
-			sngls = dict((row[2], (row[3], row[4])) for row in rows)
+			sngls = snglsdict((row[4], (row[5], row[6])) for row in rows)
+			sngls.ln_likelihood_ratio = rows[0][1]
+			sngls.fap = rows[0][2]
 			if is_background:
 				background_sngls.append(sngls)
 			else:
@@ -217,8 +206,8 @@ ORDER BY
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	background_ln_likelihood_ratios.sort()
-	zerolag_ln_likelihood_ratios.sort()
+	background_ln_likelihood_ratios = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in background_sngls)
+	zerolag_ln_likelihood_ratios = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in zerolag_sngls)
 
 	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls
 
@@ -294,8 +283,12 @@ else:
 
 if options.database:
 	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+	if options.scatter_log_lambdas is not None:
+		sngls = [sngl for sngl in background_sngls + zerolag_sngls if sngl.ln_likelihood_ratio in options.scatter_log_lambdas]
+	else:
+		sngls = None
 else:
-	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls = None, None, None, None
+	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, sngls = None, None, None
 
 
 #
@@ -305,7 +298,7 @@ else:
 # SNR and Chisquared
 for instrument in ("H1","L1","V1"):
 	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
-		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr)
+		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = (sngls if snr_chi_type == "LR" else None))
 		if fig is None:
 			continue
 		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
@@ -325,7 +318,7 @@ fig.savefig(plotname)
 # SNR PDFs
 for (instruments, horizon_distances) in sorted(coinc_params_distributions.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
 	horizon_distances = dict(horizon_distances)	# stored as frozen set of key/value pairs in cache key
-	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions, instruments, horizon_distances, options.max_snr)
+	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions, instruments, horizon_distances, options.max_snr, sngls = sngls)
 	if fig is not None:
 		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 		if options.verbose:
