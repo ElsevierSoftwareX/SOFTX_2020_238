@@ -1107,9 +1107,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
 
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
-		for instrument, number_of_events in n.items():
-			# NOTE a uniform prior is added that must be smaller than the uniform prior added for the background
-			self.injection_rates["%s_snr_chi" % instrument].array += 1. / number_of_events / self.injection_rates["%s_snr_chi" % instrument].array.size / 1e20
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
