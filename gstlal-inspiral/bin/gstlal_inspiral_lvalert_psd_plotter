@@ -160,10 +160,10 @@ for graceid in graceids:
 	except AttributeError:
 		# not available on old matplotlibs
 		pass
+	filename = "%s_psd.png" % graceid
 	if options.no_upload:
-		filename = "psd_%s.png" % graceid
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
 	else:
-		lvalert_helper.upload_fig(fig, gracedb_client, graceid, log_message = "strain spectral density plot")
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "strain spectral density plot")
 	logging.info("finished processing %s" % graceid)
