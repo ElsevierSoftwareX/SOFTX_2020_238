@@ -126,7 +126,7 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 	if ranking_data is not None and not options.dont_apply_extinction:
 		# FIXME signal PDFs are still not right.
 		ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
-		ranking_data.finish(verbose = verbose)
+	ranking_data.finish(verbose = verbose)
 	# FIXME:  hack to fake some segments so we can generate file names
 	# if the input files didn't provide segment information
 	try:
