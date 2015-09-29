@@ -27,7 +27,7 @@ typedef struct _XmlNodeStruct
 
 } XmlNodeStruct;
 
-typedef enum { UNKNOWN, LSTRING, REAL_4, REAL_8, INT_4S } xmlType;
+typedef enum { UNKNOWN, LSTRING, REAL_4, REAL_8, INT_4S, INT_8S } xmlType;
 
 typedef struct _XmlArray
 {
