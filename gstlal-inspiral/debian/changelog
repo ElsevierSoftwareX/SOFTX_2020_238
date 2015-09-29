@@ -1,3 +1,9 @@
+gstlal-inspiral (0.6.8-1) unstable; urgency=low
+
+  * ER8/early O1 offline release
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Tue, 29 Sep 2015 16:43:20 -0500
+
 gstlal-inspiral (0.6.7-1) unstable; urgency=low
 
   * numpy.frompyfunc() --> numpy.vectorize()
