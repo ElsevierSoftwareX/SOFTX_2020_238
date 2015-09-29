@@ -117,6 +117,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 		case PROP_DETRSP_FNAME:
 
        			/* must make sure stream_id has already loaded */
+			g_assert(element->stream_id != NOT_INIT);
 			g_mutex_lock(element->prop_lock);
 			element->detrsp_fname = g_value_dup_string(value);
 			cuda_postcoh_device_set_init(element);
@@ -129,6 +130,7 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 		case PROP_AUTOCORRELATION_FNAME: 
 
        			/* must make sure stream_id has already loaded */
+			g_assert(element->stream_id != NOT_INIT);
 			g_mutex_lock(element->prop_lock);
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
@@ -1187,7 +1189,6 @@ static void cuda_postcoh_base_init(gpointer g_class)
 	gst_element_class_add_pad_template(
 		element_class,
 //		gst_static_pad_template_get(&cuda_postcoh_src_template)
-#if 1
 		gst_pad_template_new(
 			"src",
 			GST_PAD_SRC,
@@ -1196,7 +1197,6 @@ static void cuda_postcoh_base_init(gpointer g_class)
 				"application/x-lal-postcoh" 
 			)
 		)
-#endif
 	);
 }
 
