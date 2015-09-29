@@ -25,42 +25,66 @@
  * 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef __BACKGROUND_STATS_UTILS_H__
-#define __BACKGROUND_STATS_UTILS_H__
 
-#include <math.h>
-#include <gsl/gsl_sf_gamma.h>
+#ifndef __COHFAR_UPBACKGROUND_H__
+#define __COHFAR_UPBACKGROUND_H__
 
-#include "background_stats.h"
 
-#define IFO_LEN 2
-#define MAX_COMBOS 4
-char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"}
+#include <complex.h>
 
-#define LOGSNR_MIN	0.6
-#define LOGSNR_MAX	2.5
-#define LOGSNR_NBIN	190
-#define LOGCHISQ_MIN	-0.5
-#define LOGCHISQ_MAX	2.5
-#define LOGCHISQ_NBIN	300
 
-Bins1D *
-bins1D_create(float min, float max, int nbin);
+#include <glib.h>
+#include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
-Bins2D *
-bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin);
 
-BackgroundStats **
-background_stats_create(char *ifos);
+#include <gsl/gsl_matrix.h>
 
-gboolean
-add_background_val_to_rates(float val, Bins1D *bins);
 
-gboolean
-background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename);
+G_BEGIN_DECLS
+#define COHFAR_UPBACKGROUND_TYPE \
+	(cohfar_upbackground_get_type())
+#define COHFAR_UPBACKGROUND(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), COHFAR_UPBACKGROUND_TYPE, CohfarUpbackground))
+#define COHFAR_UPBACKGROUND_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), COHFAR_UPBACKGROUND_TYPE, CohfarUpbackgroundClass))
+#define GST_IS_COHFAR_UPBACKGROUND(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), COHFAR_UPBACKGROUND_TYPE))
+#define GST_IS_COHFAR_UPBACKGROUND_CLASS(klass) \
+	(G_type_CHECK_CLASS_TYPE((klass), COHFAR_UPBACKGROUND_TYPE))
 
-gboolean
-background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *filename);
 
-#endif /* __BACKGROUND_STATS_UTILS_H__ */
+typedef struct {
+	GstBaseTransformClass parent_class;
+} CohfarUpbackgroundClass;
 
+
+typedef struct {
+	GstBaseTransform element;
+
+	char *ifos;
+	int ncombo; // ifo combination
+	BackgroundStats **stats;
+
+	int hist_trials;
+	int snapshot_interval;
+	gchar *input_filename;
+	gchar *output_filename;
+
+	GMutex *prop_lock;
+	Gcond *prop_avail;
+	/*
+	 * timestamp book-keeping
+	 */
+
+	GstClockTime t_roll_start;
+} CohfarUpbackground;
+
+
+GType cohfar_upbackground_get_type(void);
+
+
+G_END_DECLS
+
+
+#endif	/* __COHFAR_UPBACKGROUND_H__ */
