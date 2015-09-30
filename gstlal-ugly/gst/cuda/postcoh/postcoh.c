@@ -826,13 +826,17 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static void cuda_postcoh_write_table_to_buf(PostcohState *state, GstBuffer *outbuf)
+static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outbuf)
 {
+	PostcohState *state = postcoh->state;
 
 	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
 	int iifo = 0, nifo = state->nifo;
 	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
-	int npeak = 0, itrial = 0, exe_len = state->exe_len;
+	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len;
+	int hist_trials = postcoh->hist_trials;
+
+	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
 	for(iifo=0; iifo<nifo; iifo++) {
 		if (is_cur_ifo_has_data(state, iifo)) {
@@ -930,7 +934,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	PostcohState *state = postcoh->state;
 
 	cuda_postcoh_rm_invalid_peak(state);
-	int allnpeak = 0, iifo, ipeak, nifo = state->nifo;
+	int allnpeak = 0, iifo, nifo = state->nifo;
 	int hist_trials = postcoh->hist_trials;
 
 	for(iifo=0; iifo<nifo; iifo++) {
@@ -962,7 +966,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
         GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
         GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
 
-	cuda_postcoh_write_table_to_buf(state, outbuf);
+	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
 	GST_LOG_OBJECT (srcpad,
 		"Processed of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
