@@ -299,7 +299,7 @@ else:
 # SNR and Chisquared
 for instrument in ("H1","L1","V1"):
 	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
-		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = (sngls if snr_chi_type == "LR" else None))
+		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = sngls)
 		if fig is None:
 			continue
 		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
