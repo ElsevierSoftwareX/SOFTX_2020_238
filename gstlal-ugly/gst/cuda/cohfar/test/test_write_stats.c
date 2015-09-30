@@ -9,6 +9,7 @@ int main(int argc, char *argv[])
 	char *output_fname = "test_stats.xml.gz";
 	BackgroundStats ** stats = background_stats_create(ifos);
 
+	gsl_vector_long_set_all(stats[0]->rates->logsnr_bins->data, 125);
 	gsl_matrix_set_all(stats[0]->cdf->data, 0.1);
 	background_stats_to_xml(stats, 1, output_fname);
 	return 0;	

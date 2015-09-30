@@ -36,7 +36,7 @@ typedef struct {
 	float	max;
 	int	nbin;
 	float	step;
-	gsl_vector	*data;
+	gsl_vector_long	*data;
 } Bins1D;
 
 typedef struct {

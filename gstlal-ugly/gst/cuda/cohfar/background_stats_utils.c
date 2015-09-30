@@ -2,7 +2,7 @@
 
 #include <math.h>
 #include <string.h>
-#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_long.h>
 #include <gsl/gsl_matrix.h>
 
 #include "../LIGOLw_xmllib/LIGOLwHeader.h"
@@ -18,8 +18,8 @@ bins1D_create(float min, float max, int nbin)
   bins->max = max;
   bins->nbin = nbin;
   bins->step = (max - min)/ nbin;
-  bins->data = gsl_vector_alloc(nbin);
-  gsl_vector_set_zero(bins->data);
+  bins->data = gsl_vector_long_alloc(nbin);
+  gsl_vector_long_set_zero(bins->data);
   return bins;
 }
 
@@ -72,16 +72,16 @@ add_background_val_to_rates(float val, Bins1D *bins)
 {
   float logval = log10f(val); // float
   if (logval < bins->min) {
-    gsl_vector_set(bins->data, 0, gsl_vector_get(bins->data, 0) + 1);
+    gsl_vector_long_set(bins->data, 0, gsl_vector_long_get(bins->data, 0) + 1);
     return TRUE;
   }
   if (logval > bins->max) {
-    gsl_vector_set(bins->data, bins->nbin-1, gsl_vector_get(bins->data, bins->nbin-1) + 1);
+    gsl_vector_long_set(bins->data, bins->nbin-1, gsl_vector_long_get(bins->data, bins->nbin-1) + 1);
     return TRUE;
   }
 
   int idx = (logval - bins->min) / bins->step;
-  gsl_vector_set(bins->data, idx, gsl_vector_get(bins->data, idx) + 1);
+  gsl_vector_long_set(bins->data, idx, gsl_vector_long_get(bins->data, idx) + 1);
   return TRUE;
 }
 
