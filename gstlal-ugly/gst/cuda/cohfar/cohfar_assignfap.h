@@ -29,17 +29,11 @@
 #ifndef __COHFAR_ASSIGNFAP_H__
 #define __COHFAR_ASSIGNFAP_H__
 
-
-#include <complex.h>
-
-
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 
-
-#include <gsl/gsl_matrix.h>
-
+#include <cohfar/background_stats.h>
 
 G_BEGIN_DECLS
 #define COHFAR_ASSIGNFAP_TYPE \

@@ -24,7 +24,7 @@
  *
  * ============================================================================
  */
-
+#include <math.h>
 #include <string.h>
 /*
  *  stuff from gobject/gstreamer
@@ -38,15 +38,16 @@
 
 
 /*
- * stuff from FFTW and GSL
+ * stuff from here
  */
 
-
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_blas.h>
+#include <postcoh/postcoh_table.h>
+#include <cohfar/background_stats_utils.h>
+#include <cohfar/cohfar_accumbackground.h>
 
 #include <time.h>
-#define DEFAULT_STATS_NAME "stats.xml.gz"
+#define NOT_INIT -1
+#define DEFAULT_STATS_FNAME "stats.xml.gz"
 /*
  * ============================================================================
  *
@@ -94,7 +95,7 @@ enum property {
 	PROP_HIST_TRIALS,
 	PROP_UPDATE_INTERVAL,
 	PROP_INPUT_FNAME,
-	PROP_OUTPUT_FILENAME
+	PROP_OUTPUT_FNAME
 };
 
 static void cohfar_accumbackground_set_property (GObject * object,
@@ -103,6 +104,10 @@ static void cohfar_accumbackground_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
 /* vmethods */
+
+static gboolean
+cohfar_accumbackground_get_unit_size (GstBaseTransform * base, GstCaps * caps,
+    guint * size);
 static GstFlowReturn cohfar_accumbackground_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
 static gboolean cohfar_accumbackground_transform_size (GstBaseTransform * base,
@@ -110,8 +115,8 @@ static gboolean cohfar_accumbackground_transform_size (GstBaseTransform * base,
     guint * othersize);
 static gboolean cohfar_accumbackground_event (GstBaseTransform * base,
     GstEvent * event);
-static gboolean cohfar_accumbackground_dispose (GObject *object);
-/
+static void cohfar_accumbackground_dispose (GObject *object);
+
 /*
  * ============================================================================
  *
@@ -119,6 +124,14 @@ static gboolean cohfar_accumbackground_dispose (GObject *object);
  *
  * ============================================================================
  */
+
+static gboolean
+cohfar_accumbackground_get_unit_size (GstBaseTransform * base, GstCaps * caps,
+    guint * size)
+{
+	*size = sizeof(PostcohTable);
+  return TRUE;
+}
 
 /*
  * transform_size()
@@ -128,7 +141,7 @@ static gboolean cohfar_accumbackground_dispose (GObject *object);
 static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
 {
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
-  GST_LOG_OBJECT (base, "asked to transform size %d in direction %s",
+  GST_LOG_OBJECT (trans, "asked to transform size %d in direction %s",
       size, direction == GST_PAD_SINK ? "SINK" : "SRC");
 
 
@@ -163,7 +176,7 @@ static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, G
 		return FALSE;
 	}
 
-  GST_LOG_OBJECT (base, "transformed size %d to %d", size,
+  GST_LOG_OBJECT (trans, "transformed size %d to %d", size,
       *othersize);
 
 
@@ -206,16 +219,18 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	PostcohTable *outtable = (PostcohTable *) GST_BUFFER_DATA(outbuf);
 	for (; intable<intable_end; intable++) {
 		if (intable->is_background == 1) {
+			if (intable->cohsnr > intable->maxsnglsnr) {
 			icombo = get_icombo(intable->ifos);
-			add_background_val_to_rates(intable->snr, stats[icombo]->rates->logsnr_bins);
+			add_background_val_to_rates(intable->cohsnr, stats[icombo]->rates->logsnr_bins);
 			add_background_val_to_rates(intable->chisq, stats[icombo]->rates->logchisq_bins);
+			}
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohTable));
 			outtable++;
 		} 
 	}
 
-	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(buf);
+	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(inbuf);
 	if (element->update_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->update_interval) {
 		/* update background xml file */
 		background_stats_to_xml(stats, element->ncombo, element->output_fname);
@@ -245,7 +260,7 @@ cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
 //      if (fflush (sink->file))
 //        goto flush_failed;
 
-    GST_LOG_OBJECT(sink, "EVENT EOS. Finish writing document");
+    GST_LOG_OBJECT(element, "EVENT EOS. Finish writing document");
     background_stats_to_xml(element->stats, element->ncombo, element->output_fname);
       break;
     default:
@@ -270,8 +285,8 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 	switch(prop_id) {
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
-			int nifo = strlen(ifos) / IFO_LEN;
-			element->ncombo = power(2, nifo) - 1 - nifo;
+			int nifo = strlen(element->ifos) / IFO_LEN;
+			element->ncombo = pow(2, nifo) - 1 - nifo;
 			element->stats = background_stats_create(element->ifos);
 			break;
 
@@ -412,8 +427,9 @@ static void cohfar_accumbackground_base_init(gpointer gclass)
 		)
 	);
 
-	transform_class->transform = GST_DEBUG_FUNCPTR(cohfar_upbackgrond_transform);
+	transform_class->transform = GST_DEBUG_FUNCPTR(cohfar_accumbackground_transform);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(cohfar_accumbackground_transform_size);
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(cohfar_accumbackground_get_unit_size);
 	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_accumbackground_event);
 
 }
@@ -488,8 +504,8 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 		g_param_spec_int(
 			"update-interval",
 			"update interval",
-			"update background statistics xml file every update time",
-			1, G_MAXINT, 600,
+			"(-1) never update; (0) update at the end; (N) update background statistics xml file every N seconds.",
+			-1, G_MAXINT, 600,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -504,7 +520,7 @@ static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAc
 {
 	element->stats = NULL;
 	element->hist_trials = NOT_INIT;
-	element->update_interval = 0;
+	element->update_interval = NOT_INIT;
 	element->prop_lock = g_mutex_new();
 	element->prop_avail = g_cond_new();
 }

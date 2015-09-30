@@ -48,6 +48,8 @@
 #include <multiratespiir/multiratespiir.h>
 #include <postcoh/postcoh.h>
 #include <postcoh/postcoh_filesink.h>
+#include <cohfar/cohfar_accumbackground.h>
+#include <cohfar/cohfar_assignfap.h>
 
 
 /*
@@ -71,6 +73,8 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"cuda_multiratespiir", CUDA_TYPE_MULTIRATE_SPIIR},
 		{"cuda_postcoh", CUDA_TYPE_POSTCOH},
 		{"postcoh_filesink", POSTCOH_TYPE_FILESINK},
+		{"cohfar_accumbackground", COHFAR_ACCUMBACKGROUND_TYPE},
+		{"cohfar_assignfap", COHFAR_ASSIGNFAP_TYPE},
 		{NULL, 0},
 	};
 

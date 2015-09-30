@@ -24,7 +24,7 @@
  *
  * ============================================================================
  */
-
+#include <math.h>
 #include <string.h>
 /*
  *  stuff from gobject/gstreamer
@@ -38,12 +38,12 @@
 
 
 /*
- * stuff from FFTW and GSL
+ * stuff from here
  */
 
-
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_blas.h>
+#include <postcoh/postcoh_table.h>
+#include <cohfar/background_stats_utils.h>
+#include <cohfar/cohfar_assignfap.h>
 
 #include <time.h>
 #define DEFAULT_STATS_NAME "stats.xml.gz"
@@ -102,9 +102,9 @@ static void cohfar_assignfap_get_property (GObject * object,
 
 /* vmethods */
 static GstFlowReturn cohfar_assignfap_transform_ip (GstBaseTransform * base,
-    GstBuffer * inbuf, GstBuffer * outbuf);
-static gboolean cohfar_assignfap_dispose (GObject *object);
-/
+    GstBuffer * buf);
+static void cohfar_assignfap_dispose (GObject *object);
+
 /*
  * ============================================================================
  *
@@ -147,12 +147,12 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		int icombo;
 		BackgroundStats **stats = element->stats;
 		PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buf);
-		PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(inbuf));
+		PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
-			table->fap = background_stats_get_cdf(table->snr, table->chisq, stats[icombo]->cdf);
+			table->fap = background_stats_get_cdf(table->cohsnr, table->chisq, stats[icombo]->cdf);
+		}
 	}
-
 
 	return result;
 }
@@ -177,8 +177,7 @@ cohfar_assignfap_event (GstBaseTransform * base, GstEvent * event)
 //      if (fflush (sink->file))
 //        goto flush_failed;
 
-    GST_LOG_OBJECT(sink, "EVENT EOS. Finish writing document");
-    background_stats_to_xml(element->stats, element->ncombo, element->output_fname);
+    GST_LOG_OBJECT(element, "EVENT EOS. Finish assign fap");
       break;
     default:
       break;
@@ -202,8 +201,8 @@ static void cohfar_assignfap_set_property(GObject *object, enum property prop_id
 	switch(prop_id) {
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
-			int nifo = strlen(ifos) / IFO_LEN;
-			element->ncombo = power(2, nifo) - 1 - nifo;
+			int nifo = strlen(element->ifos) / IFO_LEN;
+			element->ncombo = pow(2, nifo) - 1 - nifo;
 			element->stats = background_stats_create(element->ifos);
 			break;
 
@@ -327,7 +326,7 @@ static void cohfar_assignfap_base_init(gpointer gclass)
 		)
 	);
 
-	transform_class->transform_ip = GST_DEBUG_FUNCPTR(cohfar_upbackgrond_transform);
+	transform_class->transform_ip = GST_DEBUG_FUNCPTR(cohfar_assignfap_transform_ip);
 	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_assignfap_event);
 
 }
@@ -360,7 +359,7 @@ static void cohfar_assignfap_class_init(CohfarAssignfapClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_INTPUT_FNAME,
+		PROP_INPUT_FNAME,
 		g_param_spec_string(
 			"input-fname",
 			"input filename",
@@ -384,7 +383,7 @@ static void cohfar_assignfap_class_init(CohfarAssignfapClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_UPDATE_INTERVAL,
+		PROP_COLLECTION_TIME,
 		g_param_spec_int(
 			"collection-time",
 			"background collection time",

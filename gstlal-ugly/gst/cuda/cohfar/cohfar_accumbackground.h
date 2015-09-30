@@ -29,17 +29,11 @@
 #ifndef __COHFAR_ACCUMBACKGROUND_H__
 #define __COHFAR_ACCUMBACKGROUND_H__
 
-
-#include <complex.h>
-
-
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 
-
-#include <gsl/gsl_matrix.h>
-
+#include <cohfar/background_stats.h>
 
 G_BEGIN_DECLS
 #define COHFAR_ACCUMBACKGROUND_TYPE \
@@ -68,11 +62,11 @@ typedef struct {
 
 	int hist_trials;
 	int update_interval;
-	gchar *input_filename;
-	gchar *output_filename;
+	gchar *input_fname;
+	gchar *output_fname;
 
 	GMutex *prop_lock;
-	Gcond *prop_avail;
+	GCond *prop_avail;
 	/*
 	 * timestamp book-keeping
 	 */
