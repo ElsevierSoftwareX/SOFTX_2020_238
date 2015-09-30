@@ -28,14 +28,11 @@
 #ifndef __BACKGROUND_STATS_UTILS_H__
 #define __BACKGROUND_STATS_UTILS_H__
 
-#include <math.h>
-#include <gsl/gsl_sf_gamma.h>
-
+#include <glib.h>
 #include "background_stats.h"
 
 #define IFO_LEN 2
 #define MAX_COMBOS 4
-char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"}
 
 #define LOGSNR_MIN	0.6
 #define LOGSNR_MAX	2.5
@@ -43,6 +40,8 @@ char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"}
 #define LOGCHISQ_MIN	-0.5
 #define LOGCHISQ_MAX	2.5
 #define LOGCHISQ_NBIN	300
+
+extern char *IFO_COMBO_MAP[];
 
 Bins1D *
 bins1D_create(float min, float max, int nbin);

@@ -1,7 +1,14 @@
 #include "background_stats_utils.h"
 
-#define MIN(a, b) a>b?b:a
-#define MAX(a, b) a>b?a:b
+#include <math.h>
+#include <string.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+
+#include "../LIGOLw_xmllib/LIGOLwHeader.h"
+#include "background_stats_xml.h"
+
+char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
 
 Bins1D *
 bins1D_create(float min, float max, int nbin) 
@@ -36,14 +43,16 @@ bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, in
 BackgroundStats **
 background_stats_create(char *ifos)
 {
-  int iifo, jifo, nifo = 0, ncombo = 0, icombo = 0;
+  int nifo = 0, ncombo = 0, icombo = 0;
   nifo = strlen(ifos) / IFO_LEN;
-  ncombo = power(2, nifo) - 1 - nifo;
+  ncombo = pow(2, nifo) - 1 - nifo;
   BackgroundStats ** stats = (BackgroundStats **) malloc(sizeof(BackgroundStats *) * ncombo);
 
   for (icombo=0; icombo<ncombo; icombo++) {
     stats[icombo] = (BackgroundStats *) malloc(sizeof(BackgroundStats));
     BackgroundStats *cur_stats = stats[icombo];
+    printf("len %s, %d\n", IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]));
+    cur_stats->ifos = malloc(strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
     BackgroundRates *rates = cur_stats->rates;
@@ -63,7 +72,7 @@ add_background_val_to_rates(float val, Bins1D *bins)
 {
   float logval = log10f(val); // float
   if (logval < bins->min) {
-    gsl_vector_set(bins->data, 0, gsl_vector_get(bins->data, 0) + 1;)
+    gsl_vector_set(bins->data, 0, gsl_vector_get(bins->data, 0) + 1);
     return TRUE;
   }
   if (logval > bins->max) {
@@ -73,7 +82,7 @@ add_background_val_to_rates(float val, Bins1D *bins)
 
   int idx = (logval - bins->min) / bins->step;
   gsl_vector_set(bins->data, idx, gsl_vector_get(bins->data, idx) + 1);
-  return TURE;
+  return TRUE;
 }
 
 /*
@@ -122,7 +131,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     xns[icombo].data = &(array_cdf[icombo]);
   }
 
-  parseFile(fname, xns, nnode);
+  parseFile(filename, xns, nnode);
 
   // FIXME: need sanity check that number of rows and columns are the same
   // with the struct of BackgroundStats
@@ -130,7 +139,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
 
   int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
   int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
-  for (iicombo=0; icombo<ncombo; icombo++) {
+  for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
     memcpy(rates->logsnr_bins->data->data, array_logsnr_bins[icombo].data, x_size);
@@ -138,7 +147,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     memcpy(cur_stats->pdf->data->data, array_pdf[icombo].data, x_size * y_size);
     memcpy(cur_stats->cdf->data->data, array_cdf[icombo].data, x_size * y_size);
   }
-  for (iicombo=0; icombo<ncombo; icombo++) {
+  for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);
     freeArray(array_pdf + icombo);
@@ -148,6 +157,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   free(xns);
   xmlCleanupParser();
   xmlMemoryDump();
+  return TRUE;
 }
 
 
@@ -162,6 +172,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 
   int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
   int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
+
+  int ix, jy;
 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
@@ -178,12 +190,21 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     array_pdf[icombo].dim[0] = x_nbin;
     array_pdf[icombo].dim[1] = y_nbin;
     array_pdf[icombo].data = (double *) malloc(x_size * y_size);
-    memcpy(array_pdf[icombo].data, rates->pdf->data->data, x_size * y_size);
+    for (ix=0; ix<x_nbin; ix++) {
+	    for (jy=0; jy<y_nbin; jy++) {
+    		((double *)array_pdf[icombo].data)[ix * y_nbin + jy] = gsl_matrix_get(cur_stats->pdf->data, ix, jy);
+	    }
+    }
     array_cdf[icombo].ndim = 2;
     array_cdf[icombo].dim[0] = x_nbin;
     array_cdf[icombo].dim[1] = y_nbin;
     array_cdf[icombo].data = (double *) malloc(x_size * y_size);
-    memcpy(array_cdf[icombo].data, rates->cdf->data->data, x_size * y_size);
+    for (ix=0; ix<x_nbin; ix++) {
+	    for (jy=0; jy<y_nbin; jy++) {
+    		((double *)array_cdf[icombo].data)[ix * y_nbin + jy] = gsl_matrix_get(cur_stats->cdf->data, ix, jy);
+	    }
+    }
+
   
   }
 
@@ -192,10 +213,10 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   xmlTextWriterPtr writer;
 
   /* Create a new XmlWriter for uri, with no compression. */
-  writer = xmlNewTextWriterFilename(uri, 0);
+  writer = xmlNewTextWriterFilename(filename, 1);
   if (writer == NULL) {
       printf("testXmlwriterFilename: Error creating the xml writer\n");
-      return;
+      return FALSE;
   }
 
   rc = xmlTextWriterSetIndent(writer, 1);
@@ -208,14 +229,14 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterStartDocument\n");
-      return;
+      return FALSE;
   }
 
   rc = xmlTextWriterWriteDTD(writer, BAD_CAST "LIGO_LW", NULL, BAD_CAST "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt", NULL);
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterWriteDTD\n");
-      return;
+      return FALSE;
   }
 
   /* Start an element named "LIGO_LW". Since thist is the first
@@ -224,7 +245,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
-      return;
+      return FALSE;
   }
 
   /* Start an element named "LIGO_LW" as child of EXAMPLE. */
@@ -232,7 +253,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
-      return;
+      return FALSE;
   }
 
   /* Add an attribute with name "Name" and value "gstlal_spiir_cohfar" to LIGO_LW. */
@@ -241,7 +262,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterWriteAttribute\n");
-      return;
+      return FALSE;
   }
 
   GString *array_name = g_string_new(NULL);
@@ -255,7 +276,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     ligoxml_write_Array(writer, &(array_cdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
   }
-  g_string_free(array_name);
+  g_string_free(array_name, TRUE);
 
   /* Since we do not want to
    * write any other elements, we simply call xmlTextWriterEndDocument,
@@ -264,14 +285,15 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   if (rc < 0) {
       printf
           ("testXmlwriterFilename: Error at xmlTextWriterEndDocument\n");
-      return;
+      return FALSE;
   }
 
   xmlFreeTextWriter(writer);
-  for (iicombo=0; icombo<ncombo; icombo++) {
+  for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
   }
+  return TRUE;
 }

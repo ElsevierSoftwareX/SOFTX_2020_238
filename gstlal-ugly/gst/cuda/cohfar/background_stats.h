@@ -35,6 +35,7 @@ typedef struct {
 	float	min;
 	float	max;
 	int	nbin;
+	float	step;
 	gsl_vector	*data;
 } Bins1D;
 
@@ -65,7 +66,7 @@ typedef struct {
  */
 
 typedef struct {
-	gchar	*ifos;
+	char	*ifos;
 	BackgroundRates *rates;
 	Bins2D	*pdf;
 	Bins2D	*cdf;
