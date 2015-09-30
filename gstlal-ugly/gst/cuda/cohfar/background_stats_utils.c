@@ -1,5 +1,8 @@
 #include "background_stats_utils.h"
 
+#define MIN(a, b) a>b?b:a
+#define MAX(a, b) a>b?a:b
+
 Bins1D *
 bins1D_create(float min, float max, int nbin) 
 {
@@ -72,10 +75,23 @@ add_background_val_to_rates(float val, Bins1D *bins)
   gsl_vector_set(bins->data, idx, gsl_vector_get(bins->data, idx) + 1);
   return TURE;
 }
+
+/*
+ * background cdf utils
+ */
+double
+background_stats_get_cdf(float snr, float chisq, Bins2D *bins)
+{
+  float logsnr = log10f(snr), logchisq = log10f(chisq);
+  int x_idx = 0, y_idx = 0;
+  x_idx = MIN(MAX((logsnr - bins->x_min) / bins->x_step, 0), bins->x_nbin-1);
+  y_idx = MIN(MAX((logchisq - bins->y_min) / bins->y_step, 0), bins->y_nbin-1);
+  return gsl_matrix_get(bins->data, x_idx, y_idx);
+}
+
 /*
  * background xml utils
  */
-
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename)
 {

@@ -56,6 +56,9 @@ background_stats_create(char *ifos);
 gboolean
 add_background_val_to_rates(float val, Bins1D *bins);
 
+double
+background_stats_get_cdf(float snr, float chisq, Bins2D *bins);
+
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename);
 

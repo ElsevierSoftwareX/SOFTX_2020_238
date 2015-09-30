@@ -54,7 +54,7 @@
  *
  * ============================================================================
  */
-static int find_icombo(char *ifos) {
+static int get_icombo(char *ifos) {
 	int icombo = 0;
 	for (icombo=0; icombo<MAX_COMBOS; icombo++) {
 		if (strcmp(ifos, IFO_COMBO_MAP[icombo]) == 0)
@@ -206,7 +206,7 @@ static GstFlowReturn cohfar_upbackground_transform(GstBaseTransform *trans, GstB
 	PostcohTable *outtable = (PostcohTable *) GST_BUFFER_DATA(outbuf);
 	for (; intable<intable_end; intable++) {
 		if (intable->is_background == 1) {
-			icombo = find_icombo(intable->ifos);
+			icombo = get_icombo(intable->ifos);
 			add_background_val_to_rates(intable->snr, stats[icombo]->rates->logsnr_bins);
 			add_background_val_to_rates(intable->chisq, stats[icombo]->rates->logchisq_bins);
 		} else { /* coherent trigger entry */
@@ -464,7 +464,7 @@ static void cohfar_upbackground_class_init(CohfarUpbackgroundClass *klass)
 			"output-fname",
 			"Output filename",
 			"Output background statistics filename",
-			DEFAULT_DETRSP_FNAME,
+			DEFAULT_STATS_FNAME,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

@@ -67,7 +67,7 @@ typedef struct {
 	BackgroundStats **stats;
 
 	int hist_trials;
-	int snapshot_interval;
+	int update_interval;
 	gchar *input_filename;
 	gchar *output_filename;
 
