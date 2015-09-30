@@ -72,18 +72,18 @@ static int get_icombo(char *ifos) {
  */
 
 
-#define GST_CAT_DEFAULT cohfar_upbackground_debug
+#define GST_CAT_DEFAULT cohfar_accumbackground_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 static void additional_initializations(GType type)
 {
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cohfar_upbackground", 0, "cohfar_upbackground element");
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cohfar_accumbackground", 0, "cohfar_accumbackground element");
 }
 
 GST_BOILERPLATE_FULL(
-	CohfarUpbackground,
-	cohfar_upbackground,
+	CohfarAccumbackground,
+	cohfar_accumbackground,
 	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
@@ -97,20 +97,20 @@ enum property {
 	PROP_OUTPUT_FILENAME
 };
 
-static void cohfar_upbackground_set_property (GObject * object,
+static void cohfar_accumbackground_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
-static void cohfar_upbackground_get_property (GObject * object,
+static void cohfar_accumbackground_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
 /* vmethods */
-static GstFlowReturn cohfar_upbackground_transform (GstBaseTransform * base,
+static GstFlowReturn cohfar_accumbackground_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
-static gboolean cohfar_upbackground_transform_size (GstBaseTransform * base,
+static gboolean cohfar_accumbackground_transform_size (GstBaseTransform * base,
    GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
     guint * othersize);
-static gboolean cohfar_upbackground_event (GstBaseTransform * base,
+static gboolean cohfar_accumbackground_event (GstBaseTransform * base,
     GstEvent * event);
-static gboolean cohfar_upbackground_dispose (GObject *object);
+static gboolean cohfar_accumbackground_dispose (GObject *object);
 /
 /*
  * ============================================================================
@@ -125,9 +125,9 @@ static gboolean cohfar_upbackground_dispose (GObject *object);
  */
 
 
-static gboolean cohfar_upbackground_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
 {
-	CohfarUpbackground *element = COHFAR_UPBACKGROUND(trans);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
   GST_LOG_OBJECT (base, "asked to transform size %d in direction %s",
       size, direction == GST_PAD_SINK ? "SINK" : "SRC");
 
@@ -178,9 +178,9 @@ static gboolean cohfar_upbackground_transform_size(GstBaseTransform *trans, GstP
  */
 
 
-static GstFlowReturn cohfar_upbackground_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	CohfarUpbackground *element = COHFAR_UPBACKGROUND(trans);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 
 
@@ -236,9 +236,9 @@ static GstFlowReturn cohfar_upbackground_transform(GstBaseTransform *trans, GstB
 
 /* handle events (search) */
 static gboolean
-cohfar_upbackground_event (GstBaseTransform * base, GstEvent * event)
+cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
 {
-  CohfarUpbackground *element = COHFAR_UPBACKGROUND(base);
+  CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(base);
 
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
@@ -262,9 +262,9 @@ cohfar_upbackground_event (GstBaseTransform * base, GstEvent * event)
  */
 
 
-static void cohfar_upbackground_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
+static void cohfar_accumbackground_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
-	CohfarUpbackground *element = COHFAR_UPBACKGROUND(object);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
 	GST_OBJECT_LOCK(element);
 	switch(prop_id) {
@@ -314,9 +314,9 @@ static void cohfar_upbackground_set_property(GObject *object, enum property prop
  */
 
 
-static void cohfar_upbackground_get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
+static void cohfar_accumbackground_get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
-	CohfarUpbackground *element = COHFAR_UPBACKGROUND(object);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -353,9 +353,9 @@ static void cohfar_upbackground_get_property(GObject *object, enum property prop
  */
 
 
-static void cohfar_upbackground_dispose(GObject *object)
+static void cohfar_accumbackground_dispose(GObject *object)
 {
-	CohfarUpbackground *element = COHFAR_UPBACKGROUND(object);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
 	g_mutex_free(element->prop_lock);
 	element->prop_lock = NULL;
@@ -373,7 +373,7 @@ static void cohfar_upbackground_dispose(GObject *object)
  */
 
 
-static void cohfar_upbackground_base_init(gpointer gclass)
+static void cohfar_accumbackground_base_init(gpointer gclass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
@@ -413,8 +413,8 @@ static void cohfar_upbackground_base_init(gpointer gclass)
 	);
 
 	transform_class->transform = GST_DEBUG_FUNCPTR(cohfar_upbackgrond_transform);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(cohfar_upbackground_transform_size);
-	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_upbackground_event);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(cohfar_accumbackground_transform_size);
+	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_accumbackground_event);
 
 }
 
@@ -424,13 +424,13 @@ static void cohfar_upbackground_base_init(gpointer gclass)
  */
 
 
-static void cohfar_upbackground_class_init(CohfarUpbackgroundClass *klass)
+static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 ;
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(cohfar_upbackground_set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(cohfar_upbackground_get_property);
-	gobject_class->dispose = GST_DEBUG_FUNCPTR(cohfar_upbackground_dispose);
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(cohfar_accumbackground_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(cohfar_accumbackground_get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(cohfar_accumbackground_dispose);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -500,7 +500,7 @@ static void cohfar_upbackground_class_init(CohfarUpbackgroundClass *klass)
  */
 
 
-static void cohfar_upbackground_init(CohfarUpbackground *element, CohfarUpbackgroundClass *kclass)
+static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAccumbackgroundClass *kclass)
 {
 	element->stats = NULL;
 	element->hist_trials = NOT_INIT;

@@ -26,8 +26,8 @@
  */
 
 
-#ifndef __COHFAR_UPBACKGROUND_H__
-#define __COHFAR_UPBACKGROUND_H__
+#ifndef __COHFAR_ACCUMBACKGROUND_H__
+#define __COHFAR_ACCUMBACKGROUND_H__
 
 
 #include <complex.h>
@@ -42,21 +42,21 @@
 
 
 G_BEGIN_DECLS
-#define COHFAR_UPBACKGROUND_TYPE \
-	(cohfar_upbackground_get_type())
-#define COHFAR_UPBACKGROUND(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), COHFAR_UPBACKGROUND_TYPE, CohfarUpbackground))
-#define COHFAR_UPBACKGROUND_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), COHFAR_UPBACKGROUND_TYPE, CohfarUpbackgroundClass))
-#define GST_IS_COHFAR_UPBACKGROUND(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), COHFAR_UPBACKGROUND_TYPE))
-#define GST_IS_COHFAR_UPBACKGROUND_CLASS(klass) \
-	(G_type_CHECK_CLASS_TYPE((klass), COHFAR_UPBACKGROUND_TYPE))
+#define COHFAR_ACCUMBACKGROUND_TYPE \
+	(cohfar_accumbackground_get_type())
+#define COHFAR_ACCUMBACKGROUND(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), COHFAR_ACCUMBACKGROUND_TYPE, CohfarAccumbackground))
+#define COHFAR_ACCUMBACKGROUND_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), COHFAR_ACCUMBACKGROUND_TYPE, CohfarAccumbackgroundClass))
+#define GST_IS_COHFAR_ACCUMBACKGROUND(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), COHFAR_ACCUMBACKGROUND_TYPE))
+#define GST_IS_COHFAR_ACCUMBACKGROUND_CLASS(klass) \
+	(G_type_CHECK_CLASS_TYPE((klass), COHFAR_ACCUMBACKGROUND_TYPE))
 
 
 typedef struct {
 	GstBaseTransformClass parent_class;
-} CohfarUpbackgroundClass;
+} CohfarAccumbackgroundClass;
 
 
 typedef struct {
@@ -78,13 +78,13 @@ typedef struct {
 	 */
 
 	GstClockTime t_roll_start;
-} CohfarUpbackground;
+} CohfarAccumbackground;
 
 
-GType cohfar_upbackground_get_type(void);
+GType cohfar_accumbackground_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __COHFAR_UPBACKGROUND_H__ */
+#endif	/* __COHFAR_ACCUMBACKGROUND_H__ */
