@@ -16,7 +16,10 @@ libcuda_plugin_la_SOURCES = \
 	postcoh/postcoh_utils.c \
 	postcoh/postcoh.c \
 	postcoh/postcoh_table_utils.c \
-	postcoh/postcoh_filesink.c
+	postcoh/postcoh_filesink.c \
+	cohfar/background_stats_utils.c \
+	cohfar/cohfar_accumbackground.c \
+	cohfar/cohfar_assignfap.c
 
 #	postcoh/detresponse_skymap.c
 #	audioresample folder not working, seg fault
@@ -45,5 +48,11 @@ noinst_HEADERS = \
 	multiratespiir/spiir_state_macro.h \
 	postcoh/postcoh_utils.h \
 	postcoh/postcoh.h \
-	postcoh/postcoh_table_utils.h
+	postcoh/postcoh_table.h \
+	postcoh/postcoh_table_utils.h \
+	cohfar/background_stats.h \
+	cohfar/background_stats_utils.h \
+	cohfar/background_stats_xml.h \
+	cohfar/cohfar_accumbackground.h \
+	cohfar/cohfar_assignfap.h
 
