@@ -221,8 +221,7 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		if (intable->is_background == 1) {
 			if (intable->cohsnr > intable->maxsnglsnr) {
 			icombo = get_icombo(intable->ifos);
-			add_background_val_to_rates(intable->cohsnr, stats[icombo]->rates->logsnr_bins);
-			add_background_val_to_rates(intable->chisq, stats[icombo]->rates->logchisq_bins);
+			background_stats_update_rates(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 			}
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohTable));
@@ -260,8 +259,9 @@ cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
 //      if (fflush (sink->file))
 //        goto flush_failed;
 
-    GST_LOG_OBJECT(element, "EVENT EOS. Finish writing document");
-    background_stats_to_xml(element->stats, element->ncombo, element->output_fname);
+    GST_LOG_OBJECT(element, "EVENT EOS. ");
+    if (element->update_interval > -1)
+      background_stats_to_xml(element->stats, element->ncombo, element->output_fname);
       break;
     default:
       break;
