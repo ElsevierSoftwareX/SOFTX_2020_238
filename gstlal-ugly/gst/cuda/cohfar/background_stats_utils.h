@@ -44,16 +44,25 @@
 extern char *IFO_COMBO_MAP[];
 
 Bins1D *
-bins1D_create(float min, float max, int nbin);
+bins1D_create_long(float min, float max, int nbin);
 
 Bins2D *
 bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin);
 
+Bins2D *
+bins2D_create_long(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin);
+
 BackgroundStats **
 background_stats_create(char *ifos);
 
+int
+get_idx_bins1D(float val, Bins1D *bins);
+
+void
+background_stats_update_rates(float snr, float chisq, BackgroundRates *rates);
+
 gboolean
-add_background_val_to_rates(float val, Bins1D *bins);
+background_stats_calc_pdf(BackgroundRates *rates, Bins2D *pdf);
 
 double
 background_stats_get_cdf(float snr, float chisq, Bins2D *bins);

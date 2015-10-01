@@ -36,7 +36,7 @@ typedef struct {
 	float	max;
 	int	nbin;
 	float	step;
-	gsl_vector_long	*data;
+	void	*data; // gsl_vector
 } Bins1D;
 
 typedef struct {
@@ -48,7 +48,7 @@ typedef struct {
 	float	y_max;
 	int	y_nbin;
 	float	y_step;
-	gsl_matrix	*data;
+	void	*data; //gsl_matrix
 } Bins2D;
 
 /*
@@ -58,6 +58,7 @@ typedef struct {
 typedef struct {
 	Bins1D	*logsnr_bins;
 	Bins1D	*logchisq_bins;
+	Bins2D	*hist;
 } BackgroundRates;
 
 

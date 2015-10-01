@@ -6,12 +6,13 @@
 #include <gsl/gsl_matrix.h>
 
 #include "../LIGOLw_xmllib/LIGOLwHeader.h"
+#include "ssvkernel.h"
 #include "background_stats_xml.h"
 
 char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
 
 Bins1D *
-bins1D_create(float min, float max, int nbin) 
+bins1D_create_long(float min, float max, int nbin) 
 {
   Bins1D * bins = (Bins1D *) malloc(sizeof(Bins1D));
   bins->min = min;
@@ -40,6 +41,24 @@ bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, in
   return bins;
 }
 
+Bins2D *
+bins2D_create_long(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin) 
+{
+  Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
+  bins->x_min = x_min;
+  bins->x_max = x_max;
+  bins->x_nbin = x_nbin;
+  bins->x_step = (x_max - x_min) / x_nbin;
+  bins->y_min = y_min;
+  bins->y_max = y_max;
+  bins->y_nbin = y_nbin;
+  bins->y_step = (y_max - y_min) / y_nbin;
+  bins->data = gsl_matrix_long_alloc(x_nbin, y_nbin);
+  gsl_matrix_long_set_zero(bins->data);
+  return bins;
+}
+
+
 BackgroundStats **
 background_stats_create(char *ifos)
 {
@@ -56,8 +75,9 @@ background_stats_create(char *ifos)
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
     BackgroundRates *rates = cur_stats->rates;
-    rates->logsnr_bins = bins1D_create(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN);
-    rates->logchisq_bins = bins1D_create(LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
+    rates->logsnr_bins = bins1D_create_long(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN);
+    rates->logchisq_bins = bins1D_create_long(LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
+    rates->hist = bins2D_create_long(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
     cur_stats->pdf = bins2D_create(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
     cur_stats->cdf = bins2D_create(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
   }
@@ -67,29 +87,105 @@ background_stats_create(char *ifos)
 /*
  * background rates utils
  */
-gboolean
-add_background_val_to_rates(float val, Bins1D *bins)
+int
+get_idx_bins1D(float val, Bins1D *bins)
 {
   float logval = log10f(val); // float
-  if (logval < bins->min) {
-    gsl_vector_long_set(bins->data, 0, gsl_vector_long_get(bins->data, 0) + 1);
-    return TRUE;
-  }
-  if (logval > bins->max) {
-    gsl_vector_long_set(bins->data, bins->nbin-1, gsl_vector_long_get(bins->data, bins->nbin-1) + 1);
-    return TRUE;
-  }
 
-  int idx = (logval - bins->min) / bins->step;
-  gsl_vector_long_set(bins->data, idx, gsl_vector_long_get(bins->data, idx) + 1);
-  return TRUE;
+  if (logval < bins->min) 
+    return 0;
+  
+  if (logval > bins->max) 
+    return bins->nbin - 1;
+
+  return (int) ((logval - bins->min) / bins->step);
 }
 
+void
+background_stats_update_rates(float snr, float chisq, BackgroundRates *rates)
+{
+	int snr_idx = get_idx_bins1D(snr, rates->logsnr_bins);
+	int chisq_idx = get_idx_bins1D(chisq, rates->logchisq_bins);
+
+	gsl_vector_long *snr_vec = (gsl_vector_long *)rates->logsnr_bins->data;
+	gsl_vector_long *chisq_vec = (gsl_vector_long *)rates->logchisq_bins->data;
+	gsl_matrix_long *hist_mat = (gsl_matrix_long *)rates->hist->data;
+
+	gsl_vector_long_set(snr_vec, snr_idx, gsl_vector_long_get(snr_vec, snr_idx) + 1);
+	gsl_vector_long_set(chisq_vec, chisq_idx, gsl_vector_long_get(chisq_vec, chisq_idx) + 1);
+	gsl_matrix_long_set(hist_mat, snr_idx, chisq_idx, gsl_matrix_long_get(hist_mat, snr_idx, chisq_idx) + 1);
+}
 /*
  * background cdf utils
  */
+
+gboolean
+background_stats_calc_pdf(BackgroundRates *rates, Bins2D *pdf)
+{
+
+	gsl_vector_long *snr = rates->logsnr_bins->data;
+	gsl_vector_long *chisq = rates->logchisq_bins->data;
+
+	long nevent = gsl_vector_long_sum(snr);
+	gsl_vector *snr_double = gsl_vector_alloc(snr->size);
+	gsl_vector *chisq_double = gsl_vector_alloc(chisq->size);
+	gsl_vector_long_to_double(snr, snr_double);
+	gsl_vector_long_to_double(chisq, chisq_double);
+
+	gsl_vector *tin_snr = gsl_vector_alloc(pdf->x_nbin);
+	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->y_nbin);
+	gsl_vector_linspace(pdf->x_min, pdf->x_max, pdf->x_nbin, tin_snr);
+	gsl_vector_linspace(pdf->y_min, pdf->y_max, pdf->y_nbin, tin_chisq);
+
+	gsl_matrix *result_snr = gsl_matrix_alloc(pdf->x_nbin, pdf->x_nbin);
+	gsl_matrix *result_chisq = gsl_matrix_alloc(pdf->y_nbin, pdf->y_nbin);
+
+	ssvkernel_from_hist(snr_double, tin_snr, result_snr);
+	ssvkernel_from_hist(chisq_double, tin_chisq, result_chisq);
+
+
+	//two-dimensional histogram
+	gsl_matrix *histogram = gsl_matrix_alloc(snr->size, chisq->size);
+	gsl_matrix_long_to_double((gsl_matrix_long *)rates->hist->data, histogram);
+	//gsl_matrix_hist3(snr_data, chisq_data, temp_tin_snr, temp_tin_chisq, histogram);
+
+	//Compute the 'scale' variable in matlab code 'test.m'
+	int i, j;
+	for(i=0;i<histogram->size1;i++){
+		for(j=0;j<histogram->size2;j++){
+			double temp = gsl_matrix_get(histogram,i,j);
+			temp = temp/(gsl_vector_get(snr_double, i)*gsl_vector_get(chisq_double, j));
+			if(isnan(temp))
+				gsl_matrix_set(histogram,i,j,0);
+			else
+				gsl_matrix_set(histogram,i,j,temp);
+		}
+	}
+
+	//compute the two-dimensional estimation
+	gsl_matrix * result = pdf->data;
+	gsl_matrix * temp_matrix = gsl_matrix_alloc(tin_snr->size,tin_chisq->size);
+	for(i=0;i<tin_snr->size;i++){
+		for(j=0;j<tin_chisq->size;j++){
+			gsl_matrix_get_col(snr_double,result_snr,i);
+			gsl_matrix_get_col(chisq_double,result_chisq,j);
+			gsl_matrix_xmul(snr_double,chisq_double,temp_matrix);
+			gsl_matrix_mul_elements(temp_matrix,histogram);
+			gsl_matrix_set(result,i,j,gsl_matrix_sum(temp_matrix)/(double)nevent);
+		}
+	}
+	gsl_vector_free(snr_double);
+	gsl_vector_free(chisq_double);
+	gsl_matrix_free(histogram);
+	gsl_vector_free(tin_snr);
+	gsl_vector_free(tin_chisq);
+	gsl_matrix_free(result_snr);
+	gsl_matrix_free(result_chisq);
+	gsl_matrix_free(temp_matrix);
+}
+
 double
-background_stats_get_cdf(float snr, float chisq, Bins2D *bins)
+background_stats_get_cdf_val(float snr, float chisq, Bins2D *bins)
 {
   float logsnr = log10f(snr), logchisq = log10f(chisq);
   int x_idx = 0, y_idx = 0;
@@ -104,12 +200,13 @@ background_stats_get_cdf(float snr, float chisq, Bins2D *bins)
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename)
 {
-  int nnode = ncombo * 4, icombo; // 2 for rates, 1 for pdf, 1 for cdf
+  int nnode = ncombo * 5, icombo; // 3 for rates, 1 for pdf, 1 for cdf
   /* read rates */
 
   XmlNodeStruct * xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct) * ncombo);
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_cdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
 
@@ -122,11 +219,15 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     xns[icombo].processPtr = readArray;
     xns[icombo].data = &(array_logchisq_bins[icombo]);
 
-    sprintf((char *)xns[icombo+2*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_PDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
+    sprintf((char *)xns[icombo+2*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_HIST_SUFFIX);
+    xns[icombo].processPtr = readArray;
+    xns[icombo].data = &(array_hist[icombo]);
+
+    sprintf((char *)xns[icombo+3*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_PDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     xns[icombo].processPtr = readArray;
     xns[icombo].data = &(array_pdf[icombo]);
 
-    sprintf((char *)xns[icombo+3*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
+    sprintf((char *)xns[icombo+4*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     xns[icombo].processPtr = readArray;
     xns[icombo].data = &(array_cdf[icombo]);
   }
@@ -139,17 +240,21 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
 
   int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
   int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
+  int xy_size = sizeof(double) * x_nbin * y_nbin;
+
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
-    memcpy(rates->logsnr_bins->data->data, array_logsnr_bins[icombo].data, x_size);
-    memcpy(rates->logchisq_bins->data->data, array_logchisq_bins[icombo].data, y_size);
-    memcpy(cur_stats->pdf->data->data, array_pdf[icombo].data, x_size * y_size);
-    memcpy(cur_stats->cdf->data->data, array_cdf[icombo].data, x_size * y_size);
+    memcpy(((gsl_vector_long *)rates->logsnr_bins->data)->data, array_logsnr_bins[icombo].data, x_size);
+    memcpy(((gsl_vector_long *)rates->logchisq_bins->data)->data, array_logchisq_bins[icombo].data, y_size);
+    memcpy(((gsl_matrix_long *)rates->hist->data)->data, array_hist[icombo].data, xy_size);
+    memcpy(((gsl_matrix *)cur_stats->pdf->data)->data, array_pdf[icombo].data, xy_size);
+    memcpy(((gsl_matrix *)cur_stats->cdf->data)->data, array_cdf[icombo].data, xy_size);
   }
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);
+    freeArray(array_hist + icombo);
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
   }
@@ -167,13 +272,13 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   int icombo = 0;
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_cdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
 
   int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
   int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
-
-  int ix, jy;
+  int xy_size = sizeof(double) * x_nbin * y_nbin;
 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
@@ -181,30 +286,26 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     array_logsnr_bins[icombo].ndim = 1;
     array_logsnr_bins[icombo].dim[0] = x_nbin;
     array_logsnr_bins[icombo].data = (long *) malloc(x_size);
-    memcpy(array_logsnr_bins[icombo].data, rates->logsnr_bins->data->data, x_size);
+    memcpy(array_logsnr_bins[icombo].data, ((gsl_vector_long *)rates->logsnr_bins->data)->data, x_size);
     array_logchisq_bins[icombo].ndim = 1;
     array_logchisq_bins[icombo].dim[0] = y_nbin;
     array_logchisq_bins[icombo].data = (long *) malloc(y_size);
-    memcpy(array_logchisq_bins[icombo].data, rates->logchisq_bins->data->data, y_size);
+    memcpy(array_logchisq_bins[icombo].data, ((gsl_vector_long *)rates->logchisq_bins->data)->data, y_size);
+    array_hist[icombo].ndim = 2;
+    array_hist[icombo].dim[0] = x_nbin;
+    array_hist[icombo].dim[1] = y_nbin;
+    array_hist[icombo].data = (long *) malloc(xy_size);
+    memcpy(array_hist[icombo].data, ((gsl_matrix_long *)rates->hist->data)->data, xy_size);
     array_pdf[icombo].ndim = 2;
     array_pdf[icombo].dim[0] = x_nbin;
     array_pdf[icombo].dim[1] = y_nbin;
-    array_pdf[icombo].data = (double *) malloc(x_size * y_size);
-    for (ix=0; ix<x_nbin; ix++) {
-	    for (jy=0; jy<y_nbin; jy++) {
-    		((double *)array_pdf[icombo].data)[ix * y_nbin + jy] = gsl_matrix_get(cur_stats->pdf->data, ix, jy);
-	    }
-    }
+    array_pdf[icombo].data = (double *) malloc(xy_size);
+    memcpy(array_pdf[icombo].data, ((gsl_matrix *)cur_stats->pdf->data)->data, xy_size);
     array_cdf[icombo].ndim = 2;
     array_cdf[icombo].dim[0] = x_nbin;
     array_cdf[icombo].dim[1] = y_nbin;
     array_cdf[icombo].data = (double *) malloc(x_size * y_size);
-    for (ix=0; ix<x_nbin; ix++) {
-	    for (jy=0; jy<y_nbin; jy++) {
-    		((double *)array_cdf[icombo].data)[ix * y_nbin + jy] = gsl_matrix_get(cur_stats->cdf->data, ix, jy);
-	    }
-    }
-
+    memcpy(array_cdf[icombo].data, ((gsl_matrix *)cur_stats->cdf->data)->data, xy_size);
   
   }
 
@@ -271,6 +372,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     ligoxml_write_Array(writer, &(array_logsnr_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_CHISQ_SUFFIX);
     ligoxml_write_Array(writer, &(array_logchisq_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+    g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_HIST_SUFFIX);
+    ligoxml_write_Array(writer, &(array_hist[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_PDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     ligoxml_write_Array(writer, &(array_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
@@ -292,6 +395,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);
+    freeArray(array_hist + icombo);
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
   }

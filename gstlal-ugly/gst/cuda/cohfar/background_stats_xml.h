@@ -31,6 +31,7 @@
 #define	BACKGROUND_XML_RATES_NAME "background_rates"
 #define	BACKGROUND_XML_SNR_SUFFIX "_logsnr"
 #define	BACKGROUND_XML_CHISQ_SUFFIX "_logchisq"
+#define	BACKGROUND_XML_HIST_SUFFIX "_histogram"	
 #define	BACKGROUND_XML_PDF_NAME	"background_pdf"	
 #define	BACKGROUND_XML_CDF_NAME	"background_cdf"	
 #define BACKGROUND_XML_SNR_CHISQ_SUFFIX "_logsnr_logchisq"
