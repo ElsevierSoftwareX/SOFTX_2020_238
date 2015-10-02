@@ -140,7 +140,7 @@ int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
     // Write Column Nodes
     int i, rows, j;
     rows = 0;
-    for (i = 0; i < xtablePtr->names->len; ++i)
+    for (i = 0; (unsigned)i < xtablePtr->names->len; ++i)
     {
         rc = xmlTextWriterStartElement(writer, BAD_CAST "Column");
 
@@ -171,7 +171,7 @@ int ligoxml_write_Table(xmlTextWriterPtr writer, const XmlTable *xtablePtr)
         GString *type; //, *content;
         XmlHashVal *hashVal;
 
-        for (j = 0; j < xtablePtr->names->len; ++j)
+        for (j = 0; (unsigned)j < xtablePtr->names->len; ++j)
         {
             hashVal = g_hash_table_lookup(xtablePtr->hashContent, &g_array_index(xtablePtr->names, GString, j));
             type = hashVal->type;
