@@ -11,6 +11,14 @@
 
 char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
 
+int get_icombo(char *ifos) {
+	int icombo = 0;
+	for (icombo=0; icombo<MAX_COMBOS; icombo++) {
+		if (strcmp(ifos, IFO_COMBO_MAP[icombo]) == 0)
+			return icombo;
+	}
+	return -1;
+}
 Bins1D *
 bins1D_create_long(float min, float max, int nbin) 
 {
@@ -102,7 +110,7 @@ get_idx_bins1D(float val, Bins1D *bins)
 }
 
 void
-background_stats_update_rates(float snr, float chisq, BackgroundRates *rates)
+background_stats_rates_update(float snr, float chisq, BackgroundRates *rates)
 {
 	int snr_idx = get_idx_bins1D(snr, rates->logsnr_bins);
 	int chisq_idx = get_idx_bins1D(chisq, rates->logchisq_bins);
@@ -115,12 +123,21 @@ background_stats_update_rates(float snr, float chisq, BackgroundRates *rates)
 	gsl_vector_long_set(chisq_vec, chisq_idx, gsl_vector_long_get(chisq_vec, chisq_idx) + 1);
 	gsl_matrix_long_set(hist_mat, snr_idx, chisq_idx, gsl_matrix_long_get(hist_mat, snr_idx, chisq_idx) + 1);
 }
+
+void
+background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2)
+{
+	gsl_vector_long_add((gsl_vector_long *)rates1->logsnr_bins->data, (gsl_vector_long *)rates2->logsnr_bins->data);
+	gsl_vector_long_add((gsl_vector_long *)rates1->logchisq_bins->data, (gsl_vector_long *)rates2->logchisq_bins->data);
+	gsl_matrix_long_add((gsl_matrix_long *)rates1->hist->data, (gsl_matrix_long *)rates2->hist->data);
+}
+
 /*
  * background cdf utils
  */
 
 gboolean
-background_stats_calc_pdf(BackgroundRates *rates, Bins2D *pdf)
+background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 {
 
 	gsl_vector_long *snr = rates->logsnr_bins->data;
@@ -185,7 +202,7 @@ background_stats_calc_pdf(BackgroundRates *rates, Bins2D *pdf)
 }
 
 double
-background_stats_get_cdf_val(float snr, float chisq, Bins2D *bins)
+background_stats_bins2D_get_val(float snr, float chisq, Bins2D *bins)
 {
   float logsnr = log10f(snr), logchisq = log10f(chisq);
   int x_idx = 0, y_idx = 0;
@@ -203,7 +220,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   int nnode = ncombo * 5, icombo; // 3 for rates, 1 for pdf, 1 for cdf
   /* read rates */
 
-  XmlNodeStruct * xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct) * ncombo);
+  XmlNodeStruct * xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct) * nnode);
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -216,22 +233,23 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     xns[icombo].data = &(array_logsnr_bins[icombo]);
 
     sprintf((char *)xns[icombo+ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_CHISQ_SUFFIX);
-    xns[icombo].processPtr = readArray;
-    xns[icombo].data = &(array_logchisq_bins[icombo]);
+    xns[icombo+ncombo].processPtr = readArray;
+    xns[icombo+ncombo].data = &(array_logchisq_bins[icombo]);
 
     sprintf((char *)xns[icombo+2*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_HIST_SUFFIX);
-    xns[icombo].processPtr = readArray;
-    xns[icombo].data = &(array_hist[icombo]);
+    xns[icombo+2*ncombo].processPtr = readArray;
+    xns[icombo+2*ncombo].data = &(array_hist[icombo]);
 
     sprintf((char *)xns[icombo+3*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_PDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
-    xns[icombo].processPtr = readArray;
-    xns[icombo].data = &(array_pdf[icombo]);
+    xns[icombo+3*ncombo].processPtr = readArray;
+    xns[icombo+3*ncombo].data = &(array_pdf[icombo]);
 
     sprintf((char *)xns[icombo+4*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
-    xns[icombo].processPtr = readArray;
-    xns[icombo].data = &(array_cdf[icombo]);
+    xns[icombo+4*ncombo].processPtr = readArray;
+    xns[icombo+4*ncombo].data = &(array_cdf[icombo]);
   }
 
+  printf("before parse\n");
   parseFile(filename, xns, nnode);
 
   // FIXME: need sanity check that number of rows and columns are the same
@@ -245,12 +263,13 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
-    memcpy(((gsl_vector_long *)rates->logsnr_bins->data)->data, array_logsnr_bins[icombo].data, x_size);
-    memcpy(((gsl_vector_long *)rates->logchisq_bins->data)->data, array_logchisq_bins[icombo].data, y_size);
-    memcpy(((gsl_matrix_long *)rates->hist->data)->data, array_hist[icombo].data, xy_size);
+    memcpy(((gsl_vector_long *)rates->logsnr_bins->data)->data, (long *)array_logsnr_bins[icombo].data, x_size);
+    memcpy(((gsl_vector_long *)rates->logchisq_bins->data)->data, (long *)array_logchisq_bins[icombo].data, y_size);
+    memcpy(((gsl_matrix_long *)rates->hist->data)->data, (long *)array_hist[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->pdf->data)->data, array_pdf[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->cdf->data)->data, array_cdf[icombo].data, xy_size);
   }
+  printf("done memcpy\n");
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);

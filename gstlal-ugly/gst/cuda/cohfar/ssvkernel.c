@@ -395,6 +395,7 @@ void fftkernel(gsl_vector * data, double w, gsl_vector * y) {
 	size_t n = pow(2, ceil(log(Lmax) / log(2)));
 	double X[n], data2[2 * n];
 	size_t i;
+	printf("n %d, L %d\n", n, L);
 	for (i = 0; i < n; i++) {
 		if (i < L)
 			X[i] = gsl_vector_get(data, i);
@@ -427,11 +428,18 @@ void fftkernel(gsl_vector * data, double w, gsl_vector * y) {
 	}
 
 }
+
 double logexp(double x) {
 	if (x < 1e2)
 		return log(1 + exp(x));
 	else
 		return x;
+}
+void gsl_vector_logexp(gsl_vector *x)
+{
+	int i;
+	for (i=0; i<x->size; i++)
+		gsl_vector_set(x, i, logexp(gsl_vector_get(x, i)));
 }
 double ilogexp(double x) {
 	if (x < 1e2)
@@ -573,12 +581,16 @@ void ssvkernel_from_hist(gsl_vector * y_hist_input, gsl_vector * tin, gsl_matrix
 	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, WIN);
 
 
+	gsl_vector_logexp(temp);
+	gsl_vector_logexp(WIN);
+
 	gsl_matrix * c = gsl_matrix_alloc(M, L);
 	gsl_vector * yh = gsl_vector_alloc(L);
 
 	double sqrt_temp = 2 / sqrt(2 * PI);
 	for (j = 0; j < M; j++) {
 		double w = gsl_vector_get(WIN, j);
+		printf("j %d, w %f, dt %f\n", j, w, dt);
 		fftkernel(y_hist, w / dt, yh);
 		for (i = 0; i < L; i++) {
 			double yh_val = gsl_vector_get(yh, i);

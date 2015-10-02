@@ -4,6 +4,7 @@ plugin_LTLIBRARIES = libcuda_plugin.la
 
 libcuda_plugin_la_SOURCES = \
 	LIGOLw_xmllib/LIGOLwReader.c \
+	LIGOLw_xmllib/LIGOLwWriter.c \
 	LIGOLw_xmllib/LIGOLwUtils.c \
 	cuda_plugin.c \
 	iirfilter/iirfilter_kernel.cu \
@@ -17,6 +18,7 @@ libcuda_plugin_la_SOURCES = \
 	postcoh/postcoh.c \
 	postcoh/postcoh_table_utils.c \
 	postcoh/postcoh_filesink.c \
+	cohfar/ssvkernel.c \
 	cohfar/background_stats_utils.c \
 	cohfar/cohfar_accumbackground.c \
 	cohfar/cohfar_assignfap.c
@@ -56,3 +58,16 @@ noinst_HEADERS = \
 	cohfar/cohfar_accumbackground.h \
 	cohfar/cohfar_assignfap.h
 
+gstlal_cohfar_calc_cdf_SOURCES = \
+	LIGOLw_xmllib/LIGOLwReader.c \
+	LIGOLw_xmllib/LIGOLwWriter.c \
+	LIGOLw_xmllib/LIGOLwUtils.c \
+	cohfar/ssvkernel.c \
+	cohfar/background_stats_utils.c \
+	cohfar/cohfar_calc_cdf.c
+
+gstlal_cohfar_calc_cdf_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) 
+gstlal_cohfar_calc_cdf_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+
+bin_PROGRAMS = \
+	gstlal_cohfar_calc_cdf

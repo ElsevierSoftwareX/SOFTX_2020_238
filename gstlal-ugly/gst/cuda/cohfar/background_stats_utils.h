@@ -43,6 +43,8 @@
 
 extern char *IFO_COMBO_MAP[];
 
+int get_icombo(char *ifos);
+	
 Bins1D *
 bins1D_create_long(float min, float max, int nbin);
 
@@ -59,13 +61,16 @@ int
 get_idx_bins1D(float val, Bins1D *bins);
 
 void
-background_stats_update_rates(float snr, float chisq, BackgroundRates *rates);
+background_stats_rates_update(float snr, float chisq, BackgroundRates *rates);
+
+void
+background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2);
 
 gboolean
-background_stats_calc_pdf(BackgroundRates *rates, Bins2D *pdf);
+background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf);
 
 double
-background_stats_get_cdf(float snr, float chisq, Bins2D *bins);
+background_stats_bins2D_get_val(float snr, float chisq, Bins2D *bins);
 
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename);

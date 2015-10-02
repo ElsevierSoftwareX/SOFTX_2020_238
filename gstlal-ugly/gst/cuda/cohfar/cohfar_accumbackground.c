@@ -55,14 +55,7 @@
  *
  * ============================================================================
  */
-static int get_icombo(char *ifos) {
-	int icombo = 0;
-	for (icombo=0; icombo<MAX_COMBOS; icombo++) {
-		if (strcmp(ifos, IFO_COMBO_MAP[icombo]) == 0)
-			return icombo;
-	}
-	return -1;
-}
+
 
 /*
  * ============================================================================
