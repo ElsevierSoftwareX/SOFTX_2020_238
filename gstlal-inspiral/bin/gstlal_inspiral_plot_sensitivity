@@ -284,6 +284,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--xaxis-points", default = 50, type = "int", help = "Specify the number of FARs/SNRs for which to compute the search volume.")
     parser.add_option("--min-far", default = 1.0e-6/lal.YRJUL_SI, type = "float", help = "Specify the minimum FAR (Hz)") # one per million years is probably detection worthy
     parser.add_option("--max-far", default = 12.0/lal.YRJUL_SI, type = "float", help = "Specify the maximum FAR (Hz)") # one per month is possibly EM-followup worthy
+    parser.add_option("--fiducial-far", default = 1.0e-2/lal.YRJUL_SI, type = "float", help = "Specify a fiducial FAR (Hz) for plotting efficiency")
     parser.add_option("--min-snr", default = 7, type = "float", help = "Specify the minimum SNR for volume calculation.")
     parser.add_option("--max-snr", default = 15, type = "float", help = "Specify the maximum SNR for volume calculation.")
 
@@ -422,6 +423,13 @@ for bin_type in opts.bin_types:
         if opts.verbose:
             print "\tInjections performed: %d\n" % (len(UL.total_injections[instr]))
 
+
+        #
+        # compute efficiency at some fiducial far
+        #
+        found_by_far = [s for f, s in UL.found_injections_fars[instr] if f < opts.fiducial_far]
+        eff_fid_lo, eff_fid, eff_fid_hi = imr_utils.compute_search_efficiency_in_bins(found_by_far, UL.total_injections[instr], bins, s2b)
+
         #
         # prepare output XML file. record mass bins, fars, snrs and
         # livetime
@@ -536,9 +544,10 @@ for bin_type in opts.bin_types:
         # data to disk, it may make more sense to carry out the
         # plotting in a separate code
         #
-        fig_far, fig_snr = pyplot.figure(), pyplot.figure()
+        fig_far, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure()
         ax_far = fig_far.add_axes([0.15, 0.15, 0.7, 0.7])
         ax_snr = fig_snr.add_axes([0.15, 0.15, 0.7, 0.7])
+        ax_eff = fig_eff.add_axes([0.15, 0.15, 0.7, 0.7])
 
         # plot the volume/range versus far/snr for each bin
         mbins = rate.NDBins(bins[1:])
@@ -576,6 +585,15 @@ for bin_type in opts.bin_types:
             line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
             ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
 
+            # plot fiducial efficiency
+            # # far vs snr
+            ds = (bins[0].lower() + bins[0].upper() )/2
+            eff = numpy.array([eff_fid[(d,) + mmid] for d in ds])
+            lo = numpy.array([eff_fid_lo[(d,) + mmid] for d in ds])
+            hi = numpy.array([eff_fid_hi[(d,) + mmid] for d in ds])
+            line, = ax_eff.plot(ds, eff, label=label, linewidth=2 )
+            ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
+
         # sensitivity vs far
         tx = ax_far.twinx() # map volume to distance
         tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in ax_far.get_yticks()] )
@@ -602,8 +620,15 @@ for bin_type in opts.bin_types:
         ax_snr.legend(loc="upper right")
         ax_snr.grid()
 
+        # efficiency vs distance
+        ax_eff.set_xlabel("Distance (Mpc)")
+        ax_eff.set_ylabel("Efficiency")
+        ax_eff.legend(loc="upper right")
+        ax_eff.grid()
+
         ax_snr.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_far.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
+        ax_eff.set_title("%s Observing (FAR $<$ %.2eHz)" % ("".join(sorted(list(instr))), opts.fiducial_far))
 
         # save and close figures
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
@@ -613,6 +638,10 @@ for bin_type in opts.bin_types:
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
         pyplot.close(fig_snr)
+
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_eff.savefig(tag)
+        pyplot.close(fig_eff)
 
 
 # write a cache file describing the files generated during by this program
