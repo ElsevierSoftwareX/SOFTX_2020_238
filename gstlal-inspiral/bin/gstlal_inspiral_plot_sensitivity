@@ -595,8 +595,10 @@ for bin_type in opts.bin_types:
             ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
 
         # sensitivity vs far
+        vol_tix = ax_far.get_yticks()
         tx = ax_far.twinx() # map volume to distance
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in ax_far.get_yticks()] )
+        tx.set_yticks(vol_tix)
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
 
         ax_far.set_xlabel("Combined FAR (Hz)")
@@ -609,8 +611,10 @@ for bin_type in opts.bin_types:
         ax_far.grid()
 
         # sensitivity vs snr
+        vol_tix = ax_snr.get_yticks()
         tx = ax_snr.twinx() # map volume to distance
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in ax_snr.get_yticks()] )
+        tx.set_yticks(vol_tix)
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
 
         ax_snr.set_xlabel("Network SNR")
