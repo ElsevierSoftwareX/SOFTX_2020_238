@@ -563,9 +563,9 @@ for bin_type in opts.bin_types:
             if bin_type == "Mass_Ratio":
                 label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
-                label = "$M_{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+                label = "$M_\mathrm{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Chirp_Mass":
-                label = "$M_{chirp} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
