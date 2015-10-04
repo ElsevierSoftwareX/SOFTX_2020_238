@@ -544,8 +544,9 @@ for bin_type in opts.bin_types:
         # data to disk, it may make more sense to carry out the
         # plotting in a separate code
         #
-        fig_far, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure()
+        fig_far, fig_far_range, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
         ax_far = fig_far.add_axes([0.15, 0.15, 0.7, 0.7])
+        ax_far_range = fig_far_range.add_axes([0.15, 0.15, 0.7, 0.7])
         ax_snr = fig_snr.add_axes([0.15, 0.15, 0.7, 0.7])
         ax_eff = fig_eff.add_axes([0.15, 0.15, 0.7, 0.7])
 
@@ -577,6 +578,13 @@ for bin_type in opts.bin_types:
             hi = numpy.array([v[mmid] for v in vols_hi_far])
             line, = ax_far.plot( fars, center, label=label, linewidth=2 )
             ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
+
+            # range vs far
+            center = (center/(4*3.14*UL.livetime[instr]/3))**(1./3)
+            lo = (lo/(4*3.14*UL.livetime[instr]/3))**(1./3)
+            hi = (hi/(4*3.14*UL.livetime[instr]/3))**(1./3)
+            line, = ax_far_range.plot( fars, center, label=label, linewidth=2 )
+            ax_far_range.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # sensitivity vs snr
             center = numpy.array([v[mmid] for v in vols_snr])
@@ -610,6 +618,15 @@ for bin_type in opts.bin_types:
         ax_far.legend(loc="upper right")
         ax_far.grid()
 
+        # range vs far
+        ax_far_range.set_xlabel("Combined FAR (Hz)")
+        ax_far_range.set_ylabel("Range (Mpc)")
+        ax_far_range.set_xscale("log")
+        ax_far_range.set_xlim([min(fars), max(fars)])
+        ax_far_range.invert_xaxis()
+        ax_far_range.legend(loc="upper right")
+        ax_far_range.grid()
+
         # sensitivity vs snr
         vol_tix = ax_snr.get_yticks()
         tx = ax_snr.twinx() # map volume to distance
@@ -630,14 +647,19 @@ for bin_type in opts.bin_types:
         ax_eff.legend(loc="upper right")
         ax_eff.grid()
 
-        ax_snr.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_far.set_title("%s Observing (%.2fd)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
+        ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
+        ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
+        ax_far_range.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_eff.set_title("%s Observing (FAR $<$ %.2eHz)" % ("".join(sorted(list(instr))), opts.fiducial_far))
 
         # save and close figures
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
         fig_far.savefig(tag)
         pyplot.close(fig_far)
+
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        fig_far_range.savefig(tag)
+        pyplot.close(fig_far_range)
 
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
