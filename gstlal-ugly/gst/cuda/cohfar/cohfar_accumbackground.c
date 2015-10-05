@@ -84,6 +84,7 @@ GST_BOILERPLATE_FULL(
 );
 
 enum property {
+	PROP_0,
 	PROP_IFOS,
 	PROP_HIST_TRIALS,
 	PROP_UPDATE_INTERVAL,
@@ -149,6 +150,7 @@ static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, G
 			g_cond_wait(element->prop_avail, element->prop_lock);
 
 		*othersize = size * (1 + element->hist_trials);
+		g_mutex_unlock(element->prop_lock);
 
 		break;
 
@@ -162,6 +164,8 @@ static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, G
 			g_cond_wait(element->prop_avail, element->prop_lock);
 
 		*othersize = size / (1 + element->hist_trials);
+		g_mutex_unlock(element->prop_lock);
+		break;
 
 
 	case GST_PAD_UNKNOWN:
@@ -189,6 +193,16 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 
+  GST_LOG_OBJECT (element, "transforming accum %s+%s buffer of %ld bytes, ts %"
+      GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
+      G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
+      GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
+      GST_BUFFER_IS_DISCONT(inbuf) ? "DISCONT" : "CONT",
+      GST_BUFFER_SIZE(inbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (inbuf)),
+      GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
+
+
 
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start))
 		element->t_roll_start = GST_BUFFER_TIMESTAMP(inbuf);
@@ -199,6 +213,7 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf);
 	GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf);
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
+	GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf)/(1+element->hist_trials);
 
 
 	/*
@@ -214,7 +229,7 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		if (intable->is_background == 1) {
 			if (intable->cohsnr > intable->maxsnglsnr) {
 			icombo = get_icombo(intable->ifos);
-			background_stats_update_rates(intable->cohsnr, intable->chisq, stats[icombo]->rates);
+			background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 			}
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohTable));
@@ -228,6 +243,16 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		background_stats_to_xml(stats, element->ncombo, element->output_fname);
 		element->t_roll_start = t_cur;
 	}
+
+  GST_LOG_OBJECT (element, "transformed %s+%s buffer of %ld bytes, ts %"
+      GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
+      G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
+      GST_BUFFER_FLAG_IS_SET(outbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
+      GST_BUFFER_IS_DISCONT(outbuf) ? "DISCONT" : "CONT",
+      GST_BUFFER_SIZE(outbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
+      GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
+
 
 	return result;
 }
@@ -253,7 +278,7 @@ cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
 //        goto flush_failed;
 
     GST_LOG_OBJECT(element, "EVENT EOS. ");
-    if (element->update_interval > -1)
+    if (element->update_interval >= 0)
       background_stats_to_xml(element->stats, element->ncombo, element->output_fname);
       break;
     default:
@@ -306,7 +331,6 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 		case PROP_UPDATE_INTERVAL:
 			element->update_interval = g_value_get_int(value);
 			break;
-		break;
 
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);

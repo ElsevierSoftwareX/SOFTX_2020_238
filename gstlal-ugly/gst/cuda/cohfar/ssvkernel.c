@@ -590,7 +590,7 @@ void ssvkernel_from_hist(gsl_vector * y_hist_input, gsl_vector * tin, gsl_matrix
 	double sqrt_temp = 2 / sqrt(2 * PI);
 	for (j = 0; j < M; j++) {
 		double w = gsl_vector_get(WIN, j);
-		printf("j %d, w %f, dt %f\n", j, w, dt);
+		//printf("j %d, w %f, dt %f\n", j, w, dt);
 		fftkernel(y_hist, w / dt, yh);
 		for (i = 0; i < L; i++) {
 			double yh_val = gsl_vector_get(yh, i);

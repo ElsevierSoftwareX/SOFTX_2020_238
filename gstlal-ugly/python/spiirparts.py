@@ -82,6 +82,55 @@ def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_
 		properties["sigmasq"] = sigmasq
 	return pipeparts.mkgeneric(pipeline, src, "lal_itac_spearman", **properties)
 
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
+
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream_id"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
+	if "name" in properties:
+		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
+	else:
+		elem = gst.element_factory_make("cuda_postcoh")
+	# make sure stream_id go first
+	for name, value in properties.items():
+		if name == "stream_id":
+			elem.set_property(name.replace("_", "-"), value)
+	for name, value in properties.items():
+		if name != "stream_id":
+			elem.set_property(name.replace("_", "-"), value)
+
+	pipeline.add(elem)
+	snr.link_pads(None, elem, instrument)
+	return elem
+
+
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, update_interval =  0, input_fname = None,output_fname = None):
+	properties = {
+		"ifos": ifos,
+		"hist_trials": hist_trials,
+		"update_interval": update_interval
+	}
+	if input_fname is not None:
+		properties["input_fname"] = input_fname
+	if output_fname is not None:
+		properties["output_fname"] = output_fname
+
+	if "name" in properties:
+		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
+	else:
+		elem = gst.element_factory_make("cohfar_accumbackground")
+	# make sure ifos go first
+	for name, value in properties.items():
+		if name == "ifos":
+			elem.set_property(name.replace("_", "-"), value)
+	for name, value in properties.items():
+		if name != "ifos":
+			elem.set_property(name.replace("_", "-"), value)
+
+	pipeline.add(elem)
+	if isinstance(src, gst.Pad):
+		src.get_parent_element().link_pads(src, elem, None)
+	elif src is not None:
+		src.link(elem)
+	return elem
 
 def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
 	#
@@ -310,26 +359,6 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 
 	assert any(triggersrcs.values())
 	return triggersrcs
-
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
-
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream_id"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
-	if "name" in properties:
-		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
-	else:
-		elem = gst.element_factory_make("cuda_postcoh")
-	# make sure stream_id go first
-	for name, value in properties.items():
-		if name == "stream_id":
-			elem.set_property(name.replace("_", "-"), value)
-	for name, value in properties.items():
-		if name != "stream_id":
-			elem.set_property(name.replace("_", "-"), value)
-
-	pipeline.add(elem)
-	snr.link_pads(None, elem, instrument)
-	return elem
-
 def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapshot_interval = 0):
 	properties = dict((name, value) for name, value in zip(("location", "compression", "snapshot-interval", "sync", "async"), (location, compression, snapshot_interval, False, False)))
 	if "name" in properties:
@@ -497,6 +526,9 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	# construct trigger generators
 	#
 	triggersrcs = []
+	ifos = ""
+	for instrument in banks[0].keys():
+		ifos += str(instrument)
 
 	# format of banks :	[{'H1': <H1Bank0>; 'L1': <L1Bank0>..;}
 	#			 {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
@@ -528,6 +560,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	for i_dict, bank_dict in enumerate(banks):
 		postcoh = None
 		head = None
+		output_stats_fname = "%s_stats.xml.gz" % output_prefix[i_dict]
 
 		for instrument, bank_list in bank_dict.items():
 			max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_list[0])
@@ -560,6 +593,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
+		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname = output_stats_fname, hist_trials = hist_trials, update_interval = 0)
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs

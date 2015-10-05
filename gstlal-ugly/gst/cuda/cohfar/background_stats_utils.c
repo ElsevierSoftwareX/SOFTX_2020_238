@@ -12,13 +12,24 @@
 char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
 
 int get_icombo(char *ifos) {
-	int icombo = 0;
+	int icombo = 0, len_in = strlen(ifos), len_map;
+	int nifo_in = len_in / IFO_LEN, nifo_map, iifo, jifo;
 	for (icombo=0; icombo<MAX_COMBOS; icombo++) {
-		if (strcmp(ifos, IFO_COMBO_MAP[icombo]) == 0)
+		nifo_map = 0;
+		if (len_in == strlen(IFO_COMBO_MAP[icombo])) {
+			for (iifo=0; iifo<nifo_in; iifo++) {
+				for (jifo=0; jifo<nifo_in; jifo++)
+					if (strncmp(ifos+iifo*IFO_LEN, IFO_COMBO_MAP[icombo]+jifo*IFO_LEN, IFO_LEN) == 0)
+					nifo_map++;
+			}
+		}
+		if (nifo_in == nifo_map)
 			return icombo;
 	}
+
 	return -1;
 }
+
 Bins1D *
 bins1D_create_long(float min, float max, int nbin) 
 {

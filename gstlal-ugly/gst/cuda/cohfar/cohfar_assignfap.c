@@ -82,6 +82,7 @@ GST_BOILERPLATE_FULL(
 );
 
 enum property {
+	PROP_0,
 	PROP_IFOS,
 	PROP_REFRESH_INTERVAL,
 	PROP_COLLECTION_TIME,
@@ -143,7 +144,7 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
-			table->fap = background_stats_get_cdf(table->cohsnr, table->chisq, stats[icombo]->cdf);
+			table->fap = background_stats_bins2D_get_val(table->cohsnr, table->chisq, stats[icombo]->cdf);
 		}
 	}
 
