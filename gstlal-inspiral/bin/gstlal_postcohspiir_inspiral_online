@@ -99,6 +99,7 @@ from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import datasource
+from gstlal import postcoh_output
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
   pass
@@ -275,7 +276,7 @@ def parse_command_line():
     os.environ['GSTLAL_LL_JOB'] = options.job_tag
 
     # check required options in this case
-    required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
+    required_options = ["job_tag"]
 
     missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
     if missing_options:
@@ -432,7 +433,7 @@ if 1==1:
   pipeline = gst.Pipeline("gstlal_postcoh_inspiral")
   mainloop = gobject.MainLoop()
 
-  postcohsink = spiirparts.mkPostcohSPIIROnline(
+  postcohsrcs = spiirparts.mkPostcohSPIIROnline(
       pipeline,
       detectors = detectors,
       banks = iir_banks,
@@ -456,15 +457,24 @@ if 1==1:
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
+  output = postcoh_output.Data(
+		  options.output_prefix)
+
 
   if options.verbose:
-    print >>sys.stderr, "done"
+    print >>sys.stderr, " output document initialized"
 
 
   handler = simplehandler.Handler(mainloop, pipeline)
 
+  if options.verbose:
+    print >>sys.stderr, " attaching appsinks to pipeline ..."
+
+  appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
+  appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-postcoh"), name = "sink_%d" % n) for (n, src) in enumerate(postcohsrcs))
+ 
   if options.write_pipeline is not None:
-    pipeparts.connect_appsink_dump_dot(pipeline, postcohsink, options.write_pipeline, options.verbose)
+    pipeparts.connect_appsink_dump_dot(pipeline, postcohsrcs, options.write_pipeline, options.verbose)
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
   if options.data_source in ("lvshm", "framexmit"):

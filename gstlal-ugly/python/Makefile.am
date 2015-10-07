@@ -11,4 +11,5 @@ pkgpython_PYTHON = \
 	httpinterface.py \
 	servicediscovery.py \
 	spiirparts.py \
-	uni_datasource.py
+	uni_datasource.py \
+	postcoh_output.py
