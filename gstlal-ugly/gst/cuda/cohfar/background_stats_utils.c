@@ -235,6 +235,7 @@ background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
 			if (ix < x_nbin-1)
 				tmp += gsl_matrix_get(pdfdata, ix+1, iy);
 			tmp += gsl_matrix_get(pdfdata, ix, iy);
+			tmp *= pdf->x_step * pdf->y_step;
 			gsl_matrix_set(cdfdata, ix, iy, tmp);
 		}
 	}
