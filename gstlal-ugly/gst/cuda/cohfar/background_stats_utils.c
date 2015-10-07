@@ -202,6 +202,13 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 			gsl_matrix_set(result,i,j,gsl_matrix_sum(temp_matrix)/(double)nevent);
 		}
 	}
+
+	// normalize pdf
+	float x_step = pdf->x_step, y_step = pdf->y_step;
+	double pdf_sum;
+       	pdf_sum = x_step * y_step * gsl_matrix_sum(result);
+	gsl_matrix_scale(result, 1/pdf_sum);
+	
 	gsl_vector_free(snr_double);
 	gsl_vector_free(chisq_double);
 	gsl_matrix_free(histogram);
@@ -210,6 +217,27 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	gsl_matrix_free(result_snr);
 	gsl_matrix_free(result_chisq);
 	gsl_matrix_free(temp_matrix);
+}
+
+void
+background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
+{
+	int x_nbin = pdf->x_nbin, y_nbin = pdf->y_nbin;
+	int ix, iy;
+       	double	tmp;
+	gsl_matrix *pdfdata = pdf->data, *cdfdata = cdf->data;
+
+	for (ix=x_nbin-1; ix>=0; ix--) {
+		for (iy=y_nbin-1; iy>=0; iy--) {
+			tmp = 0;
+			if (iy < y_nbin-1)
+				tmp += gsl_matrix_get(pdfdata, ix, iy+1);
+			if (ix < x_nbin-1)
+				tmp += gsl_matrix_get(pdfdata, ix+1, iy);
+			tmp += gsl_matrix_get(pdfdata, ix, iy);
+			gsl_matrix_set(cdfdata, ix, iy, tmp);
+		}
+	}
 }
 
 double
@@ -299,6 +327,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
 gboolean
 background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *filename)
 {
+  gchar *tmp_filename = g_strdup_printf("%s_next", filename);
   int icombo = 0;
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -344,7 +373,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   xmlTextWriterPtr writer;
 
   /* Create a new XmlWriter for uri, with no compression. */
-  writer = xmlNewTextWriterFilename(filename, 1);
+  writer = xmlNewTextWriterFilename(tmp_filename, 1);
   if (writer == NULL) {
       printf("testXmlwriterFilename: Error creating the xml writer\n");
       return FALSE;
@@ -429,5 +458,10 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
   }
+  /* rename the file, prevent write/ read of the same file problem.
+   * rename will wait for file count of the filename to be 0.  */
+  printf("rename from %s\n", tmp_filename);
+  g_rename(tmp_filename, filename);
+  g_free(tmp_filename);
   return TRUE;
 }

@@ -69,6 +69,10 @@ background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2);
 gboolean
 background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf);
 
+void
+background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf);
+
+
 double
 background_stats_bins2D_get_val(float snr, float chisq, Bins2D *bins);
 
