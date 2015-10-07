@@ -58,8 +58,10 @@ int main(int argc, char *argv[])
 			background_stats_rates_add(stats_out[icombo]->rates, stats_in[icombo]->rates);
 	}
 
-	for (icombo=0; icombo<ncombo; icombo++)
+	for (icombo=0; icombo<ncombo; icombo++) {
 		background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
+		background_stats_pdf_to_cdf(stats_out[icombo]->pdf, stats_out[icombo]->cdf);
+	}
 	background_stats_to_xml(stats_out, ncombo, *out);
 	//FIXME: free stats
 	g_strfreev(in_fnames);
