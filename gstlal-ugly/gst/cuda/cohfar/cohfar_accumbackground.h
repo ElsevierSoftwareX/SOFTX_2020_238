@@ -62,7 +62,7 @@ typedef struct {
 
 	int hist_trials;
 	int update_interval;
-	gchar *input_fname;
+	gchar *history_fname;
 	gchar *output_fname;
 
 	GMutex *prop_lock;
