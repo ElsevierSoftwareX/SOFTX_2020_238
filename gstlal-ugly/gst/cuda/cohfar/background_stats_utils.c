@@ -208,6 +208,7 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	double pdf_sum;
        	pdf_sum = x_step * y_step * gsl_matrix_sum(result);
 	gsl_matrix_scale(result, 1/pdf_sum);
+	//printf("pdf sum %f\n", gsl_matrix_sum(result) * x_step * y_step);
 	
 	gsl_vector_free(snr_double);
 	gsl_vector_free(chisq_double);
@@ -228,17 +229,19 @@ background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
 	gsl_matrix *pdfdata = pdf->data, *cdfdata = cdf->data;
 
 	for (ix=x_nbin-1; ix>=0; ix--) {
-		for (iy=y_nbin-1; iy>=0; iy--) {
+		for (iy=0; iy<=y_nbin-1; iy++) {
 			tmp = 0;
-			if (iy < y_nbin-1)
-				tmp += gsl_matrix_get(pdfdata, ix, iy+1);
+			if (iy > 0)
+				tmp += gsl_matrix_get(cdfdata, ix, iy-1);
 			if (ix < x_nbin-1)
-				tmp += gsl_matrix_get(pdfdata, ix+1, iy);
-			tmp += gsl_matrix_get(pdfdata, ix, iy);
-			tmp *= pdf->x_step * pdf->y_step;
+				tmp += gsl_matrix_get(cdfdata, ix+1, iy);
+			if (ix < x_nbin-1 && iy > 0)
+				tmp -= gsl_matrix_get(cdfdata, ix+1, iy-1);
+			tmp += gsl_matrix_get(pdfdata, ix, iy) * pdf->x_step * pdf->y_step;
 			gsl_matrix_set(cdfdata, ix, iy, tmp);
 		}
 	}
+	//printf("cdf max %f\n", gsl_matrix_max(cdfdata));
 }
 
 double
