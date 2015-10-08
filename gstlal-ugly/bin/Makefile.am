@@ -27,4 +27,5 @@ dist_bin_SCRIPTS = \
 	gstlal_parse_frame_segment_logs \
 	gstlal_postcoh_skymap2fits \
 	gstlal_ll_iir_inspiral_pipe \
-	gstlal_ll_postcohspiir_inspiral_pipe
+	gstlal_ll_postcohspiir_inspiral_pipe \
+	gstlal_cohfar_plot_stats

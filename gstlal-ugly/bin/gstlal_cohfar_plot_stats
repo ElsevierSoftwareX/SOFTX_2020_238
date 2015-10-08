@@ -1,0 +1,68 @@
+#! /usr/bin/env python
+import os
+import numpy
+import scipy
+import math
+import csv
+import logging
+from optparse import OptionParser
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot
+
+from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from pylal import datatypes as laltypes
+from pylal import git_version
+import pdb
+
+Attributes = ligolw.sax.xmlreader.AttributesImpl
+
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+def array_read_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
+
+		# Load document
+		xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+			result = array.get_array(root, array_name).array 
+		return result
+
+def parse_command_line():
+	parser = OptionParser(version = git_version.verbose_msg, usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
+	parser.add_option("--output-filename-suffix", default = "", metavar = "name", help = "Set the output file suffix name")
+	parser.add_option("--input-filename", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--ifos",  default = "append", metavar = "name", help = "set the ifos to plot pdf and cdf")
+	opts, filenames = parser.parse_args()
+
+	return opts
+
+opts = parse_command_line()
+
+pdf_name = "background_pdf:%s_logsnr_logchisq:array" % opts.ifos
+cdf_name = "background_cdf:%s_logsnr_logchisq:array" % opts.ifos
+
+pdf = array_read_from_xml(opts.input_filename, pdf_name)
+figpdf = pyplot.figure()
+#ax = fig.add_axes((.6,2.5,-0.5,2.5))
+pyplot.imshow(pdf, extent = [0.6, 2.5, -0.5, 2.5], origin = 'lower')
+pyplot.xlabel('log10SNR')	
+pyplot.ylabel('log10Chisq')	
+pyplot.title('PDF')
+pyplot.savefig("pdf_%s" % opts.output_filename_suffix)
+
+cdf = array_read_from_xml(opts.input_filename, cdf_name)
+figcdf = pyplot.figure()
+#ax = fig.add_axes((.6,2.5,-0.5,2.5))
+pyplot.imshow(cdf, extent = [0.6, 2.5, -0.5, 2.5], origin = 'lower')
+pyplot.xlabel('log10SNR')	
+pyplot.ylabel('log10Chisq')	
+pyplot.title('CDF')
+pyplot.savefig("cdf_%s" % opts.output_filename_suffix)
+
