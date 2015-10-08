@@ -102,14 +102,14 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, update_interval =  0, input_fname = None,output_fname = None):
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, update_interval =  0, history_fname = None,output_fname = None):
 	properties = {
 		"ifos": ifos,
 		"hist_trials": hist_trials,
 		"update_interval": update_interval
 	}
-	if input_fname is not None:
-		properties["input_fname"] = input_fname
+	if history_fname is not None:
+		properties["history_fname"] = history_fname
 	if output_fname is not None:
 		properties["output_fname"] = output_fname
 
@@ -579,12 +579,11 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 				# FIXME: hard-coded to set 2 postcoh process to 2 gtx750 cards
 				if bank_count > 23:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count])
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count % 2])
 					postcoh_count += 1
 				else:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count + k10_gpu_start_id)
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
 					postcoh_count += 1
-					postcoh_count = postcoh_count % num_k10_gpu
 			else:
 				snr.link_pads(None, postcoh, instrument)
 			bank_count += 1

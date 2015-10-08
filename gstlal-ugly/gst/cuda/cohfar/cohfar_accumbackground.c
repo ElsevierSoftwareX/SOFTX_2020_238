@@ -88,7 +88,7 @@ enum property {
 	PROP_IFOS,
 	PROP_HIST_TRIALS,
 	PROP_UPDATE_INTERVAL,
-	PROP_INPUT_FNAME,
+	PROP_HISTORY_FNAME,
 	PROP_OUTPUT_FNAME
 };
 
@@ -226,10 +226,13 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	PostcohTable *intable_end = (PostcohTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
 	PostcohTable *outtable = (PostcohTable *) GST_BUFFER_DATA(outbuf);
 	for (; intable<intable_end; intable++) {
+		printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
+			printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			if (intable->cohsnr > intable->maxsnglsnr) {
-			icombo = get_icombo(intable->ifos);
-			background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
+				printf("update\n");
+				icombo = get_icombo(intable->ifos);
+				background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 			}
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohTable));
@@ -308,12 +311,12 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			element->stats = background_stats_create(element->ifos);
 			break;
 
-		case PROP_INPUT_FNAME:
+		case PROP_HISTORY_FNAME:
 
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
-			element->input_fname = g_value_dup_string(value);
-			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
+			element->history_fname = g_value_dup_string(value);
+			background_stats_from_xml(element->stats, element->ncombo, element->history_fname);
 			break;
 
 		case PROP_OUTPUT_FNAME:
@@ -357,8 +360,8 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 			g_value_set_string(value, element->ifos);
 			break;
 
-		case PROP_INPUT_FNAME:
-			g_value_set_string(value, element->input_fname);
+		case PROP_HISTORY_FNAME:
+			g_value_set_string(value, element->history_fname);
 			break;
 
 		case PROP_OUTPUT_FNAME:
@@ -479,11 +482,11 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_INPUT_FNAME,
+		PROP_HISTORY_FNAME,
 		g_param_spec_string(
-			"input-fname",
-			"Input filename",
-			"Reference input background statstics filename",
+			"history-fname",
+			"Input history filename",
+			"Reference history background statstics filename",
 			DEFAULT_STATS_FNAME,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
