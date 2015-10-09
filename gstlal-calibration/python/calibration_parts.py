@@ -20,13 +20,34 @@ from gstlal import pipeparts
 import gst
 import numpy
 
+def gate_strain_for_output_frames(pipeline, head, control):
+	controltee = pipeparts.mktee(pipeline, control)
+	head = pipeparts.mkgate(pipeline, mkqueue(pipeline, head), control = mkqueue(pipeline, controltee), threshold = 0, leaky = True)
+	control = mkqueue(pipeline, controltee)
+	return head, control
+
+def gate_other_with_strain(pipeline, other, strain):
+	other = pipeparts.mkgate(pipeline, other, control = mkqueue(pipeline, strain), threshold=0, leaky = True)
+	other = mkaudiorate(pipeline, other)
+	other = mkreblock(pipeline, other)
+	return other
+
+def mkqueue(pipeline, head):
+	return pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND * 1000)
+	
+def mkaudiorate(pipeline, head):
+	return pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
+
+def mkreblock(pipeline, head):
+	return pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+
 def write_graph(demux, pipeline, name):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
 
 def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 	head = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
-	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+	head = mkreblock(pipeline, head)
 	return head
 
 def caps_and_progress(pipeline, head, caps, progress_name):
@@ -41,8 +62,8 @@ def caps_and_progress_and_resample(pipeline, head, caps, progress_name, new_caps
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
-	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+	head = mkaudiorate(pipeline, head)
+	head = mkreblock(pipeline, head)
 	return head
 
 def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps):
@@ -57,8 +78,8 @@ def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps
 def resample(pipeline, head, caps):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
-	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+	head = mkaudiorate(pipeline, head)
+	head = mkreblock(pipeline, head)
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):
@@ -87,15 +108,28 @@ def mkadder(pipeline, srcs, caps, sync = True):
 def list_srcs(pipeline, *args):
 	out = []
 	for src in args:
-		out.append(pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND * 1000))
+		out.append(mkqueue(pipeline, src))
 	return tuple(out)
+
+def average_calib_factors(pipeline, head, var, expected, N, caps, default, statevector):
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	head = pipeparts.mkgate(pipeline, mkqueue(pipeline, head), control = mkqueue(pipeline, statevector), threshold = 1)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [[0,1]]) 
+	head = mkaudiorate(pipeline, head)
+	head = mkreblock(pipeline, head)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", min = expected - var, max = expected + var, default = default)
+	head = pipeparts.mkmean(pipeline, head, n = N, type = 1, moment = 1)
+	head = mkaudiorate(pipeline, head)
+	head = mkreblock(pipeline, head)
+	return head
 
 def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
 	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag), real_caps)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float")
-	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False) # This audiorate is necessary! Probaly once lal_interleave gets fixed it won't be
-	head = pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+	head = mkaudiorate(pipeline, head) # This audiorate is necessary! Probaly once lal_interleave gets fixed it won't be
+	head = mkreblock(pipeline, head)
 	head = pipeparts.mktogglecomplex(pipeline,head)
 	head = pipeparts.mkcapsfilter(pipeline, head, complex_caps)
 	return head
@@ -114,21 +148,21 @@ def split_into_real(pipeline, complex, real_caps, complex_caps):
 	imag = pipeparts.mkcapsfilter(pipeline, imag, real_caps)
 	return real, imag
 
-def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_samples):
+def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_samples, td):
 	headtee = pipeparts.mktee(pipeline, head)
 	deltat = 1.0/float(sr)
-	cos = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
-	sin = pipeparts.mkgeneric(pipeline, pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
+	cos = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
+	sin = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 
-	headR = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), cos), orig_caps)
+	headR = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), cos), orig_caps)
 	headR = pipeparts.mkresample(pipeline, headR, quality=9)
 	headR = pipeparts.mkcapsfilter(pipeline, headR, new_caps)
-	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
+	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
 
-	headI = mkmultiplier(pipeline, (pipeparts.mkqueue(pipeline, headtee, max_size_time = gst.SECOND * 100), sin), orig_caps)
+	headI = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), sin), orig_caps)
 	headI = pipeparts.mkresample(pipeline, headI, quality=9)
 	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
-	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = True)
+	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
 
 	return headR, headI
 
