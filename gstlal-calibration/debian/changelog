@@ -1,3 +1,10 @@
+gstlal-calibration (0.5.4-1) unstable; urgency=low
+
+  * Bug fixes and a few small feature additions including averaging
+    calibration factors
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 09 Oct 2015 17:11:00 -0500
+
 gstlal-calibration (0.5.3-1) unstable; urgency=low
 
   * Allow more general naming scheme for output channels
