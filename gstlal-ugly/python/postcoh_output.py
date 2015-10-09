@@ -1,5 +1,6 @@
 import threading
 import sys
+import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -28,6 +29,7 @@ import lal
 from pylal.datatypes import LALUnit
 from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
+from pylal.xlal.datatypes import postcohinspiraltable
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -51,12 +53,32 @@ class Data(object):
 		self.t_roll_start = None
 
 	def appsink_new_buffer(self, elem):
+		pdb.set_trace()
 		with self.lock:
 			buf = elem.emit("pull-buffer")
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			if self.t_roll_start is None:
 				self.t_roll_start = buf_timestamp
 			print buf_timestamp
-			#events = PostcohFromBuf(buf)
-
+			events = postcohinspiraltable.PostcohInspiralTable.from_buffer(buf)
+	
 			#self.cluster(events, self.cluster_window)
+
+
+class PostcohInspiral(postcohinspiraltable.PostcohInspiralTable):
+  __slots__ = ()
+
+  def __eq__(self, other):
+    return not (
+      cmp(self.ifos, other.ifos) or
+      cmp(self.end, other.end) or
+      cmp(self.search, other.search)
+      )
+
+  def __cmp__(self, other):
+    # compare self's end time to the LIGOTimeGPS instance
+    # other.  allows bisection searches by GPS time to find
+    # ranges of triggers quickly
+    return cmp(self.end, other)
+
+
