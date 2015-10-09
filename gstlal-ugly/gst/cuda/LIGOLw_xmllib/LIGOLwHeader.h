@@ -127,10 +127,14 @@ void ligoxml_init_XmlTable(XmlTable *table);
 static const XmlTypeMap typeMap[MAPSIZE] =
 {
     {BAD_CAST "lstring",	data_to_string_char,	"%s",   sizeof(char),   0},
-    {BAD_CAST "real_8",		data_to_string_double,    "%e",  sizeof(double), 1},
-    {BAD_CAST "real_4",		data_to_string_float,     "%f",   sizeof(float),  2},
+     /* FIXME: read and write should be different.
+     * read %lg, write %.16g */
+    {BAD_CAST "real_8",		data_to_string_double,    "%lg",  sizeof(double), 1},
+     /* FIXME: read and write should be different.
+     * read %g, write %.8g */
+    {BAD_CAST "real_4",		data_to_string_float,     "%g",   sizeof(float),  2},
     {BAD_CAST "int_4s",		data_to_string_int,	"%d",   sizeof(int),    3},
-    {BAD_CAST "int_8s",		data_to_string_long,	"%ld",	sizeof(long),	4}
+    {BAD_CAST "int_8s",		data_to_string_long,	"%ld",	sizeof(long),	4},
 };
 int ligoxml_get_type_index(const xmlChar *type);
 
