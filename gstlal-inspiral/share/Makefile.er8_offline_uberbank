@@ -120,14 +120,14 @@ $(BANK):
 $(BANK_MCHIRP1):$(BANK)
 	wget https://versions.ligo.org/cgit/gstlal/tree/gstlal-inspiral/bin/gstlal_inspiral_bank_param_splitter
 	chmod u+x,g+x,o+x gstlal_inspiral_bank_param_splitter
-	./gstlal_inspiral_bank_param_splitter --output-tag $(OUTPUT_SPLITBANK_TAG) --mchirp-split $(MCHIRP_SPLIT) --verbose $(BANK)
+	./gstlal_inspiral_bank_param_splitter --output-tag $(OUTPUT_SPLITBANK_TAG) --mchirp-split $(MCHIRP_SPLIT) --overlap $(OVERLAP) --sort-by mchirp --verbose $(BANK)
 %_split_bank.cache : $(BANK_MCHIRP1) $(BANK_MCHIRP2)
 	mkdir -p $*_split_bank_1
 	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_bank_splitter
 	chmod u+x,g+x,o+x gstlal_bank_splitter
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_1 --approximant $(APPROXIMANT1) --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_1 --approximant $(APPROXIMANT1) --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
 	mkdir -p $*_split_bank_2
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_2 --approximant $(APPROXIMANT2) --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_2 --approximant $(APPROXIMANT2) --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
 	cat $@.1 $@.2 > $@
 
 plots :
