@@ -19,14 +19,12 @@ NUM_CHI_BINS = 20
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
 # in the SVD.  Redundant templates will be removed
 OVERLAP = 30
-# The program used to make the template bank. This will be searched for in the
-# process param table in order to extract some metadata
-BANK_PROGRAM = lalapps_cbc_sbank
-# The following split banks can be found on UWM in: 
-# The original full template bank is also there. It was made by Tito using the ER8 PSD and goes up to mtot = 100
+BANKORIGIN = /home/tito/er8/bank/H1L1-UBERBANK_MAXM100_NS0p05_ER8HMPSD-1126033217-223200.xml.gz
 # The location of the original full bank is on Atlas: /home/tito/er8/bank/H1L1-UBERBANK_MAXM100_NS0p05_ER8HMPSD-1126033217-223200.xml.gz
-BANK_MCHIRP1 = 
-BANK_MCHIRP2 = 
+MCHIRP_SPLIT = 1.73
+OUTPUT_SPLITBANK_TAG = ER8
+BANK_MCHIRP1 = bank_00_$(OUTPUT_SPLITBANK_TAG)_00.xml.gz
+BANK_MCHIRP2 = bank_00_$(OUTPUT_SPLITBANK_TAG)_01.xml.gz
 # The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
 APPROXIMANT1 = TaylorF2
 APPROXIMANT2 = SEOBNRv2_ROM_DoubleSpin
@@ -75,7 +73,7 @@ ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES
 INJECTIONS := 
 
 # GSTLAL_SEGMENTS Options
-SEG_SERVER=https://dqsegdb5.phy.syr.edu
+SEG_SERVER=https://segments.ligo.org
 LIGO_SEGMENTS="$*:DMT-ANALYSIS_READY:1"
 SEGMENT_TRIM = 16
 SEGMENT_MIN_LENGTH = 512
@@ -116,11 +114,20 @@ include Makefile.offline_analysis_rules
 
 all : dag
 
+BANK = $(notdir $(BANKORIGIN))
+$(BANK):
+	gsiscp atlas2.atlas.aei.uni-hannover.de:/home/tito/er8/bank/H1L1-UBERBANK_MAXM100_NS0p05_ER8HMPSD-1126033217-223200.xml.gz $@
+$(BANK_MCHIRP1):$(BANK)
+	wget https://versions.ligo.org/cgit/gstlal/tree/gstlal-inspiral/bin/gstlal_inspiral_bank_param_splitter
+	chmod u+x,g+x,o+x gstlal_inspiral_bank_param_splitter
+	./gstlal_inspiral_bank_param_splitter --output-tag $(OUTPUT_SPLITBANK_TAG) --mchirp-split $(MCHIRP_SPLIT) --verbose $(BANK)
 %_split_bank.cache : $(BANK_MCHIRP1) $(BANK_MCHIRP2)
 	mkdir -p $*_split_bank_1
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_1 --approximant $(APPROXIMANT1) --bank-program $(BANK_PROGRAM) --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
+	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_bank_splitter
+	chmod u+x,g+x,o+x gstlal_bank_splitter
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_1 --approximant $(APPROXIMANT1) --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
 	mkdir -p $*_split_bank_2
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_2 --approximant $(APPROXIMANT2) --bank-program $(BANK_PROGRAM) --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_2 --approximant $(APPROXIMANT2) --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
 	cat $@.1 $@.2 > $@
 
 plots :
