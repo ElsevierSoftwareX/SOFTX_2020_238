@@ -21,6 +21,7 @@ from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import ilwd
+from glue.ligolw import table
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
@@ -32,6 +33,49 @@ from pylal.datatypes import REAL8FrequencySeries
 from pylal.xlal.datatypes import postcohinspiraltable
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
+
+# defined in postcoh_table.h
+class PostcohTable(table.Table):
+	tableName = "postcoh:table"
+	validcolumns = {
+		"end_time":	"int_4s",
+		"end_time_ns":	"int_4s",
+		"is_background":	"int_4s",
+		"pivotal_ifo":	"lstring",
+		"tmplt_idx":	"int_4s",
+		"pix_idx":	"int_4s",
+		"maxsnglsnr":	"real_4",
+		"cohsnr":	"real_4",
+		"nullsnr":	"real_4",
+		"chisq":	"real_4",
+		"spearman_pval":	"real_4",
+		"fap":		"real_4",
+		"far":		"real_4",
+		"livetime":	"real_4",
+		"skymap_fname":	"lstring"
+	}
+
+
+class PostcohDocument(object):
+	def __init__(self, filename, verbose = False):
+		self.get_another = lambda: PostcohDocument(filename = filename, verbose = verbose)
+
+		self.filename = filename
+
+		#
+		# build the XML document
+		#
+
+		self.xmldoc = ligolw.Document()
+		self.xmldoc.appendChild(ligolw.LIGO_LW())
+
+		# FIXME: process table, search summary table
+		# FIXME: should be implemented as lsctables.PostcohTable
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohTable))
+
+	def write_output_file(self, verbose = False):
+		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endwith(".gz"), verbose = verbose, trap_signals = None)
+
 
 class Data(object):
 	def __init__(self, output_prefix, cluster_window = 1, snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
@@ -48,7 +92,7 @@ class Data(object):
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
 
-		#self.postcoh_document = PostcohDocument()
+		self.postcoh_document = PostcohDocument()
 
 		self.t_roll_start = None
 
@@ -63,22 +107,18 @@ class Data(object):
 			events = postcohinspiraltable.PostcohInspiralTable.from_buffer(buf)
 	
 			#self.cluster(events, self.cluster_window)
+	def get_filename(output_prefix, t_roll_start, duration_roll):
+			fname = "%s_%d_%d.xml.gz" % (output_prefix, t_roll_start, duration_roll)
+			return fname
 
+	def snapshot_output_file(self, filename, verbose = False):
+		with self.lock:
+			postcoh_document = self.postcoh_document.get_another()
+			self.__write_output_file(filename = filename, verbose = verbose)
+			del self.postcoh_document
+			self.postcoh_document = postcoh_document
 
-class PostcohInspiral(postcohinspiraltable.PostcohInspiralTable):
-  __slots__ = ()
-
-  def __eq__(self, other):
-    return not (
-      cmp(self.ifos, other.ifos) or
-      cmp(self.end, other.end) or
-      cmp(self.search, other.search)
-      )
-
-  def __cmp__(self, other):
-    # compare self's end time to the LIGOTimeGPS instance
-    # other.  allows bisection searches by GPS time to find
-    # ranges of triggers quickly
-    return cmp(self.end, other)
-
-
+	def __write_output_file(self, filename = None, verbose = False):
+		if filename is not None:
+			self.postcoh_document.filename = filename
+		self.postcoh_document.write_output_file(verbose = verbose)
