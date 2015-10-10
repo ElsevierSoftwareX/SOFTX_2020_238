@@ -116,12 +116,12 @@ all : dag
 
 BANK = $(notdir $(BANKORIGIN))
 $(BANK):
-	gsiscp atlas2.atlas.aei.uni-hannover.de:/home/tito/er8/bank/H1L1-UBERBANK_MAXM100_NS0p05_ER8HMPSD-1126033217-223200.xml.gz $@
+	gsiscp atlas2.atlas.aei.uni-hannover.de:$(BANKORIGIN) $@
 $(BANK_MCHIRP1):$(BANK)
-	use wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_inspiral_bank_param_splitter
+	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_inspiral_bank_param_splitter
 	chmod u+x,g+x,o+x gstlal_inspiral_bank_param_splitter
 	./gstlal_inspiral_bank_param_splitter --output-tag $(OUTPUT_SPLITBANK_TAG) --value-split $(MCHIRP_SPLIT) --overlap $(OVERLAP) --sort-by mchirp --verbose $(BANK)
-%_split_bank.cache : $(BANK_MCHIRP1) $(BANK_MCHIRP2)
+%_split_bank.cache : $(BANK_MCHIRP1)
 	mkdir -p $*_split_bank_1
 	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_bank_splitter
 	chmod u+x,g+x,o+x gstlal_bank_splitter
