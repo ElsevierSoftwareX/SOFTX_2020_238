@@ -1803,7 +1803,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	#
 
 	total = sum(sorted(result.values()))
-	assert abs(total - 1.) < 1e-13
+	assert abs(total - 1.) < 1e-13, "result insufficiently well normalized: %s, sum = %g" % (result, total)
 	for key in result:
 		result[key] /= total
 
