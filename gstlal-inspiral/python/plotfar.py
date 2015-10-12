@@ -253,7 +253,14 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	with numpy.errstate(divide = "ignore"):
 		z = numpy.log(z)
 
-	norm = matplotlib.colors.Normalize(vmin = -40., vmax = z.max())
+	# FIXME:  hack to allow all-0 PDFs to be plotted.  remove when we
+	# have a version of matplotlib that doesn't crash, whatever version
+	# of matplotlib that is
+	if numpy.isinf(z).all():
+		z[:,:] = -60.
+		z[0,0] = -55.
+
+	norm = matplotlib.colors.Normalize(vmin = -40., vmax = max(0., z.max()))
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
 	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)

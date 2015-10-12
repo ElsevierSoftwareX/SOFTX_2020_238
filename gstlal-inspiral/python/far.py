@@ -762,9 +762,13 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@staticmethod
 	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = PosInf, min_ratio = 0.1):
 		horizon_distance_norm = max(horizon_distances.values())
-		assert horizon_distance_norm != 0.
+		assert horizon_distance_norm >= 0.
+		# check for no-op:  all distances are 0.
+		if horizon_distance_norm == 0.:
+			return dict.fromkeys(horizon_distances, 0.)
+		# check for no-op:  map all (non-zero) values to 1
 		if math.isinf(log_distance_tolerance):
-			return dict((instrument, 1.) for instrument in horizon_distances)
+			return dict((instrument, 1. if horizon_distance > 0. else 0.) for instrument, horizon_distance in horizon_distances.items())
 		min_distance = min_ratio * horizon_distance_norm
 		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
 
@@ -1719,7 +1723,8 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 	xlal_am_resp = lal.ComputeDetAMResponse
 
 	# loop as many times as requested
-	for i in xrange(n_samples):
+	successes = fails = 0
+	while successes < n_samples:
 		# retrieve random horizon distances in the same order as
 		# the instruments.  note:  rand_horizon_distances() is only
 		# evaluated once in this expression.  that's important
@@ -1780,6 +1785,9 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		if V[0] <= min_distance:
 			# fewer than two instruments are on, so no
 			# combination can see anything
+			fails += 1
+			if successes + fails >= n_samples and fails / float(successes + fails) > .90:
+				raise ValueError("convergence too slow:  success/fail ratio = %d/%d" % (successes, fails))
 			continue
 
 		# for each instrument combination, probability that a
@@ -1795,6 +1803,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		# other combination of instruments.
 		for key, p, pnext in zip(instruments, P, P[1:] + (0.,)):
 			result[key] += p - pnext
+		successes += 1
 	for key in result:
 		result[key] /= n_samples
 
