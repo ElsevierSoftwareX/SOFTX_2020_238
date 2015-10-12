@@ -90,7 +90,7 @@ for (cid, time, ifos) in cids:
 		coinceventmap.append(row)
 	
 	# sngl inspiral table
-	sngl = lsctables.New(lsctables.SnglInspiralTable)
+	sngl = lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"))
 	xmldoc.appendChild(sngl)
 	rowfunc = snglrow(db)
 	#FIXME Terrible hack, figure out how to do this correctly
