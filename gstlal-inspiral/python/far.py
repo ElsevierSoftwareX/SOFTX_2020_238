@@ -1556,14 +1556,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		for i in xrange(n_samples):
 			# select random sky location and source orbital
 			# plane inclination and choice of polarization
-			theta = acos(random_uniform(-1., 1.))
-			phi = random_uniform(0., twopi)
+			ra = random_uniform(0., twopi)
+			dec = pi_2 - acos(random_uniform(-1., 1.))
 			psi = random_uniform(0., twopi)
 			cosi2 = random_uniform(-1., 1.)**2.
 
 			# F+^2 and Fx^2 for each instrument
-			fpfc2 = numpy.array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps))**2.
-			fpfc2_other = numpy.array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps_other))**2.
+			fpfc2 = numpy.array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps))**2.
+			fpfc2_other = numpy.array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps_other))**2.
 
 			# ratio of distance to inverse SNR for each instrument
 			fpfc_factors = ((1. + cosi2)**2. / 4., cosi2)
@@ -1727,14 +1727,14 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 
 		# select random sky location and source orbital plane
 		# inclination and choice of polarization
-		theta = acos(random_uniform(-1., 1.))
-		phi = random_uniform(0., twopi)
+		ra = random_uniform(0., twopi)
+		dec = pi_2 - acos(random_uniform(-1., 1.))
 		psi = random_uniform(0., twopi)
 		cosi2 = random_uniform(-1., 1.)**2.
 
 		# compute F+^2 and Fx^2 for each antenna from the sky
 		# location and antenna responses
-		fpfc2 = numpy_array(tuple(xlal_am_resp(resp, phi, pi_2 - theta, psi, gmst) for resp in resps))**2.
+		fpfc2 = numpy_array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps))**2.
 
 		# 1/8 ratio of inverse SNR to distance for each instrument
 		# (1/8 because horizon distance is defined for an SNR of 8,
