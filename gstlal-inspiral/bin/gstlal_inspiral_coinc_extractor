@@ -34,8 +34,12 @@ def coincrow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.CoincInspiralTable.tableName).row_from_cols
 def coinceventrow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.CoincTable.tableName).row_from_cols
+def coincdefrow(connection):
+	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.CoincDefTable.tableName).row_from_cols
 def coinceventmaprow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.CoincMapTable.tableName).row_from_cols
+def timesliderow(connection):
+	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.TimeSlideTable.tableName).row_from_cols
 
 parser = OptionParser()
 parser.add_option("--fap-thresh", default=0.01, type="float", metavar="probability", help="Set the false alarm probability: default 0.01")
@@ -78,6 +82,20 @@ for (cid, time, ifos) in cids:
 	rowfunc = coinceventrow(db) 
 	for val in db.cursor().execute('SELECT * FROM coinc_event WHERE coinc_event_id == ?', (cid,)):
 		coincevent.append(rowfunc(val))
+	
+	# coinc def table
+	coincdef = lsctables.New(lsctables.CoincDefTable)
+	xmldoc.appendChild(coincdef)
+	rowfunc = coincdefrow(db) 
+	for val in db.cursor().execute('SELECT * FROM coinc_definer'):
+		coincdef.append(rowfunc(val))
+	
+	# time slide table
+	timeslide = lsctables.New(lsctables.TimeSlideTable)
+	xmldoc.appendChild(timeslide)
+	rowfunc = timesliderow(db) 
+	for val in db.cursor().execute('SELECT * FROM time_slide'):
+		timeslide.append(rowfunc(val))
 	
 	# coinc event map table
 	coinceventmap = lsctables.New(lsctables.CoincMapTable)
