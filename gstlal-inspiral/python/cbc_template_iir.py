@@ -239,6 +239,72 @@ def normalized_convolv(a, b, autocorrelation_length = 201):
 	auto_bank = numpy.concatenate(auto, corr[max(max_idx, 0):max_idx + (autocorrelation_length // 2 + 1)])
 	return auto_bank
 
+def M_chi2_readline(flower=30., sampleRate=2048.):
+	fh = open('m1_m2_mc_1xyz_2xyz.dat')
+	line = fh.readline()
+	#m1, m2, mc, s1x, s1y, s1z, s2x, s2y, s2z = line.strip().split(',')
+	params = [float(pa) for pa in line.strip().split(',')]
+	
+	tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, params[0] * lal.MSUN_SI, params[1] * lal.MSUN_SI, 0., 0.)
+
+	# FIXME: This is a hack to calculate the maximum length of given table, we 
+	# know that working_f_low_extra_time is about 1/10 of the maximum duration
+	working_f_low_extra_time = .1 * tchirp + 1.0
+	length_max = working_f_low_extra_time * 10 * sampleRate
+
+	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+	working_duration = float(working_length) / sampleRate
+	
+	amp, phase = gen_whitened_amp_phase(None, params[0], params[1], sampleRate, flower, 0, working_length, working_duration, length_max, params[3], params[4], params[5], params[6], params[7], params[8] )
+	fh.close()
+	
+	print len(amp)
+	import matplotlib.pyplot as plt
+	plt.figure()
+	plt.plot(range(len(amp)), amp*numpy.cos(phase),'b')
+	plt.show()
+
+
+def M_chi2(flower=30., sampleRate=2048.):
+	
+	#m1, m2, mc, s1x, s1y, s1z, s2x, s2y, s2z = line.strip().split(',')
+	params = numpy.loadtxt('test.dat')
+
+	temp_list = []
+	
+	for ii in range(len(params[:,0])):
+		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, params[ii, 0] * lal.MSUN_SI, params[ii, 1] * lal.MSUN_SI, 0., 0.)
+
+		# FIXME: This is a hack to calculate the maximum length of given table, we 
+		# know that working_f_low_extra_time is about 1/10 of the maximum duration
+		working_f_low_extra_time = .1 * tchirp + 1.0
+		length_max = working_f_low_extra_time * 10 * sampleRate
+
+		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+		working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+		working_duration = float(working_length) / sampleRate
+	
+		amp, phase = gen_whitened_amp_phase(None, params[ii, 0], params[ii, 1], sampleRate, flower, 0, working_length, working_duration, length_max, params[ii, 3], params[ii, 4], params[ii, 5], params[ii, 6], params[ii, 7], params[ii, 8] )
+		phase = phase - phase[-1]
+		h_temp = amp*numpy.exp(phase*1j)
+		h_temp /= numpy.sqrt(numpy.sum(amp*amp))
+		temp_list.append(h_temp)
+		# print len(amp)
+	
+	m_chi2 = numpy.zeros( (len(temp_list),len(temp_list)), dtype=complex )
+	for ii in range(len(temp_list)):
+		for jj in range(len(temp_list)):
+			minlen = min(len(temp_list[ii][:]), len(temp_list[jj][:]))
+			m_chi2[ii, jj] = numpy.dot( temp_list[ii][-minlen:], numpy.conj(temp_list[jj][-minlen:]))
+	
+	import matplotlib.pyplot as plt
+	#plt.figure()
+	#plt.plot(range(len(temp_list)), numpy.abs(m_chi2[0,:]),'b')
+	ax = plt.figure().gca()
+	im = ax.imshow(numpy.abs(m_chi2))
+	plt.colorbar(im)
+	plt.show()
 
 def innerproduct(a,b):
 
