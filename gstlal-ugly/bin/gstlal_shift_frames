@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+# This is just a simplified version of gstlal_inj_frames, written by
+# Laleh and Chris. The only real difference is that here we:
+# (1) Do NOT do any injections (and uploads to SimDb);
+# (2) Shift the time stamps on the data using Chad's shift element.
+# (3) Append the string '_SHIFT' to all of the names of the shifted
+#     channels which are output. Note that these channels MUST be
+#     present in the data or the pipeline will abruptly stop.
+#
+# As an example, to read data from the LHO_Data partition and write
+# it to the LHO_ShiftData partition, but shifting the time stamps by
+# 1.0 seconds, we could run:
+# ./gstlal_shift_frames --shared-memory-read LHO_Data --shared-memory-write LHO_ShiftData --frame-duration=4 --frames-per-file=1 --compression-scheme=6 --compression-level=3 --blocksize=1000000 --num-buffers=16 --shift=1.0 --save-and-shift=H1:GDS-CALIB_STRAIN,H1:GDS-CALIB_STATE_VECTOR,H1:ODC-MASTER_CHANNEL_OUT_DQ
+from optparse import OptionParser
+import os
+import numpy
+import sys
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+
+# This mess is to make gstreamer stop eating our help messages.
+if "--help" in sys.argv or "-h" in sys.argv:
+        try:
+                del sys.argv[ sys.argv.index( "--help" ) ]
+        except ValueError:
+                pass
+        try:
+                del sys.argv[ sys.argv.index( "-h" ) ]
+        except ValueError:
+                pass
+
+        import gst
+        sys.argv.append( "--help" )
+else:
+        import gst
+
+from gstlal import pipeparts
+from gstlal import pipeutil
+from gstlal import simplehandler
+
+usage = """
+Example usage:
+./gstlal_shift_frames --shared-memory-read LHO_Data --shared-memory-write LHO_ShiftData --frame-duration=4 --frames-per-file=1 --compression-scheme=6 --compression-level=3 --blocksize=1000000 --num-buffers=16 --shift=1.0 --save-and-shift=H1:GDS-CALIB_STRAIN,H1:GDS-CALIB_STATE_VECTOR,H1:ODC-MASTER_CHANNEL_OUT_DQ
+"""
+
+def write_graph(demux):
+         pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
+
+parser = OptionParser( usage = usage, description = __doc__ )
+
+def parse_command_line():
+        parser.add_option("--shared-memory-read", default = None, type = "string", help = "Give the shared memory section name to read the frames from")
+        parser.add_option("--shared-memory-write", default = None, type = "string", help = "Give the shared memory section name to write the frames with injections into it.")
+        parser.add_option("--num-buffers", default = 16, type = "int", help = "Give the number of buffers (optional).")
+        parser.add_option("--blocksize", default = 1000000, type = "int", help = "blocksize (optional)")
+        parser.add_option("--compression-level", default = 3, type = "int", help = "compression_level (optional)")
+        parser.add_option("--compression-scheme", default = 6, type = "int", help = "compression_scheme (optional)")
+        parser.add_option("--frames-per-file", default = 1, type = "int", help = "frames_per_file (optional)")
+        parser.add_option("--frame-duration", default = 4, metavar= "frame duration in seconds" , type = "int", help = "frame_duration (optional)")        
+        parser.add_option("--shift", default = 5e9, type = "string", help = "how many seconds to shift the stream")
+        parser.add_option("--save-and-shift", default = None, type = "string", help = "Comma separated list of the channels to shift and include in the output frames.")
+        parser.add_option("--strain-channel", default = None, type = "string", help = "The name of the h(t) channel. If given, we will fix the units on this stream.")
+        
+        options, filenames = parser.parse_args()
+
+        required_options = ["shared_memory_read", "shared_memory_write", "shift", "save_and_shift"]
+
+        missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+        if missing_options:
+                raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
+
+        return options, filenames
+
+# debugging options
+parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parse_command_line()
+
+# set the amount to actually shift (in nanoseconds)
+shift_nanosec = float(options.shift) * 1e9
+
+print 'Shifting ', shift_nanosec, ' nanoseconds.'
+
+save_and_shift = options.save_and_shift.split(',')
+
+# setup the pipeline
+pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
+
+# main loop 
+mainloop = gobject.MainLoop()
+
+# reading from shared memory
+src = pipeparts.mklvshmsrc(pipeline, shm_name = options.shared_memory_read)
+
+# demuxer
+demux = src = pipeparts.mkframecppchanneldemux(pipeline, src)
+
+if options.write_pipeline is not None:
+        demux.connect("no-more-pads", write_graph)
+
+channel_src_map = {}
+
+# Go through the channels to include in the output and shift.
+# Each of these will have a separate "sub-pipeline" set up for it
+# below, where the data is shifted and the name has the string
+# '_SHIFT' appended to it.
+for sas in save_and_shift:
+	unit_fix=''
+	inst, channel = sas.split(":")
+	sas_shift = sas + '_SHIFT'
+	print 'Adding inst=[', inst, '], channel=[', channel, '], sas_shift=[', sas_shift, ']'
+	pipeline_head = pipeparts.mkaudioconvert(pipeline, None)
+	pipeparts.src_deferred_link(src, sas, pipeline_head.get_pad("sink"))
+	pipeline_head = pipeparts.mkqueue(pipeline, pipeline_head, max_size_buffers = 0 , max_size_time = 0, max_size_bytes = 0)
+	# giving a new tag and fix the units, not entirely sure
+	# if this is useful to do, but we'll do it anyway
+	if options.strain_channel != None:
+		if sas==options.strain_channel:
+			print 'Fixing units'
+			unit_fix=',units="strain"'
+	pipeline_head = pipeparts.mktaginject(pipeline, pipeline_head, "instrument=%s,channel-name=%s%s" % (inst, channel, unit_fix))
+	pipeline_head = pipeparts.mkshift(pipeline, pipeline_head, shift=shift_nanosec)
+	# Chris Pankow knows why the following line is necessary when
+	# using e.g. small shifts of 2ns
+	pipeline_head = pipeparts.mkaudiorate(pipeline, pipeline_head)
+	channel_src_map[sas_shift] = pipeline_head
+
+# muxer
+# The compression level, frames_per_file and frame_duration are set when broadcasting using DMTGen
+# To get these values, we have to look at the DMTGen configuration file.
+# This file (DMTGen-LHO_Data.cfg in Patrick's home directory) currently (6 Aug 2014) looks like:
+# Parameter Compression "zero-suppress-or-gzip"
+# Parameter OutputDirectory /online/LHO_Data
+# Parameter FrameLength 4
+# To figure out the numerical compression level, do a "gst-inspect framecpp_channelmux"
+mux = pipeparts.mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = None, compression_level=options.compression_level, compression_scheme=options.compression_scheme , frames_per_file=options.frames_per_file, frame_duration=options.frame_duration)
+
+# writing to the shared memory
+mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
+# NOTE: to get the num_buffers and blocksize values, do a "smlist" on the broadcaster
+#     num_buffers = nBuf; blocksize = lBuf
+# ALSO note: if they are not exactly correct, the system complains that it cannot write to
+# the shared memory.
+
+pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2, sync=0, async=0)
+
+if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
+
+# state playing
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+	raise RuntimeError( "pipeline failed to enter PLAYING state" )
+else:
+        print "set to playing successfully"
+
+handler = simplehandler.Handler(mainloop, pipeline)
+print 'running mainloop...'
+
+try:
+    mainloop.run()
+
+# I put the plotting part here to get all the pads as they have been hoocked. The plot will get generated when we intrupt the code by "Conrel c"
+except KeyboardInterrupt:
+    if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+        pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
