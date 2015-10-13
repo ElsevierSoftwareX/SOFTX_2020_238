@@ -53,8 +53,8 @@
 //#define REAL(z,i) ((z)[2*(i)])
 //#define IMAG(z,i) ((z)[2*(i)+1])
 
-#define XN 200
-#define YN 220
+#define XN 320
+#define YN 300
 
 
 typedef struct {
