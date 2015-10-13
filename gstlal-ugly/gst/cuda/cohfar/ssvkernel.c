@@ -73,7 +73,7 @@ void pdf2cdf(PdfCdf *pc) {
 	pdfSum = 0;
 	for ( i=0; i < pc->xn; i++) {
 		for ( j=0; j < pc->yn; j++) {
-			pc->pdf[i][j] *= pc->xspac[i]*pc->yspac[j];
+			pc->pdf[i][j] *= (long double) pc->xspac[i]*pc->yspac[j];
 			pdfSum += pc->pdf[i][j];
 		}
 	}
@@ -119,7 +119,7 @@ void pdf2cdf_sharpcut(PdfCdf *pc) {
 	pdfSum = 0;
 	for ( i=0; i < pc->xn; i++) {
 		for ( j=0; j < pc->yn; j++) {
-			pc->pdf[i][j] *= pc->xspac[i]*pc->yspac[j];
+			pc->pdf[i][j] *= (long double) pc->xspac[i]*pc->yspac[j];
 			pdfSum += pc->pdf[i][j];
 		}
 	}
@@ -179,6 +179,7 @@ long gsl_vector_long_sum(gsl_vector_long * x) {
 	return result;
 }
 void Gauss(gsl_vector * x, double w, gsl_vector * y) {
+	// FIXME: two pointers pointing to the same address, might cause problems in some case
 	double temp = 1 / sqrt(2 * PI) / w;
 	size_t i;
 	for (i = 0; i < x->size; i++) {
@@ -326,11 +327,12 @@ double CostFunction(gsl_vector* y_hist, double N, gsl_vector * t, double dt,
 
 }
 void fftkernelWin(gsl_vector * data, double w, char * WinFunc, gsl_vector * y) {
-	size_t L = data->size;
-	double Lmax = L + 3 * w;
+	size_t L = (size_t) data->size;
+	double Lmax = (double) L + 3 * w;
 
-	size_t i, n = pow(2, ceil(log(Lmax) / log(2)));
+	size_t i, n = (size_t) pow(2.0, ceil(log(Lmax) / log(2.0)));
 	double X[n], data2[2 * n];
+
 	for (i = 0; i < n; i++) {
 		if (i < L)
 			X[i] = gsl_vector_get(data, i);
@@ -391,11 +393,13 @@ void fftkernelWin(gsl_vector * data, double w, char * WinFunc, gsl_vector * y) {
 }
 void fftkernel(gsl_vector * data, double w, gsl_vector * y) {
 	size_t L = data->size;
-	double Lmax = L + 3 * w;
-	size_t n = pow(2, ceil(log(Lmax) / log(2)));
+	double Lmax = (double) L + 3 * w;
+	size_t n = (size_t) pow(2.0, ceil(log(Lmax) / log(2.0)));
 	double X[n], data2[2 * n];
 	size_t i;
-	printf("n %d, L %d\n", n, L);
+	
+	//printf("n %d, L %d\n", n, L);
+	
 	for (i = 0; i < n; i++) {
 		if (i < L)
 			X[i] = gsl_vector_get(data, i);
@@ -574,14 +578,14 @@ void ssvkernel_from_hist(gsl_vector * y_hist_input, gsl_vector * tin, gsl_matrix
 	printf("computing local bandwidths....\n");
 
 	//Window sizes
-	gsl_vector * temp = gsl_vector_alloc(M);
+//	gsl_vector * temp = gsl_vector_alloc(M);
 	gsl_vector * WIN = gsl_vector_alloc(M);
 
 	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, temp);
 	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, WIN);
 
 
-	gsl_vector_logexp(temp);
+//	gsl_vector_logexp(temp);
 	gsl_vector_logexp(WIN);
 
 	gsl_matrix * c = gsl_matrix_alloc(M, L);
@@ -697,12 +701,12 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 	//set x_ab variable
 	for (i = 0; i < x->size; i++) {
 		if (gsl_vector_get(x, i) <= max_tin
-				&& gsl_vector_get(x, i >= min_tin)) {
+				&& gsl_vector_get(x, i) >= min_tin) {
 			number++;
 		}
 	}
 	gsl_vector * x_ab = gsl_vector_alloc(number);
-	gsl_vector * temp_x_ab = gsl_vector_alloc(number);
+//	gsl_vector * temp_x_ab = gsl_vector_alloc(number);
 
 	number = 0;
 	for (i = 0; i < x->size; i++) {
@@ -713,7 +717,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 		}
 	}
 	//finished
-	gsl_vector_memcpy(temp_x_ab,x_ab);
+/*	gsl_vector_memcpy(temp_x_ab,x_ab);
 	gsl_sort_vector(temp_x_ab);
 	number = 0;
 	double dt_samp = 0;
@@ -727,7 +731,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 			}
 		}
 	}
-
+*/
 	//set t variable
 	gsl_vector * t;
 	////////////////////////////////////
@@ -912,7 +916,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 //	gsl_interp_free(linear);
 //	gsl_rng_free(r);
 //	gsl_vector_free(temp_t);
-	gsl_vector_free(temp_x_ab);
+//	gsl_vector_free(temp_x_ab);
 //	gsl_vector_free(yb_buf);
 	gsl_vector_free(x_ab);
 	gsl_vector_free(t);
