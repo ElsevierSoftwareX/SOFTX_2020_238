@@ -146,6 +146,7 @@ def ncx2pdf(x, k, l):
 #
 
 
+@numpy.vectorize
 def poisson_p_not_0(l):
 	"""
 	Return the probability that a Poisson process with a mean rate of l
@@ -188,8 +189,6 @@ def poisson_p_not_0(l):
 			# positive.
 			assert s >= 0.
 			return s if s else 0.
-
-poisson_p_not_0 = numpy.vectorize(poisson_p_not_0)
 
 
 def poisson_p_0(l):
