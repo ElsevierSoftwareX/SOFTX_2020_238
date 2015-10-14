@@ -933,7 +933,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
 
-	cuda_postcoh_rm_invalid_peak(state);
+	//cuda_postcoh_rm_invalid_peak(state);
 	int allnpeak = 0, iifo, nifo = state->nifo;
 	int hist_trials = postcoh->hist_trials;
 
@@ -990,6 +990,47 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 	GST_LOG("current days from utc0 %lu, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
+
+static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo)
+{
+	int exe_len = state->exe_len, ntmplt = state->ntmplt, itmplt, ilen, jlen, npeak = 0;
+	COMPLEX_F *isnr = snglsnr;
+	float tmp_abssnr, tmp_tmplt, snglsnr_thresh = state->snglsnr_thresh;
+	float *maxsnr = state->peak_list[cur_ifo]->maxsnglsnr;
+	int *maxtmplt = state->peak_list[cur_ifo]->tmplt_idx;
+	int *peak_pos = state->peak_list[cur_ifo]->peak_pos;
+	for (ilen=0; ilen<exe_len; ilen++) {
+		maxsnr[ilen] = 0.0;
+		maxtmplt[ilen] = -1;
+		for (itmplt=0; itmplt<ntmplt; itmplt++) {
+			tmp_abssnr = sqrt((*isnr).re * (*isnr).re + (*isnr).im * (*isnr).im);
+			if (tmp_abssnr > maxsnr[ilen]) {
+				maxsnr[ilen] = tmp_abssnr;
+				maxtmplt[ilen] = itmplt;
+			}
+			isnr++;
+		}
+	}
+
+	for (ilen=0; ilen<exe_len; ilen++) {
+		if (maxtmplt[ilen] > -1) {
+			for (jlen=ilen+1; jlen<exe_len; jlen++) {
+				if (maxtmplt[jlen] == maxtmplt[ilen] && maxsnr[jlen] > maxsnr[ilen])
+					break;
+				if (maxtmplt[jlen] == maxtmplt[ilen] && maxsnr[jlen] < maxsnr[ilen]) 
+					maxtmplt[jlen] = -1;
+			}
+
+			if(jlen == exe_len && maxsnr[ilen] > snglsnr_thresh) {
+				peak_pos[npeak] = ilen;
+				npeak++;
+			}
+		}
+	}
+	state->peak_list[cur_ifo]->npeak[0] = npeak;
+	return npeak;
+}
+
 static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint one_take_size, gint exe_size, CudaPostcoh *postcoh)
 {
 	GSList *collectlist;
@@ -1002,15 +1043,38 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 
 	GstFlowReturn ret;
 
+	int c_npeak;
+	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
+		       	postcoh->rate);
+
+	LIGOTimeGPS ligo_time;
+	XLALINT8NSToGPS(&ligo_time, ts);
 	while (common_size >= one_take_size) {
 		int gps_idx = timestamp_to_gps_idx(state->gps_step, postcoh->next_exe_t);
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			cur_ifo = state->ifo_mapping[i];
+			PeakList *pklist = state->peak_list[cur_ifo];
+
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
+			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo);
+			CUDA_CHECK(cudaMemcpyAsync(	pklist->d_tmplt_idx, 
+			pklist->tmplt_idx, 
+			sizeof(int) * (pklist->peak_intlen), 
+			cudaMemcpyHostToDevice,
+			postcoh->stream));
+
+			CUDA_CHECK(cudaMemcpyAsync(	pklist->d_maxsnglsnr, 
+			pklist->maxsnglsnr, 
+			sizeof(float) * (pklist->peak_floatlen), 
+			cudaMemcpyHostToDevice,
+			postcoh->stream));
+
+
+			printf("gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 			/* copy the snglsnr to the right cuda memory */
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
@@ -1030,12 +1094,15 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			}
 
 		}
+		cudaStreamSynchronize(postcoh->stream);
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 
 			data = collectlist->data;
 			cur_ifo = state->ifo_mapping[i];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
+				// FIXME: GPU peakfinder produces much less peaks than peaks_over_thresh function
+#if 0
 				GST_LOG("peak finder for ifo %d", cur_ifo);
 				peakfinder(state, cur_ifo, postcoh->stream);
 				CUDA_CHECK(cudaMemcpyAsync(	state->peak_list[cur_ifo]->npeak, 
@@ -1044,6 +1111,10 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 						cudaMemcpyDeviceToHost,
 						postcoh->stream));
 
+				cudaStreamSynchronize(postcoh->stream);
+
+				printf("gps %d, ifo %d, gpu peak %d\n", ligo_time.gpsSeconds, cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
+#endif
 				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d", cur_ifo);
