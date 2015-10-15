@@ -992,14 +992,15 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 	return gps_idx;
 }
 
-static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo)
+static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo, cudaStream_t stream)
 {
 	int exe_len = state->exe_len, ntmplt = state->ntmplt, itmplt, ilen, jlen, npeak = 0;
 	COMPLEX_F *isnr = snglsnr;
 	float tmp_abssnr, tmp_tmplt, snglsnr_thresh = state->snglsnr_thresh;
-	float *maxsnr = state->peak_list[cur_ifo]->maxsnglsnr;
-	int *maxtmplt = state->peak_list[cur_ifo]->tmplt_idx;
-	int *peak_pos = state->peak_list[cur_ifo]->peak_pos;
+	PeakList *pklist = state->peak_list[cur_ifo];
+	float *maxsnr = pklist->maxsnglsnr;
+	int *maxtmplt = pklist->tmplt_idx;
+	int *peak_pos = pklist->peak_pos;
 	for (ilen=0; ilen<exe_len; ilen++) {
 		maxsnr[ilen] = 0.0;
 		maxtmplt[ilen] = -1;
@@ -1028,7 +1029,18 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 			}
 		}
 	}
-	state->peak_list[cur_ifo]->npeak[0] = npeak;
+	pklist->npeak[0] = npeak;
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_tmplt_idx, 
+			pklist->tmplt_idx, 
+			sizeof(int) * (pklist->peak_intlen), 
+			cudaMemcpyHostToDevice,
+			stream));
+
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_maxsnglsnr, 
+			pklist->maxsnglsnr, 
+			sizeof(float) * (pklist->peak_floatlen), 
+			cudaMemcpyHostToDevice,
+			stream));
 	return npeak;
 }
 
@@ -1061,19 +1073,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
-			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo);
-			CUDA_CHECK(cudaMemcpyAsync(	pklist->d_tmplt_idx, 
-			pklist->tmplt_idx, 
-			sizeof(int) * (pklist->peak_intlen), 
-			cudaMemcpyHostToDevice,
-			postcoh->stream));
-
-			CUDA_CHECK(cudaMemcpyAsync(	pklist->d_maxsnglsnr, 
-			pklist->maxsnglsnr, 
-			sizeof(float) * (pklist->peak_floatlen), 
-			cudaMemcpyHostToDevice,
-			postcoh->stream));
-
+			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
 			//printf("gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
