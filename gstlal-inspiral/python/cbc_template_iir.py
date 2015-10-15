@@ -205,22 +205,36 @@ def compute_autocorrelation_mask( autocorrelation ):
 	return numpy.ones( autocorrelation.shape, dtype="int" )
 
 def normalized_crosscorr(a, b, autocorrelation_length = 201):
+	
+	n_temp = len(a)
+	if autocorrelation_length > n_temp:
+		raise ValueError, "autocorrelation length (%d) cannot be larger than the template length (%d)" % (autocorrelation_length, n_temp)
+	if n_temp != len(b):
+		raise ValueError, "len(a) should be the same as len(b)"
+	
 	af = scipy.fft(a)
 	bf = scipy.fft(b)
 	corr = scipy.ifft( af * numpy.conj( bf ))
 	abs_corr = abs(corr)
 	max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
-	if max_idx != 0:
-		print "max of autocorrelation happen at position [%d]" % max_idx
-	tmp_corr = corr
-	corr = tmp_corr / tmp_corr[max_idx]
+	
+	half_len = autocorrelation_length//2
 	auto_bank = numpy.zeros(autocorrelation_length, dtype = 'cdouble')
-	if max_idx > autocorrelation_length // 2 + 1:
-		auto_bank[::-1] = numpy.concatenate((corr[(-autocorrelation_length // 2 + max_idx):],corr[:(-autocorrelation_length // 2 + max_idx)]))
-	elif max_idx == autocorrelation_length // 2 + 1:
-		auto_bank[::-1] = numpy.copy(corr)
-	else:
-		auto_bank[::-1] = numpy.concatenate((corr[(-autocorrelation_length // 2 + max_idx):],corr[:(autocorrelation_length // 2 + 1 + max_idx)]))
+	if max_idx == 0:
+		auto_bank[::-1] = numpy.concatenate((corr[-half_len:],corr[:half_len+1]))
+		auto_bank /= corr[max_idx]
+	else:	
+		print "Warning: max of autocorrelation happen at position [%d]" % max_idx
+		temp_idx = (n_temp-1)//2
+		temp_corr = numpy.concatenate((corr[-temp_idx:], corr[:-temp_idx]))
+		max_idx = numpy.where(abs(temp_corr) == max(abs(temp_corr)))[0][0]
+		
+		if max_idx-half_len<0 or max_idx+half_len+1>n_temp:
+			raise ValueError, "cannot generate cross-correlation of the given (autocorrelation) length, insufficient data"
+		else:
+			auto_bank[::-1] = temp_corr[max_idx-half_len:max_idx+half_len+1]
+			auto_bank /= temp_corr[max_idx]
+	
 	return auto_bank
 
 def normalized_convolv(a, b, autocorrelation_length = 201):
