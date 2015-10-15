@@ -581,7 +581,7 @@ void ssvkernel_from_hist(gsl_vector * y_hist_input, gsl_vector * tin, gsl_matrix
 //	gsl_vector * temp = gsl_vector_alloc(M);
 	gsl_vector * WIN = gsl_vector_alloc(M);
 
-	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, temp);
+//	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, temp);
 	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, WIN);
 
 
