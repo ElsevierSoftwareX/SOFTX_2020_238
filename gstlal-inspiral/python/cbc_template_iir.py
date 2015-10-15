@@ -472,7 +472,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 
 
 	if is_freq_whiten:
-		hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
+		# hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
 		lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
 		return lalwhiten_amp, lalwhiten_phase
 
