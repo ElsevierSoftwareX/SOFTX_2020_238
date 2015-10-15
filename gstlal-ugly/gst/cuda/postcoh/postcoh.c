@@ -37,7 +37,7 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
-#define EPSILON 1  
+#define EPSILON 1e-6
 
 static void additional_initializations(GType type)
 {
@@ -792,7 +792,7 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
 {
-	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->exe_len];
+	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->exe_len], peak_cur;
 	for(iifo=0; iifo<nifo; iifo++) {
 		final_peaks = 0;
 		PeakList *pklist = state->peak_list[iifo];
@@ -803,7 +803,8 @@ static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
 			 * it means that only one detector is in action,
 			 * we abandon this peak
 			 * */
-			if (abs(pklist->maxsnglsnr[peak_pos[ipeak]]- pklist->cohsnr[ipeak]) > EPSILON) {
+			peak_cur = peak_pos[ipeak];
+			if (pklist->cohsnr[peak_cur] > 0 && sqrt(pklist->cohsnr[peak_cur]) - pklist->maxsnglsnr[peak_cur] > EPSILON) {
 				tmp_peak_pos[final_peaks++] = peak_pos[ipeak];
 			}
 
@@ -933,7 +934,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
 
-	//cuda_postcoh_rm_invalid_peak(state);
+	cuda_postcoh_rm_invalid_peak(state);
 	int allnpeak = 0, iifo, nifo = state->nifo;
 	int hist_trials = postcoh->hist_trials;
 
@@ -1074,7 +1075,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			postcoh->stream));
 
 
-			printf("gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
+			//printf("gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 			/* copy the snglsnr to the right cuda memory */
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){

@@ -35,6 +35,7 @@
 #include "postcoh_filesink.h"
 #include "postcoh_table_utils.h"
 
+#define EPSILON 1e-6
 enum 
 {
 	PROP_0,
@@ -611,6 +612,14 @@ postcoh_filesink_cleanup_xml (PostcohFilesink * sink)
   return TRUE;
 }
 
+static gboolean postcoh_filesink_is_invalid_background(PostcohTable *table)
+{
+	gboolean is_invalid = FALSE;
+	if (table->is_background == 1 && table->cohsnr - table->maxsnglsnr < EPSILON)
+		is_invalid = TRUE;
+	return is_invalid;
+
+}
 static GstFlowReturn
 postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 {
@@ -619,9 +628,12 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 
   XmlTable *xtable = sink->xtable;
   int rc;
+  gboolean is_invalid = FALSE;
 
 
   for(; table<table_end; table++) {
+	is_invalid = postcoh_filesink_is_invalid_background(table);
+	if (!is_invalid) {
         GString *line = g_string_new("\t\t\t\t");
 	g_string_append_printf(line, "%d%s", table->end_time.gpsSeconds, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->end_time.gpsNanoSeconds, xtable->delimiter->str);
@@ -645,6 +657,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	if (rc < 0)
 		return GST_FLOW_ERROR;
         g_string_free(line, TRUE);
+	}
   }
 
   GST_LOG_OBJECT (sink,
