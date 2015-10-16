@@ -1,3 +1,9 @@
+gstlal-calibration (0.5.5-1) unstable; urgency=low
+
+  * Minor bug fixes to typos
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 16 Oct 2015 01:09:00 -0500
+
 gstlal-calibration (0.5.4-1) unstable; urgency=low
 
   * Bug fixes and a few small feature additions including averaging

@@ -173,7 +173,7 @@ parser.add_option("--no-kappapu", action = "store_true", help = "Set this to tur
 parser.add_option("--no-kappaa", action = "store_true", help = "Set this to turn off the calculation of \kappa_a.")
 parser.add_option("--no-kappac", action = "store_true", help = "Set this to turn off the calculation of \kappa_c.")
 parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn off the calculation of f_cc.")
-parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 60, help = "Time over which to average the time-varying calibration factors (\kappas), given in seconds. (Default = 60 seconds)")
+parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 64, help = "Time over which to average the time-varying calibration factors (\kappas), given in seconds. (Default = 64 seconds)")
 parser.add_option("--apply-kappaa", action = "store_true", help = "Set this to have the \kappa_a factors multiply the actuation chain.")
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
