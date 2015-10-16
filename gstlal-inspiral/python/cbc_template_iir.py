@@ -677,8 +677,14 @@ class Bank(object):
 			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
 
 			
+	                h_pad1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
+	                h_pad1[-len(h):] = h
+
+			norm_h1 = numpy.sqrt(abs(numpy.dot(h_pad1, numpy.conj(h_pad1))))
+	                h_pad1 /= norm_h1
+			
 			# compute the SNR
-			spiir_match = abs(numpy.dot(u_rev_pad, h_pad))
+			spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad1)))/numpy.sqrt(2)
 			if(abs(original_epsilon - epsilon) < 1e-5):
 			    original_match = spiir_match
 			    original_filters = len(a1)
