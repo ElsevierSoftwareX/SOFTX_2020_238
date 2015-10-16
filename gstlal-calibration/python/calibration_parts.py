@@ -33,7 +33,7 @@ def gate_other_with_strain(pipeline, other, strain):
 	return other
 
 def mkqueue(pipeline, head):
-	return pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND * 1000)
+	return pipeparts.mkqueue(pipeline, head, max_size_time = 0, max_size_buffers = 0, max_size_bytes = 0)
 	
 def mkaudiorate(pipeline, head):
 	return pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
@@ -45,7 +45,7 @@ def write_graph(demux, pipeline, name):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
 
 def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
-	head = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = gst.SECOND * 100)
+	head = mkqueue(pipeline, None)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
 	head = mkreblock(pipeline, head)
 	return head
@@ -111,17 +111,16 @@ def list_srcs(pipeline, *args):
 		out.append(mkqueue(pipeline, src))
 	return tuple(out)
 
-def average_calib_factors(pipeline, head, var, expected, N, caps, default, statevector):
+def average_calib_factors(pipeline, head, var, expected, averaging_time, caps, default, statevector, td):
+	averaging_rate = 16
+	N = averaging_time * averaging_rate
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkgate(pipeline, mkqueue(pipeline, head), control = mkqueue(pipeline, statevector), threshold = 1)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [[0,1]]) 
-	head = mkaudiorate(pipeline, head)
-	head = mkreblock(pipeline, head)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", min = expected - var, max = expected + var, default = default)
-	head = pipeparts.mkmean(pipeline, head, n = N, type = 1, moment = 1)
-	head = mkaudiorate(pipeline, head)
-	head = mkreblock(pipeline, head)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", min = expected - var, max = expected + var, default = expected)
+	head = resample(pipeline, head, "audio/x-raw-float, rate=%d" % averaging_rate)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(N)/N], time_domain = td)
+	head = resample(pipeline, head, caps)
 	return head
 
 def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):

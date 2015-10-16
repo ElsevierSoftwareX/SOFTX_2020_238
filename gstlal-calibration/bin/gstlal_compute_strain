@@ -259,7 +259,7 @@ if options.wings is not None and options.data_source != "frames":
 if options.wings is not None and (options.wings % (options.frames_per_file * options.frame_duration)) and (options.wings > (options.frames_per_file * options.frame_duration)):
 	raise ValueError("--wings must be an integer multiple of --frames-per-file * --frame-duration when --wings is greater than --frames-per-file * --frame-duration")
 
-if options.wings is not None and (options.wings < (options.frames_per_file * options.frame_duration)) and (options.gps_start_time % (options.frames_per_file * options.frame_duration) != options.wings):
+if options.wings is not None and (options.wings < (options.frames_per_file * options.frame_duration)) and (((int(options.gps_start_time)+options.wings) % (options.frames_per_file * options.frame_duration) != 0) or ((int(options.gps_end_time)-options.wings) % (options.frames_per_file * options.frame_duration) != 0)):
 	raise ValueError("when you want --wings < --frames-per-file * --frame-duration just set your GPS start and end times to be the value of --wings before and after an integer second boundarty of --frames-per-file * --frame-duration")
 
 if options.ifo is None:
@@ -742,8 +742,8 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 		ktstR, ktstI = calibration_parts.compute_kappatst_from_filters_file(pipeline, calibration_parts.mkqueue(pipeline, ktst_derrWftstR), calibration_parts.mkqueue(pipeline, ktst_derrWftstI), calibration_parts.mkqueue(pipeline, ktst_tstexcR), calibration_parts.mkqueue(pipeline, ktst_tstexcI), calibration_parts.mkqueue(pipeline, pcalfp_derrfpR), calibration_parts.mkqueue(pipeline, pcalfp_derrfpI), EP1_real, EP1_imag, compute_calib_factors_caps, compute_calib_factors_complex_caps)
 		 
 	if not options.no_dq_vector:
-		ktstR = calibration_parts.average_calib_factors(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
-		ktstI = calibration_parts.average_calib_factors(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
+		ktstR = calibration_parts.average_calib_factors(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
+		ktstI = calibration_parts.average_calib_factors(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
 	ktstRtee = pipeparts.mktee(pipeline, ktstR)
 	ktstItee = pipeparts.mktee(pipeline, ktstI)
 	if not options.no_kappatst:
@@ -783,8 +783,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	elif options.factors_from_filters_file:
 		kpuR, kpuI = calibration_parts.compute_kappapu_from_filters_file(pipeline, EP3_real, EP3_imag, calibration_parts.mkqueue(pipeline, AfctrlR), calibration_parts.mkqueue(pipeline, AfctrlI), calibration_parts.mkqueue(pipeline, ktstRtee), calibration_parts.mkqueue(pipeline, ktstItee), EP4_real, EP4_imag, compute_calib_factors_caps, compute_calib_factors_complex_caps)
 	if not options.no_dq_vector:
-		kpuR = calibration_parts.average_calib_factors(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
-		kpuI = calibration_parts.average_calib_factors(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
+		kpuR = calibration_parts.average_calib_factors(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
+		kpuI = calibration_parts.average_calib_factors(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
 	kpuRtee = pipeparts.mktee(pipeline, kpuR)
 	kpuItee = pipeparts.mktee(pipeline, kpuI)
 
@@ -798,8 +798,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		elif options.factors_from_filters_file:
 			kaR, kaI = calibration_parts.compute_kappaa_from_filters_file(pipeline, calibration_parts.mkqueue(pipeline, AfctrlR), calibration_parts.mkqueue(pipeline, AfctrlI), EP4_real, EP4_imag, EP5_real, EP5_imag, compute_calib_factors_caps, compute_calib_factors_complex_caps)
 		if not options.no_dq_vector:
-			kaR = calibration_parts.average_calib_factors(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
-			kaI = calibration_parts.average_calib_factors(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
+			kaR = calibration_parts.average_calib_factors(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
+			kaI = calibration_parts.average_calib_factors(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
 		kaRtee = pipeparts.mktee(pipeline, kaR)
 		kaItee = pipeparts.mktee(pipeline, kaI)
 		kaRout = calibration_parts.mkqueue(pipeline, kaRtee)
@@ -833,13 +833,13 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		if not options.no_kappac:
 			kc = calibration_parts.compute_kappac(pipeline, calibration_parts.mkqueue(pipeline, SRtee), calibration_parts.mkqueue(pipeline, SItee), compute_calib_factors_caps)
 			if not options.no_dq_vector:
-				kc = calibration_parts.average_calib_factors(pipeline, kc, options.kappac_ok_var, options.expected_kappac, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
+				kc = calibration_parts.average_calib_factors(pipeline, kc, options.kappac_ok_var, options.expected_kappac, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
 			kctee = pipeparts.mktee(pipeline, kc)
 			kcout = calibration_parts.mkqueue(pipeline, kctee)
 		if not options.no_fcc:
 			fcc = calibration_parts.compute_fcc(pipeline, calibration_parts.mkqueue(pipeline, SRtee), calibration_parts.mkqueue(pipeline, SItee), kc_pcal_line_freq, compute_calib_factors_caps)
 			if not options.no_dq_vector:
-				fcc = calibration_parts.average_calib_factors(pipeline, fcc, options.fcc_ok_var, options.expected_fcc, options.factors_averaging_time*options.compute_factors_sr, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee))
+				fcc = calibration_parts.average_calib_factors(pipeline, fcc, options.fcc_ok_var, options.expected_fcc, options.factors_averaging_time, compute_calib_factors_caps, 1.0, calibration_parts.mkqueue(pipeline, statevectortee), td)
 			fcctee = pipeparts.mktee(pipeline, fcc)
 			fccout = calibration_parts.mkqueue(pipeline, fcctee)
 #
