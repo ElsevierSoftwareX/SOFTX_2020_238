@@ -116,7 +116,6 @@ def average_calib_factors(pipeline, head, var, expected, averaging_time, caps, d
 	N = averaging_time * averaging_rate
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkgate(pipeline, mkqueue(pipeline, head), control = mkqueue(pipeline, statevector), threshold = 1)
 	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", min = expected - var, max = expected + var, default = expected)
 	head = resample(pipeline, head, "audio/x-raw-float, rate=%d" % averaging_rate)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(N)/N], time_domain = td)
