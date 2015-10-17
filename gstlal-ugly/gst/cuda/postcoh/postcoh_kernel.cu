@@ -425,9 +425,9 @@ __global__ void ker_coh_max_and_chisq
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
 			if (ipix < 2) {
-			printf("ipeak %d, trial %d, dk[0].re %f, dk[0].im %f," 
+			printf("ipeak %d, ipix %d, trial %d, dk[0].re %f, dk[0].im %f," 
 					"dk[1].re %f, dk[1].im %f, dk[2].re %f, dk[2].im %f,"
-					"snr %f\n", ipeak, itrial, dk[0].re, dk[0].im,
+					"snr %f\n", ipeak, ipix, itrial, dk[0].re, dk[0].im,
 				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_tmp);
 			}
 #endif
@@ -486,7 +486,7 @@ __global__ void ker_coh_max_and_chisq
 		}
 		if (threadIdx.x == 0)
 		{
-			coh_snr[peak_cur + output_offset]			= snr_shared[0];
+			coh_snr[peak_cur + output_offset]		= snr_shared[0];
 			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
 			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
 
@@ -549,8 +549,8 @@ __global__ void ker_coh_max_and_chisq
 				{
 
 					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
-		//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 				}
+		//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 
 			}
 
@@ -582,7 +582,9 @@ __global__ void ker_coh_max_and_chisq
 				/* NOTE: The snr is stored channel-wise */
 				// The background cohsnr should be obtained coherently as well.
 				if (NtOff == 0)
-					dk[j] = snr[j][((start_exe + peak_cur - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
+					/* FIXME: how we select a background trigger, see the old way (commented) and the new way. */
+					//dk[j] = snr[j][((start_exe + peak_cur - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + peak_cur + len) % len) * templateN + tmplt_cur ]; 	
 				else
 					dk[j] = snr[j][((start_exe + peak_cur + NtOff - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
 			}
@@ -604,9 +606,9 @@ __global__ void ker_coh_max_and_chisq
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
 			if (ipix < 2) {
-			printf("ipeak %d, trial %d, dk[0].re %f, dk[0].im %f," 
+			printf("ipeak %d, ipix %d, trial %d, dk[0].re %f, dk[0].im %f," 
 					"dk[1].re %f, dk[1].im %f, dk[2].re %f, dk[2].im %f,"
-					"snr %f\n", ipeak, itrial, dk[0].re, dk[0].im,
+					"snr %f\n", ipeak, ipix, itrial, dk[0].re, dk[0].im,
 				       	dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_tmp);
 			}
 #endif
@@ -665,7 +667,7 @@ __global__ void ker_coh_max_and_chisq
 		}
 		if (threadIdx.x == 0)
 		{
-			coh_snr[peak_cur + output_offset]			= snr_shared[0];
+			coh_snr[peak_cur + output_offset]		= snr_shared[0];
 			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
 			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
 
