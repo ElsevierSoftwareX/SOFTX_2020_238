@@ -37,7 +37,7 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
-#define EPSILON 1e-6
+#define EPSILON 1e-3
 
 static void additional_initializations(GType type)
 {
@@ -790,14 +790,46 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 }
 
-static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
+static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
+{
+	for (int i=0; i<state->cur_nifo; i++) {
+		if (strncmp(state->cur_ifos+2*i, IFO_MAP[cur_ifo], 2) == 0)
+			return TRUE;
+	}
+	return FALSE;
+
+}
+
+static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int hist_trials, int exe_len)
+{
+	int ipeak, npeak, peak_cur, itrial, background_cur, left_backgrounds = 0;
+	npeak = pklist->npeak[0];
+	for (ipeak=0; ipeak<npeak; ipeak++) {
+		peak_cur = pklist->peak_pos[ipeak];
+		for (itrial=1; itrial<=hist_trials; itrial++) {
+			background_cur = itrial*exe_len + peak_cur;
+			if ( sqrt(pklist->cohsnr[background_cur]) - pklist->maxsnglsnr[peak_cur] > EPSILON)
+				left_backgrounds++;
+			else
+				pklist->cohsnr[background_cur] = -1;
+		}
+	}
+	return left_backgrounds;
+}
+
+static int cuda_postcoh_rm_invalid_peak(PostcohState *state)
 {
 	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->exe_len], peak_cur;
+	PeakList *pklist; 
+	int *peak_pos;
+	int left_entries = 0;
+
 	for(iifo=0; iifo<nifo; iifo++) {
+		if(is_cur_ifo_has_data(state, iifo)) {
 		final_peaks = 0;
-		PeakList *pklist = state->peak_list[iifo];
+		pklist= state->peak_list[iifo];
 		npeak = pklist->npeak[0];
-		int *peak_pos = pklist->peak_pos;
+		peak_pos = pklist->peak_pos;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			/* if the difference of maximum single snr and coherent snr is ignorable,
 			 * it means that only one detector is in action,
@@ -813,17 +845,13 @@ static	void cuda_postcoh_rm_invalid_peak(PostcohState *state)
 		npeak = final_peaks;
 		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
 		pklist->npeak[0] = npeak;
+		/* mark background triggers which do not pass the test */
+		left_entries += npeak;
+		left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, state->hist_trials, state->exe_len);
+	
+		}
 	}
-
-}
-
-static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
-{
-	for (int i=0; i<state->cur_nifo; i++) {
-		if (strncmp(state->cur_ifos+2*i, IFO_MAP[cur_ifo], 2) == 0)
-			return TRUE;
-	}
-	return FALSE;
+	return left_entries;
 
 }
 
@@ -900,6 +928,8 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			for(ipeak=0; ipeak<npeak; ipeak++) {
 				int *peak_pos = pklist->peak_pos;
 				peak_cur = peak_pos[ipeak];
+				/* check if cohsnr pass the valid test */
+				if (pklist->cohsnr[itrial*exe_len + peak_cur] > 0) {
 				output->end_time = end_time[ipeak];
 				output->is_background = 1;
 				strncpy(output->ifos, state->cur_ifos, ifos_size);
@@ -919,6 +949,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 				output++;
 			}
+			}
 		}
 		}
 	}
@@ -933,22 +964,10 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstCaps *caps = GST_PAD_CAPS(srcpad);
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
+	int left_entries = 0;
 
-	cuda_postcoh_rm_invalid_peak(state);
-	int allnpeak = 0, iifo, nifo = state->nifo;
-	int hist_trials = postcoh->hist_trials;
-
-	for(iifo=0; iifo<nifo; iifo++) {
-		if(is_cur_ifo_has_data(state, iifo)) {
-			if (state->cur_nifo == state->nifo)
-				allnpeak += state->peak_list[iifo]->npeak[0]* (1 + hist_trials);
-			else
-				allnpeak += state->peak_list[iifo]->npeak[0];
-		}
-	};
-
-
-	int out_size = sizeof(PostcohTable) * allnpeak ;
+	left_entries = cuda_postcoh_rm_invalid_peak(state);
+	int out_size = sizeof(PostcohTable) * left_entries ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
