@@ -17,9 +17,9 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include "postcoh_table_utils.h"
+#include "postcohinspiral_table_utils.h"
 
-void postcoh_table_init(XmlTable *table)
+void postcohinspiral_table_init(XmlTable *table)
 {
     table->tableName = g_string_new("postcoh:table");
 

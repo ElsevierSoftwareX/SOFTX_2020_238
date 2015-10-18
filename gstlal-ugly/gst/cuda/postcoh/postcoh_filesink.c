@@ -33,9 +33,9 @@
 #include <string.h>
 #include <math.h>
 #include "postcoh_filesink.h"
-#include "postcoh_table_utils.h"
+#include "postcohinspiral_table_utils.h"
 
-#define EPSILON 1e-6
+#define EPSILON 1e-3
 enum 
 {
 	PROP_0,
@@ -523,7 +523,7 @@ postcoh_filesink_start_xml(PostcohFilesink *sink)
 
   sink->xtable = (XmlTable *)malloc(sizeof(XmlTable));
   XmlTable * xtable = sink->xtable;
-  postcoh_table_init(xtable);
+  postcohinspiral_table_init(xtable);
     // Add the Table Node
     rc = xmlTextWriterStartElement(writer, BAD_CAST "Table");
 
@@ -612,7 +612,7 @@ postcoh_filesink_cleanup_xml (PostcohFilesink * sink)
   return TRUE;
 }
 
-static gboolean postcoh_filesink_is_invalid_background(PostcohTable *table)
+static gboolean postcoh_filesink_is_invalid_background(PostcohInspiralTable *table)
 {
 	gboolean is_invalid = FALSE;
 	if (table->is_background == 1 && table->cohsnr - table->maxsnglsnr < EPSILON)
@@ -623,8 +623,8 @@ static gboolean postcoh_filesink_is_invalid_background(PostcohTable *table)
 static GstFlowReturn
 postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 {
-  PostcohTable *table = (PostcohTable *) GST_BUFFER_DATA(buf);
-  PostcohTable *table_end = (PostcohTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
+  PostcohInspiralTable *table = (PostcohInspiralTable *) GST_BUFFER_DATA(buf);
+  PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 
   XmlTable *xtable = sink->xtable;
   int rc;

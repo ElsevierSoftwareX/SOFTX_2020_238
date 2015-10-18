@@ -33,9 +33,9 @@
 #define MAX_SKYMAP_FNAME_LEN 50
 
 typedef struct
-tagPostcohTable
+tagPostcohInspiralTable
 {
-  struct tagPostcohTable *next;
+  struct tagPostcohInspiralTable *next;
   LIGOTimeGPS	end_time;
   CHAR		is_background;
   CHAR		ifos[MAX_ALLIFO_LEN];
@@ -51,5 +51,5 @@ tagPostcohTable
   REAL4		far;
   CHAR		skymap_fname[MAX_SKYMAP_FNAME_LEN];			// location of skymap
 }
-PostcohTable;
+PostcohInspiralTable;
 #endif /* __POSTCOH_TABLE_H */

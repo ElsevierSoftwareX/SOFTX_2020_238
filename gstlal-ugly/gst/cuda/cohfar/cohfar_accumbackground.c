@@ -41,7 +41,7 @@
  * stuff from here
  */
 
-#include <postcoh/postcoh_table.h>
+#include <postcoh/postcohinspiral_table.h>
 #include <cohfar/background_stats_utils.h>
 #include <cohfar/cohfar_accumbackground.h>
 
@@ -122,7 +122,7 @@ static gboolean
 cohfar_accumbackground_get_unit_size (GstBaseTransform * base, GstCaps * caps,
     guint * size)
 {
-	*size = sizeof(PostcohTable);
+	*size = sizeof(PostcohInspiralTable);
   return TRUE;
 }
 
@@ -194,17 +194,17 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 
 	int icombo, outentries = 0;
 	BackgroundStats **stats = element->stats;
-	PostcohTable *intable = (PostcohTable *) GST_BUFFER_DATA(inbuf);
-	PostcohTable *intable_end = (PostcohTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
-	PostcohTable *outtable = (PostcohTable *) GST_BUFFER_DATA(outbuf);
+	PostcohInspiralTable *intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
+	PostcohInspiralTable *intable_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
+	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	for (; intable<intable_end; intable++) {
-		printf("is_back %d\n", intable->is_background);
+		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			icombo = get_icombo(intable->ifos);
 			background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 		} else { /* coherent trigger entry */
-			memcpy(outtable, intable, sizeof(PostcohTable));
+			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 			outentries++;
 		} 
@@ -223,7 +223,7 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf);
 	GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf);
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
-	GST_BUFFER_SIZE(outbuf) = sizeof(PostcohTable) * outentries;
+	GST_BUFFER_SIZE(outbuf) = sizeof(PostcohInspiralTable) * outentries;
 
 
   GST_LOG_OBJECT (element, "transformed %s+%s buffer of %ld bytes, ts %"

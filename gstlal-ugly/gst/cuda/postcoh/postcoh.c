@@ -30,7 +30,7 @@
 #include <math.h>
 #include "postcoh.h"
 #include "postcoh_utils.h"
-#include "postcoh_table_utils.h"
+#include "postcohinspiral_table_utils.h"
 #include <cuda_debug.h>
 
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
@@ -859,7 +859,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 {
 	PostcohState *state = postcoh->state;
 
-	PostcohTable *output = (PostcohTable *) GST_BUFFER_DATA(outbuf);
+	PostcohInspiralTable *output = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	int iifo = 0, nifo = state->nifo;
 	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
 	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len;
@@ -967,7 +967,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	int left_entries = 0;
 
 	left_entries = cuda_postcoh_rm_invalid_peak(state);
-	int out_size = sizeof(PostcohTable) * left_entries ;
+	int out_size = sizeof(PostcohInspiralTable) * left_entries ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (ret != GST_FLOW_OK) {
