@@ -86,7 +86,6 @@ GST_BOILERPLATE_FULL(
 enum property {
 	PROP_0,
 	PROP_IFOS,
-	PROP_HIST_TRIALS,
 	PROP_UPDATE_INTERVAL,
 	PROP_HISTORY_FNAME,
 	PROP_OUTPUT_FNAME
@@ -141,32 +140,14 @@ static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, G
 
 	switch(direction) {
 	case GST_PAD_SRC:
-		/*
-		 * background entries will be eliminated from the table
-		 */
-
-		g_mutex_lock(element->prop_lock);
-		while(element->hist_trials == NOT_INIT)
-			g_cond_wait(element->prop_avail, element->prop_lock);
-
-		*othersize = size * (1 + element->hist_trials);
-		g_mutex_unlock(element->prop_lock);
-
-		break;
-
 	case GST_PAD_SINK:
 		/*
 		 * background entries will be eliminated from the table
 		 */
 
-		g_mutex_lock(element->prop_lock);
-		while(element->hist_trials == NOT_INIT)
-			g_cond_wait(element->prop_avail, element->prop_lock);
+		*othersize = size;
 
-		*othersize = size / (1 + element->hist_trials);
-		g_mutex_unlock(element->prop_lock);
 		break;
-
 
 	case GST_PAD_UNKNOWN:
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
@@ -206,21 +187,12 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start))
 		element->t_roll_start = GST_BUFFER_TIMESTAMP(inbuf);
-	/*
-	 * set the outbuf meta data
-	 */
-	GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf);
-	GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf);
-	GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf);
-	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
-	GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf)/(1+element->hist_trials);
-
 
 	/*
 	 * update background rates
 	 */
 
-	int icombo;
+	int icombo, outentries = 0;
 	BackgroundStats **stats = element->stats;
 	PostcohTable *intable = (PostcohTable *) GST_BUFFER_DATA(inbuf);
 	PostcohTable *intable_end = (PostcohTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
@@ -229,14 +201,12 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
-			if (intable->cohsnr > intable->maxsnglsnr) {
-				printf("update\n");
-				icombo = get_icombo(intable->ifos);
-				background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
-			}
+			icombo = get_icombo(intable->ifos);
+			background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohTable));
 			outtable++;
+			outentries++;
 		} 
 	}
 
@@ -246,6 +216,15 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		background_stats_to_xml(stats, element->ncombo, element->output_fname);
 		element->t_roll_start = t_cur;
 	}
+	/*
+	 * set the outbuf meta data
+	 */
+	GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf);
+	GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf);
+	GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf);
+	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
+	GST_BUFFER_SIZE(outbuf) = sizeof(PostcohTable) * outentries;
+
 
   GST_LOG_OBJECT (element, "transformed %s+%s buffer of %ld bytes, ts %"
       GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
@@ -323,13 +302,6 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			element->output_fname = g_value_dup_string(value);
 			break;
 
-		case PROP_HIST_TRIALS:
-			g_mutex_lock(element->prop_lock);
-			element->hist_trials = g_value_get_int(value);
-			g_cond_broadcast(element->prop_avail);
-			g_mutex_unlock(element->prop_lock);
-			break;
-
 
 		case PROP_UPDATE_INTERVAL:
 			element->update_interval = g_value_get_int(value);
@@ -366,10 +338,6 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 
 		case PROP_OUTPUT_FNAME:
 			g_value_set_string(value, element->output_fname);
-			break;
-
-		case PROP_HIST_TRIALS:
-			g_value_set_int(value, element->hist_trials);
 			break;
 
 		case PROP_UPDATE_INTERVAL:
@@ -508,18 +476,6 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_HIST_TRIALS,
-		g_param_spec_int(
-			"hist-trials",
-			"history trials",
-			"history triggers that should be kept in times",
-			0, G_MAXINT, 1,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
-
-	g_object_class_install_property(
-		gobject_class,
 		PROP_UPDATE_INTERVAL,
 		g_param_spec_int(
 			"update-interval",
@@ -539,7 +495,6 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAccumbackgroundClass *kclass)
 {
 	element->stats = NULL;
-	element->hist_trials = NOT_INIT;
 	element->update_interval = NOT_INIT;
 	element->prop_lock = g_mutex_new();
 	element->prop_avail = g_cond_new();
