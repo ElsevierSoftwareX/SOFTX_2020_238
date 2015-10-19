@@ -61,7 +61,7 @@ dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.s
 		--inj-gracedb-far-threshold 0.0001 \
 		--control-peak-time 0 \
 		--fir-stride 1 \
-		--psd-fft-length 8 \
+		--psd-fft-length 16 \
 		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
 		--gracedb-group CBC \
 		--gracedb-search LowMass \

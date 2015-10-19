@@ -26,7 +26,7 @@
 #
 # See datasource.append_options() for generic options
 #
-#	+ `--psd-fft-length` [int] (s): FFT length, default 16s.
+#	+ `--psd-fft-length` [int] (s): FFT length, default 32s.  Note that 50% will be used for zero-padding.
 #	+ `--reference-psd: Don't measure PSDs, use this one instead
 #	+ `--overlap [int]: Set the factor that describes the overlap of the sub banks, must be even!
 #	+ `--autocorrelation-length [int]: The minimum number of samples to use for auto-chisquared, default 201 should be odd
@@ -644,7 +644,7 @@ def parse_command_line():
 
 	# generic data source options
 	datasource.append_options(parser)
-	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "FFT length, default 32s.  Note that 50% will be used for zero-padding.")
 
 	# reference_psd
 	parser.add_option("--reference-psd", help = "Don't measure PSDs, use this one instead")
