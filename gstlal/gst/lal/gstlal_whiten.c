@@ -300,6 +300,11 @@ static int make_workspace(GSTLALWhiten *element)
 		GST_ERROR_OBJECT(element, "failure creating Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
 	}
+	/* safety check in case numerical issues lead to the edge bins
+	 * being not exactly 0.  we require them to be exactly 0 in order
+	 * to affect the reset of the workspace between iterations */
+	g_assert_cmpfloat(hann_window->data->data[0], ==, 0);
+	g_assert_cmpfloat(hann_window->data->data[hann_window->data->length - 1], ==, 0);
 	if(!XLALResizeREAL8Sequence(hann_window->data, -zero_pad_length(element), fft_length(element))) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
@@ -726,8 +731,10 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 
 		/*
 		 * Copy data from input queue into time-domain workspace.
-		 * No need to explicitly zero-pad the time series because
-		 * the window function will do it for us.
+		 * We explicitly clear the zero padding region of the
+		 * workspace just in case there's an inf or a nan in there
+		 * because multiplication by the window won't be enough to
+		 * reset those values.
 		 *
 		 * Note:  the workspace's epoch is set to the timestamp of
 		 * the workspace's first sample, not the first sample of
@@ -735,7 +742,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * samples later).
 		 */
 
+		memset(&element->tdworkspace->data->data[0], 0, zero_pad * sizeof(*element->tdworkspace->data->data));
 		gst_audioadapter_copy_samples(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
+		memset(&element->tdworkspace->data->data[zero_pad + hann_length], 0, zero_pad * sizeof(*element->tdworkspace->data->data));
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + *outsamples - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
