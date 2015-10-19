@@ -95,7 +95,7 @@ page.subpages["summary"].sections["Pipeline Configuration"].add("""
 """ % (os.path.basename(__file__), __version__))
 
 # number of triggers
-page.subpages["summary"].add_section("Search Information", "Data Information")
+page.subpages["summary"].add_section("Search Information", "Search Information")
 tab, name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%snum_trigs_table.txt' % opts.output_user_tag[0]))
 if tab:
 	page.subpages["summary"].sections["Search Information"].add_table(tab[0], "Coinc events summary", "This table gives the number of coincident events")
@@ -106,7 +106,7 @@ if tab:
 	page.subpages["summary"].sections["Search Information"].add_table(tab[0], "Live time summary", "This table gives the summary of the live time")
 
 imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*HORIZON*.png'))
-page.subpages["summary"].sections["Data Information"].add_table(imgtable, "Horizon Distance", "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form. ")
+page.subpages["summary"].sections["Search Information"].add_table(imgtable, "Horizon Distance", "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form. ")
 
 ### INJ PARAM PAGE ###
 page.add_subpage("injection_params","Injection Parameters", "Injection Parameters")
@@ -162,11 +162,14 @@ page.subpages["injection_params_acc"].sections["mchirp_param_acc"].add_table(img
 page.subpages["injection_params_acc"].add_section("eta_param_acc","Eta Parameter Accuracy")
 imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_scatter*.png'))
 page.subpages["injection_params_acc"].sections["eta_param_acc"].add_table(imgtable, "Eta Accuracy", "Accuracy of eta")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_hist*.png'))
-page.subpages["injection_params_acc"].sections["eta_param_acc"].add_table(imgtable, "Eta Accuracy", "Accuracy of eta")
+
+page.subpages["injection_params_acc"].add_section("mtotal_param_acc","Total Mass Parameter Accuracy")
+imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_mtotal_acc_frac_*.png'))
+page.subpages["injection_params_acc"].sections["mtotal_param_acc"].add_table(imgtable, "Total Mass Accuracy", "Accuracy of total mass")
 
 page.subpages["injection_params_acc"].add_section("time_param_acc","Time Parameter Accuracy")
 imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_scatter*.png'))
+
 page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgtable, "Time Accuracy", "Accuracy of time")
 imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_hist*.png'))
 page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgtable, "Time Accuracy", "Accuracy of time")
@@ -199,6 +202,7 @@ H1H2L1 time.
 
 page.subpages["missed_found"].add_section("found_missed_mchirp","Found / Missed Chirp Mass")
 page.subpages["missed_found"].add_section("found_missed_mtotal","Found / Missed Total Mass")
+page.subpages["missed_found"].add_section("found_missed_eta","Found / Missed Eta")
 page.subpages["missed_found"].add_section("found_missed_time","Found / Missed Time")
 page.subpages["missed_found"].add_section("found_missed_chi","Found / Missed Spin")
 
@@ -215,6 +219,9 @@ for tag in opts.output_user_tag:
 
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mtotal_*.png' % tag))
 	page.subpages["missed_found"].sections["found_missed_mtotal"].add_table(imgtable, "Missed Found Effective Distance vs M total: %s" % tag, "Effective distance of found and missed injections as a function of total mass")
+
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag))
+	page.subpages["missed_found"].sections["found_missed_eta"].add_table(imgtable, "Missed Found Chirp Distance vs Eta: %s" % tag, "Effective distance of found and missed injections as a function of symmetric mass ratio eta")
 
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag))
 	page.subpages["missed_found"].sections["found_missed_time"].add_table(imgtable, "Missed Found vs Time: %s" % tag, "Effective distance of found and missed injections as a function of time")
@@ -280,15 +287,13 @@ if not opts.open_box:
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'))
 	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Likelihood Ratios","")
 
-	page.subpages["background"].add_section("event parameters","Background Event Parameters")
+	page.subpages["background"].add_section("background triggers","Background Triggers")
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'))
-	page.subpages["background"].sections["event parameters"].add_table(imgtable, "","")
+	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'))
-	page.subpages["background"].sections["event parameters"].add_table(imgtable, "","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_bgparams_multi*_snreff*.png'))
-	page.subpages["background"].sections["event parameters"].add_table(imgtable, "","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_bgparams_multi*_dt_*.png'))
-	page.subpages["background"].sections["event parameters"].add_table(imgtable, "","")
+	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
+	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'))
+	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
 
 	### CHISQ ###
 	page.add_subpage("chisq","Chi-squared", "Chi-squared")
