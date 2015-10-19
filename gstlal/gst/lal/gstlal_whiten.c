@@ -121,6 +121,9 @@
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
 
 
+#undef NORMDEBUGGING
+
+
 /*
  * ============================================================================
  *
@@ -740,13 +743,19 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * Apply (zero-padded) Hann window.
 		 */
 
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square before window = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+		{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square before window = %.16g\n", s / kk); }
+#endif
 		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->hann_window)) {
 			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after window = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+		{ unsigned kk; for(kk = 0; kk < zero_pad; kk++) if(element->tdworkspace->data->data[kk] != 0.) { fprintf(stderr, "\t<-- non-zero samples left of Hann window (index %d)\n", kk); break; } }
+		{ unsigned kk; for(kk = zero_pad + hann_length; kk < element->tdworkspace->data->length; kk++) if(element->tdworkspace->data->data[kk] != 0.) { fprintf(stderr, "\t<-- non-zero samples right of Hann window (index %d)\n", kk); break; } }
+		{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after window = %.16g\n", s / kk); }
+#endif
 
 		/*
 		 * The next steps can be skipped if all we have are zeros
@@ -762,7 +771,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				XLALClearErrno();
 				return GST_FLOW_ERROR;
 			}
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+			{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }
+#endif
 
 			/*
 			 * Retrieve the PSD.
@@ -821,7 +832,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				XLALClearErrno();
 				return GST_FLOW_ERROR;
 			}
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+			{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }
+#endif
 
 			/*
 			 * Transform to time domain.
@@ -832,7 +845,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				XLALClearErrno();
 				return GST_FLOW_ERROR;
 			}
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+			{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }
+#endif
 
 			/* 
 			 * Normalize the time series.
@@ -856,7 +871,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->hann_window->sumofsquares);
 			/* normalization constant has units of seconds */
 			XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after normalization = %.16g\n", s / kk); }*/
+#ifdef NORMDEBUGGING
+			{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after normalization = %.16g\n", s / kk); }
+#endif
 
 			/*
 			 * Verify the result is dimensionless.
@@ -881,6 +898,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 					element->output_history->data[i] += element->tdworkspace->data->data[i];
 			}
 			element->nonzero_output_history_length = element->output_history->length;
+#ifdef NORMDEBUGGING
+			{ unsigned kk; double s = 0; for(kk = 0; kk < hann_length / 2; kk++) s += pow(element->output_history->data[kk], 2); fprintf(stderr, "mean square of output = %.16g\n", s / kk); }
+#endif
 		} else
 			element->tdworkspace->sampleUnits = lalDimensionlessUnit;
 
