@@ -26,8 +26,8 @@ OUTPUT_SPLITBANK_TAG = ER8
 BANK_MCHIRP1 = bank_00_$(OUTPUT_SPLITBANK_TAG)_00.xml.gz
 BANK_MCHIRP2 = bank_00_$(OUTPUT_SPLITBANK_TAG)_01.xml.gz
 # The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
-APPROXIMANT1 = TaylorF2
-APPROXIMANT2 = SEOBNRv2_ROM_DoubleSpin
+APPROXIMANT1 = 0.00:$(MCHIRP_SPLIT):TaylorF2
+APPROXIMANT2 = $(MCHIRP_SPLIT):1000.0:SEOBNRv2_ROM_DoubleSpin
 
 #
 # Triggering parameters
@@ -70,7 +70,7 @@ ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES
 # Change as appropriate, whitespace is important
 # The common ER8 injection sets are here: https://ldas-jobs.cgca.uwm.edu/~scaudill/ER8/common_injections/original
 # Note that they do not currently contain the calculated SNRs; this message will be updated when they do
-INJECTIONS := 
+INJECTIONS := HL-INJECTIONS_45671_BNS1-1127271617-1114200.xml
 
 # GSTLAL_SEGMENTS Options
 SEG_SERVER=https://segments.ligo.org
@@ -114,21 +114,15 @@ include Makefile.offline_analysis_rules
 
 all : dag
 
+$(INJECTIONS):
+	gsiscp pcdev1.phys.uwm.edu:~scaudill/public_html/O1/common_injections/analysis_2/$@ ./
+
 BANK = $(notdir $(BANKORIGIN))
 $(BANK):
-	gsiscp atlas2.atlas.aei.uni-hannover.de:$(BANKORIGIN) $@
-$(BANK_MCHIRP1):$(BANK)
-	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_inspiral_bank_param_splitter
-	chmod u+x,g+x,o+x gstlal_inspiral_bank_param_splitter
-	./gstlal_inspiral_bank_param_splitter --output-tag $(OUTPUT_SPLITBANK_TAG) --value-split $(MCHIRP_SPLIT) --overlap $(OVERLAP) --sort-by mchirp --verbose $(BANK)
-%_split_bank.cache : $(BANK_MCHIRP1)
-	mkdir -p $*_split_bank_1
-	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_bank_splitter
-	chmod u+x,g+x,o+x gstlal_bank_splitter
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_1 --approximant $(APPROXIMANT1) --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
-	mkdir -p $*_split_bank_2
-	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank_2 --approximant $(APPROXIMANT2) --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
-	cat $@.1 $@.2 > $@
+	gsiscp atlas2.atlas.aei.uni-hannover.de:/home/tito/er8/bank/H1L1-UBERBANK_MAXM100_NS0p05_ER8HMPSD-1126033217-223200.xml.gz $@
+%_split_bank.cache : $(BANK)
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank --approximant $(APPROXIMANT1) --approximant $(APPROXIMANT2) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK)
 
 plots :
 	mkdir plots
@@ -142,7 +136,7 @@ tisi.xml :
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
-	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 1 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --ht-gate-threshold 50 $(ADDITIONAL_DAG_OPTIONS) $(CONDOR_COMMANDS)
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 1 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --ht-gate-threshold 50 $(ADDITIONAL_DAG_OPTIONS) $(CONDOR_COMMANDS) --copy-raw-results --singles-threshold 6.0
 
 H1_frame.cache:
 	# FIXME force the observatory column to actually be instrument
