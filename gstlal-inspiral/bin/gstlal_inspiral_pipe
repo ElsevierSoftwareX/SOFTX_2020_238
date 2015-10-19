@@ -178,14 +178,8 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 			ids = []
 			for n, f in enumerate(files):
 				# handle template bank clipping
-				if (n == 0) and (i == 0):
-					clipleft.append(0)
-				else:
-					clipleft.append(options.overlap / 2)
-				if (i == len(bank_groups) - 1) and (n == len(files) -1):
-					clipright.append(0)
-				else:
-					clipright.append(options.overlap / 2)
+				clipleft.append(options.overlap / 2)
+				clipright.append(options.overlap / 2)
 				ids.append("%d_%d" % (i, n))
 
 			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_SVD' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = svdJob.output_path)

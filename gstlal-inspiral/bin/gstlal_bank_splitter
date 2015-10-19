@@ -178,10 +178,6 @@ def sort_func((row, rows), column = options.sort_by):
 outputrows.sort(key=sort_func)
 
 for bank_count, (_, rows) in enumerate(outputrows):
-	if bank_count == 0:
-		rows = rows[options.overlap/2:]
-	if bank_count == len(outputrows) - 1:
-		rows = rows[:-options.overlap/2]
 	# just choose the first row to get mchirp
 	# FIXME this could certainly be better
 	approximant = assign_approximant(rows[0].mchirp) 
