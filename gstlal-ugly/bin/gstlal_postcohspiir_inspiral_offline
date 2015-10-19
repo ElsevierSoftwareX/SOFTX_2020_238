@@ -99,7 +99,7 @@ from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import datasource
-from gstlal import postcoh_output
+#from gstlal import postcoh_output
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
   pass
