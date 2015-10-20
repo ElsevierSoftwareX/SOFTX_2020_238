@@ -160,8 +160,7 @@ def binned_rates_from_samples(samples):
 	binnedarray = rate.BinnedArray(rate.NDBins((rate.LinearBins(lo, hi, nbins),)))
 	for sample in samples:
 		binnedarray[sample,] += 1.
-	rate.filter_array(binnedarray.array, rate.gaussian_window(5))
-	numpy.clip(binnedarray.array, 0.0, PosInf, binnedarray.array)
+	rate.filter_array(binnedarray.array, rate.gaussian_window(5), use_fft = False)
 	return binnedarray
 
 
