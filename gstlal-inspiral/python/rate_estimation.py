@@ -351,8 +351,12 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	bin_widths = upper - lower
 	if (bin_widths <= 0.).any():
 		raise ValueError("rate PDF bin sizes must be positive")
-	assert not numpy.isinf(bin_widths).any(), "infinite bin sizes not supported"
-	P = binned_array.array * bin_widths
+	pdf = binned_array.array
+	P = pdf * bin_widths
+	# fix NaNs in infinite-sized bins
+	P[numpy.isinf(bin_widths)] = 0.
+	assert (pdf >= 0.).all()
+	assert (P >= 0.).all()
 	if abs(P.sum() - 1.0) > 1e-13:
 		raise ValueError("rate PDF is not normalized")
 
@@ -361,17 +365,29 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	while P_sum < confidence:
 		if li <= 0 and ri >= len(P) - 1:
 			raise ValueError("failed to achieve requested confidence")
-		P_li = P[li - 1] if li > 0 else 0.
-		P_ri = P[ri + 1] if ri < len(P) - 1 else 0.
-		assert P_li >= 0. and P_ri >= 0.
-		if P_li > P_ri:
-			P_sum += P_li
+
+		if li > 0:
+			pdf_li = pdf[li - 1]
+			P_li = P[li - 1]
+		else:
+			pdf_li = 0.
+			P_li = 0.
+		if ri < len(P) - 1:
+			pdf_ri = pdf[ri + 1]
+			P_ri = P[ri + 1]
+		else:
+			pdf_ri = 0.
+			P_ri = 0.
+
+		if pdf_li > pdf_ri:
 			li -= 1
-		elif P_ri > P_li:
-			P_sum += P_ri
+			P_sum += P_li
+		elif pdf_ri > pdf_li:
 			ri += 1
+			P_sum += P_ri
 		else:
 			P_sum += P_li + P_ri
 			li = max(li - 1, 0)
 			ri = min(ri + 1, len(P) - 1)
+
 	return centres[mode_index], lower[li], upper[ri]
