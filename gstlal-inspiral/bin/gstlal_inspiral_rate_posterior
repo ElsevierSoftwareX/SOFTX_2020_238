@@ -238,7 +238,7 @@ def plot_rates(signal_rate, confidence_intervals = None):
 
 		for conf, segs in confidence_intervals:
 			for lo, hi in segs:
-				signal_axes.fill_between(x[lo:hi], y[lo:hi], 1e-8, color = "k", alpha = alphas[conf])
+				signal_axes.fill_between(x[lo:hi+1], y[lo:hi+1], 1e-8, color = "k", alpha = alphas[conf])
 
 	try:
 		fig.tight_layout()
