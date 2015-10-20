@@ -324,7 +324,7 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 		goto done;
 	}
 	GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_READONLY);
-	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, fd, 0);
 	if(!GST_BUFFER_DATA(*buf)) {
 		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));
 		gst_buffer_unref(*buf);
