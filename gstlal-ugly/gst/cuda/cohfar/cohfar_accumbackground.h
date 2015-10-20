@@ -49,24 +49,23 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstBaseTransformClass parent_class;
+	GstElementClass parent_class;
 } CohfarAccumbackgroundClass;
 
 
 typedef struct {
-	GstBaseTransform element;
+	GstElement element;
+
+	GstPad *sinkpad, *srcpad;
 
 	char *ifos;
 	int ncombo; // ifo combination
 	BackgroundStats **stats;
 
-	int hist_trials;
 	int update_interval;
 	gchar *history_fname;
 	gchar *output_fname;
 
-	GMutex *prop_lock;
-	GCond *prop_avail;
 	/*
 	 * timestamp book-keeping
 	 */

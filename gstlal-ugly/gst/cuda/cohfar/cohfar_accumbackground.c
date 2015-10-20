@@ -78,8 +78,8 @@ static void additional_initializations(GType type)
 GST_BOILERPLATE_FULL(
 	CohfarAccumbackground,
 	cohfar_accumbackground,
-	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM,
+	GstElement,
+	GST_TYPE_ELEMENT,
 	additional_initializations
 );
 
@@ -98,83 +98,30 @@ static void cohfar_accumbackground_get_property (GObject * object,
 
 /* vmethods */
 
-static gboolean
-cohfar_accumbackground_get_unit_size (GstBaseTransform * base, GstCaps * caps,
-    guint * size);
-static GstFlowReturn cohfar_accumbackground_transform (GstBaseTransform * base,
-    GstBuffer * inbuf, GstBuffer * outbuf);
-static gboolean cohfar_accumbackground_transform_size (GstBaseTransform * base,
-   GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
-    guint * othersize);
-static gboolean cohfar_accumbackground_event (GstBaseTransform * base,
-    GstEvent * event);
+static GstFlowReturn cohfar_accumbackground_chain (GstPad * pad, GstBuffer * inbuf);
+static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event);
 static void cohfar_accumbackground_dispose (GObject *object);
 
 /*
  * ============================================================================
  *
- *                     GstBaseTransform Method Overrides
+ *                     GstElement Method Overrides
  *
  * ============================================================================
  */
 
-static gboolean
-cohfar_accumbackground_get_unit_size (GstBaseTransform * base, GstCaps * caps,
-    guint * size)
-{
-	*size = sizeof(PostcohInspiralTable);
-  return TRUE;
-}
 
 /*
- * transform_size()
+ * chain()
  */
 
 
-static gboolean cohfar_accumbackground_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 {
-	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
-  GST_LOG_OBJECT (trans, "asked to transform size %d in direction %s",
-      size, direction == GST_PAD_SINK ? "SINK" : "SRC");
-
-
-	switch(direction) {
-	case GST_PAD_SRC:
-	case GST_PAD_SINK:
-		/*
-		 * background entries will be eliminated from the table
-		 */
-
-		*othersize = size;
-
-		break;
-
-	case GST_PAD_UNKNOWN:
-		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
-		return FALSE;
-	}
-
-  GST_LOG_OBJECT (trans, "transformed size %d to %d", size,
-      *othersize);
-
-
-	return TRUE;
-}
-
-
-
-
-/*
- * transform()
- */
-
-
-static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
-{
-	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(trans);
+	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(GST_OBJECT_PARENT(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 
-  GST_LOG_OBJECT (element, "transforming accum %s+%s buffer of %ld bytes, ts %"
+  GST_LOG_OBJECT (element, "receiving accum %s+%s buffer of %ld bytes, ts %"
       GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
@@ -189,24 +136,45 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 		element->t_roll_start = GST_BUFFER_TIMESTAMP(inbuf);
 
 	/*
-	 * update background rates
+	 * calculate output buffer entries
 	 */
-
 	int icombo, outentries = 0;
 	BackgroundStats **stats = element->stats;
 	PostcohInspiralTable *intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *intable_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
+	for (; intable<intable_end; intable++) 
+		if (intable->is_background == 0) 
+			outentries++;
+
+	/*
+	 * allocate output buffer
+	 */
+	GstBuffer *outbuf = NULL;
+	GstPad *srcpad = element->srcpad;
+	GstCaps *caps = GST_PAD_CAPS(srcpad);
+	
+	int out_size = sizeof(PostcohInspiralTable) * outentries ;
+	result = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
+	if (result != GST_FLOW_OK) {
+		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", result);
+		return result;
+	}
+
+	/*
+	 * update background rates
+	 */
+
+	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	for (; intable<intable_end; intable++) {
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
-			printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
+			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			icombo = get_icombo(intable->ifos);
 			background_stats_rates_update(intable->cohsnr, intable->chisq, stats[icombo]->rates);
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
-			outentries++;
 		} 
 	}
 
@@ -225,8 +193,10 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
 	GST_BUFFER_SIZE(outbuf) = sizeof(PostcohInspiralTable) * outentries;
 
+	gst_buffer_unref(inbuf);
+	result = gst_pad_push(srcpad, outbuf);
 
-  GST_LOG_OBJECT (element, "transformed %s+%s buffer of %ld bytes, ts %"
+  GST_LOG_OBJECT (element, "pushed %s+%s buffer of %ld bytes, ts %"
       GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(outbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
@@ -234,7 +204,6 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
       GST_BUFFER_SIZE(outbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
       GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
-
 
 	return result;
 }
@@ -250,9 +219,9 @@ static GstFlowReturn cohfar_accumbackground_transform(GstBaseTransform *trans, G
 
 /* handle events (search) */
 static gboolean
-cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
+cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 {
-  CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(base);
+  CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(GST_OBJECT_PARENT(pad));
 
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
@@ -267,7 +236,7 @@ cohfar_accumbackground_event (GstBaseTransform * base, GstEvent * event)
       break;
   }
 
-  return TRUE;
+  return gst_pad_event_default(pad, event);
 }
 
 
@@ -360,10 +329,6 @@ static void cohfar_accumbackground_dispose(GObject *object)
 {
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
-	g_mutex_free(element->prop_lock);
-	element->prop_lock = NULL;
-	g_cond_free(element->prop_avail);
-	element->prop_avail = NULL;
 	if(element->stats) {
 		// FIXME: free stats
 	}
@@ -378,8 +343,8 @@ static void cohfar_accumbackground_dispose(GObject *object)
 
 static void cohfar_accumbackground_base_init(gpointer gclass)
 {
+#if 1
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
-	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -414,12 +379,7 @@ static void cohfar_accumbackground_base_init(gpointer gclass)
 			)
 		)
 	);
-
-	transform_class->transform = GST_DEBUG_FUNCPTR(cohfar_accumbackground_transform);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(cohfar_accumbackground_transform_size);
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(cohfar_accumbackground_get_unit_size);
-	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_accumbackground_event);
-
+#endif
 }
 
 
@@ -492,10 +452,23 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
  */
 
 
-static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAccumbackgroundClass *kclass)
+static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAccumbackgroundClass *element_klass)
 {
+	GstElementClass *klass = GST_ELEMENT_CLASS(element_klass);
+	element->sinkpad = gst_pad_new_from_template(
+			gst_element_class_get_pad_template(klass, "sink"), "sink");
+	gst_element_add_pad(GST_ELEMENT(element), element->sinkpad);
+
+	element->srcpad = gst_pad_new_from_template(
+			gst_element_class_get_pad_template(klass, "src"), "src");
+	gst_element_add_pad(GST_ELEMENT(element), element->srcpad);
+
+	gst_pad_set_event_function(element->sinkpad,
+					GST_DEBUG_FUNCPTR(cohfar_accumbackground_sink_event));
+
+	gst_pad_set_chain_function(element->sinkpad,
+					GST_DEBUG_FUNCPTR(cohfar_accumbackground_chain));
+
 	element->stats = NULL;
 	element->update_interval = NOT_INIT;
-	element->prop_lock = g_mutex_new();
-	element->prop_avail = g_cond_new();
 }
