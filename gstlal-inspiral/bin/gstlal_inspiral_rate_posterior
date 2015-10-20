@@ -298,7 +298,7 @@ kwargs = {}
 if options.chain_file is not None:
 	kwargs["chain_file"] = h5py.File(options.chain_file)
 if options.samples is not None:
-	kwargs["nsamples"] = options.samples
+	kwargs["nsample"] = options.samples
 signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
 del progressbar
 
