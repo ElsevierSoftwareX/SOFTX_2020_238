@@ -1115,9 +1115,9 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	#
 
 	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Zero-lag", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 
 	#
 	# adjust bounds of plot
