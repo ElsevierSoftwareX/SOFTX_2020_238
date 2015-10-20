@@ -638,6 +638,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	g_string_append_printf(line, "%d%s", table->end_time.gpsSeconds, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->end_time.gpsNanoSeconds, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->livetime, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);

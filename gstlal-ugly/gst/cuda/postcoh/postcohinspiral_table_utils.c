@@ -29,6 +29,7 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->names, *g_string_new("postcoh:end_time"));
     g_array_append_val(table->names, *g_string_new("postcoh:end_time_ns"));
     g_array_append_val(table->names, *g_string_new("postcoh:is_background"));
+    g_array_append_val(table->names, *g_string_new("postcoh:livetime"));
     g_array_append_val(table->names, *g_string_new("postcoh:ifos"));
     g_array_append_val(table->names, *g_string_new("postcoh:pivotal_ifo"));
     g_array_append_val(table->names, *g_string_new("postcoh:tmplt_idx"));
@@ -43,6 +44,7 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->names, *g_string_new("postcoh:skymap_fname"));
 
     table->type_names = g_array_new(FALSE, FALSE, sizeof(GString)); 
+    g_array_append_val(table->type_names, *g_string_new("int_4s"));
     g_array_append_val(table->type_names, *g_string_new("int_4s"));
     g_array_append_val(table->type_names, *g_string_new("int_4s"));
     g_array_append_val(table->type_names, *g_string_new("int_4s"));

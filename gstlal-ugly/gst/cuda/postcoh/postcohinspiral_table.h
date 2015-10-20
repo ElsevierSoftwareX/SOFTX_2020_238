@@ -37,7 +37,8 @@ tagPostcohInspiralTable
 {
   struct tagPostcohInspiralTable *next;
   LIGOTimeGPS	end_time;
-  CHAR		is_background;
+  INT4		is_background;
+  INT4		livetime;
   CHAR		ifos[MAX_ALLIFO_LEN];
   CHAR		pivotal_ifo[MAX_IFO_LEN];
   INT4		tmplt_idx;

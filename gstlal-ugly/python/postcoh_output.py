@@ -34,13 +34,15 @@ from pylal.xlal.datatypes import postcohinspiraltable
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
-# defined in postcoh_table.h
-class PostcohTable(table.Table):
+# defined in postcohinspiral_table.h
+class PostcohInspiralTable(table.Table):
 	tableName = "postcoh:table"
 	validcolumns = {
 		"end_time":	"int_4s",
 		"end_time_ns":	"int_4s",
 		"is_background":	"int_4s",
+		"livetime":	"int_4s",
+		"ifos":		"lstring",
 		"pivotal_ifo":	"lstring",
 		"tmplt_idx":	"int_4s",
 		"pix_idx":	"int_4s",
@@ -51,16 +53,15 @@ class PostcohTable(table.Table):
 		"spearman_pval":	"real_4",
 		"fap":		"real_4",
 		"far":		"real_4",
-		"livetime":	"real_4",
 		"skymap_fname":	"lstring"
 	}
 
 
 class PostcohDocument(object):
-	def __init__(self, filename, verbose = False):
-		self.get_another = lambda: PostcohDocument(filename = filename, verbose = verbose)
+	def __init__(self, verbose = False):
+		self.get_another = lambda: PostcohDocument(verbose = verbose)
 
-		self.filename = filename
+		self.filename = None
 
 		#
 		# build the XML document
@@ -70,21 +71,27 @@ class PostcohDocument(object):
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 
 		# FIXME: process table, search summary table
-		# FIXME: should be implemented as lsctables.PostcohTable
-		self.xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohTable))
+		# FIXME: should be implemented as lsctables.PostcohInspiralTable
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohInspiralTable))
+
+	def set_filename(self, filename):
+		self.filename = filename
 
 	def write_output_file(self, verbose = False):
-		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endwith(".gz"), verbose = verbose, trap_signals = None)
+		assert self.filename is not None
+		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
 class Data(object):
-	def __init__(self, output_prefix, cluster_window = 1, snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, output_data_prefix, cluster_window = 1, snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
 		self.lock = threading.Lock()
 		self.verbose = verbose
-		self.output_prefix = output_prefix
+		self.pipeline = pipeline
+		self.output_data_prefix = output_data_prefix
+		self.snapshot_interval = snapshot_interval
 		self.cluster_window = cluster_window
 		self.gracedb_far_threshold = gracedb_far_threshold
 		self.gracedb_group = gracedb_group
@@ -93,22 +100,29 @@ class Data(object):
 		self.gracedb_service_url = gracedb_service_url
 
 		self.postcoh_document = PostcohDocument()
+		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 		self.t_roll_start = None
+		self.duration_roll = None
 
 	def appsink_new_buffer(self, elem):
-		pdb.set_trace()
+		#pdb.set_trace()
 		with self.lock:
 			buf = elem.emit("pull-buffer")
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			if self.t_roll_start is None:
 				self.t_roll_start = buf_timestamp
-			print buf_timestamp
+			#print buf_timestamp
 			events = postcohinspiraltable.PostcohInspiralTable.from_buffer(buf)
-	
+			self.postcoh_table.extend(events)
+			self.duration_roll = buf_timestamp - self.t_roll_start
+			if self.snapshot_interval is not None and self.duration_roll > self.snapshot_interval:
+				snapshot_filename = self.get_output_filename(self.output_data_prefix, self.t_roll_start, self.duration_roll)
+				self.snapshot_output_file(snapshot_filename)
+				self.t_roll_start = buf_timestamp
 			#self.cluster(events, self.cluster_window)
-	def get_filename(output_prefix, t_roll_start, duration_roll):
-			fname = "%s_%d_%d.xml.gz" % (output_prefix, t_roll_start, duration_roll)
+	def get_output_filename(self, output_data_prefix, t_roll_start, duration_roll):
+			fname = "%s_%d_%d.xml.gz" % (output_data_prefix, t_roll_start, duration_roll)
 			return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
@@ -118,7 +132,10 @@ class Data(object):
 			del self.postcoh_document
 			self.postcoh_document = postcoh_document
 
+	def write_output_file(self, filename = None, verbose = False):
+		self.__write_output_file(filename)
+
 	def __write_output_file(self, filename = None, verbose = False):
 		if filename is not None:
-			self.postcoh_document.filename = filename
+			self.postcoh_document.set_filename(filename)
 		self.postcoh_document.write_output_file(verbose = verbose)
