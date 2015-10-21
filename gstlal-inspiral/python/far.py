@@ -1414,7 +1414,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		simply be the probability densities of the signal and noise
 		populations at that point in parameter space.  They cannot
 		be used to form an importance weighted sampler of the log
-		likeklihood ratios.
+		likelihood ratios.
 		"""
 		#
 		# retrieve horizon distance from history if not given
