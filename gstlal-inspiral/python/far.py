@@ -2116,9 +2116,8 @@ WHERE
 			# we also need the zero lag counts to build the extinction model
 			zlagcounts_ba = self.zero_lag_likelihood_rates[key]
 
-			# Only model background above a ln(LR) of 3
-			# FIXME make this depend on the data size
-			likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], 3)
+			# Only model background above a ln(LR) of 3 or at the 10000 event count whatever is greater
+			likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], max(3, bgcounts_ba.bins.upper()[0][::-1][numpy.searchsorted(zlagcounts_ba.array[::-1].cumsum(), 10000)]))
 			bgcounts_ba.array[:likethresh] = 0.
 			bgpdf_ba.array[:likethresh] = 0.
 			zlagcounts_ba.array[:likethresh] = 0.
