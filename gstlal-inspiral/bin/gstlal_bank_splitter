@@ -195,6 +195,8 @@ for bank_count, (_, rows) in enumerate(outputrows):
 	for row in rows:
 		# Chirptime uses SI
 		m1_SI, m2_SI = MSUN_SI * row.mass1, MSUN_SI * row.mass2
+		# Find the total spin magnitudes
+		spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
 
 		if approximant in templates.gstlal_IMR_approximants:
 			# make sure to go a factor of 2 above the ringdown frequency for safety
@@ -209,8 +211,6 @@ for bank_count, (_, rows) in enumerate(outputrows):
 			row.f_final = options.max_f_final
 		row.process_id = process.process_id
 
-		# Find the total spin magnitudes
-		spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
 
 		# Record the conservative template duration
 		row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
