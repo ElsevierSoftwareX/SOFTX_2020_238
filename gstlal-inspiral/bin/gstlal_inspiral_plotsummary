@@ -1192,12 +1192,13 @@ def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
 
-def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None), max_events = 1000):
+def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None)):
 	#
-	# isolate relevent data
+	# determine plot limits
 	#
 
-	zerolag_stats = zerolag_stats[:max_events]
+	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	ylim = 0.001, 10.**math.ceil(math.log10(len(zerolag_stats)))
 
 	#
 	# background.  uncomment the two lines to make the background
@@ -1213,9 +1214,9 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	#
 
 	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
-	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
-	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
-	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(0.001, max_events), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
+	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(*ylim), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
+	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(*ylim), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
+	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(*ylim), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
 
 	#
 	# zero-lag
@@ -1237,9 +1238,8 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	# adjust bounds of plot
 	#
 
-	xlim = max(zerolag_stats.min(), xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
 	axes.set_xlim(xlim)
-	axes.set_ylim((0.001, 10.**math.ceil(math.log10(max_events))))
+	axes.set_ylim(ylim)
 
 
 class RateVsThreshold(object):
