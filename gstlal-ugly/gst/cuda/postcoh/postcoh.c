@@ -868,6 +868,8 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
+	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND);
+
 	for(iifo=0; iifo<nifo; iifo++) {
 		if (is_cur_ifo_has_data(state, iifo)) {
 		PeakList *pklist = state->peak_list[iifo];
@@ -883,7 +885,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			XLALGPSAdd(&(end_time[ipeak]), (double) peak_cur /exe_len);
 			output->end_time = end_time[ipeak];
 			output->is_background = 0;
-			output->livetime = 0;
+			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
 			output->ifos[2*state->cur_nifo] = '\0';
 		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
@@ -934,7 +936,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				if (pklist->cohsnr[itrial*exe_len + peak_cur] > 0) {
 				output->end_time = end_time[ipeak];
 				output->is_background = 1;
-				output->livetime = 0;
+				output->livetime = livetime;
 				strncpy(output->ifos, state->cur_ifos, ifos_size);
 				output->ifos[2*state->cur_nifo] = '\0';
 		       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
