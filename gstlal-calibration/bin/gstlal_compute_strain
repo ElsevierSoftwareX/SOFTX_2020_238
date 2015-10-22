@@ -158,6 +158,7 @@ parser.add_option("--science-intent-bitmask", metavar = "bitmask", type = "int",
 parser.add_option("--hw-inj-cbc-bitmask", metavar = "bitmask", type = "int", default = 16777216, help = "Bitmask used on ODC state vector in order presence of CBC hardware injection. (Default=16777216)")
 parser.add_option("--hw-inj-burst-bitmask", metavar = "bitmask", type = "int", default = 33554432, help = "Bitmask used on ODC state vector in order presence of burst hardware injection. (Default=33554432)")
 parser.add_option("--hw-inj-detchar-bitmask", metavar = "bitmask", type = "int", default = 67108864, help = "Bitmask used on ODC state vector in order presence of DetChar hardware injection. (Default=67108864)")
+parser.add_option("--hw-inj-stoch-bitmask", metavar = "bitmask", type = "int", default = 8388608, help = "Bitmask used on ODC state vector in order presence of stochastic hardware injection. (Default=8388608)")
 parser.add_option("--chan-prefix", metavar = "name", default = "GDS-", help = "Prefix for all output channel names. (Default = GDS)") 
 parser.add_option("--chan-suffix", metavar = "name", help = "Suffix for all output channel names.") 
 
@@ -1151,12 +1152,18 @@ if not options.no_dq_vector:
 	hwinjdetchar = calibration_parts.mkaudiorate(pipeline, hwinjdetchar)
 	hwinjdetchar = calibration_parts.mkreblock(pipeline, hwinjdetchar)
 
+	hwinjstoch = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = int(options.hw_inj_stoch_bitmask), status_out = 32)
+	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
+	hwinjstoch = calibration_parts.mkaudiorate(pipeline, hwinjstoch)
+	hwinjstoch = calibration_parts.mkreblock(pipeline, hwinjstoch)
+
+
 	#
 	# COMBINE ALL BITS TO MAKE GDS-CALIB_STATE_VECTOR
 	#
 
 	dqcaps = "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % dqsr
-	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, higherbitstee, scienceintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar), dqcaps)
+	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, higherbitstee, scienceintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar, hwinjstoch), dqcaps)
 	if not options.no_kappaa:
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, kaok), dqcaps)
 	if not options.no_kappatst:

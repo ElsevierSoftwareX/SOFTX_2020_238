@@ -1,3 +1,9 @@
+gstlal-calibration (0.5.7-1) unstable; urgency=low
+
+  * Addition of "NO_STOCH_INJ" bit to GDS-CALIB_STATE_VECTOR
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 22 Oct 2015 16:24:00 -0500
+
 gstlal-calibration (0.5.6-1) unstable; urgency=low
 
   * Bug fix for lock-ups caused by averaging \kappas when not in science mode
