@@ -37,7 +37,7 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
-#define EPSILON 1e-3
+#define EPSILON 1.414
 
 static void additional_initializations(GType type)
 {
