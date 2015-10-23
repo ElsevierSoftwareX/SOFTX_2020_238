@@ -37,7 +37,6 @@ from glue.ligolw import utils as ligolw_utils
 # modules for uploading to GraceDB
 import threading
 from glue.ligolw.utils import process as ligolw_process
-from ligo.gracedb.rest import GraceDb
 import urllib2  # for HTTPError:
 import StringIO
 
@@ -90,10 +89,12 @@ def parse_command_line():
         parser.add_option("--frames-per-file", default = 1, type = "int", help = "frames_per_file (optional)")
         parser.add_option("--frame-duration", default = 4, metavar= "frame duration in seconds" , type = "int", help = "frame_duration (optional)")        
         parser.add_option("--gracedb-server", default = "https://simdb.cgca.uwm.edu/api/", type = "string", help = "name of gracedb or simdb server")        
-
+        parser.add_option("--instrument", default = None, type = "string", help = "name of the instrument e.g. H1 etc")        
+        parser.add_option("--virtualenv-activator", default = None, type = "string", help = "Give the path to the virtualenv-activator if you want to use virtual environment installation instead of system installation")        
+        
         options, filenames = parser.parse_args()
 
-        required_options = ["shared_memory_read", "shared_memory_write", "channel", "channel_inj", "dqv_channel", "injections_file"]
+        required_options = ["shared_memory_read", "shared_memory_write", "channel", "channel_inj", "dqv_channel", "injections_file", "instrument"]
 
         missing_options = ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
         if missing_options:
@@ -113,6 +114,19 @@ parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT 
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parse_command_line()
+
+# activate the virtual environment in the case that the user wants to use a different installation than system installation:
+if options.virtualenv_activator is not None:
+    VIRTUALENV_ACTIVATOR = options.virtualenv_activator
+    execfile(VIRTUALENV_ACTIVATOR, dict(__file__ = VIRTUALENV_ACTIVATOR))
+
+# PB: temporary solution for virtual environment (not sure why virtual
+# environment not working)
+# See e.g. http://stackoverflow.com/questions/10095037/why-use-sys-path-appendpath-instead-of-sys-path-insert1-path
+# sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
+
+# Now that we have the virtual environment loaded, load up GraceDb
+from ligo.gracedb.rest import GraceDb
 
 # setup the pipeline
 pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
@@ -217,8 +231,8 @@ class GraceDBThread ( threading.Thread ):
         print "Talking to GraceDB"
         gracedb = GraceDb(options.gracedb_server)
         try:
-            r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
-            #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue())
+            r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search, instrument = options.instrument, source_channel = options.channel, destination_channel = options.channel_inj)
+            #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
             rdict = r.json()
             graceid = rdict['graceid']
             print "Success: GraceID = %s" % graceid
@@ -263,7 +277,7 @@ mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
 # ALSO note: if they are not exactly correct, the system complains that it cannot write to
 # the shared memory.
 
-pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2)
+pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2, sync=0, async=0)
 
 if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
         pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
