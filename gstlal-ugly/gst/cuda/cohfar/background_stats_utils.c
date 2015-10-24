@@ -12,8 +12,9 @@
 char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
 
 int get_icombo(char *ifos) {
-	int icombo = 0, len_in = strlen(ifos), len_map;
-	int nifo_in = len_in / IFO_LEN, nifo_map, iifo, jifo;
+	int icombo = 0; 
+	unsigned len_in = strlen(ifos);
+	int nifo_in = (int) len_in / IFO_LEN, nifo_map, iifo, jifo;
 	for (icombo=0; icombo<MAX_COMBOS; icombo++) {
 		nifo_map = 0;
 		if (len_in == strlen(IFO_COMBO_MAP[icombo])) {
@@ -178,7 +179,7 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	//gsl_matrix_hist3(snr_data, chisq_data, temp_tin_snr, temp_tin_chisq, histogram);
 
 	//Compute the 'scale' variable in matlab code 'test.m'
-	int i, j;
+	unsigned i, j;
 	for(i=0;i<histogram->size1;i++){
 		for(j=0;j<histogram->size2;j++){
 			double temp = gsl_matrix_get(histogram,i,j);
@@ -218,6 +219,7 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	gsl_matrix_free(result_snr);
 	gsl_matrix_free(result_chisq);
 	gsl_matrix_free(temp_matrix);
+	return TRUE;
 }
 
 void
@@ -333,6 +335,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 {
   gchar *tmp_filename = g_strdup_printf("%s_next", filename);
   int icombo = 0;
+  XmlParam param_range;
+  param_range.data = (float *) malloc(sizeof(float) * 2);
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -429,6 +433,20 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
       return FALSE;
   }
 
+  GString *param_name = g_string_new(NULL);
+
+  g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_SNR_SUFFIX);
+  ((float *)param_range.data)[0] = LOGSNR_MIN;
+  ((float *)param_range.data)[1] = LOGSNR_MAX;
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_4", BAD_CAST "FLOAT");
+
+  g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_CHISQ_SUFFIX);
+  ((float *)param_range.data)[0] = LOGCHISQ_MIN;
+  ((float *)param_range.data)[1] = LOGCHISQ_MAX;
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_4", BAD_CAST "FLOAT");
+
+  g_string_free(param_name, TRUE);
+
   GString *array_name = g_string_new(NULL);
   for (icombo=0; icombo<ncombo; icombo++) {
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_SUFFIX);
@@ -455,6 +473,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   }
 
   xmlFreeTextWriter(writer);
+  free(param_range.data);
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_logsnr_bins + icombo);
     freeArray(array_logchisq_bins + icombo);
