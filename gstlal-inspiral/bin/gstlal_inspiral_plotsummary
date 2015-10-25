@@ -1139,7 +1139,6 @@ WHERE
 					self.points[instrument_pair] = BackgroundVsInjectionPlotsMulti.Points()
 				self.points[instrument_pair].injections_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
-				self.points[instrument_pair].injections_dt.append(x.end_time - y.end_time + 1e-9*(x.end_time_ns - y.end_time_ns))
 				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 				mtot = x.mass1 + x.mass2
 				self.points[instrument_pair].injections_mchirp.append( mtot*eta**(3./5) )
