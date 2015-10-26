@@ -630,7 +630,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
   int rc;
   gboolean is_invalid = FALSE;
 
-
+  GST_LOG_OBJECT(sink, "start to write postcoh table");
   for(; table<table_end; table++) {
 	is_invalid = postcoh_filesink_is_invalid_background(table);
 	if (!is_invalid) {
@@ -651,6 +651,19 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	g_string_append_printf(line, "%g%s", table->fap, xtable->delimiter->str);
 	g_string_append_printf(line, "%g%s", table->far, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->template_duration, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mchirp, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mtotal, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass1, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass2, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1z, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2z, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->ra, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->dec, xtable->delimiter->str);
 	
 	g_string_append(line, "\n");
 	//printf("%s", line->str);

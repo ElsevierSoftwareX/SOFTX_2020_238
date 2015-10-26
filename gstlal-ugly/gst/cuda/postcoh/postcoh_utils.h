@@ -12,6 +12,9 @@ void
 cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream);
 
 void
+cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table);
+
+void
 peakfinder(PostcohState *state, int iifo, cudaStream_t stream);
 void
 state_destroy(PostcohState *state);

@@ -27,6 +27,8 @@
 #include <gst/base/gstadapter.h>
 #include <cuda_runtime.h>
 
+#include <lal/LIGOMetadataTables.h>
+
 G_BEGIN_DECLS
 
 #define CUDA_TYPE_POSTCOH \
@@ -129,6 +131,7 @@ typedef struct _PostcohState {
   float **d_U_map;
   float **d_diff_map;
   int gps_step;
+  unsigned long nside;
   int npix;
   PeakList **peak_list;
   int head_len;
@@ -183,6 +186,9 @@ struct _CudaPostcoh {
   float trial_interval;
   gint trial_interval_in_samples;
   gint output_skymap;
+
+  char *sngl_tmplt_fname;
+  SnglInspiralTable *sngl_table;
 
   /* sink event handling */
   GstPadEventFunction collect_event;

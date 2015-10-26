@@ -1,10 +1,12 @@
+#include <lal/LIGOMetadataTables.h> // SnglInspiralTable
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <chealpix.h>
 #include "postcoh_utils.h"
 #include <cuda_debug.h>
 
 char* IFO_MAP[] = {"L1", "H1", "V1"};
-#define debug 1
+#define __DEBUG__ 1
+#define NSNGL_TMPLT_COLS 11
 
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
@@ -101,6 +103,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	state->gps_step = *((int *)param_gps.data);
 	printf("gps_step %d\n", state->gps_step);
 	unsigned long nside = (unsigned long) 1 << *((int *)param_order.data);
+	state->nside = nside;
 	state->npix = nside2npix(nside);
 	free(param_gps.data);
 	param_gps.data = NULL;
@@ -268,7 +271,105 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	state->autochisq_len = autochisq_len;
 }
 
+char * ColNames[] = {
+	"sngl_inspiral:template_duration", 
+	"sngl_inspiral:mass1",
+	"sngl_inspiral:mass2",
+	"sngl_inspiral:mchirp",
+	"sngl_inspiral:mtotal",
+	"sngl_inspiral:spin1x",
+	"sngl_inspiral:spin1y",
+	"sngl_inspiral:spin1z",
+	"sngl_inspiral:spin2x",
+	"sngl_inspiral:spin2y",
+	"sngl_inspiral:spin2z"
+	};
 
+void
+cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
+{
+
+	XmlNodeStruct *xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct));
+	XmlTable *xtable = (XmlTable *) malloc(sizeof(XmlTable));
+
+	xtable->names = NULL;
+	xtable->type_names = NULL;
+
+	strncpy((char *) xns->tag, "sngl_inspiral:table", XMLSTRMAXLEN);
+	xns->processPtr = readTable;
+	xns->data = xtable;
+
+	parseFile(fname, xns, 1);
+
+    /*
+     * Cleanup function for the XML library.
+     */
+    xmlCleanupParser();
+    /*
+     * this is to debug memory for regression tests
+     */
+    xmlMemoryDump();
+
+	GHashTable *hash = xtable->hashContent;
+	GString **col_names = (GString **) malloc(sizeof(GString *) * NSNGL_TMPLT_COLS);
+	unsigned icol, jlen;
+	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) {
+		col_names[icol] = g_string_new(ColNames[icol]);
+	}
+	XmlHashVal *val = g_hash_table_lookup(hash, (gpointer) col_names[0]);
+	*psngl_table = (SnglInspiralTable *) malloc(sizeof(SnglInspiralTable) * (val->data->len));
+	SnglInspiralTable *sngl_table = *psngl_table;
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].template_duration = g_array_index(val->data, double, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[1]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].mass1 = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[2]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].mass2 = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[3]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].mchirp = g_array_index(val->data, float, jlen);
+
+
+	val = g_hash_table_lookup(hash, col_names[4]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].mtotal = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[5]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].spin1x = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[6]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].spin1y = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[7]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].spin1z = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[8]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].spin2x = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[9]);
+	for (jlen=0; jlen<val->data->len; jlen++)
+		sngl_table[jlen].spin2y = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[10]);
+	for (jlen=0; jlen<val->data->len; jlen++) 
+		sngl_table[jlen].spin2z = g_array_index(val->data, float, jlen);
+
+	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) 
+		g_string_free(col_names[icol], TRUE);
+
+	// FIXME: XmlTable destroy not implemented yet.	
+	// freeTable(xtable);
+	free(xns);
+}
 
 void
 state_destroy(PostcohState *state)

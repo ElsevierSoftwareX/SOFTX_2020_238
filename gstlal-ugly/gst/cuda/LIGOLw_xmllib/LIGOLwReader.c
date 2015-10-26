@@ -17,6 +17,7 @@
 #include "LIGOLwHeader.h"
 
 //#define __DEBUG__ 1
+//#define __DEBUG_TABLE__ 1
 // In Array Node, No Dim sub node should appear after Stream sub node
 void readArray(xmlTextReaderPtr reader, void *data)
 {
@@ -244,7 +245,7 @@ void readTable(xmlTextReaderPtr reader, void *data)
 
             columnName = xmlTextReaderGetAttribute(reader, BAD_CAST "Name");
             columnType = xmlTextReaderGetAttribute(reader, BAD_CAST "Type");
-            #ifdef __DEBUG__
+            #ifdef __DEBUG_TABLE__
             printf("Column: %s Type: %s\n", columnName, columnType);
             #endif
 
@@ -283,13 +284,13 @@ void readTable(xmlTextReaderPtr reader, void *data)
             
             i = 0;
             numLine = g_strv_length(lines) - 2;
-            #ifdef __DEBUG__
+            #ifdef __DEBUG_TABLE__
             printf("numLine: %d\n", numLine);
             #endif
             // by pass the first line and the last line
             for (i = 1; i <= numLine; ++i)
             {
-                #ifdef __DEBUG__
+                #ifdef __DEBUG_TABLE__
                 printf("line len: %zu line %d: %s\n", strlen(lines[i]), i, (const char*)lines[i]);
                 #endif
 
@@ -298,24 +299,24 @@ void readTable(xmlTextReaderPtr reader, void *data)
 
                 for (j = 0; j < numCol; ++j)
                 {
-                    #ifdef __DEBUG__
+                    #ifdef __DEBUG_TABLE__
                     printf("len: %zu, token %d: %s\n", strlen(tokens[j]), j, (const char*)tokens[j]);
                     #endif
 
                     colName = &g_array_index(xmlTable->names, GString, j);
 
-                    #ifdef __DEBUG__
+                    #ifdef __DEBUG_TABLE__
                     printf("colName = %s\n", colName->str);
                     #endif
 
                     XmlHashVal *valPtr = g_hash_table_lookup(xmlTable->hashContent, (gpointer)colName);
                     if (strcmp(valPtr->type->str, "real_4") == 0) {
                         float num;
-                        sscanf(tokens[j], "%f", &num);
+                        sscanf(tokens[j], "%g", &num);
                         g_array_append_val(valPtr->data, num);
                     } else if (strcmp(valPtr->type->str, "real_8") == 0) {
                         double num;
-                        sscanf(tokens[j], "%lf", &num);
+                        sscanf(tokens[j], "%lg", &num);
                         g_array_append_val(valPtr->data, num);
                     } else if (strcmp(valPtr->type->str, "int_4s") == 0) {
                         int num;
@@ -327,7 +328,7 @@ void readTable(xmlTextReaderPtr reader, void *data)
                         g_array_append_val(valPtr->data, *val);
                     }
 
-                    #ifdef __DEBUG__
+                    #ifdef __DEBUG_TABLE__
                     printf("name: %s\n", valPtr->name->str);
                     #endif
                 }
@@ -342,7 +343,7 @@ void readTable(xmlTextReaderPtr reader, void *data)
         // Meet node </Table>, just break out of the loop
         if (xmlStrcmp(nodeName, BAD_CAST "Table") == 0 && nodeType == 15)
         {
-            #ifdef __DEBUG__
+            #ifdef __DEBUG_TABLE__
             g_print("hash table size: %d\n", g_hash_table_size(xmlTable->hashContent));
             #endif
             break;
@@ -352,7 +353,7 @@ void readTable(xmlTextReaderPtr reader, void *data)
 
 void freeTable(XmlTable *table)
 {
-	// to be updated
+	// FIXME:to be implemented
 }
 
 #ifdef LIBXML_READER_ENABLED
@@ -386,7 +387,7 @@ processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len) {
     {
         ret = xmlStrcmp(value, xns[i].tag);
 	#ifdef __DEBUG__
-	printf("current value:%s, search tag %s\n", value, xns[i].tag);
+	printf("current value:%s, search tag %s, equal %d\n", value, xns[i].tag, ret);
 	#endif
         if (ret == 0)
         {

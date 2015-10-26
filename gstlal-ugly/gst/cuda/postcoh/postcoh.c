@@ -25,6 +25,7 @@
 #include <gst/gst.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
+#include <chealpix.h>
 
 #include <string.h>
 #include <math.h>
@@ -88,6 +89,7 @@ enum
 	PROP_0,
 	PROP_DETRSP_FNAME,
 	PROP_AUTOCORRELATION_FNAME,
+	PROP_SNGL_TMPLT_FNAME,
 	PROP_HIST_TRIALS,
 	PROP_TRIAL_INTERVAL,
 	PROP_OUTPUT_SKYMAP,
@@ -140,6 +142,12 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			g_mutex_unlock(element->prop_lock);
 			break;
 
+		case PROP_SNGL_TMPLT_FNAME: 
+			element->sngl_tmplt_fname = g_value_dup_string(value);
+			cuda_postcoh_sngl_tmplt_from_xml(element->sngl_tmplt_fname, &(element->sngl_table));
+			break;
+
+
 		case PROP_HIST_TRIALS:
 			g_mutex_lock(element->prop_lock);
 			element->hist_trials = g_value_get_int(value);
@@ -188,6 +196,11 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 		case PROP_AUTOCORRELATION_FNAME:
 			g_value_set_string(value, element->autocorr_fname);
 			break;
+
+		case PROP_SNGL_TMPLT_FNAME:
+			g_value_set_string(value, element->sngl_tmplt_fname);
+			break;
+
 
 		case PROP_HIST_TRIALS:
 			g_value_set_int(value, element->hist_trials);
@@ -866,9 +879,13 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len;
 	int hist_trials = postcoh->hist_trials;
 
+	int tmplt_idx;
+	
 	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
 	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND);
+
+	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 
 	for(iifo=0; iifo<nifo; iifo++) {
 		if (is_cur_ifo_has_data(state, iifo)) {
@@ -899,6 +916,26 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->spearman_pval = 0;
 			output->fap = 0;
 			output->far = 0;
+			/* covert template index to mass values */
+			tmplt_idx = output->tmplt_idx;
+			output->template_duration = sngl_table[tmplt_idx].template_duration;
+			output->mchirp = sngl_table[tmplt_idx].mchirp;
+			output->mtotal = sngl_table[tmplt_idx].mtotal;
+			output->mass1 = sngl_table[tmplt_idx].mass1;
+			output->mass2 = sngl_table[tmplt_idx].mass2;
+			output->spin1x = sngl_table[tmplt_idx].spin1x;
+			output->spin1y = sngl_table[tmplt_idx].spin1y;
+			output->spin1z = sngl_table[tmplt_idx].spin1z;
+			output->spin2x = sngl_table[tmplt_idx].spin2x;
+			output->spin2y = sngl_table[tmplt_idx].spin2y;
+			output->spin2z = sngl_table[tmplt_idx].spin2z;
+			/* convert pixel index to ra and dec */
+			double theta, phi;
+			/* ra = phi, dec = 2pi - theta */	
+			pix2ang_nest(postcoh->state->nside, output->pix_idx, &theta, &phi);
+	
+			output->ra = phi;
+			output->dec = 2*M_PI - theta;
 			if (postcoh->output_skymap) {
 				GString *filename = NULL;
 				FILE *file = NULL;
@@ -960,6 +997,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	}
 
 	}
+	printf("table done\n");
 }
 
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
@@ -979,6 +1017,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
 		return NULL;
 	}
+	memset(GST_BUFFER_DATA(outbuf), 0, out_size);
 
         /* set the time stamps */
 	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
@@ -990,6 +1029,8 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	/* set the offset */
         GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
         GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
+
+	GST_BUFFER_SIZE(outbuf) = out_size;
 
 	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
@@ -1338,6 +1379,19 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_SNGL_TMPLT_FNAME,
+		g_param_spec_string(
+			"sngl-tmplt-fname",
+			"File that has SnglInspiralTable",
+			"single template filename",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
 
 	g_object_class_install_property(
 		gobject_class,

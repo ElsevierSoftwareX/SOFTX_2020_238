@@ -82,19 +82,18 @@ def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_
 		properties["sigmasq"] = sigmasq
 	return pipeparts.mkgeneric(pipeline, src, "lal_itac_spearman", **properties)
 
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
-
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream_id"), (detrsp_fname, autocorrelation_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "sngl-tmplt-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream-id"), (detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
 	if "name" in properties:
 		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
 	else:
 		elem = gst.element_factory_make("cuda_postcoh")
 	# make sure stream_id go first
 	for name, value in properties.items():
-		if name == "stream_id":
+		if name == "stream-id":
 			elem.set_property(name.replace("_", "-"), value)
 	for name, value in properties.items():
-		if name != "stream_id":
+		if name != "stream-id":
 			elem.set_property(name.replace("_", "-"), value)
 
 	pipeline.add(elem)
@@ -462,7 +461,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
 				postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -699,10 +698,10 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 				# FIXME: hard-coded to set 2 postcoh process to 2 gtx750 cards
 				if bank_count > 23:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count % 2])
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count % 2])
 					postcoh_count += 1
 				else:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
 					postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)

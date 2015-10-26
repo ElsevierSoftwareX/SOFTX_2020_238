@@ -42,6 +42,19 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->names, *g_string_new("postcoh:fap"));
     g_array_append_val(table->names, *g_string_new("postcoh:far"));
     g_array_append_val(table->names, *g_string_new("postcoh:skymap_fname"));
+    g_array_append_val(table->names, *g_string_new("postcoh:template_duration"));
+    g_array_append_val(table->names, *g_string_new("postcoh:mchirp"));
+    g_array_append_val(table->names, *g_string_new("postcoh:mtotal"));
+    g_array_append_val(table->names, *g_string_new("postcoh:mass1"));
+    g_array_append_val(table->names, *g_string_new("postcoh:mass2"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin1x"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin1y"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin1z"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin2x"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin2y"));
+    g_array_append_val(table->names, *g_string_new("postcoh:spin2z"));
+    g_array_append_val(table->names, *g_string_new("postcoh:ra"));
+    g_array_append_val(table->names, *g_string_new("postcoh:dec"));
 
     table->type_names = g_array_new(FALSE, FALSE, sizeof(GString)); 
     g_array_append_val(table->type_names, *g_string_new("int_4s"));
@@ -58,7 +71,21 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("lstring"));
+    g_array_append_val(table->type_names, *g_string_new("real_8"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_8"));
+    g_array_append_val(table->type_names, *g_string_new("real_8"));
 }
 
 
