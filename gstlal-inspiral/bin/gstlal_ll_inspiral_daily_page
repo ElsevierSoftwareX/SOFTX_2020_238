@@ -62,10 +62,7 @@ def process_mass_bin(args):
 
 if __name__ == '__main__':
 
-	try:
-		pool = Pool(int(os.environ['GSTLAL_LL_INSPIRAL_DAILY_PAGE_CORES']))
-	except KeyError:
-		pool = Pool(2)
+	pool = Pool(20)
 
 	parser = OptionParser()
 	parser.add_option("--directory", default = ".", help = "directory to start looking for results")
@@ -157,10 +154,10 @@ if __name__ == '__main__':
 	os.mkdir(os.path.join(options.directory, "plots"))
 
 	pattern = re.compile("(?P<id>[0-9]{4})_prior.xml.gz")
-	for d in os.listdir(options.directory):
-		m = pattern.match(d)
-		if m:
-			subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
+	#for d in os.listdir(options.directory):
+	#	m = pattern.match(d)
+	#	if m:
+	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
 	subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
 	subprocess.check_call(["gstlal_inspiral_plotsummary", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
