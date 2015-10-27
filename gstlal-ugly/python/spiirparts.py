@@ -101,15 +101,15 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", update_interval =  0, history_fname = None,output_fname = None):
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", snapshot_interval = 0, history_fname = None, output_fname_prefix = None):
 	properties = {
 		"ifos": ifos,
-		"update_interval": update_interval
+		"snapshot_interval": snapshot_interval
 	}
 	if history_fname is not None:
 		properties["history_fname"] = history_fname
-	if output_fname is not None:
-		properties["output_fname"] = output_fname
+	if output_fname_prefix is not None:
+		properties["output_fname_prefix"] = output_fname_prefix
 
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
@@ -130,7 +130,35 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", update_interval =  0, 
 		src.link(elem)
 	return elem
 
-def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
+def mkcohfar_assignfap(pipeline, src, ifos= "H1L1", refresh_interval = 14400, collection_time = 0, input_fname = None):
+	properties = {
+		"ifos": ifos,
+		"refresh_interval": refresh_interval,
+		"collection_time": collection_time,
+		"input_fname": input_fname
+	}
+
+	if "name" in properties:
+		elem = gst.element_factory_make("cohfar_assignfap", properties.pop("name"))
+	else:
+		elem = gst.element_factory_make("cohfar_assignfap")
+	# make sure ifos go first
+	for name, value in properties.items():
+		if name == "ifos":
+			elem.set_property(name.replace("_", "-"), value)
+	for name, value in properties.items():
+		if name != "ifos":
+			elem.set_property(name.replace("_", "-"), value)
+
+	pipeline.add(elem)
+	if isinstance(src, gst.Pad):
+		src.get_parent_element().link_pads(src, elem, None)
+	elif src is not None:
+		src.link(elem)
+	return elem
+
+
+def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -197,16 +225,16 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			# FIXME: bank.snr_thresh is removed, use peak_thresh instead
-			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
+			# FIXME: bank.snr_thresh is removed, use cuda_postcoh_snglsnr_thresh instead
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = cuda_postcoh_snglsnr_thresh, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
 		elif chisq_type == 'autochisq_spearman':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
-			# FIXME: bank.snr_thresh is removed, use peak_thresh instead
-			head = mkitac_spearman(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank.sigmasq)
+			# FIXME: bank.snr_thresh is removed, use cuda_postcoh_snglsnr_thresh instead
+			head = mkitac_spearman(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = cuda_postcoh_snglsnr_thresh, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
@@ -259,7 +287,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	return head
 
-def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4):
+def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -332,7 +360,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
 			head = pipeparts.mkqueue(pipeline, snr, max_size_buffers=1)
-			head = pipeparts.mkitac(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
+			head = pipeparts.mkitac(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = cuda_postcoh_snglsnr_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
@@ -340,7 +368,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
 			head = pipeparts.mkqueue(pipeline, snr, max_size_buffers=1)
-			head = mkitac_spearman(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = peak_thresh, sigmasq = bank_struct.sigmasq)
+			head = mkitac_spearman(pipeline, head, max_bank_rate, bank_struct.template_bank_filename, autocorrelation_matrix = bank_struct.autocorrelation_bank, mask_matrix = bank_struct.autocorrelation_mask, snr_thresh = cuda_postcoh_snglsnr_thresh, sigmasq = bank_struct.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_spearman_%s" % suffix)
 			triggersrcs[instrument].add(head)
@@ -370,7 +398,7 @@ def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapsh
 	return elem
 
 
-def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0):
+def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, output_prefix = None, cuda_postcoh_output_skymap = 0):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -461,7 +489,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
 				postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -474,7 +502,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_stats_prefix = None, output_skymap = 0, stats_update_interval = 14400, k10_gpu_start_id = 0, num_k10_gpu = 4):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 86400, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -538,6 +566,8 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	k10_list = range(k10_gpu_start_id, k10_gpu_start_id + num_k10_gpu)
 	for ele in k10_list:
 		gtx750_list.remove(ele)
+
+	# assemble autocorrelation_fname for postcoh chisq calculation
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
 		autocorrelation_fname = ""
@@ -547,9 +577,8 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 			autocorrelation_fname += str(bank_list[0])
 			autocorrelation_fname += "," 
 			if len(bank_list) != 1:
-				raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
+				raise ValueError("%s instrument: number of banks is not equal to 1, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
-		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
 
 	for instrument in banks[0].keys():
@@ -558,7 +587,6 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 	for i_dict, bank_dict in enumerate(banks):
 		postcoh = None
 		head = None
-		output_stats_fname = "%s_stats.xml.gz" % output_stats_prefix[i_dict]
 
 		for instrument, bank_list in bank_dict.items():
 			max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_list[0])
@@ -577,10 +605,10 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 				# FIXME: hard-coded to set 2 postcoh process to 2 gtx750 cards
 				if bank_count > 23:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count % 2])
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = gtx750_list[postcoh_count % 2])
 					postcoh_count += 1
 				else:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
 					postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -590,12 +618,13 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname = output_stats_fname, update_interval = stats_update_interval)
+		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		postcoh = mkcohfar_assignfap(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfap_refresh_interval, collection_time = cohfar_assignfap_collection_time, input_fname = cohfar_assignfap_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)
 	return triggersrcs
 
-def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400, k10_gpu_start_id = 0, num_k10_gpu = 4):
+def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, output_prefix = None, cuda_postcoh_output_skymap = 0, snapshot_interval = 14400, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -698,10 +727,10 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 				# FIXME: hard-coded to set 2 postcoh process to 2 gtx750 cards
 				if bank_count > 23:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = gtx750_list[postcoh_count % 2])
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = gtx750_list[postcoh_count % 2])
 					postcoh_count += 1
 				else:
-					postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
+					postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count % num_k10_gpu + k10_gpu_start_id)
 					postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -711,7 +740,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		#postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname = output_stats_fname, hist_trials = hist_trials, update_interval = 0)
+		#postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname = output_stats_fname, hist_trials = cuda_postcoh_hist_trials, update_interval = 0)
 		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs

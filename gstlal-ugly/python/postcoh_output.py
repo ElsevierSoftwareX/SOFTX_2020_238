@@ -38,22 +38,35 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 class PostcohInspiralTable(table.Table):
 	tableName = "postcoh:table"
 	validcolumns = {
-		"end_time":	"int_4s",
-		"end_time_ns":	"int_4s",
-		"is_background":	"int_4s",
-		"livetime":	"int_4s",
-		"ifos":		"lstring",
-		"pivotal_ifo":	"lstring",
-		"tmplt_idx":	"int_4s",
-		"pix_idx":	"int_4s",
-		"maxsnglsnr":	"real_4",
-		"cohsnr":	"real_4",
-		"nullsnr":	"real_4",
-		"chisq":	"real_4",
-		"spearman_pval":	"real_4",
-		"fap":		"real_4",
-		"far":		"real_4",
-		"skymap_fname":	"lstring"
+			"end_time":	"int_4s",
+			"end_time_ns":	"int_4s",
+			"is_background":	"int_4s",
+			"livetime":	"int_4s",
+			"ifos":		"lstring",
+			"pivotal_ifo":	"lstring",
+			"tmplt_idx":	"int_4s",
+			"pix_idx":	"int_4s",
+			"maxsnglsnr":	"real_4",
+			"cohsnr":	"real_4",
+			"nullsnr":	"real_4",
+			"chisq":	"real_4",
+			"spearman_pval":	"real_4",
+			"fap":		"real_4",
+			"far":		"real_4",
+			"skymap_fname":	"lstring",
+			"template_duration": "real_8",
+			"mass1":	"real_4",
+			"mass2":	"real_4",
+			"mchirp":	"real_4",
+			"mtotal":	"real_4",
+			"spin1x":	"real_4",
+			"spin1y":	"real_4",
+			"spin1z":	"real_4",
+			"spin2x":	"real_4",
+			"spin2y":	"real_4",
+			"spin2z":	"real_4",
+			"ra":		"real_8",
+			"dec":		"real_8"
 	}
 
 
@@ -83,15 +96,15 @@ class PostcohDocument(object):
 
 
 class Data(object):
-	def __init__(self, pipeline, output_data_prefix, cluster_window = 1, snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, data_output_prefix, cluster_window = 1, data_snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
 		self.lock = threading.Lock()
 		self.verbose = verbose
 		self.pipeline = pipeline
-		self.output_data_prefix = output_data_prefix
-		self.snapshot_interval = snapshot_interval
+		self.data_output_prefix = data_output_prefix
+		self.data_snapshot_interval = data_snapshot_interval
 		self.cluster_window = cluster_window
 		self.gracedb_far_threshold = gracedb_far_threshold
 		self.gracedb_group = gracedb_group
@@ -116,7 +129,7 @@ class Data(object):
 			events = postcohinspiraltable.PostcohInspiralTable.from_buffer(buf)
 			self.postcoh_table.extend(events)
 			self.duration_roll = buf_timestamp - self.t_roll_start
-			if self.snapshot_interval is not None and self.duration_roll > self.snapshot_interval:
+			if self.data_snapshot_interval is not None and self.duration_roll > self.data_snapshot_interval:
 				snapshot_filename = self.get_output_filename(self.output_data_prefix, self.t_roll_start, self.duration_roll)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_roll_start = buf_timestamp

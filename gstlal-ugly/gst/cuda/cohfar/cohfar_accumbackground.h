@@ -62,14 +62,14 @@ typedef struct {
 	int ncombo; // ifo combination
 	BackgroundStats **stats;
 
-	int update_interval;
+	int snapshot_interval;
 	gchar *history_fname;
-	gchar *output_fname;
+	gchar *output_fname_prefix;
 
 	/*
 	 * timestamp book-keeping
 	 */
-
+	GstClockTime t_end;
 	GstClockTime t_roll_start;
 } CohfarAccumbackground;
 

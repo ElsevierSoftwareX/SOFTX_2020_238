@@ -719,6 +719,7 @@ postcoh_filesink_event (GstBaseSink * basesink, GstEvent * event)
       GString *new_filename = g_string_new(sink->uri);
       gint gps_time = sink->t_start / GST_SECOND;
       g_string_append_printf(new_filename, "_%d_%d.xml.gz", gps_time, duration);
+      /* rename does not recognize the first 7 chars "file://" so we need to remove that */
       gchar *tmp_new_filename_str = g_strdup(&(new_filename->str[7]));
       gchar *tmp_cur_filename_str = g_strdup(&(sink->cur_filename->str[7]));
       /* rename the current file to a proper name */
