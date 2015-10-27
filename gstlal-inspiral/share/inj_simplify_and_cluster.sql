@@ -18,6 +18,42 @@
 DROP table if EXISTS sim_inspiral;
 
 --
+-- process clean up.  same computer, unix process ID, and start time =
+-- same process
+--
+
+CREATE INDEX tmpindex ON process (node, unix_procid, start_time);
+CREATE TEMPORARY TABLE _idmap_ AS
+	SELECT
+		old.process_id AS old,
+		MIN(new.process_id) AS new
+	FROM
+		process AS old
+		JOIN process AS new ON (
+			new.node == old.node
+			AND new.unix_procid == old.unix_procid
+			AND new.start_time == old.start_time
+		)
+	GROUP BY
+		old.process_id;
+DROP INDEX tmpindex;
+CREATE INDEX tmpindex ON _idmap_ (old);
+
+UPDATE coinc_event SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE segment SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE segment_definer SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE segment_summary SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE sngl_inspiral SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE time_slide SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+
+DELETE FROM process WHERE process_id IN (SELECT old FROM _idmap_ WHERE old != new);
+DELETE FROM process_params WHERE process_id NOT IN (SELECT process_id FROM process);
+DELETE FROM search_summary WHERE process_id NOT IN (SELECT process_id FROM process);
+
+DROP INDEX tmpindex;
+DROP TABLE _idmap_;
+
+--
 -- coinc_definer clean up
 --
 
@@ -69,6 +105,29 @@ DELETE FROM segment_definer WHERE segment_def_id IN (SELECT old FROM _idmap_ WHE
 
 DROP INDEX tmpindex;
 DROP TABLE _idmap_;
+
+--
+-- segment clean up.  NOTE:  this assumes that nothing references segment
+-- rows by ID, so that redundant rows can be deleted without correcting
+-- references to their IDs in other tables
+--
+
+DELETE FROM
+	segment
+WHERE
+	EXISTS (
+		SELECT
+			*
+		FROM
+			segment AS other
+		WHERE
+			other.segment_def_id == segment.segment_def_id
+			AND other.start_time == segment.start_time
+			AND other.start_time_ns == segment.start_time_ns
+			AND other.end_time == segment.end_time
+			AND other.end_time_ns == segment.end_time_ns
+			AND other.segment_id < segment.segment_id
+	);
 
 --
 -- time_slide clean up
