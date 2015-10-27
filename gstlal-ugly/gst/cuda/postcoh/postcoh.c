@@ -997,7 +997,6 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	}
 
 	}
-	printf("table done\n");
 }
 
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)

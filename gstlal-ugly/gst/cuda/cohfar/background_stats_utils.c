@@ -77,7 +77,19 @@ bins2D_create_long(float x_min, float x_max, int x_nbin, float y_min, float y_ma
   gsl_matrix_long_set_zero(bins->data);
   return bins;
 }
+void
+background_stats_reset(BackgroundStats **stats, int ncombo)
+{
+  int icombo;
+  BackgroundRates *rates;
+  for (icombo=0; icombo<ncombo; icombo++) {
+	  rates = stats[icombo]->rates;
+	  gsl_vector_long_set_zero((gsl_vector_long *)rates->logsnr_bins->data);
+	  gsl_vector_long_set_zero((gsl_vector_long *)rates->logchisq_bins->data);
+	  gsl_matrix_long_set_zero((gsl_matrix_long *)rates->hist->data);
+  }
 
+}
 
 BackgroundStats **
 background_stats_create(char *ifos)
@@ -90,7 +102,7 @@ background_stats_create(char *ifos)
   for (icombo=0; icombo<ncombo; icombo++) {
     stats[icombo] = (BackgroundStats *) malloc(sizeof(BackgroundStats));
     BackgroundStats *cur_stats = stats[icombo];
-    printf("len %s, %d\n", IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]));
+    //printf("len %s, %d\n", IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]));
     cur_stats->ifos = malloc(strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
