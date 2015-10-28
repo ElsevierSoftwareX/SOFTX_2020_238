@@ -27,6 +27,11 @@
 #include <gst/base/gstadapter.h>
 #include <cuda_runtime.h>
 
+// FIXME: hack for cuda-6.5 and lal header to work
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
+
 #include <lal/LIGOMetadataTables.h>
 
 G_BEGIN_DECLS

@@ -1,4 +1,12 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "postcoh.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 #define NOT_INIT -1
 #define INIT 1
