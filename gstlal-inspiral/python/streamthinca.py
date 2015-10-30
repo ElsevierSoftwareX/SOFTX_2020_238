@@ -196,6 +196,17 @@ class StreamThinca(object):
 	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
 
 
+	@property
+	def max_dt(self):
+		"""
+		Upper bound on the time that can separate two triggers and
+		they still pass coincidence, not including time shifts.
+		"""
+		# add 10% to coincidence window for safety + the
+		# light-crossing time of the Earth
+		return 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
+
+
 	def add_events(self, xmldoc, process_id, events, boundary, fapfar = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
@@ -224,19 +235,62 @@ class StreamThinca(object):
 
 
 	def run_coincidence(self, xmldoc, process_id, boundary, fapfar = None):
+		"""
+		boundary = the time up-to which the trigger list can be
+		assumed to be complete.
+		"""
+		#
+		# Notes on time intervals:
+		#
+		#  ... -------)[----------------------)[----------------- ...
+		#
+		#              ^                       ^
+		#              | last boundary         | boundary
+		#        ^                       ^
+		#        |last_bound-back_off    | boundary-back_off
+		#        [----------------------)
+		#             coinc segment (times of earliest single)
+		#        ^
+		#        | discard all singles before here
+		#
+		# We know all singles up-to boundary;  from boundary and on
+		# the list might be incomplete.  A concidence can involve
+		# triggers separated by as much as coincidence_back_off
+		# (including time slide offsets).  Therefore, on this
+		# iteration coincs whose earliest trigger is not later than
+		# (boundary-coincidence_back_off) are complete;  coincs
+		# whose earliest trigger occurs on or after
+		# (boundary-coincidence_back_off) might be incomplete (we
+		# might form new doubles or doubles might be promoted to
+		# triples, and so on, when we fill in the singles list
+		# later).
+		#
+		# Therefore, if for the purpose of this code we define the
+		# "time" of a coinc by the time of its earliest single,
+		# then on this iteration, we will construct all coincs with
+		# times in [last_boundary-coincidence_back_off,
+		# boundary-coincidence_back_off).  Singles that precede
+		# (last_boundary-coincidence_back_off), are no longer
+		# required since all coincs that can involve those triggers
+		# were obtained on the last iteration.
+		#
+
 		# safety check
 		assert xmldoc is self._xmldoc
-
-		# stay this far away from the boundaries of the available
-		# triggers
-		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
-		coincidence_back_off = max(abs(offset) for offset in time_slide_table.getColumnByName("offset"))
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
 		# the last flush
-		if self.last_boundary + self.thinca_interval > boundary - coincidence_back_off or self.sngl_inspiral_table is None:
+		if self.last_boundary + self.thinca_interval > boundary or self.sngl_inspiral_table is None:
 			return []
+
+		# how far apart two singles can be and still be coincident,
+		# including time slide offsets.  FIXME:  assumes the
+		# greatest and least offsets are in different instruments,
+		# if not then this overestimates the time that can separate
+		# two triggers
+		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
+		coincidence_back_off = max(offset for offset in time_slide_table.getColumnByName("offset")) - min(offset for offset in time_slide_table.getColumnByName("offset")) + self.max_dt
 
 		# remove triggers that are too old to be useful from our
 		# internal sngl_inspiral table.  save any that were never
@@ -271,8 +325,8 @@ class StreamThinca(object):
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
 		# keyword argument
-		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
-			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
+		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
+			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or min(event.end for event in events) not in seg
 
 		# find coincs
 		ligolw_thinca.ligolw_thinca(
@@ -284,9 +338,7 @@ class StreamThinca(object):
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
 			likelihood_params_func = self.ln_likelihood_params_func,
-			# add 10% to coincidence window for safety + the
-			# light-crossing time for the Earth
-			max_dt = 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
+			max_dt = self.max_dt
 		)
 
 		# assign the FAP and FAR if provided with the data to do so
