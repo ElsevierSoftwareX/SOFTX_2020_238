@@ -174,8 +174,7 @@ class StreamThinca(object):
 		self.last_coincs = {}
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
-		self.ln_likelihood_func = None
-		self.ln_likelihood_params_func = None
+		self.coinc_params_distributions = None
 
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
@@ -189,8 +188,12 @@ class StreamThinca(object):
 
 
 	def set_coinc_params_distributions(self, coinc_params_distributions):
-		self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
-		self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
+		if coinc_params_distributions is None:
+			self.ln_likelihood_func = None
+			self.ln_likelihood_params_func = None
+		else:
+			self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+			self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
 	def del_coinc_params_distributions(self):
 		self.ln_likelihood_func = None
 		self.ln_likelihood_params_func = None
