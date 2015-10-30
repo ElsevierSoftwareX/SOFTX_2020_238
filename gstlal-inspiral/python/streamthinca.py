@@ -1,4 +1,4 @@
-# Copyright (C) 2011--2013  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2011--2015  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -340,10 +340,10 @@ class StreamThinca(object):
 			coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
 			gps_time_now = float(lal.UTCToGPS(time.gmtime()))
 			for coinc_inspiral_row in coinc_inspiral_table:
-				likelihood_ratio = coinc_event_index[coinc_inspiral_row.coinc_event_id].likelihood
-				coinc_inspiral_row.combined_far = fapfar.far_from_rank(likelihood_ratio)
+				ln_likelihood_ratio = coinc_event_index[coinc_inspiral_row.coinc_event_id].likelihood
+				coinc_inspiral_row.combined_far = fapfar.far_from_rank(ln_likelihood_ratio)
 				# FIXME:  add a proper column to store this in
-				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(likelihood_ratio)
+				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(ln_likelihood_ratio)
 
 				# abuse minimum_duration column to store
 				# the latency.  NOTE:  this is nonsensical
@@ -405,7 +405,7 @@ class StreamThinca(object):
 		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
 		# save all sngls above the requested sngls SNR threshold
-		# (all snlgs that participated in coincs are already in the
+		# (all sngls that participated in coincs are already in the
 		# document, so only need to check for ones in the
 		# non-coincident sngls list for this iteration)
 		if self.sngls_snr_threshold is not None:
