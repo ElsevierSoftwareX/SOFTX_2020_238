@@ -502,7 +502,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 }
 
 void
-background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins2D *pdf)
+background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D *logsnr_bins, Bins1D *logchisq_bins, Bins2D *pdf)
 {
 
 	//tin_dim1 and tin_dim2 contains points at which estimations are computed
@@ -529,9 +529,13 @@ background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bin
 	gsl_matrix * result_dim2  = gsl_matrix_alloc(tin_dim2->size,tin_dim2->size);
 
 	//Compute temporary result of each dimension, equal to the 'y1' and 'y2' in matlab code 'test.m';
-	ssvkernel(data_dim2,tin_dim2,y_hist_result_dim2,result_dim2);
 	ssvkernel(data_dim1,tin_dim1,y_hist_result_dim1,result_dim1);
+	printf("snr data %d, completed\n", data_dim1->size);
+	ssvkernel(data_dim2,tin_dim2,y_hist_result_dim2,result_dim2);
+	printf("chisq data %d, completed\n", data_dim2->size);
 
+	gsl_vector_double_to_long(y_hist_result_dim1, (gsl_vector_long *)logsnr_bins->data);
+	gsl_vector_double_to_long(y_hist_result_dim2, (gsl_vector_long *)logchisq_bins->data);
 	//two-dimensional histogram
 	gsl_vector * temp_tin_dim1 =  gsl_vector_alloc(num_bin1);
 	gsl_vector * temp_tin_dim2 =  gsl_vector_alloc(num_bin2);
@@ -543,6 +547,7 @@ background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bin
 	gsl_matrix_hist3(data_dim1,data_dim2,temp_tin_dim1,temp_tin_dim2,histogram);
 
 	//Compute the 'scale' variable in matlab code 'test.m'
+	unsigned i, j;
 	for(i=0;i<histogram->size1;i++){
 		for(j=0;j<histogram->size2;j++){
 			double temp = gsl_matrix_get(histogram,i,j);
