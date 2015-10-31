@@ -295,7 +295,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				noninjnode.set_post_script("gzip_test.sh")
 				noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
 				# impose a priority to help with depth first submission
-				noninjnode.set_priority(chunk_counter)
+				noninjnode.set_priority(chunk_counter+15)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
