@@ -510,16 +510,23 @@ void gsl_vector_histc(gsl_vector * x, gsl_vector * edges, gsl_vector* result) {
 					gsl_vector_get(result, edges->size - 1) + 1);
 	}
 }
+void gsl_vector_double_to_long(gsl_vector *in, gsl_vector_long *out)
+{
+	size_t i;
+	for (i=0; i<in->size; i++) 
+		gsl_vector_long_set(out, i, (long)gsl_vector_get(in, i));
+	
+}
 void gsl_vector_long_to_double(gsl_vector_long *in, gsl_vector *out)
 {
-	int i;
+	size_t i;
 	for (i=0; i<in->size; i++) 
 		gsl_vector_set(out, i, (double)gsl_vector_long_get(in, i));
 	
 }
 void gsl_matrix_long_to_double(gsl_matrix_long *in, gsl_matrix *out)
 {
-	int i, j;
+	size_t i, j;
 	for (i=0; i<in->size1; i++) 
 		for (j=0; j<in->size2; j++) 
 			gsl_matrix_set(out, i, j, (double)gsl_matrix_long_get(in, i, j));
@@ -697,7 +704,8 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 	double T = max_tin - min_tin;
 
 	size_t number = 0;
-
+#if 0
+	/* remove out of range data */
 	//set x_ab variable
 	for (i = 0; i < x->size; i++) {
 		if (gsl_vector_get(x, i) <= max_tin
@@ -706,8 +714,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 		}
 	}
 	gsl_vector * x_ab = gsl_vector_alloc(number);
-//	gsl_vector * temp_x_ab = gsl_vector_alloc(number);
-
+	gsl_vector * temp_x_ab = gsl_vector_alloc(number);
 	number = 0;
 	for (i = 0; i < x->size; i++) {
 		if (gsl_vector_get(x, i) <= max_tin
@@ -716,6 +723,19 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 			number++;
 		}
 	}
+#endif
+	gsl_vector * x_ab = gsl_vector_alloc(x->size);
+	gsl_vector_memcpy(x_ab, x);
+	printf("number of data %d\n", x_ab->size);
+
+	/* make the out of range data to be inside the bins */
+	for (i = 0; i < x_ab->size; i++) {
+		if (gsl_vector_get(x_ab, i) < min_tin)
+			gsl_vector_set(x_ab, i, min_tin);
+		if (gsl_vector_get(x_ab, i) > max_tin) 
+			gsl_vector_set(x_ab, i, max_tin);
+	}
+	
 	//finished
 /*	gsl_vector_memcpy(temp_x_ab,x_ab);
 	gsl_sort_vector(temp_x_ab);
@@ -734,6 +754,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 */
 	//set t variable
 	gsl_vector * t;
+	/* force bins to be the same as the input bins */
 	////////////////////////////////////
 //	if (dt_samp > gsl_vector_mindiff(tin)) {
 //		size_t temp = MIN(ceil(T / dt_samp), 1e3);
@@ -764,12 +785,14 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 	printf("computing local bandwidths....\n");
 
 	//Window sizes
-	gsl_vector * temp = gsl_vector_alloc(M);
+//	gsl_vector * temp = gsl_vector_alloc(M);
 	gsl_vector * WIN = gsl_vector_alloc(M);
 
-	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, temp);
+//	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, temp);
 	gsl_vector_linspace(ilogexp(5 * dt), ilogexp(T), M, WIN);
 
+//	gsl_vector_logexp(temp);
+	gsl_vector_logexp(WIN);
 
 	gsl_matrix * c = gsl_matrix_alloc(M, L);
 	gsl_vector * yh = gsl_vector_alloc(L);
@@ -922,7 +945,7 @@ void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_
 	gsl_vector_free(t);
 	gsl_vector_free(t_dt2);
 	gsl_vector_free(y_hist);
-	gsl_vector_free(temp);
+//	gsl_vector_free(temp);
 	gsl_vector_free(WIN);
 	gsl_vector_free(yh);
 	gsl_vector_free(c_row);
