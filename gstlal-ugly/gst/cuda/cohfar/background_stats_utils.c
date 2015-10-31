@@ -500,3 +500,71 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   g_free(tmp_filename);
   return TRUE;
 }
+
+void
+background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins2D *pdf)
+{
+
+	//tin_dim1 and tin_dim2 contains points at which estimations are computed
+	size_t num_bin1 = LOGSNR_NBIN, num_bin2 = LOGCHISQ_NBIN; //each bin's size
+	gsl_vector * tin_dim1 =  gsl_vector_alloc(num_bin1);
+	gsl_vector * tin_dim2 =  gsl_vector_alloc(num_bin2);
+    //bin of each dimension
+#if 0
+    	double tin_dim1_max = gsl_vector_max(data_dim1) + 0.5;  // linspace in power (i.e. logspace)
+	double tin_dim1_min = gsl_vector_min(data_dim1) - 0.5;
+	double tin_dim2_max = gsl_vector_max(data_dim2) + 0.5;
+	double tin_dim2_min = gsl_vector_min(data_dim2) - 0.5;
+	
+	gsl_vector_linspace(tin_dim1_min, tin_dim1_max, num_bin1, tin_dim1);
+	gsl_vector_linspace(tin_dim2_min, tin_dim2_max, num_bin2, tin_dim2);
+#endif
+
+	gsl_vector_linspace(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, tin_dim1);
+	gsl_vector_linspace(LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN, tin_dim2);
+	gsl_vector * y_hist_result_dim1 = gsl_vector_alloc(num_bin1);
+	gsl_vector * y_hist_result_dim2 = gsl_vector_alloc(num_bin2);
+    //histogram of each dimension
+	gsl_matrix * result_dim1  = gsl_matrix_alloc(tin_dim1->size,tin_dim1->size);
+	gsl_matrix * result_dim2  = gsl_matrix_alloc(tin_dim2->size,tin_dim2->size);
+
+	//Compute temporary result of each dimension, equal to the 'y1' and 'y2' in matlab code 'test.m';
+	ssvkernel(data_dim2,tin_dim2,y_hist_result_dim2,result_dim2);
+	ssvkernel(data_dim1,tin_dim1,y_hist_result_dim1,result_dim1);
+
+	//two-dimensional histogram
+	gsl_vector * temp_tin_dim1 =  gsl_vector_alloc(num_bin1);
+	gsl_vector * temp_tin_dim2 =  gsl_vector_alloc(num_bin2);
+	gsl_vector_memcpy(temp_tin_dim1,tin_dim1);
+	gsl_vector_add_constant(temp_tin_dim1,-gsl_vector_mindiff(tin_dim1)/2);
+	gsl_vector_memcpy(temp_tin_dim2,tin_dim2);
+	gsl_vector_add_constant(temp_tin_dim2,-gsl_vector_mindiff(tin_dim2)/2);
+	gsl_matrix * histogram = gsl_matrix_alloc(tin_dim1->size,tin_dim2->size);
+	gsl_matrix_hist3(data_dim1,data_dim2,temp_tin_dim1,temp_tin_dim2,histogram);
+
+	//Compute the 'scale' variable in matlab code 'test.m'
+	for(i=0;i<histogram->size1;i++){
+		for(j=0;j<histogram->size2;j++){
+			double temp = gsl_matrix_get(histogram,i,j);
+			temp = temp/(gsl_vector_get(y_hist_result_dim1,i)*gsl_vector_get(y_hist_result_dim2,j));
+			if(isnan(temp))
+				gsl_matrix_set(histogram,i,j,0);
+			else
+				gsl_matrix_set(histogram,i,j,temp);
+		}
+	}
+
+	//compute the two-dimensional estimation
+	gsl_matrix * result = pdf->data;//final result
+	gsl_matrix * temp_matrix = gsl_matrix_alloc(tin_dim1->size,tin_dim2->size);
+	for(i=0;i<tin_dim1->size;i++){
+		for(j=0;j<tin_dim2->size;j++){
+			gsl_matrix_get_col(y_hist_result_dim1,result_dim1,i);
+			gsl_matrix_get_col(y_hist_result_dim2,result_dim2,j);
+			gsl_matrix_xmul(y_hist_result_dim1,y_hist_result_dim2,temp_matrix);
+			gsl_matrix_mul_elements(temp_matrix,histogram);
+			gsl_matrix_set(result,i,j,gsl_matrix_sum(temp_matrix)/(double)data_dim1->size);
+		}
+	}
+
+}
