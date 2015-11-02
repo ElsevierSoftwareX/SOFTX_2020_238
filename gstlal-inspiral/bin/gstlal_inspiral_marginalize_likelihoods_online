@@ -88,10 +88,10 @@ while true ; do
 	# generated here are all 0.
 	RANKING_PDF_FILES=
 	for REG in "$@" ; do
-		SERVER=$(cat ${REG}) || break
-		RANKING_PDF_FILE=$(mktemp --suffix .xml.gz) || break
+		SERVER=$(cat ${REG}) || exit 1
+		RANKING_PDF_FILE=$(mktemp --suffix .xml.gz) || exit 1
 		RANKING_PDF_FILES="${RANKING_PDF_FILES} ${RANKING_PDF_FILE}"
-		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} ${SERVER}${LIKELIHOOD_PATH} || break
+		gstlal_inspiral_calc_rank_pdfs --ranking-stat-samples 100000 --verbose --output ${RANKING_PDF_FILE} ${SERVER}${LIKELIHOOD_PATH} || exit 1
 	done || break
 
 	# sum the noise and signal model ranking statistic histograms
@@ -108,7 +108,7 @@ while true ; do
 	# downloaded from the jobs must be all 0!!!
 	ZEROLAG_COUNTS_URLS=
 	for REG in "$@" ; do
-		SERVER=$(cat ${REG}) || break
+		SERVER=$(cat ${REG}) || exit 1
 		ZEROLAG_COUNTS_URLS="${ZEROLAG_COUNTS_URLS} ${SERVER}${ZEROLAG_COUNTS_PATH}"
 	done || break
 	gstlal_inspiral_marginalize_likelihood --verbose --output ${OUTPUT}.next.gz ${BACKGROUND_COUNTS} ${ZEROLAG_COUNTS_URLS} || break
