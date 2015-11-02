@@ -38,8 +38,8 @@
 #define LOGSNR_CMAX	2.49 // center of the last bin
 #define LOGSNR_NBIN	190 // step is 0.01
 #define LOGCHISQ_CMIN	-0.5
-#define LOGCHISQ_CMAX	2.99
-#define LOGCHISQ_NBIN	350
+#define LOGCHISQ_CMAX	2.49
+#define LOGCHISQ_NBIN	300
 
 extern char *IFO_COMBO_MAP[];
 
