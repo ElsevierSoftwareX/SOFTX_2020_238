@@ -503,7 +503,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 86400, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type

@@ -162,7 +162,7 @@ def parse_command_line():
   parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
   parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
   parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
-  parser.add_option("--cohfar-accumbackground-snapshot-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to snapshot the stats files. (optional)")
+  parser.add_option("--cohfar-accumbackground-snapshot-interval", type = "int", metavar = "seconds", default = 0, help = "How often to snapshot the stats files. (optional)")
   parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
   parser.add_option("--cohfar-assignfap-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
@@ -189,7 +189,7 @@ def parse_command_line():
   parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
   parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
-  parser.add_option("--data-snapshot-interval", type = "float", metavar = "seconds", default = 14400, help = "How often to snapshot the trigger files.")
+  parser.add_option("--data-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--data-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
 
   # set the postcoh parameters

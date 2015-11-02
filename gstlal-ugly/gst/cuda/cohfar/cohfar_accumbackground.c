@@ -183,7 +183,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration > element->snapshot_interval) {
 		/* snapshot background xml file */
-		gint gps_time = (int) element->t_roll_start / GST_SECOND;
+		gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 		GString *tmp_fname = g_string_new(element->output_fname_prefix);
 		g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
 		background_stats_to_xml(stats, element->ncombo, tmp_fname->str);

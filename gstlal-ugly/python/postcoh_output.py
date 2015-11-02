@@ -1,4 +1,5 @@
 import threading
+import thread # low level threading
 import sys
 import pdb
 
@@ -91,8 +92,10 @@ class PostcohDocument(object):
 		self.filename = filename
 
 	def write_output_file(self, verbose = False):
+		print "start writing"
 		assert self.filename is not None
 		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		print "finish writing"
 
 
 class Data(object):
@@ -101,6 +104,7 @@ class Data(object):
 	# initialize
 	#
 		self.lock = threading.Lock()
+		self.thread_snapshot = None
 		self.verbose = verbose
 		self.pipeline = pipeline
 		self.data_output_prefix = data_output_prefix
@@ -113,6 +117,7 @@ class Data(object):
 		self.gracedb_service_url = gracedb_service_url
 
 		self.postcoh_document = PostcohDocument()
+		self.postcoh_document_cpy = None
 		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 		self.t_roll_start = None
@@ -130,22 +135,32 @@ class Data(object):
 			self.postcoh_table.extend(events)
 			self.duration_roll = buf_timestamp - self.t_roll_start
 			if self.data_snapshot_interval is not None and self.duration_roll > self.data_snapshot_interval:
-				snapshot_filename = self.get_output_filename(self.output_data_prefix, self.t_roll_start, self.duration_roll)
+				snapshot_filename = self.get_output_filename(self.data_output_prefix, self.t_roll_start, self.duration_roll)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_roll_start = buf_timestamp
 			#self.cluster(events, self.cluster_window)
-	def get_output_filename(self, output_data_prefix, t_roll_start, duration_roll):
-			fname = "%s_%d_%d.xml.gz" % (output_data_prefix, t_roll_start, duration_roll)
+	def get_output_filename(self, data_output_prefix, t_roll_start, duration_roll):
+			fname = "%s_%d_%d.xml.gz" % (data_output_prefix, t_roll_start, duration_roll)
 			return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
-		with self.lock:
-			postcoh_document = self.postcoh_document.get_another()
-			self.__write_output_file(filename = filename, verbose = verbose)
-			del self.postcoh_document
-			self.postcoh_document = postcoh_document
+		# FIXME: thread_snapshot must finish before calling this function
+		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
+			self.thread_snapshot.join()
+		del self.postcoh_document_cpy
+		self.postcoh_document_cpy = self.postcoh_document
+		self.postcoh_document_cpy.set_filename(filename)
+		self.thread_snapshot = threading.Thread(target = self.postcoh_document_cpy.write_output_file, args =(self.postcoh_document_cpy, ))
+		self.thread_snapshot.start()
+		print "main thread: sub thread return"
+		postcoh_document = self.postcoh_document.get_another()
+		del self.postcoh_document
+		self.postcoh_document = postcoh_document
+		print "main thread: snapshot finish"
 
 	def write_output_file(self, filename = None, verbose = False):
+		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
+			self.thread_snapshot.join()
 		self.__write_output_file(filename)
 
 	def __write_output_file(self, filename = None, verbose = False):
