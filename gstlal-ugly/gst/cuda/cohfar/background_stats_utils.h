@@ -34,34 +34,34 @@
 #define IFO_LEN 2
 #define MAX_COMBOS 4
 
-#define LOGSNR_MIN	0.6
-#define LOGSNR_MAX	2.5
-#define LOGSNR_NBIN	190
-#define LOGCHISQ_MIN	-0.5
-#define LOGCHISQ_MAX	2.5
-#define LOGCHISQ_NBIN	300
+#define LOGSNR_CMIN	0.6 // center of the first bin
+#define LOGSNR_CMAX	2.49 // center of the last bin
+#define LOGSNR_NBIN	190 // step is 0.01
+#define LOGCHISQ_CMIN	-0.5
+#define LOGCHISQ_CMAX	2.99
+#define LOGCHISQ_NBIN	350
 
 extern char *IFO_COMBO_MAP[];
 
 int get_icombo(char *ifos);
 	
 Bins1D *
-bins1D_create_long(float min, float max, int nbin);
+bins1D_create_long(double cmin, double cmax, int nbin);
 
 Bins2D *
-bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin);
+bins2D_create(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin);
 
 Bins2D *
-bins2D_create_long(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin);
+bins2D_create_long(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin);
 
 BackgroundStats **
 background_stats_create(char *ifos);
 
 int
-get_idx_bins1D(float val, Bins1D *bins);
+get_idx_bins1D(double val, Bins1D *bins);
 
 void
-background_stats_rates_update(float snr, float chisq, BackgroundRates *rates);
+background_stats_rates_update(double snr, double chisq, BackgroundRates *rates);
 
 void
 background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2);
@@ -74,7 +74,7 @@ background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf);
 
 
 double
-background_stats_bins2D_get_val(float snr, float chisq, Bins2D *bins);
+background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins);
 
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename);

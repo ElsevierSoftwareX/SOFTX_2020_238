@@ -167,7 +167,7 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
   parser.add_option("--cohfar-assignfap-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
   parser.add_option("--cohfar-assignfap-collection-time", type = "int", metavar = "seconds", default = 0, help = "How often to update the marginalized stats files. (optional)")
-  parser.add_option("--cohfar-assignfap-input-fname", metavar = "filename", help = "Set the filename to read the CDF (required)")
+  parser.add_option("--cohfar-assignfap-input-fname", metavar = "filename", default = None, help = "Set the filename to read the CDF (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
   parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
@@ -213,7 +213,7 @@ def parse_command_line():
   if options.blind_injections and options.injections:
     raise ValueError("must use only one of --blind-injections or --injections")
 
-  required_options = ["job_tag", "cohfar_assignfap_input_fname"]
+  required_options = ["job_tag"]
 	
   missing_options = []
 

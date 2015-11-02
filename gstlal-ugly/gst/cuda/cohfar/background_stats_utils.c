@@ -32,47 +32,50 @@ int get_icombo(char *ifos) {
 }
 
 Bins1D *
-bins1D_create_long(float min, float max, int nbin) 
+bins1D_create_long(double cmin, double cmax, int nbin) 
 {
   Bins1D * bins = (Bins1D *) malloc(sizeof(Bins1D));
-  bins->min = min;
-  bins->max = max;
+  bins->cmin = cmin;
+  bins->cmax = cmax;
   bins->nbin = nbin;
-  bins->step = (max - min)/ nbin;
+  bins->step = (cmax - cmin)/ (nbin - 1);
+  bins->step_2 = bins->step / 2;
   bins->data = gsl_vector_long_alloc(nbin);
   gsl_vector_long_set_zero(bins->data);
   return bins;
 }
 
 Bins2D *
-bins2D_create(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin) 
+bins2D_create(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin) 
 {
   Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
-  bins->x_min = x_min;
-  bins->x_max = x_max;
+  bins->x_cmin = x_cmin;
+  bins->x_cmax = x_cmax;
   bins->x_nbin = x_nbin;
-  bins->x_step = (x_max - x_min) / x_nbin;
-  bins->y_min = y_min;
-  bins->y_max = y_max;
+  bins->x_step = (x_cmax - x_cmin) / (x_nbin - 1);
+  bins->x_step_2 = bins->x_step / 2;
+  bins->y_cmin = y_cmin;
+  bins->y_cmax = y_cmax;
   bins->y_nbin = y_nbin;
-  bins->y_step = (y_max - y_min) / y_nbin;
+  bins->y_step = (y_cmax - y_cmin) / (y_nbin - 1);
+  bins->y_step_2 = bins->y_step / 2;
   bins->data = gsl_matrix_alloc(x_nbin, y_nbin);
   gsl_matrix_set_zero(bins->data);
   return bins;
 }
 
 Bins2D *
-bins2D_create_long(float x_min, float x_max, int x_nbin, float y_min, float y_max, int y_nbin) 
+bins2D_create_long(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin) 
 {
   Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
-  bins->x_min = x_min;
-  bins->x_max = x_max;
+  bins->x_cmin = x_cmin;
+  bins->x_cmax = x_cmax;
   bins->x_nbin = x_nbin;
-  bins->x_step = (x_max - x_min) / x_nbin;
-  bins->y_min = y_min;
-  bins->y_max = y_max;
+  bins->x_step = (x_cmax - x_cmin) / (x_nbin - 1);
+  bins->y_cmin = y_cmin;
+  bins->y_cmax = y_cmax;
   bins->y_nbin = y_nbin;
-  bins->y_step = (y_max - y_min) / y_nbin;
+  bins->y_step = (y_cmax - y_cmin) / (y_nbin - 1);
   bins->data = gsl_matrix_long_alloc(x_nbin, y_nbin);
   gsl_matrix_long_set_zero(bins->data);
   return bins;
@@ -107,11 +110,11 @@ background_stats_create(char *ifos)
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
     BackgroundRates *rates = cur_stats->rates;
-    rates->logsnr_bins = bins1D_create_long(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN);
-    rates->logchisq_bins = bins1D_create_long(LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
-    rates->hist = bins2D_create_long(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
-    cur_stats->pdf = bins2D_create(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
-    cur_stats->cdf = bins2D_create(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN);
+    rates->logsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
+    rates->logchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    rates->hist = bins2D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    cur_stats->cdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
   }
   return stats;
 }
@@ -120,21 +123,21 @@ background_stats_create(char *ifos)
  * background rates utils
  */
 int
-get_idx_bins1D(float val, Bins1D *bins)
+get_idx_bins1D(double val, Bins1D *bins)
 {
-  float logval = log10f(val); // float
+  double logval = log10(val); // double
 
-  if (logval < bins->min) 
+  if (logval < bins->cmin) 
     return 0;
   
-  if (logval > bins->max) 
+  if (logval > bins->cmax) 
     return bins->nbin - 1;
 
-  return (int) ((logval - bins->min) / bins->step);
+  return (int) ((logval - bins->cmin - bins->step_2) / bins->step);
 }
 
 void
-background_stats_rates_update(float snr, float chisq, BackgroundRates *rates)
+background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
 {
 	int snr_idx = get_idx_bins1D(snr, rates->logsnr_bins);
 	int chisq_idx = get_idx_bins1D(chisq, rates->logchisq_bins);
@@ -175,8 +178,8 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 
 	gsl_vector *tin_snr = gsl_vector_alloc(pdf->x_nbin);
 	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->y_nbin);
-	gsl_vector_linspace(pdf->x_min, pdf->x_max, pdf->x_nbin, tin_snr);
-	gsl_vector_linspace(pdf->y_min, pdf->y_max, pdf->y_nbin, tin_chisq);
+	gsl_vector_linspace(pdf->x_cmin, pdf->x_cmax, pdf->x_nbin, tin_snr);
+	gsl_vector_linspace(pdf->y_cmin, pdf->y_cmax, pdf->y_nbin, tin_chisq);
 
 	gsl_matrix *result_snr = gsl_matrix_alloc(pdf->x_nbin, pdf->x_nbin);
 	gsl_matrix *result_chisq = gsl_matrix_alloc(pdf->y_nbin, pdf->y_nbin);
@@ -217,7 +220,7 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	}
 
 	// normalize pdf
-	float x_step = pdf->x_step, y_step = pdf->y_step;
+	double x_step = pdf->x_step, y_step = pdf->y_step;
 	double pdf_sum;
        	pdf_sum = x_step * y_step * gsl_matrix_sum(result);
 	gsl_matrix_scale(result, 1/pdf_sum);
@@ -255,16 +258,16 @@ background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
 			gsl_matrix_set(cdfdata, ix, iy, tmp);
 		}
 	}
-	//printf("cdf max %f\n", gsl_matrix_max(cdfdata));
+	//printf("cdf cmax %f\n", gsl_matrix_cmax(cdfdata));
 }
 
 double
-background_stats_bins2D_get_val(float snr, float chisq, Bins2D *bins)
+background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins)
 {
-  float logsnr = log10f(snr), logchisq = log10f(chisq);
+  double logsnr = log10(snr), logchisq = log10(chisq);
   int x_idx = 0, y_idx = 0;
-  x_idx = MIN(MAX((logsnr - bins->x_min) / bins->x_step, 0), bins->x_nbin-1);
-  y_idx = MIN(MAX((logchisq - bins->y_min) / bins->y_step, 0), bins->y_nbin-1);
+  x_idx = MIN(MAX((logsnr - bins->x_cmin - bins->x_step_2) / bins->x_step, 0), bins->x_nbin-1);
+  y_idx = MIN(MAX((logchisq - bins->y_cmin - bins->y_step_2) / bins->y_step, 0), bins->y_nbin-1);
   return gsl_matrix_get(bins->data, x_idx, y_idx);
 }
 
@@ -348,7 +351,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   gchar *tmp_filename = g_strdup_printf("%s_next", filename);
   int icombo = 0;
   XmlParam param_range;
-  param_range.data = (float *) malloc(sizeof(float) * 2);
+  param_range.data = (double *) malloc(sizeof(double) * 2);
   XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -448,14 +451,14 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   GString *param_name = g_string_new(NULL);
 
   g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_SNR_SUFFIX);
-  ((float *)param_range.data)[0] = LOGSNR_MIN;
-  ((float *)param_range.data)[1] = LOGSNR_MAX;
-  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_4", BAD_CAST "FLOAT");
+  ((double *)param_range.data)[0] = LOGSNR_CMIN;
+  ((double *)param_range.data)[1] = LOGSNR_CMAX;
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST "DOUBLE");
 
   g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_CHISQ_SUFFIX);
-  ((float *)param_range.data)[0] = LOGCHISQ_MIN;
-  ((float *)param_range.data)[1] = LOGCHISQ_MAX;
-  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_4", BAD_CAST "FLOAT");
+  ((double *)param_range.data)[0] = LOGCHISQ_CMIN;
+  ((double *)param_range.data)[1] = LOGCHISQ_CMAX;
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST "DOUBLE");
 
   g_string_free(param_name, TRUE);
 
@@ -511,17 +514,17 @@ background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bin
 	gsl_vector * tin_dim2 =  gsl_vector_alloc(num_bin2);
     //bin of each dimension
 #if 0
-    	double tin_dim1_max = gsl_vector_max(data_dim1) + 0.5;  // linspace in power (i.e. logspace)
-	double tin_dim1_min = gsl_vector_min(data_dim1) - 0.5;
-	double tin_dim2_max = gsl_vector_max(data_dim2) + 0.5;
-	double tin_dim2_min = gsl_vector_min(data_dim2) - 0.5;
+    	double tin_dim1_cmax = gsl_vector_max(data_dim1) + 0.5;  // linspace in power (i.e. logspace)
+	double tin_dim1_cmin = gsl_vector_cmin(data_dim1) - 0.5;
+	double tin_dim2_cmax = gsl_vector_max(data_dim2) + 0.5;
+	double tin_dim2_cmin = gsl_vector_cmin(data_dim2) - 0.5;
 	
-	gsl_vector_linspace(tin_dim1_min, tin_dim1_max, num_bin1, tin_dim1);
-	gsl_vector_linspace(tin_dim2_min, tin_dim2_max, num_bin2, tin_dim2);
+	gsl_vector_linspace(tin_dim1_cmin, tin_dim1_cmax, num_bin1, tin_dim1);
+	gsl_vector_linspace(tin_dim2_cmin, tin_dim2_cmax, num_bin2, tin_dim2);
 #endif
 
-	gsl_vector_linspace(LOGSNR_MIN, LOGSNR_MAX, LOGSNR_NBIN, tin_dim1);
-	gsl_vector_linspace(LOGCHISQ_MIN, LOGCHISQ_MAX, LOGCHISQ_NBIN, tin_dim2);
+	gsl_vector_linspace(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, tin_dim1);
+	gsl_vector_linspace(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN, tin_dim2);
 	gsl_vector * y_hist_result_dim1 = gsl_vector_alloc(num_bin1);
 	gsl_vector * y_hist_result_dim2 = gsl_vector_alloc(num_bin2);
     //histogram of each dimension
@@ -545,6 +548,7 @@ background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bin
 	gsl_vector_add_constant(temp_tin_dim2,-gsl_vector_mindiff(tin_dim2)/2);
 	gsl_matrix * histogram = gsl_matrix_alloc(tin_dim1->size,tin_dim2->size);
 	gsl_matrix_hist3(data_dim1,data_dim2,temp_tin_dim1,temp_tin_dim2,histogram);
+	printf("histogram estimation done\n");
 
 	//Compute the 'scale' variable in matlab code 'test.m'
 	unsigned i, j;

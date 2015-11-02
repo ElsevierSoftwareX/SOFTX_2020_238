@@ -32,22 +32,25 @@
 #include <gsl/gsl_matrix.h>
 
 typedef struct {
-	float	min;
-	float	max;
+	double	cmin;
+	double	cmax;
 	int	nbin;
-	float	step;
+	double	step;
+	double	step_2;
 	void	*data; // gsl_vector_long
 } Bins1D;
 
 typedef struct {
-	float	x_min;
-	float	x_max;
+	double	x_cmin;
+	double	x_cmax;
 	int	x_nbin;
-	float	x_step;
-	float	y_min;
-	float	y_max;
+	double	x_step;
+	double	x_step_2;
+	double	y_cmin;
+	double	y_cmax;
 	int	y_nbin;
-	float	y_step;
+	double	y_step;
+	double	y_step_2;
 	void	*data; //gsl_matrix or gsl_matrix_long
 } Bins2D;
 

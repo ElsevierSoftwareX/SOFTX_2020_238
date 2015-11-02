@@ -135,8 +135,9 @@ def mkcohfar_assignfap(pipeline, src, ifos= "H1L1", refresh_interval = 14400, co
 		"ifos": ifos,
 		"refresh_interval": refresh_interval,
 		"collection_time": collection_time,
-		"input_fname": input_fname
 	}
+	if input_fname is not None:
+		properties["input_fname"] = input_fname
 
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_assignfap", properties.pop("name"))

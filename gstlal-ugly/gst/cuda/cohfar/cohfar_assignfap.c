@@ -127,13 +127,15 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->collection_time) {
 		element->t_roll_start = t_cur;
-		background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
+		if (element->input_fname)
+			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
 		element->pass_collection_time = TRUE;
 	}
 
 	if (element->pass_collection_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
-		background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
+		if (element->input_fname)
+			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
 	}
 
 
@@ -144,7 +146,7 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
-			table->fap = background_stats_bins2D_get_val(table->cohsnr, table->chisq, stats[icombo]->cdf);
+			table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->chisq, stats[icombo]->cdf);
 		}
 	}
 
