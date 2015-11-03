@@ -56,6 +56,7 @@ from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import load_filename
 from glue import lal
 from pylal import db_thinca_rings
 from pylal import git_version
@@ -134,6 +135,7 @@ def parse_command_line():
  6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
+	parser.add_option("--likelihood-file", metavar = "filename", help = "Path to the marginalized likelihood file.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -147,6 +149,9 @@ def parse_command_line():
 		filenames = []
 	if options.input_cache:
 		filenames.extend(c.path for c in map(lal.CacheEntry, open(options.input_cache)))
+
+	if options.likelihood_file is None:
+		raise ValueError("Must provide likelihood file.")
 
 	return options, filenames
 
@@ -1186,6 +1191,40 @@ WHERE
 # =============================================================================
 #
 
+def load_distributions(filenames, verbose = False):
+	coinc_params_distributions, ranking_data, seglists = None, None, None
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+		this_coinc_params_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(load_filename(filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
+		if this_coinc_params_distributions is None and this_ranking_data is None:
+			raise ValueError("%s contains no parameter distribution data" % filename)
+		if coinc_params_distributions is None:
+			coinc_params_distributions = this_coinc_params_distributions
+		elif this_coinc_params_distributions is not None:
+			coinc_params_distributions += this_coinc_params_distributions
+		if ranking_data is None:
+			ranking_data = this_ranking_data
+		elif this_ranking_data is not None:
+			ranking_data += this_ranking_data
+		if seglists is None:
+			seglists = this_seglists
+		else:
+			seglists |= this_seglists
+	if coinc_params_distributions is None and ranking_data is None:
+		raise ValueError("no parameter distribution data loaded")
+	if coinc_params_distributions is not None:
+		coinc_params_distributions.finish(verbose = verbose)
+	# FIXME signal PDFs are still not right.
+	ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
+	ranking_data.finish(verbose = verbose)
+	# FIXME:  hack to fake some segments so we can generate file names
+	# if the input files didn't provide segment information
+	try:
+		seglists.extent_all()
+	except ValueError:
+		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
+	return coinc_params_distributions, ranking_data, seglists
 
 def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
@@ -1240,9 +1279,53 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	axes.set_xlim(xlim)
 	axes.set_ylim(ylim)
 
+def plot_likelihood_ratio_ccdf(axes, zerolag_stats, fapfar, is_open_box, xlim = (None, None)):
+
+	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	ylim = 0.001, 10.**math.ceil(math.log10(len(zerolag_stats)))
+
+	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
+	expected_count_y = []
+	for llr in expected_count_x:
+		expected_count_y.append(fapfar.far_from_rank(llr) * fapfar.livetime)
+
+	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
+
+	#
+	# error bands
+	#
+
+	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
+	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(*ylim), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
+	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(*ylim), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
+	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(*ylim), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
+
+	#
+	# zero-lag
+	#
+
+	if zerolag_stats is not None:
+		N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
+		line5, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
+
+	#
+	# legend
+	#
+
+	if is_open_box:
+		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+	else:
+		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+
+	#
+	# adjust bounds of plot
+	#
+
+	axes.set_xlim(xlim)
+	axes.set_ylim(ylim)
 
 class RateVsThreshold(object):
-	def __init__(self):
+	def __init__(self, fapfar):
 		self.background_ln_likelihood_ratio = []
 		self.zerolag_ln_likelihood_ratio = []
 		self.background_far = []
@@ -1252,6 +1335,7 @@ class RateVsThreshold(object):
 		self.background_snr = []
 		self.zerolag_snr = []
 		self.farsegs = segments.segmentlistdict()
+		self.fapfar = fapfar
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is not None:
@@ -1331,27 +1415,7 @@ WHERE
 
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
 
-				# we want to plot FAR(ln L) * livetime vs.
-				# ln L, but we don't have access to the
-				# ranking statistic data file where that
-				# function is encoded.  instead, we rely on
-				# the FARs stored in each coinc, together
-				# with the ln L assigned to each coinc, to
-				# provide us with a collection of samples
-				# of that function.  to get more points, we
-				# combine data from the zero-lag and
-				# background coincs.  in the future,
-				# perhaps this program could be provided
-				# with the marginalized ranking statistic
-				# PDF data file
-
-				expected_count_x = self.zerolag_ln_likelihood_ratio + self.background_ln_likelihood_ratio
-				order = range(len(expected_count_x))
-				order.sort(key = lambda i: expected_count_x[i], reverse = True)
-				expected_count_x = numpy.array(expected_count_x)[order]
-				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
-
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 25.))
+				plot_likelihood_ratio_ccdf(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (-5, 40))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
@@ -1378,6 +1442,17 @@ options, filenames = parse_command_line()
 
 
 #
+# Load likelihood input
+# FIXME: Probably shouldn't try to read LLR data unless we
+# are trying to make those plots.
+coinc_params_distributions, ranking_data, seglists = load_distributions([options.likelihood_file], verbose = options.verbose)
+if ranking_data is not None:
+	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+else:
+	fapfar = None
+
+
+#
 # Initialize plots
 #
 
@@ -1393,7 +1468,7 @@ def new_plots(plots = None, far_thresh = None):
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
-		RateVsThreshold(),
+		RateVsThreshold(fapfar = fapfar),
 		InjectionParameterDistributionPlots(),
 	)
 	max_plot_groups = len(l)
