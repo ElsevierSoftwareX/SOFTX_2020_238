@@ -250,8 +250,9 @@ class StreamThinca(object):
 		#        |last_bound-back_off    | boundary-back_off
 		#        [----------------------)
 		#             coinc segment (times of earliest single)
-		#        ^
-		#        | discard all singles before here
+		#                                ^
+		#                                | discard all singles up
+		#                                  to here when done
 		#
 		# We know all singles up-to boundary;  from boundary and on
 		# the list might be incomplete.  A concidence can involve
@@ -269,10 +270,10 @@ class StreamThinca(object):
 		# "time" of a coinc by the time of its earliest single,
 		# then on this iteration, we will construct all coincs with
 		# times in [last_boundary-coincidence_back_off,
-		# boundary-coincidence_back_off).  Singles that precede
-		# (last_boundary-coincidence_back_off), are no longer
+		# boundary-coincidence_back_off).  When done, singles that
+		# precede (boundary-coincidence_back_off), are no longer
 		# required since all coincs that can involve those triggers
-		# were obtained on the last iteration.
+		# have been obtained on this iteration.
 		#
 
 		# safety check
@@ -291,13 +292,6 @@ class StreamThinca(object):
 		# two triggers
 		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
 		coincidence_back_off = max(offset for offset in time_slide_table.getColumnByName("offset")) - min(offset for offset in time_slide_table.getColumnByName("offset")) + self.max_dt
-
-		# remove triggers that are too old to be useful from our
-		# internal sngl_inspiral table.  save any that were never
-		# used in coincidences
-		discard_boundary = self.last_boundary - coincidence_back_off
-		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.event_ids]
-		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
 		# we need our own copies of these other tables because
 		# sometimes ligolw_thinca wants to modify the attributes of
@@ -400,6 +394,16 @@ class StreamThinca(object):
 		else:
 			background_coinc_sngls = []
 
+		# record boundary
+		self.last_boundary = boundary
+
+		# remove triggers that are too old to be useful from our
+		# internal sngl_inspiral table.  save any that were never
+		# used in coincidences
+		discard_boundary = self.last_boundary - coincidence_back_off
+		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.event_ids]
+		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
+
 		# save all sngls above the requested sngls SNR threshold
 		# (all snlgs that participated in coincs are already in the
 		# document, so only need to check for ones in the
@@ -408,9 +412,6 @@ class StreamThinca(object):
 			for event in noncoinc_sngls:
 				if event.snr >= self.sngls_snr_threshold:
 					real_sngl_inspiral_table.append(event)
-
-		# record boundary
-		self.last_boundary = boundary
 
 		# return sngls that are not coincident in zero-lag
 		return noncoinc_sngls + background_coinc_sngls
