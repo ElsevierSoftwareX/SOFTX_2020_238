@@ -636,7 +636,8 @@ FROM
 						self.found_in[participating_instruments] = [sim]
 
 		def finish(self):
-			f = open(self.base + "injection_summary.txt", "a")
+			f1 = open(self.base + "injection_summary.txt", "a")
+			f2 = open(self.base + "missed_summary.txt", "a")
 			missed = self.found_in.pop(None, [])
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
 				(r"Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
@@ -650,14 +651,23 @@ FROM
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
-					if not cnt: f.write("||%s||%s||FOUND: %d||\n" % ("".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)))
+					if not cnt: f1.write("||%s||%s||FOUND: %d||\n" % ("".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)))
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
-					if not cnt: f.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
+					if not cnt:
+						f1.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
+						def sort_func(row):
+							#FIXME: Don't hardcode IFOs
+							return sorted([row.get_chirp_eff_dist("h1"), row.get_chirp_eff_dist("l1")])[1]
+						tmplt_list = sorted(missed, key=sort_func)
+						for rank, sim in enumerate(tmplt_list[:10], 1):
+							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.h_end_time + 1.0e-9*sim.h_end_time_ns, sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination))
+							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.l_end_time + 1.0e-9*sim.l_end_time_ns, sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp))
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
-				f.close()
+				f1.close()
+				f2.close()
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
@@ -678,9 +688,13 @@ FROM
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
-		f = open(self.base + "injection_summary.txt", "w")
-		f.write("||<b>ON INSTRUMENTS</b>||<b> PARTICIPATING INSTRUMENTS</b>||<b>MISSED/FOUND</b||\n")
-		f.close()
+		f1 = open(self.base + "injection_summary.txt", "w")
+		f1.write("||<b>ON INSTRUMENTS</b>||<b> PARTICIPATING INSTRUMENTS</b>||<b>MISSED/FOUND</b||\n")
+		f1.close()
+		f2 = open(self.base + "missed_summary.txt", "w")
+		f2.write("|| <b>Rank</b> || <b>Waveform</b> || <b>H1 End Time</b> || <b>Mass1</b> || <b>Spin1x</b> || <b>Spin1y</b> || <b>Spin1z</b> || <b>Dist (Mpc)</b> || <b>Inclination</b> ||\n")
+		f2.write("||      ||          || <b>L1 End Time</b> || <b>Mass2</b> || <b>Spin2x</b> || <b>Spin2y</b> || <b>Spin2z</b> || <b>Decisive D<sub>chirp</sub> (Mpc)</b> || <b><i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub></b> ||\n")
+		f2.close()
 		for on_instruments, plot in self.plots.items():
 			for fig, filename_fragment, is_open_box in plot.finish():
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box

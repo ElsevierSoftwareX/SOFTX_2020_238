@@ -205,6 +205,7 @@ page.subpages["missed_found"].add_section("found_missed_mtotal","Found / Missed 
 page.subpages["missed_found"].add_section("found_missed_eta","Found / Missed Eta")
 page.subpages["missed_found"].add_section("found_missed_time","Found / Missed Time")
 page.subpages["missed_found"].add_section("found_missed_chi","Found / Missed Spin")
+page.subpages["missed_found"].add_section("found_missed_table","Missed Table")
 
 for tag in opts.output_user_tag:
 	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%sinjection_summary.txt' % tag))
@@ -228,6 +229,9 @@ for tag in opts.output_user_tag:
 
 	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag))
 	page.subpages["missed_found"].sections["found_missed_chi"].add_table(imgtable, "Missed Found vs Spin: %s" % tag, "Effective distance of found and missed injections as a function of mass-weighted spin")
+
+tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%smissed_summary.txt' % opts.output_user_tag[0]))
+page.subpages["missed_found"].sections["found_missed_table"].add_table(tab[0], "Nearby Missed Injection Summary Table", "Top 10 injections that were reported as missed as ranked by decisive chirp distance.")
 
 # SEARCH SENSITIVITY PLOTS #
 page.add_subpage("search_sensitivity","Search Sensitivity", "Search Sensitivity")
