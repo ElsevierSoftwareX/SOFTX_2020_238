@@ -73,6 +73,7 @@ def parse_command_line():
 	parser.add_option("--ignore-missing", action = "store_true", help = "Ignore and skip missing input documents.")
 	parser.add_option("--require-coinc-param-data", action = "store_true", help = "Require input documents to contain candidate parameter PDF data (default = data is optional).")
 	parser.add_option("--require-ranking-stat-data", action = "store_true", help = "Require input documents to contain ranking statistic PDF data (default = data is optional).")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("-o", "--output", metavar = "filename", help = "Set the output file name (default = write to stdout).")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Set the cache file name from which to read likelihood files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
@@ -192,6 +193,8 @@ if distributions is None and ranking_data is None:
 #
 
 
+if options.add_zerolag_to_background:
+	distributions.zero_lag_in_background = True
 if distributions is not None:
 	distributions.finish(verbose = options.verbose)
 if ranking_data is not None:

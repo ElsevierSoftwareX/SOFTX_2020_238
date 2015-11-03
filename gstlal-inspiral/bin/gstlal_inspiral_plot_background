@@ -78,6 +78,7 @@ def parse_command_line():
 	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by choosen the filename extension (default = \".png\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
 	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
@@ -122,6 +123,8 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 	if coinc_params_distributions is None and ranking_data is None:
 		raise ValueError("no parameter distribution data loaded")
 	if coinc_params_distributions is not None:
+		if options.add_zerolag_to_background:
+			coinc_params_distributions.zero_lag_in_background = True
 		coinc_params_distributions.finish(verbose = verbose)
 	if ranking_data is not None and not options.dont_apply_extinction:
 		# FIXME signal PDFs are still not right.

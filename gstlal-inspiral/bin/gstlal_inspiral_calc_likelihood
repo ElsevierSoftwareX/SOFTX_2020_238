@@ -83,6 +83,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("-f", "--force", action = "store_true", help = "Force recomputation of likelihood values.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-w", "--write-rates", metavar = "filename", help = "Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.")
@@ -171,6 +172,8 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 #
 
 
+if options.add_zerolag_to_background:
+	coincparamsdistributions.zero_lag_in_background = True
 coincparamsdistributions.finish(verbose = options.verbose)
 ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 

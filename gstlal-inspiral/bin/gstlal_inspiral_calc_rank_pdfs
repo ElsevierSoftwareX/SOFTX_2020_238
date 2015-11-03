@@ -72,6 +72,7 @@ def parse_command_line():
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 10000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 10000000).")
 	parser.add_option("--samples-file", metavar = "filename", action = "append", help = "Load the results of previous sampler runs from this file, and add the samples we generate to it.  Can be given multiple times.")
 	parser.add_option("--samples-cache", metavar = "filename", help = "Load the results of previous sampler runs from the files listed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
 
@@ -161,7 +162,8 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 # correctly)
 #
 
-
+if options.add_zerolag_to_background:
+	coincparamsdistributions.zero_lag_in_background = True
 coincparamsdistributions.finish(verbose = options.verbose)
 if old_ranking_data is not None:
 	old_ranking_data.finish(verbose = options.verbose)
