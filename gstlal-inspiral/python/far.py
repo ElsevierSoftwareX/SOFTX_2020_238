@@ -2229,9 +2229,12 @@ WHERE
 		reconstruct(xml, u"zero_lag_likelihood_rate", self.zero_lag_likelihood_rates)
 		reconstruct(xml, u"zero_lag_likelihood_pdf", self.zero_lag_likelihood_pdfs)
 
-		assert set(self.background_likelihood_rates) == set(self.background_likelihood_pdfs)
-		assert set(self.signal_likelihood_rates) == set(self.signal_likelihood_pdfs)
-		assert set(self.zero_lag_likelihood_rates) == set(self.zero_lag_likelihood_pdfs)
+		if set(self.background_likelihood_pdfs):
+			assert set(self.background_likelihood_rates) == set(self.background_likelihood_pdfs)
+		if set(self.signal_likelihood_pdfs):
+			assert set(self.signal_likelihood_rates) == set(self.signal_likelihood_pdfs)
+		if set(self.zero_lag_likelihood_pdfs):
+			assert set(self.zero_lag_likelihood_rates) == set(self.zero_lag_likelihood_pdfs)
 		assert set(self.background_likelihood_rates) == set(self.signal_likelihood_rates)
 		assert set(self.background_likelihood_rates) == set(self.zero_lag_likelihood_rates)
 
