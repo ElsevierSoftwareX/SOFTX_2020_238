@@ -693,7 +693,14 @@ class Data(object):
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
 			# coincs
-			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar):
+			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to be
+			# the maximum offset a template can have within a
+			# buffer that would cause its end time to be before the
+			# tru buffer boundary start.  This comes from the
+			# largest negative offset in any given SVD bank.  ITAC
+			# should be patched to do this once synchronization
+			# issues are sorted
+			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp - 1.0, fapfar = self.fapfar):
 				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
 
