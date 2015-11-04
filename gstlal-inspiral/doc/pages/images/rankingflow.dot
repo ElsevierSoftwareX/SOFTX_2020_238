@@ -1,0 +1,396 @@
+digraph rankingflow {
+	graph [
+		rankdir = "LR"
+	];
+
+	subgraph cluster_0 {
+		label = "gstlal_inspiral mass bin 0";
+
+		node [
+		];
+
+		triggers0 [
+			label = "triggers"
+		];
+
+		candidates0 [
+			label = "candidates"
+		];
+
+		candidates0a [
+			label = "candidates w/ log L"
+		];
+
+		candidates0b [
+			label = "candidates w/ FAP & FAR"
+		];
+
+		SNR0 [
+			label = "SNR PDF"
+		];
+
+		PSD0 [
+			label = "PSD"
+		];
+
+		extinctedLPDF0 [
+			label = "noise log L PDF with extinction"
+		];
+
+		node [
+			shape = "record",
+		];
+
+		rankingdata0 [
+			label = "<f0> coinc params PDF | <f1> (nil) | <f2> segments"
+		];
+
+		margrankingdata0 [
+			label = "<f0> (nil) | <f1> marginalized noise log L PDF | <f2> segments"
+		];
+
+		zerolagcounts0 [
+			label = "<f0> (nil) | <f1> candidates log L PDF | <f2> (nil)"
+		];
+
+		margzerolagcounts0 [
+			label = "<f0> (nil) | <f1> marginalized candidates log L PDF | <f2> (nil)"
+		];
+
+		rankingdataxml0 [
+			label = "<f0> coinc params PDF | <f1> marginalized log L PDFs | <f2> segments"
+		];
+
+		SNR0 -> rankingdata0:f0;
+
+		PSD0 -> rankingdata0:f0 [
+			label = "horizon distance"
+		];
+
+		PSD0 -> SNR0 [
+			label = "horizon distance"
+		];
+
+		triggers0 -> rankingdata0:f2 [
+			label = "buffer boundaries"
+		];
+
+		triggers0 -> candidates0 [
+			label = "coincident"
+		];
+
+		triggers0 -> rankingdata0:f0 [
+			label = "non-coincident"
+		];
+
+		candidates0 -> candidates0a;
+		rankingdata0:f0 -> candidates0a -> zerolagcounts0:f1;
+
+		margrankingdata0:f1 -> extinctedLPDF0;
+		extinctedLPDF0 -> candidates0b;
+
+		candidates0a -> candidates0b;
+		margrankingdata0:f2 -> candidates0b;
+
+		margzerolagcounts0:f1 -> extinctedLPDF0;
+
+		rankingdata0:f0 -> rankingdataxml0:f0;
+		margrankingdata0:f1 -> rankingdataxml0:f1;
+		margzerolagcounts0:f1 -> rankingdataxml0:f1;
+		margrankingdata0:f2 -> rankingdataxml0:f2;
+	}
+
+	subgraph cluster_1 {
+		label = "gstlal_inspiral mass bin 1";
+		color = "black";
+
+		node [
+		];
+
+		triggers1 [
+			label = "triggers"
+		];
+
+		candidates1 [
+			label = "candidates"
+		];
+
+		candidates1a [
+			label = "candidates w/ log L"
+		];
+
+		candidates1b [
+			label = "candidates w/ FAP & FAR"
+		];
+
+		SNR1 [
+			label = "SNR PDF"
+		];
+
+		PSD1 [
+			label = "PSD"
+		];
+
+		extinctedLPDF1 [
+			label = "noise log L PDF with extinction"
+		];
+
+		node [
+			shape = "record",
+		];
+
+		rankingdata1 [
+			label = "<f0> coinc params PDF | <f1> (nil) | <f2> segments"
+		];
+
+		margrankingdata1 [
+			label = "<f0> (nil) | <f1> marginalized noise log L PDF | <f2> segments"
+		];
+
+		zerolagcounts1 [
+			label = "<f0> (nil) | <f1> candidates log L PDF | <f2> (nil)"
+		];
+
+		margzerolagcounts1 [
+			label = "<f0> (nil) | <f1> marginalized candidates log L PDF | <f2> (nil)"
+		];
+
+		rankingdataxml1 [
+			label = "<f0> coinc params PDF | <f1> marginalized log L PDFs | <f2> segments"
+		];
+
+		SNR1 -> rankingdata1:f0;
+
+		PSD1 -> rankingdata1:f0 [
+			label = "horizon distance"
+		];
+
+		PSD1 -> SNR1 [
+			label = "horizon distance"
+		];
+
+		triggers1 -> rankingdata1:f2 [
+			label = "buffer boundaries"
+		];
+
+		triggers1 -> candidates1 [
+			label = "coincident"
+		];
+
+		triggers1 -> rankingdata1:f0 [
+			label = "non-coincident"
+		];
+
+		candidates1 -> candidates1a;
+		rankingdata1:f0 -> candidates1a -> zerolagcounts1:f1;
+
+		margrankingdata1:f1 -> extinctedLPDF1;
+		extinctedLPDF1 -> candidates1b;
+
+		candidates1a -> candidates1b;
+		margrankingdata1:f2 -> candidates1b;
+
+		margzerolagcounts1:f1 -> extinctedLPDF1;
+
+		rankingdata1:f0 -> rankingdataxml1:f0;
+		margrankingdata1:f1 -> rankingdataxml1:f1;
+		margzerolagcounts1:f1 -> rankingdataxml1:f1;
+		margrankingdata1:f2 -> rankingdataxml1:f2;
+	}
+
+	subgraph cluster_20 {
+		label = "gstlal_inspiral_calc_rank_pdfs mass bin 0";
+
+		rankingsampler0 [
+			label = "log L sampler"
+		];
+
+		node [
+			shape = "record",
+		];
+
+		rankingdata0c [
+			label = "<f0> coinc params PDF | <f1> (nil) | <f2> segments"
+		];
+
+		rankingdata0a [
+			label = "<f0> coinc params PDF | <f1> noise log L PDF | <f2> segments"
+		];
+
+		rankingdata0c:f0 -> rankingdata0a:f0;
+		rankingdata0c:f0 -> rankingsampler0 -> rankingdata0a:f1;
+		rankingdata0c:f2 -> rankingsampler0;
+		rankingdata0c:f2 -> rankingdata0a:f2;
+	}
+
+	subgraph cluster_21 {
+		label = "gstlal_inspiral_calc_rank_pdfs mass bin 1";
+
+		rankingsampler1 [
+			label = "log L sampler"
+		];
+
+		node [
+			shape = "record",
+		];
+
+		rankingdata1c [
+			label = "<f0> coinc params PDF | <f1> (nil) | <f2> segments"
+		];
+
+		rankingdata1a [
+			label = "<f0> coinc params PDF | <f1> noise log L PDF | <f2> segments"
+		];
+
+		rankingdata1c:f0 -> rankingdata1a:f0;
+		rankingdata1c:f0 -> rankingsampler1 -> rankingdata1a:f1;
+		rankingdata1c:f2 -> rankingsampler1;
+		rankingdata1c:f2 -> rankingdata1a:f2;
+	}
+
+	subgraph cluster_3 {
+		label = "gstlal_inspiral_marginalize_likelihood (noise model)";
+
+		margnoise_add0 [
+			label = "+"
+		];
+
+		margnoise_add1 [
+			label = "+"
+		];
+
+		margnoise_union [
+			label = "+"
+		];
+
+		node [
+			shape = "record"
+		];
+
+		margnoise_in0 [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margnoise_in1 [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margnoise_out [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margnoise_in0:f0 -> margnoise_add0 -> margnoise_out:f0;
+		margnoise_in1:f0 -> margnoise_add0;
+		margnoise_in0:f1 -> margnoise_add1 -> margnoise_out:f1;
+		margnoise_in1:f1 -> margnoise_add1;
+		margnoise_in0:f2 -> margnoise_union -> margnoise_out:f2;
+		margnoise_in1:f2 -> margnoise_union;
+	}
+
+	subgraph cluster_4 {
+		label = "gstlal_inspiral_marginalize_likelihood (observed zero lag)";
+
+		margzero_add0 [
+			label = "+"
+		];
+
+		margzero_add1 [
+			label = "+"
+		];
+
+		margzero_union [
+			label = "+"
+		];
+
+		node [
+			shape = "record"
+		];
+
+		margzero_in0 [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margzero_in1 [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margzero_out [
+			label = "<f0> coinc params PDF | <f1> log L PDF | <f2> segments"
+		];
+
+		margzero_in0:f0 -> margzero_add0 -> margzero_out:f0;
+		margzero_in1:f0 -> margzero_add0;
+		margzero_in0:f1 -> margzero_add1 -> margzero_out:f1;
+		margzero_in1:f1 -> margzero_add1;
+		margzero_in0:f2 -> margzero_union -> margzero_out:f2;
+		margzero_in1:f2 -> margzero_union;
+	}
+
+	node [
+	];
+
+	ht [
+		label = "h(t)"
+	];
+
+	gracedb [
+		label = "GraceDb"
+	];
+
+	ht -> PSD0;
+	ht -> PSD1;
+
+	ht -> triggers0;
+	ht -> triggers1;
+
+	rankingdata0 -> rankingdata0c [
+		style = bold,
+		label = "1 / (4 h)"
+	];
+
+	rankingdata1 -> rankingdata1c [
+		style = bold,
+		label = "1 / (4 h)"
+	];
+
+	zerolagcounts0 -> margzero_in0 [
+		style = bold
+	];
+	margzero_out -> margzerolagcounts0 [
+		style = bold
+	];
+	zerolagcounts1 -> margzero_in1 [
+		style = bold
+	];
+	margzero_out -> margzerolagcounts1 [
+		style = bold
+	];
+
+	rankingdata0a -> margnoise_in0 [
+		style = bold
+	];
+	margnoise_out-> margrankingdata0 [
+		style = bold
+	];
+	rankingdata1a -> margnoise_in1 [
+		style = bold
+	];
+	margnoise_out -> margrankingdata1 [
+		style = bold
+	];
+
+	candidates0b -> gracedb [
+		label = "coinc.xml"
+	];
+	rankingdataxml0 -> gracedb [
+		style = bold,
+		label = "ranking_data.xml.gz"
+	];
+	candidates1b -> gracedb [
+		label = "coinc.xml"
+	];
+	rankingdataxml1 -> gracedb [
+		style = bold,
+		label = "ranking_data.xml.gz"
+	];
+}

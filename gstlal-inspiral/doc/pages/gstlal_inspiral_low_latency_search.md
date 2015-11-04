@@ -238,6 +238,10 @@ The running dag topology looks like this:
 
 @dotfile llpipe.dot
 
+The contents of the box labelled ``Global background statistics processing'' and a more detailed flow chart showing its relationship with the calculations performed by each candidate generating job is shown in the following diagram:
+
+@dotfile rankingflow.dot
+
 \subsection far_thresh Adjusting the gracedb FAR threshold
 
 Each gstlal_inspiral job that is running is also running its own webserver as a
