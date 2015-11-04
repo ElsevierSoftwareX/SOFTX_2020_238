@@ -75,6 +75,8 @@ def parse_command_line():
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
+	process_params = options.__dict__.copy()
+
 	if options.background_bins_file is None:
 		raise ValueError("must set --background-bins-file")
 
@@ -84,7 +86,7 @@ def parse_command_line():
 	if filenames:
 		raise ValueError("unrecognized trailing arguments")
 
-	return options, filenames
+	return options, process_params, filenames
 
 
 #
@@ -101,7 +103,7 @@ def parse_command_line():
 #
 
 
-options, filenames = parse_command_line()
+options, process_params, filenames = parse_command_line()
 
 
 #
@@ -203,7 +205,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	#
 
 	xmldoc = dbtables.get_xml(connection)
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", {})
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", process_params)
 
 	#
 	# assign FAPs and FARs
