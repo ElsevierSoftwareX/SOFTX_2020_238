@@ -2417,6 +2417,65 @@ def parse_likelihood_control_doc(xmldoc, name = u"gstlal_inspiral_likelihood"):
 	return coinc_params_distributions, ranking_data, seglists
 
 
+def marginalize_pdf_urls(urls, require_coinc_param_data, require_ranking_stat_data, ignore_missing_files = False, verbose = False):
+	"""
+	Implements marginalization of PDFs in ranking statistic data files.
+	The marginalization is over the degree of freedom represented by
+	the file collection.  One or both of the candidate parameter PDFs
+	and ranking statistic PDFs can be processed, with errors thrown if
+	one or more files is missing the required component.
+	"""
+	distributions = None
+	ranking_data = None
+	seglists = segments.segmentlistdict()
+	for n, url in enumerate(urls, start = 1):
+		#
+		# load input document
+		#
+
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(urls)),
+		try:
+			in_xmldoc = ligolw_utils.load_url(url, verbose = verbose, contenthandler = ThincaCoincParamsDistributions.LIGOLWContentHandler)
+		except IOError:
+			# IOError is raised when an on-disk file is missing.
+			# urllib2.URLError is raised when a URL cannot be loaded,
+			# but this is subclassed from IOError so IOError will catch
+			# those, too.
+			if not ignore_missing_files:
+				raise
+			if verbose:
+				print >>sys.stderr, "Could not load \"%s\" ... skipping as requested" % url
+			continue
+
+		#
+		# compute weighted sum of ranking data PDFs
+		#
+
+		this_distributions, this_ranking_data, this_seglists = parse_likelihood_control_doc(in_xmldoc)
+		in_xmldoc.unlink()
+
+		if this_distributions is None and require_coinc_param_data:
+			raise ValueError("\"%s\" contains no parameter PDF data" % url)
+		if this_ranking_data is None and require_ranking_stat_data:
+			raise ValueError("\"%s\" contains no ranking statistic PDF data" % url)
+
+		if distributions is None:
+			distributions = this_distributions
+		elif this_distributions is not None:
+			distributions += this_distributions
+		if ranking_data is None:
+			ranking_data = this_ranking_data
+		elif this_ranking_data is not None:
+			ranking_data += this_ranking_data
+		seglists |= this_seglists
+
+	if distributions is None and ranking_data is None:
+		raise ValueError("no data loaded from input documents")
+
+	return distributions, ranking_data, seglists
+
+
 #
 # =============================================================================
 #

@@ -45,7 +45,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
-from glue import segments
 from gstlal import far
 
 
@@ -70,8 +69,6 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 10000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 10000000).")
-	parser.add_option("--samples-file", metavar = "filename", action = "append", help = "Load the results of previous sampler runs from this file, and add the samples we generate to it.  Can be given multiple times.")
-	parser.add_option("--samples-cache", metavar = "filename", help = "Load the results of previous sampler runs from the files listed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
@@ -82,11 +79,6 @@ def parse_command_line():
 		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
 	if not urls:
 		raise ValueError("must provide some likelihood files")
-
-	if options.samples_file is None:
-		options.samples_file = []
-	if options.samples_cache is not None:
-		options.samples_file += [CacheEntry(line).url for line in open(options.samples_cache)]
 
 	if options.output is None:
 		raise ValueError("must set --output")
@@ -112,40 +104,11 @@ options, urls, paramdict = parse_command_line()
 
 
 #
-# load parameter distribution data and, optionally, samples from previous
-# runs
+# load parameter distribution data
 #
 
 
-old_ranking_data = None
-for n, filename in enumerate(options.samples_file, start = 1):
-	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.samples_file)),
-	xmldoc = ligolw_utils.load_url(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
-	ignored, this_ranking_data, ignored = far.parse_likelihood_control_doc(xmldoc)
-	xmldoc.unlink()
-	if this_ranking_data is None:
-		raise ValueError("%s does not contain ranking statistic distribution data" % filename)
-	if old_ranking_data is None:
-		old_ranking_data = this_ranking_data
-	else:
-		old_ranking_data += this_ranking_data
-
-coincparamsdistributions = None
-seglists = segments.segmentlistdict()
-for n, likelihood_url in enumerate(urls, start = 1):
-	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(urls)),
-	xmldoc = ligolw_utils.load_url(likelihood_url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
-	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
-	xmldoc.unlink()
-	if this_coincparamsdistributions is None:
-		raise ValueError("%s does not contain parameter distribution data" % likelihood_url)
-	if coincparamsdistributions is None:
-		coincparamsdistributions = this_coincparamsdistributions
-	else:
-		coincparamsdistributions += this_coincparamsdistributions
-	seglists |= this_seglists
+coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(urls, require_coinc_param_data = True, require_ranking_stat_data = False, verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())

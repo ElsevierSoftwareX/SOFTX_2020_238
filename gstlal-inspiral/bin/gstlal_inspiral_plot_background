@@ -56,7 +56,6 @@ import sys
 from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue.ligolw import utils as ligolw_utils
 from glue import segmentsUtils
 from pylal import ligolw_thinca
 
@@ -101,27 +100,7 @@ def parse_command_line():
 
 
 def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
-	coinc_params_distributions, ranking_data, seglists = None, None, None
-	for n, filename in enumerate(filenames, 1):
-		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-		this_coinc_params_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
-		if this_coinc_params_distributions is None and this_ranking_data is None:
-			raise ValueError("%s contains no parameter distribution data" % filename)
-		if coinc_params_distributions is None:
-			coinc_params_distributions = this_coinc_params_distributions
-		elif this_coinc_params_distributions is not None:
-			coinc_params_distributions += this_coinc_params_distributions
-		if ranking_data is None:
-			ranking_data = this_ranking_data
-		elif this_ranking_data is not None:
-			ranking_data += this_ranking_data
-		if seglists is None:
-			seglists = this_seglists
-		else:
-			seglists |= this_seglists
-	if coinc_params_distributions is None and ranking_data is None:
-		raise ValueError("no parameter distribution data loaded")
+	coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = verbose)
 	if coinc_params_distributions is not None:
 		if options.add_zerolag_to_background:
 			coinc_params_distributions.zero_lag_in_background = True

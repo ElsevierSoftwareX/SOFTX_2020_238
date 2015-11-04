@@ -56,7 +56,6 @@ from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import load_filename
 from glue import lal
 from pylal import db_thinca_rings
 from pylal import git_version
@@ -1208,28 +1207,9 @@ WHERE
 # =============================================================================
 #
 
+
 def load_distributions(filenames, verbose = False):
-	coinc_params_distributions, ranking_data, seglists = None, None, None
-	for n, filename in enumerate(filenames, 1):
-		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-		this_coinc_params_distributions, this_ranking_data, this_seglists = far.parse_likelihood_control_doc(load_filename(filenames[0], contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
-		if this_coinc_params_distributions is None and this_ranking_data is None:
-			raise ValueError("%s contains no parameter distribution data" % filename)
-		if coinc_params_distributions is None:
-			coinc_params_distributions = this_coinc_params_distributions
-		elif this_coinc_params_distributions is not None:
-			coinc_params_distributions += this_coinc_params_distributions
-		if ranking_data is None:
-			ranking_data = this_ranking_data
-		elif this_ranking_data is not None:
-			ranking_data += this_ranking_data
-		if seglists is None:
-			seglists = this_seglists
-		else:
-			seglists |= this_seglists
-	if coinc_params_distributions is None and ranking_data is None:
-		raise ValueError("no parameter distribution data loaded")
+	coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = verbose)
 	if coinc_params_distributions is not None:
 		coinc_params_distributions.finish(verbose = verbose)
 	# FIXME signal PDFs are still not right.
@@ -1242,6 +1222,7 @@ def load_distributions(filenames, verbose = False):
 	except ValueError:
 		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
 	return coinc_params_distributions, ranking_data, seglists
+
 
 def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))

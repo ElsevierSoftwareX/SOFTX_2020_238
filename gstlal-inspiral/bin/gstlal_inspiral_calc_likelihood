@@ -141,21 +141,7 @@ options, paramdict, filenames = parse_command_line()
 #
 
 
-coincparamsdistributions = None
-seglists = segments.segmentlistdict()
-for n, likelihood_url in enumerate(options.likelihood_urls, start = 1):
-	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(options.likelihood_urls)),
-	xmldoc = ligolw_utils.load_url(likelihood_url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
-	this_coincparamsdistributions, ignored, this_seglists = far.parse_likelihood_control_doc(xmldoc)
-	xmldoc.unlink()
-	if this_coincparamsdistributions is None:
-		raise ValueError("%s does not contain parameter distribution data" % likelihood_url)
-	if coincparamsdistributions is None:
-		coincparamsdistributions = this_coincparamsdistributions
-	else:
-		coincparamsdistributions += this_coincparamsdistributions
-	seglists |= this_seglists
+coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(options.likelihood_urls, require_coinc_param_data = True, require_ranking_stat_data = False, verbose = options.verbose)
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
