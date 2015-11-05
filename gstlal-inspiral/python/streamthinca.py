@@ -289,12 +289,9 @@ class StreamThinca(object):
 			return []
 
 		# how far apart two singles can be and still be coincident,
-		# including time slide offsets.  FIXME:  assumes the
-		# greatest and least offsets are in different instruments,
-		# if not then this overestimates the time that can separate
-		# two triggers
-		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
-		coincidence_back_off = max(offset for offset in time_slide_table.getColumnByName("offset")) - min(offset for offset in time_slide_table.getColumnByName("offset")) + self.max_dt
+		# including time slide offsets.
+		offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
+		coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
 
 		# we need our own copies of these other tables because
 		# sometimes ligolw_thinca wants to modify the attributes of
@@ -379,7 +376,7 @@ class StreamThinca(object):
 			self.event_ids |= newids
 
 			# find zero-lag coinc event IDs
-			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in time_slide_table.as_dict().items() if not any(offsetvector.values()))
+			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
 			zero_lag_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.time_slide_id in zero_lag_time_slide_ids)
 
 			# singles used in coincs but not in zero-lag
