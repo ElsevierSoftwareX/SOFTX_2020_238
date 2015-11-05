@@ -156,7 +156,7 @@ def binned_rates_from_samples(samples):
 	sequence can be a generator.
 	"""
 	lo, hi = math.floor(samples.min()), math.ceil(samples.max())
-	nbins = len(samples) // 729
+	nbins = int(math.sqrt(len(samples)) / 40.)
 	binnedarray = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo if lo !=0. else samples.min(), hi, nbins),)))
 	for sample in samples:
 		binnedarray[sample,] += 1.
