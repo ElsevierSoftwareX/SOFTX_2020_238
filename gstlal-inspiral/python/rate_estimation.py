@@ -253,13 +253,15 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	#
 	# run MCMC sampler to generate (foreground rate, background rate)
 	# samples.  to improve the measurement of the tails of the PDF
-	# using the MCMC sampler, we draw from the square root of the PDF
+	# using the MCMC sampler, we draw from a power of the PDF
 	# and then correct the histogram of the samples (see below).
 	#
 
 	log_posterior = posterior(ln_f_over_b)
 
-	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), (lambda x: log_posterior(x) / 2.), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+	exponent = 2.25
+
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), (lambda x: log_posterior(x) / exponent), n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
 		# coordslist is nwalkers x ndim
 		samples[j,:,:] = coordslist
 		# dump samples to the chain file every 2048 steps
@@ -288,19 +290,19 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# PDF.  how to correct count:
 	#
 	# correct count = (correct PDF) * (bin size)
-	#               = (measured PDF)^2 * (bin size)
-	#               = (measured count / (bin size))^2 * (bin size)
-	#               = (measured count)^2 / (bin size)
+	#               = (measured PDF)^exponent * (bin size)
+	#               = (measured count / (bin size))^exponent * (bin size)
+	#               = (measured count)^exponent / (bin size)^(exponent - 1)
 	#
 	# this assumes small bin sizes.
 	#
 
 	Rf_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
-	Rf_pdf.array = Rf_pdf.array**2. / Rf_pdf.bins.volumes()
+	Rf_pdf.array = Rf_pdf.array**exponent / Rf_pdf.bins.volumes()**(exponent - 1.)
 	Rf_pdf.to_pdf()
 
 	Rb_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
-	Rb_pdf.array = Rb_pdf.array**2. / Rb_pdf.bins.volumes()
+	Rb_pdf.array = Rb_pdf.array**exponent / Rb_pdf.bins.volumes()**(exponent - 1.)
 	Rb_pdf.to_pdf()
 
 	#
