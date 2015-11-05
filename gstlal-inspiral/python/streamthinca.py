@@ -233,10 +233,7 @@ class StreamThinca(object):
 			assert event.end >= self.last_boundary, "boundary failure:  encountered event preceding previous boundary:  %s < %s" % (str(event.end), str(self.last_boundary))
 			self.sngl_inspiral_table.append(event)
 
-		# run coincidence, return non-coincident sngls.  no-op if
-		# no new events
-		if not events:
-			return []
+		# run coincidence, return non-coincident sngls.
 		return self.run_coincidence(xmldoc, process_id, boundary, fapfar = fapfar)
 
 
