@@ -225,7 +225,9 @@ class StreamThinca(object):
 			self._xmldoc = xmldoc
 
 		# append the new row objects to our sngl_inspiral table
-		self.sngl_inspiral_table.extend(events)
+		for event in events:
+			assert event.end >= self.last_boundary, "boundary failure:  encountered event preceding previous boundary:  %s < %s" % (str(event.end), str(self.last_boundary))
+			self.sngl_inspiral_table.append(event)
 
 		# run coincidence, return non-coincident sngls.  no-op if
 		# no new events
