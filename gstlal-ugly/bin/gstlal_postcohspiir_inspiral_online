@@ -191,6 +191,7 @@ def parse_command_line():
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
   parser.add_option("--data-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--data-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--cluster-window", type = "float", metavar = "seconds", default = 0.5, help = "Cluster window to cluster zerolags.")
 
   # set the postcoh parameters
   parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
@@ -441,6 +442,7 @@ if 1==1:
 
   output = postcoh_output.Data(
 		  pipeline = pipeline,
+		  cluster_window = options.cluster_window,
 		  data_output_prefix = options.data_output_prefix,
 		  data_snapshot_interval = options.data_snapshot_interval)
 
@@ -487,7 +489,7 @@ if 1==1:
   #
   # write output file
   #
-  output.write_output_file(filename = output.get_output_filename(options.data_output_prefix, output.t_roll_start, output.duration_roll), verbose = options.verbose)
+  output.write_output_file(filename = output.get_output_filename(options.data_output_prefix, output.t_snapshot_start, output.snapshot_duration), verbose = options.verbose)
 
   # Shutdown the web interface servers
   bottle.default_app.pop()
