@@ -6,7 +6,7 @@
 
 char* IFO_MAP[] = {"L1", "H1", "V1"};
 #define __DEBUG__ 1
-#define NSNGL_TMPLT_COLS 11
+#define NSNGL_TMPLT_COLS 12
 
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
@@ -364,7 +364,7 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	for (jlen=0; jlen<val->data->len; jlen++) 
 		sngl_table[jlen].spin2z = g_array_index(val->data, float, jlen);
 
-	val = g_hash_table_lookup(hash, col_names[10]);
+	val = g_hash_table_lookup(hash, col_names[11]);
 	for (jlen=0; jlen<val->data->len; jlen++) 
 		sngl_table[jlen].eta = g_array_index(val->data, float, jlen);
 
