@@ -186,9 +186,10 @@ def parse_command_line():
 
   #FIXME: do not consider online paramters yet
   parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
-  parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-  parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+  parser.add_option("--gracedb-far-threshold", type = "float", default = None, help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+  parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
+  parser.add_option("--gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
   parser.add_option("--data-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--data-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
   parser.add_option("--cluster-window", type = "float", metavar = "seconds", default = 0.5, help = "Cluster window to cluster zerolags.")
@@ -444,7 +445,11 @@ if 1==1:
 		  pipeline = pipeline,
 		  cluster_window = options.cluster_window,
 		  data_output_prefix = options.data_output_prefix,
-		  data_snapshot_interval = options.data_snapshot_interval)
+		  data_snapshot_interval = options.data_snapshot_interval,
+		  gracedb_far_threshold = options.gracedb_far_threshold,
+		  gracedb_group = options.gracedb_group,
+		  gracedb_search = options.gracedb_search,
+		  gracedb_pipeline = options.gracedb_pipeline)
 
 
   if options.verbose:

@@ -4,6 +4,7 @@ import threading
 import sys
 import StringIO
 import httplib
+import math
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -76,6 +77,7 @@ class PostcohInspiralTable(table.Table):
 			"spin2x":	"real_4",
 			"spin2y":	"real_4",
 			"spin2z":	"real_4",
+			"eta":		"real_4",
 			"ra":		"real_8",
 			"dec":		"real_8"
 	}
@@ -120,6 +122,7 @@ class Data(object):
 		# cluster parameters
 		self.cluster_window = cluster_window
 		self.candidate = None
+		self.boundary = None
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(PostcohInspiralTable)
 		self.nevent_clustered = 0
@@ -177,7 +180,10 @@ class Data(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					if self.gracedb_far_threshold and self.candidate.far < self.gracedb_far_threshold:
-						self.__do_gracedb_alerts()
+						print self.candidate.end
+						print self.candidate.far
+						print self.candidate.eta
+						#self.__do_gracedb_alerts(self.candidate)
 					self.candidate = None
 					self.need_candidate_check = False
 
@@ -228,7 +234,7 @@ class Data(object):
 	def __set_far(self, candidate):
 		candidate.far = candidate.fap * self.nevent_clustered / candidate.livetime
 
-	def __do_gracedb_alerts(self):
+	def __do_gracedb_alerts(self, trigger):
 		# do alerts
 		gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 		gracedb_ids = []
@@ -241,13 +247,6 @@ class Data(object):
 		# future proofing this at the point where it could have
 		# multiple clustered events
 			
-		#observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
-		#instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
-		#description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
-		#end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
-
-
-		#xmldoc = self.stream_thinca.last_coincs[coinc_event.coinc_event_id]
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 
@@ -279,24 +278,24 @@ class Data(object):
 		
 		# Setting the H1 row
 		row.process_id = "process:process_id:10"
-		row.ifo = "H1"
+		row.ifo = trigger.pivotal_ifo
 		row.search = "tmpltbank"
-		row.channel = "LDAS-STRAIN" 
-		row.end_time = event.end_time
-		row.end_time_ns = 0 
+		row.channel = "LDAS-CALIB_STRAIN" 
+		row.end_time = trigger.end_time
+		row.end_time_ns = trigger.end_time_ns 
 		row.end_time_gmst = 0 
 		row.impulse_time = 0
 		row.impulse_time_ns = 0
-		row.template_duration = 0
+		row.template_duration = trigger.template_duration
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
 		row.coa_phase = 0
-		row.mass1 = 1
-		row.mass2 = 1
-		row.mchirp = 1
-		row.mtotal = 2 
-		row.eta = 0 
+		row.mass1 = trigger.mass1 
+		row.mass2 = trigger.mass2
+		row.mchirp = trigger.mchirp 
+		row.mtotal = trigger.mtotal 
+		row.eta = trigger.eta 
 		row.kappa = 0 
 		row.chi = 1 
 		row.tau0 = 0 
@@ -316,8 +315,8 @@ class Data(object):
 		row.alpha6 = 0
 		row.beta = 0
 		row.f_final = 2048
-		row.snr = event.cohsnr
-		row.chisq = 1
+		row.snr = trigger.maxsnglsnr
+		row.chisq = trigger.chisq
 		row.chisq_dof = 4
 		row.bank_chisq = 0
 		row.bank_chisq_dof = 0
@@ -335,35 +334,39 @@ class Data(object):
 		row.Gamma7 = 0
 		row.Gamma8 = 0
 		row.Gamma9 = 0
-		row.spin1x = 0
-		row.spin1y = 0
-		row.spin1z = 0
-		row.spin2x = 0
-		row.spin2y = 0
-		row.spin2z = 0
-		row.event_id = "sngl_inspiral:event_id:1"
+		row.spin1x = trigger.spin1x 
+		row.spin1y = trigger.spin1y 
+		row.spin1z = trigger.spin1z 
+		row.spin2x = trigger.spin2x 
+		row.spin2y = trigger.spin2y 
+		row.spin2z = trigger.spin2z
+		row.event_id = "sngl_inspiral:event_id:%d" % self.nevent_clustered
 		
 		sngl_inspiral_table.append(row)
 
-		# Setting the L1 row
+		if trigger.pivotal_ifo == "H1":
+			the_other_ifo = "L1"
+		else:
+			the_other_ifo = "H1"
+		# Setting the the other row
 		row.process_id = "process:process_id:10"
-		row.ifo = "H1"
+		row.ifo = the_other_ifo
 		row.search = "tmpltbank"
-		row.channel = "LDAS-STRAIN" 
-		row.end_time = event.end_time
+		row.channel = "LDAS-CALIB_STRAIN" 
+		row.end_time = 0
 		row.end_time_ns = 0 
 		row.end_time_gmst = 0 
 		row.impulse_time = 0
 		row.impulse_time_ns = 0
-		row.template_duration = 0
+		row.template_duration = trigger.template_duration
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
 		row.coa_phase = 0
-		row.mass1 = 1
-		row.mass2 = 1
-		row.mchirp = 1
-		row.mtotal = 2 
+		row.mass1 = trigger.mass1 
+		row.mass2 = trigger.mass2 
+		row.mchirp = trigger.mchirp 
+		row.mtotal = trigger.mtotal 
 		row.eta = 0 
 		row.kappa = 0 
 		row.chi = 1 
@@ -384,8 +387,8 @@ class Data(object):
 		row.alpha6 = 0
 		row.beta = 0
 		row.f_final = 2048
-		row.snr = event.cohsnr
-		row.chisq = 1
+		row.snr = math.sqrt(math.pow(trigger.cohsnr, 2) - math.pow(trigger.maxsnglsnr, 2))
+		row.chisq = 0
 		row.chisq_dof = 4
 		row.bank_chisq = 0
 		row.bank_chisq_dof = 0
@@ -403,12 +406,12 @@ class Data(object):
 		row.Gamma7 = 0
 		row.Gamma8 = 0
 		row.Gamma9 = 0
-		row.spin1x = 0
-		row.spin1y = 0
-		row.spin1z = 0
-		row.spin2x = 0
-		row.spin2y = 0
-		row.spin2z = 0
+		row.spin1x = trigger.spin1x 
+		row.spin1y = trigger.spin1y 
+		row.spin1z = trigger.spin1z 
+		row.spin2x = trigger.spin2x 
+		row.spin2y = trigger.spin2y 
+		row.spin2z = trigger.spin2z
 		row.event_id = "sngl_inspiral:event_id:2"
 		
 		sngl_inspiral_table.append(row)
@@ -422,25 +425,25 @@ class Data(object):
 
 		row = coinc_table.RowType()
 		row.coinc_event_id = "coinc_event:coinc_event_id:2"
-		row.instruments = event.ifos
+		row.instruments = trigger.ifos
 		row.nevents = 2
 		row.process_id = "process:process_id:5"
 		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
 		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.likelihood = 10.0
+		row.likelihood = 0
 		coinc_table.append(row)
 		
 		row = coinc_inspiral_table.RowType()
-		row.false_alarm_rate = event.far
-		row.mchirp = 1
-		row.minimum_duration = 10
-		row.mass = 1
-		row.end_time = event.end_time
+		row.false_alarm_rate = trigger.fap
+		row.mchirp = trigger.mchirp 
+		row.minimum_duration = trigger.template_duration
+		row.mass = trigger.mtotal
+		row.end_time = trigger.end_time
 		row.coinc_event_id = "coinc_event:coinc_event_id:2"
-		row.snr = event.cohsnr
-		row.end_time_ns = event.end_time
-		row.combined_far = 1e-4
-		row.ifos = event.ifos
+		row.snr = trigger.cohsnr
+		row.end_time_ns = trigger.end_time_ns
+		row.combined_far = trigger.far
+		row.ifos = trigger.ifos
 		coinc_inspiral_table.append(row)
 
 		#row = coinc_map_table.RowType()
@@ -470,7 +473,7 @@ class Data(object):
 		row.offset = 0
 		time_slide_table.append(row)
 
-		filename = "%s_%s_%d_%d.xml" % (event.ifos, event.end_time, event.tmplt_idx, event.pix_idx)
+		filename = "%s_%s_%d_%d.xml" % (trigger.ifos, trigger.end_time, trigger.tmplt_idx, trigger.pix_idx)
 		#
 		# construct message and send to gracedb.
 		# we go through the intermediate step of
@@ -481,32 +484,34 @@ class Data(object):
 		# into gracedb's input pipe and crashing
 		# part way through.
 		#
-		#message = StringIO.StringIO()
-		message = file(filename, "w")
+		message = StringIO.StringIO()
+		#message = file(filename, "w")
 		#pdb.set_trace()
 		ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
 		xmldoc.unlink()
 		
-		if self.verbose:
-		  print >>sys.stderr, "sending %s to gracedb ..." % filename
+		print >>sys.stderr, "sending %s to gracedb ..." % filename
 		# FIXME: make this optional from command line?
-		#if True:
-		#  resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
-		#  resp_json = resp.json()
-		#  if resp.status != httplib.CREATED:
-		#    print >>sys.stderr, "gracedb upload of %s failed" % filename
-		#  else:
-		#    if self.verbose:
-		#      print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
-		    #gracedb_ids.append(resp_json["graceid"])
+		if True:
+		  resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+		  resp_json = resp.json()
+		  if resp.status != httplib.CREATED:
+		    print >>sys.stderr, "gracedb upload of %s failed" % filename
+		  else:
+		    print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+		    gracedb_ids.append(resp_json["graceid"])
 		#else:
 		#  proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
 		#  proc.stdin.write(message.getvalue())
 		#  proc.stdin.flush()
 		#  proc.stdin.close()
-		#message.close()
-		#sys.exit()
+		message.close()
 
+		# write a log to explain far
+		for gracedb_id in gracedb_ids:
+			resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated, do not take it too seriously", filename = None, tagname = "analyst_comments")
+			if resp.status != httplib.CREATED:
+		    		print >>sys.stderr, "gracedb upload of log failed"
 
 
 	

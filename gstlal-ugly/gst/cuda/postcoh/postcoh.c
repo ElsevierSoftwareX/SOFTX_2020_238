@@ -929,6 +929,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->spin2x = sngl_table[tmplt_idx].spin2x;
 			output->spin2y = sngl_table[tmplt_idx].spin2y;
 			output->spin2z = sngl_table[tmplt_idx].spin2z;
+			output->eta = sngl_table[tmplt_idx].eta;
 			/* convert pixel index to ra and dec */
 			double theta, phi;
 			/* ra = phi, dec = 2pi - theta */	

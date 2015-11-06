@@ -62,6 +62,7 @@ tagPostcohInspiralTable
   REAL4		spin2x;
   REAL4		spin2y;
   REAL4		spin2z;
+  REAL4		eta;
   REAL8		ra;
   REAL8		dec;
 }

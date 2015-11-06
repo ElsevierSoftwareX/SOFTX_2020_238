@@ -282,7 +282,8 @@ char * ColNames[] = {
 	"sngl_inspiral:spin1z",
 	"sngl_inspiral:spin2x",
 	"sngl_inspiral:spin2y",
-	"sngl_inspiral:spin2z"
+	"sngl_inspiral:spin2z",
+	"sngl_inspiral:eta"
 	};
 
 void
@@ -362,6 +363,10 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	val = g_hash_table_lookup(hash, col_names[10]);
 	for (jlen=0; jlen<val->data->len; jlen++) 
 		sngl_table[jlen].spin2z = g_array_index(val->data, float, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[10]);
+	for (jlen=0; jlen<val->data->len; jlen++) 
+		sngl_table[jlen].eta = g_array_index(val->data, float, jlen);
 
 	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) 
 		g_string_free(col_names[icol], TRUE);
