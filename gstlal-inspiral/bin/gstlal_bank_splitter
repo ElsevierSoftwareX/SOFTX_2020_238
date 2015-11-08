@@ -73,10 +73,11 @@ from gstlal import chirptime
 # | Names 	                                        | Hash 					                   | Date       | Diff to Head of Master      |
 # | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
 # | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-28 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_bank_splitter?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_bank_splitter</a> |
+# | Sathya, Duncan Me., Jolien, Kipp, Chad          | 72875f5cb241e8d297cd9b3f9fe309a6cfe3f716 | 2015-11-06 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_bank_splitter?id=HEAD&id2=72875f5cb241e8d297cd9b3f9fe309a6cfe3f716">gstlal_bank_splitter</a> |
 #
 # #### Action
 #
-# - Consider cleanup once additional bank programs are used and perhaps have additional metadata
+# - [COMPLETED] Consider cleanup once additional bank programs are used and perhaps have additional metadata
 #
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
