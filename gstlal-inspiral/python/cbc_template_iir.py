@@ -59,12 +59,21 @@ lsctables.use_in(DefaultContentHandler)
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
+def ceil_pow_2(x):
+	x = int(math.ceil(x))
+	x -= 1
+	n = 1
+	while n and (x & (x+1)):
+		x |= x >> n
+		n <<= 1
+	return x + 1
+
 def lefttukeywindow(data, samps = 200.):
-       assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-       tp = float(samps) / len(data)
-       wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
-       wn[len(wn)//2:] = 1.0
-       return wn
+	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+	tp = float(samps) / len(data)
+	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
+	wn[len(wn)//2:] = 1.0
+	return wn
 
 def Theta(eta, Mtot, t):
 	Tsun = lal.MTSUN_SI #4.925491e-6
@@ -267,7 +276,7 @@ def M_chi2_readline(flower=30., sampleRate=2048.):
 	length_max = working_f_low_extra_time * 10 * sampleRate
 
 	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-	working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+	working_length = ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
 	working_duration = float(working_length) / sampleRate
 	
 	amp, phase = gen_whitened_amp_phase(None, params[0], params[1], sampleRate, flower, 0, working_length, working_duration, length_max, params[3], params[4], params[5], params[6], params[7], params[8] )
@@ -296,7 +305,7 @@ def M_chi2(flower=30., sampleRate=2048.):
 		length_max = working_f_low_extra_time * 10 * sampleRate
 
 		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-		working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+		working_length = ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
 		working_duration = float(working_length) / sampleRate
 	
 		amp, phase = gen_whitened_amp_phase(None, params[ii, 0], params[ii, 1], sampleRate, flower, 0, working_length, working_duration, length_max, params[ii, 3], params[ii, 4], params[ii, 5], params[ii, 6], params[ii, 7], params[ii, 8] )
@@ -440,7 +449,12 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
 
         # generate the waveform
-	# FIXME: waveform approximant should not be fixed.	
+	# FIXME: currently only works for the non-spin or spin-aligned case
+	if (m1+m2) <=4:
+		approximant_string = "SpinTaylorT4"
+	else:
+		approximant_string = "IMRPhenomB"
+
 	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,				# reference phase, phi ref
 		    				    1./sampleRate,			# delta T
 						    m1*lal.MSUN_SI,			# mass 1 in kg
@@ -455,7 +469,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 						    None,				# Waveflags
 						    None,				# Non GR parameters
 						    0,7,				# Amplitude and phase order 2N+1
-						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+						    lalsimulation.GetApproximantFromString(approximant_string))
 
 
 	# The following code will plot the original autocorrelation function
@@ -548,7 +562,6 @@ class Bank(object):
 		self.alpha = alpha
 		self.beta = beta
 
-		epsilon_increment = 0.001
 
 		if sampleRate is None:
 			sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
@@ -589,7 +602,8 @@ class Bank(object):
 		  raise ValueError("flow must be >= 0.: %s" % repr(flower))
 
 		template = min(sngl_inspiral_table, key = lambda row: row.mchirp)
-		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
+		# FIXME: when large spins present, lowest chirp mass might not correspond to longest chirp time
+		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, template.spin1z, template.spin2z)
 		working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
 		# FIXME: This is a hack to calculate the maximum length of given table, we 
@@ -598,7 +612,7 @@ class Bank(object):
 		length_max = working_f_low_extra_time * 10 * sampleRate
 
 		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-		working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
+		working_length = ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
 		working_duration = float(working_length) / sampleRate
 
 		# Smooth the PSD and interpolate to required resolution
@@ -617,13 +631,14 @@ class Bank(object):
 		# waveforms by peak amplitude)
 		#
 
-	
 		original_epsilon = epsilon
+		epsilon_increment = 0.001
 	        for tmp, row in enumerate(sngl_inspiral_table):
 		    spiir_match = -1
 		    epsilon = original_epsilon
+		    n_filters = 0
 
-		    while(spiir_match < req_min_match and epsilon > 0):
+		    while(spiir_match < req_min_match and epsilon > 0 and n_filters < 2000):
 			m1 = row.mass1
 			m2 = row.mass2
 			
@@ -694,9 +709,10 @@ class Bank(object):
 
 		    self.matches.append(spiir_match)
 		    self.sigmasq.append(1.0 * norm_h / sampleRate)
+		    n_filters = len(a1)
 
 		    if verbose:
-			    logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, len(a1), spiir_match, original_epsilon, original_filters, original_match))	
+			    logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))	
 		    # get the filter frequencies
 		    fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
 		    a1dict = {}
