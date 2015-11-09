@@ -503,7 +503,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -619,8 +619,10 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
-		postcoh = mkcohfar_assignfap(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfap_refresh_interval, collection_time = cohfar_assignfap_collection_time, input_fname = cohfar_assignfap_input_fname)
+		cohfar_accumbackground_output_prefix_full = "%s/%s" % (cohfar_file_path, cohfar_accumbackground_output_prefix[i_dict])
+		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname_prefix = cohfar_accumbackground_output_prefix_full, snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		cohfar_assignfap_input_fname_full = "%s/%s" % (cohfar_file_path, cohfar_assignfap_input_fname)
+		postcoh = mkcohfar_assignfap(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfap_refresh_interval, collection_time = cohfar_assignfap_collection_time, input_fname = cohfar_assignfap_input_fname_full)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)
 	return triggersrcs

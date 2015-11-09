@@ -166,7 +166,8 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
   parser.add_option("--cohfar-assignfap-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
-  parser.add_option("--cohfar-assignfap-collection-time", type = "int", metavar = "seconds", default = 0, help = "How often to update the marginalized stats files. (optional)")
+  parser.add_option("--cohfar-assignfap-collection-time", type = "int", metavar = "seconds", default = 0, help = "Do not assign FAP during this collection time. (optional)")
+  parser.add_option("--background-collection-time", type = "int", metavar = "seconds", default = 86400, help = "Update the marginalized stats files using the information of the collection time. (optional)")
   parser.add_option("--cohfar-assignfap-input-fname", metavar = "filename", default = None, help = "Set the filename to read the CDF (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
@@ -431,6 +432,7 @@ if 1==1:
       cuda_postcoh_detrsp_fname = options.cuda_postcoh_detrsp_fname,
       cuda_postcoh_hist_trials = options.cuda_postcoh_hist_trials,
       cuda_postcoh_output_skymap = options.cuda_postcoh_output_skymap,
+      cohfar_file_path = options.job_tag,
       cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
       cohfar_accumbackground_snapshot_interval = options.cohfar_accumbackground_snapshot_interval,
       cohfar_assignfap_refresh_interval = options.cohfar_assignfap_refresh_interval,
@@ -443,9 +445,14 @@ if 1==1:
 
   output = postcoh_output.Data(
 		  pipeline = pipeline,
-		  cluster_window = options.cluster_window,
+		  ifos = lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""),
+		  job_tag = options.job_tag,
 		  data_output_prefix = options.data_output_prefix,
+		  cluster_window = options.cluster_window,
 		  data_snapshot_interval = options.data_snapshot_interval,
+		  cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
+		  cohfar_assignfap_input_fname = options.cohfar_assignfap_input_fname,
+		  background_collection_time = options.background_collection_time,
 		  gracedb_far_threshold = options.gracedb_far_threshold,
 		  gracedb_group = options.gracedb_group,
 		  gracedb_search = options.gracedb_search,

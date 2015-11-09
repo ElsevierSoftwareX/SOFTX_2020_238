@@ -5,6 +5,7 @@ import sys
 import StringIO
 import httplib
 import math
+import subprocess
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -107,9 +108,45 @@ class PostcohDocument(object):
 		assert self.filename is not None
 		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
+class BackgroundStatsUpdater(object):
+	def __init__(self, path, input_prefix_list, output, collection_time, ifos):
+		self.path = path
+		self.input_prefix_list = input_prefix_list
+		self.output = output
+		self.collection_time = collection_time
+		self.ifos = ifos
+
+	def update(self, cur_buftime):
+		boundary = cur_buftime - self.collection_time
+		# list all the files in the path
+		nprefix = len(self.input_prefix_list[0].split("_"))
+		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+		ls_out, ls_err = ls_proc.communicate()
+		ls_fnames = ls_out.split("\n")
+		# find the files within the collection time
+		valid_fnames = []
+		for ifname in ls_fnames:
+			ifname_split = ifname.split("_")
+			# FIXME: hard coded the prefix test for the first 4 chars 
+			if len(ifname_split) > nprefix and ifname[0:3] == self.input_prefix_list[0][0:3] and ifname[-4:] != "next" and ifname_split[nprefix].isdigit() and int(ifname_split[nprefix]) > boundary:
+				valid_fnames.append("%s/%s" % (self.path, ifname))
+		if len(valid_fnames) > 0:
+			input_for_cmd = ",".join(valid_fnames)
+			output_for_cmd = "%s/%s" % (self.path, self.output)
+			# execute the cmd in a different process
+			cmd = []
+			cmd += ["gstlal_cohfar_calc_cdf"]
+			cmd += ["--input-fname", input_for_cmd]
+			cmd += ["--input-format", "stats"]
+			cmd += ["--output-fname", output_for_cmd]
+			cmd += ["--ifos", self.ifos]
+			#print cmd
+			update_proc = subprocess.Popen(cmd, shell = True)
+
+
 
 class Data(object):
-	def __init__(self, pipeline, data_output_prefix, cluster_window = 0.5, data_snapshot_interval = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, ifos, job_tag, data_output_prefix, cluster_window = 0.5, data_snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -140,11 +177,15 @@ class Data(object):
 		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 		# snapshot parameters
+		self.job_tag = job_tag
 		self.data_output_prefix = data_output_prefix
 		self.data_snapshot_interval = data_snapshot_interval
 		self.thread_snapshot = None
 		self.t_snapshot_start = None
 		self.snapshot_duration = None
+
+		# background updater
+		self.bsupdater = BackgroundStatsUpdater(path = job_tag, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -171,8 +212,6 @@ class Data(object):
 			# yourself before reading the code
 			# check if the newevents is over boundary
 			while nevent > 0 and buf_timestamp > self.boundary:
-				#if buf_timestamp > 966388199:
-					#pdb.set_trace()
 				self.cluster(self.cluster_window)
 
 				if self.need_candidate_check:
@@ -180,10 +219,7 @@ class Data(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					if self.gracedb_far_threshold and self.candidate.far < self.gracedb_far_threshold:
-						print self.candidate.end
-						print self.candidate.far
-						print self.candidate.eta
-						#self.__do_gracedb_alerts(self.candidate)
+						self.__do_gracedb_alerts(self.candidate)
 					self.candidate = None
 					self.need_candidate_check = False
 
@@ -193,6 +229,7 @@ class Data(object):
 				snapshot_filename = self.get_output_filename(self.data_output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
+				self.bsupdater.update(buf_timestamp)
 
 	def __select_head_event(self):
 		# last event should have the smallest timestamp
@@ -211,6 +248,7 @@ class Data(object):
 
 		if self.candidate.end > self.boundary:
 			self.boundary = self.boundary + cluster_window
+			self.candidate = None
 			return
 
 		# find the max cohsnr event within the boundary of cur_event_table
@@ -491,7 +529,7 @@ class Data(object):
 		xmldoc.unlink()
 		
 		print >>sys.stderr, "sending %s to gracedb ..." % filename
-		# FIXME: make this optional from command line?
+		# FIXME: make this optional from cmd line?
 		if True:
 		  resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
 		  resp_json = resp.json()
@@ -516,23 +554,25 @@ class Data(object):
 
 	
 	def get_output_filename(self, data_output_prefix, t_snapshot_start, snapshot_duration):
-		fname = "%s_%d_%d.xml.gz" % (data_output_prefix, t_snapshot_start, snapshot_duration)
+		fname = "%s/%s_%d_%d.xml.gz" % (self.job_tag, data_output_prefix, t_snapshot_start, snapshot_duration)
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
 		# FIXME: thread_snapshot must finish before calling this function
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
+		# free the memory
 		del self.postcoh_document_cpy
 		self.postcoh_document_cpy = self.postcoh_document
 		self.postcoh_document_cpy.set_filename(filename)
 		self.thread_snapshot = threading.Thread(target = self.postcoh_document_cpy.write_output_file, args =(self.postcoh_document_cpy, ))
 		self.thread_snapshot.start()
-		print "main thread: sub thread return"
+
+		# set a new document for postcoh_document
 		postcoh_document = self.postcoh_document.get_another()
-		del self.postcoh_document
 		self.postcoh_document = postcoh_document
-		print "main thread: snapshot finish"
+		del self.postcoh_table
+		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 	def write_output_file(self, filename = None, verbose = False):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
