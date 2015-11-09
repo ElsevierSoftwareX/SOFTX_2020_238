@@ -589,7 +589,8 @@ class Bank(object):
 		  raise ValueError("flow must be >= 0.: %s" % repr(flower))
 
 		template = min(sngl_inspiral_table, key = lambda row: row.mchirp)
-		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
+		# FIXME: when large spins present, lowest chirp mass might not correspond to longest chirp time
+		tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, template.spin1z, template.spin2z)
 		working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / flower, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
 		# FIXME: This is a hack to calculate the maximum length of given table, we 
