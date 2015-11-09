@@ -449,7 +449,12 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
 
         # generate the waveform
-	# FIXME: waveform approximant should not be fixed.	
+	# FIXME: currently only works for the non-spin or spin-aligned case
+	if (m1+m2) <=4:
+		approximant_string = "SpinTaylorT4"
+	else:
+		approximant_string = "IMRPhenomB"
+
 	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,				# reference phase, phi ref
 		    				    1./sampleRate,			# delta T
 						    m1*lal.MSUN_SI,			# mass 1 in kg
@@ -464,7 +469,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 						    None,				# Waveflags
 						    None,				# Non GR parameters
 						    0,7,				# Amplitude and phase order 2N+1
-						    lalsimulation.GetApproximantFromString("SpinTaylorT4"))
+						    lalsimulation.GetApproximantFromString(approximant_string))
 
 
 	# The following code will plot the original autocorrelation function
