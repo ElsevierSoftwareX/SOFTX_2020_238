@@ -115,6 +115,7 @@ class BackgroundStatsUpdater(object):
 		self.output = output
 		self.collection_time = collection_time
 		self.ifos = ifos
+		self.proc = None
 
 	def update(self, cur_buftime):
 		boundary = cur_buftime - self.collection_time
@@ -136,12 +137,12 @@ class BackgroundStatsUpdater(object):
 			# execute the cmd in a different process
 			cmd = []
 			cmd += ["gstlal_cohfar_calc_cdf"]
-			cmd += ["--input-fname", input_for_cmd]
+			cmd += ["--input-filename", input_for_cmd]
 			cmd += ["--input-format", "stats"]
-			cmd += ["--output-fname", output_for_cmd]
+			cmd += ["--output-filename", output_for_cmd]
 			cmd += ["--ifos", self.ifos]
-			#print cmd
-			update_proc = subprocess.Popen(cmd, shell = True)
+			print cmd
+			self.proc = subprocess.Popen(cmd)
 
 
 
@@ -185,6 +186,9 @@ class Data(object):
 		self.snapshot_duration = None
 
 		# background updater
+		self.total_duration = None
+		self.t_start = None
+		self.background_collection_time = background_collection_time
 		self.bsupdater = BackgroundStatsUpdater(path = job_tag, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
 
 	def appsink_new_buffer(self, elem):
@@ -199,6 +203,7 @@ class Data(object):
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
+				self.t_start = buf_timestamp
 				self.is_first_buf = False
 
 			if self.is_first_event and nevent > 0:
@@ -218,18 +223,20 @@ class Data(object):
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
-					if self.gracedb_far_threshold and self.candidate.far < self.gracedb_far_threshold:
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold:
 						self.__do_gracedb_alerts(self.candidate)
 					self.candidate = None
 					self.need_candidate_check = False
 
 			# do snapshot when ready
 			self.snapshot_duration = buf_timestamp - self.t_snapshot_start
+			self.total_duration = buf_timestamp - self.t_start
 			if self.data_snapshot_interval is not None and self.snapshot_duration >= self.data_snapshot_interval:
 				snapshot_filename = self.get_output_filename(self.data_output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
-				self.bsupdater.update(buf_timestamp)
+				if self.total_duration > self.background_collection_time:
+					self.bsupdater.update(buf_timestamp)
 
 	def __select_head_event(self):
 		# last event should have the smallest timestamp
@@ -558,9 +565,7 @@ class Data(object):
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
-		# FIXME: thread_snapshot must finish before calling this function
-		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
-			self.thread_snapshot.join()
+		self.__check_internal_process_finish()
 		# free the memory
 		del self.postcoh_document_cpy
 		self.postcoh_document_cpy = self.postcoh_document
@@ -574,9 +579,15 @@ class Data(object):
 		del self.postcoh_table
 		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
-	def write_output_file(self, filename = None, verbose = False):
+	def __check_internal_process_finish(self):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
+	
+		if self.bsupdater.proc is not None and self.bsupdater.proc.poll() is None:
+			tmp_out, tmp_err = self.bsupdater.proc.communicate()
+
+	def write_output_file(self, filename = None, verbose = False):
+		self.__check_internal_process_finish()
 		self.__write_output_file(filename)
 
 	def __write_output_file(self, filename = None, verbose = False):
