@@ -447,8 +447,9 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	return amp, phase
 
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
-
-        # generate the waveform
+'''
+        Generate whitened waveform, and return the amplitude and the phase.
+	'''
 	# FIXME: currently only works for the non-spin or spin-aligned case
 	if (m1+m2) <=4:
 		approximant_string = "SpinTaylorT4"
@@ -499,9 +500,10 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 		cleanFreq(f,flower)
 
 
-		# This is the key of SPIIR method. The whitening in
-		# frequency domain
-		# can be achieved in time domain
+		# The whitening in frequency domain
+		# can also be achieved in time domain,
+		# when the frequency evolution is monotonic.
+		# But the following are a bit obsolete.
 
 		if psd is not None:
        			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
@@ -514,22 +516,6 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 			psd_interp = interpolate.interp1d(fsampling, psd.data)
 			newpsd = psd_interp(f)
 			amp[0:len(f)] /= newpsd ** 0.5
-
-		# The following code will plot the original (phase,amp) and
-		# whitened (phase,amp)
-		#import matplotlib.pyplot as plt
-		#axis_x = numpy.linspace(0, len(phase), len(phase))
-		#f, axarr = plt.subplots(2, sharex = True)
-		#axarr[0].plot(axis_x, amp)
-		#axarr[0].plot(axis_x, lalwhiten_amp)
-		#axarr[1].plot(axis_x, phase)
-		#axarr[1].plot(axis_x, lalwhiten_phase)
-		#plt.show()
-
-		#f2, axarr2 = plt.subplots(2, sharex = True)
-		#axarr2[0].plot(axis_x, amp/lalwhiten_amp)
-		#axarr2[1].plot(axis_x, phase - lalwhiten_phase)
-		#plt.show()
 
 		return amp, phase
 
@@ -552,6 +538,10 @@ class Bank(object):
 		self.epsilon = None
 
 	def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.1, epsilon = 0.02, alpha = .99, beta = 0.25, pnorder = 4, flower = 40, all_psd = None, autocorrelation_length = 201, downsample = False, req_min_match = 0.0, verbose = False, contenthandler = DefaultContentHandler):
+		"""
+			Build SPIIR template bank from physical parameters, e.g. mass, spin.
+			"""
+		
 		# Open template bank file
 		self.template_bank_filename = filename
 		tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
@@ -659,7 +649,7 @@ class Bank(object):
        	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
 	
                		# get the chirptime (nearest power of two)
-                	length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
+                	length = ceil_pow_2(amp.shape[0]+autocorrelation_length)
 
                 	# get the IIR response
                 	u = spawaveform.iirresponse(length, a1, b0, delay)
@@ -724,7 +714,7 @@ class Bank(object):
 			    max_M = int( 2**numpy.floor(numpy.log2(sampleRate/flower)))
 			    # iterate over the frequencies and put them in the right downsampled bin
 			    for i, f in enumerate(fs):
-				    M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
+				    M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding) ) )) # Decimation factor
 				    M = max(min_M, M)
 
 				    if M > max_M:
