@@ -501,7 +501,7 @@ if 1==1:
   #
   # write output file
   #
-  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, output.t_snapshot_start, output.snapshot_duration), verbose = options.verbose)
+  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, finalsink.t_snapshot_start, finalsink.snapshot_duration), verbose = options.verbose)
 
   # Shutdown the web interface servers
   bottle.default_app.pop()
