@@ -44,10 +44,10 @@
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required"
 #	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
-#	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
+#	+ `--finalsink_gracedb-far-threshold` (float): False alarm rate threshold for finalsink_gracedb (Hz), if not given finalsink_gracedb events are not sent.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
-#	+ `--gracedb-type`: gracedb type (default is LowMass).
-#	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--finalsink_gracedb-type`: finalsink_gracedb type (default is LowMass).
+#	+ `--finalsink_gracedb-group`: finalsink_gracedb group (default is Test).
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval (default = 30s).
 
 #
@@ -98,7 +98,7 @@ from gstlal import simplehandler
 from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import datasource
-from gstlal import postcoh_output
+from gstlal import postcoh_finalsink
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
   pass
@@ -167,7 +167,7 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
   parser.add_option("--cohfar-assignfap-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
   parser.add_option("--cohfar-assignfap-collection-time", type = "int", metavar = "seconds", default = 0, help = "Do not assign FAP during this collection time. (optional)")
-  parser.add_option("--background-collection-time", type = "int", metavar = "seconds", default = 86400, help = "Update the marginalized stats files using the information of the collection time. (optional)")
+  parser.add_option("--finalsink-background-collection-time", type = "int", metavar = "seconds", default = 86400, help = "Update the marginalized stats files using the information of the collection time. (optional)")
   parser.add_option("--cohfar-assignfap-input-fname", metavar = "filename", default = None, help = "Set the filename to read the CDF (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
@@ -187,13 +187,13 @@ def parse_command_line():
 
   #FIXME: do not consider online paramters yet
   parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
-  parser.add_option("--gracedb-far-threshold", type = "float", default = None, help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-  parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
-  parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
-  parser.add_option("--gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
-  parser.add_option("--data-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
-  parser.add_option("--data-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
-  parser.add_option("--cluster-window", type = "float", metavar = "seconds", default = 0.5, help = "Cluster window to cluster zerolags.")
+  parser.add_option("--finalsink-gracedb-far-threshold", type = "float", default = None, help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+  parser.add_option("--finalsink-gracedb-group", default = "Test", help = "gracedb group, default is Test")
+  parser.add_option("--finalsink-gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
+  parser.add_option("--finalsink-gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
+  parser.add_option("--finalsink-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
+  parser.add_option("--finalsink-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--finalsink-cluster-window", type = "float", metavar = "seconds", default = 0.5, help = "Cluster window to cluster zerolags.")
 
   # set the postcoh parameters
   parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
@@ -443,20 +443,20 @@ if 1==1:
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
-  output = postcoh_output.Data(
+  finalsink = postcoh_finalsink.FinalSink(
 		  pipeline = pipeline,
 		  ifos = lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""),
-		  job_tag = options.job_tag,
-		  data_output_prefix = options.data_output_prefix,
-		  cluster_window = options.cluster_window,
-		  data_snapshot_interval = options.data_snapshot_interval,
+		  path = options.job_tag,
+		  output_prefix = options.finalsink_output_prefix,
+		  cluster_window = options.finalsink_cluster_window,
+		  snapshot_interval = options.finalsink_snapshot_interval,
 		  cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
 		  cohfar_assignfap_input_fname = options.cohfar_assignfap_input_fname,
-		  background_collection_time = options.background_collection_time,
-		  gracedb_far_threshold = options.gracedb_far_threshold,
-		  gracedb_group = options.gracedb_group,
-		  gracedb_search = options.gracedb_search,
-		  gracedb_pipeline = options.gracedb_pipeline)
+		  background_collection_time = options.finalsink_background_collection_time,
+		  gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
+		  gracedb_group = options.finalsink_gracedb_group,
+		  gracedb_search = options.finalsink_gracedb_search,
+		  gracedb_pipeline = options.finalsink_gracedb_pipeline)
 
 
   if options.verbose:
@@ -468,7 +468,7 @@ if 1==1:
   if options.verbose:
     print >>sys.stderr, " attaching appsinks to pipeline ..."
 
-  appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
+  appsync = pipeparts.AppSync(appsink_new_buffer = finalsink.appsink_new_buffer)
   appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-postcoh"), name = "sink_%d" % n) for (n, src) in enumerate(postcohsrcs))
  
   if options.write_pipeline is not None:
@@ -501,7 +501,7 @@ if 1==1:
   #
   # write output file
   #
-  output.write_output_file(filename = output.get_output_filename(options.data_output_prefix, output.t_snapshot_start, output.snapshot_duration), verbose = options.verbose)
+  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, output.t_snapshot_start, output.snapshot_duration), verbose = options.verbose)
 
   # Shutdown the web interface servers
   bottle.default_app.pop()

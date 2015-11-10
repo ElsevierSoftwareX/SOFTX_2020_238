@@ -12,4 +12,4 @@ pkgpython_PYTHON = \
 	servicediscovery.py \
 	spiirparts.py \
 	uni_datasource.py \
-	postcoh_output.py
+	postcoh_finalsink.py

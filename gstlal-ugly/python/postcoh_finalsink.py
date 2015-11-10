@@ -146,8 +146,8 @@ class BackgroundStatsUpdater(object):
 
 
 
-class Data(object):
-	def __init__(self, pipeline, ifos, job_tag, data_output_prefix, cluster_window = 0.5, data_snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+class FinalSink(object):
+	def __init__(self, pipeline, ifos, path, output_prefix, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -178,9 +178,9 @@ class Data(object):
 		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 		# snapshot parameters
-		self.job_tag = job_tag
-		self.data_output_prefix = data_output_prefix
-		self.data_snapshot_interval = data_snapshot_interval
+		self.path = path
+		self.output_prefix = output_prefix
+		self.snapshot_interval = snapshot_interval
 		self.thread_snapshot = None
 		self.t_snapshot_start = None
 		self.snapshot_duration = None
@@ -189,7 +189,7 @@ class Data(object):
 		self.total_duration = None
 		self.t_start = None
 		self.background_collection_time = background_collection_time
-		self.bsupdater = BackgroundStatsUpdater(path = job_tag, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
+		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -231,8 +231,8 @@ class Data(object):
 			# do snapshot when ready
 			self.snapshot_duration = buf_timestamp - self.t_snapshot_start
 			self.total_duration = buf_timestamp - self.t_start
-			if self.data_snapshot_interval is not None and self.snapshot_duration >= self.data_snapshot_interval:
-				snapshot_filename = self.get_output_filename(self.data_output_prefix, self.t_snapshot_start, self.snapshot_duration)
+			if self.snapshot_interval is not None and self.snapshot_duration >= self.snapshot_interval:
+				snapshot_filename = self.get_output_filename(self.output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
 				if self.total_duration > self.background_collection_time:
@@ -325,7 +325,7 @@ class Data(object):
 		row.process_id = "process:process_id:10"
 		row.ifo = trigger.pivotal_ifo
 		row.search = "tmpltbank"
-		row.channel = "LDAS-CALIB_STRAIN" 
+		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = trigger.end_time
 		row.end_time_ns = trigger.end_time_ns 
 		row.end_time_gmst = 0 
@@ -386,18 +386,20 @@ class Data(object):
 		row.spin2y = trigger.spin2y 
 		row.spin2z = trigger.spin2z
 		row.event_id = "sngl_inspiral:event_id:%d" % self.nevent_clustered
-		
+	
 		sngl_inspiral_table.append(row)
 
 		if trigger.pivotal_ifo == "H1":
 			the_other_ifo = "L1"
 		else:
 			the_other_ifo = "H1"
+
+		row = sngl_inspiral_table.RowType()
 		# Setting the the other row
 		row.process_id = "process:process_id:10"
 		row.ifo = the_other_ifo
 		row.search = "tmpltbank"
-		row.channel = "LDAS-CALIB_STRAIN" 
+		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = 0
 		row.end_time_ns = 0 
 		row.end_time_gmst = 0 
@@ -536,15 +538,20 @@ class Data(object):
 		xmldoc.unlink()
 		
 		print >>sys.stderr, "sending %s to gracedb ..." % filename
+		gracedb_upload_itrial = 1
 		# FIXME: make this optional from cmd line?
-		if True:
-		  resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
-		  resp_json = resp.json()
-		  if resp.status != httplib.CREATED:
-		    print >>sys.stderr, "gracedb upload of %s failed" % filename
-		  else:
-		    print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
-		    gracedb_ids.append(resp_json["graceid"])
+		while gracedb_upload_itrial < 10:
+			try:
+				resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+				resp_json = resp.json()
+				if resp.status != httplib.CREATED:
+					print >>sys.stderr, "gracedb upload of %s failed" % filename
+				else:
+		    			print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+		    			gracedb_ids.append(resp_json["graceid"])
+		    			break
+			except:
+				gracedb_upload_itrial += 1
 		#else:
 		#  proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
 		#  proc.stdin.write(message.getvalue())
@@ -552,16 +559,24 @@ class Data(object):
 		#  proc.stdin.close()
 		message.close()
 
+		gracedb_upload_itrial = 1
 		# write a log to explain far
-		for gracedb_id in gracedb_ids:
-			resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated, do not take it too seriously", filename = None, tagname = "analyst_comments")
-			if resp.status != httplib.CREATED:
-		    		print >>sys.stderr, "gracedb upload of log failed"
+		#for gracedb_id in gracedb_ids:
+		gracedb_id = gracedb_ids[0]
+		while gracedb_upload_itrial < 10:
+			try:
+				resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated;", filename = None, tagname = "analyst_comments")
+				if resp.status != httplib.CREATED:
+		    			print >>sys.stderr, "gracedb upload of log failed"
+				else:
+					break
+			except:
+				gracedb_upload_itrial += 1
 
 
 	
-	def get_output_filename(self, data_output_prefix, t_snapshot_start, snapshot_duration):
-		fname = "%s/%s_%d_%d.xml.gz" % (self.job_tag, data_output_prefix, t_snapshot_start, snapshot_duration)
+	def get_output_filename(self, output_prefix, t_snapshot_start, snapshot_duration):
+		fname = "%s/%s_%d_%d.xml.gz" % (self.path, output_prefix, t_snapshot_start, snapshot_duration)
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
