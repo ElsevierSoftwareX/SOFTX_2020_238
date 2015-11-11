@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import sqlite3
+from glue.ligolw import dbtables
+from glue import segments
+from glue import segmentsUtils
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import segments as ligolw_segments
+
+connection = sqlite3.connect(sys.argv[1])
+xmldoc = dbtables.get_xml(connection)
+
+for name, in set(connection.cursor().execute("SELECT name from segment_definer")):
+	segs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str(name)).coalesce()
+	print "%s: livetime %s" % (name, abs(segs))
+	print "%s: two or more detectors on: %s\n" % (name, abs(segmentsUtils.vote(segs.values(), 2)))
+
+whitesegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("whitehtsegments")).coalesce()
+datasegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("datasegments")).coalesce()
+vetosegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("vetoes")).coalesce()
+
+padded_segs = whitesegs - datasegs
+gated_segs = (datasegs - vetosegs - whitesegs)
+for k,s in gated_segs.items():
+	gated_segs[k] = s & segmentsUtils.vote(datasegs.values(), 2)
+
+print "zero padded segs livetime: %s" % abs(padded_segs) 
+print "gated segs livetime: %s" % abs(gated_segs) 
+print "analyzable time %s\n" % abs(segmentsUtils.vote((datasegs-vetosegs).values(),2))
+
+
+for ifo, segs in padded_segs.items():
+	print "\n+++++++++++++++++++++++++++++++++++++++++++++++++++\n%s: whitener padded segments\n" % ifo
+	for seg in segs:
+		print seg
+
+for ifo, segs in gated_segs.items():
+	print "\n+++++++++++++++++++++++++++++++++++++++++++++++++++\n%s: ht gated segments\n" % ifo
+	for seg in segs:
+		print seg
+
