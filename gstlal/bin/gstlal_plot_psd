@@ -67,5 +67,6 @@ for fname in sys.argv[2:]:
 		pyplot.ylabel('Strain^2/Hz')
 pyplot.legend()
 pyplot.grid()
-pyplot.ylim([min(minpsd), min(minpsd)*1e10])
+pyplot.ylim([1e-50, 1e-30])
+pyplot.xlim([1, 1e4])
 pyplot.savefig(outname)
