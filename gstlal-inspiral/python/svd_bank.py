@@ -399,3 +399,30 @@ def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False
 
 		banks.append(bank)
 	return banks
+
+
+def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
+	"""
+	From a list of the names of files containing SVD bank objects,
+	construct a dictionary mapping filename to list of sngl_inspiral
+	templates in that file.  Typically this mapping is inverted through
+	the use of some sort of "template identity" function to map each
+	template to the filename that contains that template.
+
+	Example:
+
+	Assuming the (mass1, mass2) tuple is known to uniquely identify the
+	templates
+
+	>>> def template_id(row):
+	...	return row.mass1, row.mass2
+	...
+	>>> mapping = svdbank_templates_mapping([], DefaultContentHandler)
+	>>> template_to_filename = dict((template_id(tempate), filename) for filename, templates in mapping.items() for template in templates)
+	"""
+	mapping = {}
+	for n, filename in enumerate(filenames, start = 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler = contenthandler, verbose = verbose)), [])
+	return mapping
