@@ -64,17 +64,22 @@ struct _GstLALInterleave
 
   GstClockTime timestamp;
   guint64 offset;
+  gboolean synchronous;
 
   gboolean segment_pending;
   guint64 segment_position;
   gdouble segment_rate;
   GstSegment segment;
 
+  gboolean flush_stop_pending;
+
   GstPadEventFunction collect_event;
 
   GstLALInterleaveFunc func;
 
   GstPad *src;
+
+  GList *pending_events;
 };
 
 struct _GstLALInterleaveClass

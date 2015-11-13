@@ -43,20 +43,20 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 	out = []
 	start_ts = inbuf.timestamp
 	current = numpy.frombuffer(inbuf[:], dtype = numpy.float64)
-	dt = 1/(float(rate)) * gst.SECOND
+	dt = 1/float(rate) * gst.SECOND
 	for j, i in enumerate(current):
-		current_ts = start_ts + dt
+		current_ts = start_ts + j * dt
 		if (i >= (last_best - var)) and (i <= (last_best + var)):
 			last_best = i
 			last_best_ts = current_ts
-			val = i
+			val = 1.0
 		else:
 			if (current_ts - last_best_ts > wait_time_ns):
 				last_best = i
 				last_best_ts = current_ts
-				val = i
+				val = 1.0
 			else:
-				val = last_best
+				val = 0.0
 		out.append(val)
 	out = numpy.array(out, dtype = numpy.float64)
 	out_len = out.nbytes
@@ -71,11 +71,11 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 # =============================================================================
 #
 
-class lal_check_calib_factors(gst.BaseTransform):
+class lal_calib_factors_to_statevector(gst.BaseTransform):
 	__gstdetails__ = (
-		"Check Calibration Factors",
+		"Create Statevector from Factors Computation",
 		"Filter/Audio",
-		"Checks the value of calibration factors compared to a specified minimum and maximum value.  Returns the input if it lies within expected range; returns the last best computed value if it lies outside expected range.",
+		"Checks the value of calibration factors compared to a specified minimum and maximum value.  Returns the 1 if it lies within expected range; returns 0 if it lies outside expected range.",
 		__author__
 	)
 
@@ -129,7 +129,7 @@ class lal_check_calib_factors(gst.BaseTransform):
 	)
 
 	def __init__(self):
-		super(lal_check_calib_factors, self).__init__()
+		super(lal_calib_factors_to_statevector, self).__init__()
 		self.set_gap_aware(True)
 
 	def do_set_property(self, prop, val):
@@ -173,10 +173,10 @@ class lal_check_calib_factors(gst.BaseTransform):
 	
 		return gst.FLOW_OK
 
-gobject.type_register(lal_check_calib_factors)
+gobject.type_register(lal_calib_factors_to_statevector)
 
 __gstelementfactory__ = (
-	lal_check_calib_factors.__name__,
+	lal_calib_factors_to_statevector.__name__,
 	gst.RANK_NONE,
-	lal_check_calib_factors
+	lal_calib_factors_to_statevector
 )

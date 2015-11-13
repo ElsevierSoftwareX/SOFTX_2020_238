@@ -4,8 +4,9 @@
  *                    2005 Wim Taymans <wim@fluendo.com>
  *                    2007 Andy Wingo <wingo at pobox.com>
  *                    2008 Sebastian Dröge <slomo@circular-chaos.rg>
+ *                    2015 Madeline Wade <madeline.wade@ligo.org>
  *
- * interleave.c: interleave samples, mostly based on adder.
+ * lal_interleave.c: interleave samples, mostly based on adder.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,11 +22,6 @@
  * License along with this library; if not, write to the
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
- */
-
-/* TODO:
- *       - handle caps changes
- *       - handle more queries/events
  */
 
 /**
@@ -110,7 +106,7 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 static void interleave_##type (guint##type *out, guint##type *in, \
     guint stride, guint nframes) \
 { \
-  gint i; \
+  guint i; \
   \
   for (i = 0; i < nframes; i++) { \
     *out = in[i]; \
@@ -126,7 +122,7 @@ MAKE_FUNC (64);
 static void
 interleave_24 (guint8 * out, guint8 * in, guint stride, guint nframes)
 {
-  gint i;
+  guint i;
 
   for (i = 0; i < nframes; i++) {
     memcpy (out, in, 3);
@@ -204,7 +200,8 @@ enum
 {
   PROP_0,
   PROP_CHANNEL_POSITIONS,
-  PROP_CHANNEL_POSITIONS_FROM_INPUT
+  PROP_CHANNEL_POSITIONS_FROM_INPUT,
+  PROP_SYNCHRONOUS
 };
 
 static void gst_interleave_set_property (GObject * object,
@@ -255,13 +252,19 @@ gst_interleave_finalize (GObject * object)
 
   gst_caps_replace (&self->sinkcaps, NULL);
 
+  while (self->pending_events) {
+    GstEvent *ev = GST_EVENT (self->pending_events->data);
+    gst_event_unref (ev);
+    self->pending_events = g_list_remove (self->pending_events, ev);
+  }
+
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static gboolean
 gst_interleave_check_channel_positions (GValueArray * positions)
 {
-  gint i;
+  guint i;
   guint channels;
   GstAudioChannelPosition *pos;
   gboolean ret;
@@ -290,7 +293,7 @@ gst_interleave_set_channel_positions (GstLALInterleave * self, GstStructure * s)
   g_value_init (&pos_array, GST_TYPE_ARRAY);
 
   if (self->channel_positions
-      && self->channels == self->channel_positions->n_values
+      && (gint) self->channels == (gint) self->channel_positions->n_values
       && gst_interleave_check_channel_positions (self->channel_positions)) {
     GST_DEBUG_OBJECT (self, "Using provided channel positions");
     for (i = 0; i < self->channels; i++)
@@ -385,6 +388,19 @@ gst_interleave_class_init (GstLALInterleaveClass * klass)
           "Take channel positions from the input", TRUE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
+  /**
+   * GstLALInterleave:sync
+   *
+   * Sync/Synchronous: Channels will be interleaved synchronously by timestampe
+   *
+   */
+   
+  g_object_class_install_property (gobject_class, PROP_SYNCHRONOUS,
+      g_param_spec_boolean ("sync", "Synchronous",
+          "Align the time stamps of input streams. ",
+          FALSE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   gstelement_class->request_new_pad =
       GST_DEBUG_FUNCPTR (gst_interleave_request_new_pad);
   gstelement_class->release_pad =
@@ -439,6 +455,9 @@ gst_interleave_set_property (GObject * object, guint prop_id,
         self->channel_positions = self->input_channel_positions;
       }
       break;
+    case PROP_SYNCHRONOUS:
+      self->synchronous = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -458,6 +477,9 @@ gst_interleave_get_property (GObject * object, guint prop_id,
     case PROP_CHANNEL_POSITIONS_FROM_INPUT:
       g_value_set_boolean (value, self->channel_positions_from_input);
       break;
+    case PROP_SYNCHRONOUS:
+      g_value_set_boolean (value, self->synchronous);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -472,6 +494,7 @@ gst_interleave_request_new_pad (GstElement * element, GstPadTemplate * templ,
   GstPad *new_pad;
   gchar *pad_name;
   gint channels, padnumber;
+  GstLALCollectData *data = NULL;
   GValue val = { 0, };
 
   if (templ->direction != GST_PAD_SINK)
@@ -497,8 +520,11 @@ gst_interleave_request_new_pad (GstElement * element, GstPadTemplate * templ,
       GST_DEBUG_FUNCPTR (gst_interleave_sink_setcaps));
   gst_pad_set_getcaps_function (new_pad,
       GST_DEBUG_FUNCPTR (gst_interleave_sink_getcaps));
-
-  gst_collect_pads_add_pad (self->collect, new_pad, sizeof (GstCollectData));
+  GST_OBJECT_LOCK(self->collect);
+  data = gstlal_collect_pads_add_pad(self->collect, new_pad, sizeof(*data));
+  gstlal_collect_pads_set_unit_size(new_pad, self->width / 8);
+  gstlal_collect_pads_set_rate(new_pad, self->rate);
+  GST_OBJECT_UNLOCK(self->collect);
 
   /* FIXME: hacked way to override/extend the event function of
    * GstCollectPads; because it sets its own event function giving the
@@ -601,7 +627,7 @@ gst_interleave_release_pad (GstElement * element, GstPad * pad)
 
   GST_OBJECT_UNLOCK (self->collect);
 
-  gst_collect_pads_remove_pad (self->collect, pad);
+  gstlal_collect_pads_remove_pad (self->collect, pad);
   gst_element_remove_pad (element, pad);
 }
 
@@ -619,6 +645,7 @@ gst_interleave_change_state (GstElement * element, GstStateChange transition)
     case GST_STATE_CHANGE_READY_TO_PAUSED:
       self->timestamp = 0;
       self->offset = 0;
+      self->flush_stop_pending = FALSE;
       self->segment_pending = TRUE;
       self->segment_position = 0;
       self->segment_rate = 1.0;
@@ -758,6 +785,7 @@ static gboolean
 gst_interleave_sink_setcaps (GstPad * pad, GstCaps * caps)
 {
   GstLALInterleave *self;
+  GList *pads;
 
   g_return_val_if_fail (GST_IS_INTERLEAVE_PAD (pad), FALSE);
 
@@ -810,6 +838,17 @@ gst_interleave_sink_setcaps (GstPad * pad, GstCaps * caps)
       goto src_did_not_accept;
   }
 
+  /* set unit size on collect pads */
+  GST_OBJECT_LOCK(self->collect);
+  for (pads = GST_ELEMENT (self)->pads; pads; pads = g_list_next (pads)) {
+    GstPad *pad = GST_PAD(pads->data);
+    if (gst_pad_get_direction (pad) == GST_PAD_SINK) {
+      gstlal_collect_pads_set_unit_size (pad, self->width / 8);
+      gstlal_collect_pads_set_rate (pad, self->rate);
+    }
+  }
+  GST_OBJECT_UNLOCK(self->collect);
+
   if (!self->sinkcaps) {
     GstCaps *sinkcaps = gst_caps_copy (caps);
     GstStructure *s = gst_caps_get_structure (sinkcaps, 0);
@@ -857,7 +896,7 @@ static gboolean
 gst_interleave_sink_event (GstPad * pad, GstEvent * event)
 {
   GstLALInterleave *self = GST_INTERLEAVE (gst_pad_get_parent (pad));
-  gboolean ret;
+  gboolean ret = TRUE;
 
   GST_DEBUG ("Got %s event on pad %s:%s", GST_EVENT_TYPE_NAME (event),
       GST_DEBUG_PAD_NAME (pad));
@@ -870,8 +909,21 @@ gst_interleave_sink_event (GstPad * pad, GstEvent * event)
        * assume the collectpads forwarded the FLUSH_STOP past us
        * and downstream (using our source pad, the bastard!).
        */
+      GST_OBJECT_LOCK (self->collect);
       self->segment_pending = TRUE;
+      self->flush_stop_pending = FALSE;
+      while (self->pending_events) {
+        GstEvent *ev = GST_EVENT (self->pending_events->data);
+        gst_event_unref(ev);
+        self->pending_events = g_list_remove (self->pending_events, ev);
+      }
+      GST_OBJECT_UNLOCK(self->collect);
       break;
+    case GST_EVENT_TAG:
+      GST_OBJECT_LOCK(self->collect);
+      self->pending_events = g_list_append (self->pending_events, event);
+      GST_OBJECT_UNLOCK (self->collect);
+      goto beach; 
     default:
       break;
   }
@@ -879,6 +931,7 @@ gst_interleave_sink_event (GstPad * pad, GstEvent * event)
   /* now GstCollectPads can take care of the rest, e.g. EOS */
   ret = self->collect_event (pad, event);
 
+beach:
   gst_object_unref (self);
   return ret;
 }
@@ -1149,19 +1202,23 @@ gst_interleave_src_event (GstPad * pad, GstEvent * event)
       GstSeekFlags flags;
       GstSeekType curtype;
       gint64 cur;
+      gboolean flush;
 
       /* parse the seek parameters */
       gst_event_parse_seek (event, &self->segment_rate, NULL, &flags, &curtype,
           &cur, NULL, NULL);
 
+      flush = (flags & GST_SEEK_FLAG_FLUSH) == GST_SEEK_FLAG_FLUSH;
+
       /* check if we are flushing */
-      if (flags & GST_SEEK_FLAG_FLUSH) {
+      if (flush) {
         /* make sure we accept nothing anymore and return WRONG_STATE */
         gst_collect_pads_set_flushing (self->collect, TRUE);
 
         /* flushing seek, start flush downstream, the flush will be done
          * when all pads received a FLUSH_STOP. */
         gst_pad_push_event (self->src, gst_event_new_flush_start ());
+        self->flush_stop_pending = TRUE;
       }
 
       /* now wait for the collected to be finished and mark a new
@@ -1172,9 +1229,19 @@ gst_interleave_src_event (GstPad * pad, GstEvent * event)
       else
         self->segment_position = 0;
       self->segment_pending = TRUE;
+      if (flush) {
+        gst_collect_pads_set_flushing (self->collect, TRUE);
+      }
       GST_OBJECT_UNLOCK (self->collect);
 
       result = forward_event (self, event);
+      if (!result) {
+        GST_DEBUG_OBJECT (self, "seeking failed");
+      }
+      if (g_atomic_int_compare_and_exchange (&self->flush_stop_pending, TRUE, FALSE)) {
+        GST_DEBUG_OBJECT (self, "pending flush stop");
+        gst_pad_push_event (self->src, gst_event_new_flush_stop ());
+      }
       break;
     }
     case GST_EVENT_NAVIGATION:
@@ -1200,84 +1267,29 @@ output_timestamp_from_offset (const GstLALInterleave *self, guint64 offset)
 static GstFlowReturn
 gst_interleave_collected (GstCollectPads * pads, GstLALInterleave * self)
 {
-  guint size;
   GstBuffer *outbuf;
   GstFlowReturn ret = GST_FLOW_OK;
   GSList *collected;
-  guint nsamples;
-  guint ncollected = 0;
-  gboolean empty = TRUE;
   gint width = self->width / 8;
   GstClockTime t_start, t_end;
-  guint64 earliest_output_offset, earliest_output_offset_end;
+  guint64 earliest_output_offset, earliest_output_offset_end, outlength;
+  guint ncollected = 0;
+  gboolean empty = TRUE;
 
   g_return_val_if_fail (self->func != NULL, GST_FLOW_NOT_NEGOTIATED);
   g_return_val_if_fail (self->width > 0, GST_FLOW_NOT_NEGOTIATED);
   g_return_val_if_fail (self->channels > 0, GST_FLOW_NOT_NEGOTIATED);
   g_return_val_if_fail (self->rate > 0, GST_FLOW_NOT_NEGOTIATED);
 
-  size = gst_collect_pads_available (pads);
-
-  g_return_val_if_fail (size % width == 0, GST_FLOW_ERROR);
-
-  GST_DEBUG_OBJECT (self, "Starting to collect %u bytes from %d channels", size,
-      self->channels);
-
-  nsamples = size / width;
-
-  ret =
-      gst_pad_alloc_buffer (self->src, GST_BUFFER_OFFSET_NONE,
-      size * self->channels, GST_PAD_CAPS (self->src), &outbuf);
-
-  if (ret != GST_FLOW_OK) {
-    return ret;
-  } else if (outbuf == NULL || GST_BUFFER_SIZE (outbuf) < size * self->channels) {
-    gst_buffer_unref (outbuf);
-    return GST_FLOW_NOT_NEGOTIATED;
-  } else if (!gst_caps_is_equal (GST_BUFFER_CAPS (outbuf),
-          GST_PAD_CAPS (self->src))) {
-    gst_buffer_unref (outbuf);
-    return GST_FLOW_NOT_NEGOTIATED;
+  if (g_atomic_int_compare_and_exchange (&self->flush_stop_pending, TRUE, FALSE)){
+    GST_DEBUG_OBJECT (self, "pending flush stop");
+    gst_pad_push_event (self->src, gst_event_new_flush_stop ());
   }
-
-  memset (GST_BUFFER_DATA (outbuf), 0, size * self->channels);
-
-  for (collected = pads->data; collected != NULL; collected = collected->next) {
-    GstCollectData *cdata;
-    GstBuffer *inbuf;
-    guint8 *outdata;
-
-    cdata = (GstCollectData *) collected->data;
-
-    inbuf = gst_collect_pads_take_buffer (pads, cdata, size);
-    if (inbuf == NULL) {
-      GST_DEBUG_OBJECT (cdata->pad, "No buffer available");
-      goto next;
-    }
-    ncollected++;
-
-    if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP))
-      goto next;
-
-    empty = FALSE;
-    outdata =
-        GST_BUFFER_DATA (outbuf) +
-        width * GST_INTERLEAVE_PAD_CAST (cdata->pad)->channel;
-
-    self->func (outdata, GST_BUFFER_DATA (inbuf), self->channels, nsamples);
-
-  next:
-    if (inbuf)
-      gst_buffer_unref (inbuf);
-  }
-
-  if (ncollected == 0)
-    goto eos;
 
   if (self->segment_pending) {
     GstEvent *event;
     GstSegment *segment;
-    
+        
     segment = gstlal_collect_pads_get_segment (self->collect);
     if (segment) {
       g_assert (segment->format == GST_FORMAT_TIME);
@@ -1285,47 +1297,167 @@ gst_interleave_collected (GstCollectPads * pads, GstLALInterleave * self)
       gst_segment_free (segment);
     } else
       GST_ELEMENT_ERROR (self, STREAM, FORMAT, (NULL), ("failed to deduce output segment, falling back to undefined default"));
-
+        
     event = gst_event_new_new_segment_full (FALSE, self->segment.rate,
         1.0, GST_FORMAT_TIME, self->segment.start, self->segment.stop, self->segment.start);
     if (self->segment.rate > 0.0) {
       self->timestamp = self->segment.start;
       self->offset = 0;
     } else {
-      self->timestamp = self->segment.start;
-      self->offset = gst_util_uint64_scale_round (self->segment.stop - self->segment.start, self->rate, GST_SECOND);
+      self->timestamp = self->segment.stop;
+      self->offset = gst_util_uint64_scale_round (self->segment.stop - self->segment.start, self->rate, GST_SECOND);    
     }
-    gst_pad_push_event (self->src, event);
+
+    if (event) {
+      if (!gst_pad_push_event (self->src, event)) {
+        GST_WARNING_OBJECT (self->src, "Sending event %p (%s) failed.", event, GST_EVENT_TYPE_NAME (event));
+      }
     self->segment_pending = FALSE;
     self->segment_position = 0;
+    } else {
+    GST_WARNING_OBJECT (self->src, "Creating new segment event for " "start:%" G_GINT64_FORMAT, " end:%" G_GINT64_FORMAT " failed", self->segment.start, self->segment.stop);
+    }
   }
 
-  earliest_output_offset = self->offset;
-  earliest_output_offset_end = earliest_output_offset + nsamples;
+  if (self->pending_events) {
+    while (self->pending_events) {
+      GstEvent *ev = GST_EVENT (self->pending_events->data);
+      gst_pad_push_event (self->src, ev);
+      self->pending_events = g_list_remove (self->pending_events, ev);
+    }
+  }
 
+  /* get the range of offsets in the output stream spanend by the available input buffers */
+  if (self->synchronous) {
+    /* when doing synchronous interleaving, determine the offsets for real */
+    if (!gstlal_collect_pads_get_earliest_times (self->collect, &t_start, &t_end)) {
+      GST_ELEMENT_ERROR (self, STREAM, FORMAT, (NULL), ("cannot deduce input timestamp offset information"));
+      goto bad_timestamps;
+    }
+    /* check for EOS */
+    if (!GST_CLOCK_TIME_IS_VALID (t_start))
+      goto eos;
+    /* don't let time go backwards */
+    earliest_output_offset = gst_util_uint64_scale_int_round (t_start - self->segment.start, self->rate, GST_SECOND);
+    earliest_output_offset_end = gst_util_uint64_scale_int_round (t_end - self->segment.start, self->rate, GST_SECOND);
+
+    if (earliest_output_offset < self->offset) {
+      GST_ELEMENT_ERROR (self, STREAM, FORMAT, (NULL), ("detected time reversal in at least one input stream: expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, self->offset, earliest_output_offset));
+      goto bad_timestamps;
+    }
+  } else {
+    earliest_output_offset = self->offset;
+    earliest_output_offset_end = earliest_output_offset + gst_collect_pads_available(pads) / width;
+  }
+    
+  /* compute the number of samples for which all sink pads can contribute
+   * information.  0 does not necessarily mean EOS. */
+  outlength = earliest_output_offset_end - earliest_output_offset;
+
+  ret = gst_pad_alloc_buffer (self->src, GST_BUFFER_OFFSET_NONE, outlength * width * self->channels, GST_PAD_CAPS (self->src), &outbuf);
+ 
+  if (ret != GST_FLOW_OK) {
+    return ret;
+  } else if (outbuf == NULL || GST_BUFFER_SIZE (outbuf) < outlength * width * self->channels) {
+    gst_buffer_unref (outbuf);
+    return GST_FLOW_NOT_NEGOTIATED;
+  } else if (!gst_caps_is_equal (GST_BUFFER_CAPS (outbuf), GST_PAD_CAPS (self->src))) {
+    gst_buffer_unref (outbuf);
+    return GST_FLOW_NOT_NEGOTIATED;
+  }
+
+  // Set up buffer of zeros
+  memset (GST_BUFFER_DATA (outbuf), 0, outlength * width * self->channels);
+  
+  for (collected = pads->data; collected; collected = g_slist_next (collected)) {
+    GstLALCollectData *collect_data = (GstLALCollectData *) collected->data;
+    GstBuffer *inbuf;
+    guint8 *outdata;
+    guint offset;
+    guint64 inlength;
+    
+    /* (try to) get a buffer upto the desired end offset.
+     * NULL means EOS or an empty buffer so we still need to flush in
+     * case of an empty buffer.
+     * determine the buffer's location relative to the desired range of
+     * offsets.  we've checked above that time hasn't gone backwards on any
+     * input buffer so offset can't be negative.  if not doing synchronous
+     * adding the buffer starts "now". */
+    if (self->synchronous) {
+      inbuf = gstlal_collect_pads_take_buffer_sync (pads, collect_data, t_end);
+      if (inbuf == NULL) {
+        GST_LOG_OBJECT (self, "channel %p: no bytes available", collect_data);
+        goto next;
+      }
+      offset = gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - self->segment.start, self->rate, GST_SECOND) - earliest_output_offset;
+      inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
+      g_assert (inlength == GST_BUFFER_SIZE (inbuf) / width || GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP));
+    } else {
+      inbuf = gst_collect_pads_take_buffer (pads, (GstCollectData *) collect_data, outlength * width); 
+      if (inbuf == NULL) {
+        GST_LOG_OBJECT (self, "channel %p: no bytes available", collect_data);
+        goto next;
+      }
+      offset = 0;
+      inlength = GST_BUFFER_SIZE (inbuf) / width;
+    }
+    g_assert (offset + inlength <= outlength || inlength == 0);
+    GST_LOG_OBJECT (self, "channel %p: retrieved %d sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
+    
+    /* this buffer is for the future, we don't need it yet. */
+    if (offset > outlength || (offset == outlength && outlength != 0)) {
+      /* it must be empty or there's a bug in the collect pads class */
+      g_assert (inlength == 0);
+      GST_LOG_OBJECT (self, "channel %p: discarding 0 sample buffer from the future", collect_data);
+      goto next;
+    }
+
+    ncollected++;
+
+    if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP))
+      goto next;
+    
+    empty = FALSE;
+    outdata = GST_BUFFER_DATA (outbuf) + width * GST_INTERLEAVE_PAD_CAST ( ( (GstCollectData *) collect_data)->pad)->channel + offset * width * self->channels;
+    self->func (outdata, GST_BUFFER_DATA (inbuf), self->channels, inlength);
+
+  next:
+    if (inbuf)
+    gst_buffer_unref (inbuf);
+  }
+
+  if (ncollected == 0)
+    goto eos;
+
+  /* FIXME:  this logic can't run backwards */
+  /* set timestamps on the output buffer */
   GST_BUFFER_OFFSET (outbuf) = earliest_output_offset;
   GST_BUFFER_TIMESTAMP (outbuf) = output_timestamp_from_offset (self, GST_BUFFER_OFFSET (outbuf));
-
-  self->offset += nsamples;
-  self->timestamp = gst_util_uint64_scale_int (self->offset,
-      GST_SECOND, self->rate);
-
-  GST_BUFFER_DURATION (outbuf) = self->timestamp -
-      GST_BUFFER_TIMESTAMP (outbuf);
+  GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (outbuf) + outlength;
+  self->timestamp = output_timestamp_from_offset (self, GST_BUFFER_OFFSET_END (outbuf));
+  self->offset += outlength;
+  GST_BUFFER_DURATION (outbuf) = self->timestamp - GST_BUFFER_TIMESTAMP (outbuf);
 
   if (empty)
     GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
 
-  GST_LOG_OBJECT (self, "pushing outbuf, timestamp %" GST_TIME_FORMAT,
-      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)));
+  /* send it out */
+  g_assert (GST_BUFFER_CAPS (outbuf) != NULL);
+  GST_LOG_OBJECT (self, "pushing outbuf %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, outbuf, GST_BUFFER_BOUNDARIES_ARGS (outbuf));
   ret = gst_pad_push (self->src, outbuf);
+  GST_LOG_OBJECT (self, "pushed outbuf, result = %s", gst_flow_get_name (ret));
 
+  
   return ret;
-
+  
+  /* ERRORS */
+bad_timestamps:
+  {
+    return GST_FLOW_ERROR;
+  }
 eos:
   {
     GST_DEBUG_OBJECT (self, "no data available, must be EOS");
-    gst_buffer_unref (outbuf);
     gst_pad_push_event (self->src, gst_event_new_eos ());
     return GST_FLOW_UNEXPECTED;
   }

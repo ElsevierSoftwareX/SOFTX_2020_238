@@ -91,7 +91,7 @@ def mkmultiplier(pipeline, srcs, caps, sync = True):
 	return elem
 
 def mkinterleave(pipeline, srcs, caps):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_interleave")
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_interleave", sync = True)
 	if srcs is not None:
 		for src in srcs:
 			pipeparts.mkcapsfilter(pipeline, src, caps).link(elem)
@@ -111,13 +111,11 @@ def list_srcs(pipeline, *args):
 		out.append(mkqueue(pipeline, src))
 	return tuple(out)
 
-def average_calib_factors(pipeline, head, var, expected, averaging_time, caps, default, statevector, td):
-	averaging_rate = 16
-	N = averaging_time * averaging_rate
+def average_calib_factors(pipeline, head, var, expected, N, caps, td, hold_time):
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", min = expected - var, max = expected + var, default = expected)
-	head = resample(pipeline, head, "audio/x-raw-float, rate=%d" % averaging_rate)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", variance = var, default = expected, wait_time_to_new_expected = hold_time)
+	head = mkaudiorate(pipeline, head)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(N)/N], time_domain = td)
 	head = resample(pipeline, head, caps)
 	return head
@@ -237,6 +235,7 @@ def compute_kappatst_from_filters_file(pipeline, derrfxR, derrfxI, excfxR, excfx
 
 	derrfx_over_excfxR, derrfx_over_excfxI = compute_pcalfp_over_derrfp(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
 	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
+	
 
 	# 	     
 	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)
