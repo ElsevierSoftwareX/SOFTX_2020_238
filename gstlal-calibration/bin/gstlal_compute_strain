@@ -969,7 +969,6 @@ res = pipeparts.mkfirbank(pipeline, res, fir_matrix = [[0,1]], time_domain = td)
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
 	kc_modify_res = calibration_parts.resample(pipeline, calibration_parts.mkqueue(pipeline, kctee), "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % sr)
-	#kc_modify_res = pipeparts.mkgeneric(pipeline, kc_modify_res, "lal_check_calib_factors", min=options.expected_kappac-options.kappac_ok_var, max=options.expected_kappac+options.kappac_ok_var, default = options.expected_kappac)
 	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0)), "audio/x-raw-float, width=64, rate=%d, channels=1, endianness=1234" % sr)
 	res = pipeparts.mkaudioconvert(pipeline, res)
 	res = pipeparts.mkcapsfilter(pipeline, res, "audio/x-raw-float, width=64, rate=%d, channels=1, endianness=1234" % sr)
@@ -1087,7 +1086,7 @@ if not options.no_dq_vector:
 		kaok = calibration_parts.mkaudiorate(pipeline, kaok)
 		kaok = calibration_parts.mkreblock(pipeline, kaok)
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = options.kappaa_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, kaIdq))
-		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = (-int(options.factors_averaging_time) - int(options.factors_hold_time)) * dqsr)
+		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kaRInRange))
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kaIInRange))
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
@@ -1106,7 +1105,7 @@ if not options.no_dq_vector:
 		kpuok = calibration_parts.mkaudiorate(pipeline, kpuok)
 		kpuok = calibration_parts.mkreblock(pipeline, kpuok)
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = options.kappapu_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, kpuIdq))
-		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = (-int(options.factors_averaging_time) - int(options.factors_hold_time)) * dqsr)
+		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kpuRInRange))
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kpuIInRange))
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
@@ -1125,7 +1124,7 @@ if not options.no_dq_vector:
 		ktstok = calibration_parts.mkaudiorate(pipeline, ktstok)
 		ktstok = calibration_parts.mkreblock(pipeline, ktstok)
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = options.kappatst_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, ktstIdq)) 
-		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = (-int(options.factors_averaging_time) - int(options.factors_hold_time)) * dqsr)
+		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, ktstRInRange))
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, ktstIInRange))
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
@@ -1141,7 +1140,7 @@ if not options.no_dq_vector:
 		kcok = pipeparts.mkcapsfilter(pipeline, kcok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		kcok = calibration_parts.mkaudiorate(pipeline, kcok)
 		kcok = calibration_parts.mkreblock(pipeline, kcok)
-		kcok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kcok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = (-int(options.factors_averaging_time) - int(options.factors_hold_time)) * dqsr)
+		kcok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kcok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kcok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kcok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kcInRange))
 
 	#
@@ -1155,7 +1154,7 @@ if not options.no_dq_vector:
 		fccok = pipeparts.mkcapsfilter(pipeline, fccok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 		fccok = calibration_parts.mkaudiorate(pipeline, fccok)
 		fccok = calibration_parts.mkreblock(pipeline, fccok)
-		fccok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fccok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = (-int(options.factors_averaging_time) - int(options.factors_hold_time)) * dqsr)
+		fccok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fccok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		fccok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fccok), threshold = 1, control = calibration_parts.mkqueue(pipeline, fccInRange))
 		
 	#
@@ -1275,6 +1274,7 @@ if not options.no_kappac:
 	strain, kcout = calibration_parts.gate_strain_for_output_frames(pipeline, strain, kcout)
 if not options.no_fcc:
 	strain, fccout = calibration_parts.gate_strain_for_output_frames(pipeline, strain, fccout)
+strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = td)
 strain = calibration_parts.mkaudiorate(pipeline, strain)
 strain = calibration_parts.mkreblock(pipeline, strain)
 
@@ -1298,7 +1298,6 @@ if not options.no_fcc:
 	fccout = calibration_parts.gate_other_with_strain(pipeline, fccout, straintee)
 	
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
-# FIXME: The code below just locks up the pipeline. Think of another way to do this
 strain = calibration_parts.mkqueue(pipeline, straintee)
 if not options.no_dq_vector and (options.apply_kappatst or options.apply_kappac or options.apply_kappapu):
 	calibstatevectortee = pipeparts.mktee(pipeline, calibstatevector)

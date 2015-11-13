@@ -51,7 +51,7 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 			last_best_ts = current_ts
 			val = i
 		else:
-			if (current_ts - last_best_ts > wait_time_ns):
+			if (current_ts - last_best_ts > wait_time_ns) and not numpy.isnan(i) and not numpy.isinf(i):
 				last_best = i
 				last_best_ts = current_ts
 				val = i
