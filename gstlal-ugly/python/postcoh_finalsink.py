@@ -147,7 +147,7 @@ class BackgroundStatsUpdater(object):
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, ifos, path, output_prefix, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -166,6 +166,7 @@ class FinalSink(object):
 		self.nevent_clustered = 0
 
 		# gracedb parameters
+		self.far_factor = far_factor
 		self.gracedb_far_threshold = gracedb_far_threshold
 		self.gracedb_group = gracedb_group
 		self.gracedb_search = gracedb_search
@@ -235,8 +236,8 @@ class FinalSink(object):
 				snapshot_filename = self.get_output_filename(self.output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
-				if self.total_duration > self.background_collection_time:
-					self.bsupdater.update(buf_timestamp)
+				self.bsupdater.update(buf_timestamp)
+				self.nevent_clustered = 0
 
 	def __select_head_event(self):
 		# last event should have the smallest timestamp
@@ -277,7 +278,8 @@ class FinalSink(object):
 			self.need_candidate_check = True
 
 	def __set_far(self, candidate):
-		candidate.far = candidate.fap * self.nevent_clustered / candidate.livetime
+		hack_factor = max(0.5, self.nevent_clustered / float(1 + self.snapshot_duration.gpsSeconds))
+		candidate.far = candidate.fap * hack_factor * self.far_factor
 
 	def __do_gracedb_alerts(self, trigger):
 		# do alerts
@@ -414,7 +416,7 @@ class FinalSink(object):
 		row.mass2 = trigger.mass2 
 		row.mchirp = trigger.mchirp 
 		row.mtotal = trigger.mtotal 
-		row.eta = 0 
+		row.eta = trigger.eta
 		row.kappa = 0 
 		row.chi = 1 
 		row.tau0 = 0 
@@ -565,7 +567,7 @@ class FinalSink(object):
 		gracedb_id = gracedb_ids[0]
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated;", filename = None, tagname = "analyst_comments")
+				resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated; coa_phase and end_time of the other detector not provided yet", filename = None, tagname = "analyst_comments")
 				if resp.status != httplib.CREATED:
 		    			print >>sys.stderr, "gracedb upload of log failed"
 				else:
