@@ -447,9 +447,15 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	return amp, phase
 
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
-'''
-        Generate whitened waveform, and return the amplitude and the phase.
-	'''
+    """ Generate whitened waveform, and return the amplitude and the phase.
+    
+    Returns
+    -------
+    Amplitude : 
+	The amplitude of the whitened template
+    Phase :
+	The phase of the whitened template
+    """
 	# FIXME: currently only works for the non-spin or spin-aligned case
 	if (m1+m2) <=4:
 		approximant_string = "SpinTaylorT4"
