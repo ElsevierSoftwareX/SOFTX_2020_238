@@ -57,33 +57,40 @@ lsctables.use_in(DefaultContentHandler)
 
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
-	pass
+    pass
 
 def ceil_pow_2(x):
     """ Return the smallest power of 2 that is larger than x.
 
     Parameters
     ----------
-    x : a positive integer number
+    x : int or float
+	A positive integer number
 
     Returns
     -------
-    Number: the smallest power of 2 that is larger than x
+    Number : int
+	The smallest power of 2 that is larger than x
+    
+    Example
+    -------
+    >>> ceil_pow_2(25)
+    32
     """
-	x = int(math.ceil(x))
-	x -= 1
-	n = 1
-	while n and (x & (x+1)):
-		x |= x >> n
-		n <<= 1
-	return x + 1
+    x = int(math.ceil(x))
+    x -= 1
+    n = 1
+    while n and (x & (x+1)):
+	x |= x >> n
+	n <<= 1
+    return x + 1
 
 def lefttukeywindow(data, samps = 200.):
-	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-	tp = float(samps) / len(data)
-	wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
-	wn[len(wn)//2:] = 1.0
-	return wn
+    assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+    tp = float(samps) / len(data)
+    wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
+    wn[len(wn)//2:] = 1.0
+    return wn
 
 def Theta(eta, Mtot, t):
 	Tsun = lal.MTSUN_SI #4.925491e-6
@@ -338,23 +345,6 @@ def M_chi2(flower=30., sampleRate=2048.):
 	im = ax.imshow(numpy.abs(m_chi2))
 	plt.colorbar(im)
 	plt.show()
-
-def innerproduct(a,b):
-
-        n = a.length
-        a.append(zeros(n/2),complex)
-        a.extend(zeros(n/2),complex)
-
-        b.append(zeros(n/2),complex)
-        b.extend(zeros(n/2),complex)
-
-        af = fft(a)
-        bf = fft(b)
-
-        cf = af * bf
-        c = ifft(cf)
-
-        return max(abs(c))
 
 def smooth_and_interp(psd, width=1, length = 10):
         data = psd.data
