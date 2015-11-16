@@ -60,6 +60,16 @@ class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 def ceil_pow_2(x):
+    """ Return the smallest power of 2 that is larger than x.
+
+    Parameters
+    ----------
+    x : a positive integer number
+
+    Returns
+    -------
+    Number: the smallest power of 2 that is larger than x
+    """
 	x = int(math.ceil(x))
 	x -= 1
 	n = 1
