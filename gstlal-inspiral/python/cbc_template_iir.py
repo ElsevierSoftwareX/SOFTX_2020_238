@@ -484,13 +484,13 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
     Phase :
 	The phase of the whitened template
     """
-	# FIXME: currently only works for the non-spin or spin-aligned case
-	if (m1+m2) <=4:
-		approximant_string = "SpinTaylorT4"
-	else:
-		approximant_string = "IMRPhenomB"
+    # FIXME: currently only works for the non-spin or spin-aligned case
+    if (m1+m2) <=4:
+	approximant_string = "SpinTaylorT4"
+    else:
+	approximant_string = "IMRPhenomB"
 
-	hp,hc = lalsimulation.SimInspiralChooseTDWaveform(  0,				# reference phase, phi ref
+    hp,hc = lalsimulation.SimInspiralChooseTDWaveform(0,				# reference phase, phi ref
 		    				    1./sampleRate,			# delta T
 						    m1*lal.MSUN_SI,			# mass 1 in kg
 						    m2*lal.MSUN_SI,			# mass 2 in kg
@@ -520,18 +520,16 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 	#plt.show()
 
 
-	if is_freq_whiten:
-		# hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
-		lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
-		return lalwhiten_amp, lalwhiten_phase
+    if is_freq_whiten:
+	# hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
+	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+	return lalwhiten_amp, lalwhiten_phase
+    else:
+	amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
+	amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
-	else:
-
-		amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
-		amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
-
-		f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
-		cleanFreq(f,flower)
+	f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
+	cleanFreq(f,flower)
 
 
 		# The whitening in frequency domain
@@ -539,19 +537,19 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 		# when the frequency evolution is monotonic.
 		# But the following are a bit obsolete.
 
-		if psd is not None:
-       			fsampling = numpy.arange(len(psd.data)) * psd.deltaF
+	if psd is not None:
+	    fsampling = numpy.arange(len(psd.data)) * psd.deltaF
 			# FIXME: which interpolation method should we choose,
 			# currently we are using linear interpolation, splrep 
 			# will generate negative values at the edge of psd. pchip is too slow
 			#psd_interp = interpolate.splrep(fsampling, psd.data)
 			#newpsd = interpolate.splev(f, psd_interp)
 			#newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
-			psd_interp = interpolate.interp1d(fsampling, psd.data)
-			newpsd = psd_interp(f)
-			amp[0:len(f)] /= newpsd ** 0.5
+	    psd_interp = interpolate.interp1d(fsampling, psd.data)
+	    newpsd = psd_interp(f)
+	    amp[0:len(f)] /= newpsd ** 0.5
 
-		return amp, phase
+	    return amp, phase
 
 
 class Bank(object):
