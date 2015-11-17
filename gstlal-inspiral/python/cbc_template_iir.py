@@ -549,7 +549,7 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 	    newpsd = psd_interp(f)
 	    amp[0:len(f)] /= newpsd ** 0.5
 
-	    return amp, phase
+	return amp, phase
 
 
 class Bank(object):
