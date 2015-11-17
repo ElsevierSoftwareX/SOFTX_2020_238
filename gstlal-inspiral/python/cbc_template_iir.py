@@ -447,8 +447,36 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	return amp, phase
 
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
-    """ Generate whitened waveform, and return the amplitude and the phase.
+    """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
     
+    Parameters
+    ----------
+    psd :
+	Power spectral density
+    m1 :
+	Mass of one compact object
+    m2 :
+	Mass of the other compact object
+    sampleRate :
+	Sampling rate in Hz
+    flower :
+	Low frequency cut-off
+    is_freq_whiten :
+	Whether perform the whitening in the frequency domain (if True),
+	or perform the whitening in the time domain (otherwise).
+	Time-domain whitening is quicker and better-conditioned, but less accurate.
+	Use frequency-domain whitening by default.
+    working_length :
+	Number of samples pre-allocated for the template.
+    working_duration :
+	The period in seconds corresponding to working_length.
+    length_max :
+	Parameter for frequency-domain whitening.
+    spin1x, spin1y, spin1z :
+	Spin parameters of compact object 1.
+    spin2x, spin2y, spin2z :
+	Spin parameters of compact object 2.
+
     Returns
     -------
     Amplitude : 
@@ -648,7 +676,7 @@ class Bank(object):
 
 			fFinal = row.f_final
 
-			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, 1, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
+			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
 			
 			iir_type_flag = 1
 	              	# make the iir filter coeffs
