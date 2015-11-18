@@ -125,7 +125,7 @@ distributions, ranking_data, seglists = far.marginalize_pdf_urls(
 	urls,
 	options.require_coinc_param_data,
 	options.require_ranking_stat_data,
-	ingore_missing_files = options.ignore_missing,
+	ignore_missing_files = options.ignore_missing,
 	verbose = options.verbose
 )
 

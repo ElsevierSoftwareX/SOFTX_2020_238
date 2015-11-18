@@ -79,6 +79,7 @@ import sys
 
 
 from glue import iterutils
+from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
