@@ -2329,6 +2329,29 @@ class FAPFAR(object):
 		# arXiv:1209.0718
 		return fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
+	def rank_from_fap(self, p, tolerance = 1e-6):
+		"""
+		Inverts .fap_from_rank() using a bisection search.  This
+		function is sensitive to numerical noise for probabilities
+		that are close to 1.  The tolerance sets the absolute error
+		of the result.
+		"""
+		assert 0. <= p <= 1., "p (%g) is not a valid probability" % p
+		lo, hi = self.minrank, self.maxrank
+		while hi - lo > tolerance:
+			mid = (hi + lo) / 2.
+			mid_fap = self.fap_from_rank(mid)
+			if p > mid_fap:
+				# desired rank is below the middle
+				hi = mid
+			elif p < mid_fap:
+				# desired rank is above the middle
+				lo = mid
+			else:
+				# jackpot
+				return mid
+		return (hi + lo) / 2.
+
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718.  the return value is divided by T to
