@@ -868,6 +868,9 @@ class BackgroundVsInjectionPlots(object):
 			self.spin = []
 			self.end_time = []
 
+		def __nonzero__(self):
+			return bool(self.snr)
+
 	def __init__(self):
 		self.injections = {}
 		self.background = {}
@@ -988,23 +991,23 @@ FROM
 			axes.legend(loc = "upper left")
 			yield fig, "chi2_vs_rho_%s" % instrument, True
 
-			# for the following plots, sort injections by SNR -- descending
-			sortable = numpy.array(self.injections[instrument].snr).argsort()[::-1]
-			inj_mcs = numpy.array(self.injections[instrument].mchirp)[sortable]
-			inj_etas = numpy.array(self.injections[instrument].eta)[sortable]
-			inj_snrs = numpy.array(self.injections[instrument].snr)[sortable]
-			inj_chisq = numpy.array(self.injections[instrument].chi2)[sortable]
+			# the following plots require background and injections
+			if self.background[instrument] and self.injections[instrument]:
+				# for the following plots, sort injections by SNR -- descending
+				sortable = numpy.array(self.injections[instrument].snr).argsort()[::-1]
+				inj_mcs = numpy.array(self.injections[instrument].mchirp)[sortable]
+				inj_etas = numpy.array(self.injections[instrument].eta)[sortable]
+				inj_snrs = numpy.array(self.injections[instrument].snr)[sortable]
+				inj_chisq = numpy.array(self.injections[instrument].chi2)[sortable]
 
-			# sort background triggers by SNR -- ascending
-			sortable = numpy.array(self.background[instrument].snr).argsort()
-			bg_mcs = numpy.array(self.background[instrument].mchirp)[sortable]
-			bg_etas = numpy.array(self.background[instrument].eta)[sortable]
-			bg_snrs = numpy.array(self.background[instrument].snr)[sortable]
-			bg_chisq = numpy.array(self.background[instrument].chi2)[sortable]
-			bg_chieffs = numpy.array(self.background[instrument].chieff)[sortable]
+				# sort background triggers by SNR -- ascending
+				sortable = numpy.array(self.background[instrument].snr).argsort()
+				bg_mcs = numpy.array(self.background[instrument].mchirp)[sortable]
+				bg_etas = numpy.array(self.background[instrument].eta)[sortable]
+				bg_snrs = numpy.array(self.background[instrument].snr)[sortable]
+				bg_chisq = numpy.array(self.background[instrument].chi2)[sortable]
+				bg_chieffs = numpy.array(self.background[instrument].chieff)[sortable]
 
-			# Don't try to make these plots if there is no background
-			if bg_snrs:
 				# mass dependence of chisq
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi^{2}/\rho^2$")
 				coll = axes.scatter(inj_mcs, inj_chisq/inj_snrs**2, c=inj_snrs, label="Injections", vmax=20, linewidth=0.2, alpha=0.8)
