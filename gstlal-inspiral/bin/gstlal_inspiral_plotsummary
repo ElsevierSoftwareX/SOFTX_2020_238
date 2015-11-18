@@ -291,14 +291,6 @@ class CoincDatabase(object):
 #
 
 
-def sim_end_time(sim, instrument):
-	# this function requires .get_time_geocent() and .get_ra_dec()
-	# methods, and so can be used for both burst and inspiral
-	# injections.  FIXME:  update function call when inspiral
-	# injections carry offset vector information
-	return SimBurstUtils.time_at_instrument(sim, instrument, {instrument: 0.0})
-
-
 def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m","cm","d","cd","c","xc","l","xl","x","ix","v","iv","i")):
 	if not arabics:
 		return ""
@@ -568,7 +560,7 @@ FROM
 		for waveform, sims in self.injections.items():
 			for col1,col2,ax1,ax2,name,aspect in [
 							([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", None),
-							([sim.geocent_end_time for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
+							([float(sim.time_geocent) for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
 							([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"RA (h)", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s",None),
 							([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos $Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
 							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
@@ -662,8 +654,8 @@ FROM
 							return sorted([row.get_chirp_eff_dist("h1"), row.get_chirp_eff_dist("l1")])[1]
 						tmplt_list = sorted(missed, key=sort_func)
 						for rank, sim in enumerate(tmplt_list[:10], 1):
-							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.h_end_time + 1.0e-9*sim.h_end_time_ns, sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination))
-							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.l_end_time + 1.0e-9*sim.l_end_time_ns, sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp))
+							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.time_at_instrument("H1", {"H1": 0.0}), sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination))
+							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.time_at_instrument("L1", {"L1": 0.0}), sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp))
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
 				f1.close()
@@ -819,12 +811,12 @@ FROM
 
 			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Recovered End Time - Injection End Time (s)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim_end_time(sim, instrument) for sim, sngl, far in pairs], [sngl.get_end() - sim_end_time(sim, instrument) for sim, sngl, far in pairs], "kx")
+			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], "kx")
 			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Recovered End Time - Injection End Time (s)", "Number")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([float(sngl.get_end()) - float(sim_end_time(sim, instrument)) for sim, sngl, far in pairs]), axes)
+			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0})) for sim, sngl, far in pairs]), axes)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
@@ -918,7 +910,7 @@ WHERE
 					self.background[instrument].mchirp.append(mtot * eta**(3. / 5))
 					self.background[instrument].eta.append(eta)
 					self.background[instrument].chieff.append(chieff)
-					self.background[instrument].end_time.append(sngl.end_time + 1e-9*sngl.end_time_ns)
+					self.background[instrument].end_time.append(float(sngl.end))
 				else:
 					if instrument not in self.zerolag:
 						self.zerolag[instrument] = BackgroundVsInjectionPlots.Points()
@@ -951,7 +943,7 @@ FROM
 				mtot = sngl.mass1 + sngl.mass2
 				chieff = (sngl.mass1 * sngl.spin1z + sngl.mass2 * sngl.spin2z) / mtot
 				instrument = sngl.ifo
-				end_time = sngl.end_time + 1e-9 * sngl.end_time_ns
+				end_time = sngl.end
 				spin = values[-1]
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
