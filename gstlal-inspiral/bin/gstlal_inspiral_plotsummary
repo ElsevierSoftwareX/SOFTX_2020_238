@@ -903,7 +903,7 @@ WHERE
 				is_background = values[-1]
 				if is_background:
 					if instrument not in self.background:
-						self.background[instrument] = BackgroundVsInjectionPlots.Points()
+						self.background[instrument] = self.Points()
 					self.background[instrument].snr.append(sngl.snr)
 					self.background[instrument].chi2.append(sngl.chisq)
 					self.background[instrument].bankveto.append(sngl.bank_chisq)
@@ -913,7 +913,7 @@ WHERE
 					self.background[instrument].end_time.append(float(sngl.end))
 				else:
 					if instrument not in self.zerolag:
-						self.zerolag[instrument] = BackgroundVsInjectionPlots.Points()
+						self.zerolag[instrument] = self.Points()
 					self.zerolag[instrument].snr.append(sngl.snr)
 					self.zerolag[instrument].chi2.append(sngl.chisq)
 					self.zerolag[instrument].bankveto.append(sngl.bank_chisq)
@@ -947,7 +947,7 @@ FROM
 				spin = values[-1]
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
-						self.injections[instrument] = BackgroundVsInjectionPlots.Points()
+						self.injections[instrument] = self.Points()
 					self.injections[instrument].snr.append(sngl.snr)
 					self.injections[instrument].chi2.append(sngl.chisq)
 					self.injections[instrument].bankveto.append(sngl.bank_chisq)
@@ -958,9 +958,10 @@ FROM
 
 	def finish(self):
 		for instrument in set(self.injections) | set(self.background) | set(self.zerolag):
-			self.injections.setdefault(instrument, BackgroundVsInjectionPlots.Points())
-			self.background.setdefault(instrument, BackgroundVsInjectionPlots.Points())
-			self.zerolag.setdefault(instrument, BackgroundVsInjectionPlots.Points())
+			self.injections.setdefault(instrument, self.Points())
+			self.background.setdefault(instrument, self.Points())
+			self.zerolag.setdefault(instrument, self.Points())
+
 		for instrument in self.background:
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
@@ -1110,7 +1111,7 @@ WHERE
 				is_background, = values[-1:]
 				instrument_pair = (x.ifo, y.ifo)
 				if instrument_pair not in self.points:
-					self.points[instrument_pair] = BackgroundVsInjectionPlotsMulti.Points()
+					self.points[instrument_pair] = self.Points()
 				if is_background:
 					self.points[instrument_pair].background_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 					self.points[instrument_pair].background_deff.append((x.eff_distance, y.eff_distance))
@@ -1153,7 +1154,7 @@ WHERE
 				y = contents.sngl_inspiral_table.row_from_cols(values[len(contents.sngl_inspiral_table.columnnames):])
 				instrument_pair = (x.ifo, y.ifo)
 				if instrument_pair not in self.points:
-					self.points[instrument_pair] = BackgroundVsInjectionPlotsMulti.Points()
+					self.points[instrument_pair] = self.Points()
 				self.points[instrument_pair].injections_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
 				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
 				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
