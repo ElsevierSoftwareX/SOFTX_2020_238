@@ -28,6 +28,7 @@
 #
 
 
+import bisect
 import math
 import matplotlib
 matplotlib.rcParams.update({
@@ -1231,7 +1232,7 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	#
 
 	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
-	ylim = 0.001, 10.**math.ceil(math.log10(len(zerolag_stats)))
+	ylim = 0.001, (10.**math.ceil(math.log10(expected_count_y[::-1][bisect.bisect_right(expected_count_x[::-1], xlim[0])])) if xlim[0] is not None else None)
 
 	#
 	# background.  uncomment the two lines to make the background
@@ -1275,14 +1276,18 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	axes.set_ylim(ylim)
 
 def plot_likelihood_ratio_ccdf(axes, zerolag_stats, fapfar, is_open_box, xlim = (None, None)):
+	#
+	# plot limits and expected counts
+	#
 
 	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
-	ylim = 0.001, 10.**math.ceil(math.log10(len(zerolag_stats)))
-
 	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = []
-	for llr in expected_count_x:
-		expected_count_y.append(fapfar.far_from_rank(llr) * fapfar.livetime)
+	expected_count_y = [fapfar.far_from_rank(x) * fapfar.livetime for x in expected_count_x]
+	ylim = 0.001, (10.**math.ceil(math.log10(expected_count_y[bisect.bisect_left(expected_count_x, xlim[0])])) if xlim[0] is not None else None)
+
+	#
+	# expected count curve
+	#
 
 	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
@@ -1396,7 +1401,7 @@ WHERE
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
 				expected_count_x = livetime / expected_count_y
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime))
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1410,7 +1415,7 @@ WHERE
 
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
 
-				plot_likelihood_ratio_ccdf(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (-5, 40))
+				plot_likelihood_ratio_ccdf(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (5., 30.))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
