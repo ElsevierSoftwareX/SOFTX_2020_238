@@ -306,7 +306,7 @@ def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_r
 	fig = matplotlib.figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches(width / 25.4, width / 25.4 / aspect)
-	axes = fig.gca()
+	axes = fig.add_axes((0.1, 0.12, .875, .80))
 	axes.grid(True)
 	if x_label is not None:
 		axes.set_xlabel(x_label)
@@ -1503,6 +1503,14 @@ n = 0
 filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
 while len(plots):
 	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
+		try:
+			fig.tight_layout()
+		except AttributeError:
+			# old matplotlib
+			pass
+		except ValueError:
+			# broken at UWM
+			pass
 		for format in options.format:
 			if filename_fragment and fig:
 				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
