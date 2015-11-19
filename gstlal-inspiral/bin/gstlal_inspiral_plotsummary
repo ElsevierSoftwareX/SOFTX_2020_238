@@ -859,7 +859,8 @@ class BackgroundVsInjectionPlots(object):
 		def __nonzero__(self):
 			return bool(self.snr)
 
-	def __init__(self):
+	def __init__(self, snr_min):
+		self.snr_min = snr_min
 		self.injections = {}
 		self.background = {}
 		self.zerolag = {}
@@ -968,6 +969,7 @@ FROM
 				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
+			axes.set_xlim((self.snr_min, None))
 			yield fig, "chi2_vs_rho_%s" % instrument, False
 
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
@@ -979,6 +981,7 @@ FROM
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
 			axes.legend(loc = "upper left")
+			axes.set_xlim((self.snr_min, None))
 			yield fig, "chi2_vs_rho_%s" % instrument, True
 
 			# the following plots require background and injections
@@ -1162,6 +1165,7 @@ WHERE
 	def finish(self):
 		for (x_instrument, y_instrument), points in self.points.items():
 			fig, axes = create_plot(r"$\rho$ in %s" % x_instrument, r"$\rho$ in %s" % y_instrument, aspect = 1.0)
+			axes.grid(True, which = "both")
 			axes.set_title(r"SNR in %s vs.\ %s (Closed Box)" % (y_instrument, x_instrument))
 			axes.loglog([x for x, y in points.injections_snr], [y for x, y in points.injections_snr], "rx")
 			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
@@ -1171,6 +1175,7 @@ WHERE
 			yield fig, "rho_%s_vs_%s" % (y_instrument, x_instrument), False
 
 			fig, axes = create_plot(r"$\rho$ in %s" % x_instrument, r"$\rho$ in %s" % y_instrument, aspect = 1.0)
+			axes.grid(True, which = "both")
 			axes.set_title(r"SNR in %s vs.\ %s" % (y_instrument, x_instrument))
 			axes.loglog([x for x, y in points.injections_snr], [y for x, y in points.injections_snr], "rx")
 			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
@@ -1466,7 +1471,7 @@ def new_plots(plots = None, far_thresh = None):
 		SummaryTable(),
 		MissedFoundPlots(far_thresh = far_thresh),
 		ParameterAccuracyPlots(),
-		BackgroundVsInjectionPlots(),
+		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
 		RateVsThreshold(fapfar = fapfar, snr_min = snr_min),
 		InjectionParameterDistributionPlots(),
