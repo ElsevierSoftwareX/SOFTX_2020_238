@@ -236,9 +236,6 @@ class CoincDatabase(object):
 			self.veto_segments = segments.segmentlistdict()
 		self.seglists -= self.veto_segments
 
-		# Get the live time used for the far calculation.  By convention this is simply the entire interval of the analysis with no regard for segments
-		self.farsegs = far.get_live_time_segs_from_search_summary_table(connection)
-
 		# get the live time
 		if verbose:
 			print >>sys.stderr, "calculating background livetimes: ",
@@ -1340,15 +1337,12 @@ class RateVsThreshold(object):
 		self.zerolag_fap = []
 		self.background_snr = []
 		self.zerolag_snr = []
-		self.farsegs = segments.segmentlistdict()
 		self.fapfar = fapfar
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is not None:
 			# skip injection documents
 			return
-
-		self.farsegs |= contents.farsegs
 
 		for ln_likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
 SELECT
@@ -1385,8 +1379,6 @@ WHERE
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
-		livetime = far.get_live_time(self.farsegs)
-
 		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \mathcal{L}$")
 		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
@@ -1405,8 +1397,8 @@ WHERE
 				# fars in ascending order --> ifars in descending order
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
-				expected_count_x = livetime / expected_count_y
-				create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * livetime))
+				expected_count_x = self.fapfar.livetime / expected_count_y
+				create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * self.fapfar.livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
