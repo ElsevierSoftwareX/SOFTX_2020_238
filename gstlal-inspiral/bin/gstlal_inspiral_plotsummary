@@ -96,9 +96,6 @@ class SnglInspiral(lsctables.SnglInspiral):
 	def chi(self):
 		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
 
-	def get_effective_snr(self, fac):
-		return self.snr / (self.chisq / self.chisq_dof)**.5
-
 lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 lsctables.SimInspiralTable.RowType = SimInspiral
 lsctables.SnglInspiralTable.RowType = SnglInspiral
@@ -133,7 +130,7 @@ def parse_command_line():
  1. Missed Found (Scatter plots of missed and found injections on several axes)
  2. Injection Parameter Accuracy Plots
  3. Background Vs Injection Plots (sngl detector triggers from coincs of snr, chisq, bank chisq,...)
- 4. Background Vs Injection Plots pairwise (effective snr DET1 Vs. DET2...),
+ 4. Background Vs Injection Plots pairwise (SNR instrument 1 vs. instrument2, ...),
  5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
  6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
@@ -1049,9 +1046,9 @@ FROM
 class BackgroundVsInjectionPlotsMulti(object):
 	class Points(object):
 		def __init__(self):
-			self.background_snreff = []
-			self.injections_snreff = []
-			self.zerolag_snreff = []
+			self.background_snr = []
+			self.injections_snr = []
+			self.zerolag_snr = []
 			self.background_deff = []
 			self.injections_deff = []
 			self.injections_mchirp = []
@@ -1062,8 +1059,7 @@ class BackgroundVsInjectionPlotsMulti(object):
 			self.background_eta = []
 			self.background_chieff = []
 
-	def __init__(self, snrfactor):
-		self.snrfactor = snrfactor
+	def __init__(self):
 		self.points = {}
 
 	def add_contents(self, contents):
@@ -1112,7 +1108,7 @@ WHERE
 				if instrument_pair not in self.points:
 					self.points[instrument_pair] = self.Points()
 				if is_background:
-					self.points[instrument_pair].background_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
+					self.points[instrument_pair].background_snr.append((x.snr, y.snr))
 					self.points[instrument_pair].background_deff.append((x.eff_distance, y.eff_distance))
 					eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 					mtot = x.mass1 + x.mass2
@@ -1122,7 +1118,7 @@ WHERE
 					self.points[instrument_pair].background_chieff.append( (x.mass1*x.spin1z + x.mass2*x.spin2z)/mtot )
 
 				else:
-					self.points[instrument_pair].zerolag_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
+					self.points[instrument_pair].zerolag_snr.append((x.snr, y.snr))
 					self.points[instrument_pair].zerolag_deff.append((x.eff_distance, y.eff_distance))
 		else:
 			# injections file
@@ -1154,7 +1150,7 @@ WHERE
 				instrument_pair = (x.ifo, y.ifo)
 				if instrument_pair not in self.points:
 					self.points[instrument_pair] = self.Points()
-				self.points[instrument_pair].injections_snreff.append((x.get_effective_snr(fac = self.snrfactor), y.get_effective_snr(fac = self.snrfactor)))
+				self.points[instrument_pair].injections_snr.append((x.snr, y.snr))
 				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
 				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 				mtot = x.mass1 + x.mass2
@@ -1164,18 +1160,18 @@ WHERE
 
 	def finish(self):
 		for (x_instrument, y_instrument), points in self.points.items():
-			fig, axes = create_plot(r"$\rho_{\mathrm{eff}}$ in %s" % x_instrument, r"$\rho_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
-			axes.set_title(r"Effective SNR in %s vs.\ %s (SNR Factor = %g) (Closed Box)" % (y_instrument, x_instrument, self.snrfactor))
-			axes.loglog([x for x, y in points.injections_snreff], [y for x, y in points.injections_snreff], "rx")
-			axes.loglog([x for x, y in points.background_snreff], [y for x, y in points.background_snreff], "kx")
+			fig, axes = create_plot(r"$\rho$ in %s" % x_instrument, r"$\rho$ in %s" % y_instrument, aspect = 1.0)
+			axes.set_title(r"SNR in %s vs.\ %s (Closed Box)" % (y_instrument, x_instrument))
+			axes.loglog([x for x, y in points.injections_snr], [y for x, y in points.injections_snr], "rx")
+			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
 			axes.legend(("Injections", "Background"), loc = "lower right")
 			yield fig, "rho_%s_vs_%s" % (y_instrument, x_instrument), False
 
-			fig, axes = create_plot(r"$\rho_{\mathrm{eff}}$ in %s" % x_instrument, r"$\rho_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
-			axes.set_title(r"Effective SNR in %s vs.\ %s (SNR Factor = %g)" % (y_instrument, x_instrument, self.snrfactor))
-			axes.loglog([x for x, y in points.injections_snreff], [y for x, y in points.injections_snreff], "rx")
-			axes.loglog([x for x, y in points.background_snreff], [y for x, y in points.background_snreff], "kx")
-			axes.loglog([x for x, y in points.zerolag_snreff], [y for x, y in points.zerolag_snreff], "bx")
+			fig, axes = create_plot(r"$\rho$ in %s" % x_instrument, r"$\rho$ in %s" % y_instrument, aspect = 1.0)
+			axes.set_title(r"SNR in %s vs.\ %s" % (y_instrument, x_instrument))
+			axes.loglog([x for x, y in points.injections_snr], [y for x, y in points.injections_snr], "rx")
+			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
+			axes.loglog([x for x, y in points.zerolag_snr], [y for x, y in points.zerolag_snr], "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "lower right")
 			yield fig, "rho_%s_vs_%s" % (y_instrument, x_instrument), True
 
@@ -1460,7 +1456,7 @@ def new_plots(plots = None, far_thresh = None):
 		MissedFoundPlots(far_thresh = far_thresh),
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
-		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
+		BackgroundVsInjectionPlotsMulti(),
 		RateVsThreshold(fapfar = fapfar),
 		InjectionParameterDistributionPlots(),
 	)
