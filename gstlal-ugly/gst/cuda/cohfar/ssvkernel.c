@@ -1,11 +1,30 @@
 /*
- *         Copyright (C) 2015 Yichun Li(buckfryspj@gmail.com), Yan Wang (yan.wang@ligo.org) 
- *                         
- *                                 This code converts pdf (probability density function) of SNR and chi-squared to cdf (cumulative density function).
- *                                  
- *                                  */
+ * Copyright (C) 2015 Yichun Li(buckfryspj@gmail.com), Yan Wang (yan.wang@ligo.org), Qi Chu, Linqing Wen
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
+ */
 
-
+/*
+ *  This C code implements a local adaptive KDE algorithm given by
+ *  Shimazaki and Shinomoto. J Comput Neurosci, 2010, 29 (1-2) 171-182.
+ *  This C code is mostly translated from their matlab code ssvkernel.m.
+ *  The original matlab code can be found at:
+ *  http://www.mathworks.com/matlabcentral/fileexchange/37374-locally-adaptive-kernel-density-estimation
+ *  The main difference is an additional C function: ssvkernel_from_hist
+ */
 
 ///////////////////////////////
 //void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_matrix * result)
