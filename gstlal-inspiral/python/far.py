@@ -2315,8 +2315,8 @@ class FAPFAR(object):
 
 		# record min and max ranks so we know which end of the ccdf
 		# to use when we're out of bounds
-		self.minrank = min(ranks)
-		self.maxrank = max(ranks)
+		self.minrank = ranks[0]
+		self.maxrank = ranks[-1]
 
 	@assert_probability
 	def ccdf_from_rank(self, rank):
