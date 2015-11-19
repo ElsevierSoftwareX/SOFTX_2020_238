@@ -1059,7 +1059,8 @@ class BackgroundVsInjectionPlotsMulti(object):
 			self.background_eta = []
 			self.background_chieff = []
 
-	def __init__(self):
+	def __init__(self, snr_min):
+		self.snr_min = snr_min
 		self.points = {}
 
 	def add_contents(self, contents):
@@ -1165,6 +1166,8 @@ WHERE
 			axes.loglog([x for x, y in points.injections_snr], [y for x, y in points.injections_snr], "rx")
 			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
 			axes.legend(("Injections", "Background"), loc = "lower right")
+			axes.set_xlim((self.snr_min, None))
+			axes.set_ylim((self.snr_min, None))
 			yield fig, "rho_%s_vs_%s" % (y_instrument, x_instrument), False
 
 			fig, axes = create_plot(r"$\rho$ in %s" % x_instrument, r"$\rho$ in %s" % y_instrument, aspect = 1.0)
@@ -1173,6 +1176,8 @@ WHERE
 			axes.loglog([x for x, y in points.background_snr], [y for x, y in points.background_snr], "kx")
 			axes.loglog([x for x, y in points.zerolag_snr], [y for x, y in points.zerolag_snr], "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "lower right")
+			axes.set_xlim((self.snr_min, None))
+			axes.set_ylim((self.snr_min, None))
 			yield fig, "rho_%s_vs_%s" % (y_instrument, x_instrument), True
 
 			fig, axes = create_plot(r"$D_{\mathrm{eff}}$ in %s" % x_instrument, r"$D_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
@@ -1202,8 +1207,6 @@ WHERE
 
 def load_distributions(filenames, verbose = False):
 	coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = verbose)
-	if coinc_params_distributions is not None:
-		coinc_params_distributions.finish(verbose = verbose)
 	# FIXME signal PDFs are still not right.
 	ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
 	ranking_data.finish(verbose = verbose)
@@ -1213,7 +1216,7 @@ def load_distributions(filenames, verbose = False):
 		seglists.extent_all()
 	except ValueError:
 		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
-	return coinc_params_distributions, ranking_data, seglists
+	return coinc_params_distributions.snr_min, ranking_data, seglists
 
 
 def sigma_region(mean, nsigma):
@@ -1324,7 +1327,7 @@ def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box, xlim = (No
 	axes.set_ylim(ylim)
 
 class RateVsThreshold(object):
-	def __init__(self, fapfar):
+	def __init__(self, fapfar, snr_min):
 		self.background_ln_likelihood_ratio = []
 		self.zerolag_ln_likelihood_ratio = []
 		self.background_far = []
@@ -1334,6 +1337,7 @@ class RateVsThreshold(object):
 		self.background_snr = []
 		self.zerolag_snr = []
 		self.fapfar = fapfar
+		self.snr_min = snr_min
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is not None:
@@ -1380,9 +1384,8 @@ WHERE
 		axes.plot(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"Candidate's $\ln \mathcal{L}$ vs.\ SNR (Closed Box)")
-		# FIXME:  4 is the single detector SNR threshold.  don't
-		# hard-code
-		axes.set_xlim(((4.**2 + 4.**2)**.5, None))
+		# assume at least two instruments are required
+		axes.set_xlim(((2. * self.snr_min**2.)**.5, None))
 		yield fig, "lr_vs_snr", False
 		fig, axes = create_plot(x_label = r"$\sqrt{\sum_{\mathrm{instruments}} \mathrm{SNR}^{2}}$", y_label = r"$\ln \mathcal{L}$")
 		axes.grid(True, which = "both")
@@ -1390,9 +1393,8 @@ WHERE
 		axes.plot(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
 		axes.legend(loc = "upper left")
 		axes.set_title(r"Candidate's $\ln \mathcal{L}$ vs.\ SNR")
-		# FIXME:  4 is the single detector SNR threshold.  don't
-		# hard-code
-		axes.set_xlim(((4.**2 + 4.**2)**.5, None))
+		# assume at least two instruments are required
+		axes.set_xlim(((2. * self.snr_min**2.)**.5, None))
 		yield fig, "lr_vs_snr", True
 
 		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
@@ -1440,9 +1442,10 @@ options, filenames = parse_command_line()
 
 #
 # Load likelihood input
-# FIXME: Probably shouldn't try to read LLR data unless we
-# are trying to make those plots.
-coinc_params_distributions, ranking_data, seglists = load_distributions([options.likelihood_file], verbose = options.verbose)
+#
+
+
+snr_min, ranking_data, seglists = load_distributions([options.likelihood_file], verbose = options.verbose)
 if ranking_data is not None:
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
@@ -1464,8 +1467,8 @@ def new_plots(plots = None, far_thresh = None):
 		MissedFoundPlots(far_thresh = far_thresh),
 		ParameterAccuracyPlots(),
 		BackgroundVsInjectionPlots(),
-		BackgroundVsInjectionPlotsMulti(),
-		RateVsThreshold(fapfar = fapfar),
+		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
+		RateVsThreshold(fapfar = fapfar, snr_min = snr_min),
 		InjectionParameterDistributionPlots(),
 	)
 	max_plot_groups = len(l)
