@@ -1227,7 +1227,9 @@ def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
 
-def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None)):
+def create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None)):
+	axes.loglog()
+
 	#
 	# determine plot limits
 	#
@@ -1276,7 +1278,10 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 	axes.set_xlim(xlim)
 	axes.set_ylim(ylim)
 
-def plot_likelihood_ratio_ccdf(axes, zerolag_stats, fapfar, is_open_box, xlim = (None, None)):
+
+def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box, xlim = (None, None)):
+	axes.semilogy()
+
 	#
 	# plot limits and expected counts
 	#
@@ -1396,32 +1401,27 @@ WHERE
 
 		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
 			if fars:
-				fig, axes = create_plot(None, r"Number of Events")
-				axes.loglog()
+				fig, axes = create_plot(r"Inverse False-Alarm Rate (s)", r"Number of Events")
 				# fars in ascending order --> ifars in descending order
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
 				expected_count_x = livetime / expected_count_y
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * livetime))
+				create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold (Closed Box)")
-				axes.set_xlabel(r"Inverse False-Alarm Rate (s)")
 				yield fig, "count_vs_ifar", is_open_box
 
 			if ln_likelihood_ratio:
-				fig, axes = create_plot(None, r"Number of Events")
-				axes.semilogy()
-
+				fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+				# ln(L) in ascending order
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
-
-				plot_likelihood_ratio_ccdf(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (5., 30.))
+				create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (5., 30.))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
-				axes.set_xlabel(r"$\ln \mathcal{L}$")
 				yield fig, "count_vs_lr", is_open_box
 
 
