@@ -84,37 +84,63 @@ struct _GstPostcohCollectData {
 };
 
 typedef struct _PeakList {
-  int peak_intlen;
-  int peak_floatlen;
+	int peak_intlen;
+	int peak_floatlen;
 
 	/* data in the same type are allocated together */
+	int *npeak;
+	int *peak_pos;
 	int *tmplt_idx;
 	int *pix_idx;
-	int *pix_idx_bg;
-	int *peak_pos;
-	int *npeak;
+	int *pix_idx_bg; // background Ntoff needs this, do not remove
+	int *ntoff_L;
+	int *ntoff_H;
+	int *ntoff_V;
+
 	float *maxsnglsnr;
+	float *snglsnr_L;
+	float *snglsnr_H;
+	float *snglsnr_V;
+	float *coa_phase_L;
+	float *coa_phase_H;
+	float *coa_phase_V;
+
 	float *cohsnr;
-	float *cohsnr_bg;
 	float *nullsnr;
-	float *nullsnr_bg;
 	float *chisq;
+
+	float *cohsnr_bg;
+	float *nullsnr_bg;
 	float *chisq_bg;
+	
 	float *cohsnr_skymap;
 	float *nullsnr_skymap;
 
+	int *d_npeak;
+	int *d_peak_pos;
 	int *d_tmplt_idx;
 	int *d_pix_idx;
-	int *d_pix_idx_bg;
-	int *d_peak_pos;
-	int *d_npeak;
+	int *d_pix_idx_bg; // background Ntoff needs this, do not remove
+	int *d_ntoff_L;
+	int *d_ntoff_H;
+	int *d_ntoff_V;
+
 	float *d_maxsnglsnr;
+	float *d_snglsnr_L;
+	float *d_snglsnr_H;
+	float *d_snglsnr_V;
+	float *d_coa_phase_L;
+	float *d_coa_phase_H;
+	float *d_coa_phase_V;
+
 	float *d_cohsnr;
-	float *d_cohsnr_bg;
 	float *d_nullsnr;
-	float *d_nullsnr_bg;
 	float *d_chisq;
+
+	float *d_cohsnr_bg;
+	float *d_nullsnr_bg;
 	float *d_chisq_bg;
+	
 	float *d_cohsnr_skymap;
 	float *d_nullsnr_skymap;
 

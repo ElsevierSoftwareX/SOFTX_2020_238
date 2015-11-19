@@ -635,8 +635,8 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	is_invalid = postcoh_filesink_is_invalid_background(table);
 	if (!is_invalid) {
         GString *line = g_string_new("\t\t\t\t");
-	g_string_append_printf(line, "%d%s", table->end_time.gpsSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
 	g_string_append_printf(line, "%d%s", table->livetime, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);

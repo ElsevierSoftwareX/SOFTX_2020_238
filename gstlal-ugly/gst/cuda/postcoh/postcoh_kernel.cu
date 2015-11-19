@@ -531,6 +531,14 @@ __global__ void ker_coh_max_and_chisq
 					peak_pos_tmp = start_exe + peak_cur + NtOff - trial_offset + len;
 
 				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * templateN + tmplt_cur];
+				/* set the ntoff; snglsnr; and coa_phase for each detector */
+				/* set the ntoff; this is actually d_ntoff_*  */
+				peak_pos[peak_cur + (3 + hist_trials + j) * exe_len] = NtOff;
+				/* set the d_snglsnr_* */
+				maxsnglsnr[peak_cur + (1 + j) * exe_len] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
+				/* set the d_coa_phase_* */
+				maxsnglsnr[peak_cur + (4 + j) * exe_len] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+				
 				for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
@@ -549,8 +557,8 @@ __global__ void ker_coh_max_and_chisq
 				{
 
 					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
+//					printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur + output_offset], chisq[peak_cur + output_offset]);
 				}
-		//			printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + trial_offset], coh_nullstream[peak_cur + trial_offset], pix_idx[peak_cur + trial_offset], chisq[peak_cur + trial_offset]);
 
 			}
 
@@ -559,6 +567,12 @@ __global__ void ker_coh_max_and_chisq
 
 		__syncthreads();
 #endif
+
+		/*
+		 *
+		 * Generate background cohsnr; nullsnr; chisq
+		 *
+		 */
 
 		int ipix = 0, rand_range = trial_sample_inv * hist_trials -1;
 		for(itrial=1; itrial<=hist_trials; itrial++) {
@@ -605,7 +619,7 @@ __global__ void ker_coh_max_and_chisq
 			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
-			if (iifo==1 && tmplt_cur == 33) {
+			if (itrial==1 && threadIdx.x == 1) {
 			printf("iifo %d, ipeak %d, ipix %d, trial %d, trial_offset %d, trial_sample_inv %d, dk[0].re %f, dk[0].im %f," 
 					"dk[1].re %f, dk[1].im %f, dk[2].re %f, dk[2].im %f,"
 					"snr %f\n", iifo, ipeak, ipix, itrial, trial_offset, trial_sample_inv, dk[0].re, dk[0].im,
@@ -669,6 +683,7 @@ __global__ void ker_coh_max_and_chisq
 		{
 			coh_snr[peak_cur + output_offset]		= snr_shared[0];
 			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
+			/* background need this for Ntoff */
 			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
 
 		}
@@ -714,7 +729,7 @@ __global__ void ker_coh_max_and_chisq
 
 				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * templateN + tmplt_cur];
 #if 0
-				if (iifo == 1 && tmplt_cur == 33 && NtOff != 0 && threadIdx.x == 1)
+				if (threadIdx.x == 1 && ipeak == 0)
 				printf("ipeak %d, itrial %d, trial_offset %d, NtOff %d, maxsnr.re %f, maxsnr.im %f\n", ipeak, itrial, trial_offset, NtOff, tmp_maxsnr.re, tmp_maxsnr.im);
 #endif
 	
@@ -737,8 +752,8 @@ __global__ void ker_coh_max_and_chisq
 
 					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
 #if 0
-					if (iifo == 1 && tmplt_cur == 33)
-					printf("iifo%d, jifo %d, peak %d, start %d, itrial %d, trial_offset %d, ntoff %d, off_pos %d, len %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", iifo, j, ipeak, start_exe+peak_cur, itrial, trial_offset, NtOff, peak_pos_tmp, len, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur + output_offset], chisq[peak_cur + output_offset]);
+					if (ipeak == 0)
+					printf("iifo%d, jifo %d, peak %d, start %d, itrial %d, trial_offset %d, ntoff %d, off_pos %d, len %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", iifo, j, ipeak, start_exe+peak_cur, itrial, trial_offset, NtOff, peak_pos_tmp, len, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur], chisq[peak_cur + output_offset]);
 #endif
 				}
 
@@ -872,19 +887,21 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->hist_trials,
 									state->trial_sample_inv);
 
+	cudaStreamSynchronize(stream);
 	CUDA_CHECK(cudaPeekAtLastError());
 	/* copy the snr, cohsnr, nullsnr, chisq out */
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->tmplt_idx, 
-			pklist->d_tmplt_idx, 
-			sizeof(int) * (pklist->peak_intlen), 
-			cudaMemcpyDeviceToHost,
-			stream));
-
 	CUDA_CHECK(cudaMemcpyAsync(	pklist->maxsnglsnr, 
 			pklist->d_maxsnglsnr, 
 			sizeof(float) * (pklist->peak_floatlen), 
 			cudaMemcpyDeviceToHost,
 			stream));
+
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->npeak, 
+			pklist->d_npeak, 
+			sizeof(int) * (pklist->peak_intlen), 
+			cudaMemcpyDeviceToHost,
+			stream));
+
 
 	cudaStreamSynchronize(stream);
 }

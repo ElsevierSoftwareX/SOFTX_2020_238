@@ -891,16 +891,29 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 		if (is_cur_ifo_has_data(state, iifo)) {
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
-		LIGOTimeGPS end_time[npeak];
+		LIGOTimeGPS end_time;
 
 		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d", iifo, npeak);
 		int peak_cur;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
-			XLALINT8NSToGPS(&(end_time[ipeak]), ts);
+			XLALINT8NSToGPS(&end_time, ts);
 			int *peak_pos = pklist->peak_pos;
 			peak_cur = peak_pos[ipeak];
-			XLALGPSAdd(&(end_time[ipeak]), (double) peak_cur /exe_len);
-			output->end_time = end_time[ipeak];
+			XLALGPSAdd(&(end_time), (double) peak_cur/exe_len);
+			output->end_time = end_time;
+			XLALGPSAdd(&(end_time), (double) pklist->ntoff_L[peak_cur]/exe_len);
+			output->end_time_L = end_time;
+			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_H[peak_cur] - pklist->ntoff_L[peak_cur])/exe_len);
+			output->end_time_H = end_time;
+			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_V[peak_cur] - pklist->ntoff_H[peak_cur])/exe_len);
+			output->end_time_V = end_time;
+			output->snglsnr_L = pklist->snglsnr_L[peak_cur];
+			output->snglsnr_H = pklist->snglsnr_H[peak_cur];
+			output->snglsnr_V = pklist->snglsnr_V[peak_cur];
+			output->coa_phase_L = pklist->coa_phase_L[peak_cur];
+			output->coa_phase_H = pklist->coa_phase_H[peak_cur];
+			output->coa_phase_V = pklist->coa_phase_V[peak_cur];
+	
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
@@ -941,7 +954,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(output->ifos);
-				g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds);
+				g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
 				g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
 //				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
@@ -972,7 +985,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				peak_cur = peak_pos[ipeak];
 				/* check if cohsnr pass the valid test */
 				if (pklist->cohsnr[itrial*exe_len + peak_cur] > 0) {
-				output->end_time = end_time[ipeak];
+				//output->end_time = end_time[ipeak];
 				output->is_background = 1;
 				output->livetime = livetime;
 				strncpy(output->ifos, state->cur_ifos, ifos_size);
@@ -980,7 +993,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 		       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 				output->pivotal_ifo[2] = '\0';
 				output->tmplt_idx = pklist->tmplt_idx[peak_cur];
-				output->pix_idx = pklist->pix_idx[itrial*exe_len + peak_cur];
+				//output->pix_idx = pklist->pix_idx[itrial*exe_len + peak_cur];
 				output->maxsnglsnr = pklist->maxsnglsnr[peak_cur];
 				output->cohsnr = sqrt(pklist->cohsnr[itrial*exe_len + peak_cur]);
 				output->nullsnr = pklist->nullsnr[itrial*exe_len + peak_cur];
@@ -1010,6 +1023,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	int left_entries = 0;
 
 	left_entries = cuda_postcoh_rm_invalid_peak(state);
+	GST_LOG_OBJECT(postcoh, "left entries %d", left_entries);
 	int out_size = sizeof(PostcohInspiralTable) * left_entries ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
@@ -1095,12 +1109,12 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 		}
 	}
 	pklist->npeak[0] = npeak;
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_tmplt_idx, 
-			pklist->tmplt_idx, 
+	//printf("peaks_over_thresh , ifo %d, npeak %d\n", cur_ifo, npeak);
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_npeak, 
+			pklist->npeak, 
 			sizeof(int) * (pklist->peak_intlen), 
 			cudaMemcpyHostToDevice,
 			stream));
-
 	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_maxsnglsnr, 
 			pklist->maxsnglsnr, 
 			sizeof(float) * (pklist->peak_floatlen), 
@@ -1183,7 +1197,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 #endif
 				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap, postcoh->stream);
-					GST_LOG("after coherent analysis for ifo %d", cur_ifo);
+					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
 
 				/* move along */
