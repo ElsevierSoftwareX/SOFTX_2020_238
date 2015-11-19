@@ -1331,6 +1331,80 @@ def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box, xlim = (No
 	axes.set_xlim(xlim)
 	axes.set_ylim(ylim)
 
+
+def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, xlim = (None, None)):
+	#
+	# plot limits and expected counts
+	#
+
+	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
+	expected_count_y = [fapfar.far_from_rank(x) * fapfar.livetime for x in expected_count_x]
+	ylim = 1e-7, (10.**math.ceil(math.log10(expected_count_y[bisect.bisect_left(expected_count_x, xlim[0])])) if xlim[0] is not None else None)
+
+	axes.set_position((0.10, 0.1, .875, .80))
+	axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold", position = (0.5, 1.05))
+
+	#
+	# expected count curve
+	#
+
+	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
+
+	#
+	# time slide
+	#
+
+	N = numpy.arange(1., len(background_stats) + 1., dtype = "double")
+	line5, = axes.plot(background_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
+
+	#
+	# zero-lag
+	#
+
+	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
+	#line6, = axes.plot(zerolag_stats, N, "r+")
+	line6, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'r', linewidth = 1)
+
+	#
+	# legend
+	#
+
+	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "upper right", handlelength = 5)
+
+	#
+	# adjust bounds of plot
+	#
+
+	axes.set_xlim(xlim)
+	axes.set_ylim(ylim)
+
+	#
+	# build false-alarm probability labels
+	#
+
+	sigma_rank_alpha = [
+		(None, xlim[0], None),	# left-edge of plot
+		(1., fapfar.rank_from_fap(math.erfc(1. / math.sqrt(2.))), 0.1),
+		(2., fapfar.rank_from_fap(math.erfc(2. / math.sqrt(2.))), 0.2),
+		(3., fapfar.rank_from_fap(math.erfc(3. / math.sqrt(2.))), 0.3),
+		(4., fapfar.rank_from_fap(math.erfc(4. / math.sqrt(2.))), 0.4),
+		(5., fapfar.rank_from_fap(math.erfc(5. / math.sqrt(2.))), 0.5)
+	]
+
+	ax = axes.twiny()
+	ax.set_xlim(xlim)
+	ax.set_xlabel("False Alarm Probability", horizontalalignment = "left", position = (0.05, 1.02), size = "small")
+
+	for (_, lo, _), (_, hi, alpha) in zip(sigma_rank_alpha[:-1], sigma_rank_alpha[1:]):
+		if hi < lo:	# can happen if xlim[0] > 1 sigma
+			continue
+		ax.axvspan(lo, hi, color = "k", alpha = alpha)
+
+	ax.set_xticks([rank for (sigma, rank, _) in sigma_rank_alpha[1:]])
+	ax.set_xticklabels([r"$%.2g \sigma$" % sigma for (sigma, rank, _) in sigma_rank_alpha[1:]])
+
+
 class RateVsThreshold(object):
 	def __init__(self, fapfar, snr_min):
 		self.background_ln_likelihood_ratio = []
@@ -1426,6 +1500,13 @@ WHERE
 				else:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				yield fig, "count_vs_lr", is_open_box
+
+		fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+		axes.semilogy()
+		background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
+		zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
+		create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max()) / 5.)))
+		yield fig, "count_vs_lr_fig3", True
 
 
 #
