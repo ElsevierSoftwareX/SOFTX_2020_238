@@ -129,10 +129,10 @@ def parse_command_line():
  0. Summary Table (top 10 loudest events globally across all zero lag triggers read in)
  1. Missed Found (Scatter plots of missed and found injections on several axes)
  2. Injection Parameter Accuracy Plots
- 3. Background Vs Injection Plots (sngl detector triggers from coincs of snr, chisq, bank chisq,...)
+ 3. Background Vs Injection Plots (sngl detector triggers from coincs of snr, chisq, bank chisq, ...)
  4. Background Vs Injection Plots pairwise (SNR instrument 1 vs. instrument2, ...),
  5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
- 6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
+ 6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2, ...)
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Path to the marginalized likelihood file.")
@@ -947,7 +947,7 @@ FROM
 					self.injections[instrument].snr.append(sngl.snr)
 					self.injections[instrument].chi2.append(sngl.chisq)
 					self.injections[instrument].bankveto.append(sngl.bank_chisq)
-					self.injections[instrument].mchirp.append( mtot * eta**(3. / 5) )
+					self.injections[instrument].mchirp.append(mtot * eta**(3. / 5))
 					self.injections[instrument].eta.append(eta)
 					self.injections[instrument].chieff.append(chieff)
 					self.injections[instrument].spin.append((spin / 2.)**.5)
@@ -1115,8 +1115,8 @@ WHERE
 					mtot = x.mass1 + x.mass2
 					self.points[instrument_pair].background_eta.append(eta)
 					self.points[instrument_pair].background_mtot.append(mtot)
-					self.points[instrument_pair].background_mchirp.append( mtot*eta**(3./5) )
-					self.points[instrument_pair].background_chieff.append( (x.mass1*x.spin1z + x.mass2*x.spin2z)/mtot )
+					self.points[instrument_pair].background_mchirp.append(mtot * eta**(3./5))
+					self.points[instrument_pair].background_chieff.append((x.mass1 * x.spin1z + x.mass2 * x.spin2z) / mtot)
 
 				else:
 					self.points[instrument_pair].zerolag_snr.append((x.snr, y.snr))
@@ -1155,8 +1155,8 @@ WHERE
 				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
 				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 				mtot = x.mass1 + x.mass2
-				self.points[instrument_pair].injections_mchirp.append( mtot*eta**(3./5) )
-				self.points[instrument_pair].injections_chieff.append( (x.mass1*x.spin1z + x.mass2*x.spin2z)/mtot )
+				self.points[instrument_pair].injections_mchirp.append(mtot * eta**(3./5))
+				self.points[instrument_pair].injections_chieff.append((x.mass1 * x.spin1z + x.mass2 * x.spin2z) / mtot)
 
 
 	def finish(self):
