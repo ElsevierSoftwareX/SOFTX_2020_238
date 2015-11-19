@@ -1375,16 +1375,24 @@ WHERE
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \mathcal{L}$")
-		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		fig, axes = create_plot(x_label = r"$\sqrt{\sum_{\mathrm{instruments}} \mathrm{SNR}^{2}}$", y_label = r"$\ln \mathcal{L}$")
+		axes.grid(True, which = "both")
+		axes.plot(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
 		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \mathcal{L}$ vs.\ SNR Scatter Plot (Closed Box)")
+		axes.set_title(r"Candidate's $\ln \mathcal{L}$ vs.\ SNR (Closed Box)")
+		# FIXME:  4 is the single detector SNR threshold.  don't
+		# hard-code
+		axes.set_xlim(((4.**2 + 4.**2)**.5, None))
 		yield fig, "lr_vs_snr", False
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \mathcal{L}$")
-		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
-		axes.loglog(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
+		fig, axes = create_plot(x_label = r"$\sqrt{\sum_{\mathrm{instruments}} \mathrm{SNR}^{2}}$", y_label = r"$\ln \mathcal{L}$")
+		axes.grid(True, which = "both")
+		axes.plot(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
+		axes.plot(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
 		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \mathcal{L}$ vs.\ SNR Scatter Plot")
+		axes.set_title(r"Candidate's $\ln \mathcal{L}$ vs.\ SNR")
+		# FIXME:  4 is the single detector SNR threshold.  don't
+		# hard-code
+		axes.set_xlim(((4.**2 + 4.**2)**.5, None))
 		yield fig, "lr_vs_snr", True
 
 		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
