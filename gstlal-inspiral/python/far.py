@@ -2362,6 +2362,26 @@ class FAPFAR(object):
 		log_tdp = math.log1p(-self.ccdf_from_rank(rank))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
+	def rank_from_far(self, rate, tolerance = 1e-6):
+		"""
+		Inverts .far_from_rank() using a bisection search.  The
+		tolerance sets the absolute error of the result.
+		"""
+		lo, hi = self.minrank, self.maxrank
+		while hi - lo > tolerance:
+			mid = (hi + lo) / 2.
+			mid_far = self.far_from_rank(mid)
+			if rate > mid_far:
+				# desired rank is below the middle
+				hi = mid
+			elif rate < mid_far:
+				# desired rank is above the middle
+				lo = mid
+			else:
+				# jackpot
+				return mid
+		return (hi + lo) / 2.
+
 	def assign_fapfars(self, connection):
 		# assign false-alarm probabilities and false-alarm rates
 		# FIXME:  choose function names more likely to be unique?
