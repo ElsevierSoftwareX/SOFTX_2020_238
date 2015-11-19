@@ -51,6 +51,7 @@ from optparse import OptionParser
 import sqlite3
 import sys
 
+import lal
 import os
 
 from glue import segments
@@ -61,10 +62,8 @@ from glue import lal
 from pylal import db_thinca_rings
 from pylal import git_version
 from pylal import SimBurstUtils
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from gstlal import far
 from gstlal import inspiral_pipe
-from lal import MTSUN_SI
 
 class SimInspiral(lsctables.SimInspiral):
 	@property
@@ -96,7 +95,7 @@ class SnglInspiral(lsctables.SnglInspiral):
 	def get_effective_snr(self, fac):
 		return self.snr / (self.chisq / self.chisq_dof)**.5
 
-lsctables.LIGOTimeGPS = LIGOTimeGPS
+lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 lsctables.SimInspiralTable.RowType = SimInspiral
 lsctables.SnglInspiralTable.RowType = SnglInspiral
 
@@ -1025,7 +1024,7 @@ FROM
 				flow = 10 # arbitrary choice
 				a0 = 5. / (256 * (numpy.pi * flow)**(8./3) )
 				a3 = numpy.pi / (8 * (numpy.pi * flow)**(5./3) )
-				bg_tau0s = a0 * (MTSUN_SI * bg_mcs)**(-5./3)
+				bg_tau0s = a0 * (lal.MTSUN_SI * bg_mcs)**(-5./3)
 				bg_tau3s = (a3 / bg_etas) * (bg_etas * bg_tau0s / a0)**(2./5)
 				coll = axes.scatter(bg_tau0s, bg_tau3s, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
 				fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
