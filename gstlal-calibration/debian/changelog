@@ -1,3 +1,11 @@
+gstlal-calibration (0.5.8-1) unstable; urgency=low
+
+  * Bug fixes to factors computation
+  * Bug fix to synchronization of interleave element
+  * Update to averaging routine for factors
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 14 Nov 2015 00:01:00 -0500
+
 gstlal-calibration (0.5.7-1) unstable; urgency=low
 
   * Addition of "NO_STOCH_INJ" bit to GDS-CALIB_STATE_VECTOR
