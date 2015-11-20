@@ -175,7 +175,7 @@ parser.add_option("--no-kappaa", action = "store_true", help = "Set this to turn
 parser.add_option("--no-kappac", action = "store_true", help = "Set this to turn off the calculation of \kappa_c.")
 parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn off the calculation of f_cc.")
 parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 128, help = "Time over which to average the time-varying calibration factors (\kappas), given in seconds. (Default = 128 seconds)")
-parser.add_option("--factors-hold-time", metavar = "Sec", type = int, default = 1, help = "If values of \kappa are computed outside of the expected range for more than the period of time (in seconds) specified by this option, then the expected average value is updated to the current computed value. (Default = 1 seconds)")
+parser.add_option("--factors-hold-time", metavar = "Sec", type = int, default = 20.0, help = "If values of \kappa are computed outside of the expected range for more than the period of time (in seconds) specified by this option, then the expected average value is updated to the current computed value. (Default = 20 seconds)")
 parser.add_option("--apply-kappaa", action = "store_true", help = "Set this to have the \kappa_a factors multiply the actuation chain.")
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
@@ -192,21 +192,21 @@ parser.add_option("--expected-kappatst-imag", metavar = "float", type = float, d
 parser.add_option("--expected-kappac", metavar = "float", type = float, default = 1.0, help = "Expected value for \kappa_c. (Default = 1.0)")
 parser.add_option("--expected-fcc", metavar = "Hz", type = float, default = 330.0, help = "Expected value for the coupled cavity pole. (Default = 330.0 Hz)")
 parser.add_option("--kappaa-real-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the real part of \kappa_a +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappaa-real-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed real part of \kappa_a +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappaa-real-ok-var-for-average", metavar = "float", type = float, default = 0.001, help = "Values of the (pre-averaged) real part of \kappa_a must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.001)")
 parser.add_option("--kappapu-real-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the real part of \kappa_pu +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappapu-real-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed real part of \kappa_pu +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappapu-real-ok-var-for-average", metavar = "float", type = float, default = 0.0015, help = "Values of the (pre-averaged) real part of \kappa_pu must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.0015)")
 parser.add_option("--kappatst-real-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the real part of \kappa_tst +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappatst-real-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed real part of \kappa_tst +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappatst-real-ok-var-for-average", metavar = "float", type = float, default = 0.0008, help = "Values of the (pre-averaged) real part of \kappa_tst must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.0008)")
 parser.add_option("--kappaa-imag-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the imaginary part of \kappa_a +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappaa-imag-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed imaginary part of \kappa_a +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappaa-imag-ok-var-for-average", metavar = "float", type = float, default = 0.001, help = "Values of the (pre-averaged) imaginary part of \kappa_a must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.001)")
 parser.add_option("--kappapu-imag-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the imaginary part of \kappa_pu +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappapu-imag-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last bests computed imaginary part of \kappa_pu +/- this number will be considered OK for average. (Default = 0.05)")
+parser.add_option("--kappapu-imag-ok-var-for-average", metavar = "float", type = float, default = 0.0015, help = "Values of the (pre-averaged) imaginary part of \kappa_pu must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.0015)")
 parser.add_option("--kappatst-imag-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the imaginary part of \kappa_tst +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappatst-imag-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed imaginary part of \kappa_tst +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappatst-imag-ok-var-for-average", metavar = "float", type = float, default = 0.001, help = "Values of the (pre-averaged) imaginary part of \kappa_tst must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.001)")
 parser.add_option("--kappac-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of \kappa_c +/- this number will be considered OK. (Default = 0.1)")
-parser.add_option("--kappac-ok-var-for-average", metavar = "float", type = float, default = 0.05, help = "Values of the last best computed \kappa_c +/- this number will be considered OK for averaging. (Default = 0.05)")
+parser.add_option("--kappac-ok-var-for-average", metavar = "float", type = float, default = 0.002, help = "Values of the (pre-averaged) \kappa_c must not change by more than +/- this amount from the last best computed value for this number to be considered OK for averaging. (Default = 0.002)")
 parser.add_option("--fcc-ok-var", metavar = "Hz", type = float, default = 30, help = "Values of f_cc +/- this number (in Hz) will be considered OK. (Default = 30 Hz)")
-parser.add_option("--fcc-ok-var-for-average", metavar = "Hz", type = float, default = 10, help = "Values of the last best computed f_cc +/- this number (in Hz) will be considered OK for averaging. (Default = 10 Hz)")
+parser.add_option("--fcc-ok-var-for-average", metavar = "Hz", type = float, default = 5, help = "Values of the last best computed f_cc +/- this number (in Hz) will be considered OK for averaging. (Default = 5 Hz)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "Set the name of the excitation channel.  This is only necessary when the calibration factors computation is turned on, which is the default behavior. (Default = CAL-CS_LINE_SUM_DQ)")
 parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  This is only necessary when the \kappa_tst factors computation is turned on, which is the default behavior. (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
@@ -733,13 +733,13 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	pcalfp_derrfpI = pipeparts.mktee(pipeline, pcalfp_derrfpI)
 	
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappapu:
-	tstexc = pipeparts.mkresample(pipeline, tstexc, quality = 9)
-	tstexc = pipeparts.mkcapsfilter(pipeline, tstexc, caps)
+	tstexc = calibration_parts.resample(pipeline, tstexc, caps)
 	ktst_tstexcR, ktst_tstexcI = calibration_parts.demodulate(pipeline, tstexc, sr, ktst_esd_line_freq, caps, compute_calib_factors_caps, factors_integration_samples, td)
 	ktst_tstexcR = pipeparts.mkaudioconvert(pipeline, ktst_tstexcR)
 	ktst_tstexcR = pipeparts.mkcapsfilter(pipeline, ktst_tstexcR, compute_calib_factors_caps)
 	ktst_tstexcI = pipeparts.mkaudioconvert(pipeline, ktst_tstexcI)
 	ktst_tstexcI = pipeparts.mkcapsfilter(pipeline, ktst_tstexcI, compute_calib_factors_caps)
+
 	ktst_derrftstR, ktst_derrftstI = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), sr, ktst_esd_line_freq, caps, compute_calib_factors_caps, factors_integration_samples, td)
 	ktst_derrftstR = pipeparts.mkaudioconvert(pipeline, ktst_derrftstR)
 	ktst_derrftstR = pipeparts.mkcapsfilter(pipeline, ktst_derrftstR, compute_calib_factors_caps)
@@ -866,7 +866,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			
 			kcteedq = pipeparts.mktee(pipeline, kc)
 			# Produce a channel that says whether lal_check_calib_factors will compute a good value or not.  Use this in the statevector bit for this \kappa
-			kcInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kcteedq), "lal_calib_factors_to_statevector", variance = options.kappac_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappac)
+			kcrange = pipeparts.mkqueue(pipeline, kcteedq)
+			kcInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kcrange), "lal_calib_factors_to_statevector", variance = options.kappac_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappac)
 
 			kc = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kcteedq), options.kappac_ok_var, options.expected_kappac, factors_averaging_samples, compute_calib_factors_caps, td, options.factors_hold_time)
 			kctee = pipeparts.mktee(pipeline, kc)
@@ -1058,11 +1059,11 @@ if not options.no_dq_vector:
 	#
 	
 	# Set the FILTERS-OK bit based on science-quality transitions
-	filtersok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, sciencequalitytee), bit_vector=16, threshold=4)
+	filtersok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, scienceintenttee), bit_vector=16, threshold=2)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
 	filtersok = calibration_parts.mkaudiorate(pipeline, filtersok)
 	filtersok = calibration_parts.mkreblock(pipeline, filtersok)
-	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok), control = calibration_parts.mkqueue(pipeline, sciencequalitytee), threshold = 4, attack_length = -int(options.filter_settle_time) * dqsr)
+	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok), control = calibration_parts.mkqueue(pipeline, scienceintenttee), threshold = 2, attack_length = -int(options.filter_settle_time) * dqsr)
 
 	# If we are computing any \kappas, set up a statevector to use for gating them against the start of science mode
 	if not options.no_kappaa or not options.no_kappac or not options.no_kappatst or not options.no_kappapu or not options.no_fcc:	
@@ -1296,6 +1297,7 @@ if not options.no_kappac:
 	kcout = calibration_parts.gate_other_with_strain(pipeline, kcout, straintee)
 if not options.no_fcc:
 	fccout = calibration_parts.gate_other_with_strain(pipeline, fccout, straintee)
+
 	
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
 strain = calibration_parts.mkqueue(pipeline, straintee)

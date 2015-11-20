@@ -36,6 +36,7 @@ def mkqueue(pipeline, head):
 	return pipeparts.mkqueue(pipeline, head, max_size_time = 0, max_size_buffers = 0, max_size_bytes = 0)
 	
 def mkaudiorate(pipeline, head):
+	#return pipeparts.mkqueue(pipeline, head)
 	return pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
 
 def mkreblock(pipeline, head):
@@ -78,7 +79,7 @@ def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps
 def resample(pipeline, head, caps):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = mkaudiorate(pipeline, head)
+	#head = mkaudiorate(pipeline, head)
 	head = mkreblock(pipeline, head)
 	return head
 
@@ -151,13 +152,11 @@ def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_sample
 	sin = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 
 	headR = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), cos), orig_caps)
-	headR = pipeparts.mkresample(pipeline, headR, quality=9)
-	headR = pipeparts.mkcapsfilter(pipeline, headR, new_caps)
+	headR = resample(pipeline, headR, new_caps)
 	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
 
 	headI = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), sin), orig_caps)
-	headI = pipeparts.mkresample(pipeline, headI, quality=9)
-	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
+	headI = resample(pipeline, headI, new_caps)
 	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
 
 	return headR, headI
@@ -235,7 +234,6 @@ def compute_kappatst_from_filters_file(pipeline, derrfxR, derrfxI, excfxR, excfx
 
 	derrfx_over_excfxR, derrfx_over_excfxI = compute_pcalfp_over_derrfp(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
 	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
-	
 
 	# 	     
 	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)

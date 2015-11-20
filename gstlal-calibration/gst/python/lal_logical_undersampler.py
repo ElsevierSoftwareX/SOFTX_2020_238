@@ -219,7 +219,7 @@ class lal_logical_undersampler(gst.BaseTransform):
 		if not incaps[0]["signed"]:
 			self.data_type = numpy.uint32
 		elif incaps[0]["signed"]:
-			self.data_type = numpy.uint32
+			self.data_type = numpy.int32
 		else: 
 			return False
 		return True

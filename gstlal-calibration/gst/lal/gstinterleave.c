@@ -1418,6 +1418,7 @@ gst_interleave_collected (GstCollectPads * pads, GstLALInterleave * self)
       goto next;
     
     empty = FALSE;
+    outbuf = gst_buffer_make_writable(outbuf);
     outdata = GST_BUFFER_DATA (outbuf) + width * GST_INTERLEAVE_PAD_CAST ( ( (GstCollectData *) collect_data)->pad)->channel + offset * width * self->channels;
     self->func (outdata, GST_BUFFER_DATA (inbuf), self->channels, inlength);
 
@@ -1431,12 +1432,18 @@ gst_interleave_collected (GstCollectPads * pads, GstLALInterleave * self)
 
   /* FIXME:  this logic can't run backwards */
   /* set timestamps on the output buffer */
+  outbuf = gst_buffer_make_metadata_writable(outbuf);
   GST_BUFFER_OFFSET (outbuf) = earliest_output_offset;
   GST_BUFFER_TIMESTAMP (outbuf) = output_timestamp_from_offset (self, GST_BUFFER_OFFSET (outbuf));
+  if (GST_BUFFER_OFFSET (outbuf) == 0 || GST_BUFFER_TIMESTAMP (outbuf) != self->timestamp)
+    GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_DISCONT);
+  else
+    GST_BUFFER_FLAG_UNSET (outbuf, GST_BUFFER_FLAG_DISCONT);
   GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (outbuf) + outlength;
   self->timestamp = output_timestamp_from_offset (self, GST_BUFFER_OFFSET_END (outbuf));
-  self->offset += outlength;
+  self->offset = GST_BUFFER_OFFSET_END(outbuf);
   GST_BUFFER_DURATION (outbuf) = self->timestamp - GST_BUFFER_TIMESTAMP (outbuf);
+  g_assert(GST_BUFFER_SIZE(outbuf) == outlength*width*self->channels);
 
   if (empty)
     GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
@@ -1466,7 +1473,7 @@ eos:
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "lal_interleave", 0, "audio channel interleavning element");
+  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "lal_interleave", 0, "audio channel interleaving element");
   if (!gst_element_register (plugin, "lal_interleave",
     GST_RANK_NONE, gst_interleave_get_type()))
     return FALSE;

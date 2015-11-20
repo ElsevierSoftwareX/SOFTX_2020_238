@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
-plugin_LTLIBRARIES = libgstlalcalibration.la libgstlalinterleave.la
+plugin_LTLIBRARIES = libgstlalcalibration.la libgstlalinterleave.la libgstlaldeinterleave.la
 
 libgstlalcalibration_la_SOURCES = \
 	gstlalcalibration.c \
@@ -14,3 +14,9 @@ libgstlalinterleave_la_SOURCES = \
 libgstlalinterleave_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) -DGST_PACKAGE_NAME=\"gstlal\" -DGST_PACKAGE_ORIGIN=\"\"
 #libgstlalinterleave_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlaltypes.la
 libgstlalinterleave_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+
+libgstlaldeinterleave_la_SOURCES = \
+	gstdeinterleave.c gstdeinterleave.h
+libgstlaldeinterleave_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) -DGST_PACKAGE_NAME=\"gstlal\" -DGST_PACKAGE_ORIGIN=\"\"
+#libgstlalinterleave_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlaltypes.la
+libgstlaldeinterleave_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
