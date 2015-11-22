@@ -6,6 +6,9 @@ import StringIO
 import httplib
 import math
 import subprocess
+import re
+import time
+import numpy
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -45,6 +48,8 @@ from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
 from pylal.xlal.datatypes import postcohinspiraltable
 
+from gstlal import bottle
+from gstlal import reference_psd
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 # defined in postcohinspiral_table.h
@@ -53,7 +58,19 @@ class PostcohInspiralTable(table.Table):
 	validcolumns = {
 			"end_time":	"int_4s",
 			"end_time_ns":	"int_4s",
-			"is_background":	"int_4s",
+			"end_time_L":	"int_4s",
+			"end_time_ns_L":"int_4s",
+			"end_time_H":	"int_4s",
+			"end_time_ns_H":"int_4s",
+			"end_time_V":	"int_4s",
+			"end_time_ns_V":"int_4s",
+			"snglsnr_L":	"real_4",
+			"snglsnr_H":	"real_4",
+			"snglsnr_V":	"real_4",
+			"coa_phase_L":	"real_4",
+			"coa_phase_H":	"real_4",
+			"coa_phase_V":	"real_4",
+			"is_background":"int_4s",
 			"livetime":	"int_4s",
 			"ifos":		"lstring",
 			"pivotal_ifo":	"lstring",
@@ -63,7 +80,7 @@ class PostcohInspiralTable(table.Table):
 			"cohsnr":	"real_4",
 			"nullsnr":	"real_4",
 			"chisq":	"real_4",
-			"spearman_pval":	"real_4",
+			"spearman_pval":"real_4",
 			"fap":		"real_4",
 			"far":		"real_4",
 			"skymap_fname":	"lstring",
@@ -192,6 +209,23 @@ class FinalSink(object):
 		self.background_collection_time = background_collection_time
 		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
 
+		# setup bottle routes
+		bottle.route("/latency_history.txt")(self.web_get_latency_history)
+
+
+		self.latency_history = deque(maxlen = 1000)
+
+	def web_get_latency_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, latency in self.latency_history:
+				yield "%f %e\n" % (time, latency)
+
+	def __update_eye_candy(self, buf_timestamp):
+		latency_val = (float(self.candidate.end), float(buf_timestamp - self.candidate.end))
+		self.latency_history.append(latency_val)
+
+
 	def appsink_new_buffer(self, elem):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
@@ -217,7 +251,7 @@ class FinalSink(object):
 			# the logic of clustering here is quite complicated, fresh up
 			# yourself before reading the code
 			# check if the newevents is over boundary
-			while nevent > 0 and buf_timestamp > self.boundary:
+			while self.boundary and buf_timestamp > self.boundary:
 				self.cluster(self.cluster_window)
 
 				if self.need_candidate_check:
@@ -226,6 +260,7 @@ class FinalSink(object):
 					self.postcoh_table.append(self.candidate)	
 					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold:
 						self.__do_gracedb_alerts(self.candidate)
+					self.__update_eye_candy(buf_timestamp)
 					self.candidate = None
 					self.need_candidate_check = False
 
@@ -241,7 +276,10 @@ class FinalSink(object):
 
 	def __select_head_event(self):
 		# last event should have the smallest timestamp
-		assert len(self.cur_event_table) != 0
+		#assert len(self.cur_event_table) != 0
+		if len(self.cur_event_table) == 0:
+			return None
+
 		head_event = self.cur_event_table[0]
 		for row in self.cur_event_table:
 			if row.end < head_event.end:
@@ -254,13 +292,20 @@ class FinalSink(object):
 		if self.candidate is None:
 			self.candidate = self.__select_head_event()
 
-		if self.candidate.end > self.boundary:
+		if self.candidate is None or self.candidate.end > self.boundary:
 			self.boundary = self.boundary + cluster_window
 			self.candidate = None
 			return
 
 		# find the max cohsnr event within the boundary of cur_event_table
 		peak_event = self.__select_head_event()
+		if peak_event is None:
+			print self.candidate.end
+			# update boundary
+			self.boundary = self.boundary + cluster_window
+			self.need_candidate_check = True
+			return
+
 		for row in self.cur_event_table:
 			if row.end <= self.boundary and row.cohsnr > peak_event.cohsnr:
 				peak_event = row
@@ -325,11 +370,11 @@ class FinalSink(object):
 		
 		# Setting the H1 row
 		row.process_id = "process:process_id:10"
-		row.ifo = trigger.pivotal_ifo
+		row.ifo = "L1"
 		row.search = "tmpltbank"
 		row.channel = "GDS-CALIB_STRAIN" 
-		row.end_time = trigger.end_time
-		row.end_time_ns = trigger.end_time_ns 
+		row.end_time = trigger.end_time_L
+		row.end_time_ns = trigger.end_time_ns_L
 		row.end_time_gmst = 0 
 		row.impulse_time = 0
 		row.impulse_time_ns = 0
@@ -337,7 +382,7 @@ class FinalSink(object):
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
-		row.coa_phase = 0
+		row.coa_phase = trigger.coa_phase_L
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2
 		row.mchirp = trigger.mchirp 
@@ -362,7 +407,7 @@ class FinalSink(object):
 		row.alpha6 = 0
 		row.beta = 0
 		row.f_final = 2048
-		row.snr = trigger.maxsnglsnr
+		row.snr = trigger.snglsnr_L
 		row.chisq = trigger.chisq
 		row.chisq_dof = 4
 		row.bank_chisq = 0
@@ -391,19 +436,14 @@ class FinalSink(object):
 	
 		sngl_inspiral_table.append(row)
 
-		if trigger.pivotal_ifo == "H1":
-			the_other_ifo = "L1"
-		else:
-			the_other_ifo = "H1"
-
 		row = sngl_inspiral_table.RowType()
 		# Setting the the other row
 		row.process_id = "process:process_id:10"
-		row.ifo = the_other_ifo
+		row.ifo = "H1"
 		row.search = "tmpltbank"
 		row.channel = "GDS-CALIB_STRAIN" 
-		row.end_time = 0
-		row.end_time_ns = 0 
+		row.end_time = trigger.end_time_H
+		row.end_time_ns = trigger.end_time_ns_H 
 		row.end_time_gmst = 0 
 		row.impulse_time = 0
 		row.impulse_time_ns = 0
@@ -411,7 +451,7 @@ class FinalSink(object):
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
-		row.coa_phase = 0
+		row.coa_phase = trigger.coa_phase_H
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2 
 		row.mchirp = trigger.mchirp 
@@ -436,7 +476,7 @@ class FinalSink(object):
 		row.alpha6 = 0
 		row.beta = 0
 		row.f_final = 2048
-		row.snr = math.sqrt(math.pow(trigger.cohsnr, 2) - math.pow(trigger.maxsnglsnr, 2))
+		row.snr = trigger.snglsnr_H
 		row.chisq = 0
 		row.chisq_dof = 4
 		row.bank_chisq = 0
@@ -565,15 +605,59 @@ class FinalSink(object):
 		# write a log to explain far
 		#for gracedb_id in gracedb_ids:
 		gracedb_id = gracedb_ids[0]
+		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f)" % (trigger.ra, trigger.dec)
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = gracedb_client.writeLog(gracedb_id, "FAR is extrapolated; coa_phase and end_time of the other detector not provided yet", filename = None, tagname = "analyst_comments")
+				resp = gracedb_client.writeLog(gracedb_id, log_message , filename = None, tagname = "analyst_comments")
 				if resp.status != httplib.CREATED:
 		    			print >>sys.stderr, "gracedb upload of log failed"
 				else:
 					break
 			except:
 				gracedb_upload_itrial += 1
+
+		if self.verbose:
+			print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
+		psddict = {}
+		instruments = re.findall('..', trigger.ifos)
+		for instrument in instruments:
+			elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
+			# FIXME:  remove
+			# LIGOTimeGPS type cast
+			# when we port to swig
+			# version of
+			# REAL8FrequencySeries
+			psddict[instrument] = REAL8FrequencySeries(
+				name = "PSD",
+				epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
+				f0 = 0.0,
+				deltaF = elem.get_property("delta-f"),
+				sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
+				data = numpy.array(elem.get_property("mean-psd"))
+				)
+		fobj = StringIO.StringIO()
+		reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+		common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
+
+
+		#
+		# do PSD and ranking data file uploads
+		#
+
+		while common_messages:
+			message, filename, tag, contents = common_messages.pop()
+			gracedb_upload_itrial = 1
+			gracedb_id = gracedb_ids[0]
+			while gracedb_upload_itrial < 10:
+				try:
+					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+					resp_json = resp.json()
+					if resp.status != httplib.CREATED:
+						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
+					else:
+						break
+				except:
+					gracedb_upload_itrial += 1
 
 
 	
