@@ -50,56 +50,8 @@ from pylal.xlal.datatypes import postcohinspiraltable
 
 from gstlal import bottle
 from gstlal import reference_psd
+from gstlal import postcoh_table_def 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
-
-# defined in postcohinspiral_table.h
-class PostcohInspiralTable(table.Table):
-	tableName = "postcoh:table"
-	validcolumns = {
-			"end_time":	"int_4s",
-			"end_time_ns":	"int_4s",
-			"end_time_L":	"int_4s",
-			"end_time_ns_L":"int_4s",
-			"end_time_H":	"int_4s",
-			"end_time_ns_H":"int_4s",
-			"end_time_V":	"int_4s",
-			"end_time_ns_V":"int_4s",
-			"snglsnr_L":	"real_4",
-			"snglsnr_H":	"real_4",
-			"snglsnr_V":	"real_4",
-			"coa_phase_L":	"real_4",
-			"coa_phase_H":	"real_4",
-			"coa_phase_V":	"real_4",
-			"is_background":"int_4s",
-			"livetime":	"int_4s",
-			"ifos":		"lstring",
-			"pivotal_ifo":	"lstring",
-			"tmplt_idx":	"int_4s",
-			"pix_idx":	"int_4s",
-			"maxsnglsnr":	"real_4",
-			"cohsnr":	"real_4",
-			"nullsnr":	"real_4",
-			"chisq":	"real_4",
-			"spearman_pval":"real_4",
-			"fap":		"real_4",
-			"far":		"real_4",
-			"skymap_fname":	"lstring",
-			"template_duration": "real_8",
-			"mass1":	"real_4",
-			"mass2":	"real_4",
-			"mchirp":	"real_4",
-			"mtotal":	"real_4",
-			"spin1x":	"real_4",
-			"spin1y":	"real_4",
-			"spin1z":	"real_4",
-			"spin2x":	"real_4",
-			"spin2y":	"real_4",
-			"spin2z":	"real_4",
-			"eta":		"real_4",
-			"ra":		"real_8",
-			"dec":		"real_8"
-	}
-
 
 class PostcohDocument(object):
 	def __init__(self, verbose = False):
@@ -116,7 +68,7 @@ class PostcohDocument(object):
 
 		# FIXME: process table, search summary table
 		# FIXME: should be implemented as lsctables.PostcohInspiralTable
-		self.xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohInspiralTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(postcoh_table_def.PostcohInspiralTable))
 
 	def set_filename(self, filename):
 		self.filename = filename
@@ -124,6 +76,25 @@ class PostcohDocument(object):
 	def write_output_file(self, verbose = False):
 		assert self.filename is not None
 		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+
+class OnlinePerformer(object):
+
+	def __init__(self, parent_lock):
+		# setup bottle routes
+		bottle.route("/latency_history.txt")(self.web_get_latency_history(parent_lock))
+
+		self.latency_history = deque(maxlen = 1000)
+
+	def web_get_latency_history(self, parent_lock):
+		with parent_lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, latency in self.latency_history:
+				yield "%f %e\n" % (time, latency)
+
+	def __update_eye_candy(self, candidate):
+		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end))
+		self.latency_history.append(latency_val)
+
 
 class BackgroundStatsUpdater(object):
 	def __init__(self, path, input_prefix_list, output, collection_time, ifos):
@@ -164,7 +135,7 @@ class BackgroundStatsUpdater(object):
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -179,7 +150,7 @@ class FinalSink(object):
 		self.candidate = None
 		self.boundary = None
 		self.need_candidate_check = False
-		self.cur_event_table = lsctables.New(PostcohInspiralTable)
+		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		self.nevent_clustered = 0
 
 		# gracedb parameters
@@ -193,7 +164,7 @@ class FinalSink(object):
 		self.postcoh_document = PostcohDocument()
 		self.postcoh_document_cpy = None
 		# this table will go to snapshot file, it stores clustered peaks
-		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
+		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 		# snapshot parameters
 		self.path = path
@@ -209,22 +180,9 @@ class FinalSink(object):
 		self.background_collection_time = background_collection_time
 		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
 
-		# setup bottle routes
-		bottle.route("/latency_history.txt")(self.web_get_latency_history)
-
-
-		self.latency_history = deque(maxlen = 1000)
-
-	def web_get_latency_history(self):
-		with self.lock:
-			# first one in the list is sacrificed for a time stamp
-			for time, latency in self.latency_history:
-				yield "%f %e\n" % (time, latency)
-
-	def __update_eye_candy(self, buf_timestamp):
-		latency_val = (float(self.candidate.end), float(buf_timestamp - self.candidate.end))
-		self.latency_history.append(latency_val)
-
+		# online information performer
+		self.need_online_perform = need_online_perform
+		self.onperformer = OnlinePerformer(self.lock)
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -260,7 +218,8 @@ class FinalSink(object):
 					self.postcoh_table.append(self.candidate)	
 					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold:
 						self.__do_gracedb_alerts(self.candidate)
-					self.__update_eye_candy(buf_timestamp)
+					if self.need_online_perform:
+						self.onperformer.__update_eye_candy(self.candidate)
 					self.candidate = None
 					self.need_candidate_check = False
 
@@ -299,16 +258,15 @@ class FinalSink(object):
 
 		# find the max cohsnr event within the boundary of cur_event_table
 		peak_event = self.__select_head_event()
-		if peak_event is None:
-			print self.candidate.end
-			# update boundary
-			self.boundary = self.boundary + cluster_window
-			self.need_candidate_check = True
-			return
-
 		for row in self.cur_event_table:
 			if row.end <= self.boundary and row.cohsnr > peak_event.cohsnr:
 				peak_event = row
+
+		if peak_event is None:
+			# no event within the boundary, candidate is the peak, update boundary
+			self.boundary = self.boundary + cluster_window
+			self.need_candidate_check = True
+			return
 
 		if peak_event.end <= self.boundary and peak_event.cohsnr > self.candidate.cohsnr:
 			self.candidate = peak_event
@@ -678,7 +636,7 @@ class FinalSink(object):
 		postcoh_document = self.postcoh_document.get_another()
 		self.postcoh_document = postcoh_document
 		del self.postcoh_table
-		self.postcoh_table = PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
+		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 	def __check_internal_process_finish(self):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
