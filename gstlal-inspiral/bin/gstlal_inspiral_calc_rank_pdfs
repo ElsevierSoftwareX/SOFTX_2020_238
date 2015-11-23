@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
+# Copyright (C) 2010--2015  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -128,8 +128,6 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 if options.add_zerolag_to_background:
 	coincparamsdistributions.zero_lag_in_background = True
 coincparamsdistributions.finish(verbose = options.verbose)
-if old_ranking_data is not None:
-	old_ranking_data.finish(verbose = options.verbose)
 
 
 #
@@ -151,8 +149,6 @@ for horizon_distances in coincparamsdistributions.horizon_history.all():
 
 
 ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), nsamples = options.ranking_stat_samples, verbose = options.verbose)
-if old_ranking_data is not None:
-	ranking_data += old_ranking_data
 
 
 #
