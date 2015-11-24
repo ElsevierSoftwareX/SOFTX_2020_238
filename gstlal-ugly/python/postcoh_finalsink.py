@@ -81,18 +81,20 @@ class OnlinePerformer(object):
 
 	def __init__(self, parent_lock):
 		# setup bottle routes
-		bottle.route("/latency_history.txt")(self.web_get_latency_history(parent_lock))
+		bottle.route("/latency_history.txt")(self.web_get_latency_history)
 
 		self.latency_history = deque(maxlen = 1000)
+		self.parent_lock = parent_lock
 
-	def web_get_latency_history(self, parent_lock):
-		with parent_lock:
+	def web_get_latency_history(self):
+		with self.parent_lock:
 			# first one in the list is sacrificed for a time stamp
 			for time, latency in self.latency_history:
 				yield "%f %e\n" % (time, latency)
 
 	def __update_eye_candy(self, candidate):
 		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end))
+		print >>sys.stderr, latency_val
 		self.latency_history.append(latency_val)
 
 
@@ -182,7 +184,7 @@ class FinalSink(object):
 
 		# online information performer
 		self.need_online_perform = need_online_perform
-		self.onperformer = OnlinePerformer(self.lock)
+		self.onperformer = OnlinePerformer(parent_lock = self.lock)
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
