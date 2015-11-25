@@ -1,0 +1,378 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015  Cody Messick, Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+# # This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file gstlal_inspiral_recalc_likelihood_with_zerolag
+#
+# This program re-calculates the likelihood ratios in an arbitrary number of
+# databases, including zerolag in the background. 
+from collections import namedtuple
+from optparse import OptionParser
+import sqlite3
+from time import gmtime
+
+from glue.lal import CacheEntry
+from glue.ligolw import dbtables
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import ligolw_sqlite
+from glue.offsetvector import offsetvector
+from glue import segments
+from gstlal import inspiral
+from gstlal import far
+from lal import UTCToGPS
+from pylal import ligolw_burca2
+from pylal import snglcoinc
+
+# FIXME Need to add entries to process and process_params tables
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
+	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
+	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use. Can be given more than once. File names should file T050017 naming convention, with an integer corresponding to split bank it is associated with (e.g. H1L1-0_DIST_STATS-1127307417-3805.xml.gz)")
+	parser.add_option("--global-likelihood-file", metavar = "filename", action = "append", help = "Set the name of a likelihood file not associated with a specific split ban. Can be given multiple times.")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Set the name of the likelihood ratio cache file to use.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, databases = parser.parse_args()
+
+	process_params = options.__dict__.copy()
+	
+	if options.svd_bank_cache:
+		#FIXME Use Ordered Dictionary when we use python 2.7
+		svd_bank_dict = {}
+		descriptions = []
+		for line in open(options.svd_bank_cache):
+			svd_bank_cache_entry = CacheEntry(line)
+			if svd_bank_cache_entry.description not in descriptions:
+				descriptions.append(svd_bank_cache_entry.description)
+			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
+		# do this out-of-place to preserve process_params' contents
+		options.svd_bank = options.svd_bank + [",".join(svd_bank_dict[description]) for description in descriptions]
+
+        # FIXME Put all svd banks for different detectors in one file.  
+        try:
+                svd_banks = [inspiral.parse_svdbank_string(svdbank) for svdbank in options.svd_bank]
+        except ValueError as e:
+                print "Unable to parse svd banks"
+                raise 
+
+        options.likelihood_files= []
+        if options.likelihood_file:
+                options.likelihood_files += options.likelihood_file
+        if options.likelihood_cache:
+                options.likelihood_files += [CacheEntry(line).url for line in open(options.likelihood_cache)]
+        if not options.likelihood_files:
+                raise ValueError("no likelihood URLs specified")
+
+	return options, databases, svd_banks, process_params
+
+#
+# =============================================================================
+#
+#                              Class Definitions
+#
+# =============================================================================
+#
+
+class Connections:
+	def __init__(self, databases, options):
+		self.connection_id_map = {}
+		self.coinc_event_definitions = {}
+		self.verbose = options.verbose
+		for n, database in enumerate(databases):
+			working_filename = dbtables.get_connection_filename(database, tmp_path = options.tmp_space, verbose = self.verbose)
+			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(working_filename), '%d' % UTCToGPS(gmtime()))
+
+		#
+		# Create dictionaries keyed by the connection_id value set
+		# above containing offset_vectors and coinc_event_map_index
+		# dictionaries for each database
+		#
+		self.__set_coinc_event_map_index()
+		self.__set_offset_vectors()
+		
+		# 
+		# Create a fake temporary coinc definer id that events we want
+		# to rerank can be assigned so that we can pass all of the
+		# events to the likelihood ratio assigning function and only
+		# rank a subset of them.
+		# FIXME Its possible that we may need to revisit this for cases
+		# of more than 2 IFOs, I'm not sure if the likelihood ratio
+		# assigning function works in that regard.
+		#
+		self.tmp_coinc_def_id = "coinc_definer:coinc_def_id:-1"
+
+	def __set_coinc_event_map_index(self):
+		self.coinc_event_map_index = {}
+		for connection_id, ConnectionNamedTuple in self.connection_id_map.items():
+			#
+			# Get sngl_inspiral table index now since nothing about it should change during
+			# the reranking process
+			#
+			#SnglInspiralTable = lsctables.SnglInspiralTable.get_table(dbtables.get_xml(ConnectionNamedTuple.connection))
+			#sngl_inspiral_table_index = dict((row.event_id, row) for row in SnglInspiralTable)
+			xmldoc = dbtables.get_xml(ConnectionNamedTuple.connection)
+			sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
+
+			#
+			# Create a dictionary that is keyed by coinc_event_id strings
+			# (as opposed to ilwd class instances) and populated by
+			# instances of the SnglInspiral class connected to the sngl
+			# inspiral events involved in the coincidence
+			#
+			self.coinc_event_map_index[connection_id] = {}
+			#for row in SnglInspiralTable:
+			for row in lsctables.CoincMapTable.get_table(xmldoc):
+				self.coinc_event_map_index[connection_id].setdefault(str(row.coinc_event_id), []).append(sngl_inspiral_table_index[row.event_id])
+
+	def __set_offset_vectors(self):
+		self.offset_vectors = {}
+		for connection_id, ConnectionNamedTuple in self.connection_id_map.items():
+			#
+			# Create a dictionary keyed by time_slide_id strings (as opposed to
+			# ilwd class instances) and populated by offset vector class instances
+			#
+			self.offset_vectors[connection_id] = {}
+			for (time_slide_id, ifo, offset) in ConnectionNamedTuple.connection.cursor().execute("select time_slide_id, instrument, offset from time_slide").fetchall():
+				self.offset_vectors[connection_id].setdefault(time_slide_id, offsetvector({})).update(offsetvector({ifo: offset}))
+
+	def get_coinc_event_definitions(self, subbank_events_map_list):
+		for connection_id, ConnectionNamedTuple in self.connection_id_map.items():
+			#
+			# Create a temp subbank in order to figure out which events came from which split bank
+			#
+			ConnectionNamedTuple.connection.cursor().execute("""
+			CREATE TEMP TABLE 
+				subbank (mass1 REAL, mass2 REAL, spin1z REAL, spin2z REAL)
+			""")
+
+			ConnectionNamedTuple.connection.cursor().executemany("""
+			INSERT INTO 
+				subbank 
+			VALUES (?, ?, ?, ?)
+			""", subbank_events_map_list)
+
+			#
+			# Create a dictionary keyed by coinciden event ids of
+			# events in the database that come from this subbank
+			#
+			self.coinc_event_definitions[connection_id] = dict((coinc_event_id_tuple[0], None) for coinc_event_id_tuple in ConnectionNamedTuple.connection.cursor().execute("""
+			SELECT 
+				coinc_event_id
+			FROM
+				coinc_event_map
+			WHERE
+				event_id 
+			IN
+				(SELECT 
+					sngl_inspiral.event_id
+				FROM
+					sngl_inspiral, subbank
+				WHERE
+					sngl_inspiral.mass1 == subbank.mass1
+					AND 
+					sngl_inspiral.mass2 == subbank.mass2
+					AND 
+					sngl_inspiral.spin1z == subbank.spin1z
+					AND 
+					sngl_inspiral.spin2z == subbank.spin2z
+				)
+			GROUP BY
+				coinc_event_id
+			"""))
+			ConnectionNamedTuple.connection.cursor().execute("DROP TABLE subbank")
+			
+			#
+			# If there are no events from this split bank in the database
+			# then there is nothing else to do for this bank id
+			#
+			if not self.coinc_event_definitions[connection_id]:
+				continue
+
+			#
+			# Populate the dictionary with each coincident event's
+			# original coincident definer id
+			#
+			for coinc_event_id in self.coinc_event_definitions[connection_id].keys():
+				self.coinc_event_definitions[connection_id][coinc_event_id], = ConnectionNamedTuple.connection.cursor().execute("""
+				SELECT
+					coinc_def_id
+				FROM
+					coinc_event
+				WHERE
+					coinc_event_id == ?
+				""", (coinc_event_id,)).fetchone()
+
+			#
+			# Change the coinc_def_id so that we can tell the tools assigning new
+			# likelihood ratio values to only focus on these events that we want
+			# reranked
+			#
+			ConnectionNamedTuple.connection.cursor().executemany("""
+			UPDATE
+				coinc_event
+			SET
+				coinc_def_id = ?
+			WHERE
+				coinc_event_id == ?
+			""", [(self.tmp_coinc_def_id, coinc_event_id) for coinc_event_id in self.coinc_event_definitions[connection_id].keys()])
+
+	def assign_new_likelihoods(self, ln_likelihood_ratio_func, likelihood_params_func):
+		for connection_id, ConnectionNamedTuple in self.connection_id_map.items():
+			if not self.coinc_event_definitions[connection_id]:
+				continue
+
+			ligolw_burca2.assign_likelihood_ratios(ConnectionNamedTuple.connection,
+				coinc_def_id = self.tmp_coinc_def_id,
+				offset_vectors = self.offset_vectors[connection_id],
+				vetoseglists = segments.segmentlistdict(),
+				events_func = lambda _, coinc_event_id: self.coinc_event_map_index[connection_id][coinc_event_id],
+				veto_func = lambda event, vetoseglists: True, # Obviously you would never veto any of the events in the database
+				ln_likelihood_ratio_func = ln_likelihood_ratio_func, 
+				likelihood_params_func = likelihood_params_func, 
+				verbose = self.verbose)
+
+	
+	def reset_coinc_event_definitions(self):
+		for connection_id, coinc_event_definitions in self.coinc_event_definitions.items():
+			if not coinc_event_definitions:
+				continue
+
+			self.connection_id_map[connection_id].connection.cursor().executemany("""
+			UPDATE
+				coinc_event
+			SET
+				coinc_def_id = ?
+			WHERE
+				coinc_event_id == ?
+			""", zip(coinc_event_definitions.values(), coinc_event_definitions.keys()))
+		self.coinc_event_definitions = {}
+
+	def finish(self): 
+		#
+		# Close connections and replace original files with updated
+		# working files
+		#
+		for ConnectionNamedTuple in self.connection_id_map.values():
+			ConnectionNamedTuple.connection.commit()
+			ConnectionNamedTuple.connection.close()
+			dbtables.put_connection_filename(ConnectionNamedTuple.database, ConnectionNamedTuple.working_filename, verbose = self.verbose)
+			
+
+#
+# =============================================================================
+#
+#                             Function Definitions
+#
+# =============================================================================
+#
+
+def get_subbank_maps(svd_banks, options):
+	subbank_events_map_index = {}
+	subbank_likelihood_file_map_index = {}
+	for svd_bank in svd_banks:
+		bank_id = None
+		banks = inspiral.parse_bank_files(svd_bank, verbose = options.verbose).values()[0]
+		for bank in banks:
+			#
+			# Create a dict keyed by bank id and populated by a
+			# list of (mass1, mass2, spin1z, spin2z) tuples
+			#
+			if bank_id is None:
+				bank_id = bank.bank_id.split('_')[0]
+			subbank_events_map_index.setdefault(bank_id,[]).extend([(repr(mass1), repr(mass2), repr(spin1z), repr(spin2z)) for mass1, mass2, spin1z, spin2z in zip(bank.sngl_inspiral_table.get_column('mass1'), bank.sngl_inspiral_table.get_column('mass2'), bank.sngl_inspiral_table.get_column('spin1z'), bank.sngl_inspiral_table.get_column('spin2z'))])
+			
+		#
+		# Create a dict keyed by bank id and populated by a list of
+		# likelihood files associated with that bank id
+		#
+		subbank_likelihood_file_map_index[bank_id] = [likelihood_file for likelihood_file in options.likelihood_files if '-%d_' % int(bank_id) in likelihood_file]
+		if options.global_likelihood_file:
+			subbank_likelihood_file_map_index[bank_id].extend(options.global_likelihood_file)
+
+	return subbank_events_map_index, subbank_likelihood_file_map_index
+
+def get_likelihood_funcs(likelihood_files, options):
+	coinc_params_distributions = None
+	seglists = segments.segmentlistdict()
+	for likelihood_file in likelihood_files:
+		this_coinc_params_distribution, _, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
+		if coinc_params_distributions is None:
+			coinc_params_distributions = this_coinc_params_distribution
+		else:
+			coinc_params_distributions += this_coinc_params_distribution
+		seglists |= this_seglists
+
+	#
+	# Compute the probability of instruments given signal and the
+	# instrument combination counts
+	#
+	coinc_params_distributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
+	coinc_params_distributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
+
+	return coinc_params_distributions.coinc_params, snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+options, databases, svd_banks, process_params = parse_command_line()
+
+subbank_events_map_index, subbank_likelihood_file_map_index = get_subbank_maps(svd_banks, options)
+
+#
+# Get database parameters necessary for all of the subbank likelihood
+# calculations
+#
+connections = Connections(databases, options)
+for bank_id, subbank_events_map_list in sorted(subbank_events_map_index.items(), key = lambda (k, v): str(k).zfill(4)):
+	#
+	# Get coincident events that came from this split bank
+	#
+	connections.get_coinc_event_definitions(subbank_events_map_list)
+
+	#
+	# Get the correct likelihood functions from the approriate likelihood
+	# files
+	#
+	likelihood_params_func, ln_likelihood_ratio_func = get_likelihood_funcs(subbank_likelihood_file_map_index[bank_id], options)
+
+	#
+	# Assign new likelihood ratios
+	#
+	connections.assign_new_likelihoods(ln_likelihood_ratio_func, likelihood_params_func)
+
+	#
+	# Return the coinc_def_id's back to their original value
+	#
+	connections.reset_coinc_event_definitions()
+
+connections.finish()

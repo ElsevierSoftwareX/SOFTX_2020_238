@@ -1,0 +1,90 @@
+SHELL:=/bin/bash
+
+#
+# Analysis directories
+#
+DIR1=/home/gstlalcbc/observing/1/offline/1126051217-1127271617-run1
+DIR2=/home/gstlalcbc/observing/1/offline/1127271617-1128299417-run2-2
+DIR3=/home/gstlalcbc/observing/1/offline/1128299417-1129383017-run3-rerun
+DIRS=$(DIR1) $(DIR2) $(DIR3) 
+
+#
+# Required files and caches
+#
+COMBINED_DIST_FILES=$(shell for MASSBIN in $(shell seq 0 247); do echo gstlal_inspiral_calc_rank_pdfs/H1L1-$${MASSBIN}_CALC_RANK_PDFS_WITH_ZEROLAG-1126051217-3384954051.xml.gz; done)
+LIKELIHOOD_CACHES=$(shell for x in $(shell seq 0 247); do echo gstlal_inspiral_calc_rank_pdfs/likelihood_$${x}; done)
+CALC_RANK_CACHES=$(shell for x in $(shell seq 0 15); do echo gstlal_inspiral_marginalize_likelihood/calc_rank_$${x}.cache; done)
+MARGINALIZED_FILES=$(shell for x in $(shell seq 0 15); do echo gstlal_inspiral_marginalize_likelihood/$${x}_marginalized_likelihood.xml.gz; done)
+DATABASES=$(shell for DIR in $(DIRS); do echo $${DIR}/H1L1-ALL_LLOID-*sqlite; done)
+DATABASES_WITH_NEW_LIKELIHOOD=$(shell for DATABASE in $(DATABASES); do basename $${DATABASE} | sed -e 's/ALL_LLOID/ALL_LLOID_WITH_ZEROLAG/g' -e 's/sqlite/original_far.sqlite/g'; done)
+
+
+all : gstlal_inspiral_marginalize_likelihood gstlal_inspiral_calc_rank_pdfs gstlal_inspiral_recalc_likelihood_with_zerolag post_marginalized_likelihood.xml.gz
+
+gstlal_inspiral_marginalize_likelihood :
+	mkdir $@
+
+gstlal_inspiral_calc_rank_pdfs :
+	mkdir $@
+
+gstlal_inspiral_recalc_likelihood_with_zerolag :
+	mkdir $@
+
+
+post_marginalized_likelihood.xml.gz : marginalized_likelihood.xml.gz databases_with_new_likelihood
+	ARG_STR="" && \
+	for DATABASE in $(DATABASES_WITH_NEW_LIKELIHOOD); do \
+		ARG_STR="--non-injection-db $${DATABASE} $${ARG_STR}"; \
+	done && \
+	gstlal_compute_far_from_snr_chisq_histograms --background-bins-file marginalized_likelihood.xml.gz --tmp-space $${TMPDIR} --verbose --force $${ARG_STR}
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.original_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.sqlite
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.original_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.sqlite
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.original_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.sqlite
+
+marginalized_likelihood.xml.gz : $(MARGINALIZED_FILES)
+	gstlal_inspiral_marginalize_likelihood --verbose --add-zerolag-to-background --output $@ $^
+
+%_marginalized_likelihood.xml.gz : calc_rank_%.cache
+	gstlal_inspiral_marginalize_likelihood --verbose --add-zerolag-to-background --likelihood-cache $(shell dirname $*)/calc_rank_$(shell basename $*).cache --output $@
+
+calc_rank_%.cache : $(COMBINED_DIST_FILES)
+	for MASSBIN in $$(seq $$(($(shell basename $*) * 16)) $$(($$(($(shell basename $*) * 16)) + 15))); do \
+		if [ $${MASSBIN} -gt 247 ]; then \
+			continue; \
+		else \
+			ls gstlal_inspiral_calc_rank_pdfs/H1L1-$${MASSBIN}_CALC_RANK_PDFS_WITH_ZEROLAG*.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@; \
+		fi; \
+	done
+
+databases_with_new_likelihood : gstlal_inspiral_recalc_likelihood_with_zerolag/likelihood.cache gstlal_inspiral_recalc_likelihood_with_zerolag/svd_bank.cache
+	cp $(DIR1)/H1L1-ALL_LLOID-1126051217-1220400.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.original_likelihood_far.sqlite
+	cp $(DIR2)/H1L1-ALL_LLOID-1127271617-1027800.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.original_likelihood_far.sqlite
+	cp $(DIR3)/H1L1-ALL_LLOID-1128299417-1083600.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.original_likelihood_far.sqlite
+	/home/cody.messick/reranking/gstlal_inspiral_recalc_likelihood_with_zerolag --verbose \
+		--likelihood-cache gstlal_inspiral_recalc_likelihood_with_zerolag/likelihood.cache \
+		--svd-bank-cache gstlal_inspiral_recalc_likelihood_with_zerolag/svd_bank.cache \
+		--tmp-space $${TMPDIR} \
+		H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.original_likelihood_far.sqlite \
+		H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.original_likelihood_far.sqlite \
+		H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.original_likelihood_far.sqlite && \
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.original_likelihood_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1126051217-1220400.original_far.sqlite && \
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.original_likelihood_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1127271617-1027800.original_far.sqlite && \
+	mv H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.original_likelihood_far.sqlite H1L1-ALL_LLOID_WITH_ZEROLAG-1128299417-1083600.original_far.sqlite && \
+	touch $@
+
+gstlal_inspiral_recalc_likelihood_with_zerolag/likelihood.cache : $(COMBINED_DIST_FILES) 
+	ls $(COMBINED_DIST_FILES) | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@
+
+gstlal_inspiral_recalc_likelihood_with_zerolag/svd_bank.cache : 
+	ls $(shell echo $(DIRS) | cut -d\  -f1)/gstlal_svd_bank/*_SVD-*.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@
+
+H1L1-%_CALC_RANK_PDFS_WITH_ZEROLAG-1126051217-3384954051.xml.gz : likelihood_%.cache 
+	gstlal_inspiral_calc_rank_pdfs --likelihood-cache $(shell dirname $*)/likelihood_$(shell basename $*).cache --verbose --add-zerolag-to-background --ranking-stat-samples 1000000 --output $@
+
+likelihood_%.cache : 
+	for DIR in $(DIRS); do \
+		ls $${DIR}/gstlal_inspiral/H1L1-$(shell basename $*)_DIST_STATS*.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@ && \
+		ls $${DIR}/gstlal_inspiral_create_prior_diststats/H1L1-$(shell basename $*)_CREATE_PRIOR_DIST_STATS*.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@ && \
+		ls $${DIR}/gstlal_inspiral_create_prior_diststats/H1L1-SNR_PDFS_CREATE_PRIOR_DIST_STATS*.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' >> $@; \
+	done
+
