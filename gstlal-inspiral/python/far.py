@@ -1896,7 +1896,7 @@ class RankingData(object):
 	ln_likelihood_ratio_threshold = NegInf
 
 
-	def __init__(self, coinc_params_distributions, instruments, process_id = None, nsamples = 1000000, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments, ranking_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -1928,6 +1928,9 @@ class RankingData(object):
 		# binnings.  one thread per instrument combination
 		#
 
+		if ranking_coinc_params_distributions is None:
+			ranking_coinc_params_distributions = coinc_params_distributions
+
 		threads = []
 		for key in self.background_likelihood_rates:
 			if verbose:
@@ -1937,7 +1940,7 @@ class RankingData(object):
 				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
-				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
+				snglcoinc.LnLikelihoodRatio(ranking_coinc_params_distributions).samples(coinc_params_distributions.random_params(key)),
 				nsamples = nsamples
 			))
 			p.start()

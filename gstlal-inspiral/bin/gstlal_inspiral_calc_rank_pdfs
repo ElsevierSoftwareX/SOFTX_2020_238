@@ -35,6 +35,7 @@
 #
 
 
+import copy
 from optparse import OptionParser
 import sys
 
@@ -125,7 +126,12 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 # correctly)
 #
 
-if options.add_zerolag_to_background:
+
+if not options.add_zerolag_to_background:
+	ranking_coincparamsdistributions = coincparamsdistributions
+else:
+	ranking_coincparamsdistributions = copy.deepcopy(coincparamsdistributions)
+	ranking_coincparamsdistributions.finish(verbose = options.verbose)
 	coincparamsdistributions.zero_lag_in_background = True
 coincparamsdistributions.finish(verbose = options.verbose)
 
@@ -148,7 +154,7 @@ for horizon_distances in coincparamsdistributions.horizon_history.all():
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), nsamples = options.ranking_stat_samples, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), ranking_coinc_params_distributions = ranking_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
