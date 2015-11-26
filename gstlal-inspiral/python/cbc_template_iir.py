@@ -577,7 +577,7 @@ class Bank(object):
 		# Open template bank file
 		self.template_bank_filename = filename
 		tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-	        sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
 		fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 		self.flower = flower
 		self.epsilon = epsilon
@@ -592,9 +592,9 @@ class Bank(object):
 			logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
 			logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
 
-	        Amat = {}
-       		Bmat = {}
-	        Dmat = {}
+			Amat = {}
+			Bmat = {}
+			Dmat = {}
 
 		# Check parity of autocorrelation length
 		if autocorrelation_length is not None:
@@ -618,10 +618,10 @@ class Bank(object):
 		# joliens_function is now replaced by lalsimulation calls
 		# working_f_low_extra_time, working_f_low = cbc_template_fir.joliens_function(flower, sngl_inspiral_table)
 		if not sngl_inspiral_table:
-		  raise ValueError("template list is empty")
+			raise ValueError("template list is empty")
 
 		if flower < 0:
-		  raise ValueError("flow must be >= 0.: %s" % repr(flower))
+			raise ValueError("flow must be >= 0.: %s" % repr(flower))
 
 		template = min(sngl_inspiral_table, key = lambda row: row.mchirp)
 		# FIXME: when large spins present, lowest chirp mass might not correspond to longest chirp time
@@ -639,7 +639,12 @@ class Bank(object):
 
 		# Smooth the PSD and interpolate to required resolution
 		if psd is not None:
-			psd = cbc_template_fir.condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, flower), maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0))
+			psd = cbc_template_fir.condition_psd(
+								psd, 
+								1.0 / working_duration, 
+								minfs = (working_f_low, flower), 
+								maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0)
+								)
 			# This is to avoid nan amp when whitening the amp 
 			tmppsd = psd.data
 			tmppsd[numpy.isinf(tmppsd)] = 1.0
@@ -655,118 +660,118 @@ class Bank(object):
 
 		original_epsilon = epsilon
 		epsilon_increment = 0.001
-	        for tmp, row in enumerate(sngl_inspiral_table):
-		    spiir_match = -1
-		    epsilon = original_epsilon
-		    n_filters = 0
+		for tmp, row in enumerate(sngl_inspiral_table):
+			spiir_match = -1
+			epsilon = original_epsilon
+			n_filters = 0
 
-		    while(spiir_match < req_min_match and epsilon > 0 and n_filters < 2000):
-			m1 = row.mass1
-			m2 = row.mass2
+			while(spiir_match < req_min_match and epsilon > 0 and n_filters < 2000):
+				m1 = row.mass1
+				m2 = row.mass2
 			
-			spin1x = row.spin1x
-			spin1y = row.spin1y
-			spin1z = row.spin1z
+				spin1x = row.spin1x
+				spin1y = row.spin1y
+				spin1z = row.spin1z
 
-			spin2x = row.spin2x
-			spin2y = row.spin2y
-			spin2z = row.spin2z
+				spin2x = row.spin2x
+				spin2y = row.spin2y
+				spin2z = row.spin2z
 
-			fFinal = row.f_final
+				fFinal = row.f_final
 
-			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
+				amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
 			
-			iir_type_flag = 1
-	              	# make the iir filter coeffs
-       	        	a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
+				iir_type_flag = 1
+				# make the iir filter coeffs
+				a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
 	
-               		# get the chirptime (nearest power of two)
-                	length = ceil_pow_2(amp.shape[0]+autocorrelation_length)
+				# get the chirptime (nearest power of two)
+				length = ceil_pow_2(amp.shape[0]+autocorrelation_length)
 
-                	# get the IIR response
-                	u = spawaveform.iirresponse(length, a1, b0, delay)
+				# get the IIR response
+				u = spawaveform.iirresponse(length, a1, b0, delay)
 
-	                #u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
-	                #u_pad[-len(u):] = u
+				#u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+				#u_pad[-len(u):] = u
 
-			u_rev = u[::-1]
-	                u_rev_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
-	                u_rev_pad[-len(u_rev):] = u_rev
+				u_rev = u[::-1]
+				u_rev_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+				u_rev_pad[-len(u_rev):] = u_rev
 
-	                norm_u = 1.0/numpy.sqrt(2.0)*((u_rev_pad * numpy.conj(u_rev_pad)).sum()**0.5)
-	                u_rev_pad /= norm_u
-			#u_pad /= norm_u
+				norm_u = 1.0/numpy.sqrt(2.0)*((u_rev_pad * numpy.conj(u_rev_pad)).sum()**0.5)
+				u_rev_pad /= norm_u
+				#u_pad /= norm_u
 
-	                # normalize the iir coefficients
-	                b0 /= norm_u
+				# normalize the iir coefficients
+				b0 /= norm_u
 
-	                # get the original waveform
-	                h = amp * numpy.exp(1j * phase)
-	                h_pad = numpy.zeros(length * 1, dtype=numpy.double)
-	                h_pad[-len(h):] = h.real
+				# get the original waveform
+				h = amp * numpy.exp(1j * phase)
+				h_pad = numpy.zeros(length * 1, dtype=numpy.double)
+				h_pad[-len(h):] = h.real
 
-			norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
-	                h_pad /= norm_h
+				norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
+				h_pad /= norm_h
+				self.sigmasq.append(1.0 * norm_h / sampleRate)
+
+
+				# This is actually the cross correlation between the original waveform and this approximation
+				self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
+
+			
+				h_pad1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
+				h_pad1[-len(h):] = h
+
+				norm_h1 = numpy.sqrt(abs(numpy.dot(h_pad1, numpy.conj(h_pad1))))
+				h_pad1 /= norm_h1
+			
+				# compute the SNR
+				spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad1)))/numpy.sqrt(2)
+				if(abs(original_epsilon - epsilon) < 1e-5):
+					original_match = spiir_match
+					original_filters = len(a1)
+
+				if(spiir_match < req_min_match):
+					epsilon -= epsilon_increment
+
+			self.matches.append(spiir_match)
 			self.sigmasq.append(1.0 * norm_h / sampleRate)
+			n_filters = len(a1)
 
+			if verbose:
+				logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))	
+			# get the filter frequencies
+			fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
+			a1dict = {}
+			b0dict = {}
+			delaydict = {}
 
-        	        # This is actually the cross correlation between the original waveform and this approximation
-			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
+			if downsample:
+				min_M = 1
+				max_M = int( 2**numpy.floor(numpy.log2(sampleRate/flower)))
+				# iterate over the frequencies and put them in the right downsampled bin
+				for i, f in enumerate(fs):
+					M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding) ) )) # Decimation factor
+					M = max(min_M, M)
 
-			
-	                h_pad1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
-	                h_pad1[-len(h):] = h
+					if M > max_M:
+						continue
 
-			norm_h1 = numpy.sqrt(abs(numpy.dot(h_pad1, numpy.conj(h_pad1))))
-	                h_pad1 /= norm_h1
-			
-			# compute the SNR
-			spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad1)))/numpy.sqrt(2)
-			if(abs(original_epsilon - epsilon) < 1e-5):
-			    original_match = spiir_match
-			    original_filters = len(a1)
+					a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
+					newdelay = numpy.ceil((delay[i]+1)/(float(M)))
+					b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
+					delaydict.setdefault(sampleRate/M, []).append(newdelay)
+				#logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
+			else:
+				a1dict[int(sampleRate)] = a1
+				b0dict[int(sampleRate)] = b0
+				delaydict[int(sampleRate)] = delay
 
-			if(spiir_match < req_min_match):
-				epsilon -= epsilon_increment
-
-		    self.matches.append(spiir_match)
-		    self.sigmasq.append(1.0 * norm_h / sampleRate)
-		    n_filters = len(a1)
-
-		    if verbose:
-			    logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))	
-		    # get the filter frequencies
-		    fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
-		    a1dict = {}
-		    b0dict = {}
-		    delaydict = {}
-
-		    if downsample:
-			    min_M = 1
-			    max_M = int( 2**numpy.floor(numpy.log2(sampleRate/flower)))
-			    # iterate over the frequencies and put them in the right downsampled bin
-			    for i, f in enumerate(fs):
-				    M = int(max(min_M, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding) ) )) # Decimation factor
-				    M = max(min_M, M)
-
-				    if M > max_M:
-				      continue
-
-				    a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
-				    newdelay = numpy.ceil((delay[i]+1)/(float(M)))
-				    b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
-				    delaydict.setdefault(sampleRate/M, []).append(newdelay)
-			    #logging.info("sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay))
-		    else:
-			    a1dict[int(sampleRate)] = a1
-			    b0dict[int(sampleRate)] = b0
-			    delaydict[int(sampleRate)] = delay
-
-		    # store the coeffs
-		    for k in a1dict.keys():
-			    Amat.setdefault(k, []).append(a1dict[k])
-			    Bmat.setdefault(k, []).append(b0dict[k])
-			    Dmat.setdefault(k, []).append(delaydict[k])
+			# store the coeffs
+			for k in a1dict.keys():
+				Amat.setdefault(k, []).append(a1dict[k])
+				Bmat.setdefault(k, []).append(b0dict[k])
+				Dmat.setdefault(k, []).append(delaydict[k])
 
 
 		max_rows = max([len(Amat[rate]) for rate in Amat.keys()])
