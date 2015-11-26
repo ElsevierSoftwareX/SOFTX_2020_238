@@ -1,3 +1,10 @@
+gstlal-calibration (0.5.9-1) unstable; urgency=low
+
+  * Bug fix to random seg fault issue
+  * Update to averaging routine for factors
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 25 Nov 2015 20:53:00 -0500
+
 gstlal-calibration (0.5.8-1) unstable; urgency=low
 
   * Bug fixes to factors computation

@@ -2,3 +2,5 @@ usr/bin/*
 usr/lib/gstreamer-*/python/*
 usr/lib/gstreamer-*/libgstlalcalibration.a
 usr/lib/gstreamer-*/libgstlalcalibration.so
+usr/lib/gstreamer-*/libgstlalinterleave.a
+usr/lib/gstreamer-*/libgstlalinterleave.so
