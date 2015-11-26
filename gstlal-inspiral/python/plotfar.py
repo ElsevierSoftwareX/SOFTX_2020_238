@@ -316,12 +316,10 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_ln_likelihood_ratio = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
-	ccdf = fapfar.ccdf_interpolator
 	x = numpy.linspace(xlo, xhi, 10000)
-	y = far.fap_after_trials_arr(ccdf(x), fapfar.zero_lag_total_count)
-	axes.semilogy(x, y, color = "k")
+	axes.semilogy(x, map(fapfar.fap_from_rank, x), color = "k")
 
-	ylo = far.fap_after_trials(ccdf(xhi), fapfar.zero_lag_total_count)
+	ylo = fapfar.fap_from_rank(xhi)
 	ylo = 10**math.floor(math.log10(ylo))
 	yhi = 10.
 
