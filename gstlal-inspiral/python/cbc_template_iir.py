@@ -664,24 +664,17 @@ class Bank(object):
 			spiir_match = -1
 			epsilon = original_epsilon
 			n_filters = 0
+				
+			m1 = row.mass1
+			m2 = row.mass2
+			fFinal = row.f_final
+
+			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+			
+			iir_type_flag = 1
 
 			while(spiir_match < req_min_match and epsilon > 0 and n_filters < 2000):
-				m1 = row.mass1
-				m2 = row.mass2
-			
-				spin1x = row.spin1x
-				spin1y = row.spin1y
-				spin1z = row.spin1z
-
-				spin2x = row.spin2x
-				spin2y = row.spin2y
-				spin2z = row.spin2z
-
-				fFinal = row.f_final
-
-				amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, spin1x, spin1y, spin1z, spin2x, spin2y, spin2z)
-			
-				iir_type_flag = 1
+				
 				# make the iir filter coeffs
 				a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
 	
