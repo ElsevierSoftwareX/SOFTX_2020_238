@@ -92,9 +92,8 @@ class OnlinePerformer(object):
 			for time, latency in self.latency_history:
 				yield "%f %e\n" % (time, latency)
 
-	def __update_eye_candy(self, candidate):
+	def update_eye_candy(self, candidate):
 		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end))
-		print >>sys.stderr, latency_val
 		self.latency_history.append(latency_val)
 
 
@@ -221,7 +220,7 @@ class FinalSink(object):
 					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold:
 						self.__do_gracedb_alerts(self.candidate)
 					if self.need_online_perform:
-						self.onperformer.__update_eye_candy(self.candidate)
+						self.onperformer.update_eye_candy(self.candidate)
 					self.candidate = None
 					self.need_candidate_check = False
 
