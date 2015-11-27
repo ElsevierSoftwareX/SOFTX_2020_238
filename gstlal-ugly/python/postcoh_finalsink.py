@@ -331,7 +331,7 @@ class FinalSink(object):
 		# Setting the H1 row
 		row.process_id = "process:process_id:10"
 		row.ifo = "L1"
-		row.search = "tmpltbank"
+		row.search = self.path
 		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = trigger.end_time_L
 		row.end_time_ns = trigger.end_time_ns_L
@@ -400,7 +400,7 @@ class FinalSink(object):
 		# Setting the the other row
 		row.process_id = "process:process_id:10"
 		row.ifo = "H1"
-		row.search = "tmpltbank"
+		row.search = self.path
 		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = trigger.end_time_H
 		row.end_time_ns = trigger.end_time_ns_H 
