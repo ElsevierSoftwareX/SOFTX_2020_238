@@ -108,7 +108,7 @@ else:
 	log10cohsnr = np.log10(options.cohsnr)
 	log10chisq = np.log10(options.combchisq)
 
-CM = pyplot.scatter(log10cohsnr, log10chisq, color = 'k', marker = 'o', markersize = 10, facecolors = 'none')
+CM = pyplot.scatter(log10cohsnr, log10chisq, color = 'k', marker = 'o', s = 10, facecolors = 'none')
 pyplot.xlabel('log10(CohSNR)')	
 pyplot.ylabel('log10(CombinedChisq)')	
 pyplot.title('FAP')
