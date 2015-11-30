@@ -706,17 +706,11 @@ class Data(object):
 			self.coincs_document.commit()
 
 			# update zero-lag coinc bin counts in
-			# coinc_params_distributions.  NOTE:  if likelihood
-			# ratios are known then these are the counts of
-			# occurances of parameters in coincs above
-			# threshold, otherwise they are the counts of
-			# occurances of parameters in all coincs.  knowing
-			# the meaning of the counts that get recorded is
-			# left as an exercise to the user
+			# coinc_params_distributions.
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-					if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+					if not any(offset_vector.values()):
 						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 			# Cluster last coincs before recording number of zero
@@ -737,7 +731,7 @@ class Data(object):
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
 					instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-					if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
+					if coinc_event.likelihood is not None and not any(offset_vector.values()):
 						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 			# do GraceDB alerts
@@ -813,7 +807,7 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				if (coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold or self.marginalized_likelihood_file is None) and not any(offset_vector.values()):
+				if not any(offset_vector.values()):
 					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
 
 		# Cluster last coincs before recording number of zero
@@ -833,7 +827,7 @@ class Data(object):
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
 				instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-				if (coinc_event.likelihood is not None and coinc_event.likelihood >= far.RankingData.ln_likelihood_ratio_threshold) and not any(offset_vector.values()):
+				if coinc_event.likelihood is not None and not any(offset_vector.values()):
 					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 

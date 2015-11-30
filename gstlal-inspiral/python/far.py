@@ -1889,13 +1889,6 @@ class RankingData(object):
 		"ln_likelihood_ratio": rate.gaussian_window(8.)
 	}
 
-	#
-	# Threshold at which FAP & FAR normalization will occur
-	#
-
-	ln_likelihood_ratio_threshold = NegInf
-
-
 	def __init__(self, coinc_params_distributions, instruments, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
