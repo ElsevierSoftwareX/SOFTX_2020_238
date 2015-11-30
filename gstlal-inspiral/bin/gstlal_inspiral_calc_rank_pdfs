@@ -127,12 +127,12 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 #
 
 
-if not options.add_zerolag_to_background:
-	ranking_coincparamsdistributions = coincparamsdistributions
+if options.add_zerolag_to_background:
+	sampler_coincparamsdistributions = copy.deepcopy(coincparamsdistributions)
+	sampler_coincparamsdistributions.zero_lag_in_background = True
+	sampler_coincparamsdistributions.finish(verbose = options.verbose)
 else:
-	ranking_coincparamsdistributions = copy.deepcopy(coincparamsdistributions)
-	ranking_coincparamsdistributions.finish(verbose = options.verbose)
-	coincparamsdistributions.zero_lag_in_background = True
+	sampler_coincparamsdistributions = None
 coincparamsdistributions.finish(verbose = options.verbose)
 
 
@@ -154,7 +154,7 @@ for horizon_distances in coincparamsdistributions.horizon_history.all():
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), ranking_coinc_params_distributions = ranking_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
