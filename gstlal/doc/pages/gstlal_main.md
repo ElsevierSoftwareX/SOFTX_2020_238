@@ -2,24 +2,21 @@
 
 ## Getting Started
 
-- You can get a development copy of the gstlal software suite from git via:
-
-		$ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal
+- You can get a development copy of the gstlal software suite from git.  Follow the <a href="https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/advanced-lalsuite-git.html#clone">instructions for lalsuite</a>, but use "https://versions.ligo.org/git/lalsuite.git" for the repository URL.
 
 - Release tar balls and some binary packages are available <a href=https://www.lsc-group.phys.uwm.edu/daswg/download/repositories.html>here</a>.
 
-- Installation.  This follows the normal GNU buildsystem procedures involving 1) ./00init.sh 2) ./configure 3) make 4) make install.  You should build the packages in order of gstlal, gstlal-ugly, gstlal-calibration, gstlal-inspiral.  If you are building to a non FHS place (e.g. your home directory) you will need something like the following environment to be set before building and when using the software.  Please make sure your environment is sane and cruft free otherwise.
+- Build and install from source.  This follows the normal GNU build procedures involving 1) ./00init.sh 2) ./configure 3) make 4) make install.  You should build the packages in order of gstlal, gstlal-ugly, gstlal-calibration, gstlal-inspiral.  If you are building to a non FHS place (e.g., your home directory) you will need to ensure some environment variables are set so that your installation will function.  How to do this correct (what paths to use, etc.) is left as an exercise to the user, but the following five variables must be set, and the we show examples of what they should be set to ("${PREFIX}" is the path used for --prefix when configure was run)
 
-		# This is an install prefix that does not get used anywhere but this script, it is not exported !!!
-		INSTALLPATH=/home/channa/gstlocal
+		GI_TYPELIB_PATH="${PREFIX}/lib/girepository-1.0:${GI_TYPELIB_PATH}"
+		GST_PLUGIN_PATH="${PREFIX}/lib/gstreamer-0.10:${GST_PLUGIN_PATH}"
+		PATH="${PREFIX}/bin:${PATH}"
+		# Debian systems need lib, RH systems need lib64, including both doesn't hurt
+		PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig:${PREFIX}/lib64/pkgconfig:${PKG_CONFIG_PATH}"
+		# Debian systems need lib, RH systems need lib and lib64
+		PYTHONPATH="${PREFIX}/lib64/python2.6/site-packages:${PREFIX}/lib/python2.6/site-packages:$PYTHONPATH"
 
-		# These are environment variables that do get exported
-		PATH=${INSTALLPATH}/bin:$PATH
-		PKG_CONFIG_PATH=${INSTALLPATH}/lib64/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
-		PYTHONPATH=${INSTALLPATH}/lib64/python2.6/site-packages:${INSTALLPATH}/lib/python2.6/site-packages:$PYTHONPATH
-		GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${INSTALLPATH}/lib64/gstreamer-0.10:${GST_PLUGIN_PATH}
-
-		export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
+		export GI_TYPELIB_PATH GST_PLUGIN_PATH PATH PKG_CONFIG_PATH PYTHONPATH
 
 ## Documentation for gstlal elements
 
