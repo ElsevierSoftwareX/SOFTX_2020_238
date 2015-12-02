@@ -66,6 +66,8 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_libdir}/gstreamer-0.10/python/*
 %{_libdir}/gstreamer-0.10/libgstlalcalibration.a
 %{_libdir}/gstreamer-0.10/libgstlalcalibration.so
+%{_libdir}/gstreamer-0.10/libgstlaldeinterleave.a
+%{_libdir}/gstreamer-0.10/libgstlaldeinterleave.so
 %{_libdir}/gstreamer-0.10/libgstlalinterleave.a
 %{_libdir}/gstreamer-0.10/libgstlalinterleave.so
 %{_prefix}/%{_lib}/python*/site-packages/gstlal

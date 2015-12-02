@@ -28,8 +28,38 @@ import numpy
 import gst
 import sys
 import gobject
+from bisect import insort_left
+from numpy import floor
 
 from gstlal import pipeio
+
+#
+# =============================================================================
+#
+#                                  Classes
+#
+# =============================================================================
+#
+
+class Running_median_array:
+	def __init__(self, size):
+		self.max_size = size
+		self.current_size = 0
+		self.array = []
+		self.fifo_array = []
+
+	def add_and_return_median(self, new_data):
+		# If we're not at max, just add data; don't need to remove
+		if self.current_size < self.max_size:
+			insort_left(self.array, new_data)
+			self.fifo_array.append(new_data)
+			self.current_size = self.current_size + 1
+			return self.array[int(floor(self.current_size/2))]
+		else:
+			self.array.remove(self.fifo_array.pop(1))
+			insort_left(self.array, new_data)
+			self.fifo_array.append(new_data)
+			return self.array[int(floor(self.max_size/2))]	
 
 #
 # =============================================================================
@@ -39,7 +69,7 @@ from gstlal import pipeio
 # =============================================================================
 #
 
-def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_best_ts, rate):
+def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_best_ts, rate, running_median_array, statevector):
 	out = []
 	start_ts = inbuf.timestamp
 	current = numpy.frombuffer(inbuf[:], dtype = numpy.float64)
@@ -50,20 +80,32 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 		if diff <= var:
 			last_best = i
 			last_best_ts = current_ts
-			val = i
+			if statevector:
+				val = 1.0
+			else:
+				val = i
 		else:
 			if (current_ts - last_best_ts > wait_time_ns) and not numpy.isnan(i) and not numpy.isinf(i):
 				last_best = i
 				last_best_ts = current_ts
-				val = i
+				if statevector:
+					val = 1.0
+				else:
+					val = i
 			else:
-				val = last_best
-		out.append(val)
+				if statevector:
+					val = 0.0
+				else:
+					val = last_best
+		if statevector:
+			out.append(val)
+		else:
+			out.append(running_median_array.add_and_return_median(val))
 	out = numpy.array(out, dtype = numpy.float64)
 	output_samples = len(out)
 	out_len = out.nbytes
 	outbuf[:out_len] = numpy.getbuffer(out)
-	return last_best, last_best_ts, output_samples
+	return last_best, last_best_ts, output_samples, running_median_array
 
 #
 # =============================================================================
@@ -75,7 +117,7 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 
 class lal_check_calib_factors(gst.BaseTransform):
 	__gstdetails__ = (
-		"Create Statevector from Factors Computation",
+		"Smooth factors computation",
 		"Filter/Audio",
 		"Checks the value of calibration factors have not changed by more than a specified amount from the last good computed value.",
 		__author__
@@ -101,6 +143,20 @@ class lal_check_calib_factors(gst.BaseTransform):
 			"Default",
 			"Default value for channel to take until acceptable value is computed.",
 			-gobject.G_MAXDOUBLE, gobject.G_MAXDOUBLE, 1,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"median-array-size" : (
+			gobject.TYPE_UINT,
+			"Median array size",
+			"Size of median array for smoothing",
+			0, gobject.G_MAXUINT, 2048,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"state-vector-mode" : (
+			gobject.TYPE_BOOLEAN,
+			"State vector mode",
+			"Produce state vector of 1s and 0s instead of smoothed kappas",
+			False,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		)
 	}
@@ -141,6 +197,10 @@ class lal_check_calib_factors(gst.BaseTransform):
 			self.wait = val
 		elif prop.name == "default":
 			self.default = val
+		elif prop.name == "median-array-size":
+			self.running_median_array = Running_median_array(int(val))
+		elif prop.name == "state-vector-mode":
+			self.statevector = val
 
 	def do_get_property(self, prop):
 		if prop.name == "variance":
@@ -149,6 +209,10 @@ class lal_check_calib_factors(gst.BaseTransform):
 			return self.wait
 		elif prop.name == "default":
 			return self.default
+		elif prop.name == "median-array-size":
+			return self.running_median_array.max_size
+		elif prop.name == "state-vector-mode":
+			return self.statevector
 
 	def do_get_unit_size(self, caps):
 		return pipeio.get_unit_size(caps)
@@ -200,7 +264,7 @@ class lal_check_calib_factors(gst.BaseTransform):
 		# Process buffer
 		if not gst.Buffer.flag_is_set(inbuf, gst.BUFFER_FLAG_GAP):
 			# Input is not 0s
-			self.last_best, self.last_best_ts, output_samples = determine_factor_value(inbuf, outbuf, self.var, self.wait * gst.SECOND, self.last_best, self.last_best_ts, self.rate) 
+			self.last_best, self.last_best_ts, output_samples, self.running_median_array = determine_factor_value(inbuf, outbuf, self.var, self.wait * gst.SECOND, self.last_best, self.last_best_ts, self.rate, self.running_median_array, self.statevector) 
 			self.set_metadata(outbuf, output_samples, False)
 		else:
 			# Input is 0s
