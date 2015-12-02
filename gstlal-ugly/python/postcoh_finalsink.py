@@ -51,8 +51,26 @@ from pylal.xlal.datatypes import postcohinspiraltable
 from gstlal import bottle
 from gstlal import reference_psd
 from gstlal import postcoh_table_def 
+
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
+#
+# =============================================================================
+#
+#                         glue.ligolw Content Handlers
+#
+# =============================================================================
+#
+
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+
+
+#
 class PostcohDocument(object):
 	def __init__(self, verbose = False):
 		self.get_another = lambda: PostcohDocument(verbose = verbose)
@@ -297,6 +315,7 @@ class FinalSink(object):
 		# coinc_event_index will only have one value, but we're
 		# future proofing this at the point where it could have
 		# multiple clustered events
+
 			
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
@@ -328,7 +347,7 @@ class FinalSink(object):
 		    pass
 		
 		# Setting the H1 row
-		row.process_id = "process:process_id:10"
+		row.process_id = "process:process_id:1"
 		row.ifo = "L1"
 		row.search = self.path
 		row.channel = "GDS-CALIB_STRAIN" 
@@ -391,13 +410,13 @@ class FinalSink(object):
 		row.spin2x = trigger.spin2x 
 		row.spin2y = trigger.spin2y 
 		row.spin2z = trigger.spin2z
-		row.event_id = "sngl_inspiral:event_id:%d" % self.nevent_clustered
+		row.event_id = "sngl_inspiral:event_id:1"
 	
 		sngl_inspiral_table.append(row)
 
 		row = sngl_inspiral_table.RowType()
 		# Setting the the other row
-		row.process_id = "process:process_id:10"
+		row.process_id = "process:process_id:1"
 		row.ifo = "H1"
 		row.search = self.path
 		row.channel = "GDS-CALIB_STRAIN" 
@@ -472,10 +491,10 @@ class FinalSink(object):
 		coinc_def_table.append(row)
 
 		row = coinc_table.RowType()
-		row.coinc_event_id = "coinc_event:coinc_event_id:2"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
 		row.instruments = trigger.ifos
 		row.nevents = 2
-		row.process_id = "process:process_id:5"
+		row.process_id = "process:process_id:1"
 		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
 		row.time_slide_id = "time_slide:time_slide_id:6"
 		row.likelihood = 0
@@ -487,37 +506,36 @@ class FinalSink(object):
 		row.minimum_duration = trigger.template_duration
 		row.mass = trigger.mtotal
 		row.end_time = trigger.end_time
-		row.coinc_event_id = "coinc_event:coinc_event_id:2"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
 		row.snr = trigger.cohsnr
 		row.end_time_ns = trigger.end_time_ns
 		row.combined_far = trigger.far
 		row.ifos = trigger.ifos
 		coinc_inspiral_table.append(row)
 
-		#row = coinc_map_table.RowType()
-		#pdb.set_trace()
-		#row.event_id = "sngl_inspiral:event_id:1"
-		#row.event_id = 1
-		#row.table_name = "sngl_inspiral"
-		#row.coinc_event_id = "coinc_event:coinc_event_id:2"
-		#row.coinc_event_id = 2
-		#coinc_map_table.append(row)
-		#row.event_id = "sngl_insipral:event_id:2"
-		#row.event_id = 2
-		#row.table_name = "sngl_inspiral"
-		#row.coinc_event_id = "coinc_event:coinc_event_id:2"
-		#row.coinc_event_id = 2
-		#coinc_map_table.append(row)
+		row = coinc_map_table.RowType()
+		row.event_id = "sngl_inspiral:event_id:1"
+		row.table_name = "sngl_inspiral"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		coinc_map_table.append(row)
+
+		row = coinc_map_table.RowType()
+		row.event_id = "sngl_insipral:event_id:2"
+		row.table_name = "sngl_inspiral"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		coinc_map_table.append(row)
 
 		row = time_slide_table.RowType()
 		row.instrument = "H1"
-		row.time_slide_id = "time_slide:time_slide_id:7"
-		row.process_id = "process:process_id:10"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.process_id = "process:process_id:1"
 		row.offset = 0
 		time_slide_table.append(row)
+
+		row = time_slide_table.RowType()
 		row.instrument = "L1"
-		row.time_slide_id = "time_slide:time_slide_id:7"
-		row.process_id = "process:process_id:10"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.process_id = "process:process_id:1"
 		row.offset = 0
 		time_slide_table.append(row)
 
