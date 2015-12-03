@@ -89,8 +89,6 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
-from gstlal import far
-from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import spiirparts

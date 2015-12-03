@@ -520,7 +520,7 @@ class FinalSink(object):
 		coinc_map_table.append(row)
 
 		row = coinc_map_table.RowType()
-		row.event_id = "sngl_insipral:event_id:2"
+		row.event_id = "sngl_inspiral:event_id:2"
 		row.table_name = "sngl_inspiral"
 		row.coinc_event_id = "coinc_event:coinc_event_id:1"
 		coinc_map_table.append(row)
