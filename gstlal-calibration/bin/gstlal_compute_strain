@@ -986,7 +986,7 @@ strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipelin
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
 except KeyError:
-	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3995.1)
+	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 strain = calibration_parts.mkaudiorate(pipeline, strain)
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
 	
