@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Kipp Cannon, Chad Hanna, Leo Singer
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+"""
+How to use:
+
+$ mkdir gstlal_inspiral_calc_rank_pdfs/
+$ gstlal_inspiral_recalc_rank_pdfs /path/to/*.cache
+
+where the list of LAL cache files names all cache files given to all of the
+original gstlal_inspiral_calc_rank_pdf jobs.  This script will build new
+caches in the gstlal_inspiral_calc_rank_pdfs/ ensuring that the paths in
+the caches are absolute (pointing to the original input files).
+
+You need to provide a condor submit file named
+"gstlal_inspiral_calc_rank_pdfs.sub".  An example is provided, but it will
+need to be edited in order to work correctly:   change the location of the
+log= file to a location you have write permission to, change the accounting
+group user, the path to the executable, etc..
+"""
+
+
+#
+# =============================================================================
+#
+#                                   Premable
+#
+# =============================================================================
+#
+
+
+import sys
+import os
+
+
+from glue import dagfile
+from glue.lal import CacheEntry
+from glue import segments
+from glue.text_progress_bar import ProgressBar
+from glue.ligolw.lsctables import ifos_from_instrument_set
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+progress = ProgressBar(text = "Building input caches", max = len(sys.argv[1:]))
+cachefiles = []
+for n, filename in enumerate(sorted(sys.argv[1:])):
+	progress.increment()
+	# directory containing cache file
+	directory = os.path.dirname(filename)
+	#  parent directory:  dagman's working directory
+	directory = os.path.join(directory, "..")
+
+	cache = map(CacheEntry, open(filename))
+
+	# if any of the cache entries use relative paths, convert to
+	# absolute paths by assuming them to be relative to dagman's
+	# working directory.  also collect the time and instruments spanned
+	# by this cache
+
+	seglists = segments.segmentlistdict()
+	for entry in cache:
+		seglists |= entry.segmentlistdict
+		if not os.path.isabs(entry.path):
+			entry.path = os.path.abspath(os.path.join(directory, entry.path))
+
+	cachefiles.append(CacheEntry(
+		ifos_from_instrument_set(seglists),
+		",".join(sorted(set(entry.description for entry in cache))),
+		seglists.extent_all(),
+		os.path.join("gstlal_inspiral_calc_rank_pdfs", "ranking_stat_cache_%04X.cache" % n)
+	))
+
+	open(cachefiles[-1].path, "w").writelines(map("%s\n".__mod__, cache))
+
+
+dag = dagfile.DAG()
+
+
+progress = ProgressBar(text = "Building DAG", max = len(cachefiles))
+pdfcache = []
+for n, entry in enumerate(cachefiles):
+	progress.increment()
+
+	output = CacheEntry(
+		entry.observatory,
+		entry.description,
+		entry.segment,
+		os.path.join("gstlal_inspiral_calc_rank_pdfs", "rank_stat_pdf_%04X.xml.gz" % n)
+	)
+
+	job = dagfile.JOB("calc_rank_pdfs_%04X" % n, "gstlal_inspiral_calc_rank_pdfs.sub")
+	job.vars = {
+		"macrooutput": output.path,
+		"macrolikelihoodcache": entry.path,
+		"macronodename": job.name
+	}
+
+	dag.nodes[job.name] = job
+
+	pdfcache.append(output)
+
+
+dag.reindex()
+def progress(f, n, done):
+	print "writing %s: %d lines\r" % (f.name, n),
+	if done:
+		print
+dag.write(open("recalc_pdfs.dag", "w"), progress)

@@ -1,0 +1,13 @@
+universe = vanilla
+executable = /home/kipp/local/bin/gstlal_inspiral_calc_rank_pdfs
+arguments = " --add-zerolag-to-background --output $(macrooutput) --likelihood-cache $(macrolikelihoodcache) "
+accounting_group = ligo.dev.o1.cbc.bbh.gstlaloffline
+accounting_group_user = kipp.cannon
+getenv = True
+environment = GST_REGISTRY_UPDATE=no;
+request_cpus = 1
+log = /localscratch/kipp/578d0c78fdsa
+error = logs/$(macronodename)-$(cluster)-$(process).err
+output = logs/$(macronodename)-$(cluster)-$(process).out
+notification = never
+queue 1
