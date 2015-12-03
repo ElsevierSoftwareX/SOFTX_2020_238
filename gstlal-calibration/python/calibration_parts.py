@@ -80,8 +80,13 @@ def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps
 def resample(pipeline, head, caps):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = mkaudiorate(pipeline, head)
-	#head = mkreblock(pipeline, head)
+	#head = mkaudiorate(pipeline, head)
+	return head
+
+def undersample(pipeline, head, caps):
+	head = pipeparts.mkaudioundersample(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	#head = mkaudiorate(pipeline, head)
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):

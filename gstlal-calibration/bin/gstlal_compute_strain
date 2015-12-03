@@ -180,7 +180,7 @@ parser.add_option("--apply-kappaa", action = "store_true", help = "Set this to h
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
 parser.add_option("--apply-kappac", action = "store_true", help = "Set this to have the \kappa_c factors multiply the sensing chain.")
-parser.add_option("--compute-factors-sr", metavar = "Hz", type = int, default = 512, help = "Sample rate at which calibration factors are computed. (Default = 512 Hz)")
+parser.add_option("--compute-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are computed. (Default = 16 Hz)")
 parser.add_option("--record-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are recorded. (Default = 16 Hz)")
 parser.add_option("--factors-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for calibration factors computation. (Default = 10 s)")
 parser.add_option("--expected-kappaa-real", metavar = "float", type = float, default = 1.0, help = "Expected value for the real part of \kappa_a. (Default = 1.0)")
@@ -899,7 +899,7 @@ if options.split_actuation_chain:
 		pumuim = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pum, uim), ctrl_caps)
 		pumuim = pipeparts.mkaudioconvert(pipeline, pumuim)
 		pumuim = pipeparts.mkcapsfilter(pipeline, pumuim, ctrl_caps) 
-		pumuim = pipeparts.mkfirbank(pipeline, pumuim, fir_matrix = [[0,1]], time_domain = td)
+		pumuim = pipeparts.mkfirfilter(pipeline, pumuim, kernel = [1], latency = 0)
 		if options.different_control_whitening:
 			pumuim = calibration_parts.resample(pipeline, pumuim, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % pumuimdewhitensr) 
 			pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
@@ -907,7 +907,7 @@ if options.split_actuation_chain:
 
 	if options.full_calibration:
 		ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, caps, "ctrl")
-		ctrl = pipeparts.mkfirbank(pipeline, ctrl, fir_matrix = [[0,1]], time_domain = td)
+		ctrl = pipeparts.mkfirfilter(pipeline, ctrl, kernel = [1], latency = 0)
 		ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 		ctrltee = pipeparts.mktee(pipeline, ctrl)
@@ -951,7 +951,7 @@ if options.split_actuation_chain:
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrlcorrdelay), fir_matrix = [ctrlcorrfilt[::-1]], time_domain = td)
 elif not options.split_actuation_chain:
 	ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, ctrl_caps, "ctrl")
-	ctrl = pipeparts.mkfirbank(pipeline, ctrl, fir_matrix = [[0,1]], time_domain = td)
+	ctrl = pipeparts.mkfirfilter(pipeline, ctrl, kernel = [1], latency = 0)
 	ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % ctrlfiltsr)
 	ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrlchaindelay), fir_matrix = [ctrlchainfilt[::-1]], time_domain = td)
 	ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, endianness=1234, channels=1, rate=%d" % ctrldewhitensr)
@@ -963,7 +963,7 @@ ctrl = calibration_parts.resample(pipeline, ctrl, caps)
 #
 
 res = calibration_parts.caps_and_progress(pipeline, res, caps, "res")
-res = pipeparts.mkfirbank(pipeline, res, fir_matrix = [[0,1]], time_domain = td) # FIXME: Not sure why this is needed... test more without it or debug the underlying issue.
+res = pipeparts.mkfirfilter(pipeline, res, kernel = [1], latency = 0) # FIXME: Not sure why this is needed... test more without it or debug the underlying issue.
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
@@ -1023,7 +1023,7 @@ if not options.no_dq_vector:
 	scienceintent = calibration_parts.mkqueue(pipeline, odcstatevectortee)
 	scienceintent = pipeparts.mkgeneric(pipeline, scienceintent, "lal_logical_undersampler", required_on = options.science_intent_bitmask, status_out = 2)
 	scienceintent = pipeparts.mkcapsfilter(pipeline, scienceintent, "audio/x-raw-int, width=32, depth=32, endianness=1234, channels=1, signed=false, rate=%d" % dqsr)
-	scienceintent = calibration_parts.mkaudiorate(pipeline, scienceintent)
+	#scienceintent = calibration_parts.mkaudiorate(pipeline, scienceintent)
 	scienceintenttee = pipeparts.mktee(pipeline, scienceintent)	
 
 	#
@@ -1032,7 +1032,7 @@ if not options.no_dq_vector:
 
 	sciencequality = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = options.science_quality_bitmask, status_out = 4)
 	sciencequality = pipeparts.mkcapsfilter(pipeline, sciencequality, "audio/x-raw-int, width=32, depth=32, channels=1, endianness=1234, signed=false, rate=%d" % dqsr)
-	sciencequality = calibration_parts.mkaudiorate(pipeline, sciencequality)
+	#sciencequality = calibration_parts.mkaudiorate(pipeline, sciencequality)
 	sciencequalitytee = pipeparts.mktee(pipeline, sciencequality)
 	
 	#
@@ -1044,7 +1044,7 @@ if not options.no_dq_vector:
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % sr)
 	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logical_undersampler", required_on = 8, status_out = 8)
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw-int, rate=%d, width=32, depth=32, signed=false, channels=1, endianness=1234" % dqsr)
-	htproduced = calibration_parts.mkaudiorate(pipeline, htproduced)
+	#htproduced = calibration_parts.mkaudiorate(pipeline, htproduced)
 
 	#
 	# FILTERS-OK BIT BRANCH
@@ -1053,7 +1053,7 @@ if not options.no_dq_vector:
 	# Set the FILTERS-OK bit based on science-quality transitions
 	filtersok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, scienceintenttee), bit_vector=16, threshold=2)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, "audio/x-raw-int, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-	filtersok = calibration_parts.mkaudiorate(pipeline, filtersok)
+	#filtersok = calibration_parts.mkaudiorate(pipeline, filtersok)
 	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok), control = calibration_parts.mkqueue(pipeline, scienceintenttee), threshold = 2, attack_length = -int(options.filter_settle_time) * dqsr)
 	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok), control = calibration_parts.mkqueue(pipeline, sciencequalitytee), threshold = 4, attack_length = -int(options.filter_settle_time) * dqsr)
 
@@ -1061,7 +1061,7 @@ if not options.no_dq_vector:
 	if not options.no_kappaa or not options.no_kappac or not options.no_kappatst or not options.no_kappapu or not options.no_fcc:	
 		averageok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, sciencequalitytee), bit_vector=1, threshold=4)
 		averageok = pipeparts.mkcapsfilter(pipeline, averageok, "audio/x-raw-int, wdith=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		averageok = calibration_parts.mkaudiorate(pipeline, averageok)
+		#averageok = calibration_parts.mkaudiorate(pipeline, averageok)
 		averageok = pipeparts.mktee(pipeline, averageok)
 
 	#
@@ -1075,7 +1075,7 @@ if not options.no_dq_vector:
 		
 		kaok = pipeparts.mkbitvectorgen(pipeline, kaRdq, threshold = options.kappaa_real_ok_var, invert_control = True, bit_vector = 512)
 		kaok = pipeparts.mkcapsfilter(pipeline, kaok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		kaok = calibration_parts.mkaudiorate(pipeline, kaok)
+		#kaok = calibration_parts.mkaudiorate(pipeline, kaok)
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = options.kappaa_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, kaIdq))
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kaok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kaok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kaRInRange))
@@ -1093,7 +1093,7 @@ if not options.no_dq_vector:
 		
 		kpuok = pipeparts.mkbitvectorgen(pipeline, kpuRdq, threshold = options.kappapu_real_ok_var, invert_control = True, bit_vector = 1024)
 		kpuok = pipeparts.mkcapsfilter(pipeline, kpuok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		kpuok = calibration_parts.mkaudiorate(pipeline, kpuok)
+		#kpuok = calibration_parts.mkaudiorate(pipeline, kpuok)
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = options.kappapu_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, kpuIdq))
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kpuok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kpuok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kpuRInRange))
@@ -1111,7 +1111,7 @@ if not options.no_dq_vector:
 		
 		ktstok = pipeparts.mkbitvectorgen(pipeline, ktstRdq, threshold = options.kappatst_real_ok_var, invert_control = True, bit_vector = 2048)
 		ktstok = pipeparts.mkcapsfilter(pipeline, ktstok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		ktstok = calibration_parts.mkaudiorate(pipeline, ktstok)
+		#ktstok = calibration_parts.mkaudiorate(pipeline, ktstok)
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = options.kappatst_imag_ok_var, invert_control = True, control = calibration_parts.mkqueue(pipeline, ktstIdq)) 
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		ktstok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktstok), threshold = 1, control = calibration_parts.mkqueue(pipeline, ktstRInRange))
@@ -1127,7 +1127,7 @@ if not options.no_dq_vector:
 		
 		kcok = pipeparts.mkbitvectorgen(pipeline, kcdq, threshold = options.kappac_ok_var, invert_control = True, bit_vector = 4096)
 		kcok = pipeparts.mkcapsfilter(pipeline, kcok, "audio/x-raw-int, depth=32, width=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		kcok = calibration_parts.mkaudiorate(pipeline, kcok)
+		#kcok = calibration_parts.mkaudiorate(pipeline, kcok)
 		kcok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kcok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		kcok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kcok), threshold = 1, control = calibration_parts.mkqueue(pipeline, kcInRange))
 
@@ -1140,7 +1140,7 @@ if not options.no_dq_vector:
 		
 		fccok = pipeparts.mkbitvectorgen(pipeline, fccdq, threshold = options.fcc_ok_var, invert_control = True, bit_vector = 8192)
 		fccok = pipeparts.mkcapsfilter(pipeline, fccok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-		fccok = calibration_parts.mkaudiorate(pipeline, fccok)
+		#fccok = calibration_parts.mkaudiorate(pipeline, fccok)
 		fccok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fccok), threshold = 1, control = calibration_parts.mkqueue(pipeline, averageok), attack_length = -int(options.factors_averaging_time) * dqsr)
 		fccok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fccok), threshold = 1, control = calibration_parts.mkqueue(pipeline, fccInRange))
 		
@@ -1155,7 +1155,7 @@ if not options.no_dq_vector:
 	# Now calculate h(t)-OK bit
 	htok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, higherbitstee), bit_vector = 1, threshold = 28)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, rate=%d, endianness=1234" % dqsr)
-	htok = calibration_parts.mkaudiorate(pipeline, htok)
+	#htok = calibration_parts.mkaudiorate(pipeline, htok)
 
 	#
 	# HW INJECTION BITS
@@ -1163,19 +1163,19 @@ if not options.no_dq_vector:
 
 	hwinjcbc = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = int(options.hw_inj_cbc_bitmask), status_out = 64)
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
-	hwinjcbc = calibration_parts.mkaudiorate(pipeline, hwinjcbc)
+	#hwinjcbc = calibration_parts.mkaudiorate(pipeline, hwinjcbc)
 
 	hwinjburst = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = int(options.hw_inj_burst_bitmask), status_out = 128)
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
-	hwinjburst = calibration_parts.mkaudiorate(pipeline, hwinjburst)
+	#hwinjburst = calibration_parts.mkaudiorate(pipeline, hwinjburst)
 
 	hwinjdetchar = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = int(options.hw_inj_detchar_bitmask), status_out = 256)
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
-	hwinjdetchar = calibration_parts.mkaudiorate(pipeline, hwinjdetchar)
+	#hwinjdetchar = calibration_parts.mkaudiorate(pipeline, hwinjdetchar)
 
 	hwinjstoch = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectortee), "lal_logical_undersampler", required_on = int(options.hw_inj_stoch_bitmask), status_out = 32)
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, "audio/x-raw-int, width=32, depth=32, signed=false, channels=1, endianness=1234, rate=%d" % dqsr)
-	hwinjstoch = calibration_parts.mkaudiorate(pipeline, hwinjstoch)
+	#hwinjstoch = calibration_parts.mkaudiorate(pipeline, hwinjstoch)
 
 
 	#
@@ -1205,33 +1205,34 @@ if not options.no_kappaa:
 	kaRout = pipeparts.mkaudioconvert(pipeline, kaRout)
 	kaRout = pipeparts.mkcapsfilter(pipeline, kaRout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.compute_factors_sr)
 	kaRout = calibration_parts.resample(pipeline, kaRout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.record_factors_sr)
- 
 	kaIout = pipeparts.mkaudioconvert(pipeline, kaIout)
 	kaIout = pipeparts.mkcapsfilter(pipeline, kaIout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.compute_factors_sr)
 	kaIout = calibration_parts.resample(pipeline, kaIout, "audio/x-raw-float, width=32, endianness=1234, channels=1, rate=%d" % options.record_factors_sr)
+
 # Resample the \kappa_pu channels at the specified recording sample rate and change them to single precision channels
 if not options.no_kappapu:
 	kpuRout = pipeparts.mkaudioconvert(pipeline, kpuRout)
 	kpuRout = pipeparts.mkcapsfilter(pipeline, kpuRout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.compute_factors_sr)
 	kpuRout = calibration_parts.resample(pipeline, kpuRout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
- 
 	kpuIout = pipeparts.mkaudioconvert(pipeline, kpuIout)
 	kpuIout = pipeparts.mkcapsfilter(pipeline, kpuIout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.compute_factors_sr)
 	kpuIout = calibration_parts.resample(pipeline, kpuIout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
+
 # Resample the \kappa_tst channels at the specified recording sample rate and change them to single precision channels
 if not options.no_kappatst:
 	ktstRout = pipeparts.mkaudioconvert(pipeline, ktstRout)
 	ktstRout = pipeparts.mkcapsfilter(pipeline, ktstRout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.compute_factors_sr)
 	ktstRout = calibration_parts.resample(pipeline, ktstRout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
- 
 	ktstIout = pipeparts.mkaudioconvert(pipeline, ktstIout)
 	ktstIout = pipeparts.mkcapsfilter(pipeline, ktstIout, "audio/x-raw-float, channels=1, endianness=1234, width=32, rate=%d" % options.compute_factors_sr)
 	ktstIout = calibration_parts.resample(pipeline, ktstIout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
+
 # Resample the \kappa_c channel at the specified recording sample rate and change it to a single precision channel
 if not options.no_kappac:
 	kcout = pipeparts.mkaudioconvert(pipeline, kcout)
 	kcout = pipeparts.mkcapsfilter(pipeline, kcout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.compute_factors_sr)
 	kcout = calibration_parts.resample(pipeline, kcout, "audio/x-raw-float, width=32, channels=1, endianness=1234, rate=%d" % options.record_factors_sr)
+
 # Resample the f_cc channel at the specified recording sample rate and change it to a single precision channel
 if not options.no_fcc:
 	fccout = pipeparts.mkaudioconvert(pipeline, fccout)
@@ -1255,8 +1256,6 @@ if not options.no_kappac:
 	strain, kcout = calibration_parts.gate_strain_for_output_frames(pipeline, strain, kcout)
 if not options.no_fcc:
 	strain, fccout = calibration_parts.gate_strain_for_output_frames(pipeline, strain, fccout)
-strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = td)
-strain = calibration_parts.mkaudiorate(pipeline, strain)
 
 # Gate everything with the strain channel so that no frames get written without a strain channel or any other channel already gated with the strain channel
 straintee = pipeparts.mktee(pipeline, strain)
@@ -1276,7 +1275,6 @@ if not options.no_kappac:
 	kcout = calibration_parts.gate_other_with_strain(pipeline, kcout, straintee)
 if not options.no_fcc:
 	fccout = calibration_parts.gate_other_with_strain(pipeline, fccout, straintee)
-
 	
 # If the calibration factors are bad and we are NOT in science mode, set the strain channel to a gap. This is to avoid issues with reproducibility of the pipeline.  Note: If the calibration factors are bad for an extended period of time and we ARE in science mode, there will be problems.  I'm not fixing this on purpose.
 strain = calibration_parts.mkqueue(pipeline, straintee)
@@ -1291,10 +1289,9 @@ if not options.no_dq_vector and (options.apply_kappatst or options.apply_kappac 
 	if options.apply_kappapu:
 		kpubadstate = pipeparts.mkstatevector(pipeline, calibration_parts.mkqueue(pipeline, calibstatevectortee), required_off = 1028)
 		strain = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, strain), control = calibration_parts.mkqueue(pipeline, kpubadstate), threshold = 1, invert_control = True)
-
-	strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]], time_domain = td)
-	strain = calibration_parts.mkaudiorate(pipeline, strain)
 	calibstatevector = calibration_parts.mkqueue(pipeline, calibstatevectortee)
+	#strain = pipeparts.mkfirfilter(pipeline, strain, kernel = [1], latency = 0)
+	#strain = calibration_parts.mkaudiorate(pipeline, strain)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -1311,34 +1308,34 @@ mux.set_property("compression-level", options.compression_level)
 
 # Link the output DQ vectors up to the muxer, if applicable
 if not options.no_dq_vector:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, calibstatevector)).get_pad("src").link(mux.get_pad("%s:%sCALIB_STATE_VECTOR%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, odcstatevectorout)).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
+	calibration_parts.mkqueue(pipeline, calibstatevector).get_pad("src").link(mux.get_pad("%s:%sCALIB_STATE_VECTOR%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, odcstatevectorout).get_pad("src").link(mux.get_pad("%s:%s" % (instrument, options.dq_channel_name)))
 
 # Link the strain branch to the muxer
-calibration_parts.mkaudiorate(pipeline, strain).get_pad("src").link(mux.get_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
+strain.get_pad("src").link(mux.get_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_a to the muxer
 if not options.no_kappaa:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, kaRout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, kaIout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, kaRout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, kaIout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_A_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_tst to the muxer
 if not options.no_kappatst:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, ktstRout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, ktstIout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, ktstRout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, ktstIout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_TST_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_pu to the muxer
 if not options.no_kappapu:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, kpuRout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, kpuIout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, kpuRout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_REAL%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, kpuIout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_PU_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the \kappa_c to the muxer
 if not options.no_kappac:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, kcout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_C%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, kcout).get_pad("src").link(mux.get_pad("%s:%sCALIB_KAPPA_C%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the f_cc to the muxer
 if not options.no_fcc:
-	calibration_parts.mkaudiorate(pipeline, calibration_parts.mkqueue(pipeline, fccout)).get_pad("src").link(mux.get_pad("%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, fccout).get_pad("src").link(mux.get_pad("%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)))
 
 if options.wings is not None:
 	def clip_wings(pad, obj, (wings, start, end)):
