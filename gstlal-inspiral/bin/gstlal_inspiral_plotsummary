@@ -1340,7 +1340,7 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, 
 	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
 	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
 	expected_count_y = [fapfar.far_from_rank(x) * fapfar.livetime for x in expected_count_x]
-	ylim = 1e-7, (10.**math.ceil(math.log10(expected_count_y[bisect.bisect_left(expected_count_x, xlim[0])])) if xlim[0] is not None else None)
+	ylim = 10.**math.floor(math.log10(expected_count_y[-1])), 10.**math.ceil(math.log10(expected_count_y[0]))
 
 	axes.set_position((0.10, 0.1, .875, .80))
 	axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold", position = (0.5, 1.05))
@@ -1383,26 +1383,34 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, 
 	# build false-alarm probability labels
 	#
 
-	sigma_rank_alpha = [
-		(None, xlim[0], None),	# left-edge of plot
-		(1., fapfar.rank_from_fap(math.erfc(1. / math.sqrt(2.))), 0.1),
-		(2., fapfar.rank_from_fap(math.erfc(2. / math.sqrt(2.))), 0.2),
-		(3., fapfar.rank_from_fap(math.erfc(3. / math.sqrt(2.))), 0.3),
-		(4., fapfar.rank_from_fap(math.erfc(4. / math.sqrt(2.))), 0.4),
-		(5., fapfar.rank_from_fap(math.erfc(5. / math.sqrt(2.))), 0.5)
-	]
-
 	ax = axes.twiny()
 	ax.set_xlim(xlim)
-	ax.set_xlabel("False Alarm Probability", horizontalalignment = "left", position = (0.05, 1.02), size = "small")
+	ax.set_xlabel(r"$P(\geq 1 \mathrm{candidate} | \mathrm{noise})$", horizontalalignment = "left", position = (0.05, 1.02), size = "small")
 
-	for (_, lo, _), (_, hi, alpha) in zip(sigma_rank_alpha[:-1], sigma_rank_alpha[1:]):
+	if False:
+		label_rank_alpha = [
+			(None, xlim[0], None),	# left-edge of plot
+			(r"$1 \sigma$", fapfar.rank_from_fap(math.erfc(1. / math.sqrt(2.))), 0.1),
+			(r"$2 \sigma$", fapfar.rank_from_fap(math.erfc(2. / math.sqrt(2.))), 0.2),
+			(r"$3 \sigma$", fapfar.rank_from_fap(math.erfc(3. / math.sqrt(2.))), 0.3),
+			(r"$4 \sigma$", fapfar.rank_from_fap(math.erfc(4. / math.sqrt(2.))), 0.4),
+			(r"$5 \sigma$", fapfar.rank_from_fap(math.erfc(5. / math.sqrt(2.))), 0.5)
+		]
+	else:
+		label_rank_alpha = [
+			(None, xlim[0], None),	# left-edge of plot
+			(r"$10^{-1}$", fapfar.rank_from_fap(0.1), 0.1),
+			(r"$10^{-3}$", fapfar.rank_from_fap(0.001), 0.2),
+			(r"$10^{-6}$", fapfar.rank_from_fap(0.000001), 0.3)
+		]
+
+	for (_, lo, _), (_, hi, alpha) in zip(label_rank_alpha[:-1], label_rank_alpha[1:]):
 		if hi < lo:	# can happen if xlim[0] > 1 sigma
 			continue
 		ax.axvspan(lo, hi, color = "k", alpha = alpha)
 
-	ax.set_xticks([rank for (sigma, rank, _) in sigma_rank_alpha[1:]])
-	ax.set_xticklabels([r"$%.2g \sigma$" % sigma for (sigma, rank, _) in sigma_rank_alpha[1:]])
+	ax.set_xticks([rank for (label, rank, _) in label_rank_alpha[1:]])
+	ax.set_xticklabels([label for (label, rank, _) in label_rank_alpha[1:]])
 
 
 class RateVsThreshold(object):
