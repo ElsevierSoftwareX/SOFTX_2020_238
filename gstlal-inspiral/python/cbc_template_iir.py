@@ -37,6 +37,7 @@ from gstlal import cbc_template_fir
 from gstlal import templates
 import random
 import pdb
+from gstlal.optimizeMF import OptimizerIIR
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -592,9 +593,6 @@ class Bank(object):
 			logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
 			logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
 
-			Amat = {}
-			Bmat = {}
-			Dmat = {}
 
 		# Check parity of autocorrelation length
 		if autocorrelation_length is not None:
@@ -658,6 +656,10 @@ class Bank(object):
 		# waveforms by peak amplitude)
 		#
 
+		Amat = {}
+		Bmat = {}
+		Dmat = {}
+
 		original_epsilon = epsilon
 		epsilon_increment = 0.001
 		for tmp, row in enumerate(sngl_inspiral_table):
@@ -720,12 +722,22 @@ class Bank(object):
 			
 				# compute the SNR
 				spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad1)))/numpy.sqrt(2)
+				
 				if(abs(original_epsilon - epsilon) < 1e-5):
 					original_match = spiir_match
 					original_filters = len(a1)
 
 				if(spiir_match < req_min_match):
 					epsilon -= epsilon_increment
+
+			opIIR = OptimizerIIR(length, a1, b0, delay)
+			opIIR.setTemplate(opIIR.cnormalize(h_pad1))
+			opIIR.normalizeCoef()
+			opIIR.runHierarchyLagOp(300)
+			a1 = opIIR.a1
+			b0 = opIIR.b0
+			delay = opIIR.delay
+			spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
 
 			self.matches.append(spiir_match)
 			self.sigmasq.append(1.0 * norm_h / sampleRate)
