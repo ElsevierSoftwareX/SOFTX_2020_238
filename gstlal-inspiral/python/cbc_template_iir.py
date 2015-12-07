@@ -730,14 +730,15 @@ class Bank(object):
 				if(spiir_match < req_min_match):
 					epsilon -= epsilon_increment
 
-			opIIR = OptimizerIIR(length, a1, b0, delay)
-			opIIR.setTemplate(opIIR.cnormalize(h_pad1))
-			opIIR.normalizeCoef()
-			opIIR.runHierarchyLagOp(300)
-			a1 = opIIR.a1
-			b0 = opIIR.b0
-			delay = opIIR.delay
-			spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
+			if(spiir_match < req_min_match):
+				opIIR = OptimizerIIR(length, a1, b0, delay)
+				opIIR.setTemplate(opIIR.cnormalize(h_pad1))
+				opIIR.normalizeCoef()
+				opIIR.runHierarchyLagOp(300)
+				a1 = opIIR.a1
+				b0 = opIIR.b0
+				delay = opIIR.delay
+				spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
 
 			self.matches.append(spiir_match)
 			self.sigmasq.append(1.0 * norm_h / sampleRate)
