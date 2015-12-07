@@ -21,7 +21,7 @@ pkgpython_PYTHON = \
 	lloidplots.py \
 	llweb.py \
 	lvalert_helper.py \
-	optimizeMF.py \
+	optimize_mf.py \
 	plotfar.py \
 	plotsegments.py \
 	plotsensitivity.py \

@@ -37,7 +37,7 @@ from gstlal import cbc_template_fir
 from gstlal import templates
 import random
 import pdb
-from gstlal.optimizeMF import OptimizerIIR
+from gstlal.optimize_mf import OptimizerIIR
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
