@@ -832,7 +832,8 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 //	CUDA_CHECK(cudaMemset(pklist->d_cohsnr_skymap, 0, mem_alloc_size));
 
 	pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + npeak * state->npix;
-	pklist->cohsnr_skymap = (float *)malloc(mem_alloc_size);
+	//pklist->cohsnr_skymap = (float *)malloc(mem_alloc_size);
+	CUDA_CHECK(cudaMallocHost((void **) &(pklist->cohsnr_skymap), mem_alloc_size));
 	pklist->nullsnr_skymap = pklist->cohsnr_skymap + npeak * state->npix;
 
 	ker_coh_skymap<<<npeak, threads, sharedmem, stream>>>(			pklist->d_cohsnr_skymap,

@@ -48,7 +48,8 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->d_chisq = pklist->d_maxsnglsnr + (9 + 2 * hist_trials) * exe_len;
 		pklist->d_chisq_bg = pklist->d_maxsnglsnr + (10 + 2 * hist_trials) * exe_len;
 	
-		pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
+		//pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
+		CUDA_CHECK(cudaMallocHost((void **) &(pklist->npeak), sizeof(int) * peak_intlen));
 		memset(pklist->npeak, 0, sizeof(int) * peak_intlen);
 		pklist->peak_pos = pklist->npeak + 1;
 		pklist->tmplt_idx = pklist->npeak + 1 + exe_len;
@@ -58,7 +59,8 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->ntoff_H = pklist->npeak + 1 + (4 + hist_trials) * exe_len;
 		pklist->ntoff_V = pklist->npeak + 1 + (5 + hist_trials) * exe_len;
 
-		pklist->maxsnglsnr = (float *)malloc(sizeof(float) * peak_floatlen);
+		//pklist->maxsnglsnr = (float *)malloc(sizeof(float) * peak_floatlen);
+		CUDA_CHECK(cudaMallocHost((void **) &(pklist->maxsnglsnr), sizeof(float) * peak_floatlen));
 		memset(pklist->maxsnglsnr, 0, sizeof(float) * peak_floatlen);
 		pklist->snglsnr_L = pklist->maxsnglsnr + exe_len;
 		pklist->snglsnr_H = pklist->maxsnglsnr + 2 * exe_len;
@@ -431,8 +433,8 @@ peak_list_destroy(PeakList *pklist)
 	CUDA_CHECK(cudaFree(pklist->d_maxsnglsnr));
 	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
 
-	free(pklist->npeak);
-	free(pklist->maxsnglsnr);
+	CUDA_CHECK(cudaFreeHost(pklist->npeak));
+	CUDA_CHECK(cudaFreeHost(pklist->maxsnglsnr));
 }
 
 void

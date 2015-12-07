@@ -974,7 +974,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 		}
 
 		if (pklist->cohsnr_skymap) {
-			free(pklist->cohsnr_skymap);
+			cudaFreeHost(pklist->cohsnr_skymap);
 			pklist->cohsnr_skymap = NULL;
 		}
 
