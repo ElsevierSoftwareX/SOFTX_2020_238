@@ -900,7 +900,7 @@ if options.split_actuation_chain:
 		pumuim = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pum, uim), ctrl_caps)
 		pumuim = pipeparts.mkaudioconvert(pipeline, pumuim)
 		pumuim = pipeparts.mkcapsfilter(pipeline, pumuim, ctrl_caps) 
-		pumuim = pipeparts.mkfirfilter(pipeline, pumuim, kernel = [1], latency = 0)
+		pumuim = pipeparts.mkfirbank(pipeline, pumuim, fir_matrix = [[0,1]])
 		if options.different_control_whitening:
 			pumuim = calibration_parts.resample(pipeline, pumuim, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % pumuimdewhitensr) 
 			pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
@@ -908,7 +908,7 @@ if options.split_actuation_chain:
 
 	if options.full_calibration:
 		ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, caps, "ctrl")
-		ctrl = pipeparts.mkfirfilter(pipeline, ctrl, kernel = [1], latency = 0)
+		ctrl = pipeparts.mkfirbank(pipeline, ctrl, fir_matrix = [[0,1]])
 		ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 		ctrltee = pipeparts.mktee(pipeline, ctrl)
@@ -952,7 +952,7 @@ if options.split_actuation_chain:
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrlcorrdelay), fir_matrix = [ctrlcorrfilt[::-1]], time_domain = td)
 elif not options.split_actuation_chain:
 	ctrl = calibration_parts.caps_and_progress(pipeline, ctrl, ctrl_caps, "ctrl")
-	ctrl = pipeparts.mkfirfilter(pipeline, ctrl, kernel = [1], latency = 0)
+	ctrl = pipeparts.mkfirbank(pipeline, ctrl, fir_matrix = [[0,1]])
 	ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, channels=1, endianness=1234, rate=%d" % ctrlfiltsr)
 	ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrlchaindelay), fir_matrix = [ctrlchainfilt[::-1]], time_domain = td)
 	ctrl = calibration_parts.resample(pipeline, ctrl, "audio/x-raw-float, width=64, endianness=1234, channels=1, rate=%d" % ctrldewhitensr)
@@ -964,7 +964,7 @@ ctrl = calibration_parts.resample(pipeline, ctrl, caps)
 #
 
 res = calibration_parts.caps_and_progress(pipeline, res, caps, "res")
-res = pipeparts.mkfirfilter(pipeline, res, kernel = [1], latency = 0) # FIXME: Not sure why this is needed... test more without it or debug the underlying issue.
+res = pipeparts.mkfirbank(pipeline, res, fir_matrix = [[0,1]]) # FIXME: Not sure why this is needed... test more without it or debug the underlying issue.
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
@@ -1291,8 +1291,8 @@ if not options.no_dq_vector and (options.apply_kappatst or options.apply_kappac 
 		kpubadstate = pipeparts.mkstatevector(pipeline, calibration_parts.mkqueue(pipeline, calibstatevectortee), required_off = 1028)
 		strain = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, strain), control = calibration_parts.mkqueue(pipeline, kpubadstate), threshold = 1, invert_control = True)
 	calibstatevector = calibration_parts.mkqueue(pipeline, calibstatevectortee)
-	#strain = pipeparts.mkfirfilter(pipeline, strain, kernel = [1], latency = 0)
-	#strain = calibration_parts.mkaudiorate(pipeline, strain)
+	strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]])
+	strain = calibration_parts.mkaudiorate(pipeline, strain)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
