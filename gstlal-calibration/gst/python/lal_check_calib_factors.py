@@ -101,6 +101,7 @@ def determine_factor_value(inbuf, outbuf, var, wait_time_ns, last_best, last_bes
 			out.append(val)
 		else:
 			out.append(running_median_array.add_and_return_median(val))
+	
 	out = numpy.array(out, dtype = numpy.float64)
 	output_samples = len(out)
 	out_len = out.nbytes
@@ -119,7 +120,7 @@ class lal_check_calib_factors(gst.BaseTransform):
 	__gstdetails__ = (
 		"Smooth factors computation",
 		"Filter/Audio",
-		"Checks the value of calibration factors have not changed by more than a specified amount from the last good computed value.",
+		"Checks the value of calibration factors have not changed by more than a specified amount from the last good computed value. Then computes the median value over the last N samples.",
 		__author__
 	)
 
@@ -225,6 +226,7 @@ class lal_check_calib_factors(gst.BaseTransform):
 		self.offset0 = gst.BUFFER_OFFSET_NONE
 		self.next_in_offset = gst.BUFFER_OFFSET_NONE
 		self.need_discont = True
+		self.median_val = None
 		return True
 
 	def set_metadata(self, buf, output_samples, gap):

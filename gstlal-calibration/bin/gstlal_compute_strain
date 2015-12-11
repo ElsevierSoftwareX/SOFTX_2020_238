@@ -181,6 +181,7 @@ parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to 
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
 parser.add_option("--apply-kappac", action = "store_true", help = "Set this to have the \kappa_c factors multiply the sensing chain.")
 parser.add_option("--compute-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are computed. (Default = 16 Hz)")
+parser.add_option("--median-smoothing-time", metavar = "s", type = int, default = 1, help = "Time (in seconds) for average to smooth out \kappa medians. (Default = 1 s)")
 parser.add_option("--record-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are recorded. (Default = 16 Hz)")
 parser.add_option("--factors-integration-time", metavar = "sec", type = float, default = 10.0, help = "Integration time for calibration factors computation. (Default = 10 s)")
 parser.add_option("--expected-kappaa-real", metavar = "float", type = float, default = 1.0, help = "Expected value for the real part of \kappa_a. (Default = 1.0)")
@@ -713,7 +714,7 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu:
 	factors_integration_samples = int(options.factors_integration_time) * options.compute_factors_sr
 	factors_averaging_samples = int(options.factors_averaging_time) * options.compute_factors_sr
-	one_second_smoothing = options.compute_factors_sr
+	median_smoothing = int(options.median_smoothing_time * options.compute_factors_sr)
 	pcaltee = pipeparts.mktee(pipeline, pcal)
 	derrtee = pipeparts.mktee(pipeline, darm_err)
 	ka_pcalR_nocorr, ka_pcalI_nocorr = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, pcaltee), sr, ka_pcal_line_freq, caps, compute_calib_factors_caps, factors_integration_samples, td)
@@ -760,8 +761,8 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 	ktstRInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, ktstRteedq), "lal_check_calib_factors", variance = options.kappatst_real_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappatst_real, state_vector_mode = True, median_array_size = factors_averaging_samples)
 	ktstIInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, ktstIteedq), "lal_check_calib_factors", variance = options.kappatst_imag_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappatst_imag, state_vector_mode = True, median_array_size = factors_averaging_samples)
 		 
-	ktstR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, ktstRteedq), options.kappatst_real_ok_var_for_average, options.expected_kappatst_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
-	ktstI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, ktstIteedq), options.kappatst_imag_ok_var_for_average, options.expected_kappatst_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
+	ktstR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, ktstRteedq), options.kappatst_real_ok_var_for_average, options.expected_kappatst_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
+	ktstI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, ktstIteedq), options.kappatst_imag_ok_var_for_average, options.expected_kappatst_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
 	ktstRtee = pipeparts.mktee(pipeline, ktstR)
 	ktstItee = pipeparts.mktee(pipeline, ktstI)
 	if not options.no_kappatst:
@@ -808,8 +809,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	kpuRInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kpuRteedq), "lal_check_calib_factors", variance = options.kappapu_real_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappapu_real, state_vector_mode = True, median_array_size = factors_averaging_samples)
 	kpuIInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kpuIteedq), "lal_check_calib_factors", variance = options.kappapu_imag_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappapu_imag, state_vector_mode = True, median_array_size = factors_averaging_samples)
 
-	kpuR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kpuRteedq), options.kappapu_real_ok_var, options.expected_kappapu_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
-	kpuI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kpuIteedq), options.kappapu_imag_ok_var, options.expected_kappapu_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
+	kpuR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kpuRteedq), options.kappapu_real_ok_var, options.expected_kappapu_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
+	kpuI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kpuIteedq), options.kappapu_imag_ok_var, options.expected_kappapu_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
 	kpuRtee = pipeparts.mktee(pipeline, kpuR)
 	kpuItee = pipeparts.mktee(pipeline, kpuI)
 
@@ -830,8 +831,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		kaRInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kaRteedq), "lal_check_calib_factors", variance = options.kappaa_real_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappaa_real, state_vector_mode = True, median_array_size = factors_averaging_samples)
 		kaIInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kaIteedq), "lal_check_calib_factors", variance = options.kappaa_imag_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappaa_imag, state_vector_mode = True, median_array_size = factors_averaging_samples)
 
-		kaR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kaRteedq), options.kappaa_real_ok_var, options.expected_kappaa_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
-		kaI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kaIteedq), options.kappaa_imag_ok_var, options.expected_kappaa_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
+		kaR = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kaRteedq), options.kappaa_real_ok_var, options.expected_kappaa_real, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
+		kaI = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kaIteedq), options.kappaa_imag_ok_var, options.expected_kappaa_imag, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
 		kaRtee = pipeparts.mktee(pipeline, kaR)
 		kaItee = pipeparts.mktee(pipeline, kaI)
 		kaRout = calibration_parts.mkqueue(pipeline, kaRtee)
@@ -870,14 +871,14 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			kcrange = pipeparts.mkqueue(pipeline, kcteedq)
 			kcInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, kcrange), "lal_check_calib_factors", variance = options.kappac_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_kappac, state_vector_mode = True, median_array_size = factors_averaging_samples)
 
-			kc = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kcteedq), options.kappac_ok_var, options.expected_kappac, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
+			kc = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, kcteedq), options.kappac_ok_var, options.expected_kappac, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
 			kctee = pipeparts.mktee(pipeline, kc)
 			kcout = calibration_parts.mkqueue(pipeline, kctee)
 		if not options.no_fcc:
 			fcc = calibration_parts.compute_fcc(pipeline, calibration_parts.mkqueue(pipeline, SRtee), calibration_parts.mkqueue(pipeline, SItee), kc_pcal_line_freq, compute_calib_factors_caps)
 			fccteedq = pipeparts.mktee(pipeline, fcc)
 			fccInRange = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, fccteedq), "lal_check_calib_factors", variance = options.fcc_ok_var_for_average, wait_time_to_new_expected = options.factors_hold_time, default = options.expected_fcc, state_vector_mode = True, median_array_size = factors_averaging_samples)
-			fcc = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, fccteedq), options.fcc_ok_var, options.expected_fcc, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, one_second_smoothing)
+			fcc = calibration_parts.average_calib_factors(pipeline, calibration_parts.mkqueue(pipeline, fccteedq), options.fcc_ok_var_for_average, options.expected_fcc, factors_averaging_samples, compute_calib_factors_caps, options.factors_hold_time, median_smoothing)
 			fccout = fcc
 #
 # CONTROL BRANCH
