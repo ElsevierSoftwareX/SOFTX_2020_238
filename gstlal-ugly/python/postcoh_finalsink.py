@@ -386,7 +386,7 @@ class FinalSink(object):
 		row.beta = 0
 		row.f_final = 2048
 		row.snr = trigger.snglsnr_L
-		row.chisq = trigger.chisq
+		row.chisq = trigger.chisq_L
 		row.chisq_dof = 4
 		row.bank_chisq = 0
 		row.bank_chisq_dof = 0
@@ -455,7 +455,7 @@ class FinalSink(object):
 		row.beta = 0
 		row.f_final = 2048
 		row.snr = trigger.snglsnr_H
-		row.chisq = 0
+		row.chisq = trigger.chisq_H
 		row.chisq_dof = 4
 		row.bank_chisq = 0
 		row.bank_chisq_dof = 0

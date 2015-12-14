@@ -16,7 +16,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
 
 		int peak_intlen = (6 + hist_trials) * exe_len + 1;
-		int peak_floatlen = (10 + hist_trials * 3 ) * exe_len;
+		int peak_floatlen = (13 + hist_trials * 3 ) * exe_len;
 		pklist->peak_intlen = peak_intlen;
 		pklist->peak_floatlen = peak_floatlen;
 		
@@ -41,12 +41,15 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->d_coa_phase_L = pklist->d_maxsnglsnr + 4 * exe_len;
 		pklist->d_coa_phase_H = pklist->d_maxsnglsnr + 5 * exe_len;
 		pklist->d_coa_phase_V = pklist->d_maxsnglsnr + 6 * exe_len;
-		pklist->d_cohsnr = pklist->d_maxsnglsnr + 7 * exe_len;
-		pklist->d_cohsnr_bg = pklist->d_maxsnglsnr + 8 * exe_len;
-		pklist->d_nullsnr = pklist->d_maxsnglsnr + (8 + hist_trials ) * exe_len;
-		pklist->d_nullsnr_bg = pklist->d_maxsnglsnr + (9 + hist_trials) * exe_len;
-		pklist->d_chisq = pklist->d_maxsnglsnr + (9 + 2 * hist_trials) * exe_len;
-		pklist->d_chisq_bg = pklist->d_maxsnglsnr + (10 + 2 * hist_trials) * exe_len;
+		pklist->d_chisq_L = pklist->d_maxsnglsnr + 7 * exe_len;
+		pklist->d_chisq_H = pklist->d_maxsnglsnr + 8 * exe_len;
+		pklist->d_chisq_V = pklist->d_maxsnglsnr + 9 * exe_len;
+		pklist->d_cohsnr = pklist->d_maxsnglsnr + 10 * exe_len;
+		pklist->d_cohsnr_bg = pklist->d_maxsnglsnr + 11 * exe_len;
+		pklist->d_nullsnr = pklist->d_maxsnglsnr + (11 + hist_trials ) * exe_len;
+		pklist->d_nullsnr_bg = pklist->d_maxsnglsnr + (12 + hist_trials) * exe_len;
+		pklist->d_chisq = pklist->d_maxsnglsnr + (12 + 2 * hist_trials) * exe_len;
+		pklist->d_chisq_bg = pklist->d_maxsnglsnr + (13 + 2 * hist_trials) * exe_len;
 	
 		//pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
 		CUDA_CHECK(cudaMallocHost((void **) &(pklist->npeak), sizeof(int) * peak_intlen));
@@ -68,12 +71,16 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->coa_phase_L = pklist->maxsnglsnr + 4 * exe_len;
 		pklist->coa_phase_H = pklist->maxsnglsnr + 5 * exe_len;
 		pklist->coa_phase_V = pklist->maxsnglsnr + 6 * exe_len;
-		pklist->cohsnr = pklist->maxsnglsnr + 7 * exe_len;
-		pklist->cohsnr_bg = pklist->maxsnglsnr + 8 * exe_len;
-		pklist->nullsnr = pklist->maxsnglsnr + (8 + hist_trials ) * exe_len;
-		pklist->nullsnr_bg = pklist->maxsnglsnr + (9 + hist_trials) * exe_len;
-		pklist->chisq = pklist->maxsnglsnr + (9 + 2 * hist_trials) * exe_len;
-		pklist->chisq_bg = pklist->maxsnglsnr + (10 + 2 * hist_trials) * exe_len;
+		pklist->chisq_L = pklist->maxsnglsnr + 7 * exe_len;
+		pklist->chisq_H = pklist->maxsnglsnr + 8 * exe_len;
+		pklist->chisq_V = pklist->maxsnglsnr + 9 * exe_len;
+	
+		pklist->cohsnr = pklist->maxsnglsnr + 10 * exe_len;
+		pklist->cohsnr_bg = pklist->maxsnglsnr + 11 * exe_len;
+		pklist->nullsnr = pklist->maxsnglsnr + (11 + hist_trials ) * exe_len;
+		pklist->nullsnr_bg = pklist->maxsnglsnr + (12 + hist_trials) * exe_len;
+		pklist->chisq = pklist->maxsnglsnr + (12 + 2 * hist_trials) * exe_len;
+		pklist->chisq_bg = pklist->maxsnglsnr + (13 + 2 * hist_trials) * exe_len;
 	
 //		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
 		//printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);

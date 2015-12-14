@@ -913,6 +913,9 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->coa_phase_L = pklist->coa_phase_L[peak_cur];
 			output->coa_phase_H = pklist->coa_phase_H[peak_cur];
 			output->coa_phase_V = pklist->coa_phase_V[peak_cur];
+			output->chisq_L = pklist->chisq_L[peak_cur];
+			output->chisq_H = pklist->chisq_H[peak_cur];
+			output->chisq_V = pklist->chisq_V[peak_cur];
 	
 			output->is_background = 0;
 			output->livetime = livetime;

@@ -375,7 +375,7 @@ __global__ void ker_coh_max_and_chisq
 	int		map_idx;
 	float	real, imag;
 	float	utdka[MAXIFOS];
-	float	al_all = 0.0f;
+	float	al_all = 0.0f, chisq_cur;
 
 	float	snr_max			= 0.0f, snr_tmp = 0.0f;
 	float	nullstream_max, nullstream_max_tmp;
@@ -555,8 +555,11 @@ __global__ void ker_coh_max_and_chisq
 
 				if (srcLane == 0)
 				{
+					chisq_cur = laneChi2/ autocorr_norm[j][tmplt_cur];
+					// the location of chisq_cur is indexed from maxsnglsnr
+					maxsnglsnr[peak_cur + (7 + j) * exe_len] = chisq_cur;
 
-					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
+					chisq[peak_cur + output_offset] += chisq_cur;
 //					printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur + output_offset], chisq[peak_cur + output_offset]);
 				}
 

@@ -104,6 +104,9 @@ typedef struct _PeakList {
 	float *coa_phase_L;
 	float *coa_phase_H;
 	float *coa_phase_V;
+	float *chisq_L;
+	float *chisq_H;
+	float *chisq_V;
 
 	float *cohsnr;
 	float *nullsnr;
@@ -132,6 +135,9 @@ typedef struct _PeakList {
 	float *d_coa_phase_L;
 	float *d_coa_phase_H;
 	float *d_coa_phase_V;
+	float *d_chisq_L;
+	float *d_chisq_H;
+	float *d_chisq_V;
 
 	float *d_cohsnr;
 	float *d_nullsnr;
