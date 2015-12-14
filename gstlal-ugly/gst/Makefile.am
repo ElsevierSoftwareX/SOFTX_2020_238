@@ -23,4 +23,4 @@ CUDA_SUBDIRS =
 endif
 
 
-SUBDIRS = lal python multirate $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS) $(CUDA_SUBDIRS)
+SUBDIRS = lal python multirate control $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS) $(CUDA_SUBDIRS)

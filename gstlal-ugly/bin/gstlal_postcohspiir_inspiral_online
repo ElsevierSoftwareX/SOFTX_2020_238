@@ -156,6 +156,7 @@ def parse_command_line():
 	# append all the datasource specific options
   datasource.append_options(parser)
 
+  parser.add_option("--control-time-shift-string", metavar = "detector1:shift,detector2:shift", default = None, help = "Delay the data stream")
   parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
   parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
   parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
@@ -420,6 +421,7 @@ if 1==1:
       detectors = detectors,
       banks = iir_banks,
       psd = psd,
+      control_time_shift_string = options.control_time_shift_string,
       psd_fft_length = options.psd_fft_length,
       ht_gate_threshold = options.ht_gate_threshold,
       veto_segments = veto_segments,

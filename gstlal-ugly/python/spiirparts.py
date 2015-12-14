@@ -68,6 +68,13 @@ from gstlal import cbc_template_iir
 # SPIIR many instruments, many template banks
 #
 
+def mktimeshift(pipeline, src, shift):
+	properties = {
+		"shift": shift
+	}
+
+	return pipeparts.mkgeneric(pipeline, src, "control_timeshift", **properties)
+
 def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
 	properties = {
 		"n": n,
@@ -503,7 +510,26 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		triggersrcs.append(head)
 	return triggersrcs
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
+def parse_shift_string(shift_string):
+	"""
+	parses strings of form 
+
+	det1:shift1, det2:shift2
+	
+	into a dictionary of lists of shifts.
+	"""
+	out = {}
+	if shift_string is None:
+		return out
+	for det in shift_string.split(','):
+		ifo, shift_val = det.split(':')
+		if ifo in out:
+			raise ValueError("Only one shift per instrument should be given")
+		out[ifo] = shift_val
+	return out
+
+
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_string = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfap_refresh_interval = 86400, cohfar_assignfap_collection_time = 0, cohfar_assignfap_input_fname = None, k10_gpu_start_id = 0, num_k10_gpu = 4):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -582,6 +608,9 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
 		autocorrelation_fname_list.append(autocorrelation_fname)
 
+
+	shift_dict = parse_shift_string(control_time_shift_string)
+
 	for instrument in banks[0].keys():
 		hoftdicts[instrument] = pipeparts.mktee(pipeline, hoftdicts[instrument])
 
@@ -595,7 +624,13 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
-	
+			if instrument in shift_dict.keys():
+				head = mktimeshift(pipeline, head, int(shift_dict[instrument]))
+
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "after_timeshift_%s" % suffix)
+
+
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
