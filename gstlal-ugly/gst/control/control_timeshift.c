@@ -161,8 +161,8 @@ static GstFlowReturn control_timeshift_prepare_output_buffer(GstBaseTransform *t
        	guint64 offset_end = GST_BUFFER_OFFSET_END(*outbuf);
 
 	GST_BUFFER_TIMESTAMP(*outbuf) = t_cur + 1000000000L * element->shift;
-	GST_BUFFER_OFFSET(*outbuf) = offset + element->rate * element->shift;
-	GST_BUFFER_OFFSET_END(*outbuf) = offset_end + element->rate * element->shift;
+	GST_BUFFER_OFFSET(*outbuf) = offset + (int)(element->rate * element->shift);
+	GST_BUFFER_OFFSET_END(*outbuf) = offset_end + (int)(element->rate * element->shift);
 
     GST_LOG_OBJECT (element,
       "Converted to buffer of timestamp %" GST_TIME_FORMAT 
@@ -221,7 +221,7 @@ static void control_timeshift_set_property(GObject *object, enum property prop_i
 	switch(prop_id) {
 
 		case PROP_SHIFT:
-			element->shift = g_value_get_int(value);
+			element->shift = g_value_get_float(value);
 			break;
 
 	}
@@ -244,7 +244,7 @@ static void control_timeshift_get_property(GObject *object, enum property prop_i
 	switch (prop_id) {
 
 		case PROP_SHIFT:
-			g_value_set_int(value, element->shift);
+			g_value_set_float(value, element->shift);
 			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -343,11 +343,11 @@ static void control_timeshift_class_init(ControlTimeshiftClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		PROP_SHIFT,
-		g_param_spec_int(
+		g_param_spec_float(
 			"shift",
 			"time shift",
 			"(0) no shift; (N) delay by N seconds. ",
-			0, G_MAXINT, 0,
+			-G_MAXFLOAT, G_MAXFLOAT, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

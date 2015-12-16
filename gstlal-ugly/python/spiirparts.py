@@ -625,7 +625,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
 			if instrument in shift_dict.keys():
-				head = mktimeshift(pipeline, head, int(shift_dict[instrument]))
+				head = mktimeshift(pipeline, head, float(shift_dict[instrument]))
 
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "after_timeshift_%s" % suffix)

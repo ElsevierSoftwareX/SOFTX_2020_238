@@ -54,7 +54,7 @@ typedef struct {
 typedef struct {
 	GstBaseTransform element;
 
-	int shift;
+	float shift;
 	gint rate; // for offset
 
 } ControlTimeshift;
