@@ -1,3 +1,9 @@
+gstlal-calibration (0.5.10-1) unstable; urgency=low
+
+  * Update to smoothing routine for factors to use median method
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thurs, 17 Dec 2015 10:33:00 -0500
+
 gstlal-calibration (0.5.9-1) unstable; urgency=low
 
   * Bug fix to random seg fault issue
