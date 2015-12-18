@@ -20,19 +20,15 @@
 
 
 import itertools
-import math
 import os
-import sys
 from optparse import OptionParser
 from pylal import spawaveform
-from pylal import rate
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from lal import MSUN_SI
 from glue import lal as gluelal
-from pylal.datatypes import LIGOTimeGPS
 from gstlal import templates
 from gstlal import inspiral_pipe
 from gstlal import chirptime
