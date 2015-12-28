@@ -87,8 +87,8 @@ background_stats_reset(BackgroundStats **stats, int ncombo)
   BackgroundRates *rates;
   for (icombo=0; icombo<ncombo; icombo++) {
 	  rates = stats[icombo]->rates;
-	  gsl_vector_long_set_zero((gsl_vector_long *)rates->logsnr_bins->data);
-	  gsl_vector_long_set_zero((gsl_vector_long *)rates->logchisq_bins->data);
+	  gsl_vector_long_set_zero((gsl_vector_long *)rates->lgsnr_bins->data);
+	  gsl_vector_long_set_zero((gsl_vector_long *)rates->lgchisq_bins->data);
 	  gsl_matrix_long_set_zero((gsl_matrix_long *)rates->hist->data);
   }
 
@@ -110,8 +110,8 @@ background_stats_create(char *ifos)
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
     BackgroundRates *rates = cur_stats->rates;
-    rates->logsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
-    rates->logchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    rates->lgsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
+    rates->lgchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     rates->hist = bins2D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->cdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
@@ -125,25 +125,25 @@ background_stats_create(char *ifos)
 int
 get_idx_bins1D(double val, Bins1D *bins)
 {
-  double logval = log10(val); // double
+  double lgval = log10(val); // double
 
-  if (logval < bins->cmin) 
+  if (lgval < bins->cmin) 
     return 0;
   
-  if (logval > bins->cmax) 
+  if (lgval > bins->cmax) 
     return bins->nbin - 1;
 
-  return (int) ((logval - bins->cmin - bins->step_2) / bins->step);
+  return (int) ((lgval - bins->cmin - bins->step_2) / bins->step);
 }
 
 void
 background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
 {
-	int snr_idx = get_idx_bins1D(snr, rates->logsnr_bins);
-	int chisq_idx = get_idx_bins1D(chisq, rates->logchisq_bins);
+	int snr_idx = get_idx_bins1D(snr, rates->lgsnr_bins);
+	int chisq_idx = get_idx_bins1D(chisq, rates->lgchisq_bins);
 
-	gsl_vector_long *snr_vec = (gsl_vector_long *)rates->logsnr_bins->data;
-	gsl_vector_long *chisq_vec = (gsl_vector_long *)rates->logchisq_bins->data;
+	gsl_vector_long *snr_vec = (gsl_vector_long *)rates->lgsnr_bins->data;
+	gsl_vector_long *chisq_vec = (gsl_vector_long *)rates->lgchisq_bins->data;
 	gsl_matrix_long *hist_mat = (gsl_matrix_long *)rates->hist->data;
 
 	gsl_vector_long_set(snr_vec, snr_idx, gsl_vector_long_get(snr_vec, snr_idx) + 1);
@@ -154,8 +154,8 @@ background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
 void
 background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2)
 {
-	gsl_vector_long_add((gsl_vector_long *)rates1->logsnr_bins->data, (gsl_vector_long *)rates2->logsnr_bins->data);
-	gsl_vector_long_add((gsl_vector_long *)rates1->logchisq_bins->data, (gsl_vector_long *)rates2->logchisq_bins->data);
+	gsl_vector_long_add((gsl_vector_long *)rates1->lgsnr_bins->data, (gsl_vector_long *)rates2->lgsnr_bins->data);
+	gsl_vector_long_add((gsl_vector_long *)rates1->lgchisq_bins->data, (gsl_vector_long *)rates2->lgchisq_bins->data);
 	gsl_matrix_long_add((gsl_matrix_long *)rates1->hist->data, (gsl_matrix_long *)rates2->hist->data);
 }
 
@@ -167,8 +167,8 @@ gboolean
 background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 {
 
-	gsl_vector_long *snr = rates->logsnr_bins->data;
-	gsl_vector_long *chisq = rates->logchisq_bins->data;
+	gsl_vector_long *snr = rates->lgsnr_bins->data;
+	gsl_vector_long *chisq = rates->lgchisq_bins->data;
 
 	long nevent = gsl_vector_long_sum(snr);
 	gsl_vector *snr_double = gsl_vector_alloc(snr->size);
@@ -264,10 +264,10 @@ background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
 double
 background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins)
 {
-  double logsnr = log10(snr), logchisq = log10(chisq);
+  double lgsnr = log10(snr), lgchisq = log10(chisq);
   int x_idx = 0, y_idx = 0;
-  x_idx = MIN(MAX((logsnr - bins->x_cmin - bins->x_step_2) / bins->x_step, 0), bins->x_nbin-1);
-  y_idx = MIN(MAX((logchisq - bins->y_cmin - bins->y_step_2) / bins->y_step, 0), bins->y_nbin-1);
+  x_idx = MIN(MAX((lgsnr - bins->x_cmin - bins->x_step_2) / bins->x_step, 0), bins->x_nbin-1);
+  y_idx = MIN(MAX((lgchisq - bins->y_cmin - bins->y_step_2) / bins->y_step, 0), bins->y_nbin-1);
   return gsl_matrix_get(bins->data, x_idx, y_idx);
 }
 
@@ -281,8 +281,8 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   /* read rates */
 
   XmlNodeStruct * xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct) * nnode);
-  XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
-  XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_lgsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_lgchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_cdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -290,11 +290,11 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   for (icombo=0; icombo<ncombo; icombo++) {
     sprintf((char *)xns[icombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_SUFFIX);
     xns[icombo].processPtr = readArray;
-    xns[icombo].data = &(array_logsnr_bins[icombo]);
+    xns[icombo].data = &(array_lgsnr_bins[icombo]);
 
     sprintf((char *)xns[icombo+ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_CHISQ_SUFFIX);
     xns[icombo+ncombo].processPtr = readArray;
-    xns[icombo+ncombo].data = &(array_logchisq_bins[icombo]);
+    xns[icombo+ncombo].data = &(array_lgchisq_bins[icombo]);
 
     sprintf((char *)xns[icombo+2*ncombo].tag, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_HIST_SUFFIX);
     xns[icombo+2*ncombo].processPtr = readArray;
@@ -323,16 +323,16 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
-    memcpy(((gsl_vector_long *)rates->logsnr_bins->data)->data, (long *)array_logsnr_bins[icombo].data, x_size);
-    memcpy(((gsl_vector_long *)rates->logchisq_bins->data)->data, (long *)array_logchisq_bins[icombo].data, y_size);
+    memcpy(((gsl_vector_long *)rates->lgsnr_bins->data)->data, (long *)array_lgsnr_bins[icombo].data, x_size);
+    memcpy(((gsl_vector_long *)rates->lgchisq_bins->data)->data, (long *)array_lgchisq_bins[icombo].data, y_size);
     memcpy(((gsl_matrix_long *)rates->hist->data)->data, (long *)array_hist[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->pdf->data)->data, array_pdf[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->cdf->data)->data, array_cdf[icombo].data, xy_size);
   }
   printf("done memcpy\n");
   for (icombo=0; icombo<ncombo; icombo++) {
-    freeArray(array_logsnr_bins + icombo);
-    freeArray(array_logchisq_bins + icombo);
+    freeArray(array_lgsnr_bins + icombo);
+    freeArray(array_lgchisq_bins + icombo);
     freeArray(array_hist + icombo);
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
@@ -352,8 +352,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   int icombo = 0;
   XmlParam param_range;
   param_range.data = (double *) malloc(sizeof(double) * 2);
-  XmlArray *array_logsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
-  XmlArray *array_logchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_lgsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
+  XmlArray *array_lgchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_cdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -365,14 +365,14 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
-    array_logsnr_bins[icombo].ndim = 1;
-    array_logsnr_bins[icombo].dim[0] = x_nbin;
-    array_logsnr_bins[icombo].data = (long *) malloc(x_size);
-    memcpy(array_logsnr_bins[icombo].data, ((gsl_vector_long *)rates->logsnr_bins->data)->data, x_size);
-    array_logchisq_bins[icombo].ndim = 1;
-    array_logchisq_bins[icombo].dim[0] = y_nbin;
-    array_logchisq_bins[icombo].data = (long *) malloc(y_size);
-    memcpy(array_logchisq_bins[icombo].data, ((gsl_vector_long *)rates->logchisq_bins->data)->data, y_size);
+    array_lgsnr_bins[icombo].ndim = 1;
+    array_lgsnr_bins[icombo].dim[0] = x_nbin;
+    array_lgsnr_bins[icombo].data = (long *) malloc(x_size);
+    memcpy(array_lgsnr_bins[icombo].data, ((gsl_vector_long *)rates->lgsnr_bins->data)->data, x_size);
+    array_lgchisq_bins[icombo].ndim = 1;
+    array_lgchisq_bins[icombo].dim[0] = y_nbin;
+    array_lgchisq_bins[icombo].data = (long *) malloc(y_size);
+    memcpy(array_lgchisq_bins[icombo].data, ((gsl_vector_long *)rates->lgchisq_bins->data)->data, y_size);
     array_hist[icombo].ndim = 2;
     array_hist[icombo].dim[0] = x_nbin;
     array_hist[icombo].dim[1] = y_nbin;
@@ -465,9 +465,9 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   GString *array_name = g_string_new(NULL);
   for (icombo=0; icombo<ncombo; icombo++) {
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_SUFFIX);
-    ligoxml_write_Array(writer, &(array_logsnr_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+    ligoxml_write_Array(writer, &(array_lgsnr_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_CHISQ_SUFFIX);
-    ligoxml_write_Array(writer, &(array_logchisq_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+    ligoxml_write_Array(writer, &(array_lgchisq_bins[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_HIST_SUFFIX);
     ligoxml_write_Array(writer, &(array_hist[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_PDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
@@ -490,8 +490,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   xmlFreeTextWriter(writer);
   free(param_range.data);
   for (icombo=0; icombo<ncombo; icombo++) {
-    freeArray(array_logsnr_bins + icombo);
-    freeArray(array_logchisq_bins + icombo);
+    freeArray(array_lgsnr_bins + icombo);
+    freeArray(array_lgchisq_bins + icombo);
     freeArray(array_hist + icombo);
     freeArray(array_pdf + icombo);
     freeArray(array_cdf + icombo);
@@ -505,7 +505,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 }
 
 void
-background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D *logsnr_bins, Bins1D *logchisq_bins, Bins2D *pdf)
+background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D *lgsnr_bins, Bins1D *lgchisq_bins, Bins2D *pdf)
 {
 
 	//tin_dim1 and tin_dim2 contains points at which estimations are computed
@@ -537,8 +537,8 @@ background_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bin
 	ssvkernel(data_dim2,tin_dim2,y_hist_result_dim2,result_dim2);
 	printf("chisq data %d, completed\n", data_dim2->size);
 
-	gsl_vector_double_to_long(y_hist_result_dim1, (gsl_vector_long *)logsnr_bins->data);
-	gsl_vector_double_to_long(y_hist_result_dim2, (gsl_vector_long *)logchisq_bins->data);
+	gsl_vector_double_to_long(y_hist_result_dim1, (gsl_vector_long *)lgsnr_bins->data);
+	gsl_vector_double_to_long(y_hist_result_dim2, (gsl_vector_long *)lgchisq_bins->data);
 	//two-dimensional histogram
 	gsl_vector * temp_tin_dim1 =  gsl_vector_alloc(num_bin1);
 	gsl_vector * temp_tin_dim2 =  gsl_vector_alloc(num_bin2);

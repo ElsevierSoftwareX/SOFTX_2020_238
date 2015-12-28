@@ -59,8 +59,8 @@ typedef struct {
  */
 
 typedef struct {
-	Bins1D	*logsnr_bins;
-	Bins1D	*logchisq_bins;
+	Bins1D	*lgsnr_bins;
+	Bins1D	*lgchisq_bins;
 	Bins2D	*hist;
 } BackgroundRates;
 
