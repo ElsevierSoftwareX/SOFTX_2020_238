@@ -203,6 +203,10 @@ class FinalSink(object):
 		self.need_online_perform = need_online_perform
 		self.onperformer = OnlinePerformer(parent_lock = self.lock)
 
+		# trigger control
+
+		self.trigger_control_doc = "trigger_control.txt"
+
 	def appsink_new_buffer(self, elem):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
@@ -303,7 +307,40 @@ class FinalSink(object):
 		hack_factor = max(0.5, self.nevent_clustered / float(1 + self.snapshot_duration.gpsSeconds))
 		candidate.far = candidate.fap * hack_factor * self.far_factor
 
+	def __need_trigger_control(self, trigger)
+		# do trigger control
+		with open(self.trigger_control_doc) as f:
+			content = f.read().splitlines()
+
+		(last_time, last_far) = content[-1].split(",")
+		last_time = float(last_time)
+		last_far = float(last_far)
+
+		if abs(trigger.end_time - last_time) < 5:
+			return TRUE
+		else:
+			if abs(trigger.end_time - last_time) < 50 and abs(trigger.far/last_far) > 0.1:
+				return TRUE
+
+
+		tmp_fname = "%s%s" % (self.trigger_control_doc, self.job_tag)
+
+		shutil.copyfile(self.trigger_control_doc, tmp_fname)
+		line = "%g,%g\n" % (trigger.end_time, trigger.far)
+
+		f_tmp = open(tmp_fname, "a")
+		f_tmp.write(line)
+		f_tmp.close()
+
+		os.rename(tmp_fname, self.trigger_control_doc)
+		return FALSE
+
+
 	def __do_gracedb_alerts(self, trigger):
+
+		if __need_trigger_control(trigger):
+			return
+			
 		# do alerts
 		gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 		gracedb_ids = []
