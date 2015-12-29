@@ -9,6 +9,8 @@ import subprocess
 import re
 import time
 import numpy
+import os
+import shutil
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -307,38 +309,44 @@ class FinalSink(object):
 		hack_factor = max(0.5, self.nevent_clustered / float(1 + self.snapshot_duration.gpsSeconds))
 		candidate.far = candidate.fap * hack_factor * self.far_factor
 
-	def __need_trigger_control(self, trigger)
+	def __need_trigger_control(self, trigger):
 		# do trigger control
+		# FIXME: this is really ugly
+		if not os.path.isfile(self.trigger_control_doc):
+			os.mknod(self.trigger_control_doc)
+
 		with open(self.trigger_control_doc) as f:
 			content = f.read().splitlines()
-
-		(last_time, last_far) = content[-1].split(",")
+		if len(content) > 1:
+			(last_time, last_far) = content[-1].split(",")
+		else:
+			(last_time, last_far) = ('0', '1')
 		last_time = float(last_time)
 		last_far = float(last_far)
 
-		if abs(trigger.end_time - last_time) < 5:
-			return TRUE
+		if abs(float(trigger.end) - last_time) < 5:
+			return True
 		else:
-			if abs(trigger.end_time - last_time) < 50 and abs(trigger.far/last_far) > 0.1:
-				return TRUE
+			if abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1:
+				return True
 
 
-		tmp_fname = "%s%s" % (self.trigger_control_doc, self.job_tag)
+		tmp_fname = "%s%s" % (self.trigger_control_doc, self.path)
 
 		shutil.copyfile(self.trigger_control_doc, tmp_fname)
-		line = "%g,%g\n" % (trigger.end_time, trigger.far)
+		line = "%f,%e\n" % (float(trigger.end), trigger.far)
 
 		f_tmp = open(tmp_fname, "a")
 		f_tmp.write(line)
 		f_tmp.close()
 
 		os.rename(tmp_fname, self.trigger_control_doc)
-		return FALSE
+		return False
 
 
 	def __do_gracedb_alerts(self, trigger):
 
-		if __need_trigger_control(trigger):
+		if self.__need_trigger_control(trigger):
 			return
 			
 		# do alerts
