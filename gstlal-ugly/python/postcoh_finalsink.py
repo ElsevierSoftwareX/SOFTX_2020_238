@@ -10,7 +10,7 @@ import re
 import time
 import numpy
 import os
-import shutil
+import fcntl
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -311,12 +311,11 @@ class FinalSink(object):
 
 	def __need_trigger_control(self, trigger):
 		# do trigger control
-		# FIXME: this is really ugly
-		if not os.path.isfile(self.trigger_control_doc):
-			os.mknod(self.trigger_control_doc)
-
-		with open(self.trigger_control_doc) as f:
+		# FIXME: should implement a sql solution for node communication
+		
+		with open(self.trigger_control_doc, "r") as f:
 			content = f.read().splitlines()
+
 		if len(content) > 1:
 			(last_time, last_far) = content[-1].split(",")
 		else:
@@ -324,23 +323,14 @@ class FinalSink(object):
 		last_time = float(last_time)
 		last_far = float(last_far)
 
-		if abs(float(trigger.end) - last_time) < 5:
+		if abs(float(trigger.end) - last_time) < 5 or (abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1):
+			print >> sys.stderr, "trigger controled, time %f, FAR %e" % (float(trigger.end), trigger.far)
 			return True
-		else:
-			if abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1:
-				return True
 
-
-		tmp_fname = "%s%s" % (self.trigger_control_doc, self.path)
-
-		shutil.copyfile(self.trigger_control_doc, tmp_fname)
 		line = "%f,%e\n" % (float(trigger.end), trigger.far)
+		with open(self.trigger_control_doc, "a") as f:
+			f.write(line)
 
-		f_tmp = open(tmp_fname, "a")
-		f_tmp.write(line)
-		f_tmp.close()
-
-		os.rename(tmp_fname, self.trigger_control_doc)
 		return False
 
 
