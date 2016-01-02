@@ -137,6 +137,16 @@ get_idx_bins1D(double val, Bins1D *bins)
 }
 
 void
+background_stats_rates_update_all(gsl_vector *snr_vec, gsl_vector *chisq_vec, BackgroundRates *rates)
+{
+
+	int ievent, nevent = (int) snr_vec->size;
+	for (ievent=0; ievent<nevent; ievent++) {
+		background_stats_rates_update(gsl_vector_get(snr_vec, ievent), gsl_vector_get(chisq_vec, ievent), rates);
+	}
+}
+
+void
 background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
 {
 	int snr_idx = get_idx_bins1D(snr, rates->lgsnr_bins);

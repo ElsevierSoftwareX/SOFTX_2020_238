@@ -53,10 +53,13 @@ void cohfar_get_data_from_file(gchar **in_fnames, gsl_vector **pdata_dim1, gsl_v
 			printf("read file error dimen1\n");
 		}
 		while (fgets(buf, 100, fp) != NULL) { // count number of lines in file.
-			nevent++;								//each file's number of lines must be the same
+			nevent++;
 		}
 		fclose(fp);
 	}
+	#ifdef __DEBUG__
+	printf("read %d events from file\n", nevent);
+	#endif
 	//data_dim1 and data_dim2 contain the data of two dimensions
 	*pdata_dim1 = gsl_vector_alloc(nevent);
 	*pdata_dim2 = gsl_vector_alloc(nevent);
@@ -76,14 +79,14 @@ void cohfar_get_data_from_file(gchar **in_fnames, gsl_vector **pdata_dim1, gsl_v
 				printf("data snr%d, %s\n", ievent, token);
 			#endif
 			sscanf(token, "%lg", &idata);
-			gsl_vector_set(data_dim1, ievent, log10(idata));
+			gsl_vector_set(data_dim1, ievent, idata);
 			token = strtok_r(NULL, " ", &savePtr);
 			#ifdef __DEBUG__
 			if (ievent == 0)
 				printf("data chisq%d, %s\n", ievent, token);
 			#endif
 			sscanf(token, "%lg", &idata);
-			gsl_vector_set(data_dim2, ievent, log10(idata));
+			gsl_vector_set(data_dim2, ievent, idata);
 			ievent++;
 		}
 		fclose(fp);
@@ -123,7 +126,10 @@ int main(int argc, char *argv[])
 	if (g_strcmp0(*pfmt, "data") == 0) {
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
-		background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
+		background_stats_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->rates);
+		background_stats_rates_to_pdf(stats_out[ncombo-1]->rates, stats_out[ncombo-1]->pdf);
+		background_stats_pdf_to_cdf(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->cdf);
+		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
 		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, ncombo);
 		for (icombo=0; icombo<ncombo; icombo++) {
