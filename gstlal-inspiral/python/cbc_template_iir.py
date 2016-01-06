@@ -707,7 +707,9 @@ class Bank(object):
 
 				norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
 				h_pad /= norm_h
-				self.sigmasq.append(1.0 * norm_h / sampleRate)
+				#self.sigmasq.append(1.0 * norm_h / sampleRate)
+				self.sigmasq.append(norm_h/2. * len(h) / sampleRate**2. )
+
 
 
 				# This is actually the cross correlation between the original waveform and this approximation
