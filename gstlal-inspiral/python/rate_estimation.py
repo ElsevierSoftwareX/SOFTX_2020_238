@@ -512,7 +512,7 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	#
 
 	ndim = len(ln_likelihood_ratios)
-	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
+	nwalkers = 50 * 2 * ndim	# must be even and >= 2 * ndim
 	nburn = 1000
 
 	if progressbar is not None:
@@ -520,31 +520,10 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 		progressbar.show()
 
 	#
-	# seed all walkers as "not signal" --- assume we are noise
-	# dominated
+	# seed the walkers randomly
 	#
 
-	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
-
-	i = 0
-	#if chain_file is not None and "chain" in chain_file:
-	#	chain = chain_file["chain"].values()
-	#	length = sum(sample.shape[0] for sample in chain)
-	#	samples = numpy.empty((max(nsample, length), nwalkers, ndim), dtype = "double")
-	#	if progressbar is not None:
-	#		progressbar.max = samples.shape[0]
-	#	# load chain from HDF file
-	#	for sample in chain:
-	#		samples[i:i+sample.shape[0],:,:] = sample
-	#		i += sample.shape[0]
-	#		if progressbar is not None:
-	#			progressbar.update(i)
-	#	if i:
-	#		# skip burn-in, restart chain from last position
-	#		nburn = 0
-	#		pos0 = samples[i - 1,:,:]
-	#elif nsample <= 0:
-	#	raise ValueError("no chain file to load or invalid chain file, and no new samples requested")
+	pos0 = numpy.random.random((nwalkers, ndim)).round()
 
 	#
 	# run MCMC sampler to generate {f_i} vector samples
@@ -564,28 +543,18 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 
 		terms = numpy.compress(f.round(), ln_f_over_b)
 
-		return terms.sum() + ln_double_fac_table(len(terms))
+		return terms.sum() + ln_double_fac_table[len(terms)]
 
-
-	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), log_posterior, n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
-		# coordslist is nwalkers x ndim
-		samples[j,:,:] = coordslist.round()
-		# dump samples to the chain file every 2048 steps
-		if j + 1 >= i + 2048 and chain_file is not None:
-			chain_file["chain/%08d" % i] = samples[i:j+1,:,:]
-			chain_file.flush()
-			i = j + 1
-	# dump any remaining samples to chain file
-	if chain_file is not None and i < samples.shape[0]:
-		chain_file["chain/%08d" % i] = samples[i:,:,:]
-		chain_file.flush()
+	counts = numpy.zeros((nwalkers, ndim), dtype = "double")
+	for coordslist in run_mcmc(nwalkers, ndim, nsample, log_posterior, n_burn = nburn, pos0 = pos0, progressbar = progressbar):
+		counts += coordslist.round()
 
 	#
 	# compute P(signal) for each candidate from the mean of the boolean
 	# samples
 	#
 
-	p_signal = samples.mean(0).mean(0)
+	p_signal = (counts / nsample).mean(0)
 
 	#
 	# done
