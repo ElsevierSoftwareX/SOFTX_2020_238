@@ -1,5 +1,7 @@
 # Copyright (C) 2011--2014  Kipp Cannon, Chad Hanna, Drew Keppel
 # Copyright (C) 2013  Jacob Peoples
+# Copyright (C) 2015  Heather Fong
+# Copyright (C) 2015--2016  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -52,6 +54,7 @@ except ImportError:
 import math
 import numpy
 from scipy import optimize
+from scipy import special
 import sys
 
 
@@ -66,15 +69,10 @@ from gstlal._rate_estimation import *
 #
 # =============================================================================
 #
-#                            Event Rate Posteriors
+#                                 Helper Code
 #
 # =============================================================================
 #
-
-
-def maximum_likelihood_rates(ln_f_over_b):
-	# the upper bound is chosen to include N + \sqrt{N}
-	return optimize.fmin((lambda x: -RatesLnPDF(x, ln_f_over_b)), (1.0, len(ln_f_over_b) + len(ln_f_over_b)**.5), disp = True)
 
 
 def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, args = (), n_burn = 100, progressbar = None):
@@ -144,6 +142,20 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 			progressbar.increment()
 	if n_samples_per_walker and sampler.acceptance_fraction.min() < 0.5:
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
+
+
+#
+# =============================================================================
+#
+#                            Event Rate Posteriors
+#
+# =============================================================================
+#
+
+
+def maximum_likelihood_rates(ln_f_over_b):
+	# the upper bound is chosen to include N + \sqrt{N}
+	return optimize.fmin((lambda x: -RatesLnPDF(x, ln_f_over_b)), (1.0, len(ln_f_over_b) + len(ln_f_over_b)**.5), disp = True)
 
 
 def binned_rates_from_samples(samples):
@@ -392,3 +404,191 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 			ri = min(ri + 1, len(P) - 1)
 
 	return centres[mode_index], lower[li], upper[ri]
+
+
+#
+# =============================================================================
+#
+#                            Foreground Posteriors
+#
+# =============================================================================
+#
+
+
+#
+# code to compute P(signal) for each candidate.
+#
+# starting with equation (18) in Farr et al., and using (22) to marginalize
+# over Rf and Rb we obtain
+#
+# P(\{f_i\}) \propto
+#	[ \prod_{\{i | f_i = 1\}} \hat{f}(x_i) ] [ \prod_{\{i | f_i = 0\}}
+#	\hat{b}(x_i) ] (2 m - 1)!! (2 n - 1)!!
+#
+# where m is the number of terms for which f_i = 1 and n = N - m is the
+# number of terms for which f_i = 0.  rearranging factors of \hat{b} this
+# can be written as
+#
+#	\propto [ \prod_{\{i | f_i = 1\}} \hat{f}(x_i) / \hat{b}(x_i) ] (2
+#	m - 1)!! (2 n - 1)!!
+#
+
+
+def ln_double_fac_table(N):
+	"""
+	Compute a look-up table giving
+
+	ln (2m - 1)!! (2n - 1)!!
+
+	for 0 <= m <= N, n + m = N.
+	"""
+	#
+	# (2m - 1)!! = (2m)! / (2^m m!)
+	#
+	# so
+	#
+	# ln (2m - 1)!! (2n - 1)!! =
+	#	ln (2m)! + ln (2n)! - ln m! - ln n! - N ln 2
+	#
+	# and ln x! = ln \Gamma(x + 1)
+	#
+	# for which we can use the gammaln() function from scipy.  the
+	# final N ln 2 term can be dropped because we only need the answer
+	# up to an arbitrary constant but it's cheap to calculate so we
+	# don't bother with that simplification.
+	#
+	# the array is invariant under reversal so a factor of 2 savings
+	# can be realized by computing only the first half, and using it to
+	# populate the second half without additional arithmetic cost, but
+	# at the time of writing the array takes less than a second to
+	# compute up to N = 10^6 so we don't bother getting fancy.
+	#
+
+	lnfac = lambda x: special.gammaln(x + 1.)
+
+	m = numpy.arange(N + 1)
+	n = N - m
+
+	return lnfac(2. * m) + lnfac(2. * n) - lnfac(m) - lnfac(n) - N * math.log(2.)
+
+
+def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
+	"""
+	FIXME:  document this
+	"""
+	#
+	# check for bad input
+	#
+
+	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
+		raise ValueError("NaN log likelihood ratio encountered")
+	if nsample < 0:
+		raise ValueError("nsample < 0: %d" % nsample)
+
+	#
+	# for each sample of the ranking statistic, evaluate the ratio of
+	# the signal ranking statistic PDF to background ranking statistic
+	# PDF.
+	#
+
+	if ranking_data is not None:
+		f = ranking_data.signal_likelihood_pdfs[None]
+		b = ranking_data.background_likelihood_pdfs[None]
+		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
+		# safety checks
+		if numpy.isnan(ln_f_over_b).any():
+			raise ValueError("NaN encountered in ranking statistic PDF ratios")
+		if numpy.isinf(ln_f_over_b).any():
+			raise ValueError("infinity encountered in ranking statistic PDF ratios")
+	elif nsample > 0:
+		raise ValueError("must supply ranking data to run MCMC sampler")
+	else:
+		# no-op path
+		ln_f_over_b = numpy.array([])
+
+	#
+	# initialize MCMC chain.  try loading a chain from a chain file if
+	# provided, otherwise seed the walkers for a burn-in period
+	#
+
+	ndim = len(ln_likelihood_ratios)
+	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
+	nburn = 1000
+
+	if progressbar is not None:
+		progressbar.max = nsample + nburn
+		progressbar.show()
+
+	#
+	# seed all walkers as "not signal" --- assume we are noise
+	# dominated
+	#
+
+	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+
+	i = 0
+	#if chain_file is not None and "chain" in chain_file:
+	#	chain = chain_file["chain"].values()
+	#	length = sum(sample.shape[0] for sample in chain)
+	#	samples = numpy.empty((max(nsample, length), nwalkers, ndim), dtype = "double")
+	#	if progressbar is not None:
+	#		progressbar.max = samples.shape[0]
+	#	# load chain from HDF file
+	#	for sample in chain:
+	#		samples[i:i+sample.shape[0],:,:] = sample
+	#		i += sample.shape[0]
+	#		if progressbar is not None:
+	#			progressbar.update(i)
+	#	if i:
+	#		# skip burn-in, restart chain from last position
+	#		nburn = 0
+	#		pos0 = samples[i - 1,:,:]
+	#elif nsample <= 0:
+	#	raise ValueError("no chain file to load or invalid chain file, and no new samples requested")
+
+	#
+	# run MCMC sampler to generate {f_i} vector samples
+	#
+
+	def log_posterior(f, ln_f_over_b = ln_f_over_b, ln_double_fac_table = ln_double_fac_table(len(ln_f_over_b))):
+		"""
+		Compute the natural logarithm of
+
+		[ \prod_{\{i | f_i = 1\}} \hat{f}(x_i) / \hat{b}(x_i) ] (2 m - 1)!! (2 n - 1)!!
+		"""
+		assert len(f) == len(ln_f_over_b)
+
+		# require 0 <= f_i <= 1
+		if (f < 0.).any() or (f > 1.).any():
+			return NegInf
+
+		terms = numpy.compress(f.round(), ln_f_over_b)
+
+		return terms.sum() + ln_double_fac_table(len(terms))
+
+
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, max(0, nsample - i), log_posterior, n_burn = nburn, pos0 = pos0, progressbar = progressbar), i):
+		# coordslist is nwalkers x ndim
+		samples[j,:,:] = coordslist.round()
+		# dump samples to the chain file every 2048 steps
+		if j + 1 >= i + 2048 and chain_file is not None:
+			chain_file["chain/%08d" % i] = samples[i:j+1,:,:]
+			chain_file.flush()
+			i = j + 1
+	# dump any remaining samples to chain file
+	if chain_file is not None and i < samples.shape[0]:
+		chain_file["chain/%08d" % i] = samples[i:,:,:]
+		chain_file.flush()
+
+	#
+	# compute P(signal) for each candidate from the mean of the boolean
+	# samples
+	#
+
+	p_signal = samples.mean(0).mean(0)
+
+	#
+	# done
+	#
+
+	return p_signal
