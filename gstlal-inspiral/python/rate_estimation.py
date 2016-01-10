@@ -193,6 +193,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
 	# PDF.
+	# FIXME:  use an InterpBinnedArray for this
 	#
 
 	if ranking_data is not None:
@@ -489,6 +490,7 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
 	# PDF.
+	# FIXME:  use an InterpBinnedArray for this
 	#
 
 	if ranking_data is not None:
@@ -507,27 +509,22 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 		ln_f_over_b = numpy.array([])
 
 	#
-	# initialize MCMC chain.  try loading a chain from a chain file if
-	# provided, otherwise seed the walkers for a burn-in period
+	# initialize MCMC sampler.  seed the walkers randomly
 	#
 
 	ndim = len(ln_likelihood_ratios)
 	nwalkers = 50 * 2 * ndim	# must be even and >= 2 * ndim
 	nburn = 1000
 
-	if progressbar is not None:
-		progressbar.max = nsample + nburn
-		progressbar.show()
-
-	#
-	# seed the walkers randomly
-	#
-
 	pos0 = numpy.random.random((nwalkers, ndim)).round()
 
 	#
 	# run MCMC sampler to generate {f_i} vector samples
 	#
+
+	if progressbar is not None:
+		progressbar.max = nsample + nburn
+		progressbar.show()
 
 	def log_posterior(f, ln_f_over_b = ln_f_over_b, ln_double_fac_table = ln_double_fac_table(len(ln_f_over_b))):
 		"""
