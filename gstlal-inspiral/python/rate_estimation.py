@@ -572,3 +572,51 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	#
 
 	return p_signal
+
+
+def calculate_psignal_posteriors_from_rate_samples(ranking_data, ln_likelihood_ratios, nsample = 100000, progressbar = None):
+	"""
+	FIXME:  document this
+	"""
+	#
+	# for each sample of the ranking statistic, evaluate the ratio of
+	# the signal ranking statistic PDF to background ranking statistic
+	# PDF.
+	#
+
+	f_on_b = f_over_b(ranking_data, ln_likelihood_ratios)
+
+	#
+	# run MCMC sampler to generate (foreground rate, background rate)
+	# samples and compute
+	#
+	# p(g_j = 1 | d) = 1/N \sum_{k = 1}^{N} Rf_k * f(x_j) / [Rf_k*f(x_j) + Rb_k*b(x_j)]
+	#
+	#
+
+	ndim = 2
+	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
+	nburn = 1000
+
+	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+	pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
+	pos0[:,1] = numpy.random.poisson(lam = len(ln_likelihood_ratios), size = (nwalkers,))
+
+	if progressbar is not None:
+		progressbar.max = nsample + nburn
+		progressbar.show()
+
+	p_signal = numpy.zeros_like(f_on_b)
+	for coordslist in run_mcmc(nwalkers, ndim, nsample, LogPosterior(numpy.log(f_on_b)), n_burn = nburn, pos0 = pos0, progressbar = progressbar):
+		# coordslist is nwalkers x 2 array providing an array of
+		# (Rf, Rb) sample pairs
+		for Rf, Rb in coordslist:
+			x = Rf * f_on_b
+			p_signal += x / (x + Rb)
+	p_signal /= nwalkers * nsample
+
+	#
+	# done
+	#
+
+	return p_signal
