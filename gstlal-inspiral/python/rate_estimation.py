@@ -144,6 +144,88 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
 
 
+def moment_from_pdf(binnedarray, moment, c = 0.):
+	if len(binnedarray.bins) != 1:
+		raise ValueError("BinnedArray PDF must have 1 dimension")
+	x = binnedarray.bins.centres()[0]
+	dx = binnedarray.bins.upper()[0] - binnedarray.bins.lower()[0]
+	return ((x - c)**moment * binnedarray.array * dx).sum()
+
+
+def mean_from_pdf(binnedarray):
+	return moment_from_pdf(binnedarray, 1.)
+
+
+def variance_from_pdf(binnedarray):
+	return moment_from_pdf(binnedarray, 2., mean_from_pdf(binnedarray))
+
+
+def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
+	"""
+	Constructs a confidence interval based on a BinnedArray object
+	containing a normalized 1-D PDF.  Returns the tuple (mode, lower bound,
+	upper bound).
+	"""
+	# check for funny input
+	if numpy.isnan(binned_array.array).any():
+		raise ValueError("NaNs encountered in rate PDF")
+	if numpy.isinf(binned_array.array).any():
+		raise ValueError("infinities encountered in rate PDF")
+	if (binned_array.array < 0.).any():
+		raise ValueError("negative values encountered in rate PDF")
+	if not 0.0 <= confidence <= 1.0:
+		raise ValueError("confidence must be in [0, 1]")
+
+	mode_index = numpy.argmax(binned_array.array)
+
+	centres, = binned_array.centres()
+	upper = binned_array.bins[0].upper()
+	lower = binned_array.bins[0].lower()
+	bin_widths = upper - lower
+	if (bin_widths <= 0.).any():
+		raise ValueError("rate PDF bin sizes must be positive")
+	pdf = binned_array.array
+	P = pdf * bin_widths
+	# fix NaNs in infinite-sized bins
+	P[numpy.isinf(bin_widths)] = 0.
+	assert (pdf >= 0.).all()
+	assert (P >= 0.).all()
+	if abs(P.sum() - 1.0) > 1e-13:
+		raise ValueError("rate PDF is not normalized")
+
+	li = ri = mode_index
+	P_sum = P[mode_index]
+	while P_sum < confidence:
+		if li <= 0 and ri >= len(P) - 1:
+			raise ValueError("failed to achieve requested confidence")
+
+		if li > 0:
+			pdf_li = pdf[li - 1]
+			P_li = P[li - 1]
+		else:
+			pdf_li = 0.
+			P_li = 0.
+		if ri < len(P) - 1:
+			pdf_ri = pdf[ri + 1]
+			P_ri = P[ri + 1]
+		else:
+			pdf_ri = 0.
+			P_ri = 0.
+
+		if pdf_li > pdf_ri:
+			li -= 1
+			P_sum += P_li
+		elif pdf_ri > pdf_li:
+			ri += 1
+			P_sum += P_ri
+		else:
+			P_sum += P_li + P_ri
+			li = max(li - 1, 0)
+			ri = min(ri + 1, len(P) - 1)
+
+	return centres[mode_index], lower[li], upper[ri]
+
+
 #
 # =============================================================================
 #
@@ -315,88 +397,6 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	#
 
 	return Rf_pdf, Rb_pdf
-
-
-def moment_from_pdf(binnedarray, moment, c = 0.):
-	if len(binnedarray.bins) != 1:
-		raise ValueError("BinnedArray PDF must have 1 dimension")
-	x = binnedarray.bins.centres()[0]
-	dx = binnedarray.bins.upper()[0] - binnedarray.bins.lower()[0]
-	return ((x - c)**moment * binnedarray.array * dx).sum()
-
-
-def mean_from_pdf(binnedarray):
-	return moment_from_pdf(binnedarray, 1.)
-
-
-def variance_from_pdf(binnedarray):
-	return moment_from_pdf(binnedarray, 2., mean_from_pdf(binnedarray))
-
-
-def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
-	"""
-	Constructs a confidence interval based on a BinnedArray object
-	containing a normalized 1-D PDF.  Returns the tuple (mode, lower bound,
-	upper bound).
-	"""
-	# check for funny input
-	if numpy.isnan(binned_array.array).any():
-		raise ValueError("NaNs encountered in rate PDF")
-	if numpy.isinf(binned_array.array).any():
-		raise ValueError("infinities encountered in rate PDF")
-	if (binned_array.array < 0.).any():
-		raise ValueError("negative values encountered in rate PDF")
-	if not 0.0 <= confidence <= 1.0:
-		raise ValueError("confidence must be in [0, 1]")
-
-	mode_index = numpy.argmax(binned_array.array)
-
-	centres, = binned_array.centres()
-	upper = binned_array.bins[0].upper()
-	lower = binned_array.bins[0].lower()
-	bin_widths = upper - lower
-	if (bin_widths <= 0.).any():
-		raise ValueError("rate PDF bin sizes must be positive")
-	pdf = binned_array.array
-	P = pdf * bin_widths
-	# fix NaNs in infinite-sized bins
-	P[numpy.isinf(bin_widths)] = 0.
-	assert (pdf >= 0.).all()
-	assert (P >= 0.).all()
-	if abs(P.sum() - 1.0) > 1e-13:
-		raise ValueError("rate PDF is not normalized")
-
-	li = ri = mode_index
-	P_sum = P[mode_index]
-	while P_sum < confidence:
-		if li <= 0 and ri >= len(P) - 1:
-			raise ValueError("failed to achieve requested confidence")
-
-		if li > 0:
-			pdf_li = pdf[li - 1]
-			P_li = P[li - 1]
-		else:
-			pdf_li = 0.
-			P_li = 0.
-		if ri < len(P) - 1:
-			pdf_ri = pdf[ri + 1]
-			P_ri = P[ri + 1]
-		else:
-			pdf_ri = 0.
-			P_ri = 0.
-
-		if pdf_li > pdf_ri:
-			li -= 1
-			P_sum += P_li
-		elif pdf_ri > pdf_li:
-			ri += 1
-			P_sum += P_ri
-		else:
-			P_sum += P_li + P_ri
-			li = max(li - 1, 0)
-			ri = min(ri + 1, len(P) - 1)
-
-	return centres[mode_index], lower[li], upper[ri]
 
 
 #
