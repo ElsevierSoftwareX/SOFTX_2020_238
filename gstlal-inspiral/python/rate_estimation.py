@@ -226,6 +226,41 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	return centres[mode_index], lower[li], upper[ri]
 
 
+def f_over_b(ranking_data, ln_likelihood_ratios):
+	"""
+	For each sample of the ranking statistic, evaluate the ratio of the
+	signal ranking statistic PDF to background ranking statistic PDF.
+	"""
+	#
+	# check for bad input
+	#
+
+	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
+		raise ValueError("NaN log likelihood ratio encountered")
+
+	#
+	# for each sample of the ranking statistic, evaluate the ratio of
+	# the signal ranking statistic PDF to background ranking statistic
+	# PDF.
+	# FIXME:  use InterpBinnedArrays for this
+	#
+
+	f = ranking_data.signal_likelihood_pdfs[None]
+	b = ranking_data.background_likelihood_pdfs[None]
+	f_over_b = numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios])
+	# safety checks
+	if numpy.isnan(f_over_b).any():
+		raise ValueError("NaN encountered in ranking statistic PDF ratios")
+	if numpy.isinf(f_over_b).any():
+		raise ValueError("infinity encountered in ranking statistic PDF ratios")
+
+	#
+	# done
+	#
+
+	return f_over_b
+
+
 #
 # =============================================================================
 #
@@ -236,17 +271,8 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 
 
 def maximum_likelihood_rates(ranking_data, ln_likelihood_ratios):
-	f = ranking_data.signal_likelihood_pdfs[None]
-	b = ranking_data.background_likelihood_pdfs[None]
-	ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
-	# safety check
-	if numpy.isnan(ln_f_over_b).any():
-		raise ValueError("NaN encountered in ranking statistic log PDF ratios")
-	if numpy.isinf(ln_f_over_b).any():
-		raise ValueError("infinity encountered in ranking statistic log PDF ratios")
-
 	# initializer posterior PDF for rates
-	log_posterior = LogPosterior(ln_f_over_b)
+	log_posterior = LogPosterior(numpy.log(f_over_b(ranking_data, ln_likelihood_ratios)))
 
 	# going to use a minimizer to find the max, so need to flip
 	# function upside down
@@ -282,8 +308,6 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# check for bad input
 	#
 
-	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
-		raise ValueError("NaN log likelihood ratio encountered")
 	if nsample < 0:
 		raise ValueError("nsample < 0: %d" % nsample)
 
@@ -291,18 +315,10 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
 	# PDF.
-	# FIXME:  use an InterpBinnedArray for this
 	#
 
 	if ranking_data is not None:
-		f = ranking_data.signal_likelihood_pdfs[None]
-		b = ranking_data.background_likelihood_pdfs[None]
-		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
-		# safety check
-		if numpy.isnan(ln_f_over_b).any():
-			raise ValueError("NaN encountered in ranking statistic log PDF ratios")
-		if numpy.isinf(ln_f_over_b).any():
-			raise ValueError("infinity encountered in ranking statistic log PDF ratios")
+		ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
 	elif nsample > 0:
 		raise ValueError("must supply ranking data to run MCMC sampler")
 	else:
@@ -489,8 +505,6 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	# check for bad input
 	#
 
-	if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
-		raise ValueError("NaN log likelihood ratio encountered")
 	if nsample < 0:
 		raise ValueError("nsample < 0: %d" % nsample)
 
@@ -498,18 +512,10 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
 	# PDF.
-	# FIXME:  use an InterpBinnedArray for this
 	#
 
 	if ranking_data is not None:
-		f = ranking_data.signal_likelihood_pdfs[None]
-		b = ranking_data.background_likelihood_pdfs[None]
-		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
-		# safety checks
-		if numpy.isnan(ln_f_over_b).any():
-			raise ValueError("NaN encountered in ranking statistic PDF ratios")
-		if numpy.isinf(ln_f_over_b).any():
-			raise ValueError("infinity encountered in ranking statistic PDF ratios")
+		ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
 	elif nsample > 0:
 		raise ValueError("must supply ranking data to run MCMC sampler")
 	else:
