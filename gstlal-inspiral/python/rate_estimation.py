@@ -235,9 +235,25 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 #
 
 
-def maximum_likelihood_rates(ln_f_over_b):
+def maximum_likelihood_rates(ranking_data, ln_likelihood_ratios):
+	f = ranking_data.signal_likelihood_pdfs[None]
+	b = ranking_data.background_likelihood_pdfs[None]
+	ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
+	# safety check
+	if numpy.isnan(ln_f_over_b).any():
+		raise ValueError("NaN encountered in ranking statistic log PDF ratios")
+	if numpy.isinf(ln_f_over_b).any():
+		raise ValueError("infinity encountered in ranking statistic log PDF ratios")
+
+	# initializer posterior PDF for rates
+	log_posterior = LogPosterior(ln_f_over_b)
+
+	# going to use a minimizer to find the max, so need to flip
+	# function upside down
+	f = lambda x: -log_posterior(x)
+
 	# the upper bound is chosen to include N + \sqrt{N}
-	return optimize.fmin((lambda x: -RatesLnPDF(x, ln_f_over_b)), (1.0, len(ln_f_over_b) + len(ln_f_over_b)**.5), disp = True)
+	return tuple(optimize.fmin(f, (1.0, len(ln_likelihood_ratios)), disp = False))
 
 
 def binned_rates_from_samples(samples):
