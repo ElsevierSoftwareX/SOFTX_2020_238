@@ -203,7 +203,7 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
  */
 
 
-struct posterior {
+struct LogPosterior {
 	PyObject_HEAD
 
 	/*
@@ -224,7 +224,7 @@ struct posterior {
 
 static void __del__(PyObject *self)
 {
-	struct posterior *posterior = (struct posterior *) self;
+	struct LogPosterior *posterior = (struct LogPosterior *) self;
 
 	free(posterior->ln_f_over_b);
 	posterior->ln_f_over_b = NULL;
@@ -243,7 +243,7 @@ static void __del__(PyObject *self)
 
 static int __init__(PyObject *self, PyObject *args, PyObject *kwds)
 {
-	struct posterior *posterior = (struct posterior *) self;
+	struct LogPosterior *posterior = (struct LogPosterior *) self;
 	PyArrayObject *arr;
 	int i;
 
@@ -280,7 +280,7 @@ static int __init__(PyObject *self, PyObject *args, PyObject *kwds)
 
 static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
 {
-	struct posterior *posterior = (struct posterior *) self;
+	struct LogPosterior *posterior = (struct LogPosterior *) self;
 	double Rf, Rb;
 
 	if(kw) {
@@ -303,15 +303,15 @@ static PyObject *__call__(PyObject *self, PyObject *args, PyObject *kw)
  */
 
 
-static PyTypeObject posterior_Type = {
+static PyTypeObject LogPosterior_Type = {
 	PyObject_HEAD_INIT(NULL)
-	.tp_basicsize = sizeof(struct posterior),
+	.tp_basicsize = sizeof(struct LogPosterior),
 	.tp_call = __call__,
 	.tp_dealloc = __del__,
 	.tp_doc = "",
 	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES,
 	.tp_init = __init__,
-	.tp_name = MODULE_NAME ".posterior",
+	.tp_name = MODULE_NAME ".LogPosterior",
 	.tp_new = PyType_GenericNew,
 };
 
@@ -331,8 +331,8 @@ void init_rate_estimation(void)
 
 	import_array();
 
-	if(PyType_Ready(&posterior_Type) < 0)
+	if(PyType_Ready(&LogPosterior_Type) < 0)
 		return;
-	Py_INCREF((PyObject *) &posterior_Type);
-	PyModule_AddObject(module, "posterior", (PyObject *) &posterior_Type);
+	Py_INCREF((PyObject *) &LogPosterior_Type);
+	PyModule_AddObject(module, "LogPosterior", (PyObject *) &LogPosterior_Type);
 }

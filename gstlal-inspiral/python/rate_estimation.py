@@ -63,7 +63,7 @@ from pylal import rate
 
 
 from gstlal import emcee
-from gstlal._rate_estimation import *
+from gstlal._rate_estimation import LogPosterior
 
 
 #
@@ -262,7 +262,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# and then correct the histogram of the samples (see below).
 	#
 
-	log_posterior = posterior(ln_f_over_b)
+	log_posterior = LogPosterior(ln_f_over_b)
 
 	exponent = 2.25
 
