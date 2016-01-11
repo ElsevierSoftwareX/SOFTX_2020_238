@@ -200,19 +200,11 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 		f = ranking_data.signal_likelihood_pdfs[None]
 		b = ranking_data.background_likelihood_pdfs[None]
 		ln_f_over_b = numpy.log(numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios]))
-
-		# remove NaNs.  these occur because the ranking statistic
-		# PDFs have been zeroed at the cut-off and some events get
-		# pulled out of the database with ranking statistic values
-		# in that bin
-		#
-		# FIXME:  re-investigate the decision to zero the bin at
-		# threshold.  the original motivation for doing it might
-		# not be there any longer
-		ln_f_over_b = ln_f_over_b[~numpy.isnan(ln_f_over_b)]
 		# safety check
+		if numpy.isnan(ln_f_over_b).any():
+			raise ValueError("NaN encountered in ranking statistic log PDF ratios")
 		if numpy.isinf(ln_f_over_b).any():
-			raise ValueError("infinity encountered in ranking statistic PDF ratios")
+			raise ValueError("infinity encountered in ranking statistic log PDF ratios")
 	elif nsample > 0:
 		raise ValueError("must supply ranking data to run MCMC sampler")
 	else:
