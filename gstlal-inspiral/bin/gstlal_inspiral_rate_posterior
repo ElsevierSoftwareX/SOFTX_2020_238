@@ -288,6 +288,10 @@ if options.chain_file is not None:
 if options.samples is not None:
 	kwargs["nsample"] = options.samples
 signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
+#p_signal = rate_estimation.calculate_psignal_posteriors_from_rate_samples(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar)
+#while open("p_signal.txt", "w") as f:
+#	for vals in zip(zerolag_ln_likelihood_ratios, p_signal):
+#		print >>f, "%.17g %.17g" % vals
 del progressbar
 
 
