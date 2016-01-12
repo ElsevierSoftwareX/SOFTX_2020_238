@@ -308,6 +308,7 @@ else:
 	credible_intervals = None
 if options.verbose and credible_intervals is not None:
 	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal_rate_pdf)
+	print >>sys.stderr, "rate posterior median = %g signals/experiment" % rate_estimation.median_from_pdf(signal_rate_pdf)
 	# all modes are the same, pick one and report it
 	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % credible_intervals.values()[0][0]
 	for cred, (mode, lo, hi) in sorted(credible_intervals.items()):

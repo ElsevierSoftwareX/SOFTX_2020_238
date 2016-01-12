@@ -160,6 +160,53 @@ def variance_from_pdf(binnedarray):
 	return moment_from_pdf(binnedarray, 2., mean_from_pdf(binnedarray))
 
 
+def median_from_pdf(binnedarray):
+	upper = binnedarray.bins[0].upper()
+	lower = binnedarray.bins[0].lower()
+	bin_widths = upper - lower
+	if (bin_widths <= 0.).any():
+		raise ValueError("PDF bin sizes must be positive")
+	with numpy.errstate(invalid = "ignore"):
+		P = binnedarray.array * bin_widths
+	# fix NaNs in infinite-sized bins
+	P[numpy.isinf(bin_widths)] = 0.
+	# safety checks
+	assert (0. <= P).all()
+	assert (P <= 1.).all()
+	cdf = P.cumsum()
+	assert abs(cdf[-1] - 1.0) < 1e-13, "PDF is not normalized"
+	# tweak it to clean up the numerics
+	cdf /= cdf[-1]
+
+	#
+	# wrap (CDF - 0.5) in an InterpBinnedArray and use bisect to solve
+	# for 0 crossing.  the interpolator gets confused where the x
+	# co-ordinates are infinite and it breaks the bisect function for
+	# some reason, so to work around the issue we start the upper and
+	# lower boundaries in a little bit from the edges of the domain.
+	# FIXME:  this is stupid, find a root finder that gives the correct
+	# answer regardless.
+	#
+
+	binnedarray = rate.BinnedArray(binnedarray.bins)
+	binnedarray.array[:] = cdf - 0.5
+	func = rate.InterpBinnedArray(binnedarray)
+	median = optimize.bisect(func, lower[2], upper[-3], xtol = 1e-14, disp = False)
+
+	#
+	# check result (detects when the root finder has failed for some
+	# reason)
+	#
+
+	assert abs(func(median)) < 1e-13, "failed to find median (got %g)" % median
+
+	#
+	# done
+	#
+
+	return median
+
+
 def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	"""
 	Constructs a confidence interval based on a BinnedArray object
