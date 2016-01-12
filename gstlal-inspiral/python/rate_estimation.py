@@ -215,11 +215,11 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	"""
 	# check for funny input
 	if numpy.isnan(binned_array.array).any():
-		raise ValueError("NaNs encountered in rate PDF")
+		raise ValueError("NaNs encountered in PDF")
 	if numpy.isinf(binned_array.array).any():
-		raise ValueError("infinities encountered in rate PDF")
+		raise ValueError("infinities encountered in PDF")
 	if (binned_array.array < 0.).any():
-		raise ValueError("negative values encountered in rate PDF")
+		raise ValueError("negative values encountered in PDF")
 	if not 0.0 <= confidence <= 1.0:
 		raise ValueError("confidence must be in [0, 1]")
 
@@ -230,15 +230,15 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	lower = binned_array.bins[0].lower()
 	bin_widths = upper - lower
 	if (bin_widths <= 0.).any():
-		raise ValueError("rate PDF bin sizes must be positive")
+		raise ValueError("PDF bin sizes must be positive")
 	pdf = binned_array.array
 	P = pdf * bin_widths
 	# fix NaNs in infinite-sized bins
 	P[numpy.isinf(bin_widths)] = 0.
-	assert (pdf >= 0.).all()
-	assert (P >= 0.).all()
+	assert (0. <= P).all()
+	assert (P <= 1.).all()
 	if abs(P.sum() - 1.0) > 1e-13:
-		raise ValueError("rate PDF is not normalized")
+		raise ValueError("PDF is not normalized")
 
 	li = ri = mode_index
 	P_sum = P[mode_index]
