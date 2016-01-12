@@ -271,14 +271,14 @@ def f_over_b(ranking_data, ln_likelihood_ratios):
 
 
 def maximum_likelihood_rates(ranking_data, ln_likelihood_ratios):
-	# initializer posterior PDF for rates
+	# initialize posterior PDF for rates
 	log_posterior = LogPosterior(numpy.log(f_over_b(ranking_data, ln_likelihood_ratios)))
 
 	# going to use a minimizer to find the max, so need to flip
 	# function upside down
 	f = lambda x: -log_posterior(x)
 
-	# the upper bound is chosen to include N + \sqrt{N}
+	# initial guesses are Rf=1, Rb=(# candidates)
 	return tuple(optimize.fmin(f, (1.0, len(ln_likelihood_ratios)), disp = False))
 
 
