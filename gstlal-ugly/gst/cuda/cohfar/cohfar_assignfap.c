@@ -146,7 +146,8 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
-			table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->chisq, stats[icombo]->cdf);
+			if (icombo > -1)
+				table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->chisq, stats[icombo]->cdf);
 		}
 	}
 

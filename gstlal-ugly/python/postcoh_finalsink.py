@@ -234,7 +234,8 @@ class FinalSink(object):
 			self.need_candidate_check = False
 
 			nevent = len(newevents)
-			#print "%f nevent %d" % (buf_timestamp,nevent)
+			if self.verbose:
+				print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
@@ -248,10 +249,14 @@ class FinalSink(object):
 			# extend newevents to cur_event_table
 			self.cur_event_table.extend(newevents)
 
+			if self.cluster_window == 0:
+				self.postcoh_table.extend(newevents)
+				del self.cur_event_table[:]
+
 			# the logic of clustering here is quite complicated, fresh up
 			# yourself before reading the code
 			# check if the newevents is over boundary
-			while self.boundary and buf_timestamp > self.boundary:
+			while self.cluster_window > 0 and self.boundary and buf_timestamp > self.boundary:
 				self.cluster(self.cluster_window)
 
 				if self.need_candidate_check:

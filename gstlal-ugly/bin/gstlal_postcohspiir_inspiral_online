@@ -460,7 +460,8 @@ if 1==1:
 		  gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
 		  gracedb_group = options.finalsink_gracedb_group,
 		  gracedb_search = options.finalsink_gracedb_search,
-		  gracedb_pipeline = options.finalsink_gracedb_pipeline)
+		  gracedb_pipeline = options.finalsink_gracedb_pipeline,
+		  verbose = options.verbose)
 
 
   if options.verbose:

@@ -170,8 +170,10 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
+			//FIXME: add single detector stats
 			icombo = get_icombo(intable->ifos);
-			background_stats_rates_update((double)intable->cohsnr, (double)intable->chisq, stats[icombo]->rates);
+			if (icombo > -1)
+				background_stats_rates_update((double)intable->cohsnr, (double)intable->chisq, stats[icombo]->rates);
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
