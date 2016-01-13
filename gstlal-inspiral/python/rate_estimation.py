@@ -232,13 +232,14 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	if (bin_widths <= 0.).any():
 		raise ValueError("PDF bin sizes must be positive")
 	pdf = binned_array.array
-	P = pdf * bin_widths
+	with numpy.errstate(invalid = "ignore"):
+		P = pdf * bin_widths
 	# fix NaNs in infinite-sized bins
 	P[numpy.isinf(bin_widths)] = 0.
 	assert (0. <= P).all()
 	assert (P <= 1.).all()
 	if abs(P.sum() - 1.0) > 1e-13:
-		raise ValueError("PDF is not normalized")
+		raise ValueError("PDF is not normalized (integral = %g)" % P.sum())
 
 	li = ri = mode_index
 	P_sum = P[mode_index]
