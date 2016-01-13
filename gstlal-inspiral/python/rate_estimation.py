@@ -479,6 +479,94 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	return Rf_pdf, Rb_pdf
 
 
+def calculate_alphabetsoup_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, nsample = 400000):
+	"""
+	FIXME:  document this
+	"""
+	#
+	# check for bad input
+	#
+
+	if nsample < 0:
+		raise ValueError("nsample < 0: %d" % nsample)
+
+	#
+	# for each sample of the ranking statistic, evaluate the ratio of
+	# the signal ranking statistic PDF to background ranking statistic
+	# PDF.
+	#
+
+	ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
+
+	#
+	# initialize MCMC chain.  try loading a chain from a chain file if
+	# provided, otherwise seed the walkers for a burn-in period
+	#
+
+	ndim = 3
+	nwalkers = 10 * 2 * ndim	# must be even and >= 2 * ndim
+	nburn = 1000
+
+	pos0 = numpy.zeros((nwalkers, ndim), dtype = "double")
+
+	if progressbar is not None:
+		progressbar.max = nsample + nburn
+		progressbar.show()
+
+	#
+	# seed signal rate walkers from exponential distribution,
+	# background rate walkers from poisson distribution
+	#
+
+	samples = numpy.empty((nsample, nwalkers, ndim), dtype = "double")
+	pos0[:,0] = numpy.random.exponential(scale = 1., size = (nwalkers,))
+	pos0[:,1] = numpy.random.exponential(scale = 1., size = (nwalkers,))
+	pos0[:,2] = numpy.random.poisson(lam = len(ln_likelihood_ratios), size = (nwalkers,))
+
+	#
+	# run MCMC sampler to generate (foreground rate 1, foreground rate
+	# 2, background rate) samples.
+	#
+
+	ln_f_over_b.sort()
+	def log_posterior((Rf1, Rf2, Rb), x1 = math.exp(ln_f_over_b[-1]), x2 = math.exp(ln_f_over_b[-2]), std_log_posterior = LogPosterior(ln_f_over_b[:-2])):
+		if Rf1 < 0. or Rf2 < 0. or Rb < 0.:
+			return NegInf
+		return math.log(Rf1 / Rb * x1 + 1.) + math.log(Rf2 / Rb * x2 + 1.) + 2. * math.log(Rb) + std_log_posterior((Rf1 + Rf2, Rb))
+
+	for j, coordslist in enumerate(run_mcmc(nwalkers, ndim, nsample, log_posterior, n_burn = nburn, pos0 = pos0, progressbar = progressbar)):
+		# coordslist is nwalkers x ndim
+		samples[j,:,:] = coordslist
+
+	#
+	# safety check
+	#
+
+	if samples.min() < 0:
+		raise ValueError("MCMC sampler yielded negative rate(s)")
+
+	#
+	# compute marginalized PDFs for the foreground and background
+	# rates.  for each PDF, the samples from the MCMC are histogrammed
+	# and convolved with a density estimation kernel.
+	#
+
+	Rf1_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
+	Rf1_pdf.to_pdf()
+
+	Rf2_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
+	Rf2_pdf.to_pdf()
+
+	Rb_pdf = binned_rates_from_samples(samples[:,:,2].flatten())
+	Rb_pdf.to_pdf()
+
+	#
+	# done
+	#
+
+	return Rf1_pdf, Rf2_pdf, Rb_pdf
+
+
 #
 # =============================================================================
 #
