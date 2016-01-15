@@ -12,79 +12,98 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
 		int hist_trials = state->hist_trials;
 		g_assert(hist_trials != -1);
-		int exe_len = state->exe_len;
+		int max_npeak = state->max_npeak;
 		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
 
-		int peak_intlen = (6 + hist_trials) * exe_len + 1;
-		int peak_floatlen = (13 + hist_trials * 3 ) * exe_len;
+		int peak_intlen = (7 + hist_trials) * max_npeak + 1;
+		int peak_floatlen = (12 + hist_trials * 12 ) * max_npeak;
 		pklist->peak_intlen = peak_intlen;
 		pklist->peak_floatlen = peak_floatlen;
 		
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_npeak), sizeof(int) * peak_intlen ));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int) * peak_intlen, stream));
 		pklist->d_peak_pos = pklist->d_npeak + 1;
-		pklist->d_tmplt_idx = pklist->d_npeak + 1 + exe_len;
-		pklist->d_pix_idx = pklist->d_npeak + 1 + 2 * exe_len;
-		pklist->d_pix_idx_bg = pklist->d_npeak + 1 + 3 * exe_len;
-		pklist->d_ntoff_L = pklist->d_npeak + 1 + (3 + hist_trials) * exe_len;
-		pklist->d_ntoff_H = pklist->d_npeak + 1 + (4 + hist_trials) * exe_len;
-		pklist->d_ntoff_V = pklist->d_npeak + 1 + (5 + hist_trials) * exe_len;
+		pklist->d_len_idx = pklist->d_npeak + 1 + max_npeak;
+		pklist->d_tmplt_idx = pklist->d_npeak + 1 + 2 * max_npeak;
+		pklist->d_pix_idx = pklist->d_npeak + 1 + 3 * max_npeak;
+		pklist->d_pix_idx_bg = pklist->d_npeak + 1 + 4 * max_npeak;
+		pklist->d_ntoff_L = pklist->d_npeak + 1 + (4 + hist_trials) * max_npeak;
+		pklist->d_ntoff_H = pklist->d_npeak + 1 + (5 + hist_trials) * max_npeak;
+		pklist->d_ntoff_V = pklist->d_npeak + 1 + (6 + hist_trials) * max_npeak;
 
 		//printf("d_npeak %p\n", pklist->d_npeak);
 		//CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int), stream));
 
-		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_maxsnglsnr), sizeof(float) * peak_floatlen));
-		CUDA_CHECK(cudaMemsetAsync(pklist->d_maxsnglsnr, 0, sizeof(float) * peak_floatlen, stream));
-		pklist->d_snglsnr_L = pklist->d_maxsnglsnr + exe_len;
-		pklist->d_snglsnr_H = pklist->d_maxsnglsnr + 2 * exe_len;
-		pklist->d_snglsnr_V = pklist->d_maxsnglsnr + 3 * exe_len;
-		pklist->d_coa_phase_L = pklist->d_maxsnglsnr + 4 * exe_len;
-		pklist->d_coa_phase_H = pklist->d_maxsnglsnr + 5 * exe_len;
-		pklist->d_coa_phase_V = pklist->d_maxsnglsnr + 6 * exe_len;
-		pklist->d_chisq_L = pklist->d_maxsnglsnr + 7 * exe_len;
-		pklist->d_chisq_H = pklist->d_maxsnglsnr + 8 * exe_len;
-		pklist->d_chisq_V = pklist->d_maxsnglsnr + 9 * exe_len;
-		pklist->d_cohsnr = pklist->d_maxsnglsnr + 10 * exe_len;
-		pklist->d_cohsnr_bg = pklist->d_maxsnglsnr + 11 * exe_len;
-		pklist->d_nullsnr = pklist->d_maxsnglsnr + (11 + hist_trials ) * exe_len;
-		pklist->d_nullsnr_bg = pklist->d_maxsnglsnr + (12 + hist_trials) * exe_len;
-		pklist->d_chisq = pklist->d_maxsnglsnr + (12 + 2 * hist_trials) * exe_len;
-		pklist->d_chisq_bg = pklist->d_maxsnglsnr + (13 + 2 * hist_trials) * exe_len;
+		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_snglsnr_L), sizeof(float) * peak_floatlen));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_snglsnr_L, 0, sizeof(float) * peak_floatlen, stream));
+		pklist->d_snglsnr_H = pklist->d_snglsnr_L + max_npeak;
+		pklist->d_snglsnr_V = pklist->d_snglsnr_L + 2 * max_npeak;
+		pklist->d_coaphase_L = pklist->d_snglsnr_L + 3 * max_npeak;
+		pklist->d_coaphase_H = pklist->d_snglsnr_L + 4 * max_npeak;
+		pklist->d_coaphase_V = pklist->d_snglsnr_L + 5 * max_npeak;
+		pklist->d_chisq_L = pklist->d_snglsnr_L + 6 * max_npeak;
+		pklist->d_chisq_H = pklist->d_snglsnr_L + 7 * max_npeak;
+		pklist->d_chisq_V = pklist->d_snglsnr_L + 8 * max_npeak;
+		pklist->d_cohsnr = pklist->d_snglsnr_L + 9 * max_npeak;
+		pklist->d_nullsnr = pklist->d_snglsnr_L + 10 * max_npeak;
+		pklist->d_cmbchisq = pklist->d_snglsnr_L + 11 * max_npeak;
 	
+		pklist->d_snglsnr_bg_L = pklist->d_snglsnr_L + 12 * max_npeak;
+		pklist->d_snglsnr_bg_H = pklist->d_snglsnr_L + (12 + hist_trials) * max_npeak;
+		pklist->d_snglsnr_bg_V = pklist->d_snglsnr_L + (12 + 2* hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_L = pklist->d_snglsnr_L + (12 + 3*hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_H = pklist->d_snglsnr_L + (12 + 4*hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_V = pklist->d_snglsnr_L + (12 + 5*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_L = pklist->d_snglsnr_L + (12 + 6*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_H = pklist->d_snglsnr_L + (12 + 7*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_V = pklist->d_snglsnr_L + (12 + 8*hist_trials) * max_npeak;
+		pklist->d_cohsnr_bg = pklist->d_snglsnr_L + (12 + 9*hist_trials) * max_npeak;
+		pklist->d_nullsnr_bg = pklist->d_snglsnr_L + (12 + 10*hist_trials) * max_npeak;
+		pklist->d_cmbchisq_bg = pklist->d_snglsnr_L + (12 + 11 * hist_trials) * max_npeak;
+
 		//pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
 		CUDA_CHECK(cudaMallocHost((void **) &(pklist->npeak), sizeof(int) * peak_intlen));
 		memset(pklist->npeak, 0, sizeof(int) * peak_intlen);
 		pklist->peak_pos = pklist->npeak + 1;
-		pklist->tmplt_idx = pklist->npeak + 1 + exe_len;
-		pklist->pix_idx = pklist->npeak + 1 + 2 * exe_len;
-		pklist->pix_idx_bg = pklist->npeak + 1 + 3 * exe_len;
-		pklist->ntoff_L = pklist->npeak + 1 + (3 + hist_trials) * exe_len;
-		pklist->ntoff_H = pklist->npeak + 1 + (4 + hist_trials) * exe_len;
-		pklist->ntoff_V = pklist->npeak + 1 + (5 + hist_trials) * exe_len;
+		pklist->len_idx = pklist->npeak + 1 + max_npeak;
+		pklist->tmplt_idx = pklist->npeak + 1 + 2 * max_npeak;
+		pklist->pix_idx = pklist->npeak + 1 + 3 * max_npeak;
+		pklist->pix_idx_bg = pklist->npeak + 1 + 4 * max_npeak;
+		pklist->ntoff_L = pklist->npeak + 1 + (4 + hist_trials) * max_npeak;
+		pklist->ntoff_H = pklist->npeak + 1 + (5 + hist_trials) * max_npeak;
+		pklist->ntoff_V = pklist->npeak + 1 + (6 + hist_trials) * max_npeak;
 
-		//pklist->maxsnglsnr = (float *)malloc(sizeof(float) * peak_floatlen);
-		CUDA_CHECK(cudaMallocHost((void **) &(pklist->maxsnglsnr), sizeof(float) * peak_floatlen));
-		memset(pklist->maxsnglsnr, 0, sizeof(float) * peak_floatlen);
-		pklist->snglsnr_L = pklist->maxsnglsnr + exe_len;
-		pklist->snglsnr_H = pklist->maxsnglsnr + 2 * exe_len;
-		pklist->snglsnr_V = pklist->maxsnglsnr + 3 * exe_len;
-		pklist->coa_phase_L = pklist->maxsnglsnr + 4 * exe_len;
-		pklist->coa_phase_H = pklist->maxsnglsnr + 5 * exe_len;
-		pklist->coa_phase_V = pklist->maxsnglsnr + 6 * exe_len;
-		pklist->chisq_L = pklist->maxsnglsnr + 7 * exe_len;
-		pklist->chisq_H = pklist->maxsnglsnr + 8 * exe_len;
-		pklist->chisq_V = pklist->maxsnglsnr + 9 * exe_len;
-	
-		pklist->cohsnr = pklist->maxsnglsnr + 10 * exe_len;
-		pklist->cohsnr_bg = pklist->maxsnglsnr + 11 * exe_len;
-		pklist->nullsnr = pklist->maxsnglsnr + (11 + hist_trials ) * exe_len;
-		pklist->nullsnr_bg = pklist->maxsnglsnr + (12 + hist_trials) * exe_len;
-		pklist->chisq = pklist->maxsnglsnr + (12 + 2 * hist_trials) * exe_len;
-		pklist->chisq_bg = pklist->maxsnglsnr + (13 + 2 * hist_trials) * exe_len;
-	
+		//pklist->snglsnr_L = (float *)malloc(sizeof(float) * peak_floatlen);
+		CUDA_CHECK(cudaMallocHost((void **) &(pklist->snglsnr_L), sizeof(float) * peak_floatlen));
+		memset(pklist->snglsnr_L, 0, sizeof(float) * peak_floatlen);
+		pklist->snglsnr_H = pklist->snglsnr_L + max_npeak;
+		pklist->snglsnr_V = pklist->snglsnr_L + 2 * max_npeak;
+		pklist->coaphase_L = pklist->snglsnr_L + 3 * max_npeak;
+		pklist->coaphase_H = pklist->snglsnr_L + 4 * max_npeak;
+		pklist->coaphase_V = pklist->snglsnr_L + 5 * max_npeak;
+		pklist->chisq_L = pklist->snglsnr_L + 6 * max_npeak;
+		pklist->chisq_H = pklist->snglsnr_L + 7 * max_npeak;
+		pklist->chisq_V = pklist->snglsnr_L + 8 * max_npeak;
+		pklist->cohsnr = pklist->snglsnr_L + 9 * max_npeak;
+		pklist->nullsnr = pklist->snglsnr_L + 10 * max_npeak;
+		pklist->cmbchisq = pklist->snglsnr_L + 11 * max_npeak;
+//	
+		pklist->snglsnr_bg_L = pklist->snglsnr_L + 12 * max_npeak;
+		pklist->snglsnr_bg_H = pklist->snglsnr_L + (12 + hist_trials) * max_npeak;
+		pklist->snglsnr_bg_V = pklist->snglsnr_L + (12 + 2* hist_trials) * max_npeak;
+		pklist->coaphase_bg_L = pklist->snglsnr_L + (12 + 3*hist_trials) * max_npeak;
+		pklist->coaphase_bg_H = pklist->snglsnr_L + (12 + 4*hist_trials) * max_npeak;
+		pklist->coaphase_bg_V = pklist->snglsnr_L + (12 + 5*hist_trials) * max_npeak;
+		pklist->chisq_bg_L = pklist->snglsnr_L + (12 + 6*hist_trials) * max_npeak;
+		pklist->chisq_bg_H = pklist->snglsnr_L + (12 + 7*hist_trials) * max_npeak;
+		pklist->chisq_bg_V = pklist->snglsnr_L + (12 + 8*hist_trials) * max_npeak;
+		pklist->cohsnr_bg = pklist->snglsnr_L + (12 + 9*hist_trials) * max_npeak;
+		pklist->nullsnr_bg = pklist->snglsnr_L + (12 + 10*hist_trials) * max_npeak;
+		pklist->cmbchisq_bg = pklist->snglsnr_L + (12 + 11 * hist_trials) * max_npeak;
+
 //		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
 		//printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);
-		/* temporary struct to store tmplt max in one exe_len data */
+		/* temporary struct to store tmplt max in one max_npeak data */
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt, stream));
 
@@ -437,11 +456,11 @@ peak_list_destroy(PeakList *pklist)
 {
 	
 	CUDA_CHECK(cudaFree(pklist->d_npeak));
-	CUDA_CHECK(cudaFree(pklist->d_maxsnglsnr));
+	CUDA_CHECK(cudaFree(pklist->d_snglsnr_L));
 	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
 
 	CUDA_CHECK(cudaFreeHost(pklist->npeak));
-	CUDA_CHECK(cudaFreeHost(pklist->maxsnglsnr));
+	CUDA_CHECK(cudaFreeHost(pklist->snglsnr_L));
 }
 
 void

@@ -147,7 +147,7 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
 			if (icombo > -1)
-				table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->chisq, stats[icombo]->cdf);
+				table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats[icombo]->cdf);
 		}
 	}
 

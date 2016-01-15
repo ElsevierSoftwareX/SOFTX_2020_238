@@ -16,9 +16,9 @@ class PostcohInspiralTable(table.Table):
 			"snglsnr_L":	"real_4",
 			"snglsnr_H":	"real_4",
 			"snglsnr_V":	"real_4",
-			"coa_phase_L":	"real_4",
-			"coa_phase_H":	"real_4",
-			"coa_phase_V":	"real_4",
+			"coaphase_L":	"real_4",
+			"coaphase_H":	"real_4",
+			"coaphase_V":	"real_4",
 			"chisq_L":	"real_4",
 			"chisq_H":	"real_4",
 			"chisq_V":	"real_4",
@@ -28,10 +28,9 @@ class PostcohInspiralTable(table.Table):
 			"pivotal_ifo":	"lstring",
 			"tmplt_idx":	"int_4s",
 			"pix_idx":	"int_4s",
-			"maxsnglsnr":	"real_4",
 			"cohsnr":	"real_4",
 			"nullsnr":	"real_4",
-			"chisq":	"real_4",
+			"cmbchisq":	"real_4",
 			"spearman_pval":"real_4",
 			"fap":		"real_4",
 			"far":		"real_4",
@@ -49,7 +48,10 @@ class PostcohInspiralTable(table.Table):
 			"spin2z":	"real_4",
 			"eta":		"real_4",
 			"ra":		"real_8",
-			"dec":		"real_8"
+			"dec":		"real_8",
+			"deff_L":	"real_8",
+			"deff_H":	"real_8",
+			"deff_V":	"real_8"
 	}
 
 

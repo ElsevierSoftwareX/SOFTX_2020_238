@@ -90,6 +90,7 @@ typedef struct _PeakList {
 	/* data in the same type are allocated together */
 	int *npeak;
 	int *peak_pos;
+	int *len_idx;
 	int *tmplt_idx;
 	int *pix_idx;
 	int *pix_idx_bg; // background Ntoff needs this, do not remove
@@ -97,30 +98,41 @@ typedef struct _PeakList {
 	int *ntoff_H;
 	int *ntoff_V;
 
-	float *maxsnglsnr;
 	float *snglsnr_L;
 	float *snglsnr_H;
 	float *snglsnr_V;
-	float *coa_phase_L;
-	float *coa_phase_H;
-	float *coa_phase_V;
+	float *coaphase_L;
+	float *coaphase_H;
+	float *coaphase_V;
 	float *chisq_L;
 	float *chisq_H;
 	float *chisq_V;
 
+	float *snglsnr_bg_L;
+	float *snglsnr_bg_H;
+	float *snglsnr_bg_V;
+	float *coaphase_bg_L;
+	float *coaphase_bg_H;
+	float *coaphase_bg_V;
+	float *chisq_bg_L;
+	float *chisq_bg_H;
+	float *chisq_bg_V;
+
+
 	float *cohsnr;
 	float *nullsnr;
-	float *chisq;
+	float *cmbchisq;
 
 	float *cohsnr_bg;
 	float *nullsnr_bg;
-	float *chisq_bg;
+	float *cmbchisq_bg;
 	
 	float *cohsnr_skymap;
 	float *nullsnr_skymap;
 
 	int *d_npeak;
 	int *d_peak_pos;
+	int *d_len_idx;
 	int *d_tmplt_idx;
 	int *d_pix_idx;
 	int *d_pix_idx_bg; // background Ntoff needs this, do not remove
@@ -128,29 +140,39 @@ typedef struct _PeakList {
 	int *d_ntoff_H;
 	int *d_ntoff_V;
 
-	float *d_maxsnglsnr;
 	float *d_snglsnr_L;
 	float *d_snglsnr_H;
 	float *d_snglsnr_V;
-	float *d_coa_phase_L;
-	float *d_coa_phase_H;
-	float *d_coa_phase_V;
+	float *d_coaphase_L;
+	float *d_coaphase_H;
+	float *d_coaphase_V;
 	float *d_chisq_L;
 	float *d_chisq_H;
 	float *d_chisq_V;
 
+	float *d_snglsnr_bg_L;
+	float *d_snglsnr_bg_H;
+	float *d_snglsnr_bg_V;
+	float *d_coaphase_bg_L;
+	float *d_coaphase_bg_H;
+	float *d_coaphase_bg_V;
+	float *d_chisq_bg_L;
+	float *d_chisq_bg_H;
+	float *d_chisq_bg_V;
+
 	float *d_cohsnr;
 	float *d_nullsnr;
-	float *d_chisq;
+	float *d_cmbchisq;
 
 	float *d_cohsnr_bg;
 	float *d_nullsnr_bg;
-	float *d_chisq_bg;
+	float *d_cmbchisq_bg;
 	
 	float *d_cohsnr_skymap;
 	float *d_nullsnr_skymap;
 
 	float *d_peak_tmplt;
+	float *d_maxsnglsnr; // for cuda peakfinder, not used now
 
 } PeakList;
 
@@ -173,6 +195,7 @@ typedef struct _PostcohState {
   PeakList **peak_list;
   int head_len;
   int exe_len;
+  int max_npeak;
   int ntmplt;
   float dt;
   float snglsnr_thresh;
@@ -181,6 +204,8 @@ typedef struct _PostcohState {
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
   gint is_member_init;
+  float *tmp_maxsnr;
+  int *tmp_tmpltidx;
 } PostcohState;
 
 /**
@@ -217,6 +242,7 @@ struct _CudaPostcoh {
 
   PostcohState *state;
   float snglsnr_thresh;
+  float cohsnr_thresh;
   GMutex *prop_lock;
   GCond *prop_avail;
   gint hist_trials;

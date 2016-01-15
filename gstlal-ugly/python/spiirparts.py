@@ -89,8 +89,8 @@ def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_
 		properties["sigmasq"] = sigmasq
 	return pipeparts.mkgeneric(pipeline, src, "lal_itac_spearman", **properties)
 
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials = 1, snglsnr_thresh = 4.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "sngl-tmplt-fname", "hist-trials", "snglsnr-thresh", "output-skymap", "trial-interval", "stream-id"), (detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials, snglsnr_thresh, output_skymap, trial_interval, stream_id)))
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials = 1, snglsnr_thresh = 4.0, cohsnr_thresh = 5.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "sngl-tmplt-fname", "hist-trials", "snglsnr-thresh", "cohsnr_thresh", "output-skymap", "trial-interval", "stream-id"), (detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials, snglsnr_thresh, cohsnr_thresh, output_skymap, trial_interval, stream_id)))
 	if "name" in properties:
 		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
 	else:

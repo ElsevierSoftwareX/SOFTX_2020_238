@@ -121,8 +121,9 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(GST_OBJECT_PARENT(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 
-  GST_LOG_OBJECT (element, "receiving accum %s+%s buffer of %ld bytes, ts %"
-      GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
+	GST_LOG_OBJECT (element, "receiving accum %s+%s buffer of %" G_GSIZE_FORMAT 
+	" bytes, ts %" GST_TIME_FORMAT 
+      ", duration %" GST_TIME_FORMAT ", offset %"
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
       GST_BUFFER_IS_DISCONT(inbuf) ? "DISCONT" : "CONT",
@@ -173,7 +174,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			//FIXME: add single detector stats
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
-				background_stats_rates_update((double)intable->cohsnr, (double)intable->chisq, stats[icombo]->rates);
+				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates);
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;

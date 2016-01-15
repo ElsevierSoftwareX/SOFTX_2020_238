@@ -72,7 +72,7 @@ __global__ void ker_max_snglsnr
     int iifo,
     int start_exe,
     int len,
-    int     templateN,  // INPUT: template number
+    int     ntmplt,  // INPUT: template number
     int     timeN,      // INPUT: time sample number
     float*  ressnr,     // OUTPUT: maximum snr
     int*    restemplate     // OUTPUT: max snr time
@@ -92,9 +92,9 @@ __global__ void ker_max_snglsnr
     {
 	    start_idx = (i + start_exe) % len;
         // one warp is used to find the max snr for one time
-        for (int j = wIDl; j < templateN; j += WARP_SIZE)
+        for (int j = wIDl; j < ntmplt; j += WARP_SIZE)
         {
-	    index = start_idx * templateN + j;
+	    index = start_idx * ntmplt + j;
 	
             temp_snr_sq        = snr[iifo][index].re * snr[iifo][index].re + snr[iifo][index].im * snr[iifo][index].im;
 
@@ -131,7 +131,7 @@ ker_remove_duplicate_mix
     float*  ressnr,
     int*    restemplate,
     int     timeN,
-    int     templateN,
+    int     ntmplt,
     float*  peak
 )
 {
@@ -166,8 +166,8 @@ ker_remove_duplicate_find_peak
     float*  ressnr,
     int*    restemplate,
     int     timeN,
-    int     templateN,
-    float*  peak            // peak is used for storing intermediate result, it is of size templateN
+    int     ntmplt,
+    float*  peak            // peak is used for storing intermediate result, it is of size ntmplt
 )
 {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -191,7 +191,7 @@ ker_remove_duplicate_scan
     float*  ressnr,
     int*    restemplate,
     int     timeN,
-    int     templateN,
+    int     ntmplt,
     float*  peak,
     float   snglsnr_thresh
 )
@@ -267,7 +267,7 @@ __global__ void ker_coh_skymap
 	int		exe_len,				/* INPUT, snglsnr length */
 	int		start_exe,				/* INPUT, snglsnr start exe position */
 	float		dt,			/* INPUT, 1/ sampling rate */
-	int		templateN		/* INPUT, number of templates */
+	int		ntmplt		/* INPUT, number of templates */
 )
 {
 	int bid	= blockIdx.x;
@@ -295,7 +295,7 @@ __global__ void ker_coh_skymap
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
-				dk[j] = snr[j][((start_exe + peak_cur + NtOff + len) % len) * templateN + tmplt_cur ]; 	
+				dk[j] = snr[j][((start_exe + peak_cur + NtOff + len) % len) * ntmplt + tmplt_cur ]; 	
 
 			}
 
@@ -329,25 +329,21 @@ __global__ void ker_coh_skymap
 
 __global__ void ker_coh_max_and_chisq
 (
-	float		*coh_snr,		/* OUTPUT, only save the max one, of size (num_triggers) */
-	float		*coh_nullstream,	/* OUTPUT, only save the max one, of size (num_triggers) */
-	float		*chisq,			/* OUTPUT, chisq value */
-	int		*pix_idx,		/* OUTPUT, store the index of the sky_direction, of size (num_triggers) */
 	COMPLEX_F	**snr,			/* INPUT, (2, 3) * data_points */	
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
-	float		*maxsnglsnr,		/* INPUT, maximum single snr	*/
-	int		*tmplt_idx,		/* INPUT, the tmplt index of triggers	*/
 	int		*peak_pos,	/* INPUT, place the location of the trigger */
+	float		*snglsnr_L,		/* INPUT, maximum single snr	*/
+	float		*snglsnr_bg_L,		/* INPUT, maximum single snr	*/
 	int		npeak,		/* INPUT, number of triggers */
 	float		*u_map,				/* INPUT, u matrix map */
 	float		*toa_diff_map,		/* INPUT, time of arrival difference map */
 	int		num_sky_directions,	/* INPUT, # of sky directions */
 	int		len,				/* INPUT, snglsnr length */
-	int		exe_len,				/* INPUT, snglsnr length */
+	int		max_npeak,				/* INPUT, snglsnr length */
 	int		start_exe,				/* INPUT, snglsnr start exe position */
 	float		dt,			/* INPUT, 1/ sampling rate */
-	int		templateN,		/* INPUT, number of templates */
+	int		ntmplt,		/* INPUT, number of templates */
 	int		autochisq_len,		/* INPUT, auto-chisq length */
 	COMPLEX_F	**autocorr_matrix,	/* INPUT, autocorrelation matrix for all templates */
 	float		**autocorr_norm,	/* INPUT, autocorrelation normalization matrix for all templates */
@@ -380,17 +376,26 @@ __global__ void ker_coh_max_and_chisq
 	float	snr_max			= 0.0f, snr_tmp = 0.0f;
 	float	nullstream_max, nullstream_max_tmp;
 	int	sky_idx = 0, sky_idx_tmp = 0;	
-	int	i, i2, itrial, trial_offset, output_offset;
+	int	i, i2, itrial, trial_offset, output_offset, len_cur;
+	int	*pix_idx = peak_pos + 3 * max_npeak;
+	int	*pix_idx_bg = peak_pos + 4 * max_npeak;
+	float 	*cohsnr = snglsnr_L + 9 * max_npeak;
+	float 	*nullsnr = snglsnr_L + 10 * max_npeak;
+	float 	*cmbchisq = snglsnr_L + 11 * max_npeak;
+	float 	*cohsnr_bg = snglsnr_L + (12 + 9*hist_trials) * max_npeak;
+	float 	*nullsnr_bg = snglsnr_L + (12 + 10*hist_trials) * max_npeak;
+	float 	*cmbchisq_bg = snglsnr_L + (12 + 11*hist_trials) * max_npeak;
 
 	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
 	{
 		peak_cur = peak_pos[ipeak];
-		tmplt_cur = tmplt_idx[peak_cur];
+		// find the len_cur from len_idx
+		len_cur = peak_pos[peak_cur + max_npeak];
+		// find the tmplt_cur from tmplt_idx
+		tmplt_cur = peak_pos[peak_cur + 2 * max_npeak];
 
 		itrial = 0;
 		snr_max = 0.0;
-		trial_offset = itrial * trial_sample_inv;
-		output_offset = itrial * exe_len;
 		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
 		{
 			// matrix u is stored in column order
@@ -403,9 +408,9 @@ __global__ void ker_coh_max_and_chisq
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
 				if ( j == iifo )
-					dk[j] = snr[j][((start_exe + peak_cur + len) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + len_cur + len) % len) * ntmplt + tmplt_cur ]; 	
 				else
-					dk[j] = snr[j][((start_exe + peak_cur + NtOff - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + len_cur + NtOff + len) % len) * ntmplt + tmplt_cur ]; 	
 			}
 
 			for (int j = 0; j < nifo; ++j)
@@ -421,7 +426,7 @@ __global__ void ker_coh_max_and_chisq
 				}
 				utdka[j] = real * real + imag * imag;	
 			}	
-			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
+			// cohsnr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
 			if (ipix < 2) {
@@ -486,9 +491,9 @@ __global__ void ker_coh_max_and_chisq
 		}
 		if (threadIdx.x == 0)
 		{
-			coh_snr[peak_cur + output_offset]		= snr_shared[0];
-			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
-			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
+			cohsnr[peak_cur]	= snr_shared[0];
+			nullsnr[peak_cur]	= nullstream_shared[0];
+			pix_idx[peak_cur]	= sky_idx_shared[0]; 			
 
 		}
 		__syncthreads();
@@ -506,7 +511,7 @@ __global__ void ker_coh_max_and_chisq
 			{
 
 			// NOTE: The snr is stored channel-wise 
-			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len]; 	
+			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * ntmplt + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len]; 	
 			}
 			chisq[peak_cur] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
 		}
@@ -516,7 +521,7 @@ __global__ void ker_coh_max_and_chisq
 		float laneChi2 = 0.0f;
 		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
-		chisq[peak_cur + output_offset] = 0.0;
+		cmbchisq[peak_cur] = 0.0;
 		if (wID == 0)
 		{
 			for (int j = 0; j < nifo; ++j)
@@ -526,23 +531,23 @@ __global__ void ker_coh_max_and_chisq
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
 				if (j == iifo)
-					peak_pos_tmp = start_exe + peak_cur;
+					peak_pos_tmp = start_exe + len_cur;
 				else
-					peak_pos_tmp = start_exe + peak_cur + NtOff - trial_offset + len;
+					peak_pos_tmp = start_exe + len_cur + NtOff + len;
 
-				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * templateN + tmplt_cur];
+				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * ntmplt + tmplt_cur];
 				/* set the ntoff; snglsnr; and coa_phase for each detector */
 				/* set the ntoff; this is actually d_ntoff_*  */
-				peak_pos[peak_cur + (3 + hist_trials + j) * exe_len] = NtOff;
+				peak_pos[peak_cur + (4 + hist_trials + j) * max_npeak] = NtOff;
 				/* set the d_snglsnr_* */
-				maxsnglsnr[peak_cur + (1 + j) * exe_len] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
+				snglsnr_L[peak_cur + j * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
 				/* set the d_coa_phase_* */
-				maxsnglsnr[peak_cur + (4 + j) * exe_len] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+				snglsnr_L[peak_cur + (3 + j) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
 				
 				for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
-					tmp_snr = snr[j][((peak_pos_tmp + ishift + len) % len) * templateN + tmplt_cur];
+					tmp_snr = snr[j][((peak_pos_tmp + ishift + len) % len) * ntmplt + tmplt_cur];
 					tmp_autocorr = autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len];
 					data.re = tmp_snr.re - tmp_maxsnr.re * tmp_autocorr.re + tmp_maxsnr.im * tmp_autocorr.im;
 					data.im = tmp_snr.im - tmp_maxsnr.re * tmp_autocorr.im - tmp_maxsnr.im * tmp_autocorr.re;
@@ -556,11 +561,11 @@ __global__ void ker_coh_max_and_chisq
 				if (srcLane == 0)
 				{
 					chisq_cur = laneChi2/ autocorr_norm[j][tmplt_cur];
-					// the location of chisq_cur is indexed from maxsnglsnr
-					maxsnglsnr[peak_cur + (7 + j) * exe_len] = chisq_cur;
+					// the location of chisq_* is indexed from maxsnglsnr
+					snglsnr_L[peak_cur + (6 + j) * max_npeak] = chisq_cur;
 
-					chisq[peak_cur + output_offset] += chisq_cur;
-//					printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur + output_offset], chisq[peak_cur + output_offset]);
+					cmbchisq[peak_cur] += chisq_cur;
+//					printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, cohsnr[peak_cur], nullsnr[peak_cur], pix_idx[peak_cur], cmbchisq[peak_cur]);
 				}
 
 			}
@@ -584,7 +589,7 @@ __global__ void ker_coh_max_and_chisq
 			// FIXME: try using random offset like the following
 			//trial_offset = rand()% rand_range + 1;
 			trial_offset = itrial * trial_sample_inv;
-			output_offset = itrial * exe_len;
+			output_offset = peak_cur + (itrial - 1)* max_npeak;
 		for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions/16; seed_pix += blockDim.x)
 		{
 			// matrix u is stored in column order
@@ -595,15 +600,16 @@ __global__ void ker_coh_max_and_chisq
 			{
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
+	
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
 				// The background cohsnr should be obtained coherently as well.
 				if (j == iifo)
 					/* FIXME: how we select a background trigger, see the old way (commented) and the new way. */
-					//dk[j] = snr[j][((start_exe + peak_cur - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
-					dk[j] = snr[j][((start_exe + peak_cur + len) % len) * templateN + tmplt_cur ]; 	
+					//dk[j] = snr[j][((start_exe + peak_cur - trial_offset + len) % len) * ntmplt + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + len_cur + len) % len) * ntmplt + tmplt_cur ]; 	
 				else
-					dk[j] = snr[j][((start_exe + peak_cur + NtOff - trial_offset + len) % len) * templateN + tmplt_cur ]; 	
+					dk[j] = snr[j][((start_exe + len_cur + NtOff - trial_offset + len) % len) * ntmplt + tmplt_cur ]; 	
 			}
 
 			for (int j = 0; j < nifo; ++j)
@@ -612,14 +618,11 @@ __global__ void ker_coh_max_and_chisq
 				imag = 0.0f;
 				for (int k = 0; k < nifo; ++k)
 				{
-					// real += mu[j * nifo + k] * dk[k].x;
-					// imag += mu[j * nifo + k] * dk[k].y;
 					real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
 					imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
 				}
 				utdka[j] = real * real + imag * imag;	
 			}	
-			// coh_snr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4)	/ sqrt(8.0f);
 			snr_tmp = utdka[0] + utdka[1];
 #if 0
 			if (itrial==1 && threadIdx.x == 1) {
@@ -684,10 +687,10 @@ __global__ void ker_coh_max_and_chisq
 		}
 		if (threadIdx.x == 0)
 		{
-			coh_snr[peak_cur + output_offset]		= snr_shared[0];
-			coh_nullstream[peak_cur + output_offset]	= nullstream_shared[0];
+			cohsnr_bg[output_offset]		= snr_shared[0];
+			nullsnr_bg[output_offset]	= nullstream_shared[0];
 			/* background need this for Ntoff */
-			pix_idx[peak_cur + output_offset]		= sky_idx_shared[0]; 			
+			pix_idx_bg[output_offset]		= sky_idx_shared[0]; 			
 
 		}
 		__syncthreads();
@@ -705,7 +708,7 @@ __global__ void ker_coh_max_and_chisq
 			{
 
 			// NOTE: The snr is stored channel-wise 
-			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * templateN + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len]; 	
+			data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * ntmplt + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len]; 	
 			}
 			chisq[peak_cur] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
 		}
@@ -715,7 +718,7 @@ __global__ void ker_coh_max_and_chisq
 		float laneChi2 = 0.0f;
 		int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
-		chisq[peak_cur + output_offset] = 0.0;
+		cmbchisq_bg[output_offset] = 0.0;
 		if (wID == 0)
 		{
 			for (int j = 0; j < nifo; ++j)
@@ -723,14 +726,19 @@ __global__ void ker_coh_max_and_chisq
 				laneChi2 = 0.0f;
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
-				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur + output_offset]] / dt);
+				NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx_bg[output_offset]] / dt);
 
 				if (j == iifo)
-					peak_pos_tmp = start_exe + peak_cur;
+					peak_pos_tmp = start_exe + len_cur;
 				else 
-					peak_pos_tmp = start_exe + peak_cur + NtOff - trial_offset + len;
+					peak_pos_tmp = start_exe + len_cur + NtOff - trial_offset + len;
 
-				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * templateN + tmplt_cur];
+				tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * ntmplt + tmplt_cur];
+				/* set the d_snglsnr_* */
+				snglsnr_bg_L[peak_cur + j * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
+				/* set the d_coa_phase_* */
+				snglsnr_bg_L[peak_cur + (3 + j) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+	
 #if 0
 				if (threadIdx.x == 1 && ipeak == 0)
 				printf("ipeak %d, itrial %d, trial_offset %d, NtOff %d, maxsnr.re %f, maxsnr.im %f\n", ipeak, itrial, trial_offset, NtOff, tmp_maxsnr.re, tmp_maxsnr.im);
@@ -739,7 +747,7 @@ __global__ void ker_coh_max_and_chisq
 				for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
 				{
 					/* NOTE: The snr is stored channel-wise */
-					tmp_snr = snr[j][((peak_pos_tmp + ishift + len) % len) * templateN + tmplt_cur];
+					tmp_snr = snr[j][((peak_pos_tmp + ishift + len) % len) * ntmplt + tmplt_cur];
 					tmp_autocorr = autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len];
 					data.re = tmp_snr.re - tmp_maxsnr.re * tmp_autocorr.re + tmp_maxsnr.im * tmp_autocorr.im;
 					data.im = tmp_snr.im - tmp_maxsnr.re * tmp_autocorr.im - tmp_maxsnr.im * tmp_autocorr.re;
@@ -752,11 +760,15 @@ __global__ void ker_coh_max_and_chisq
 
 				if (srcLane == 0)
 				{
+					chisq_cur = laneChi2/ autocorr_norm[j][tmplt_cur];
+					// set d_chisq_bg_* from snglsnr_bg_L
+					snglsnr_bg_L[peak_cur + (6 + j) * max_npeak] = chisq_cur;
 
-					chisq[peak_cur + output_offset] += laneChi2/ autocorr_norm[j][tmplt_cur];
+	
+					cmbchisq_bg[output_offset] += chisq_cur;
 #if 0
 					if (ipeak == 0)
-					printf("iifo%d, jifo %d, peak %d, start %d, itrial %d, trial_offset %d, ntoff %d, off_pos %d, len %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", iifo, j, ipeak, start_exe+peak_cur, itrial, trial_offset, NtOff, peak_pos_tmp, len, coh_snr[peak_cur + output_offset], coh_nullstream[peak_cur + output_offset], pix_idx[peak_cur], chisq[peak_cur + output_offset]);
+					printf("iifo%d, jifo %d, peak %d, start %d, itrial %d, trial_offset %d, ntoff %d, off_pos %d, len %d, cohsnr %f, nullstream %f, ipix %d, cmbchisq %f\n", iifo, j, ipeak, start_exe+len_cur, itrial, trial_offset, NtOff, peak_pos_tmp, len, cohsnr[peak_cur], nullsnr[peak_cur], pix_idx[peak_cur], cmbchisq[peak_cur]);
 #endif
 				}
 
@@ -791,7 +803,8 @@ void peakfinder(PostcohState *state, int iifo, cudaStream_t stream)
     CUDA_CHECK(cudaPeekAtLastError());
 
     GRID = (state->exe_len + THREAD_BLOCK - 1) / THREAD_BLOCK;
-    ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK, 0, stream>>>(	pklist->d_maxsnglsnr, 
+    ker_remove_duplicate_find_peak<<<GRID, THREAD_BLOCK, 0, stream>>>(
+						 	    pklist->d_maxsnglsnr, 
 		    						pklist->d_tmplt_idx, 
 								state->exe_len, 
 								state->ntmplt, 
@@ -851,7 +864,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->d_diff_map[gps_idx],
 									state->npix,
 									state->snglsnr_len,
-									state->exe_len,
+									state->max_npeak,
 									state->snglsnr_start_exe,
 									state->dt,
 									state->ntmplt);
@@ -866,22 +879,19 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 
 	}
 
-	ker_coh_max_and_chisq<<<npeak, threads, sharedmem, stream>>>(	pklist->d_cohsnr,
-									pklist->d_nullsnr,
-									pklist->d_chisq,
-									pklist->d_pix_idx,
+	ker_coh_max_and_chisq<<<npeak, threads, sharedmem, stream>>>(
 									state->dd_snglsnr,
 									iifo,	
 									state->nifo,
-									pklist->d_maxsnglsnr,
-									pklist->d_tmplt_idx,
 									pklist->d_peak_pos,
+									pklist->d_snglsnr_L,
+									pklist->d_snglsnr_bg_L,
 									pklist->npeak[0],
 									state->d_U_map[gps_idx],
 									state->d_diff_map[gps_idx],
 									state->npix,
 									state->snglsnr_len,
-									state->exe_len,
+									state->max_npeak,
 									state->snglsnr_start_exe,
 									state->dt,
 									state->ntmplt,
@@ -894,8 +904,8 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	cudaStreamSynchronize(stream);
 	CUDA_CHECK(cudaPeekAtLastError());
 	/* copy the snr, cohsnr, nullsnr, chisq out */
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->maxsnglsnr, 
-			pklist->d_maxsnglsnr, 
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->snglsnr_L, 
+			pklist->d_snglsnr_L, 
 			sizeof(float) * (pklist->peak_floatlen), 
 			cudaMemcpyDeviceToHost,
 			stream));

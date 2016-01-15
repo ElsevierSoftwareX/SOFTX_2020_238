@@ -723,7 +723,7 @@ class FinalSink(object):
 
 	def write_output_file(self, filename = None, verbose = False):
 		self.__check_internal_process_finish()
-		self.__write_output_file(filename)
+		self.__write_output_file(filename, verbose = verbose)
 
 	def __write_output_file(self, filename = None, verbose = False):
 		if filename is not None:
