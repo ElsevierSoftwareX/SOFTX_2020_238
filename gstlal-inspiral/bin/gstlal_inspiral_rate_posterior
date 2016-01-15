@@ -288,6 +288,7 @@ if options.chain_file is not None:
 if options.samples is not None:
 	kwargs["nsample"] = options.samples
 signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
+#signal_rate_pdf, signal2_rate_pdf, signal12_rate_pdf, noise_rate_pdf = rate_estimation.calculate_alphabetsoup_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
 #p_signal = rate_estimation.calculate_psignal_posteriors_from_rate_samples(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar)
 #while open("p_signal.txt", "w") as f:
 #	for vals in zip(zerolag_ln_likelihood_ratios, p_signal):
@@ -304,15 +305,29 @@ if options.credible_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining credible intervals ..."
 	credible_intervals = dict((cred, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, cred)) for cred in options.credible_intervals)
+	#credible_intervals2 = dict((cred, rate_estimation.confidence_interval_from_binnedarray(signal2_rate_pdf, cred)) for cred in options.credible_intervals)
+	#credible_intervals12 = dict((cred, rate_estimation.confidence_interval_from_binnedarray(signal12_rate_pdf, cred)) for cred in options.credible_intervals)
 else:
 	credible_intervals = None
+	#credible_intervals2 = None
+	#credible_intervals12 = None
 if options.verbose and credible_intervals is not None:
 	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal_rate_pdf)
 	print >>sys.stderr, "rate posterior median = %g signals/experiment" % rate_estimation.median_from_pdf(signal_rate_pdf)
+	#print >>sys.stderr, "rate 2 posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal2_rate_pdf)
+	#print >>sys.stderr, "rate 2 posterior median = %g signals/experiment" % rate_estimation.median_from_pdf(signal2_rate_pdf)
+	#print >>sys.stderr, "rate 1+2 posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal12_rate_pdf)
+	#print >>sys.stderr, "rate 1+2 posterior median = %g signals/experiment" % rate_estimation.median_from_pdf(signal12_rate_pdf)
 	# all modes are the same, pick one and report it
 	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % credible_intervals.values()[0][0]
+	#print >>sys.stderr, "maximum-likelihood rate 2 = %g signals/experiment" % credible_intervals2.values()[0][0]
+	#print >>sys.stderr, "maximum-likelihood rate 1+2 = %g signals/experiment" % credible_intervals12.values()[0][0]
 	for cred, (mode, lo, hi) in sorted(credible_intervals.items()):
 		print >>sys.stderr, "%g%% credible interval = [%g, %g] signals/experiment" % (cred * 100., lo, hi)
+	#for cred, (mode, lo, hi) in sorted(credible_intervals2.items()):
+	#	print >>sys.stderr, "%g%% credible interval 2 = [%g, %g] signals/experiment" % (cred * 100., lo, hi)
+	#for cred, (mode, lo, hi) in sorted(credible_intervals12.items()):
+	#	print >>sys.stderr, "%g%% credible interval 1+2 = [%g, %g] signals/experiment" % (cred * 100., lo, hi)
 
 
 #
