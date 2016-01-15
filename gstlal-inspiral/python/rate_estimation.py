@@ -557,6 +557,9 @@ def calculate_alphabetsoup_rate_posteriors(ranking_data, ln_likelihood_ratios, p
 	Rf2_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
 	Rf2_pdf.to_pdf()
 
+	Rf12_pdf = binned_rates_from_samples((samples[:,:,0] + samples[:,:,1]).flatten())
+	Rf12_pdf.to_pdf()
+
 	Rb_pdf = binned_rates_from_samples(samples[:,:,2].flatten())
 	Rb_pdf.to_pdf()
 
@@ -564,7 +567,7 @@ def calculate_alphabetsoup_rate_posteriors(ranking_data, ln_likelihood_ratios, p
 	# done
 	#
 
-	return Rf1_pdf, Rf2_pdf, Rb_pdf
+	return Rf1_pdf, Rf2_pdf, Rf12_pdf, Rb_pdf
 
 
 #
