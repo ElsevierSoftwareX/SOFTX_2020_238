@@ -234,8 +234,7 @@ class FinalSink(object):
 			self.need_candidate_check = False
 
 			nevent = len(newevents)
-			if self.verbose:
-				print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
+			#print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
