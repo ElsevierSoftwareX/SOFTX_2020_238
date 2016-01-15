@@ -199,7 +199,7 @@ static void cohfar_assignfap_set_property(GObject *object, enum property prop_id
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
 			int nifo = strlen(element->ifos) / IFO_LEN;
-			element->ncombo = pow(2, nifo) - 1 - nifo;
+			element->ncombo = get_ncombo(nifo);
 			element->stats = background_stats_create(element->ifos);
 			break;
 
@@ -207,7 +207,6 @@ static void cohfar_assignfap_set_property(GObject *object, enum property prop_id
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
 			element->input_fname = g_value_dup_string(value);
-			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
 			break;
 
 		case PROP_COLLECTION_TIME:

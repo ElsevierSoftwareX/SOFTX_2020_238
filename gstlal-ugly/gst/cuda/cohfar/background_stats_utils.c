@@ -9,7 +9,7 @@
 #include "ssvkernel.h"
 #include "background_stats_xml.h"
 
-char *IFO_COMBO_MAP[] = {"H1L1", "H1V1", "L1V1", "H1L1V1"};
+char *IFO_COMBO_MAP[] = {"L1", "H1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
 
 int get_icombo(char *ifos) {
 	int icombo = 0; 
@@ -29,6 +29,12 @@ int get_icombo(char *ifos) {
 	}
 
 	return -1;
+}
+
+int get_ncombo(int nifo) {
+	// FIXME: hard-coded
+	return 7;
+  
 }
 
 Bins1D *
@@ -99,7 +105,8 @@ background_stats_create(char *ifos)
 {
   int nifo = 0, ncombo = 0, icombo = 0;
   nifo = strlen(ifos) / IFO_LEN;
-  ncombo = pow(2, nifo) - 1 - nifo;
+
+  ncombo = get_ncombo(nifo);
   BackgroundStats ** stats = (BackgroundStats **) malloc(sizeof(BackgroundStats *) * ncombo);
 
   for (icombo=0; icombo<ncombo; icombo++) {

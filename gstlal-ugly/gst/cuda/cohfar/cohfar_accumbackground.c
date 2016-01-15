@@ -139,7 +139,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	/*
 	 * calculate output buffer entries
 	 */
-	int icombo, outentries = 0;
+	int outentries = 0;
 	BackgroundStats **stats = element->stats;
 	PostcohInspiralTable *intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *intable_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
@@ -167,11 +167,16 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
+	int isingle, icombo;
 	for (; intable<intable_end; intable++) {
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			//FIXME: add single detector stats
+			isingle = get_icombo(intable->pivotal_ifo);
+			if (isingle > -1)
+				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates);
+
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
 				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates);
@@ -271,7 +276,7 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
 			int nifo = strlen(element->ifos) / IFO_LEN;
-			element->ncombo = pow(2, nifo) - 1 - nifo;
+			element->ncombo = get_ncombo(nifo);
 			element->stats = background_stats_create(element->ifos);
 			break;
 
