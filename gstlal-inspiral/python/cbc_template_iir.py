@@ -707,13 +707,6 @@ class Bank(object):
 
 				norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
 				h_pad /= norm_h
-				#self.sigmasq.append(1.0 * norm_h / sampleRate)
-				self.sigmasq.append(norm_h/2. * len(h) / sampleRate**2. )
-
-
-
-				# This is actually the cross correlation between the original waveform and this approximation
-				self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
 
 			
 				h_pad1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
@@ -742,8 +735,14 @@ class Bank(object):
 				delay = opIIR.delay
 				spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
 
+			#self.sigmasq.append(1.0 * norm_h / sampleRate)
+			self.sigmasq.append(norm_h/2. * len(h) / sampleRate**2. )
+			
+			# This is actually the cross correlation between the original waveform and this approximation
+			# FIXME: also update the waveform
+			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
+			
 			self.matches.append(spiir_match)
-			self.sigmasq.append(1.0 * norm_h / sampleRate)
 			n_filters = len(a1)
 
 			if verbose:
