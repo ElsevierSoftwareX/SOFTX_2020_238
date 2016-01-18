@@ -126,8 +126,12 @@ class OptimizerIIR(Optimizer):
 		self.template = [] # original template
 		self._iir_set_res = [] # columns are individual iir responses
 		self._iir_sum_res = [] # a column vector
+		self._iir_set_index = [] # columns are the beginning and ending indices for individual iir filters
 		
 		self.n_iir = len(self.a1)
+
+		self.acc_flag = True  # acceleration flag
+
 		assert self.n_iir == len(self.b0)
 		assert self.n_iir == len(self.delay)
 		
@@ -151,6 +155,8 @@ class OptimizerIIR(Optimizer):
 		"""
 		
 		self._iir_set_res = numpy.zeros((self.length, self.n_iir), dtype=numpy.cdouble)
+		self._iir_set_index = numpy.zeros((2, self.n_iir), dtype=numpy.int16)
+
 		for ii in xrange(self.n_iir):
 			length0 = numpy.round( numpy.log(1e-13) / numpy.log(numpy.abs(self.a1[ii])) )
 			max_length = self.length - self.delay[ii]
@@ -160,6 +166,9 @@ class OptimizerIIR(Optimizer):
 
 			self._iir_set_res[ self.delay[ii] : self.delay[ii]+length0, ii] = self.b0[ii] * self.a1[ii]**t_step
 			self._iir_set_res[:, ii] = self._iir_set_res[::-1, ii]
+			
+			self._iir_set_index[1, ii] = self.length - self.delay[ii]
+			self._iir_set_index[0, ii] = self.length - self.delay[ii] - length0
 
 
 	def getSumIIR(self):
@@ -214,8 +223,13 @@ class OptimizerIIR(Optimizer):
 		self._iir_sum_res = self.cnormalize(self._iir_sum_res)
 		self._iir_set_res /= self.cnorm(self._iir_sum_res)
 
-		G = numpy.dot(numpy.conj(self._iir_set_res.T), self._iir_set_res)
-		H = numpy.dot(numpy.conj(self.template), self._iir_set_res)
+
+		if not self.acc_flag:
+			G = numpy.dot(numpy.conj(self._iir_set_res.T), self._iir_set_res)
+			H = numpy.dot(numpy.conj(self.template), self._iir_set_res)
+		else:
+			pass
+
 		HH = numpy.multiply.outer(numpy.conj(H), H)
 
 		GHH = numpy.dot(numpy.linalg.inv(G), HH)
