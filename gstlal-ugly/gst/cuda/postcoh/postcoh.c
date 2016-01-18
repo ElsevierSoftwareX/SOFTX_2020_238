@@ -39,6 +39,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 5
+#define PEAKFINDER_CLUSTER_WINDOW 5
 
 static void additional_initializations(GType type)
 {
@@ -846,7 +847,7 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int his
 
 static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh)
 {
-	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->exe_len], peak_cur;
+	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->max_npeak], peak_cur;
 	PeakList *pklist; 
 	int *peak_pos;
 	int left_entries = 0;
@@ -1012,6 +1013,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				for(ipeak=0; ipeak<npeak; ipeak++) {
 					int *peak_pos = pklist->peak_pos;
 					peak_cur = peak_pos[ipeak];
+					len_cur = pklist->len_idx[peak_cur];
 					/* check if cohsnr pass the valid test */
 					peak_cur_bg = (itrial - 1)*max_npeak + peak_cur;
 					if (pklist->cohsnr_bg[peak_cur_bg] > 0) {
@@ -1162,7 +1164,27 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 			}
 		}
 	}
+
+	/* do clustering every 5 samples */
+	int tmp_peak_pos[state->max_npeak], len_tmp_peak, len_next_peak, final_peaks=0, ipeak;
+	tmp_peak_pos[0] = peak_pos[0];
+	for(ipeak=0; ipeak<npeak-1; ipeak++) {
+		if (peak_pos[ipeak+1] - tmp_peak_pos[final_peaks] > PEAKFINDER_CLUSTER_WINDOW) {
+			final_peaks++;
+			tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+		}
+		else { // update the tmp_peak_pos if next peak pos has larger SNR
+			len_tmp_peak = len_idx[tmp_peak_pos[final_peaks]];
+			len_next_peak = len_idx[peak_pos[ipeak+1]];
+			if (tmp_maxsnr[len_tmp_peak] < tmp_maxsnr[len_next_peak])
+				tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+		}
+	}
+
+	npeak = final_peaks;
+	memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
 	pklist->npeak[0] = npeak;
+
 	//printf("peaks_over_thresh , ifo %d, npeak %d\n", cur_ifo, npeak);
 	CUDA_CHECK(cudaMemcpyAsync(	pklist->d_npeak, 
 			pklist->npeak, 

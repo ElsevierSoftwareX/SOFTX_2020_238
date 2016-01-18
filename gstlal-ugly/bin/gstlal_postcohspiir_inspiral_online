@@ -198,6 +198,7 @@ def parse_command_line():
 
   # set the postcoh parameters
   parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
+  parser.add_option("--cuda-postcoh-cohsnr-thresh", metavar = "SNR", type = "float", default = 5.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
   parser.add_option("--cuda-postcoh-detrsp-fname", metavar = "filename", help = "detector response filename.")
   parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
   parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
@@ -431,6 +432,7 @@ if 1==1:
       track_psd = options.track_psd,
       blind_injections = options.blind_injections,
       cuda_postcoh_snglsnr_thresh = options.cuda_postcoh_snglsnr_thresh,
+      cuda_postcoh_cohsnr_thresh = options.cuda_postcoh_cohsnr_thresh,
       cuda_postcoh_detrsp_fname = options.cuda_postcoh_detrsp_fname,
       cuda_postcoh_hist_trials = options.cuda_postcoh_hist_trials,
       cuda_postcoh_output_skymap = options.cuda_postcoh_output_skymap,

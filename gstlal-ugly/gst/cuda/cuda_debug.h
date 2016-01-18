@@ -6,6 +6,7 @@
 #include <time.h>
 #include <sys/time.h>
 
+#define DEBUG 1
 #ifdef DEBUG
 #define CUDA_CHECK(value) {                                             \
     cudaError_t _m_cudaStat = value;                                    \

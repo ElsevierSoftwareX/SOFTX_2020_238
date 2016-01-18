@@ -75,8 +75,8 @@ options = parse_command_line()
 
 if options.ifos == "L1H1":
 	ifos = "H1L1"
-pdf_name = "background_pdf:%s_logsnr_logchisq:array" % ifos
-cdf_name = "background_cdf:%s_logsnr_logchisq:array" % ifos
+pdf_name = "background_pdf:%s_lgsnr_lgchisq:array" % ifos
+cdf_name = "background_cdf:%s_lgsnr_lgchisq:array" % ifos
 
 # pdf not needed now
 #pdf = array_from_xml(options.input_stats_filename, pdf_name)

@@ -167,19 +167,21 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
-	int isingle, icombo;
+	int isingle, icombo, nifo;
 	for (; intable<intable_end; intable++) {
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			//FIXME: add single detector stats
-			isingle = get_icombo(intable->pivotal_ifo);
-			if (isingle > -1)
-				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates);
-
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
 				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates);
+
+			nifo = strlen(intable->ifos)/IFO_LEN;
+			for (isingle=0; isingle< nifo; isingle++)
+				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates);
+
+
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;

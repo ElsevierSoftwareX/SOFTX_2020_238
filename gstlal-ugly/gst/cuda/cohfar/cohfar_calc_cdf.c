@@ -116,7 +116,11 @@ int main(int argc, char *argv[])
 
 	parse_opts(argc, argv, pin, pfmt, pout, pifos);
 	int nifo = strlen(*pifos) / IFO_LEN;
+<<<<<<< HEAD
+	int icombo, ncombo = get_ncombo(nifo);
+=======
 	int ncombo = get_ncombo(nifo), icombo;
+>>>>>>> 3197155630a0082852b0294096b05b2581807574
 	
 	BackgroundStats **stats_in = background_stats_create(*pifos);
 	BackgroundStats **stats_out = background_stats_create(*pifos);

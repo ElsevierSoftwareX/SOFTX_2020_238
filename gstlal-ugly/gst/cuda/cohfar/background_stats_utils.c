@@ -188,6 +188,8 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	gsl_vector_long *chisq = rates->lgchisq_bins->data;
 
 	long nevent = gsl_vector_long_sum(snr);
+	if (nevent == 0)
+		return TRUE;
 	gsl_vector *snr_double = gsl_vector_alloc(snr->size);
 	gsl_vector *chisq_double = gsl_vector_alloc(chisq->size);
 	gsl_vector_long_to_double(snr, snr_double);
