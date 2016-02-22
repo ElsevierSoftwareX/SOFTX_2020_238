@@ -58,36 +58,67 @@
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal_interpolator.h>
 
-/*
- * Utility functions for tapering the FFT buffers
- */
-
 #define PI 3.141592653589793
 
-/*
- * Produce the kernel for interpolation
- * The Kernel is a parabolic windowed sinc function
- * FIXME, consider sinc windowed sinc function?? 
- *
- * The kernel is split into factor pieces to make the subesequent convolution
- * not have to multiply zeroes
- *
- * int half_length: This is the kernel's half length.  The kernel is by definition symmetric about its center, therefore it has an odd number of samples
- *
- * int factor: This is the interpolation factor. It must be a power of 2 greater than or equal to 1
- *
- */
 
-gsl_vector_float** kernel(int half_length, int factor) {
+gsl_vector_float** kernel(int half_length_at_original_rate, int f) {
 
-	int kernel_length = 2 * half_length * factor + 1;
-	int sub_kernel_length = 2 * half_length + 1;
+	/*
+	 * This is a parabolic windowed sinc function kernel
+	 * The baseline kernel is defined as
+	 * 
+	 * g[k] = sin(pi / f * (k-c)) / (pi / f * (k-c)) * (1 - (k-c)^2 / c / c)	k != c
+	 * g[k] = 1									k = c
+	 * 
+	 * Where:
+	 *
+	 * 	f: interpolation factor, must be power of 2, e.g., 2, 4, 8, ...
+	 * 	c: defined as half the full kernel length
+	 * 
+	 * You specify the half filter length at the original rate in samples,
+	 * the kernel length is then given by:
+	 *
+	 *	kernel_length = half_length_at_original_rate * 2 * f + 1
+	 *
+	 * Interpolation is then defined as a two step process.  First the
+	 * input data is zero filled to bring it up to the new sample rate,
+	 * i.e., the input data, x, is transformed to x' such that:
+	 * 
+	 * x'[i] = x[i/f]	if (i%f) == 0
+	 *	 = 0		if (i%f) > 0
+	 * 
+	 * y[i] = sum_{k=0}^{2c+1} x'[i-k] g[k]
+	 * 
+	 * Since more than half the terms in this series would be zero, the
+	 * convolution is implemented by breaking up the kernel into f separate
+	 * kernels each 1/f as large as the originalcalled z, i.e.,:
+	 * 
+	 * z[0][k/f] = g[k*f]
+	 * z[1][k/f] = g[k*f+1]
+	 * ...
+	 * z[f-1][k/f] = g[k*f + f-1]
+	 *
+	 * Now the convolution can be written as:
+	 * 
+	 * y[i] = sum_{k=0}^{2c/f+1} x[i/f] z[i%f][k]
+	 * 
+	 * which avoids multiplying zeros.  Note also that by construction the
+	 * sinc function has its zeros arranged such that z[0][:] had only one
+	 * nonzero sample at its center. Therefore the actual convolution is:
+	 * 
+	 * y[i] = x[i/f]					if i%f == 0
+	 * y[i] = sum_{k=0}^{2c/f+1} x[i/f] z[i%f][k]		otherwise
+	 *
+	 */
+
+	int kernel_length = 2 * half_length_at_original_rate * f + 1;
+	int sub_kernel_length = 2 * half_length_at_original_rate + 1;
 
 	/* the domain should be the kernel_length divided by two */
-	int center = kernel_length / 2;
+	int c = kernel_length / 2;
 
-	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * factor);
-	for (int i = 0; i < factor; i++)
+	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * f);
+	for (int i = 0; i < f; i++)
 		vecs[i] = gsl_vector_float_calloc(sub_kernel_length);
 
 	float *out = fftwf_malloc(sizeof(float) * kernel_length);
@@ -95,18 +126,18 @@ gsl_vector_float** kernel(int half_length, int factor) {
 
 
 	for (int i = 0; i < kernel_length; i++) {
-		int x = i - center;
+		int x = i - c;
 		if (x == 0)
 			out[i] = 1.;
 		else
-			out[i] = sin(PI * x / factor) / (PI * x / factor) * (1. - (float) x*x / center / center);
+			out[i] = sin(PI * x / f) / (PI * x / f) * (1. - (float) x*x / c / c);
 	}
 
-	for (int f = 0; f < factor; f++) {
+	for (int j = 0; j < f; j++) {
 		for (int i = 0; i < sub_kernel_length; i++) {
-			int index = i * factor + f;
+			int index = i * f + j;
 			if (index < kernel_length)
-				gsl_vector_float_set(vecs[f], sub_kernel_length - i - 1, out[index]);
+				gsl_vector_float_set(vecs[j], sub_kernel_length - i - 1, out[index]);
 		}
 	}
 			
@@ -114,7 +145,15 @@ gsl_vector_float** kernel(int half_length, int factor) {
 	return vecs;
 }
 
+
 void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
+
+	/* 
+	 * This function will multiply a matrix of input values by vector to
+ 	 * produce a vector of output values.  It is a single sample output of a
+	 * convolution with channels number of channels
+	 */
+
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
 	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
@@ -122,6 +161,14 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 }
 
 void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
+
+	/*
+	 * For a special set of input samples a convolution is not necessary.
+	 * These are input samples that are exactly divisble by the upsample
+	 * factor. For these we can save computation and simply copy the input
+	 * samples to the output.
+	 *
+	*/
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_vector_float_view input_vector = gsl_vector_float_view_array(input + kernel_length / 2, channels);
 	gsl_vector_float_memcpy(&(output_vector.vector), &(input_vector.vector));
@@ -129,6 +176,17 @@ void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint
 }
 
 void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+	/*
+	 * This function is responsible for the resampling of the input time
+	 * series.  It accomplishes the convolution by matrix multiplications
+	 * on the input data sample-by-sample.  Gaps are skipped and the output
+	 * is set to zero.  NOTE only gaps that are entirely zero in the input
+	 * matrix will map to an output of zero.  Gaps smaller than that will
+	 * still be convolved even though it is silly to do so.  The input
+	 * stride is 32 samples though, so most gaps will be bigger than that.
+	 *
+	*/
+
 	if (!nongap) {
 		memset(output, 0, sizeof(float) * blockstrideout * channels);
 		return;
@@ -138,7 +196,8 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
 		input_offset = samp / factor * channels;
-		/* The first kernel is a delta function by definition, so just
+		/*
+		 * The first kernel is a delta function by definition, so just
  		 * copy the input 
 		 */
 		if (kernel_offset == 0)
@@ -385,6 +444,12 @@ static guint minimum_input_size(GSTLALInterpolator *element, guint size) {
 }
 
 static guint get_output_length(GSTLALInterpolator *element, guint samps) {
+	/*
+	 * The output length is either a multiple of the blockstride or 0 if
+	 * there is not enough data.
+	 * 
+	*/
+
 	// Pretend that we have a half_length set of samples if we are at a discont
 	guint pretend_samps = element->need_pretend ? element->half_length : 0;
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
