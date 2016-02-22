@@ -64,47 +64,67 @@
 
 #define PI 3.141592653589793
 
+/*
+ * Produce the kernel for interpolation
+ * The Kernel is a parabolic windowed sinc function
+ * FIXME, consider sinc windowed sinc function?? 
+ *
+ * The kernel is split into factor pieces to make the subesequent convolution
+ * not have to multiply zeroes
+ *
+ * int half_length: This is the kernel's half length.  The kernel is by definition symmetric about its center, therefore it has an odd number of samples
+ *
+ * int factor: This is the interpolation factor. It must be a power of 2 greater than or equal to 1
+ *
+ */
+
 gsl_vector_float** kernel(int half_length, int factor) {
-	int kernel_length = (2 * half_length + 1) * factor;
-	int domain = kernel_length / 2; // kernel length is gauranteed to be even
+
+	int kernel_length = 2 * half_length * factor + 1;
+	int sub_kernel_length = 2 * half_length + 1;
+
+	/* the domain should be the kernel_length divided by two */
+	int center = kernel_length / 2;
 
 	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * factor);
 	for (int i = 0; i < factor; i++)
-		vecs[i] = gsl_vector_float_calloc(2 * half_length + 1);
+		vecs[i] = gsl_vector_float_calloc(sub_kernel_length);
 
-	float *out = fftwf_malloc(sizeof(float) * (kernel_length + factor / 2));
-	memset(out, 0, (kernel_length + factor / 2) * sizeof(float));
+	float *out = fftwf_malloc(sizeof(float) * kernel_length);
+	memset(out, 0, kernel_length * sizeof(float));
 
-	float norm = 0.;
 
-	for (int j = 0; j < 2 * half_length + 1; j++) {
-		for (int i = 0; i < factor; i++) {
-			int x = j * factor + i - domain;
-			if (x == 0)
-				out[x + domain] = 1.;
-			else
-				out[x + domain] = sin(PI * x / factor) / (PI * x / factor) * (1. - (float) x*x / domain / domain);
-			norm += out[x + domain] * out[x + domain];
-		}
+	for (int i = 0; i < kernel_length; i++) {
+		int x = i - center;
+		if (x == 0)
+			out[i] = 1.;
+		else
+			out[i] = sin(PI * x / factor) / (PI * x / factor) * (1. - (float) x*x / center / center);
 	}
 
-	for (int i = 1; i < 2 * half_length+1; i++) {
-		for (int j = 0; j < factor; j++) {
-			int index = i * factor + j - factor / 2; //FIXME FIXME FIXME this offset belongs above
-			if (factor > 1)
-				index += 1;
-			gsl_vector_float_set(vecs[factor - j - 1], i, out[index] / sqrt(norm / factor));
+	for (int f = 0; f < factor; f++) {
+		for (int i = 0; i < sub_kernel_length; i++) {
+			int index = i * factor + f;
+			if (index < kernel_length)
+				gsl_vector_float_set(vecs[f], sub_kernel_length - i - 1, out[index]);
 		}
 	}
-
+			
 	free(out);
 	return vecs;
 }
 
-void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint factor, guint channels) {
+void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
 	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
+	return;
+}
+
+void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
+	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
+	gsl_vector_float_view input_vector = gsl_vector_float_view_array(input + kernel_length / 2, channels);
+	gsl_vector_float_memcpy(&(output_vector.vector), &(input_vector.vector));
 	return;
 }
 
@@ -117,8 +137,14 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 	for (guint samp = 0; samp < blockstrideout; samp++) {
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
-		input_offset = (samp / factor) * channels; // first input sample
-		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, factor, channels);
+		input_offset = samp / factor * channels;
+		/* The first kernel is a delta function by definition, so just
+ 		 * copy the input 
+		 */
+		if (kernel_offset == 0)
+			copy_input(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
+		else
+			convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
 	return;
 }
