@@ -171,7 +171,7 @@ void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint
 	*/
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_vector_float_view input_vector = gsl_vector_float_view_array(input + kernel_length / 2, channels);
-	gsl_vector_float_memcpy(&(output_vector.vector), &(input_vector.vector));
+	gsl_blas_scopy(&(input_vector.vector), &(output_vector.vector));
 	return;
 }
 
