@@ -36,7 +36,31 @@ import scipy
 import warnings
 
 import lalsimulation
-import pdb
+#import pdb
+
+import time
+from functools import wraps
+
+
+def timethis(func):
+	'''
+	Timing decorator
+	'''
+	def op_func(func):
+		
+		if not __debug__:
+			return func
+	
+		@wrap(func)
+		def wrapper(*args, **kwargs):
+			start = time.time()
+			result = func(*args, **kwargs)
+			end = time.time()
+			print func.__name__, end - start
+			return result
+		return wrapper
+	return op_func
+
 
 class FastMatchedFilter(object):
 	pass
@@ -202,6 +226,7 @@ class OptimizerIIR(Optimizer):
 			pSNR = numpy.abs(numpy.dot(numpy.conj(self.template), self._iir_set_res)) 
 		return pSNR
 
+	@timethis
 	def runLagrangeOp(self):
 		""" Run Lagrangian optimization for the IIR coeficients.
 		This is useful when the number of IIR filters is not too large,
