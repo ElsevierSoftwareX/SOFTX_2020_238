@@ -336,7 +336,7 @@ done:
  */
 
 
-static GstElementClass *parent_class = NULL;
+static GstElementClass *gstlal_drop_parent_class = NULL;
 
 
 /*
@@ -353,7 +353,7 @@ static void finalize(GObject *object)
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_drop_parent_class)->finalize(object);
 }
 
 
@@ -411,7 +411,7 @@ static void class_init(gpointer class, gpointer class_data)
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gstlal_drop_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);

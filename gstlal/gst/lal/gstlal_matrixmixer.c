@@ -118,10 +118,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALMatrixMixer,
 	gstlal_matrixmixer,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -603,7 +602,7 @@ static void dispose(GObject *object)
 	g_cond_broadcast(element->mixmatrix_available);
 	g_mutex_unlock(element->mixmatrix_lock);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(gstlal_matrixmixer_parent_class)->dispose(object);
 }
 
 
@@ -626,7 +625,7 @@ static void finalize(GObject *object)
 	element->mixmatrix_available = NULL;
 	mixmatrix_free(element);
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_matrixmixer_parent_class)->finalize(object);
 }
 
 
@@ -736,7 +735,7 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
  */
 
 
-static void gstlal_matrixmixer_init(GSTLALMatrixMixer *filter, GSTLALMatrixMixerClass *klass)
+static void gstlal_matrixmixer_init(GSTLALMatrixMixer *filter)
 {
 	filter->data_type = GSTLAL_MATRIXMIXER_NONE;
 	filter->mixmatrix_lock = g_mutex_new();

@@ -369,7 +369,7 @@ done:
  */
 
 
-static GstElementClass *parent_class = NULL;
+static GstElementClass *gstlal_peak_parent_class = NULL;
 
 
 /*
@@ -390,7 +390,7 @@ static void finalize(GObject *object)
 	gstlal_peak_state_free(element->maxdata);
 	if (!element->data)
 		free(element->data);  
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_peak_parent_class)->finalize(object);
 }
 
 
@@ -432,7 +432,7 @@ static void class_init(gpointer class, gpointer class_data)
 		"Chad Hanna <chad.hanna@ligo.org>"
 	);
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gstlal_peak_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);

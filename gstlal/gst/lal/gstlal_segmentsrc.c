@@ -100,10 +100,9 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
     )
 );
 
-GST_BOILERPLATE(
+G_DEFINE_TYPE(
     GSTLALSegmentSrc,
     gstlal_segmentsrc,
-    GstBaseSrc,
     GST_TYPE_BASE_SRC
 );
 
@@ -345,7 +344,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	}
 
 		default:
-			return parent_class->query(basesrc, query);
+			return gstlal_segmentsrc_parent_class->query(basesrc, query);
 	}
 
 	return TRUE;
@@ -455,7 +454,7 @@ static void finalize(GObject *object)
      * chain to parent class' finalize() method
      */
 
-    G_OBJECT_CLASS(parent_class)->finalize(object);
+    G_OBJECT_CLASS(gstlal_segmentsrc_parent_class)->finalize(object);
 }
 
 
@@ -566,7 +565,7 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
  * init()
  */
 
-static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentSrcClass *klass)
+static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src)
 {
     segment_src->seglist = NULL;
     segment_src->rate = 0;

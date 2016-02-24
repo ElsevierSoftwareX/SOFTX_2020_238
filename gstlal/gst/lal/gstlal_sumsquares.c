@@ -98,10 +98,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALSumSquares,
 	gstlal_sumsquares,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -478,7 +477,7 @@ static void finalize(GObject *object)
 	g_free(element->weights_native);
 	element->weights_native = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_sumsquares_parent_class)->finalize(object);
 }
 
 
@@ -576,7 +575,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
  */
 
 
-static void gstlal_sumsquares_init(GSTLALSumSquares *filter, GSTLALSumSquaresClass *klass)
+static void gstlal_sumsquares_init(GSTLALSumSquares *filter)
 {
 	filter->channels = 0;
 	filter->weights_lock = g_mutex_new();
