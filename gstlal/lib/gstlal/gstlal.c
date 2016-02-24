@@ -795,18 +795,22 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 
 
 /**
- * gstlal_REAL8TimeSeries_from_buffer:
+ * gstlal_buffer_map_REAL8TimeSeries:
  * @buf:  the #GstBuffer to wrap
+ * @caps:  the #GstCaps for the buffer's contents
+ * @info:  a #GstMapInfo object to populated with the mapping metadata.  Pass to gstlal_buffer_unmap_REAL8TimeSeries to unmap
  * @instrument:  name of the instrument, e.g., "H1", or %NULL
  * @channel_name:  name of the channel, e.g., "LSC-STRAIN", or %NULL
  * @units:  string describing the units, parsable by XLALParseUnitString()
  *
- * Wrap a #GstBuffer in a #REAL8TimeSeries.  The time series's data->data
- * pointer points to the #GstBuffer's own data, so this pointer must not be
- * free()ed --- it must be set to %NULL before passing the time series to
- * XLALDestroyREAL8TimeSeries().  Only #GstBuffers containing
- * single-channel time series data are supported.  The @instrument and
- * @channel_name are used to build the #REAL8TimeSeries' name using
+ * Maps a #GstBuffer read/write and wraps the memory in a #REAL8TimeSeries.
+ * The time series's data->data pointer points to the #GstBuffer's own
+ * data, so the series cannot be freed using the normal
+ * XLALDestroyREAL8TimeSeries() function.  Instead, ues
+ * gstlal_buffer_unmap_REAL8TimeSeries() to safely unmap the #GstBuffer and
+ * free the #REAL8TimeSeries.  Only #GstBuffers containing single-channel
+ * time series data are supported.  The @instrument and @channel_name are
+ * used to build the #REAL8TimeSeries' name using
  * gstlal_build_full_channel_name().
  *
  * <example>
@@ -814,34 +818,30 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
  *   <programlisting>
  * REAL8TimeSeries *series;
  *
- * series = gstlal_REAL8TimeSeries_from_buffer(buf, "H1", "LSC-STRAIN", "strain");
+ * series = gstlal_buffer_map_REAL8TimeSeries(buf, &info, "H1", "LSC-STRAIN", "strain");
  * if(!series)
  * 	handle_error();
+ * else {
+ *	blah_blah_blah();
  *
- * blah_blah_blah();
- *
- * series->data->data = NULL;
- * XLALDestroyREAL8TimeSeries(series);
+ * 	gstlal_buffer_unmap_REAL8TimeSeries(buf, &info, series);
+ * }
  *   </programlisting>
  * </example>
  *
  * Returns:  newly-allocated REAL8TimeSeries.  Free with
- * XLALDestroyREAL8TimeSeries() after setting the internal data->data
- * pointer to %NULL.
+ * gstlal_buffer_unmap_REAL8TimeSeries().
  */
 
 
-REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *instrument, const char *channel_name, const char *units)
+REAL8TimeSeries *gstlal_buffer_map_REAL8TimeSeries(GstBuffer *buf, GstCaps *caps, GstMapInfo *info, const char *instrument, const char *channel_name, const char *units)
 {
-	GstCaps *caps = gst_buffer_get_caps(buf);
 	GstStructure *structure;
 	char *name = NULL;
 	gint rate;
 	gint channels;
-	double deltaT;
 	LALUnit lalunits;
 	LIGOTimeGPS epoch;
-	size_t length;
 	REAL8TimeSeries *series = NULL;
 
 	/*
@@ -865,7 +865,6 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *
 		GST_ERROR("cannot wrap multi-channel buffers in LAL time series");
 		goto done;
 	}
-	deltaT = 1.0 / rate;
 
 	/*
 	 * Retrieve the epoch from the time stamp and the length from the
@@ -873,17 +872,12 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *
 	 */
 
 	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
-	length = GST_BUFFER_SIZE(buf) / sizeof(*series->data->data) / channels;
-	if(channels * length * sizeof(*series->data->data) != GST_BUFFER_SIZE(buf)) {
-		GST_ERROR("buffer size not an integer multiple of the sample size");
-		goto done;
-	}
 
 	/*
 	 * Build a zero-length time series with the correct metadata
 	 */
 
-	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &lalunits, 0);
+	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, 1.0 / rate, &lalunits, 0);
 	if(!series) {
 		GST_ERROR("XLALCreateREAL8TimeSeries() failed");
 		goto done;
@@ -895,8 +889,22 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *
 	 */
 
 	XLALFree(series->data->data);
-	series->data->data = (double *) GST_BUFFER_DATA(buf);
-	series->data->length = length;
+	if(!gst_buffer_map(buf, info, GST_MAP_READ | GST_MAP_WRITE)) {
+		GST_ERROR("buffer map failed");
+		XLALDestroyREAL8TimeSeries(series);
+		series = NULL;
+		goto done;
+	}
+	series->data->data = (double *) (info->data);
+	series->data->length = info->size / sizeof(*series->data->data);
+	if(info->size % sizeof(*series->data->data)) {
+		GST_ERROR("buffer size not an integer multiple of the sample size");
+		series->data->data = NULL;
+		XLALDestroyREAL8TimeSeries(series);
+		series = NULL;
+		gst_buffer_unmap(buf, info);
+		goto done;
+	}
 
 	/*
 	 * Done.
@@ -906,6 +914,26 @@ done:
 	gst_caps_unref(caps);
 	g_free(name);
 	return series;
+}
+
+
+/**
+ * gstlal_buffer_unmap_REAL8TimeSeries:
+ * @buf:  the #GstBuffer to unwrap
+ * @info:  a #GstMapInfo object populated with the mapping metadata
+ * @series:  the #REAL8TimeSeries wrapping the data to free
+ *
+ * Safely frees the #REAL8TimeSeries and unmaps the #GstBuffer.
+ */
+
+
+void gstlal_buffer_unmap_REAL8TimeSeries(GstBuffer *buf, GstMapInfo *info, REAL8TimeSeries *series)
+{
+	if(series) {
+		series->data->data = NULL;
+		XLALDestroyREAL8TimeSeries(series);
+	}
+	gst_buffer_unmap(buf, info);
 }
 
 

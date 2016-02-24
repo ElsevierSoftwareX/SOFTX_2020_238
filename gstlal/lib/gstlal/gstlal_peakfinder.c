@@ -95,9 +95,8 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
 	 */
 
 	gint size = state->unit * length * state->channels;
-	GstBuffer *srcbuf = NULL;
-	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
+	GstBuffer *srcbuf = gst_buffer_new_allocate(NULL, size, NULL);
+	GstMapInfo mapinfo;
 
 	/* FIXME someday with better gap support don't actually allocate data
 	 * in this case.  For now we just mark it as a gap but let the rest of
@@ -108,9 +107,6 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
 	if (state->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
-       	if (result != GST_FLOW_OK)
-		return srcbuf;
-
 	/* set the offset */
         GST_BUFFER_OFFSET(srcbuf) = offset;
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
@@ -118,28 +114,30 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
         /* set the time stamps */
         GST_BUFFER_TIMESTAMP(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
-	
+
+	gst_buffer_map(srcbuf, &mapinfo, GST_MAP_WRITE);
 	switch (state->type)
 	{
 		case GSTLAL_PEAK_FLOAT:
-		gstlal_float_fill_output_with_peak(state, (float *) GST_BUFFER_DATA(srcbuf), length);
+		gstlal_float_fill_output_with_peak(state, (float *) mapinfo.data, length);
 		break;
 		
 		case GSTLAL_PEAK_DOUBLE:
-		gstlal_double_fill_output_with_peak(state, (double *) GST_BUFFER_DATA(srcbuf), length);
+		gstlal_double_fill_output_with_peak(state, (double *) mapinfo.data, length);
 		break;
 		
 		case GSTLAL_PEAK_COMPLEX:
-		gstlal_float_complex_fill_output_with_peak(state, (float complex *) GST_BUFFER_DATA(srcbuf), length);
+		gstlal_float_complex_fill_output_with_peak(state, (float complex *) mapinfo.data, length);
 		break;
 
 		case GSTLAL_PEAK_DOUBLE_COMPLEX:
-		gstlal_double_complex_fill_output_with_peak(state, (double complex *) GST_BUFFER_DATA(srcbuf), length);
+		gstlal_double_complex_fill_output_with_peak(state, (double complex *) mapinfo.data, length);
 		break;
 
 		default:
 		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
 	}
+	gst_buffer_unmap(srcbuf, &mapinfo);
 
 	return srcbuf;
 }

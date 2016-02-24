@@ -61,20 +61,21 @@
 
 
 /**
- * gstlal_collect_pads_add_pad_full:
+ * gstlal_collect_pads_add_pad:
  * @pads:  passed to #gst_collect_pads_add_pad()
  * @pad:  passed to #gst_collect_pads_add_pad()
  * @size:  passed to #gst_collect_pads_add_pad()
- * @destroy_notify:  passed to#gst_collect_pads_add_pad()
+ * @destroy_notify:  passed to #gst_collect_pads_add_pad()
+ * @lock:  passed to #gst_collect_pads_add_pad()
  *
- * Wraps #gst_collect_pads_add_pad_full(), initializing the additional
- * fields in the custom #GstLALCollectData object.
+ * Wraps #gst_collect_pads_add_pad(), initializing the additional fields in
+ * the custom #GstLALCollectData object.
  *
  * Returns:  #GstLALCollectData associated with the #GstPad.
  */
 
 
-GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify)
+GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify, gboolean lock)
 {
 	GstLALCollectData *data;
 
@@ -82,7 +83,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 	 * add pad to collect pads object
 	 */
 
-	data = (GstLALCollectData *) gst_collect_pads_add_pad_full(pads, pad, size, destroy_notify);
+	data = (GstLALCollectData *) gst_collect_pads_add_pad(pads, pad, size, destroy_notify, lock);
 	if(!data) {
 		GST_ERROR_OBJECT(pads, "could not add pad to collectpads object");
 		return NULL;
@@ -100,24 +101,6 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 	 */
 
 	return data;
-}
-
-
-/**
- * gstlal_collect_pads_add_pad:
- * @pads:  passed to #gstlal_collect_pads_add_pad_full()
- * @pad:  passed to #gstlal_collect_pads_add_pad_full()
- * @size:  passed to #gstlal_collect_pads_add_pad_full()
- *
- * Equivalent to #gst_collect_pads_add_pad().
- *
- * Returns:  #GstLALCollectData associated with the #GstPad.
- */
-
-
-GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size)
-{
-	return gstlal_collect_pads_add_pad_full(pads, pad, size, NULL);
 }
 
 
@@ -297,12 +280,16 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 
 		/*
 		 * expand start and stop
+		 * FIXME:  hard-code type casts to guint64 to avoid
+		 * signed/unsigned warnings are risky (what they should be
+		 * cast to might change).  find a way to silence the
+		 * warnings without this
 		 */
 
 		GST_DEBUG_OBJECT(pads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
-		if(segment->start == -1 || segment->start > data->segment.start)
+		if(segment->start == (guint64) -1 || segment->start > data->segment.start)
 			segment->start = data->segment.start;
-		if(segment->stop == -1 || segment->stop < data->segment.stop)
+		if(segment->stop == (guint64) -1 || segment->stop < data->segment.stop)
 			segment->stop = data->segment.stop;
 	}
 	if(segment)
@@ -522,7 +509,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	GstBuffer *buf;
 	guint64 offset;
 	GstClockTime buf_t_start, buf_t_end;
-	gboolean is_gap, is_malloced;
+	gboolean is_gap;
 	guint64 units;
 
 	/*
@@ -550,7 +537,6 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	buf_t_start = compute_t_start(data, buf);
 	buf_t_end = compute_t_end(data, buf);
 	is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP);
-	is_malloced = GST_BUFFER_DATA(buf) != NULL;
 	gst_buffer_unref(buf);
 
 	/*
@@ -574,51 +560,20 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	 * retrieve a buffer
 	 */
 
-	if(is_gap && !is_malloced) {
-		/* FIXME:  the underlying GstCollectData class should
-		 * handle this itself.  the need to do so is independent of
-		 * the synchronization-related work going on here.  this
-		 * probably starts by teaching gst_buffer_create_sub() to
-		 * do the right things with non-malloc()ed buffers */
-		GstBuffer *source = gst_collect_pads_peek(pads, (GstCollectData *) data);
-		buf = gst_buffer_new();
-		gst_buffer_copy_metadata(buf, source, GST_BUFFER_COPY_ALL);
-		((GstCollectData *) data)->pos += units * data->unit_size;
-		if(((GstCollectData *) data)->pos / data->unit_size >= GST_BUFFER_OFFSET_END(source) - GST_BUFFER_OFFSET(source)) {
-			gst_buffer_unref(gst_collect_pads_pop(pads, (GstCollectData *) data));
-			/*gst_collect_pads_clear (pads, (GstCollectData *) data);*/
-		}
-		gst_buffer_unref(source);
-	} else {
-		buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, units * data->unit_size);
-		/* this would normally indicate EOS, but it's impossible
-		 * here because we would've seen this already up above */
-		g_assert(buf != NULL);
-		/* it should be impossible to not get what we asked for */
-		g_assert_cmpuint(GST_BUFFER_SIZE(buf), ==, units * data->unit_size);
-	}
+	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, units * data->unit_size);
+	/* this would normally indicate EOS, but it's impossible here
+	 * because we would've seen this already up above */
+	g_assert(buf != NULL);
+	/* it should be impossible to not get what we asked for */
+	g_assert_cmpuint(gst_buffer_get_size(buf), ==, units * data->unit_size);
 	g_assert(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) == is_gap);
-
-	/*
-	 * make sure its caps are set.  for some reason we can get buffers
-	 * with NULL caps, but setcaps() must have been called on the sink
-	 * pad so we should be able to copy the caps from there.  I think
-	 * gst_buffer_create_sub() maybe doesn't copy the caps?
-	 */
-	/* FIXME:  I'm going to open a PR for this, and this code should be
-	 * removed when we can rely on a gstreamer new-enough to contain
-	 * the fix */
-
-	if(!GST_BUFFER_CAPS(buf))
-		gst_buffer_set_caps(buf, GST_PAD_CAPS(((GstCollectData *) data)->pad));
-	g_assert(GST_BUFFER_CAPS(buf) != NULL);
 
 	/*
 	 * set the buffer's start and end offsets and time stamp and
 	 * duration relative to the input stream
 	 */
 
-	buf = gst_buffer_make_metadata_writable(buf);
+	buf = gst_buffer_make_writable(buf);
 	GST_BUFFER_OFFSET(buf) = offset;
 	GST_BUFFER_OFFSET_END(buf) = offset + units;
 	GST_BUFFER_TIMESTAMP(buf) = buf_t_start;

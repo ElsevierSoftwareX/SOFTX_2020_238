@@ -52,8 +52,7 @@ typedef struct _GstLALCollectData {
  */
 
 
-GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size);
-GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify);
+GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify, gboolean lock);
 gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad);
 void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size);
 guint gstlal_collect_pads_get_unit_size(GstPad *pad);
