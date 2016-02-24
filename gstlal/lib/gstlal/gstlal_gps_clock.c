@@ -57,7 +57,7 @@
  */
 
 
-GST_BOILERPLATE(GstLALGPSSystemClock, gstlal_gps_system_clock, GstSystemClock, GST_TYPE_SYSTEM_CLOCK);
+G_DEFINE_TYPE(GstLALGPSSystemClock, gstlal_gps_system_clock, GST_TYPE_SYSTEM_CLOCK);
 
 
 /*
@@ -71,7 +71,7 @@ GST_BOILERPLATE(GstLALGPSSystemClock, gstlal_gps_system_clock, GstSystemClock, G
 
 static GstClockTime get_internal_time(GstClock *clock)
 {
-	GstClockTime t = GST_CLOCK_CLASS(parent_class)->get_internal_time(clock);
+	GstClockTime t = GST_CLOCK_CLASS(gstlal_gps_system_clock_parent_class)->get_internal_time(clock);
 
 	return t - (XLAL_EPOCH_UNIX_GPS - XLALGPSLeapSeconds(GST_TIME_AS_SECONDS(t))) * GST_SECOND;
 }
@@ -99,7 +99,7 @@ static void gstlal_gps_system_clock_class_init(GstLALGPSSystemClockClass *klass)
 }
 
 
-static void gstlal_gps_system_clock_init(GstLALGPSSystemClock *object, GstLALGPSSystemClockClass *klass)
+static void gstlal_gps_system_clock_init(GstLALGPSSystemClock *object)
 {
 	/*
 	 * Kipp:  I have empirically determined that "REALTIME" means Unix
