@@ -150,7 +150,6 @@ static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64
 
 static void set_metadata(GSTLALAudioUnderSample *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
-	GST_BUFFER_SIZE(buf) = outsamples * element->unit_size;
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
@@ -226,7 +225,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_DEFINE_TYPE(
+G_DEFINE_TYPE(
 	GSTLALAudioUnderSample,
 	gstlal_audioundersample,
 	GST_TYPE_BASE_TRANSFORM
