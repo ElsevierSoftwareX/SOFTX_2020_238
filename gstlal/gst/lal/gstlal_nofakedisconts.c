@@ -281,16 +281,6 @@ static void finalize(GObject *object)
 
 
 /*
- * base_init()
- */
-
-
-static void base_init(gpointer class)
-{
-}
-
-
-/*
  * class_init()
  */
 
@@ -398,7 +388,6 @@ GType gstlal_nofakedisconts_get_type(void)
 		static const GTypeInfo info = {
 			.class_size = sizeof(GSTLALNoFakeDiscontsClass),
 			.class_init = class_init,
-			.base_init = base_init,
 			.instance_size = sizeof(GSTLALNoFakeDisconts),
 			.instance_init = instance_init,
 		};

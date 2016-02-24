@@ -950,16 +950,6 @@ static void finalize(GObject *object)
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_autochisq_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

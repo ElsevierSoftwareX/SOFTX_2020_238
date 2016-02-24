@@ -86,11 +86,6 @@ static GstClockTime get_internal_time(GstClock *clock)
  */
 
 
-static void gstlal_gps_system_clock_base_init(gpointer klass)
-{
-}
-
-
 static void gstlal_gps_system_clock_class_init(GstLALGPSSystemClockClass *klass)
 {
 	GstClockClass *clock_class = GST_CLOCK_CLASS(klass);

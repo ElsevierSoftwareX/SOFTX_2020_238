@@ -554,16 +554,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_audioundersample_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

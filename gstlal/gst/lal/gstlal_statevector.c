@@ -485,16 +485,6 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_statevector_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

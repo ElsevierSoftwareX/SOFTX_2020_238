@@ -326,16 +326,6 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_togglecomplex_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

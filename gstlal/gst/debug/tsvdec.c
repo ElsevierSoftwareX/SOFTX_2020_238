@@ -307,10 +307,6 @@ static void finalize(GObject *object)
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
-static void gstlal_tsvdec_base_init(gpointer klass)
-{
-}
-
 static void gstlal_tsvdec_class_init(GSTLALTSVDecClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);

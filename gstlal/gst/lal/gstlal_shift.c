@@ -426,12 +426,6 @@ static void finalize(GObject *object)
 	"width = (int) {64, 128}"
 
 
-static void base_init(gpointer class)
-{
-
-}
-
-
 /*
  * Class init function.  See
  *
@@ -541,7 +535,6 @@ GType gstlal_shift_get_type(void)
 		static const GTypeInfo info = {
 			.class_size = sizeof(GSTLALShiftClass),
 			.class_init = class_init,
-			.base_init = base_init,
 			.instance_size = sizeof(GSTLALShift),
 			.instance_init = instance_init,
 		};

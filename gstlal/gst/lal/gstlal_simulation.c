@@ -826,16 +826,6 @@ static void finalize(GObject * object)
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_simulation_base_init(gpointer class)
-{
-}
-
-
-/*
  * class_init()
  */
 

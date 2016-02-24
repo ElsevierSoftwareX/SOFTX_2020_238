@@ -606,12 +606,6 @@ static void finalize(GObject *object)
 }
 
 
-static void gst_audioadapter_base_init(gpointer g_class)
-{
-	/* no-op */
-}
-
-
 static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);

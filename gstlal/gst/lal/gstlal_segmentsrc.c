@@ -486,15 +486,6 @@ static gboolean set_caps(GstBaseSrc *src, GstCaps *caps)
 
 
 /*
- * base_init()
- */
-
-static void gstlal_segmentsrc_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

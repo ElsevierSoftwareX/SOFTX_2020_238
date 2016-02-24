@@ -1607,16 +1607,6 @@ static void finalize(GObject * object)
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_whiten_base_init(gpointer gclass)
-{
-}
-
-
-/*
  * class_init()
  */
 

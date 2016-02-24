@@ -1849,16 +1849,6 @@ static void finalize(GObject *object)
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_firbank_base_init(gpointer klass)
-{
-}
-
-
-/*
  * class_init()
  */
 
