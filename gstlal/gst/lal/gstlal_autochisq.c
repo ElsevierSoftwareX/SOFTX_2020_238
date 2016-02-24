@@ -213,7 +213,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * documentation that this is true.
 	 */
 
-	gst_buffer_map(outbuf, &map_info, GST_MAP_WRITE);	
+	gst_buffer_map(outbuf, &map_info, GST_MAP_WRITE);
 	output_length = gstlal_autocorrelation_chi2((double *) map_info.data, input, available_length, element->latency, element->snr_thresh, element->autocorrelation_matrix, element->autocorrelation_mask_matrix, element->autocorrelation_norm);
 
 	/*
@@ -228,6 +228,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 	g_free(input);
 	gst_audioadapter_flush_samples(element->adapter, output_length);
+	gst_buffer_unmap(outbuf, &map_info);
 
 done:
 	/*
