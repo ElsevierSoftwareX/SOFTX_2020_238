@@ -129,7 +129,7 @@ GST_STATIC_PAD_TEMPLATE ("sink%d",
     GST_STATIC_CAPS (CAPS)
     );
 
-GST_BOILERPLATE (GstLALAdder, gstlal_adder, GstElement, GST_TYPE_ELEMENT);
+G_DEFINE_TYPE (GstLALAdder, gstlal_adder, GST_TYPE_ELEMENT);
 
 static void gst_adder_dispose (GObject * object);
 static void gst_adder_set_property (GObject * object, guint prop_id,
@@ -869,7 +869,7 @@ gstlal_adder_class_init (GstLALAdderClass * klass)
 }
 
 static void
-gstlal_adder_init (GstLALAdder * adder, GstLALAdderClass * klass)
+gstlal_adder_init (GstLALAdder * adder)
 {
   GstPadTemplate *template;
 
@@ -921,7 +921,7 @@ gst_adder_dispose (GObject * object)
     adder->pending_events = g_list_remove (adder->pending_events, ev);
   }
 
-  G_OBJECT_CLASS (parent_class)->dispose (object);
+  G_OBJECT_CLASS (gstlal_adder_parent_class)->dispose (object);
 }
 
 static void
@@ -1398,7 +1398,7 @@ gst_adder_change_state (GstElement * element, GstStateChange transition)
       break;
   }
 
-  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+  ret = GST_ELEMENT_CLASS (gstlal_adder_parent_class)->change_state (element, transition);
 
   switch (transition) {
     default:

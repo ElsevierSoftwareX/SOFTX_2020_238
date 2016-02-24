@@ -226,10 +226,9 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+GST_DEFINE_TYPE(
 	GSTLALAudioUnderSample,
 	gstlal_audioundersample,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM
 );
 
@@ -595,7 +594,7 @@ static void gstlal_audioundersample_class_init(GSTLALAudioUnderSampleClass *klas
  */
 
 
-static void gstlal_audioundersample_init(GSTLALAudioUnderSample *element, GSTLALAudioUnderSampleClass *klass)
+static void gstlal_audioundersample_init(GSTLALAudioUnderSample *element)
 {
 	element->rate_in = 0;
 	element->rate_out = 0;

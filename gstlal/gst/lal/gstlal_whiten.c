@@ -143,10 +143,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE(
 	GSTLALWhiten,
 	gstlal_whiten,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -1603,7 +1602,7 @@ static void finalize(GObject * object)
 
 	free_workspace(element);
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_whiten_parent_class)->finalize(object);
 }
 
 
@@ -1851,7 +1850,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
  */
 
 
-static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
+static void gstlal_whiten_init(GSTLALWhiten *element)
 {
 	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::zero-pad", G_CALLBACK(rebuild_workspace_and_reset), NULL);

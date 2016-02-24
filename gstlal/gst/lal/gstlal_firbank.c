@@ -126,10 +126,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+GST_DEFINE_TYPE_WITH_CODE(
 	GSTLALFIRBank,
 	gstlal_firbank,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -1814,7 +1813,7 @@ static void dispose(GObject *object)
 	g_cond_broadcast(element->fir_matrix_available);
 	g_mutex_unlock(element->fir_matrix_lock);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(gstlal_firbank_parent_class)->dispose(object);
 }
 
 
@@ -1845,7 +1844,7 @@ static void finalize(GObject *object)
 	 * chain to parent class' finalize() method
 	 */
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_firbank_parent_class)->finalize(object);
 }
 
 
@@ -1999,7 +1998,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
  */
 
 
-static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass)
+static void gstlal_firbank_init(GSTLALFIRBank *filter)
 {
 	filter->rate = 0;	/* impossible --> force signal on first caps */
 	filter->width = 0;	/* impossible --> force workspace reset on first caps */

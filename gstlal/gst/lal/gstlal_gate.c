@@ -92,10 +92,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALGate,
 	gstlal_gate,
-	GstElement,
 	GST_TYPE_ELEMENT,
 	additional_initializations
 );
@@ -1265,7 +1264,7 @@ static void finalize(GObject *object)
 	g_cond_free(element->control_queue_head_changed);
 	element->control_queue_head_changed = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_gate_parent_class)->finalize(object);
 }
 
 
@@ -1502,7 +1501,7 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
  */
 
 
-static void gstlal_gate_init(GSTLALGate *element, GSTLALGateClass *klass)
+static void gstlal_gate_init(GSTLALGate *element)
 {
 	GstPad *pad;
 

@@ -91,10 +91,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALReblock,
 	gstlal_reblock,
-	GstElement,
 	GST_TYPE_ELEMENT,
 	additional_initializations
 );
@@ -407,7 +406,7 @@ static void finalize(GObject *object)
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_reblock_parent_class)->finalize(object);
 }
 
 
@@ -500,7 +499,7 @@ static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
  */
 
 
-static void gstlal_reblock_init(GSTLALReblock *element, GSTLALReblockClass *Klass)
+static void gstlal_reblock_init(GSTLALReblock *element)
 {
 	GstPad *pad;
 
