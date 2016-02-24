@@ -313,10 +313,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALAutoChiSq,
 	gstlal_autochisq,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -965,7 +964,7 @@ static void dispose(GObject *object)
 	g_cond_broadcast(element->autocorrelation_available);
 	g_mutex_unlock(element->autocorrelation_lock);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(gstlal_autochisq_parent_class)->dispose(object);
 }
 
 
@@ -999,7 +998,7 @@ static void finalize(GObject *object)
 		element->autocorrelation_norm = NULL;
 	}
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_autochisq_parent_class)->finalize(object);
 }
 
 
@@ -1144,7 +1143,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
  */
 
 
-static void gstlal_autochisq_init(GSTLALAutoChiSq *filter, GSTLALAutoChiSqClass *klass)
+static void gstlal_autochisq_init(GSTLALAutoChiSq *filter)
 {
 	filter->latency = DEFAULT_LATENCY;
 	filter->adapter = NULL;

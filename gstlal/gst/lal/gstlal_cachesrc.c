@@ -245,7 +245,7 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GstLALCacheSrc, gstlal_cachesrc, GstBaseSrc, GST_TYPE_BASE_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, additional_initializations);
 
 
 /*
@@ -699,7 +699,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	gboolean success = TRUE;
 
 	if(!element->cache || !element->cache->length)
-		success = parent_class->query(basesrc, query);
+		success = gstlal_cachesrc_parent_class->query(basesrc, query);
 	else {
 		switch(GST_QUERY_TYPE(query)) {
 		case GST_QUERY_FORMATS:
@@ -804,7 +804,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			break;
 
 		default:
-			success = parent_class->query(basesrc, query);
+			success = gstlal_cachesrc_parent_class->query(basesrc, query);
 			break;
 		}
 	}
@@ -914,7 +914,7 @@ static void finalize(GObject *object)
 	XLALDestroyCache(element->cache);
 	element->cache = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_cachesrc_parent_class)->finalize(object);
 }
 
 
@@ -1008,7 +1008,7 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 }
 
 
-static void gstlal_cachesrc_init(GstLALCacheSrc *element, GstLALCacheSrcClass *klass)
+static void gstlal_cachesrc_init(GstLALCacheSrc *element)
 {
 	gst_base_src_set_format(GST_BASE_SRC(element), GST_FORMAT_TIME);
 
