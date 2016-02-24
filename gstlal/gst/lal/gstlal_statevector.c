@@ -182,7 +182,7 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALStateVector,
 	gstlal_statevector,
 	GstBaseTransform,

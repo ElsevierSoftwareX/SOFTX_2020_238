@@ -128,7 +128,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+G_DEFINE_TYPE(
 	GSTLALToggleComplex,
 	gstlal_togglecomplex,
 	GstBaseTransform,
