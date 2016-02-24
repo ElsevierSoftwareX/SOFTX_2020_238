@@ -311,7 +311,7 @@ static void additional_initializations(GType type)
 G_DEFINE_TYPE_WITH_CODE(GstTSVEnc,
     gst_tsvenc,
     GST_TYPE_BASE_TRANSFORM, additional_initializations);
-
+ 
 
 enum property
 {
