@@ -910,21 +910,6 @@ done:
 
 
 /**
- * gstlal_lalStrainPerADCCount:
- *
- * Returns:  #LALUnit equal to "strain / ADC count".
- */
-
-
-LALUnit gstlal_lalStrainPerADCCount(void)
-{
-	LALUnit unit;
-
-	return *XLALUnitDivide(&unit, &lalStrainUnit, &lalADCCountUnit);
-}
-
-
-/**
  * gstlal_lalUnitSquaredPerHertz:
  *
  * Returns:  #LALUnit equal to "units^2 / Hz".

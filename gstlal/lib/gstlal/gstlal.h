@@ -88,7 +88,6 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_compl
 
 char *gstlal_build_full_channel_name(const char *instrument, const char *channel_name);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *instrument, const char *channel_name, const char *units);
-LALUnit gstlal_lalStrainPerADCCount(void);
 LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit);
 GstDateTime *gstlal_datetime_new_from_gps(GstClockTime gps);
 
