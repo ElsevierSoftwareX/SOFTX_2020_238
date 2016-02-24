@@ -109,10 +109,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALSimulation,
 	gstlal_simulation,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
 );
@@ -822,7 +821,7 @@ static void finalize(GObject * object)
 	XLALDestroyREAL8TimeSeries(element->simulation_series);
 	element->simulation_series = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_simulation_parent_class)->finalize(object);
 }
 
 
@@ -948,7 +947,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
  */
 
 
-static void gstlal_simulation_init(GSTLALSimulation *element, GSTLALSimulationClass *klass)
+static void gstlal_simulation_init(GSTLALSimulation *element)
 {
 	element->xml_location = NULL;
 	element->injection_document = NULL;

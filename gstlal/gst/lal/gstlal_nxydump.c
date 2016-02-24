@@ -308,9 +308,9 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GstTSVEnc,
+G_DEFINE_TYPE_WITH_CODE(GstTSVEnc,
     gst_tsvenc,
-    GstBaseTransform, GST_TYPE_BASE_TRANSFORM, additional_initializations);
+    GST_TYPE_BASE_TRANSFORM, additional_initializations);
 
 
 enum property
@@ -730,8 +730,7 @@ static void gst_tsvenc_class_init(GstTSVEncClass * klass)
  */
 
 
-static void gst_tsvenc_init(GstTSVEnc * element,
-    GstTSVEncClass * klass)
+static void gst_tsvenc_init(GstTSVEnc * element)
 {
   gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
