@@ -103,7 +103,18 @@ GST_BOILERPLATE_FULL(GstLaltrim, gst_laltrim, GstElement,
  */
 static void gst_laltrim_base_init(gpointer g_class)
 {
-    GstElementClass *gstelement_class = GST_ELEMENT_CLASS(g_class);
+}
+
+
+/*
+ * Class init function.
+ *
+ * Specify properties ("arguments").
+ */
+static void gst_laltrim_class_init(GstLaltrimClass *klass)
+{
+    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+    GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
     /* Element description. */
     gst_element_class_set_details_simple(
@@ -112,6 +123,9 @@ static void gst_laltrim_base_init(gpointer g_class)
         "Filter-like",
         gst_laltrim_doc,
         "Jordi Burguet-Castell <jordi.burguet-castell@ligo.org>");
+
+    gobject_class->set_property = set_property;
+    gobject_class->get_property = get_property;
 
     /* Pad description. */
     gst_element_class_add_pad_template(
@@ -129,20 +143,6 @@ static void gst_laltrim_base_init(gpointer g_class)
             GST_PAD_SRC,
             GST_PAD_ALWAYS,
             gst_caps_from_string("ANY")));
-}
-
-
-/*
- * Class init function.
- *
- * Specify properties ("arguments").
- */
-static void gst_laltrim_class_init(GstLaltrimClass *klass)
-{
-    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-    gobject_class->set_property = set_property;
-    gobject_class->get_property = get_property;
 
     /* Specify properties. See:
      * http://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-class-install-property
