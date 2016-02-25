@@ -339,7 +339,7 @@ enum property {
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint width;
@@ -364,8 +364,9 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
+	// FIXME filter was added in 1.0.  Currently not used here, it should be fixed.
 	guint n;
 
 	caps = gst_caps_copy(caps);
@@ -416,17 +417,17 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_DEBUG_OBJECT(element, "size not a multiple of %" G_GSIZE_FORMAT, unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -565,6 +566,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	guint zeros_in_adapter;
 	guint output_length;
 	GstFlowReturn result = GST_FLOW_OK;
+	GstMapInfo out_info;
 
 	/*
 	 * check validity of timestamp and offsets
@@ -672,7 +674,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, output_length);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(zeros_in_adapter < autocorrelation_length(element)) {
@@ -699,14 +701,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
 		guint samples;
-		GstBuffer *buf;
+		GstBuffer *buf = gst_buffer_new_allocate(NULL, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), NULL);
+		GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 		g_assert_cmpuint(gap_length, <, output_length);
 
 		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
 		g_mutex_unlock(element->autocorrelation_lock);
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_BUFFER_CAPS(outbuf), &buf);
-		g_assert(GST_BUFFER_CAPS(buf) != NULL);
 		if(result != GST_FLOW_OK)
 			goto done;
 		g_mutex_lock(element->autocorrelation_lock);
@@ -721,7 +722,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_mutex_lock(element->autocorrelation_lock);
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 	g_mutex_unlock(element->autocorrelation_lock);
@@ -731,6 +732,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
+	gst_buffer_unmap(outbuf, &out_info);
 	GST_DEBUG_OBJECT(element, "output spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 	return result;
 }
