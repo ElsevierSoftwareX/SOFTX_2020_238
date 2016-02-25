@@ -103,17 +103,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_simulation", 0, "lal_simulation element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALSimulation,
 	gstlal_simulation,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_simulation", 0, "lal_simulation element")
 );
 
 
@@ -843,7 +837,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(event);
 	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 
 	gst_element_class_set_details_simple(
