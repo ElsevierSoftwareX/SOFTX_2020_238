@@ -26,6 +26,10 @@
 #include <glib.h>
 #include <gst/gst.h>
 
+//--AEP add
+#include <stdio.h>
+#include <stdlib.h>
+
 
 G_BEGIN_DECLS
 
@@ -57,6 +61,8 @@ struct _GSTLALNoFakeDisconts {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
+	gint rate;
+	gint unit_size;
 	guint64 next_offset;
 	guint64 next_timestamp;
 	gboolean silent;

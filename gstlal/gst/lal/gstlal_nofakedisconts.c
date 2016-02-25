@@ -144,43 +144,102 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static GstCaps *getcaps(GstPad * pad)
+//static GstCaps *getcaps(GstPad * pad)
+//{
+//    GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(gst_pad_get_parent(pad));
+//    GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
+//    GstCaps *peercaps, *caps;
+//
+//    /*
+//     * get our own allowed caps.  use the fixed caps function to avoid
+//     * recursing back into this function.
+//     */
+//
+//    /* FIXME- AEP 02242016
+//     * Replacing this function, likely to break. */
+//    //caps = gst_pad_get_fixed_caps_func(pad);
+//    caps = gst_caps_make_writable(pad);
+//
+//    /*
+//     * get the allowed caps from the downstream peer if the peer has
+//     * caps, intersect without our own.
+//     */
+//
+//    /* FIXME- AEP 02252016
+//     * Reference manual is abiguous on this function. */
+//    peercaps = gst_caps_make_writable(otherpad);
+//    if(peercaps) {
+//        GstCaps *result = gst_caps_intersect(peercaps, caps);
+//        gst_caps_unref(peercaps);
+//        gst_caps_unref(caps);
+//        caps = result;
+//    }
+//
+//    /*
+//     * done
+//     */
+//
+//    gst_object_unref(element);
+//    return caps;
+//}
+static GstCaps *drop_sink_getcaps (GstPad * pad, GstCaps * filter)
 {
-	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	GstCaps *peercaps, *caps;
-
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
-	 */
-
-	/* FIXME- AEP 02242016
-	 * Replacing this function, likely to break. */
-	//caps = gst_pad_get_fixed_caps_func(pad);
-	caps = gst_caps_make_writable(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	/* FIXME- AEP 02252016
-	 * Reference manual is abiguous on this function. */
-	peercaps = gst_caps_make_writable(otherpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return caps;
+    GSTLALNoFakeDisconts *nofakedisconts;
+    GstCaps *result, *peercaps, *current_caps, *filter_caps;
+    nofakedisconts = GSTLAL_NOFAKEDISCONTS(GST_PAD_PARENT (pad));
+    
+    /* take filter */
+    filter_caps = filter ? gst_caps_ref(filter) : NULL;
+    
+    /*
+     * If the filter caps are empty (but not NULL), there is nothing we can
+     * do, there will be no intersection
+     */
+    if (filter_caps && gst_caps_is_empty (filter_caps)) {
+        GST_WARNING_OBJECT (pad, "Empty filter caps");
+        return filter_caps;
+    }
+    
+    /* get the downstream possible caps */
+    peercaps = gst_pad_peer_query_caps(nofakedisconts->srcpad, filter_caps);
+    
+    /* get the allowed caps on this sinkpad */
+    current_caps = gst_pad_get_pad_template_caps(pad);
+    if (!current_caps)
+        current_caps = gst_caps_new_any();
+    
+    if (peercaps) {
+        /* if the peer has caps, intersect */
+        GST_DEBUG_OBJECT(nofakedisconts, "intersecting peer and our caps");
+        result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
+        /* neither peercaps nor current_caps are needed any more */
+        gst_caps_unref(peercaps);
+        gst_caps_unref(current_caps);
+    }
+    else {
+        /* the peer has no caps (or there is no peer), just use the allowed caps
+         * of this sinkpad. */
+        /* restrict with filter-caps if any */
+        if (filter_caps) {
+            GST_DEBUG_OBJECT(nofakedisconts, "no peer caps, using filtered caps");
+            result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
+            /* current_caps are not needed any more */
+            gst_caps_unref(current_caps);
+        }
+        else {
+            GST_DEBUG_OBJECT(nofakedisconts, "no peer caps, using our caps");
+            result = current_caps;
+        }
+    }
+    
+    result = gst_caps_make_writable (result);
+    
+    if (filter_caps)
+        gst_caps_unref (filter_caps);
+    
+    GST_LOG_OBJECT (nofakedisconts, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
+    
+    return result;
 }
 
 
@@ -189,26 +248,69 @@ static GstCaps *getcaps(GstPad * pad)
  */
 
 
-static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
+static gboolean drop_sink_setcaps (GSTLALNoFakeDisconts *nofakedisconts, GstPad *pad, GstCaps *caps)
 {
-	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	gboolean success;
-
-	/*
-	 * ask downstream peer
-	 */
-
-	//success = gst_pad_peer_accept_caps(otherpad, caps);
-	success = gst_pad_peer_query_accept_caps(otherpad, caps);
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
+    
+    GstStructure *structure;
+    gint rate, width, channels;
+    gboolean success = TRUE;
+    
+    /*
+     * parse caps
+     */
+    
+    structure = gst_caps_get_structure(caps, 0);
+    success &= gst_structure_get_int(structure, "rate", &rate);
+    success &= gst_structure_get_int(structure, "width", &width);
+    success &= gst_structure_get_int(structure, "channels", &channels);
+    
+    /*
+     * try setting caps on downstream element
+     */
+    
+    if(success)
+        success = gst_pad_set_caps(nofakedisconts->srcpad, caps);
+    
+    /*
+     * update the element metadata
+     */
+    
+    if(success) {
+        nofakedisconts->rate = rate;
+        nofakedisconts->unit_size = width / 8 * channels;
+    } else
+        GST_ERROR_OBJECT(nofakedisconts, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+    
+    /*
+     * done
+     */
+    
+    return success;
+    
 }
+
+
+//static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
+//{
+//	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(gst_pad_get_parent(pad));
+//	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
+//	gboolean success;
+//
+//	/*
+//	 * ask downstream peer
+//	 */
+//
+//	//success = gst_pad_peer_accept_caps(otherpad, caps);
+//	success = gst_pad_peer_query_accept_caps(otherpad, caps);
+//
+//	/*
+//	 * done
+//	 */
+//
+//	gst_object_unref(element);
+//	return success;
+//}
+
 
 
 /*
@@ -216,7 +318,7 @@ static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf)
 {
 	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(gst_pad_get_parent(pad));
 	GstFlowReturn result;
@@ -348,13 +450,97 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 }
 
+/* AEP -02252016 adding gbooleans */
+//drop_src_query
+static gboolean drop_src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	gboolean res = FALSE;
+
+	switch (GST_QUERY_TYPE (query))
+	{
+		default:
+			res = gst_pad_query_default (pad, parent, query);
+			break;
+	}
+	return res;
+}
+
+
+//drop_src_event
+static gboolean drop_src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALNoFakeDisconts *nofakedisconts;
+	gboolean result = TRUE;
+	nofakedisconts = GSTLAL_NOFAKEDISCONTS(parent);
+	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
+
+	switch (GST_EVENT_TYPE (event))
+	{
+		default:
+			/* just forward the rest for now */
+			GST_DEBUG_OBJECT(nofakedisconts, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+			gst_pad_event_default(pad, parent, event);
+			break;
+	}
+
+	return result;
+}
+
+//drop_sink_query
+static gboolean drop_sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
+{
+	gboolean res = TRUE;
+	GstCaps *filter, *caps;
+
+	switch (GST_QUERY_TYPE (query))
+	{
+		case GST_QUERY_CAPS:
+			gst_query_parse_caps (query, &filter);
+			caps = drop_sink_getcaps (pad, filter);
+			gst_query_set_caps_result (query, caps);
+			gst_caps_unref (caps);
+			break;
+		default:
+			break;
+	}
+
+	 if (G_LIKELY (query))
+		return gst_pad_query_default (pad, parent, query);
+	 else
+		 return res;
+  return res;
+}
+
+//drop_sink_event
+static gboolean drop_sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALNoFakeDisconts *nofakedisconts = GSTLAL_NOFAKEDISCONTS(parent);
+	gboolean res = TRUE;
+        GstCaps *caps;
+
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+
+	switch (GST_EVENT_TYPE (event))
+	{
+		case GST_EVENT_CAPS:
+			gst_event_parse_caps(event, &caps);
+			res = drop_sink_setcaps(nofakedisconts, pad, caps);
+			gst_event_unref(event);
+	                event = NULL;
+		default:
+			break;
+	}
+	if (G_LIKELY (event))
+		return gst_pad_event_default(pad, parent, event);
+	else
+		return res;
+}
 
 /*
  * Instance init function.  See
  *
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
  */
-
 
 static void instance_init(GTypeInstance *object, gpointer klass)
 {
