@@ -918,11 +918,6 @@ static void finalize(GObject *object)
 }
 
 
-static void gstlal_cachesrc_base_init(gpointer klass)
-{
-}
-
-
 static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);

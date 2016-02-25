@@ -65,7 +65,7 @@ INTROSPECTION_GIRS += GstLAL-$(GIR_VERSION).gir
 GstLAL-$(GIR_VERSION).gir : libgstlaltypes.la Makefile
 # automake won't let me use variables on the LHS of the following for some
 # reason, so I've resorted to using autoconf substitution macros.  ugly.
-GstLAL_@GIR_VERSION_@_gir_INCLUDES = Gst-0.10
+GstLAL_@GIR_VERSION_@_gir_INCLUDES = Gst-1.0
 GstLAL_@GIR_VERSION_@_gir_CFLAGS = $(INCLUDES)
 GstLAL_@GIR_VERSION_@_gir_LIBS = libgstlaltypes.la
 GstLAL_@GIR_VERSION_@_gir_FILES = gstlal_gps_clock.h gstlal_gps_clock.c gstlal_frhistory.h gstlal_frhistory.c

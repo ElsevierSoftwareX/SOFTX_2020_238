@@ -409,11 +409,6 @@ static void finalize(GObject *object)
 	"width = (int) {32, 64}; "
 
 
-static void base_init(gpointer class)
-{
-}
-
-
 /*
  * class_init()
  */
@@ -520,7 +515,6 @@ GType gstlal_peak_get_type(void)
 		static const GTypeInfo info = {
 			.class_size = sizeof(GSTLALPeakClass),
 			.class_init = class_init,
-			.base_init = base_init,
 			.instance_size = sizeof(GSTLALPeak),
 			.instance_init = instance_init,
 		};

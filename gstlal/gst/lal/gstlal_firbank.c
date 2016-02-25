@@ -82,7 +82,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/controller/gstcontroller.h>
+#include <gst/controller/controller.h>
 
 
 /*
@@ -1845,16 +1845,6 @@ static void finalize(GObject *object)
 	 */
 
 	G_OBJECT_CLASS(gstlal_firbank_parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gstlal_firbank_base_init(gpointer klass)
-{
 }
 
 

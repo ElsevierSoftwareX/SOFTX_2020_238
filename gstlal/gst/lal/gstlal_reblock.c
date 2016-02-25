@@ -411,16 +411,6 @@ static void finalize(GObject *object)
 
 
 /*
- * base_init()
- */
-
-
-static void gstlal_reblock_base_init(gpointer klass)
-{
-}
-
-
-/*
  * class_init()
  */
 

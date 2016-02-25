@@ -108,6 +108,12 @@ static GstFlowReturn gst_multirate_fir_interp_transform (GstBaseTransform * base
 static void
 gst_multirate_fir_interp_base_init (gpointer klass)
 {
+}
+
+static void
+gst_multirate_fir_interp_class_init (GstMultirateFirInterpClass * klass)
+{
+  GObjectClass *gobject_class;
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
   gst_element_class_add_pad_template (element_class,
@@ -118,12 +124,6 @@ gst_multirate_fir_interp_base_init (gpointer klass)
       "Filter/Audio",
       "Interpolate an audio stream using a direct form polyphase FIR interpolator",
       "Leo Singer <leo.singer@ligo.org>");
-}
-
-static void
-gst_multirate_fir_interp_class_init (GstMultirateFirInterpClass * klass)
-{
-  GObjectClass *gobject_class;
 
   gobject_class = (GObjectClass *) klass;
   gobject_class->set_property = gst_multirate_fir_interp_set_property;

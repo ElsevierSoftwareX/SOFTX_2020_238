@@ -666,16 +666,6 @@ static void get_property(GObject * object, enum property id, GValue * value,
 
 
 /*
- * base_init()
- */
-
-
-static void gst_tsvenc_base_init(gpointer klass)
-{
-}
-
-
-/*
  * class_init()
  */
 

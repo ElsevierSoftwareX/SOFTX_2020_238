@@ -383,7 +383,10 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 		memset(dst, 0, n * adapter->unit_size);
 		_copied_gap = TRUE;
 	} else {
-		memcpy(dst, GST_BUFFER_DATA(buf) + adapter->skip * adapter->unit_size, n * adapter->unit_size);
+		GstMapInfo mapinfo;
+		gst_buffer_map_range(buf, adapter->skip * adapter->unit_size, n * adapter->unit_size, &mapinfo, GST_MAP_READ);
+		memcpy(dst, mapinfo.data, mapinfo.size);
+		gst_buffer_unmap(buf, &mapinfo);
 		_copied_nongap = TRUE;
 	}
 	dst += n * adapter->unit_size;
@@ -397,7 +400,10 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 			memset(dst, 0, n * adapter->unit_size);
 			_copied_gap = TRUE;
 		} else {
-			memcpy(dst, GST_BUFFER_DATA(buf), n * adapter->unit_size);
+			GstMapInfo mapinfo;
+			gst_buffer_map_range(buf, 0, n * adapter->unit_size, &mapinfo, GST_MAP_READ);
+			memcpy(dst, mapinfo.data, mapinfo.size);
+			gst_buffer_unmap(buf, &mapinfo);
 			_copied_nongap = TRUE;
 		}
 		dst += n * adapter->unit_size;
@@ -425,7 +431,7 @@ done:
  * boundaries).
  *
  * All metadata from the original #GstBuffer objects is preserved,
- * including #GstCaps, the #GstBufferFlags, etc..
+ * including the #GstBufferFlags, etc..
  *
  * Returns: #GList of #GstBuffers.  Calling code owns a reference to each
  * #GstBuffer in the list;  call gst_buffer_unref() on each when done.
@@ -450,17 +456,10 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		GstBuffer *newbuf;
 		n = MIN(samples, n);
 
-		newbuf = gst_buffer_create_sub(buf, adapter->skip * adapter->unit_size, n * adapter->unit_size);
+		newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, adapter->skip * adapter->unit_size, n * adapter->unit_size);
 
 		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buf) + adapter->skip;
 		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + n;
-
-		/* FIXME:  check to make sure gst_buffer_create_sub()
-		 * copies caps.  remove this when gstreamer can be relied
-		 * on to do this */
-		if(!GST_BUFFER_CAPS(newbuf))
-			gst_buffer_set_caps(newbuf, GST_BUFFER_CAPS(buf));
-		g_assert(GST_BUFFER_CAPS(newbuf) != NULL);
 
 		result = g_list_append(result, newbuf);
 	} else {
@@ -473,15 +472,8 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		buf = GST_BUFFER(head->data);
 		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 		if(samples < n) {
-			GstBuffer *newbuf = gst_buffer_create_sub(buf, 0, samples * adapter->unit_size);
+			GstBuffer *newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, 0, samples * adapter->unit_size);
 			GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + samples;
-
-			/* FIXME:  check to make sure gst_buffer_create_sub()
-			 * copies caps.  remove this when gstreamer can be relied
-			 * on to do this */
-			if(!GST_BUFFER_CAPS(newbuf))
-				gst_buffer_set_caps(newbuf, GST_BUFFER_CAPS(buf));
-			g_assert(GST_BUFFER_CAPS(newbuf) != NULL);
 
 			result = g_list_append(result, newbuf);
 			samples = 0;
@@ -603,12 +595,6 @@ static void finalize(GObject *object)
 	adapter->queue = NULL;
 
 	G_OBJECT_CLASS(gst_audioadapter_parent_class)->finalize(object);
-}
-
-
-static void gst_audioadapter_base_init(gpointer g_class)
-{
-	/* no-op */
 }
 
 

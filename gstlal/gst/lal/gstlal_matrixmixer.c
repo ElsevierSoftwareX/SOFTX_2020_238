@@ -76,7 +76,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/controller/gstcontroller.h>
+#include <gst/controller/controller.h>
 
 
 /*
@@ -626,16 +626,6 @@ static void finalize(GObject *object)
 	mixmatrix_free(element);
 
 	G_OBJECT_CLASS(gstlal_matrixmixer_parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gstlal_matrixmixer_base_init(gpointer klass)
-{
 }
 
 
