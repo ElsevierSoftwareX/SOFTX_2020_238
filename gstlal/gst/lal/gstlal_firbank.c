@@ -82,7 +82,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/controller/gstcontroller.h>
+#include <gst/controller/controller.h>
 
 
 /*
