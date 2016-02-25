@@ -92,17 +92,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_sumsquares", 0, "lal_sumsquares element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALSumSquares,
 	gstlal_sumsquares,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_sumsquares", 0, "lal_sumsquares element")
 );
 
 
@@ -132,9 +126,16 @@ static void *make_weights_native_ ## DTYPE(GSTLALSumSquares *element) \
 #define DEFINE_SUMSQUARES_FUNC(DTYPE) \
 static GstFlowReturn sumsquares_ ## DTYPE(GSTLALSumSquares *element, GstBuffer *inbuf, GstBuffer *outbuf) \
 { \
-	const DTYPE *src = (const DTYPE *) GST_BUFFER_DATA(inbuf); \
-	DTYPE *dst = (DTYPE *) GST_BUFFER_DATA(outbuf); \
-	DTYPE *dst_end = dst + (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)); \
+	GstMapInfo in_info, out_info; \
+	const DTYPE *src; \
+	DTYPE *dst; \
+	DTYPE *dst_end; \
+\
+	gst_buffer_map(inbuf, &in_info, GST_MAP_READ); \
+	src = (const DTYPE *) in_info.data; \
+	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE); \
+	dst = (DTYPE *) out_info.data; \
+	dst_end = dst + (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)); \
  \
 	if(element->weights_native) { \
 		for(; dst < dst_end; dst++) { \
@@ -153,6 +154,8 @@ static GstFlowReturn sumsquares_ ## DTYPE(GSTLALSumSquares *element, GstBuffer *
 		} \
 	} \
  \
+	gst_buffer_unmap(inbuf, &in_info); \
+	gst_buffer_unmap(outbuf, &out_info); \
 	return GST_FLOW_OK; \
 }
 
@@ -177,7 +180,7 @@ DEFINE_SUMSQUARES_FUNC(float)
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint channels;
@@ -202,8 +205,9 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
+	// FIXME filter is unused. It was added in 1.0. It should probably be fixed
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
 	guint n;
 
@@ -328,6 +332,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
 	GstFlowReturn result;
+	GstMapInfo out_info;
 
 	g_assert(element->sumsquares_func != NULL);
 
@@ -350,8 +355,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is 0s.
 		 */
 
+		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		memset(out_info.data, 0, out_info.size);
+		gst_buffer_unmap(outbuf, &out_info);
 		result = GST_FLOW_OK;
 	}
 
