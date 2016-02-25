@@ -148,64 +148,62 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static GstCaps *getcaps(GstPad * pad)
+static GstCaps *getcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *filter)
 {
-	GSTLALPeak *element = GSTLAL_PEAK(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	GstCaps *peercaps, *caps;
+	GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
+	/* take filter */
+	filter_caps = filter ? gst_caps_ref(filter) : NULL;
+
+	/* 
+	 * If the filter caps are empty (but not NULL), there is nothing we can
+	 * do, there will be no intersection
 	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
+	if (filter_caps && gst_caps_is_empty (filter_caps)) {
+		GST_WARNING_OBJECT (pad, "Empty filter caps");
+		return filter_caps;
 	}
 
-	/*
-	 * done
-	 */
+	/* get the downstream possible caps */
+	peercaps = gst_pad_peer_query_caps(peak->srcpad, filter_caps);
 
-	gst_object_unref(element);
-	return caps;
-}
+	/* get the allowed caps on this sinkpad */
+	current_caps = gst_pad_get_pad_template_caps(pad);
+	if (!current_caps)
+			current_caps = gst_caps_new_any();
 
+	if (peercaps) {
+		/* if the peer has caps, intersect */
+		GST_DEBUG_OBJECT(peak, "intersecting peer and our caps");
+		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
+		/* neither peercaps nor current_caps are needed any more */
+		gst_caps_unref(peercaps);
+		gst_caps_unref(current_caps);
+	}
+	else {
+		/* the peer has no caps (or there is no peer), just use the allowed caps
+		* of this sinkpad. */
+		/* restrict with filter-caps if any */
+		if (filter_caps) {
+			GST_DEBUG_OBJECT(peak, "no peer caps, using filtered caps");
+			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
+			/* current_caps are not needed any more */
+			gst_caps_unref(current_caps);
+		}
+		else {
+			GST_DEBUG_OBJECT(peak, "no peer caps, using our caps");
+			result = current_caps;
+		}
+	}
 
-/*
- * acceptcaps()
- */
+	result = gst_caps_make_writable (result);
 
+	if (filter_caps)
+		gst_caps_unref (filter_caps);
 
-static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALPeak *element = GSTLAL_PEAK(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	gboolean success;
+	GST_LOG_OBJECT (peak, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
 
-	/*
-	 * ask downstream peer
-	 */
-
-	success = gst_pad_peer_accept_caps(otherpad, caps);
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
+	return result;
 }
 
 
@@ -214,15 +212,15 @@ static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *caps)
 {
-	GSTLALPeak *element = GSTLAL_PEAK(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	gint rate, width, channels;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
+	 * NOTE: rate, width and channels must be present
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
@@ -238,29 +236,119 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
+		success = gst_pad_set_caps(peak->srcpad, caps);
 
 	/*
 	 * update the element metadata
 	 */
 
 	if(success) {
-		element->channels = channels;
-		element->rate = rate;
-		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
+		peak->channels = channels;
+		peak->rate = rate;
+		g_object_set(peak->adapter, "unit-size", width / 8 * channels, NULL);
 		if (width == 64)
-			element->peak_type = GSTLAL_PEAK_DOUBLE;
+			peak->peak_type = GSTLAL_PEAK_DOUBLE;
 		if (width == 32)
-			element->peak_type = GSTLAL_PEAK_FLOAT;
-		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
+			peak->peak_type = GSTLAL_PEAK_FLOAT;
+		peak->maxdata = gstlal_peak_state_new(channels, peak->peak_type);
 	}
 
 	/*
 	 * done
 	 */
 
-	gst_object_unref(element);
 	return success;
+}
+
+
+/*
+ * Events and queries
+ */
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	gboolean res = FALSE;
+
+	switch (GST_QUERY_TYPE (query))
+	{
+		default:
+			res = gst_pad_query_default (pad, parent, query);
+			break;
+	}
+	return res;
+}
+
+
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALPeak *peak = GSTLAL_PEAK(parent);
+	gboolean result = TRUE;
+	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
+
+	switch (GST_EVENT_TYPE (event))
+	{	
+		default:
+			/* just forward the rest for now */
+			GST_DEBUG_OBJECT(peak, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+			gst_pad_event_default(pad, parent, event);
+			break;
+	}
+
+	return result;
+}
+
+
+static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
+{
+	GSTLALPeak *peak = GSTLAL_PEAK(parent);
+	gboolean res = TRUE;
+	GstCaps *filter, *caps;
+
+	switch (GST_QUERY_TYPE (query)) 
+	{
+		case GST_QUERY_CAPS:
+			gst_query_parse_caps (query, &filter);
+			caps = getcaps(peak, pad, filter);
+			gst_query_set_caps_result (query, caps);
+			gst_caps_unref (caps);
+			break;
+		default:
+			break;
+	}
+
+	if (G_LIKELY (query))
+		return gst_pad_query_default (pad, parent, query);
+	else
+		return res;
+
+  return res;
+}
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALPeak *peak = GSTLAL_PEAK(parent);
+	gboolean res = TRUE;
+	GstCaps *caps;
+
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+
+	switch (GST_EVENT_TYPE (event))
+	{
+		case GST_EVENT_CAPS:
+			gst_event_parse_caps(event, &caps);
+			res = setcaps(peak, pad, caps);
+			gst_event_unref(event);
+			event = NULL;
+		default:
+			break;
+	}
+
+	if (G_LIKELY (event))
+		return gst_pad_event_default(pad, parent, event);
+	else
+		return res;
 }
 
 
@@ -280,9 +368,9 @@ static GstFlowReturn push_buffer(GSTLALPeak *element, GstBuffer *srcbuf)
 	return gst_pad_push(element->srcpad, srcbuf);
 }
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
-	GSTLALPeak *element = GSTLAL_PEAK(gst_pad_get_parent(pad));
+	GSTLALPeak *element = GSTLAL_PEAK(parent);
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *srcbuf = NULL;
 	guint64 maxsize = output_num_bytes(element);
@@ -389,7 +477,7 @@ static void finalize(GObject *object)
 	g_object_unref(element->adapter);
 	gstlal_peak_state_free(element->maxdata);
 	if (!element->data)
-		free(element->data);  
+		g_free(element->data);  
 	G_OBJECT_CLASS(gstlal_peak_parent_class)->finalize(object);
 }
 
@@ -482,16 +570,15 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
 	element->srcpad = pad;
 
 	/* internal data */

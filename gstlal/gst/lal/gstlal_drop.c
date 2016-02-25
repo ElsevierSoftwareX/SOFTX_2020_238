@@ -72,7 +72,7 @@
  */
 
 
-static gboolean drop_sink_setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
+static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
 {
 
 	GstStructure *structure;
@@ -119,7 +119,7 @@ static gboolean drop_sink_setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
  */
 
 
-static GstCaps *drop_sink_getcaps (GstPad * pad, GstCaps * filter)
+static GstCaps *getcaps (GstPad * pad, GstCaps * filter)
 {
 	GSTLALDrop *drop;
 	GstCaps *result, *peercaps, *current_caps, *filter_caps;
@@ -245,7 +245,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static gboolean drop_src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
 	gboolean res = FALSE;
 
@@ -259,7 +259,7 @@ static gboolean drop_src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 }
 
 
-static gboolean drop_src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALDrop *drop;
 	gboolean result = TRUE;
@@ -279,7 +279,7 @@ static gboolean drop_src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 }
 
 
-static gboolean drop_sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
+static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
 {
 	gboolean res = TRUE;
 	GstCaps *filter, *caps;
@@ -288,7 +288,7 @@ static gboolean drop_sink_query(GstPad *pad, GstObject *parent, GstQuery * query
 	{
 		case GST_QUERY_CAPS:
 			gst_query_parse_caps (query, &filter);
-			caps = drop_sink_getcaps (pad, filter);
+			caps = getcaps (pad, filter);
 			gst_query_set_caps_result (query, caps);
 			gst_caps_unref (caps);
 			break;
@@ -305,7 +305,7 @@ static gboolean drop_sink_query(GstPad *pad, GstObject *parent, GstQuery * query
 }
 
 
-static gboolean drop_sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALDrop *drop = GSTLAL_DROP(parent);
 	gboolean res = TRUE;
@@ -317,7 +317,7 @@ static gboolean drop_sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	{
 		case GST_EVENT_CAPS:
 			gst_event_parse_caps(event, &caps);
-			res = drop_sink_setcaps(drop, pad, caps);
+			res = setcaps(drop, pad, caps);
 			gst_event_unref(event);
 			event = NULL;
 		default:
@@ -537,15 +537,15 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(drop_sink_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(drop_sink_event));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (drop_src_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (drop_src_event));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
 	element->srcpad = pad;
 
 	/* internal data */

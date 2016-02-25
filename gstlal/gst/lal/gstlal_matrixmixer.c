@@ -112,17 +112,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_matrixmixer", 0, "lal_matrixmixer element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALMatrixMixer,
 	gstlal_matrixmixer,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_matrixmixer", 0, "lal_matrixmixer element")
 );
 
 
@@ -216,6 +210,8 @@ static void mixmatrix_free(GSTLALMatrixMixer *element)
 static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	guint64 length;
+	GstMapInfo in_info;
+	GstMapInfo out_info;
 
 	/*
 	 * Number of samples to process.
@@ -223,21 +219,24 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 
 	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	if(!length) {
-		g_assert_cmpuint(GST_BUFFER_SIZE(inbuf), ==, 0);
+		g_assert_cmpuint(gst_buffer_get_size(inbuf), ==, 0);
 		return GST_FLOW_OK;
 	}
-	g_assert_cmpuint(GST_BUFFER_SIZE(inbuf) % length, ==, 0);
+	g_assert_cmpuint(gst_buffer_get_size(inbuf) % length, ==, 0);
 
 	/*
 	 * Wrap the input and output buffers in GSL matrix views, then mix
 	 * input channels into output channels.
 	 */
 
+	gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
+	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+
 	switch(element->data_type) {
 	case GSTLAL_MATRIXMIXER_FLOAT: {
-		gsl_matrix_float_view input_channels = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		gsl_matrix_float_view output_channels = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element, element->data_type));
-		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(float) != GST_BUFFER_SIZE(inbuf)) {
+		gsl_matrix_float_view input_channels = gsl_matrix_float_view_array((float *) in_info.data, length, num_input_channels(element));
+		gsl_matrix_float_view output_channels = gsl_matrix_float_view_array((float *) out_info.data, length, num_output_channels(element, element->data_type));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(float) != gst_buffer_get_size(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size does not match channel and sample count", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
@@ -246,9 +245,9 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	}
 
 	case GSTLAL_MATRIXMIXER_DOUBLE: {
-		gsl_matrix_view input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element, element->data_type));
-		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(double) != GST_BUFFER_SIZE(inbuf)) {
+		gsl_matrix_view input_channels = gsl_matrix_view_array((double *) in_info.data, length, num_input_channels(element));
+		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) out_info.data, length, num_output_channels(element, element->data_type));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(double) != gst_buffer_get_size(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size does not match channel and sample count", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
@@ -257,9 +256,9 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	}
 
 	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT: {
-		gsl_matrix_complex_float_view input_channels = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		gsl_matrix_complex_float_view output_channels = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element, element->data_type));
-		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(complex float) != GST_BUFFER_SIZE(inbuf)) {
+		gsl_matrix_complex_float_view input_channels = gsl_matrix_complex_float_view_array((float *) in_info.data, length, num_input_channels(element));
+		gsl_matrix_complex_float_view output_channels = gsl_matrix_complex_float_view_array((float *) out_info.data, length, num_output_channels(element, element->data_type));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(complex float) != gst_buffer_get_size(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size does not match channel and sample count", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
@@ -268,9 +267,9 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	}
 
 	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE: {
-		gsl_matrix_complex_view input_channels = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
-		gsl_matrix_complex_view output_channels = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(outbuf), length, num_output_channels(element, element->data_type));
-		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(complex double) != GST_BUFFER_SIZE(inbuf)) {
+		gsl_matrix_complex_view input_channels = gsl_matrix_complex_view_array((double *) in_info.data, length, num_input_channels(element));
+		gsl_matrix_complex_view output_channels = gsl_matrix_complex_view_array((double *) out_info.data, length, num_output_channels(element, element->data_type));
+		if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(complex double) != gst_buffer_get_size(inbuf)) {
 			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size does not match channel and sample count", inbuf));
 			return GST_FLOW_NOT_NEGOTIATED;
 		}
@@ -285,6 +284,9 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	/*
 	 * Done
 	 */
+
+	gst_buffer_unmap(inbuf, &in_info);
+	gst_buffer_unmap(outbuf, &out_info);
 
 	return GST_FLOW_OK;
 }
@@ -304,7 +306,7 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint width;
@@ -329,8 +331,12 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
+	/* FIXME new argument *filter in 1.0 should be used for what??
+ 	 * Presently not used
+	 */
+
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
 	enum gstlal_matrixmixer_media_type data_type = get_media_type(caps);
 	guint n;
@@ -427,8 +433,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
 	GstFlowReturn result;
+	GstMapInfo out_info;
 
-	gst_object_sync_values(G_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_DTS(inbuf));
+	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 
 	g_mutex_lock(element->mixmatrix_lock);
 	while(!element->mixmatrix_d) {
@@ -436,7 +444,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for mix matrix");
-			result = GST_FLOW_WRONG_STATE;
+			result = GST_FLOW_FLUSHING;
 			goto done;
 		}
 	}
@@ -455,7 +463,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		/* memset() is needed for pipelines that don't understand
 		 * gaps at all */
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		memset(out_info.data, 0, gst_buffer_get_size(outbuf));
 		result = GST_FLOW_OK;
 	}
 
@@ -464,7 +472,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
-	gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS);
+	gst_buffer_copy_into(outbuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS, GST_BUFFER_OFFSET(inbuf), -1);
+	gst_buffer_unmap(outbuf, &out_info);
 	g_mutex_unlock(element->mixmatrix_lock);
 	return result;
 }
