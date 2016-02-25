@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright (C) 2011 Kipp Cannon <kipp.cannon@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -66,7 +66,7 @@ struct _GSTLALStateVector {
 	guint64 off_samples;
 	guint64 gap_samples;
 
-	guint (*get_input)(void **);
+	guint (*get_input)(guint8 *);
 };
 
 

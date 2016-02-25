@@ -103,19 +103,19 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  */
 
 
-static guint get_input_uint8(void **in)
+static guint get_input_uint8(guint8 *in)
 {
 	return *(*(guint8 **) in)++;
 }
 
 
-static guint get_input_uint16(void **in)
+static guint get_input_uint16(guint8 *in)
 {
 	return *(*(guint16 **) in)++;
 }
 
 
-static guint get_input_uint32(void **in)
+static guint get_input_uint32(guint8 *in)
 {
 	return *(*(guint32 **) in)++;
 }
@@ -176,18 +176,17 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_statevector", 0, "lal_statevector element");
-}
+//static void additional_initializations(GType type)
+//{
+//	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_statevector", 0, "lal_statevector element");
+//}
 
 
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALStateVector,
 	gstlal_statevector,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_statevector", 0, "lal_statevector element")
 );
 
 
@@ -205,7 +204,7 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint width;
@@ -341,6 +340,10 @@ static gboolean start(GstBaseTransform *trans)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
+    
+    GstMapInfo in_info;
+    GstMapInfo out_info;
+    
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 	guint64 on_samples = element->on_samples;
@@ -356,16 +359,20 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not GAP.
 		 */
 
-		void *in = GST_BUFFER_DATA(inbuf);
-		void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
-		guint8 *out = GST_BUFFER_DATA(outbuf);
+		//void *in = GST_BUFFER_DATA(inbuf);
+        gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
+        gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+        guint8 *out = out_info.data;
+		//void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
+        guint8 *end = in_info.data + in_info.size;
 		guint required_on = element->required_on;
 		guint required_off = element->required_off;
 
-		for(; in < end; out++) {
-			guint input = element->get_input(&in);
+		for(; in_info.data < end; out_info.data++) {
+			guint input = element->get_input(in_info.data);
 			if(((input & required_on) == required_on) && ((~input & required_off) == required_off)) {
-				*out = 0x80;
+                //gst_buffer_map(0x80, out_info.data, GST_MAP_WRITE);
+                *out_info.data = 0x80;
 				element->on_samples++;
 			} else {
 				*out = 0x00;
@@ -378,7 +385,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+        gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+		memset(out_info.data, 0, out_info.size);
 		element->gap_samples += GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	}
 
@@ -572,7 +580,7 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
  */
 
 
-static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVectorClass *klass)
+static void gstlal_statevector_init(GSTLALStateVector *filter)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 
