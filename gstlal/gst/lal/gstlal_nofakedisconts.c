@@ -155,14 +155,19 @@ static GstCaps *getcaps(GstPad * pad)
 	 * recursing back into this function.
 	 */
 
-	caps = gst_pad_get_fixed_caps_func(pad);
+	/* FIXME- AEP 02242016
+	 * Replacing this function, likely to break. */
+	//caps = gst_pad_get_fixed_caps_func(pad);
+	caps = gst_caps_make_writable(pad);
 
 	/*
 	 * get the allowed caps from the downstream peer if the peer has
 	 * caps, intersect without our own.
 	 */
 
-	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
+	/* FIXME- AEP 02252016
+	 * Reference manual is abiguous on this function. */
+	peercaps = gst_caps_make_writable(otherpad);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
@@ -194,7 +199,8 @@ static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
 	 * ask downstream peer
 	 */
 
-	success = gst_pad_peer_accept_caps(otherpad, caps);
+	//success = gst_pad_peer_accept_caps(otherpad, caps);
+	success = gst_pad_peer_query_accept_caps(otherpad, caps);
 
 	/*
 	 * done
@@ -220,14 +226,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 		if(GST_BUFFER_OFFSET(buf) != element->next_offset || GST_BUFFER_TIMESTAMP(buf) != element->next_timestamp) {
 			if(!is_discont) {
-				buf = gst_buffer_make_metadata_writable(buf);
+				//buf = gst_buffer_make_metadata_writable(buf);
+				buf = gst_buffer_make_writable(buf);
 				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 				if(!element->silent)
 					fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
 			}
 		} else {
 			if(is_discont) {
-				buf = gst_buffer_make_metadata_writable(buf);
+				//buf = gst_buffer_make_metadata_writable(buf);
+				buf = gst_buffer_make_writable(buf);
 				GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_DISCONT);
 				if(!element->silent)
 					fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
@@ -367,15 +375,19 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	//gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	//gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(drop_sink_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(drop_sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	//gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	//gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (drop_src_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (drop_src_event));
 	element->srcpad = pad;
 
 	/* internal data */
