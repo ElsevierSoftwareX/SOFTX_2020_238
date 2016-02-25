@@ -137,17 +137,11 @@ static const LIGOTimeGPS GPS_ZERO = {0, 0};
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_whiten", 0, "lal_whiten element");
-}
-
-
-G_DEFINE_TYPE(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALWhiten,
 	gstlal_whiten,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_whiten", 0, "lal_whiten element")
 );
 
 
@@ -630,7 +624,8 @@ REAL8FrequencySeries *gstlal_whiten_message_psd_parse(GstMessage *m)
 
 static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, gint period_N, gint period_D)
 {
-	GstBuffer *buffer = NULL;
+	GstBuffer *buffer;
+	GstMapInfo mapinfo;
 	GstFlowReturn result;
 	GstCaps *caps = gst_caps_new_simple(
 		"audio/x-raw-float",
@@ -645,12 +640,15 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, 
 	gst_pad_set_caps(psd_pad, caps);
 	gst_caps_unref(caps);
 
-	result = gst_pad_alloc_buffer(psd_pad, GST_BUFFER_OFFSET_NONE, psd->data->length * sizeof(*psd->data->data), GST_PAD_CAPS(psd_pad), &buffer);
-	if(result != GST_FLOW_OK)
-		return result;
+	buffer = gst_buffer_new_allocate(NULL, psd->data->length * sizeof(*psd->data->data), NULL);
+	if(!buffer)
+		return GST_FLOW_ERROR;
 
-	memcpy(GST_BUFFER_DATA(buffer), psd->data->data, GST_BUFFER_SIZE(buffer));
+	gst_buffer_map(buffer, &mapinfo, GST_MAP_WRITE);
+	memcpy(mapinfo.data, psd->data->data, mapinfo.size);
+	gst_buffer_unmap(buffer, &mapinfo);
 
+	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_TIMESTAMP(buffer) = XLALGPSToINT8NS(&psd->epoch);
 	GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
@@ -668,7 +666,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, 
 
 static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples, gboolean is_gap)
 {
-	GST_BUFFER_SIZE(buf) = outsamples * sizeof(*element->tdworkspace->data->data);
+	gst_buffer_set_size(buf, outsamples * sizeof(*element->tdworkspace->data->data));
 	GST_BUFFER_OFFSET(buf) = element->next_offset_out;
 	element->next_offset_out += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_offset_out;
@@ -686,12 +684,12 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 }
 
 
-static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *outsamples, gboolean *output_is_gap)
+static GstFlowReturn whiten(GSTLALWhiten *element, GstMapInfo *outmap, guint *outsamples, gboolean *output_is_gap)
 {
 	guint zero_pad = zero_pad_length(element);
 	guint hann_length = fft_length(element) - 2 * zero_pad;
-	double *dst = (double *) GST_BUFFER_DATA(outbuf);
-	guint dst_size = GST_BUFFER_SIZE(outbuf) / sizeof(*dst);
+	double *dst = (double *) (outmap->data);
+	guint dst_size = outmap->size / sizeof(*dst);
 
 	/*
 	 * safety checks
@@ -719,7 +717,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * safety checks
 		 */
 
-		g_assert_cmpuint((*outsamples + hann_length / 2) * sizeof(*element->tdworkspace->data->data), <=, GST_BUFFER_SIZE(outbuf));
+		g_assert_cmpuint((*outsamples + hann_length / 2) * sizeof(*element->tdworkspace->data->data), <=, outmap->size);
 
 		/*
 		 * Reset the workspace's metadata that gets modified
@@ -995,7 +993,7 @@ static void rebuild_workspace_and_reset(GObject *object, GParamSpec *pspec, gpoi
  */
 
 
-static GstPad *request_new_pad(GstElement *element, GstPadTemplate *template, const gchar *name)
+static GstPad *request_new_pad(GstElement *element, GstPadTemplate *template, const gchar *name, const GstCaps *caps)
 {
 	GstPad *pad = gst_pad_new_from_template(template, name);
 
@@ -1036,7 +1034,7 @@ static void release_pad(GstElement *element, GstPad *pad)
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint channels;
@@ -1105,14 +1103,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 
 /*
- * event()
+ * sink_event()
  *
  * FIXME:  handle flusing and eos (i.e. flush the input queue and send the
  * last bit of data downstream)
  */
 
 
-static gboolean event(GstBaseTransform *trans, GstEvent *event)
+static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
@@ -1162,10 +1160,12 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		}
 
 		/*
-		 * gst_element_found_tags() takes ownership of the taglist
+		 * push the tags downstream.  gst_event_new_tag() takes
+		 * ownership of the tags, and gst_pad_push_event() takes
+		 * ownership of the event.
 		 */
 
-		gst_element_found_tags(GST_ELEMENT(trans), taglist);
+		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), gst_event_new_tag(taglist));
 
 		/*
 		 * don't forward the event (we did it)
@@ -1198,18 +1198,18 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	/* 1/2 the hann window */
 	guint quantum = fft_length(element) / 2 - zero_pad_length(element);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_DEBUG_OBJECT(element, "size not a multiple of %" G_GSIZE_FORMAT, unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -1308,6 +1308,7 @@ static gboolean stop(GstBaseTransform *trans)
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 	guint outsamples;
 	gboolean output_is_gap;
@@ -1362,7 +1363,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gst_audioadapter_push(element->input_queue, inbuf);
-	result = whiten(element, outbuf, &outsamples, &output_is_gap);
+	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+	result = whiten(element, &mapinfo, &outsamples, &output_is_gap);
+	gst_buffer_unmap(outbuf, &mapinfo);
 	if(result != GST_FLOW_OK)
 		goto done;
 
@@ -1671,7 +1674,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
-	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 

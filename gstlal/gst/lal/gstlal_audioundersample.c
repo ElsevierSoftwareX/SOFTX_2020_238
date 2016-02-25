@@ -246,7 +246,7 @@ G_DEFINE_TYPE(
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint channels;
@@ -271,7 +271,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	guint n;
 
@@ -349,7 +349,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALAudioUnderSample *element = GSTLAL_AUDIOUNDERSAMPLE(trans);
 	gint rate_in, rate_out;
-	guint unit_size;
+	gsize unit_size;
 
 	/*
 	 * parse the caps
@@ -393,12 +393,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALAudioUnderSample *element = GSTLAL_AUDIOUNDERSAMPLE(trans);
 	gint cadence = element->rate_in / element->rate_out;
 	/* input and output unit sizes are the same */
-	guint unit_size;
+	gsize unit_size;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
@@ -408,7 +408,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	 */
 
 	if(G_UNLIKELY(size % unit_size)) {
-		GST_DEBUG_OBJECT(element, "buffer size %u is not a multiple of %u", size, unit_size);
+		GST_DEBUG_OBJECT(element, "buffer size %" G_GSIZE_FORMAT " is not a multiple of %" G_GSIZE_FORMAT, size, unit_size);
 		return FALSE;
 	}
 	size /= unit_size;
@@ -499,6 +499,7 @@ static gboolean start(GstBaseTransform *trans)
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALAudioUnderSample *element = GSTLAL_AUDIOUNDERSAMPLE(trans);
+	GstMapInfo inmap, outmap;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -524,16 +525,22 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		output_length = undersample((void *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf), (void *) GST_BUFFER_DATA(outbuf), GST_BUFFER_SIZE(outbuf), element->unit_size, element->rate_in / element->rate_out, &element->remainder);
+		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
+		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+		output_length = undersample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->rate_in / element->rate_out, &element->remainder);
 		set_metadata(element, outbuf, output_length, FALSE);
+		gst_buffer_unmap(outbuf, &outmap);
+		gst_buffer_unmap(inbuf, &inmap);
 	} else {
 		/*
 		 * input is 0s.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, GST_BUFFER_SIZE(outbuf) / element->unit_size, TRUE);
+		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+		memset(outmap.data, 0, outmap.size);
+		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
+		gst_buffer_unmap(outbuf, &outmap);
 	}
 
 	/*

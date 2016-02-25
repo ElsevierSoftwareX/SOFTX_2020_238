@@ -203,16 +203,28 @@ static int printsample_uint8(char *location, const void **sample)
   return sprintf(location, "\t%u", (unsigned) *(*(const guint8 **) sample)++);
 }
 
-
+/*
+ * Given a function printsample which moves through the samples,
+ * print a text version to "out". Update "out"s length accordingly.
+ */
 static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
     const void *samples, int (*printsample) (char *, const void **),
     int channels, int rate, guint64 length)
 {
-  char *location = (char *) GST_BUFFER_DATA(out);
+  /*
+   * location shows the head where we are currently writing into
+   * the output buffer
+   */
+  char *location;
+  GstMapInfo mapinfo;
+  
   guint64 offset;
   int channel;
 
   g_assert(printsample != NULL);
+
+  gst_buffer_map_range(out, 0, length, &mapinfo, GST_MAP_WRITE);
+  location = (char*) mapinfo.data;
 
   for(offset = 0; offset < length; offset++) {
     /*
@@ -223,11 +235,11 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
         timestamp + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 
     /*
-     * Saftey check.
+     * Safety check.
      */
 
-    g_assert_cmpuint(((guint8 *) location - GST_BUFFER_DATA(out)) +
-        src_bytes_per_sample(channels), <=, GST_BUFFER_SIZE(out));
+    g_assert_cmpuint(((guint8 *) location - (guint8 *) mapinfo.data) +
+        src_bytes_per_sample(channels), <=, gst_buffer_get_size(out));
 
     /*
      * Print the time.
@@ -257,8 +269,15 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
    * terminator.
    */
 
-  GST_BUFFER_SIZE(out) = (guint8 *) location - GST_BUFFER_DATA(out);
+  /*
+   * In gstreamer-0.10 we had to set the size of the resultant
+   * buffer. This is no longer required.
+   * GST_BUFFER_SIZE(out) = (guint8 *) location - GST_BUFFER_DATA(out);
+   * We do have to unmap the buffer, however.
+   */
 
+  gst_buffer_unmap(out, &mapinfo);
+  
   /*
    * Done
    */
@@ -301,16 +320,12 @@ GST_STATIC_PAD_TEMPLATE(GST_BASE_TRANSFORM_SRC_NAME,
     );
 
 
-static void additional_initializations(GType type)
-{
-  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_nxydump", 0,
-      "lal_nxydump element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(GstTSVEnc,
     gst_tsvenc,
-    GST_TYPE_BASE_TRANSFORM, additional_initializations);
+    GST_TYPE_BASE_TRANSFORM,
+    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_nxydump", 0,
+        "lal_nxydump element")
+);
  
 
 enum property
@@ -454,7 +469,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
   int (*printsample) (char *, const void **);
   gboolean success = TRUE;
 
-  element->printsample = NULL;  /* incase it doesn't get set */
+  element->printsample = NULL;  /* in case it doesn't get set */
 
   /*
    * Parse the format
@@ -577,14 +592,25 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
      */
 
     GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-    GST_BUFFER_SIZE(outbuf) = 0;
+    /*
+     * This was previously:
+     * GST_BUFFER_SIZE(outbuf) = 0;
+     */
+    gst_buffer_set_size(outbuf, 0);
+    
   } else {
+      GstMapInfo mapinfo;
+      gst_buffer_map_range(inbuf, start * element->unit_size,
+          (stop - start) * element->unit_size, &mapinfo, GST_MAP_READ);
+
       result =
           print_samples(outbuf,
-          GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
-              GST_SECOND, element->rate),
-          GST_BUFFER_DATA(inbuf) + start * element->unit_size,
-          element->printsample, element->channels, element->rate, stop - start);
+		GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
+		      GST_SECOND, element->rate),
+		mapinfo.data, /* previously was: GST_BUFFER_DATA(inbuf) + start * element->unit_size, */
+		element->printsample, element->channels, element->rate, stop - start);
+
+      gst_buffer_unmap(inbuf, &mapinfo);
   }
 
   /*

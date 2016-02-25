@@ -82,7 +82,6 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/controller/controller.h>
 
 
 /*
@@ -120,17 +119,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_firbank", 0, "lal_firbank element");
-}
-
-
-GST_DEFINE_TYPE_WITH_CODE(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALFIRBank,
 	gstlal_firbank,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_firbank", 0, "lal_firbank element")
 );
 
 
@@ -302,7 +295,6 @@ static int push_gap(GSTLALFIRBank *element, unsigned samples)
 
 static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
-	GST_BUFFER_SIZE(buf) = outsamples * fir_channels(element) * element->width / 8;
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
@@ -536,7 +528,7 @@ static void free_workspace(GSTLALFIRBank *element)
  */
 
 
-static unsigned tddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned tddfilter(GSTLALFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
 {
 	unsigned i;
 	unsigned input_length;
@@ -548,7 +540,7 @@ static unsigned tddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * clip number of output samples to buffer size.
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * how many samples do we need from the adapter?
@@ -571,7 +563,7 @@ static unsigned tddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * wrap output buffer in a GSL matrix view.
 	 */
 
-	output = gsl_matrix_view_array((double *) GST_BUFFER_DATA(outbuf), output_length, fir_channels(element));
+	output = gsl_matrix_view_array((double *) (mapinfo->data), output_length, fir_channels(element));
 
 	/*
 	 * assemble the output sample time series as the columns of a
@@ -608,7 +600,7 @@ static unsigned tddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 }
 
 
-static unsigned tdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned tdsfilter(GSTLALFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
 {
 	unsigned i;
 	unsigned input_length;
@@ -620,7 +612,7 @@ static unsigned tdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * clip number of output samples to buffer size.
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * how many samples do we need from the adapter?
@@ -643,7 +635,7 @@ static unsigned tdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * wrap output buffer in a GSL matrix view.
 	 */
 
-	output = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(outbuf), output_length, fir_channels(element));
+	output = gsl_matrix_float_view_array((float *) (mapinfo->data), output_length, fir_channels(element));
 
 	/*
 	 * assemble the output sample time series as the columns of a
@@ -690,7 +682,7 @@ static unsigned tdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
  */
 
 
-static unsigned fddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned fddfilter(GSTLALFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
 {
 	unsigned stride = fft_block_stride(element);
 	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
@@ -715,7 +707,7 @@ static unsigned fddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * blocks, but only this many will be copied into the output buffer
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * retrieve input samples
@@ -736,7 +728,7 @@ static unsigned fddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * wrap first block of output buffer in a GSL matrix view
 	 */
 
-	output = gsl_matrix_view_array(((double *) GST_BUFFER_DATA(outbuf)), stride, fir_channels(element));
+	output = gsl_matrix_view_array((double *) (mapinfo->data), stride, fir_channels(element));
 	output_end = output.matrix.data + output_length * fir_channels(element);
 
 	/*
@@ -804,7 +796,7 @@ static unsigned fddfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 }
 
 
-static unsigned fdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
+static unsigned fdsfilter(GSTLALFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
 {
 	unsigned stride = fft_block_stride(element);
 	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
@@ -829,7 +821,7 @@ static unsigned fdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * blocks, but only this many will be copied into the output buffer
 	 */
 
-	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(*input)));
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
 
 	/*
 	 * retrieve input samples
@@ -850,7 +842,7 @@ static unsigned fdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
 	 * wrap first block of output buffer in a GSL matrix view
 	 */
 
-	output = gsl_matrix_float_view_array(((float *) GST_BUFFER_DATA(outbuf)), stride, fir_channels(element));
+	output = gsl_matrix_float_view_array((float *) (mapinfo->data), stride, fir_channels(element));
 	output_end = output.matrix.data + output_length * fir_channels(element);
 
 	/*
@@ -923,7 +915,7 @@ static unsigned fdsfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ou
  */
 
 
-static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
+static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 {
 	unsigned output_length;
 
@@ -947,11 +939,11 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 			 */
 
 			if(element->width == 64)
-				output_length = tddfilter(element, outbuf, output_length);
+				output_length = tddfilter(element, mapinfo, output_length);
 			else if(element->width == 32) {
 				if(!element->workspace.tds.working_fir_matrix)
 					create_tds_workspace(element);
-				output_length = tdsfilter(element, outbuf, output_length);
+				output_length = tdsfilter(element, mapinfo, output_length);
 			} else
 				g_assert_not_reached();
 		} else {
@@ -964,11 +956,11 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 			if(element->width == 64) {
 				if(!element->workspace.fdd.working_fir_matrix)
 					create_fdd_workspace(element);
-				output_length = fddfilter(element, outbuf, output_length);
+				output_length = fddfilter(element, mapinfo, output_length);
 			} else if(element->width == 32) {
 				if(!element->workspace.fds.working_fir_matrix)
 					create_fds_workspace(element);
-				output_length = fdsfilter(element, outbuf, output_length);
+				output_length = fdsfilter(element, mapinfo, output_length);
 			}
 		}
 	}
@@ -978,12 +970,6 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	gst_audioadapter_flush_samples(element->adapter, output_length);
-
-	/*
-	 * set buffer metadata
-	 */
-
-	set_metadata(element, outbuf, output_length, FALSE);
 
 	/*
 	 * done
@@ -1000,10 +986,11 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
  */
 
 
-static GstFlowReturn filter_and_push(GSTLALFIRBank *element, GstCaps *caps, guint64 output_length)
+static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_length)
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
+	GstMapInfo mapinfo;
 	unsigned filter_output_length;
 	GstFlowReturn result;
 
@@ -1013,11 +1000,15 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, GstCaps *caps, guin
 
 	if(!output_length)
 		return GST_FLOW_OK;
-	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * element->width / 8, caps, &buf);
-	g_assert(GST_BUFFER_CAPS(buf) != NULL);
-	if(result != GST_FLOW_OK)
-		return result;
-	filter_output_length = filter(element, buf);
+
+	buf = gst_buffer_new_allocate(NULL, output_length * fir_channels(element) * element->width / 8, NULL);
+	if(!buf)
+		return GST_FLOW_ERROR;
+
+	gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+	filter_output_length = filter(element, &mapinfo);
+	set_metadata(element, buf, filter_output_length, FALSE);
+	gst_buffer_unmap(buf, &mapinfo);
 	g_assert_cmpuint(filter_output_length, ==, output_length);
 	result = gst_pad_push(srcpad, buf);
 	return result;
@@ -1088,18 +1079,22 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 * process contents
 	 */
 
-	result = filter_and_push(element, GST_PAD_CAPS(srcpad), output_length - final_gap_length);
+	result = filter_and_push(element, output_length - final_gap_length);
 	if(result != GST_FLOW_OK)
 		goto done;
 	if(final_gap_length) {
 		GstBuffer *buf;
+		GstMapInfo mapinfo;
 
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * element->width / 8, GST_PAD_CAPS(srcpad), &buf);
-		g_assert(GST_BUFFER_CAPS(buf) != NULL);
-		if(result != GST_FLOW_OK)
+		buf = gst_buffer_new_allocate(NULL, final_gap_length * fir_channels(element) * element->width / 8, NULL);
+		if(!buf) {
+			result = GST_FLOW_ERROR;
 			goto done;
+		}
 
-		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
+		gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+		memset(mapinfo.data, 0, mapinfo.size);
+		gst_buffer_unmap(buf, &mapinfo);
 		set_metadata(element, buf, final_gap_length, TRUE);
 		result = gst_pad_push(srcpad, buf);
 	}
@@ -1122,10 +1117,7 @@ done:
 
 static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 {
-	gboolean update;
-	gdouble rate;
-	GstFormat format;
-	gint64 start, stop, position;
+	GstSegment *segment;
 	gint64 samples_lost;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -1136,23 +1128,23 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 	if(!element->last_new_segment)
 		goto done;
 
-	gst_event_parse_new_segment(element->last_new_segment, &update, &rate, &format, &start, &stop, &position);
+	segment = gst_segment_copy(element->last_new_segment);
 
 	samples_lost = fir_length(element) - 1;
 
-	switch(format) {
+	switch(segment->format) {
 	case GST_FORMAT_TIME:
-		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(start), GST_TIME_SECONDS_ARGS(stop), GST_TIME_SECONDS_ARGS(position), element->rate, element->latency);
-		start = gst_util_uint64_scale_int_round(start, element->rate, GST_SECOND);
-		start += samples_lost - element->latency;
-		start = gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
-		if(stop != -1) {
-			stop = gst_util_uint64_scale_int_round(stop, element->rate, GST_SECOND);
-			stop += -element->latency;
-			stop = gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate);
+		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), element->rate, element->latency);
+		segment->start = gst_util_uint64_scale_int_round(segment->start, element->rate, GST_SECOND);
+		segment->start += samples_lost - element->latency;
+		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, element->rate);
+		if(segment->stop != GST_CLOCK_TIME_NONE) {
+			segment->stop = gst_util_uint64_scale_int_round(segment->stop, element->rate, GST_SECOND);
+			segment->stop += -element->latency;
+			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_SECOND, element->rate);
 		}
-		position = start;
-		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT "\n", GST_TIME_SECONDS_ARGS(start), GST_TIME_SECONDS_ARGS(stop), GST_TIME_SECONDS_ARGS(position));
+		segment->position = segment->start;
+		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT "\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position));
 		break;
 
 	default:
@@ -1160,7 +1152,9 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 		break;
 	}
 
-	result = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element)), gst_event_new_new_segment(update, rate, format, start, stop, position));
+	result = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element)), gst_event_new_segment(segment));
+
+	gst_segment_free(segment);
 
 done:
 	return result;
@@ -1206,7 +1200,7 @@ static void rate_changed(GSTLALFIRBank *element, gint rate, void *data)
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstStructure *str;
 	gint width, channels;
@@ -1230,7 +1224,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	guint n;
@@ -1281,17 +1275,17 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_ERROR_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_ERROR_OBJECT(element, "size not a multiple of %" G_GSIZE_FORMAT, unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -1426,7 +1420,7 @@ static gboolean stop(GstBaseTransform *trans)
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 	if(element->last_new_segment) {
-		gst_event_unref(element->last_new_segment);
+		gst_segment_free(element->last_new_segment);
 		element->last_new_segment = NULL;
 	}
 	return TRUE;
@@ -1434,33 +1428,32 @@ static gboolean stop(GstBaseTransform *trans)
 
 
 /*
- * event()
+ * sink_event()
  */
 
 
-static gboolean event(GstBaseTransform *trans, GstEvent *event)
+static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
+	case GST_EVENT_SEGMENT:
 		if(element->last_new_segment)
-			gst_event_unref(element->last_new_segment);
-		gst_event_ref(event);
-		element->last_new_segment = event;
+			gst_segment_free(element->last_new_segment);
+		element->last_new_segment = gst_segment_new();
+		gst_event_copy_segment(event, element->last_new_segment);
 		element->need_new_segment = TRUE;
 		return FALSE;
 
 	case GST_EVENT_EOS:
 		/*
 		 * end-of-stream:  finish processing adapter's contents.
-		 * don't bother trying if there's no FIR matrix or caps set
-		 * on the source pad, but at least make sure the adapter's
-		 * contents are wiped
+		 * don't bother trying if there's no FIR matrix, but at
+		 * least make sure the adapter's contents are wiped
 		 */
 
 		g_mutex_lock(element->fir_matrix_lock);
-		if(element->fir_matrix && GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)) && gst_caps_is_fixed(GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)))) {
+		if(element->fir_matrix) {
 			if(flush_history(element) != GST_FLOW_OK)
 				GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
 		} else
@@ -1484,6 +1477,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	gboolean history_is_gap, input_is_gap;
 	guint output_length, nonzero_output_length;
+	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
@@ -1491,7 +1485,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 
-	gst_object_sync_values(G_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
 
 	/*
 	 * wait for FIR matrix
@@ -1503,7 +1497,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for fir matrix");
-			result = GST_FLOW_WRONG_STATE;
+			result = GST_FLOW_FLUSHING;
 			goto done;
 		}
 	}
@@ -1577,9 +1571,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * known to be all 0s
 		 */
 
-		guint samples = filter(element, outbuf);
+		guint samples;
+
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		samples = filter(element, &mapinfo);
 		g_assert_cmpuint(output_length, ==, samples);
+		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
+		gst_buffer_unmap(outbuf, &mapinfo);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -1587,7 +1586,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, output_length);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		memset(mapinfo.data, 0, mapinfo.size);
+		gst_buffer_unmap(outbuf, &mapinfo);
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_LOG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(nonzero_output_length >= output_length) {
@@ -1601,9 +1602,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * from the history?")
 		 */
 
-		guint samples = filter(element, outbuf);
+		guint samples;
+
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		samples = filter(element, &mapinfo);
 		g_assert_cmpuint(output_length, ==, samples);
+		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
+		gst_buffer_unmap(outbuf, &mapinfo);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
@@ -1621,18 +1627,22 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * generate the first output buffer and push downstream
 		 */
 
-		result = filter_and_push(element, GST_BUFFER_CAPS(outbuf), nonzero_output_length);
-		if(result != GST_FLOW_OK)
+		result = filter_and_push(element, nonzero_output_length);
+		if(result != GST_FLOW_OK) {
+			gst_buffer_unmap(outbuf, &mapinfo);
 			goto done;
+		}
 
 		/*
 		 * generate the second, gap, buffer
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		GST_BUFFER_SIZE(outbuf) = gap_length * fir_channels(element) * element->width / 8;
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		gst_buffer_set_size(outbuf, gap_length * fir_channels(element) * element->width / 8);
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		memset(mapinfo.data, 0, mapinfo.size);
 		set_metadata(element, outbuf, gap_length, TRUE);
+		gst_buffer_unmap(outbuf, &mapinfo);
 	}
 
 	/*
@@ -1899,7 +1909,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
-	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 
