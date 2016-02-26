@@ -699,9 +699,9 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GSTLALGate *element = GSTLAL_GATE(parent);
 	GstFlowReturn result = GST_FLOW_OK;
 	GstMapInfo info;
 
@@ -946,9 +946,9 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GSTLALGate *element = GSTLAL_GATE(parent);
 	guint64 sinkbuf_length;
 	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
