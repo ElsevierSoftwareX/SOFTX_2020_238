@@ -131,7 +131,6 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 G_DEFINE_TYPE(
 	GSTLALToggleComplex,
 	gstlal_togglecomplex,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM
 );
 
@@ -150,22 +149,22 @@ G_DEFINE_TYPE(
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint channels, width;
-	gboolean success = TRUE;
+    GstStructure *str;
+    gint channels, width;
+    gboolean success = TRUE;
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+    str = gst_caps_get_structure(caps, 0);
+    success &= gst_structure_get_int(str, "channels", &channels);
+    success &= gst_structure_get_int(str, "width", &width);
 
-	if(success)
-		*size = width / 8 * channels;
-	else
-		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
+    if(success)
+        *size = width / 8 * channels;
+    else
+        GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	return success;
+    return success;
 }
 
 
@@ -217,7 +216,7 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 }
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	gboolean success = TRUE;
 	guint n;
@@ -283,7 +282,7 @@ error:
  */
 
 
-static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, gint size, GstCaps *caps, GstBuffer **buf)
+static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, GstBuffer **buf)
 {
 	/*
 	 * start by making output a reference to the input
@@ -296,7 +295,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 	 * make metadata writeable
 	 */
 
-	*buf = gst_buffer_make_metadata_writable(*buf);
+	*buf = gst_buffer_make_writable(*buf);
 	if(!*buf) {
 		GST_DEBUG_OBJECT(trans, "failure creating sub-buffer from input");
 		return GST_FLOW_ERROR;
@@ -306,7 +305,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 	 * replace caps with output caps
 	 */
 
-	gst_buffer_set_caps(*buf, caps);
+	//gst_buffer_set_caps(*buf, caps);
 
 	/*
 	 * done
@@ -357,9 +356,10 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
  */
 
 
-static void gstlal_togglecomplex_init(GSTLALToggleComplex *element, GSTLALToggleComplexClass *klass)
+static void gstlal_togglecomplex_init(GSTLALToggleComplex *element)
 {
-	GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
+	//GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
+    gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
