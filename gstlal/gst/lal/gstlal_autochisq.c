@@ -568,6 +568,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result = GST_FLOW_OK;
 	GstMapInfo out_info;
 
+	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -674,7 +676,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, output_length);
-		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(zeros_in_adapter < autocorrelation_length(element)) {
@@ -722,7 +723,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_mutex_lock(element->autocorrelation_lock);
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 	g_mutex_unlock(element->autocorrelation_lock);
