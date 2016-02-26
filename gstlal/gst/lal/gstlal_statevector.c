@@ -404,6 +404,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/*
 	 * done
 	 */
+    
+    gst_buffer_unmap(inbuf, &in_info);
+    gst_buffer_unmap(outbuf, &out_info);
 
 	return result;
 }
