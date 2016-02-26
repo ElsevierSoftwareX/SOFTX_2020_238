@@ -128,11 +128,14 @@ enum property {
 
 static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 {
-    guint8 *data = GST_BUFFER_DATA(buffer);
+    GstMapInfo info;
+    guint8 *data;
     GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
     GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
     gint i;
 
+    gst_buffer_map(buffer, &info, GST_MAP_WRITE);
+    data = info.data; 
     /* This is ridiculous, but doesn't require sorted or coalesced
      * segments.  Could some fancy data structure help? */
     for (i = 0; i < element->seglist->length; i++) {
@@ -161,11 +164,13 @@ static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
+    GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(basesrc);
     GstFlowReturn result = GST_FLOW_OK;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint64 numsamps = blocksize;
-    GstClockTime start = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->offset, GST_SECOND, element->rate);
-    GstClockTime stop = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->offset + numsamps, GST_SECOND, element->rate);
+    GstClockTime start = basesrc->segment.start + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate);
+    GstClockTime stop = basesrc->segment.start + gst_util_uint64_scale_int_round(element->offset + numsamps, GST_SECOND, element->rate);
+    GstMapInfo info;
 
     *buffer = NULL;	/* just in case */
 
@@ -174,17 +179,18 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     if(GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) && start >= (GstClockTime) basesrc->segment.stop)
-        return GST_FLOW_UNEXPECTED;
+        return GST_FLOW_EOS;
 
     /*
      * Allocate the buffer of ones or zeros depending on the invert property
      */
 
-    result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, blocksize, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+    result = basesrc_class->alloc(basesrc, element->offset, blocksize, buffer);
     if(result != GST_FLOW_OK)
         return result;
 
-    memset(GST_BUFFER_DATA(*buffer), element->invert_output ? 0x80 : 0x00, GST_BUFFER_SIZE(*buffer));
+    gst_buffer_map(*buffer, &info, GST_MAP_WRITE);
+    memset(info.data, element->invert_output ? 0x80 : 0x00, info.size);
 
     /*
      * update the offsets, timestamps etc
@@ -199,10 +205,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     mark_segments(element, *buffer);
-    if(basesrc->offset == 0)
+    if(element->offset == 0)
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 
-    basesrc->offset += numsamps;
+    element->offset += numsamps;
 
     return GST_FLOW_OK;
 }
@@ -245,7 +251,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
      * Done
      */
 
-    basesrc->offset = 0;
+    element->offset = 0;
     return TRUE;
 }
 
@@ -258,6 +264,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
 	
 	GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+	GstBaseSrcClass		*basesrc_class = GST_BASE_SRC_CLASS(basesrc);
 
 	switch(GST_QUERY_TYPE(query)) {
 
@@ -281,7 +288,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			switch(src_format) {
 				case GST_FORMAT_DEFAULT:
 				case GST_FORMAT_TIME:
-					if(src_value < basesrc->segment.start) {
+					if(src_value < (gint64) basesrc->segment.start) {
 						GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
 						offset = 0;
 					} else
@@ -344,21 +351,12 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	}
 
 		default:
-			return gstlal_segmentsrc_parent_class->query(basesrc, query);
+			return basesrc_class->query(basesrc, query);
 	}
 
 	return TRUE;
 }
 
-/*
- * check_get_range()
- */
-
-
-static gboolean check_get_range(GstBaseSrc *basesrc)
-{
-    return TRUE;
-}
 
 /*
  * ============================================================================
@@ -547,7 +545,6 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
     gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
     gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
-    gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
     gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 }
 
@@ -560,6 +557,7 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src)
 {
     segment_src->seglist = NULL;
     segment_src->rate = 0;
+    segment_src->offset = 0;
     segment_src->segment_matrix_lock = g_mutex_new();
     gst_base_src_set_format(GST_BASE_SRC(segment_src), GST_FORMAT_TIME);
 }
