@@ -842,7 +842,18 @@ with open(sys.argv[1]) as f:
             modded = True
 
 	# gst_query_parse_formats_length() -> gst_query_parse_n_formats()
-	# gst_query_parse_formats_nth() -> gst_query_parse_nth_format()
+        (mod_line, mod_num) = re.subn(r'gst_query_parse_formats_length', r'gst_query_parse_n_formats', line)
+        if mod_num != 0:
+            mod_str=' /* MOD: gst_query_parse_formats_length() -> gst_query_parse_n_formats() */'
+            line = mod_line
+            modded = True
+
+        # gst_query_parse_formats_nth() -> gst_query_parse_nth_format()
+        (mod_line, mod_num) = re.subn(r'gst_query_parse_formats_nth', r'gst_query_parse_nth_format', line)
+        if mod_num != 0:
+            mod_str=' /* MOD: gst_query_parse_formats_nth() -> gst_query_parse_nth_format() */'
+            line = mod_line
+            modded = True
 
 	# Some query utility functions no longer use an inout parameter for the
 	# destination/query format:
@@ -856,20 +867,616 @@ with open(sys.argv[1]) as f:
 	#   - gst_element_query_position()
 	#   - gst_element_query_duration()
 	#   - gst_element_query_convert()
+        m = re.search('(gst_pad_query_position|gst_pad_query_duration|gst_pad_query_convert|gst_pad_query_peer_position|gst_pad_query_peer_duration|gst_pad_query_peer_convert|gst_element_query_position|gst_element_query_duration|gst_element_query_convert)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: Some query utility functions no longer use an inout parameter for the destination/query format: gst_pad_query_position(), gst_pad_query_duration(), gst_pad_query_convert(), gst_pad_query_peer_position(), gst_pad_query_peer_duration(), gst_pad_query_peer_convert(), gst_element_query_position(), gst_element_query_duration(), gst_element_query_convert() */'
+            modded = True
 
 	# gst_element_get_query_types() and gst_pad_get_query_types() with associated
 	# functions were removed.
+        m = re.search('(gst_element_get_query_types|gst_pad_get_query_types)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_element_get_query_types() and gst_pad_get_query_types() with associated functions were removed. */'
+            modded = True
 
+        ############################################################
+        # GstBufferList
+        ############################################################
+        # Is now a boxed type derived from GstMiniObject.
+
+        ############################################################
+        # GstMessage
+        ############################################################
+	# Is now a boxed type derived from GstMiniObject
+
+	# The GstStructure is removed from the public API, use the getters to get
+	# a handle to a GstStructure.
+        # (already handled above)
+
+	# GST_MESSAGE_DURATION -> GST_MESSAGE_DURATION_CHANGED
+        (mod_line, mod_num) = re.subn(r'GST_MESSAGE_DURATION', r'GST_MESSAGE_DURATION_CHANGED', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_MESSAGE_DURATION -> GST_MESSAGE_DURATION_CHANGED */'
+            modded = True
+
+	# gst_message_parse_duration() was removed (not needed any longer, do
+	# a duration query to query the updated duration)
+        m = re.search('gst_message_parse_duration', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_message_parse_duration() was removed (not needed any longer, do a duration query to query the updated duration) */'
+            modded = True
+
+        ############################################################
+        # GstCaps
+        ############################################################
+        # Is now a boxed type derived from GstMiniObject.
+
+	# GST_VIDEO_CAPS_xxx -> GST_VIDEO_CAPS_MAKE(xxx)
+        (mod_line, mod_num) = re.subn(r'GST_VIDEO_CAPS_(.+)', r'GST_VIDEO_CAPS_MAKE(\1)', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_VIDEO_CAPS_xxx -> GST_VIDEO_CAPS_MAKE(xxx) */'
+            modded = True
+
+	# Some caps functions now take ownership of the input argument, for
+	# efficiency reasons (to avoid unnecessary copies to make them writable):
+	# 
+	#   gst_caps_normalize (caps)          =>   caps = gst_caps_normalize (caps)
+	#   gst_caps_do_simplify (caps)        =>   caps = gst_caps_simplify (caps)
+	#   gst_caps_merge (caps,caps2)        =>   caps = gst_caps_merge (caps,caps2)
+	#   gst_caps_merge_structure (caps,st) =>   caps = gst_caps_merge_structure (caps,st)
+	#   gst_caps_truncate (caps)           =>   caps = gst_caps_truncate (caps)
+	# 
+	# The compiler should warn about unused return values from these functions,
+	# which may help find the places that need to be updated.
+        m = re.search('(gst_caps_normalize|gst_caps_do_simplify|gst_caps_merge|gst_caps_merge_structure|gst_caps_truncate)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: Some caps functions now take ownership of the input argument, for efficiency reasons (to avoid unnecessary copies to make them writable): gst_caps_normalize (caps) => caps = gst_caps_normalize (caps); gst_caps_do_simplify (caps) => caps = gst_caps_simplify (caps); gst_caps_merge (caps,caps2) => caps = gst_caps_merge (caps,caps2); gst_caps_merge_structure (caps,st) => caps = gst_caps_merge_structure (caps,st); gst_caps_truncate (caps) => caps = gst_caps_truncate (caps). The compiler should warn about unused return values from these functions, which may help find the places that need to be updated. */'
+            modded = True
+
+	# Removed functions:
+	# 
+	#   gst_caps_union() -> gst_caps_merge():  Be careful because _merge takes
+        #      ownership of the arguments.
+        m = re.search('gst_caps_union', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_caps_union() -> gst_caps_merge():  Be careful because _merge takes ownership of the arguments. */'
+            modded = True
+
+        ############################################################
+        # GstClock
+        ############################################################
+ 	# gst_clock_id_wait_async_full() was renamed to gst_clock_id_wait_async() and
+ 	# the old gst_clock_id_wait_async() function was removed.
+        (mod_line, mod_num) = re.subn(r'gst_clock_id_wait_async_full', r'gst_clock_id_wait_async', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_clock_id_wait_async_full() was renamed to gst_clock_id_wait_async() */'
+            modded = True
+        m = re.search('gst_clock_id_wait_async', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: the old gst_clock_id_wait_async() function was removed. */'
+            modded = True
+
+        ############################################################
+        # GstSegment
+        ############################################################
+	# abs_rate was removed from the public fields, it can be trivially calculated
+	# from the rate field.
+        m = re.search('abs_rate', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstSegment: abs_rate was removed from the public fields, it can be trivially calculated from the rate field. */'
+            modded = True
+
+	# Also segment accumulation was removed from the segment event. This means
+	# that now the source/demuxer/parser needs to add the elapsed time of the
+	# previous segment themselves (this must be added to segment->base). If this
+	# is not done, looped playback wont work.
+        # ???
+
+	# accum was renamed to base. last_stop was renamed to position.
+        m = re.search('accum', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstSegment: accum was renamed to base. */'
+            modded = True
+        m = re.search('last_stop', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstSegment: last_stop was renamed to position. */'
+            modded = True
+
+	# The segment info now contains all the information needed to convert buffer
+	# timestamps to running_time and stream_time. There is no more segment
+	# accumulation, the GstSegment is completely self contained.
+
+	# gst_segment_set_duration() and gst_segment_set_last_stop() are removed,
+	# simply modify the structure members duration and position respectively.
+        m = re.search('(gst_segment_set_duration|gst_segment_set_last_stop)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_segment_set_duration() and gst_segment_set_last_stop() are removed, simply modify the structure members duration and position respectively. */'
+            modded = True
+
+	# gst_segment_set_newsegment() is removed, it was used to accumulate segments
+	# and is not needed anymore, use gst_segment_copy_into() or modify the segment
+	# values directly.
+        m = re.search('gst_segment_set_newsegment', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_segment_set_newsegment() is removed, it was used to accumulate segments and is not needed anymore, use gst_segment_copy_into() or modify the segment values directly. */'
+            modded = True
+
+	# gst_segment_set_seek() -> gst_segment_do_seek(). Updates the segment values
+	# with seek parameters.
+        m = re.search('gst_segment_set_seek', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_segment_set_seek() -> gst_segment_do_seek(). Updates the segment values with seek parameters. */'
+            modded = True
+
+        ############################################################
+        # GstPluginFeature
+        ############################################################
+        # GST_PLUGIN_FEATURE_NAME() was removed, use GST_OBJECT_NAME() instead.
+        (mod_line, mod_num) = re.subn(r'GST_PLUGIN_FEATURE_NAME', r'GST_OBJECT_NAME', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_PLUGIN_FEATURE_NAME() was removed, use GST_OBJECT_NAME() instead. */'
+            modded = True
+
+        ############################################################
+        # GstTypeFind
+        ############################################################
+        # gst_type_find_peek() returns a const guint8 * now.
+        m = re.search('gst_type_find_peek', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_type_find_peek() returns a const guint8 * now. */'
+            modded = True        
+
+        ############################################################
+        # GstTask
+        ############################################################
+        # gst_task_create() -> gst_task_new()
+        (mod_line, mod_num) = re.subn(r'gst_task_create', r'gst_task_new', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_task_create() -> gst_task_new() */'
+            modded = True
+
+        ############################################################
+        # GstAudio
+        ############################################################
+	#     GstBaseAudioSink -> GstAudioBaseSink
+	#     GstBaseAudioSrc -> GstAudioBaseSrc
+	#     ...
+        (mod_line, mod_num) = re.subn(r'GstBaseAudio(.+)', r'GstAudioBase\1', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GstBaseAudioSink -> GstAudioBaseSink; GstBaseAudioSrc -> GstAudioBaseSrc; ... */'
+            modded = True
+
+        ############################################################
+        # GstAdapter
+        ############################################################
+	# gst_adapter_peek() is removed, use gst_adapter_map() and gst_adapter_unmap()
+	# to get access to raw data from the adapter.
+        m = re.search('gst_adapter_peek', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_adapter_peek() is removed, use gst_adapter_map() and gst_adapter_unmap() to get access to raw data from the adapter. */'
+            modded = True        
+        
+	# Arguments changed from guint to gsize.
+        m = re.search('GstAdapter', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: Arguments changed from guint to gsize. */'
+            modded = True        
+
+	# gst_adapter_prev_timestamp() is removed and should be replaced with
+	# gst_adapter_prev_pts() and gst_adapter_prev_dts().
+        m = re.search('gst_adapter_prev_timestam', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_adapter_prev_timestamp() is removed and should be replaced with gst_adapter_prev_pts() and gst_adapter_prev_dts(). */'
+            modded = True
+
+        ############################################################
+        # GstBitReader, GstByteReader, GstByteWriter
+        ############################################################
+	# gst_*_reader_new_from_buffer(), gst_*_reader_init_from_buffer() removed, get
+	# access to the buffer data with _map() and then use the _new() functions.
+        m = re.search('gst_(.+)_reader_new_from_buffer', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_*_reader_new_from_buffer(), gst_*_reader_init_from_buffer() removed, get access to the buffer data with _map() and then use the _new() functions. */'
+            modded = True
+        m = re.search('gst_(.+)_reader_init_from_buffer', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_*_reader_new_from_buffer(), gst_*_reader_init_from_buffer() removed, get access to the buffer data with _map() and then use the _new() functions. */'
+            modded = True
+
+	# gst_byte_reader_new_from_buffer() and gst_byte_reader_init_from_buffer()
+	# removed, get access to the buffer data and then use the _new() functions.
+        m = re.search('gst_byte_reader_new_from_buffer', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_byte_reader_new_from_buffer() and gst_byte_reader_init_from_buffer() removed, get access to the buffer data and then use the _new() functions. */'
+            modded = True
+        m = re.search('gst_byte_reader_init_from_buffer', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_byte_reader_new_from_buffer() and gst_byte_reader_init_from_buffer() removed, get access to the buffer data and then use the _new() functions. */'
+            modded = True
+
+        ############################################################
+        # GstCollectPads
+        ############################################################
+	# gst_collect_pads_read() removed, use _read_buffer() or _take_buffer() and
+	# then use the memory API to get to the memory.        
+        m = re.search('gst_collect_pads_read', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_collect_pads_read() removed, use _read_buffer() or _take_buffer() and then use the memory API to get to the memory. */'
+            modded = True
+
+        ############################################################
+        # GstBaseSrc, GstBaseTransform, GstBaseSink
+        ############################################################
+	# GstBaseSrc::get_caps(), GstBaseTransform::transform_caps() and
+	# GstBaseSink::get_caps() now take a filter GstCaps* parameter to
+	# filter the caps and allow better negotiation decisions.
+        m = re.search('(get_caps|transform_caps|get_caps)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstBaseSrc::get_caps(), GstBaseTransform::transform_caps() and GstBaseSink::get_caps() now take a filter GstCaps* parameter to filter the caps and allow better negotiation decisions. */'
+            modded = True
+
+        ############################################################
+        # GstBaseSrc
+        ############################################################
+	# When overriding GstBaseTransform::fixate() one should chain up to the parent
+	# implementation.
+        m = re.search('fixrate', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstBaseSrc: When overriding GstBaseTransform::fixate() one should chain up to the parent implementation. */'
+            modded = True
+
+        ############################################################
+        # GstBaseTransform
+        ############################################################
+	# GstBaseTransform::transform_caps() now gets the complete caps passed
+	# instead of getting it passed structure by structure.
+        m = re.search('transform_caps', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstBaseTransform::transform_caps() now gets the complete caps passed instead of getting it passed structure by structure. */'
+            modded = True        
+
+	# GstBaseTransform::event() was renamed to sink_event(). The old function
+	# uses the return value to determine if the event should be forwarded or not.
+	# The new function has a default implementation that always forwards the event
+	# and the return value is simply returned as a result from the event handler.
+	# The semantics of the sink_event are thus the same as those for the src_event
+	# function.        
+        m = re.search('GstBaseTransform.*event', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstBaseTransform::event() was renamed to sink_event(). The old function uses the return value to determine if the event should be forwarded or not. The new function has a default implementation that always forwards the event and the return value is simply returned as a result from the event handler. The semantics of the sink_event are thus the same as those for the src_event function. */'
+            modded = True
+
+        ############################################################
+        # GstImplementsInterface
+        ############################################################
+	# GstImplementsInterface has been removed. Interfaces need to be updated to either have
+	# is_ready/usable/available() methods, or have GError arguments
+	# to their methods so we can return an appropriate error if a
+	# particular interface isn't supported for a particular device.
+        m = re.search('GstImplementsInterface', line)
+        if m != None:
+            mod_str=" /* MOD, FIXME: GstImplementsInterface has been removed. Interfaces need to be updated to either have is_ready/usable/available() methods, or have GError arguments to their methods so we can return an appropriate error if a particular interface isn't supported for a particular device. */"
+            modded = True
+
+        ############################################################
+        # GstIterator
+        ############################################################
+	# uses a GValue based API now that is similar to the 0.10 API but
+	# allows bindings to properly use GstIterator and prevents complex
+	# return value ownership issues.
+
+        ############################################################
+        # GstNavigationInterface
+        ############################################################
+	# Now part of the video library in gst-plugins-base, and the interfaces
+	# library no longer exists.        
+        m = re.search('GstNavigationInterface', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstNavigationInterface: Now part of the video library in gst-plugins-base, and the interfaces library no longer exists. */'
+            modded = True
+
+        ############################################################
+        # GstMixerInterface / GstTunerInterface
+        ############################################################
+	# Removed - no replacement?
+        m = re.search('(GstMixerInterface|GstTunerInterface)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstMixerInterface|GstTunerInterface: Removed - no replacement? */'
+            modded = True
+
+        ############################################################
+        # GstXOverlay interface
+        ############################################################
+	# Renamed to GstVideoOverlay, and now part of the video library in
+	# gst-plugins-base, as the interfaces library no longer exists.
+        m = re.search('GstXOverlay', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstXOverlay: Renamed to GstVideoOverlay, and now part of the video library in gst-plugins-base, as the interfaces library no longer exists. */'
+            modded = True
+
+        ############################################################
+        # GstPropertyProbe interface
+        ############################################################
+	# Removed - no replacement in 1.0.x and 1.2.x, but since 1.4 there is
+	# a more featureful replacement for device discovery and feature querying,
+	# provided by GstDeviceMonitor, GstDevice, and friends. See the
+	# "GStreamer Device Discovery and Device Probing" documentation at
+	# http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-device-probing.html
+        m = re.search('GstPropertyProbe', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstPropertyProbe: Removed - no replacement in 1.0.x and 1.2.x, but since 1.4 there is a more featureful replacement for device discovery and feature querying, provided by GstDeviceMonitor, GstDevice, and friends. See the "GStreamer Device Discovery and Device Probing" documentation at http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-device-probing.html */'
+            modded = True
+
+        ############################################################
+        # GstURIHandler
+        ############################################################
+	# gst_uri_handler_get_uri() and the get_uri vfunc now return a copy of
+	# the URI string
+        m = re.search('gst_uri_handler_get_uri', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_uri_handler_get_uri() and the get_uri vfunc now return a copy of the URI string */'
+            modded = True
+
+	# gst_uri_handler_set_uri() and the set_uri vfunc now take an additional
+	# GError argument so the handler can notify the caller why it didn't
+	# accept a particular URI.
+        m = re.search(' gst_uri_handler_set_uri', line)
+        if m != None:
+            mod_str=" /* MOD, FIXME: gst_uri_handler_set_uri() and the set_uri vfunc now take an additional GError argument so the handler can notify the caller why it didn't accept a particular URI. */"
+            modded = True
+
+	# gst_uri_handler_set_uri() now checks if the protocol of the URI passed
+	# is one of the protocols advertised by the uri handler, so set_uri vfunc
+	# implementations no longer need to check that as well.
+        m = re.search('gst_uri_handler_set_uri', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_uri_handler_set_uri() now checks if the protocol of the URI passed is one of the protocols advertised by the uri handler, so set_uri vfunc implementations no longer need to check that as well. */'
+            modded = True
+
+        ############################################################
+        # GstTagList
+        ############################################################
+	# is now an opaque mini object instead of being typedefed to a GstStructure.
+
+	# While it was previously okay (and in some cases required because of
+	# missing taglist API) to cast a GstTagList to a GstStructure or use
+	# gst_structure_* API on taglists, you can no longer do that. Doing so will
+	# cause crashes.
+        m = re.search('GstTagList.*GstStructure', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: While it was previously okay (and in some cases required because of missing taglist API) to cast a GstTagList to a GstStructure or use gst_structure_* API on taglists, you can no longer do that. Doing so will cause crashes. */'
+            modded = True
+        m = re.search('GstStructure.*GstTagList', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: While it was previously okay (and in some cases required because of missing taglist API) to cast a GstTagList to a GstStructure or use gst_structure_* API on taglists, you can no longer do that. Doing so will cause crashes. */'
+            modded = True
+
+	# Also, tag lists are refcounted now, and can therefore not be freely
+	# modified any longer. Make sure to call
+	# 
+	#   taglist = gst_tag_list_make_writable (taglist);
+	# 
+	# before adding, removing or changing tags in the taglist.
+        # ???
+
+	# gst_tag_list_new() has been renamed to gst_tag_list_new_empty().
+        (mod_line, mod_num) = re.subn(r'gst_tag_list_new', r'gst_tag_list_new_empty', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_tag_list_new() has been renamed to gst_tag_list_new_empty(). */'
+            modded = True
+        
+	# gst_tag_list_new_full*() have been renamed to gst_tag_list_new*().
+        (mod_line, mod_num) = re.subn(r'gst_tag_list_new_full', r'gst_tag_list_new', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_tag_list_new_full*() have been renamed to gst_tag_list_new*(). */'
+            modded = True
+
+        # gst_tag_list_free() has been replaced by gst_tag_list_unref().
+        (mod_line, mod_num) = re.subn(r'gst_tag_list_free', r'gst_tag_list_unref', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_tag_list_free() has been replaced by gst_tag_list_unref(). */'
+            modded = True
+
+	# GST_TAG_IMAGE, GST_TAG_PREVIEW_IMAGE, GST_TAG_ATTACHMENT: many tags that
+	# used to be of type GstBuffer are now of type GstSample (which is basically
+	# a struct containing a buffer alongside caps and some other info).
+        m = re.search('(GST_TAG_IMAGE|GST_TAG_PREVIEW_IMAGE|GST_TAG_ATTACHMENT)', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GST_TAG_IMAGE, GST_TAG_PREVIEW_IMAGE, GST_TAG_ATTACHMENT: many tags that used to be of type GstBuffer are now of type GstSample (which is basically a struct containing a buffer alongside caps and some other info). */'
+            modded = True        
+
+	# gst_tag_list_get_buffer() => gst_tag_list_get_sample()
+        (mod_line, mod_num) = re.subn(r'gst_tag_list_get_buffer', r'gst_tag_list_get_sample', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_tag_list_get_buffer() => gst_tag_list_get_sample() */'
+            modded = True
+
+	# gst_is_tag_list() => GST_IS_TAG_LIST ()
+        (mod_line, mod_num) = re.subn(r'gst_is_tag_list', r'GST_IS_TAG_LIST', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_is_tag_list() => GST_IS_TAG_LIST () */'
+            modded = True
+
+        ############################################################
+        # GstController (TODO)
+        ############################################################
+	# has now been merged into GstObject. It does not exists as a individual
+	# object anymore. In addition core contains a GstControlSource base class and
+	# the GstControlBinding. The actual control sources are in the controller
+	# library as before. The 2nd big change is that control sources generate
+	# a sequence of gdouble values and those are mapped to the property type and
+	# value range by GstControlBindings.
+	# 
+	# For plugins the effect is that gst_controller_init() is gone and
+	# gst_object_sync_values() is taking a GstObject * instead of GObject *.
+	# 
+	# For applications the effect is larger. The whole gst_controller_* API is
+	# gone and now available in simplified form under gst_object_*. ControlSources
+	# are now attached via GstControlBinding to properties. There are no GValue
+	# arguments used anymore when programming control sources.
+	# 
+	# A simple way to attach a ControlSource to a property is:
+	# gst_object_add_control_binding (object,
+	#   gst_direct_control_binding_new (object, property_name, control_source));
+	#   
+	# gst_controller_set_property_disabled ->
+	#   gst_object_set_control_binding_disabled
+	# 
+	# gst_object_get_value_arrays has been removed. Loop over the controlled
+	# properties fetch the value array. Also GstValueArray is gone. The fields of
+	# GstValueArray are now passed directly to gst_object_get_value_array as
+	# arguments.
+	# 
+	# GstInterpolationControlSource has been split. There is a new 
+	# GstTimedValueControlSource baseclass and 2 sub classes: 
+	# GstInterpolationControlSource and GstTriggerControlSource. The API for setting
+	# and getting the timestamps is in GstTimedValueControlSource.
+	# 
+	# gst_interpolation_control_source_set_interpolation_mode() has been removed.
+	# Set the "mode" gobject property on the control-source instead. The possible
+	# enum values have been renamed from GST_INTERPOLATE_XXX to
+	# GST_INTERPOLATION_MODE_XXX.
+
+        ############################################################
+        # GstRegistry
+        ############################################################
+        # gst_registry_get_default() -> gst_registry_get()
+        (mod_line, mod_num) = re.subn(r'gst_registry_get_default', r'gst_registry_get', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_registry_get_default() -> gst_registry_get() */'
+            modded = True
+        
+        # gst_default_registry_*(...) -> gst_registry_*(gst_registry_get(), ...)
+        (mod_line, mod_num) = re.subn(r'gst_default_registry_(.+)\s*\(', r'gst_registry_\1(gst_registry_get(),', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_default_registry_*(...) -> gst_registry_*(gst_registry_get(), ...) */'
+            modded = True
+
+        ############################################################
+        # GstValue
+        ############################################################
+	# GST_TYPE_DATE -> G_TYPE_DATE
+        (mod_line, mod_num) = re.subn(r'GST_TYPE_DATE', r'G_TYPE_DATE', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_TYPE_DATE -> G_TYPE_DATE */'
+            modded = True
+        
+	# GST_VALUE_HOLDS_DATE(value) -> G_VALUE_HOLDS(value,G_TYPE_DATE)
+        (mod_line, mod_num) = re.subn(r'GST_VALUE_HOLDS_DATE\s*\((.+)\)', r'G_VALUE_HOLDS(\1,G_TYPE_DATE)', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_VALUE_HOLDS_DATE(value) -> G_VALUE_HOLDS(value,G_TYPE_DATE) */'
+            modded = True
+        else:
+            m = re.search('GST_VALUE_HOLDS_DATE', line)
+            if m != None:
+                mod_str=' /* MOD, FIXME: GST_VALUE_HOLDS_DATE(value) -> G_VALUE_HOLDS(value,G_TYPE_DATE) */'
+                modded = True
+
+        # gst_value_set_date() -> g_value_set_boxed()
+        (mod_line, mod_num) = re.subn(r'gst_value_set_date', r'g_value_set_boxed', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_value_set_date() -> g_value_set_boxed() */'
+            modded = True
+        
+	# gst_value_get_date() -> g_value_get_boxed()        
+        (mod_line, mod_num) = re.subn(r'gst_value_get_date', r'g_value_get_boxed', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: gst_value_get_date() -> g_value_get_boxed() */'
+            modded = True
+
+        ############################################################
+        # GError/GstGError
+        ############################################################
+	# GstGError -> GError
+        (mod_line, mod_num) = re.subn(r'GstGError', r'GError', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GstGError -> GError */'
+            modded = True
+        
+	# GST_TYPE_G_ERROR / gst_g_error_get_type() -> G_TYPE_ERROR        
+        (mod_line, mod_num) = re.subn(r'GST_TYPE_G_ERROR', r'G_TYPE_ERROR', line)
+        if mod_num != 0:
+            line = mod_line
+            mod_str=' /* MOD: GST_TYPE_G_ERROR / gst_g_error_get_type() -> G_TYPE_ERROR */'
+            modded = True
+        m = re.search('gst_g_error_get_type', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GST_TYPE_G_ERROR / gst_g_error_get_type() -> G_TYPE_ERROR */'
+            modded = True
+
+        ############################################################
+        # GstVideo
+        ############################################################
+	# GstXOverlay interface -> renamed to GstVideoOverlay, and now part of
+	# the video library in gst-plugins-base, as the interfaces library
+	# no longer exists.
+        m = re.search('GstXOverlay', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: GstXOverlay interface -> renamed to GstVideoOverlay, and now part of the video library in gst-plugins-base, as the interfaces library no longer exists. */'
+            modded = True
+
+	# gst_video_format_parse_caps() -> use gst_video_info_from_caps() and
+	#     then GstVideoInfo.        
+        m = re.search('gst_video_format_parse_caps', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_video_format_parse_caps() -> use gst_video_info_from_caps() and then GstVideoInfo.  */'
+            modded = True
+
+        ############################################################
+        # GstChildProxy
+        ############################################################
+	# gst_child_proxy_lookup() can no longer be called on GObjects that
+	# do not implement the GstChildProxy interface. Use
+	#   g_object_class_find_property (G_OBJECT_GET_CLASS (obj), "foo")
+	# instead for non-childproxy objects.
+        m = re.search('gst_child_proxy_lookup', line)
+        if m != None:
+            mod_str=' /* MOD, FIXME: gst_child_proxy_lookup() can no longer be called on GObjects that do not implement the GstChildProxy interface. Use g_object_class_find_property (G_OBJECT_GET_CLASS (obj), "foo") instead for non-childproxy objects. */'
+            modded = True
+
+        ############################################################
+        # "codec-data" and "streamheader" field in GstCaps (not implemented yet!)
+        ############################################################
+	# codec-data and stream headers are no longer in GstCaps, but sent as
+	# part of a STREAM CONFIG event (which should be sent after the initial
+	# CAPS event if needed).
+        # ???
+
+        ############################################################
+        #
+        # soft changes
+        #
+        ############################################################
+        
+        # m = re.search('', line)
+        # if m != None:
+        #     mod_str=' /* MOD, FIXME:  */'
+        #     modded = True
+        
         # (mod_line, mod_num) = re.subn(r'', r'', line)
         # if mod_num != 0:
         #     line = mod_line
         #     mod_str=' /* MOD: */'
         #     modded = True
 
-        # m = re.search('', line)
-        # if m != None:
-        #     mod_str=' /* MOD, FIXME:  */'
-        #     modded = True
         
             
         # Does not match any rule above, just print
@@ -883,3 +1490,5 @@ with open(sys.argv[1]) as f:
                     print line+mod_str
 
 # print 'line_no: ', line_no
+
+
