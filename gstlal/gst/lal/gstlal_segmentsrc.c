@@ -152,6 +152,7 @@ static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 		data[startix] = element->invert_output ? 0 : 0x80;
     }
 
+    gst_buffer_unmap(buffer, &info);
     return 0;
 }
 
@@ -210,6 +211,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
     element->offset += numsamps;
 
+    gst_buffer_unmap(*buffer, &info);
     return GST_FLOW_OK;
 }
 
