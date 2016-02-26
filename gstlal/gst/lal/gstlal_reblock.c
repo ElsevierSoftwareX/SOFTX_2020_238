@@ -85,17 +85,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_reblock", 0, "lal_reblock element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALReblock,
 	gstlal_reblock,
 	GST_TYPE_ELEMENT,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_reblock", 0, "lal_reblock element")
 );
 
 
@@ -125,64 +119,62 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static GstCaps *getcaps(GstPad *pad)
+static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
 {
-	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	GstCaps *peercaps, *caps;
+	GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
+	/* take filter */
+	filter_caps = filter ? gst_caps_ref(filter) : NULL;
+
+	/* 
+	 * If the filter caps are empty (but not NULL), there is nothing we can
+	 * do, there will be no intersection
 	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
+	if (filter_caps && gst_caps_is_empty (filter_caps)) {
+		GST_WARNING_OBJECT (pad, "Empty filter caps");
+		return filter_caps;
 	}
 
-	/*
-	 * done
-	 */
+	/* get the downstream possible caps */
+	peercaps = gst_pad_peer_query_caps(reblock->srcpad, filter_caps);
 
-	gst_object_unref(element);
-	return caps;
-}
+	/* get the allowed caps on this sinkpad */
+	current_caps = gst_pad_get_pad_template_caps(pad);
+	if (!current_caps)
+			current_caps = gst_caps_new_any();
 
+	if (peercaps) {
+		/* if the peer has caps, intersect */
+		GST_DEBUG_OBJECT(reblock, "intersecting peer and our caps");
+		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
+		/* neither peercaps nor current_caps are needed any more */
+		gst_caps_unref(peercaps);
+		gst_caps_unref(current_caps);
+	}
+	else {
+		/* the peer has no caps (or there is no peer), just use the allowed caps
+		* of this sinkpad. */
+		/* restrict with filter-caps if any */
+		if (filter_caps) {
+			GST_DEBUG_OBJECT(reblock, "no peer caps, using filtered caps");
+			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
+			/* current_caps are not needed any more */
+			gst_caps_unref(current_caps);
+		}
+		else {
+			GST_DEBUG_OBJECT(reblock, "no peer caps, using our caps");
+			result = current_caps;
+		}
+	}
 
-/*
- * acceptcaps()
- */
+	result = gst_caps_make_writable (result);
 
+	if (filter_caps)
+		gst_caps_unref (filter_caps);
 
-static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	gboolean success;
+	GST_LOG_OBJECT (reblock, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
 
-	/*
-	 * ask downstream peer
-	 */
-
-	success = gst_pad_peer_accept_caps(otherpad, caps);
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
+	return result;
 }
 
 
@@ -191,45 +183,141 @@ static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
 {
-	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	gint rate, width, channels;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
+	 * NOTE: rate, width and channels must be present
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "channels", &channels))
+		success = FALSE;
 
 	/*
 	 * try setting caps on downstream element
 	 */
 
 	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
+		success = gst_pad_set_caps(reblock->srcpad, caps);
 
 	/*
 	 * update the element metadata
 	 */
 
 	if(success) {
-		element->rate = rate;
-		element->unit_size = width / 8 * channels;
-	} else
-		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+		reblock->rate = rate;
+		reblock->unit_size = width / 8 * channels;
+	}
 
 	/*
 	 * done
 	 */
 
-	gst_object_unref(element);
 	return success;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                Event and Query
+ *
+ * ============================================================================
+ */
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	gboolean res = FALSE;
+
+	switch (GST_QUERY_TYPE (query))
+	{
+		default:
+			res = gst_pad_query_default (pad, parent, query);
+			break;
+	}
+	return res;
+}
+
+
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
+	gboolean result = TRUE;
+	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
+
+	switch (GST_EVENT_TYPE (event))
+	{	
+		default:
+			/* just forward the rest for now */
+			GST_DEBUG_OBJECT(reblock, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+			gst_pad_event_default(pad, parent, event);
+			break;
+	}
+
+	return result;
+}
+
+
+static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
+{
+	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
+	gboolean res = TRUE;
+	GstCaps *filter, *caps;
+
+	switch (GST_QUERY_TYPE (query)) 
+	{
+		case GST_QUERY_CAPS:
+			gst_query_parse_caps (query, &filter);
+			caps = getcaps(reblock, pad, filter);
+			gst_query_set_caps_result (query, caps);
+			gst_caps_unref (caps);
+			break;
+		default:
+			break;
+	}
+
+	if (G_LIKELY (query))
+		return gst_pad_query_default (pad, parent, query);
+	else
+		return res;
+
+  return res;
+}
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
+	gboolean res = TRUE;
+	GstCaps *caps;
+
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+
+	switch (GST_EVENT_TYPE (event))
+	{
+		case GST_EVENT_CAPS:
+			gst_event_parse_caps(event, &caps);
+			res = setcaps(reblock, pad, caps);
+			gst_event_unref(event);
+			event = NULL;
+		default:
+			break;
+	}
+
+	if (G_LIKELY (event))
+		return gst_pad_event_default(pad, parent, event);
+	else
+		return res;
 }
 
 
@@ -238,9 +326,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
-	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
+	GSTLALReblock *element = GSTLAL_REBLOCK(parent);
 	guint64 offset, length;
 	guint64 blocks, block_length;
 	GstFlowReturn result = GST_FLOW_OK;
@@ -285,7 +373,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(length - offset < block_length)
 			block_length = length - offset;
 
-		srcbuf = gst_buffer_create_sub(sinkbuf, offset * element->unit_size, block_length * element->unit_size);
+		srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_FLAGS, offset * element->unit_size, block_length * element->unit_size);
 		if(G_UNLIKELY(!srcbuf)) {
 			GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 			result = GST_FLOW_ERROR;
@@ -296,7 +384,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * set flags, caps, offset, and timestamps.
 		 */
 
-		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+		gst_buffer_copy_into(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_META, offset * element->unit_size, block_length * element->unit_size);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + block_length;
 		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
@@ -497,16 +585,15 @@ static void gstlal_reblock_init(GSTLALReblock *element)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
 	element->srcpad = pad;
 
 	/* internal data */

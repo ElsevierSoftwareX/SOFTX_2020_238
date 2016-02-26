@@ -33,6 +33,7 @@ struct _GSTLALSegmentSrc {
     struct gstlal_segment_list	*seglist;
     gboolean			invert_output;
     gint			rate;
+    gsize			offset;
 };
 
 /**
