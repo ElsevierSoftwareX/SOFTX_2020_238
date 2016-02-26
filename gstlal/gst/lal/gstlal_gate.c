@@ -86,17 +86,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element");
-}
-
-
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALGate,
 	gstlal_gate,
 	GST_TYPE_ELEMENT,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element")
 );
 
 
@@ -709,6 +703,9 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
+	GstMapInfo info;
+
+	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
 
 	/*
 	 * check validity of timestamp and offsets
@@ -756,9 +753,9 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
 			/* state for this segment */
-			gboolean state = element->control_sample_func(GST_BUFFER_DATA(sinkbuf), segment_start) >= element->threshold;
+			gboolean state = element->control_sample_func(info.data, segment_start) >= element->threshold;
 			for(segment_length = 1; segment_start + segment_length < buffer_length; segment_length++)
-				if(state != (element->control_sample_func(GST_BUFFER_DATA(sinkbuf), segment_start + segment_length) >= element->threshold))
+				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
 					/* state has changed */
 					break;
 			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
@@ -773,6 +770,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	gst_buffer_unmap(sinkbuf, &info);
 	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
@@ -789,7 +787,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
+	case GST_EVENT_SEGMENT:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
 		g_mutex_lock(element->control_lock);
 		element->control_eos = FALSE;
@@ -1172,7 +1170,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
+	case GST_EVENT_SEGMENT:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
 		g_mutex_lock(element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
