@@ -350,7 +350,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf)
 
 	result = gst_pad_push(element->srcpad, buf);
 
-	gst_object_unref(element);
 	return result;
 }
 

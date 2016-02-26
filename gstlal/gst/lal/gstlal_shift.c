@@ -388,7 +388,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 */
 
 done:
-	gst_object_unref(element);
 	return result;
 }
 
