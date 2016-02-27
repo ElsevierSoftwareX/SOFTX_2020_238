@@ -36,7 +36,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-
+#include <gst/audio/audio.h>
 
 #include <fftw3.h>
 #include <gsl/gsl_matrix.h>
@@ -73,8 +73,7 @@ struct _GSTLALFIRBank {
 	 * input stream
 	 */
 
-	gint rate;
-	gint width;
+	GstAudioInfo audio_info;
 	GstAudioAdapter *adapter;
 
 	/*
