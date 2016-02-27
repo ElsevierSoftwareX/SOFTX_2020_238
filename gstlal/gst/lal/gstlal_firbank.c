@@ -276,7 +276,7 @@ static int push_gap(GSTLALFIRBank *element, unsigned samples)
 		GST_BUFFER_TIMESTAMP(zerobuf) = gst_audioadapter_expected_timestamp(element->adapter);
 		if(!GST_BUFFER_TIMESTAMP_IS_VALID(zerobuf))
 			GST_BUFFER_TIMESTAMP(zerobuf) = 0;
-		GST_BUFFER_DURATION(zerobuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, element->rate);
+		GST_BUFFER_DURATION(zerobuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info)));
 		GST_BUFFER_OFFSET(zerobuf) = gst_audioadapter_expected_offset(element->adapter);
 		if(!GST_BUFFER_OFFSET_IS_VALID(zerobuf))
 			GST_BUFFER_OFFSET(zerobuf) = 0;
@@ -298,8 +298,8 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info)));
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))) - GST_BUFFER_TIMESTAMP(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -504,15 +504,15 @@ static void free_fds_workspace(GSTLALFIRBank *element)
 static void free_workspace(GSTLALFIRBank *element)
 {
 	if(element->time_domain) {
-		if(element->width == 64)
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
 			return;	/* no-op */
-		else if(element->width == 32)
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
 			return free_tds_workspace(element);
 		/* if width not valid, assume workspace is not initialized */
 	} else {
-		if(element->width == 64)
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
 			free_fdd_workspace(element);
-		else if(element->width == 32)
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
 			free_fds_workspace(element);
 		/* if width not valid, assume workspace is not initialized */
 	}
@@ -938,9 +938,9 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 			 * them yet
 			 */
 
-			if(element->width == 64)
+			if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
 				output_length = tddfilter(element, mapinfo, output_length);
-			else if(element->width == 32) {
+			else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32) {
 				if(!element->workspace.tds.working_fir_matrix)
 					create_tds_workspace(element);
 				output_length = tdsfilter(element, mapinfo, output_length);
@@ -953,11 +953,11 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 			 * yet
 			 */
 
-			if(element->width == 64) {
+			if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64) {
 				if(!element->workspace.fdd.working_fir_matrix)
 					create_fdd_workspace(element);
 				output_length = fddfilter(element, mapinfo, output_length);
-			} else if(element->width == 32) {
+			} else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32) {
 				if(!element->workspace.fds.working_fir_matrix)
 					create_fds_workspace(element);
 				output_length = fdsfilter(element, mapinfo, output_length);
@@ -1001,7 +1001,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 	if(!output_length)
 		return GST_FLOW_OK;
 
-	buf = gst_buffer_new_allocate(NULL, output_length * fir_channels(element) * element->width / 8, NULL);
+	buf = gst_buffer_new_allocate(NULL, output_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8, NULL);
 	if(!buf)
 		return GST_FLOW_ERROR;
 
@@ -1086,7 +1086,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 		GstBuffer *buf;
 		GstMapInfo mapinfo;
 
-		buf = gst_buffer_new_allocate(NULL, final_gap_length * fir_channels(element) * element->width / 8, NULL);
+		buf = gst_buffer_new_allocate(NULL, final_gap_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8, NULL);
 		if(!buf) {
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -1123,7 +1123,7 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 
 	if(!element->fir_matrix)
 		goto done;
-	if(!element->rate)
+	if(!GST_AUDIO_INFO_RATE(&(element->audio_info)))
 		goto done;
 	if(!element->last_new_segment)
 		goto done;
@@ -1134,14 +1134,14 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 
 	switch(segment->format) {
 	case GST_FORMAT_TIME:
-		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), element->rate, element->latency);
-		segment->start = gst_util_uint64_scale_int_round(segment->start, element->rate, GST_SECOND);
+		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), GST_AUDIO_INFO_RATE(&(element->audio_info)), element->latency);
+		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_AUDIO_INFO_RATE(&(element->audio_info)), GST_SECOND);
 		segment->start += samples_lost - element->latency;
-		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, element->rate);
+		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info)));
 		if(segment->stop != GST_CLOCK_TIME_NONE) {
-			segment->stop = gst_util_uint64_scale_int_round(segment->stop, element->rate, GST_SECOND);
+			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_AUDIO_INFO_RATE(&(element->audio_info)), GST_SECOND);
 			segment->stop += -element->latency;
-			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_SECOND, element->rate);
+			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info)));
 		}
 		segment->position = segment->start;
 		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT "\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position));
@@ -1202,16 +1202,11 @@ static void rate_changed(GSTLALFIRBank *element, gint rate, void *data)
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint width, channels;
-	gboolean success = TRUE;
-
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = width / 8 * channels;
+		*size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 
@@ -1349,40 +1344,34 @@ done:
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
-	GstStructure *s;
-	gint channels;
-	gint width;
-	gint rate;
-	gboolean success = TRUE;
+	gint old_rate = GST_AUDIO_INFO_IS_VALID(&(element->audio_info)) ? GST_AUDIO_INFO_RATE(&(element->audio_info)) : 0;
+	gint old_width = GST_AUDIO_INFO_IS_VALID(&(element->audio_info)) ? GST_AUDIO_INFO_WIDTH(&(element->audio_info)) : 0;
+	gboolean success = gst_audio_info_from_caps(&(element->audio_info), outcaps);
 
-	s = gst_caps_get_structure(outcaps, 0);
-	success &= gst_structure_get_int(s, "channels", &channels);
-	success &= gst_structure_get_int(s, "width", &width);
-	success &= gst_structure_get_int(s, "rate", &rate);
-
-	if(success && element->fir_matrix && (channels != (gint) fir_channels(element))) {
+	if(success && element->fir_matrix && (GST_AUDIO_INFO_CHANNELS(&(element->audio_info)) != (gint) fir_channels(element))) {
 		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
 		success = FALSE;
 	}
 
 	if(success) {
-		gboolean format_changed = element->rate != rate || element->width != width;
-		gint old_rate = element->rate;
-		if(element->width != width)
+		gboolean format_changed = FALSE;
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) != old_width) {
 			/*
 			 * invalidate filter workspace
 			 */
 
 			free_workspace(element);
-		element->width = width;
-		element->rate = rate;
+			format_changed = TRUE;
+		}
+		if(GST_AUDIO_INFO_RATE(&(element->audio_info)) != old_rate) {
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, GST_AUDIO_INFO_RATE(&(element->audio_info)), NULL);
+			format_changed = TRUE;
+		}
 		if(format_changed) {
 			gst_audioadapter_clear(element->adapter);
-			g_object_set(element->adapter, "unit-size", width / 8 * 1, NULL);	/* input has 1 channel */
+			g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8 * 1, NULL);	/* input has 1 channel */
 			element->t0 = GST_CLOCK_TIME_NONE;	/* force discont */
 		}
-		if(element->rate != old_rate)
-			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 	} else
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
 
@@ -1638,7 +1627,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		gst_buffer_set_size(outbuf, gap_length * fir_channels(element) * element->width / 8);
+		gst_buffer_set_size(outbuf, gap_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8);
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		memset(mapinfo.data, 0, mapinfo.size);
 		set_metadata(element, outbuf, gap_length, TRUE);
@@ -1868,11 +1857,10 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		"format = {" GST_AUDIO_NE("F32") ", " GST_AUDIO_NE("F64") "},"
 	)
 );
 
@@ -1882,11 +1870,10 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		"format = {" GST_AUDIO_NE("F32") ", " GST_AUDIO_NE("F64") "},"
 	)
 );
 
@@ -2000,8 +1987,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter)
 {
-	filter->rate = 0;	/* impossible --> force signal on first caps */
-	filter->width = 0;	/* impossible --> force workspace reset on first caps */
+	filter->audio_info.finfo = NULL;/* impossible --> force workspace reset on first caps */
 	filter->block_stride = 0;	/* must != DEFAULT_BLOCK_STRIDE */
 	filter->latency = 0;
 	filter->adapter = NULL;
