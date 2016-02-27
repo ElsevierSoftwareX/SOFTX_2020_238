@@ -40,7 +40,7 @@ import warnings
 import pygtk
 pygtk.require("2.0")
 import gi
-gi.require_version('Gst', '0.10')
+gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)

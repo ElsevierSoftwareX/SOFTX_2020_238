@@ -3,11 +3,11 @@ import sys
 
 import pygtk
 pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 from gstlal import pipeparts
 from gstlal import simplehandler
@@ -19,21 +19,22 @@ out_rate = 2048
 
 opt = sys.argv[1]
 
-gobject.threads_init()
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("gstlal_play_frames")
+GObject.threads_init()
+Gst.init(None)
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline("gstlal_play_frames")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 head = test_common.test_src(pipeline, buffer_length = 10.0, rate = in_rate, width = 32, channels = 1, test_duration = 10000.0, wave = 5, freq = 0, is_live = False, verbose = True)
 head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((200,1)))
 if opt == "resample":
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality=1), "audio/x-raw-float, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality=1), "audio/x-raw, rate=%d" % out_rate)
 if opt == "interp":
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw-float, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
 pipeparts.mkfakesink(pipeline, head)
 
 # run
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
 

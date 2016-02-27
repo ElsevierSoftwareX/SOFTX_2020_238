@@ -3,7 +3,7 @@
 # https://wiki.ubuntu.com/Novacut/GStreamer1.0
 
 # Usage, e.g. from gstlal/python directory:
-# find . -name \*.py -print0 | xargs -0 -n 1 -I {} bash -c 'echo {}; ../port-tools/gst1.0-convert-py.py {} > {}.tmp; ! diff -q {} {}.tmp && mv {}.tmp {}; rm -f {}.tmp'
+# find . ! -name '*.py' -print0 | xargs -0 -n 1 -I {} bash -c 'file {} | grep -i python | cut -d: -f1' | xargs -n 1 -I {} bash -c 'echo {}; ../port-tools/gst1.0-convert-py.py {} > {}.tmp; ! diff -q {} {}.tmp && mv {}.tmp {}; rm -f {}.tmp'; find . -name '*.py' -print0 | xargs -0 -n 1 -I {} bash -c 'echo {}; ../port-tools/gst1.0-convert-py.py {} > {}.tmp; ! diff -q {} {}.tmp && mv {}.tmp {}; rm -f {}.tmp'
 
 # From Chad:
 #* gst.event_new_seek() -> Gst.Event.new_seek()
@@ -83,7 +83,7 @@ with open(sys.argv[1]) as f:
             import_gobject_line_no = -1
             import_gst_line_no = -1
             print 'import gi'
-            print "gi.require_version('Gst', '0.10')"
+            print "gi.require_version('Gst', '1.0')"
             print 'from gi.repository import GObject, Gst'
             gobject_loaded=True
             if gobject_postload != False:
@@ -115,12 +115,26 @@ with open(sys.argv[1]) as f:
         #    src = gst.element_factory_make('filesrc')
         # With:
         #    src = Gst.ElementFactory.make('filesrc', None)
-        # Note that unlike element_factory_make(), ElementFactory.make() will return None rather than raising an exception when the element is not found. 
-        (mod_line, mod_num) = re.subn(r'element_factory_make\s*\((.+)\)', r"ElementFactory.make(\1, None)", line)
-        if mod_num != 0:
-            line = mod_line
-            modded = True
-
+        # Note that unlike element_factory_make(), ElementFactory.make() will return None rather than raising an exception when the element is not found.
+        #
+        # Note: only add ", None" if there is only argument (only)
+        m = re.search('element_factory_make\s*\((.+)\)', line)
+        if m != None:
+            # is there more than one argument there?
+            m2 = re.search('\,', m.group(1))
+            # Yes: more than one argument
+            if m2 != None:
+                (mod_line, mod_num) = re.subn(r'element_factory_make', r"ElementFactory.make", line)
+                if mod_num != 0:
+                    line = mod_line
+                    modded=True
+            # No: only one argument, add a ", None"
+            else:
+                (mod_line, mod_num) = re.subn(r'element_factory_make\s*\((.+)\)', r"ElementFactory.make(\1, None)", line)
+                if mod_num != 0:
+                    line = mod_line
+                    # mod_str = ' # MOD: Added ", None" to the argument list'
+                    modded=True
 
         # gst.event_new_seek() -> Gst.Event.new_seek()
         # (from Chad)
