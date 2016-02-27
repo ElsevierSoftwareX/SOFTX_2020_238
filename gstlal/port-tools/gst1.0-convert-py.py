@@ -16,7 +16,7 @@
 # gst.FORMAT_TIME -> Gst.Format.TIME
 #* gst.SEEK_FLAG_FLUSH -> Gst.SeekFlags.FLUSH
 #* gst.SEEK_TYPE_SET -> Gst.SeekType.SET
- 
+# gst.Pipeline(var) -> gst.Pipeline(name=var) 
 
 import re
 import sys
@@ -109,6 +109,21 @@ with open(sys.argv[1]) as f:
                 gobject_postload=m.group(1) + 'GObject.threads_init()'+'\n'+m.group(1) + 'Gst.init(None)'
             continue
 
+        # Chad: gst.Pipeline(var) -> gst.Pipeline(name=var) 
+        m = re.search('gst\s*\.\s*Pipeline\s*\(([^\)]+)\)', line)
+        if m != None:
+            # is there more than one argument there?
+            m2 = re.search('\,', m.group(1))
+            # Yes: more than one argument
+            if m2 != None:
+                line = mod_line
+                mod_str = ' # MOD: Not sure what to do here, Pipeline(arg) should become Pipeline(name=arg), but more than one arg here.'
+                modded=True
+            else:
+                (mod_line, mod_num) = re.subn(r'gst\s*\.\s*Pipeline\s*\(([^\)]+)\)', r'gst.Pipeline(name=\1)', line)
+                if mod_num != 0:
+                    line = mod_line
+                    modded=True
 
         # element_factory_make()
         # Replace:
