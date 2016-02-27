@@ -109,7 +109,7 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = GObject.MainLoop()
-	pipeline = pipelinefunc(Gst.Pipeline(name), name, **pipelinefunc_kwargs)
+	pipeline = pipelinefunc(Gst.Pipeline(name = name), name, **pipelinefunc_kwargs)
 	handler = simplehandler.Handler(mainloop, pipeline)
 	if segment is not None:
 		if pipeline.set_state(Gst.State.PAUSED) == Gst.StateChangeReturn.FAILURE:
@@ -133,7 +133,7 @@ def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
 	input_arrays = list(input_arrays)	# so we can modify it
 	output_arrays = []
 
-	pipeline = Gst.Pipeline(name)
+	pipeline = Gst.Pipeline(name = name)
 
 	head = pipeparts.mkgeneric(pipeline, None, "appsrc", caps = pipeio.caps_from_array(input_arrays[0], rate = rate))
 	def need_data(elem, arg, (input_arrays, rate)):
