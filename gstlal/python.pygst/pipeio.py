@@ -33,11 +33,11 @@ import sys
 
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 
 from pylal import datatypes as laltypes
@@ -100,7 +100,7 @@ def repack_real_array_to_complex(arr):
 def get_unit_size(caps):
 	struct = caps[0]
 	name = struct.get_name()
-	if name in ("audio/x-raw-complex", "audio/x-raw", "audio/x-raw"):
+	if name in ("audio/x-raw-complex", "audio/x-raw-float", "audio/x-raw-int"):
 		assert struct["width"] % 8 == 0
 		return struct["channels"] * struct["width"] // 8
 	elif name == "video/x-raw-rgb":
@@ -112,10 +112,10 @@ def get_unit_size(caps):
 def numpy_dtype_from_caps(caps):
 	struct = caps[0]
 	name = struct.get_name()
-	if name == "audio/x-raw":
+	if name == "audio/x-raw-float":
 		assert struct["width"] % 8 == 0
 		return "f%d" % (struct["width"] // 8)
-	elif name == "audio/x-raw":
+	elif name == "audio/x-raw-int":
 		assert struct["width"] % 8 == 0
 		if struct["signed"]:
 			return "i%d" % (struct["width"] // 8)
@@ -129,25 +129,25 @@ def numpy_dtype_from_caps(caps):
 
 def caps_from_numpy_dtype(dtype):
 	if dtype.char == 'f':
-		caps = Gst.Caps("audio/x-raw, width=32")
+		caps = gst.Caps("audio/x-raw-float, width=32")
 	elif dtype.char == 'd':
-		caps = Gst.Caps("audio/x-raw, width=64")
+		caps = gst.Caps("audio/x-raw-float, width=64")
 	elif dtype.char == 'b':
-		caps = Gst.Caps("audio/x-raw, width=8, signed=true")
+		caps = gst.Caps("audio/x-raw-int, width=8, signed=true")
 	elif dtype.char == 'B':
-		caps = Gst.Caps("audio/x-raw, width=8, signed=false")
+		caps = gst.Caps("audio/x-raw-int, width=8, signed=false")
 	elif dtype.char == 'h':
-		caps = Gst.Caps("audio/x-raw, width=16, signed=true")
+		caps = gst.Caps("audio/x-raw-int, width=16, signed=true")
 	elif dtype.char == 'H':
-		caps = Gst.Caps("audio/x-raw, width=16, signed=false")
+		caps = gst.Caps("audio/x-raw-int, width=16, signed=false")
 	elif dtype.char == 'i':
-		caps = Gst.Caps("audio/x-raw, width=32, signed=true")
+		caps = gst.Caps("audio/x-raw-int, width=32, signed=true")
 	elif dtype.char == 'I':
-		caps = Gst.Caps("audio/x-raw, width=32, signed=false")
+		caps = gst.Caps("audio/x-raw-int, width=32, signed=false")
 	elif dtype.char == 'l':
-		caps = Gst.Caps("audio/x-raw, width=64, signed=true")
+		caps = gst.Caps("audio/x-raw-int, width=64, signed=true")
 	elif dtype.char == 'L':
-		caps = Gst.Caps("audio/x-raw, width=64, signed=false")
+		caps = gst.Caps("audio/x-raw-int, width=64, signed=false")
 	else:
 		raise ValueError(dtype)
 	caps[0]["endianness"] = {
@@ -180,10 +180,10 @@ def array_from_audio_buffer(buf):
 
 
 def audio_buffer_from_array(arr, timestamp, offset, rate):
-	buf = Gst.Buffer(arr.data)
+	buf = gst.Buffer(arr.data)
 	buf.caps = caps_from_array(arr, rate = rate)
 	buf.timestamp = timestamp
-	buf.duration = (Gst.SECOND * arr.shape[0] + rate // 2) // rate
+	buf.duration = (gst.SECOND * arr.shape[0] + rate // 2) // rate
 	buf.offset = offset
 	buf.offset_end = offset + arr.shape[0]
 	return buf

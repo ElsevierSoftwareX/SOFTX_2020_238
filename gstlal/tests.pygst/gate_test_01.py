@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2015  Kipp Cannon
+# Copyright (C) 2014  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -25,13 +25,10 @@
 
 
 import numpy
-from glue import segments
-from lal import LIGOTimeGPS
-from gstlal import pipeio
+import sys
 from gstlal import pipeparts
-
-import test_common
 import cmp_nxydumps
+import test_common
 
 
 #
@@ -43,16 +40,31 @@ import cmp_nxydumps
 #
 
 
-def segmentsrc_test_01(pipeline, name, seg):
-	segs = segments.segmentlist([segments.segment(LIGOTimeGPS(100), LIGOTimeGPS(200)), segments.segment(LIGOTimeGPS(250), LIGOTimeGPS(300))])
+def gate_test_01(pipeline, name):
+	#
+	# try changing these.  test should still work!
+	#
 
-	head = pipeparts.mksegmentsrc(pipeline, segs, blocksize = 1)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=4")
-	head = pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
+	rate = 2048	# Hz
+	gap_frequency = 13.0	# Hz
+	gap_threshold = 0.8	# of 1
+	buffer_length = 1.0	# seconds
+	test_duration = 10.0	# seconds
 
-	f = open("%s_in.dump" % name, "w")
-	for t in numpy.arange(float(seg[0]), float(seg[1]), 0.25):
-		print >>f, "%g\t%d" % (t, 128 if  t in segs else 0)
+	#
+	# build pipeline
+	#
+
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = 64, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
+	control = test_common.gapped_test_src(pipeline, buffer_length = buffer_length / 3, rate = rate, width = 32, test_duration = test_duration, gap_frequency = gap_frequency / 3, gap_threshold = gap_threshold, verbose = False)
+
+	head = pipeparts.mkgate(pipeline, head, control = control, threshold = float("+inf"))
+
+	pipeparts.mkfakesink(pipeline, head)
+
+	#
+	# done
+	#
 
 	return pipeline
 
@@ -66,6 +78,4 @@ def segmentsrc_test_01(pipeline, name, seg):
 #
 
 
-seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(350))
-test_common.build_and_run(segmentsrc_test_01, segment = seg, seg = seg, name = "segmentsrc_test_01a")
-cmp_nxydumps.compare("segmentsrc_test_01a_in.dump", "segmentsrc_test_01a_out.dump")
+test_common.build_and_run(gate_test_01, "gate_test_01a")

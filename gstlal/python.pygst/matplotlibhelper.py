@@ -30,10 +30,10 @@ from gstlal import pipeio
 
 """Pad template suitable for producing video frames using Matplotlib.
 The Agg backend supports rgba, argb, and bgra."""
-padtemplate = Gst.PadTemplate(
+padtemplate = gst.PadTemplate(
 	"src",
-	Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS,
-	Gst.caps_from_string("""
+	gst.PAD_SRC, gst.PAD_ALWAYS,
+	gst.caps_from_string("""
 		video/x-raw-rgb,
 		bpp        = (int) {24,32},
 		depth      = (int) 24,
@@ -104,7 +104,7 @@ def render(fig, buf):
 	buf.datasize = datasize
 
 
-class BaseMatplotlibTransform(Gst.BaseTransform):
+class BaseMatplotlibTransform(gst.BaseTransform):
 	"""Base class for transform elements that use Matplotlib to render video."""
 
 	__gsttemplates__ = padtemplate
@@ -115,16 +115,16 @@ class BaseMatplotlibTransform(Gst.BaseTransform):
 
 	def do_transform_caps(self, direction, caps):
 		"""GstBaseTransform->transform_caps virtual method."""
-		if direction == Gst.PadDirection.SRC:
-			return self.get_static_pad("sink").get_fixed_caps_func()
-		elif direction == Gst.PadDirection.SINK:
-			return self.get_static_pad("src").get_fixed_caps_func()
+		if direction == gst.PAD_SRC:
+			return self.get_pad("sink").get_fixed_caps_func()
+		elif direction == gst.PAD_SINK:
+			return self.get_pad("src").get_fixed_caps_func()
 		raise ValueError(direction)
 
 	def do_transform_size(self, direction, caps, size, othercaps):
 		"""GstBaseTransform->transform_size virtual method."""
-		if direction == Gst.PadDirection.SINK:
-			return pipeio.get_unit_size(self.get_static_pad("src").query_caps(None)
+		if direction == gst.PAD_SINK:
+			return pipeio.get_unit_size(self.get_pad("src").get_caps())
 		raise ValueError(direction)
 
-GObject.type_register(BaseMatplotlibTransform) # MOD: Found type_register in line: [gobject.type_register(BaseMatplotlibTransform)]
+gobject.type_register(BaseMatplotlibTransform)

@@ -39,11 +39,11 @@ import warnings
 
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
 
 
 from glue.ligolw import utils
@@ -99,7 +99,7 @@ class PSDHandler(simplehandler.Handler):
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 
 	def do_on_message(self, bus, message):
-		if message.type == Gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
 			return True
 		return False
@@ -150,14 +150,14 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	if verbose:
 		print >>sys.stderr, "measuring PSD in segment %s" % str(gw_data_source_info.seg)
 		print >>sys.stderr, "building pipeline ..."
-	mainloop = GObject.MainLoop()
-	pipeline = Gst.Pipeline("psd")
+	mainloop = gobject.MainLoop()
+	pipeline = gst.Pipeline("psd")
 	handler = PSDHandler(mainloop, pipeline)
 
 	head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=[%d,MAX]" % rate)	# disallow upsampling
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % rate)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
 	if gw_data_source_info.seg is not None:
 		average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2.) - 1.))
@@ -180,7 +180,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 
 	if verbose:
 		print >>sys.stderr, "putting pipeline into playing state ..."
-	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."

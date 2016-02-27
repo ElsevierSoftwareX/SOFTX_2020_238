@@ -31,11 +31,11 @@ import test_common
 
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+import pygst
+pygst.require("0.10")
+import gst
+gobject.threads_init()
 
 from gstlal import pipeparts
 from gstlal import simplehandler
@@ -82,8 +82,8 @@ class SigHandler(object):
 		self.shift += 1
 
 # setup the pipeline and event loop
-mainloop = GObject.MainLoop(context = GObject.MainContext())
-pipeline = Gst.Pipeline()
+mainloop = gobject.MainLoop(context = gobject.MainContext())
+pipeline = gst.Pipeline()
 
 # setup the test pipeline
 head = test_common.test_src(pipeline, test_duration = 100.0, is_live = True)
@@ -94,7 +94,7 @@ pipeparts.mkfakesink(pipeline, head)
 # setup the pipeline handlers and start it running
 handler = simplehandler.Handler(mainloop, pipeline)
 sighand = SigHandler(pipeline)
-if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
 # run the event loop

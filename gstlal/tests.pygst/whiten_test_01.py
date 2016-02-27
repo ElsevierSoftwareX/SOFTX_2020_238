@@ -27,6 +27,7 @@
 import numpy
 import sys
 from gstlal import pipeparts
+from gstlal.pipeparts import gst
 import cmp_nxydumps
 import test_common
 
@@ -85,7 +86,7 @@ def whiten_test_01a(pipeline, name):
 	head.connect_after("notify::delta-f", psd_resolution_changed, None)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * Gst.SECOND)), "%s_in.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "%s_in.dump" % name)
 
 	#
 	# done

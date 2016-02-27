@@ -46,7 +46,7 @@ def resample_test_01a(pipeline, name):
 	#
 
 	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
-	elem = pipeparts.Gst.ElementFactory.make("audiocheblimit", None)
+	elem = pipeparts.gst.element_factory_make("audiocheblimit")
 	elem.set_property("mode", 0)
 	elem.set_property("cutoff", .95 * out_rate / 2.0)
 	pipeline.add(elem)
@@ -54,7 +54,7 @@ def resample_test_01a(pipeline, name):
 	head = elem
 	head = tee = pipeparts.mktee(pipeline, head)
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
@@ -89,7 +89,7 @@ def resample_test_01b(pipeline, name):
 	#
 
 	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
-	elem = pipeparts.Gst.ElementFactory.make("audiocheblimit", None)
+	elem = pipeparts.gst.element_factory_make("audiocheblimit")
 	elem.set_property("mode", 0)
 	elem.set_property("cutoff", .95 * out_rate / 2.0)
 	pipeline.add(elem)
@@ -97,13 +97,13 @@ def resample_test_01b(pipeline, name):
 	head = elem
 	head = tee = pipeparts.mktee(pipeline, head)
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % in_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % in_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % in_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % in_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)

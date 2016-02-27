@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kst version="2.0">
+    <data>
+        <source reader="ASCII file" file="whiten_test_01a_in.dump" fileRelative="whiten_test_01a_in.dump">
+            <properties vector="INDEX" interpretation="3" delimiters="#" columntype="0" headerstart="0" fields="0" readfields="false" usedot="true" columnwidthisconst="false" readunits="false" units="0"/>
+        </source>
+        <source reader="ASCII file" file="whiten_test_01a_out.dump" fileRelative="whiten_test_01a_out.dump">
+            <properties delimiters="#" columntype="0" headerstart="0" fields="0" readfields="false" usedot="true" columnwidthisconst="false" readunits="false" units="0"/>
+        </source>
+        <source reader="ASCII file" file="whiten_test_01b_out.dump" fileRelative="whiten_test_01b_out.dump">
+            <properties vector="INDEX" interpretation="1" delimiters="#" columntype="0" headerstart="0" fields="0" readfields="false" usedot="true" columnwidthisconst="false" readunits="false" units="0"/>
+        </source>
+    </data>
+    <variables>
+        <datavector file="whiten_test_01a_in.dump" fileRelative="whiten_test_01a_in.dump" field="Column 2" start="0" count="-1" skip="-1" doAve="false" descriptiveNameIsManual="true" descriptiveName="identity test input y" initialVNum="1" initialXNum="1"/>
+        <datavector file="whiten_test_01a_in.dump" fileRelative="whiten_test_01a_in.dump" field="Column 1" start="0" count="-1" skip="-1" doAve="false" descriptiveNameIsManual="true" descriptiveName="identity test input x" initialVNum="2" initialXNum="13"/>
+        <datavector file="whiten_test_01a_out.dump" fileRelative="whiten_test_01a_out.dump" field="Column 1" start="0" count="-1" skip="-1" doAve="false" descriptiveNameIsManual="true" descriptiveName="identity test output x" initialVNum="3" initialXNum="25"/>
+        <datavector file="whiten_test_01a_out.dump" fileRelative="whiten_test_01a_out.dump" field="Column 2" start="0" count="-1" skip="-1" doAve="false" descriptiveNameIsManual="true" descriptiveName="identity test output y" initialVNum="4" initialXNum="37"/>
+        <datavector file="whiten_test_01b_out.dump" fileRelative="whiten_test_01b_out.dump" field="Column 2" start="1000000" count="-1" skip="-1" doAve="false" initialVNum="6" initialXNum="61"/>
+    </variables>
+    <objects>
+        <histogram vector="Column 2 (V6)" numberofbins="101" realtimeautobin="false" min="-6" max="6" normalizationmode="2" descriptiveNameIsManual="true" descriptiveName="Whitener Output" initialVNum="7" initialXNum="73" initialHNum="1"/>
+        <equation expression="(([Whitener Output:bin:Last (X75)]-[Whitener Output:bin:First (X76)])/[Whitener Output:bin:NS (X80)])*EXP(-0.5*[Whitener Output:bin (V7)]^2)/SQRT(2*PI)" xvector="Whitener Output:bin (V7)" interpolate="true" initialVNum="9" initialXNum="95" initialENum="1"/>
+    </objects>
+    <relations>
+        <curve xvector="identity test input x (V2)" yvector="identity test input y (V1)" color="#000000" headcolor="#008000" haslines="true" linewidth="0" linestyle="0" haspoints="true" pointtype="0" pointdensity="0" hasbars="false" barstyle="0" ignoreautoscale="false" hashead="false" headtype="0" descriptiveNameIsManual="true" descriptiveName="Identity Test Input" initialCNum="1"/>
+        <curve xvector="identity test output x (V3)" yvector="identity test output y (V4)" color="#ff0004" headcolor="#4682b4" haslines="true" linewidth="0" linestyle="0" haspoints="true" pointtype="2" pointdensity="0" hasbars="false" barstyle="0" ignoreautoscale="false" hashead="false" headtype="0" descriptiveNameIsManual="true" descriptiveName="Identity Test Output" initialCNum="2"/>
+        <curve xvector="Whitener Output:bin (V7)" yvector="Whitener Output:num (V8)" color="#000000" headcolor="#000000" haslines="false" linewidth="0" linestyle="0" haspoints="false" pointtype="0" pointdensity="0" hasbars="true" barstyle="0" ignoreautoscale="false" hashead="false" headtype="0" descriptiveNameIsManual="true" descriptiveName="Observed" initialCNum="3"/>
+        <curve xvector="((Whitener Output:bin:Last (X75)-Whitener Output:bin:First (X76))/Whitener Output:bin:NS (X80))*EXP(-0.5*Whitener Output:bin ^2)/SQRT(2*PI):x (V9)" yvector="((Whitener Output:bin:Last (X75)-Whitener Output:bin:First (X76))/Whitener Output:bin:NS (X80))*EXP(-0.5*Whitener Output:bin ^2)/SQRT(2*PI):y (V10)" color="#000000" headcolor="#000000" haslines="true" linewidth="2" linestyle="2" haspoints="false" pointtype="0" pointdensity="0" hasbars="false" barstyle="0" ignoreautoscale="false" hashead="false" headtype="0" descriptiveNameIsManual="true" descriptiveName="Ideal" initialCNum="4"/>
+    </relations>
+    <graphics>
+        <view name="View &amp;1" width="1019" height="615">
+            <plot tiedxzoom="false" tiedyzoom="false" leftlabelvisible="true" bottomlabelvisible="true" rightlabelvisible="true" toplabelvisible="true" globalfont="DejaVu Sans,12,-1,5,50,0,0,0,0,0" globalfontscale="13.2" globalfontcolor="#000000" showlegend="true" hidebottomaxislabel="false" hidetopaxislabel="false" hideleftaxislabel="false" hiderightaxislabel="false" initialPlotNum="1" name="Plot">
+                <position x="256.6282" y="307.37795"/>
+                <rect x="-252.756" y="-303.6572" width="505.0164" height="606.3285"/>
+                <relativesize width="0.4956" height="0.9859" centerx="0.2516" centery="0.499" posx="0.0038" posy="0.00605000000000004"/>
+                <transform m11="1" m12="0" m13="0" m21="0" m22="1" m23="0" m31="0" m32="0" m33="1"/>
+                <pen style="1" width="0" miterlimit="2" cap="16" joinStyle="64">
+                    <brush color="#000000" style="1"/>
+                </pen>
+                <brush color="#ffffff" style="1"/>
+                <legend auto="true" title="" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="7.9" verticaldisplay="true" name="Legend">
+                    <position x="-92.2496904" y="-206.52054534"/>
+                    <rect x="-68.5063096" y="-13.01287136" width="137" height="26"/>
+                    <relativesize width="0.346821043379465" height="0.0492118066695247" centerx="0.173410521689732" centery="0.138405903334763" posx="0" posy="0.1138"/>
+                    <transform m11="1" m12="0" m13="0" m21="0" m22="1" m23="0" m31="0" m32="0" m33="1"/>
+                    <pen style="1" width="0" miterlimit="2" cap="16" joinStyle="64">
+                        <brush color="#000000" style="1"/>
+                    </pen>
+                    <brush color="#ffffff" style="1"/>
+                    <relation tag="Identity Test Input (C1)"/>
+                    <relation tag="Identity Test Output (C2)"/>
+                </legend>
+                <cartesianrender name="Cartesian Plot" type="1">
+                    <relation tag="Identity Test Input (C1)"/>
+                    <relation tag="Identity Test Output (C2)"/>
+                </cartesianrender>
+                <plotaxis id="xaxis" visible="true" log="false" reversed="false" autobaseoffset="true" baseoffset="false" interpret="false" interpretation="1" display="4" majortickmode="5" minortickcount="5" autominortickcount="true" drawmajorticks="true" drawminorticks="true" drawmajorgridlines="true" drawminorgridlines="false" drawmajorgridlinecolor="#a0a0a4" drawminorgridlinecolor="#a0a0a4" drawmajorgridlinestyle="2" drawminorgridlinestyle="2" drawmajorgridlinewidth="1" drawminorgridlinewidth="1" significantdigits="9" rotation="0" zoommode="2">
+                    <plotmarkers xaxis="true" linecolor="#000000" linestyle="1" linewidth="1" curvemode="3"/>
+                </plotaxis>
+                <plotaxis id="yaxis" visible="true" log="false" reversed="false" autobaseoffset="true" baseoffset="false" interpret="false" interpretation="1" display="4" majortickmode="5" minortickcount="5" autominortickcount="true" drawmajorticks="true" drawminorticks="true" drawmajorgridlines="true" drawminorgridlines="false" drawmajorgridlinecolor="#a0a0a4" drawminorgridlinecolor="#a0a0a4" drawmajorgridlinestyle="2" drawminorgridlinestyle="2" drawmajorgridlinewidth="1" drawminorgridlinewidth="1" significantdigits="9" rotation="0" zoommode="1">
+                    <plotmarkers xaxis="false" linecolor="#000000" linestyle="1" linewidth="1" curvemode="-2105377"/>
+                </plotaxis>
+                <plotlabel id="leftlabel" visible="true" overridetext="Amplitude" autolabel="false" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="rightlabel" visible="true" overridetext="" autolabel="true" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="toplabel" visible="true" overridetext="Identity Test" autolabel="false" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="bottomlabel" visible="true" overridetext="Time (s)" autolabel="false" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="numberlabel" visible="true" overridetext="" autolabel="false" font="DejaVu Sans,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <projectionrect x="71.48008493016" y="-4.84743556714852" width="0.770737990320001" height="9.2837177712699"/>
+            </plot>
+            <plot tiedxzoom="false" tiedyzoom="false" leftlabelvisible="true" bottomlabelvisible="true" rightlabelvisible="true" toplabelvisible="true" globalfont="Cantarell,12,-1,5,50,0,0,0,0,0" globalfontscale="13.2" globalfontcolor="#000000" showlegend="true" hidebottomaxislabel="false" hidetopaxislabel="false" hideleftaxislabel="false" hiderightaxislabel="false" descriptiveNameIsManual="true" descriptiveName="Whitener Output Histogram" initialPlotNum="1" name="Plot">
+                <position x="761.6446" y="307.37795"/>
+                <rect x="-252.756" y="-303.6572" width="505.0164" height="606.3285"/>
+                <relativesize width="0.4956" height="0.9859" centerx="0.7472" centery="0.499" posx="0.4994" posy="0.00605000000000004"/>
+                <transform m11="1" m12="0" m13="0" m21="0" m22="1" m23="0" m31="0" m32="0" m33="1"/>
+                <pen style="1" width="0" miterlimit="2" cap="16" joinStyle="64">
+                    <brush color="#000000" style="1"/>
+                </pen>
+                <brush color="#ffffff" style="1"/>
+                <legend auto="false" title="" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="12" verticaldisplay="true" name="Legend">
+                    <position x="-100.02575306" y="-239.29545455"/>
+                    <rect x="-75.9976308" y="-26.9950344" width="117" height="27"/>
+                    <relativesize width="0.296190234126988" height="0.0511045684645065" centerx="0.109445117063494" centery="0.0508522842322533" posx="-0.0386500000000001" posy="0.0253000000000001"/>
+                    <transform m11="1" m12="0" m13="0" m21="0" m22="1" m23="0" m31="0" m32="0" m33="1"/>
+                    <pen style="1" width="0" miterlimit="2" cap="16" joinStyle="64">
+                        <brush color="#000000" style="1"/>
+                    </pen>
+                    <brush color="#ffffff" style="1"/>
+                    <relation tag="Ideal (C4)"/>
+                </legend>
+                <cartesianrender name="Cartesian Plot" type="1">
+                    <relation tag="Observed (C3)"/>
+                    <relation tag="Ideal (C4)"/>
+                </cartesianrender>
+                <plotaxis id="xaxis" visible="true" log="false" reversed="false" autobaseoffset="true" baseoffset="false" interpret="false" interpretation="1" display="4" majortickmode="5" minortickcount="5" autominortickcount="true" drawmajorticks="true" drawminorticks="true" drawmajorgridlines="true" drawminorgridlines="false" drawmajorgridlinecolor="#a0a0a4" drawminorgridlinecolor="#a0a0a4" drawmajorgridlinestyle="2" drawminorgridlinestyle="2" drawmajorgridlinewidth="1" drawminorgridlinewidth="1" significantdigits="9" rotation="0" zoommode="2">
+                    <plotmarkers xaxis="true" linecolor="#000000" linestyle="1" linewidth="1" curvemode="3"/>
+                </plotaxis>
+                <plotaxis id="yaxis" visible="true" log="true" reversed="false" autobaseoffset="true" baseoffset="false" interpret="false" interpretation="1" display="4" majortickmode="5" minortickcount="5" autominortickcount="true" drawmajorticks="true" drawminorticks="true" drawmajorgridlines="true" drawminorgridlines="false" drawmajorgridlinecolor="#a0a0a4" drawminorgridlinecolor="#a0a0a4" drawmajorgridlinestyle="2" drawminorgridlinestyle="2" drawmajorgridlinewidth="1" drawminorgridlinewidth="1" significantdigits="9" rotation="0" zoommode="2">
+                    <plotmarkers xaxis="false" linecolor="#000000" linestyle="1" linewidth="1" curvemode="-2698030"/>
+                </plotaxis>
+                <plotlabel id="leftlabel" visible="true" overridetext="Fraction" autolabel="false" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="rightlabel" visible="true" overridetext="" autolabel="true" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="toplabel" visible="true" overridetext="Output Histogram" autolabel="false" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="bottomlabel" visible="true" overridetext="Amplitude" autolabel="false" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <plotlabel id="numberlabel" visible="true" overridetext="" autolabel="false" font="Cantarell,12,-1,5,50,0,0,0,0,0" fontscale="13.2" fontcolor="#000000" fontuseglobal="true"/>
+                <projectionrect x="-5" y="1e-07" width="10" height="0.0999999"/>
+            </plot>
+        </view>
+    </graphics>
+</kst>

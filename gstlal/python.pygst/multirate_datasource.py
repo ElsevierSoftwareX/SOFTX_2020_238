@@ -31,11 +31,11 @@ import math
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 from gstlal import bottle
 from gstlal import pipeparts
@@ -138,7 +138,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -169,7 +169,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	quality = 9
-	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
+	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkresample(pipeline, head, quality = quality)
 	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
@@ -192,7 +192,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, width=%d, rate=%d, channels=1" % (width, max(rates)))
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=%d, rate=%d, channels=1" % (width, max(rates)))
 
 	# make the buffers going downstream smaller, this can really help with
 	# RAM
@@ -287,7 +287,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
 		else:
 			head[rate] = head[max(rates)]
-		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
 		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 

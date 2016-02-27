@@ -770,7 +770,7 @@ class Bottle(object):
         ''' Add a route object, but do not change the :data:`Route.app`
             attribute.'''
         self.routes.append(route)
-        self.router.add(route.rule, route.method, route, name=route.name) # MOD: Found an add with multiple args: [        self.router.add(route.rule, route.method, route, name=route.name) ], args = [route.rule, route.method, route, name=route.name]
+        self.router.add(route.rule, route.method, route, name=route.name)
         if DEBUG: route.prepare()
 
     def route(self, path=None, method='GET', callback=None, name=None,

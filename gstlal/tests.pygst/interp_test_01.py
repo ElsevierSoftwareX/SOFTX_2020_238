@@ -45,10 +45,10 @@ def interp_test_01(pipeline, name):
 	#
 
 	head = test_common.gapped_test_src(pipeline, channels = 1, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw, rate=%d, width=32" % in_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw-float, rate=%d, width=32" % in_rate)
 	head = tee = pipeparts.mktee(pipeline, head)
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw-float, rate=%d" % out_rate)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 

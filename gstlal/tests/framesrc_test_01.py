@@ -25,7 +25,6 @@
 
 
 from gstlal import pipeparts
-from gstlal.pipeparts import gst
 from pylal.datatypes import LIGOTimeGPS
 import test_common
 
@@ -59,8 +58,8 @@ def framesrc_test_01a(pipeline, name):
 	#
 
 	head = pipeparts.mkframecppchanneldemux(pipeline, pipeparts.mkcachesrc(pipeline, location = location, cache_src_regex = "%s.*" % instrument[0]))
-	elem = pipeparts.mkqueue(pipeline, None, max_size_time = 8 * gst.SECOND)
-	pipeparts.src_deferred_link(head, "%s:%s" % (instrument, channel_name), elem.get_pad("sink"))
+	elem = pipeparts.mkqueue(pipeline, None, max_size_time = 8 * Gst.SECOND)
+	pipeparts.src_deferred_link(head, "%s:%s" % (instrument, channel_name), elem.get_static_pad("sink"))
 	head = elem
 
 	head = pipeparts.mkprogressreport(pipeline, head, "src")

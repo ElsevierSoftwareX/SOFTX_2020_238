@@ -2,6 +2,9 @@
 # implement replacements as listed on
 # https://wiki.ubuntu.com/Novacut/GStreamer1.0
 
+# Usage, e.g. from gstlal/python directory:
+# find . -name \*.py -print0 | xargs -0 -n 1 -I {} bash -c 'echo {}; ../port-tools/gst1.0-convert-py.py {} > {}.tmp; ! diff -q {} {}.tmp && mv {}.tmp {}; rm -f {}.tmp'
+
 # From Chad:
 #* gst.event_new_seek() -> Gst.Event.new_seek()
 # gst.Pipeline("blah") -> Gst.Pipeline(name="blah")
@@ -22,7 +25,7 @@ line_no = 0
 gobject_gst_lineno_diff = 5
 import_gobject_line_no = -1
 import_gst_line_no = -1
-mod_str_def=' # **mod**'
+mod_str_def=' # MOD'
 mod_str_def=''
 gobject_loaded=False
 gst_loaded=False
@@ -37,6 +40,12 @@ with open(sys.argv[1]) as f:
 
         # strip the crlf
         line = line.rstrip("\r\n")
+
+        # Is this just a comment? If so, leave as is
+        m = re.search('^\s*\#', line)
+        if m != None:
+            print line
+            continue
 
         # Remove import pygst
         m = re.search('import\s+pygst', line)
@@ -81,7 +90,7 @@ with open(sys.argv[1]) as f:
                 print gobject_postload
 
         if import_gobject_line_no > 0 and (line_no - import_gobject_line_no) > 5:
-            mod_str='# ** Error: found import gobject but expected import gst to be within ['+str(gobject_gst_lineno_diff)+'] lines.'
+            mod_str=' # MOD: Error: found import gobject but expected import gst to be within ['+str(gobject_gst_lineno_diff)+'] lines.'
             modded=True
 
 
@@ -121,7 +130,6 @@ with open(sys.argv[1]) as f:
             modded = True
 
 
-
         # element_link_many()
         # There is no equivalent to gst.element_link_many(), so replace:
         #    gst.element_link_many(one, two, three)
@@ -130,7 +138,7 @@ with open(sys.argv[1]) as f:
         #    two.link(three)
         m = re.search('element_link_many', line)
         if m != None:
-            mod_str='# ** Error line ['+str(line_no)+']: element_link_many not yet implemented. See web page **'
+            mod_str=' # MOD: Error line ['+str(line_no)+']: element_link_many not yet implemented. See web page **'
             modded=True
 
         # Pipeline.add(one, two)
@@ -146,7 +154,7 @@ with open(sys.argv[1]) as f:
             # is there more than one argumen there?
             m2 = re.search('\,', m.group(1))
             if m2 != None:
-                mod_str='# ****** Found an add with multiple args: ['+str(line)+' ], args = ['+str(m.group(1))+']'
+                mod_str=' # MOD: Found an add with multiple args: ['+str(line)+' ], args = ['+str(m.group(1))+']'
                 modded=True
 
         # one.link(two, mycaps)
@@ -161,8 +169,8 @@ with open(sys.argv[1]) as f:
             if m2 != None:
                 (mod_line, mod_num) = re.subn(r'link', r"link_filtered", line)
                 if mod_num != 0:
-                    print mod_line+mod_str_def
-                    continue
+                    line = mod_line
+                    modded = True
 
         # From Chad:
         # gst.STATE_CHANGE_FAILURE -> Gst.StateChangeReturn.FAILURE
@@ -241,8 +249,8 @@ with open(sys.argv[1]) as f:
         #     ghost = Gst.GhostPad.new('sink', mysinkpad)
         (mod_line, mod_num) = re.subn(r'gst\s*\.\s*GhostPad', r'Gst.GhostPad.new', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line = mod_line
+            modded = True
 
         # Pad.get_caps()
         # In callbacks for "pad-added" events and similar, it's common to use the string representation of the pad caps as a way to decide whether to link a pad and what to link the pad to.
@@ -258,13 +266,13 @@ with open(sys.argv[1]) as f:
         #            <link to some audio elements>
         (mod_line, mod_num) = re.subn(r'\.\s*get_caps\s*[\(\)]*\s*\[\s*0\s*\]', r'.query_caps(None)', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         (mod_line, mod_num) = re.subn(r'\.\s*get_caps\s*[\(\)]*', r'.query_caps(None)', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # Element.get_pad()
         # Element.get_pad() has been renamed Element.get_static_pad(). So replace something like this:
@@ -275,8 +283,8 @@ with open(sys.argv[1]) as f:
         #     pad = src.get_static_pad('sink')
         (mod_line, mod_num) = re.subn(r'\.\s*get_pad\s*\(', r'.get_static_pad(', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # Buffer.data
         # In a "preroll-handoff" or "handoff" callback, it's common to want access to the buffer data. A common use case is saving a JPEG thumbnail to a file, for example.
@@ -298,8 +306,8 @@ with open(sys.argv[1]) as f:
         # There is also the new Buffer.dts (Decode Time Stamp). Often pts and dts will be the same, but B-frames are an example of when they'll be different. 
         (mod_line, mod_num) = re.subn(r'\.\s+timestamp', r'.pts', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # Pad.get_negotiated_caps()
         # Pad.get_negotiated_caps() has been renamed Pad.get_current_caps(), so replace:
@@ -308,8 +316,8 @@ with open(sys.argv[1]) as f:
         #     caps = pad.get_current_caps()
         (mod_line, mod_num) = re.subn(r'get_negotiated_caps', r'get_current_caps', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # caps[0]
         # Caps objects are not array-like from PyGI, so replace:
@@ -337,8 +345,8 @@ with open(sys.argv[1]) as f:
         #     query = Gst.Query.new_duration(Gst.Format.TIME)
         (mod_line, mod_num) = re.subn(r'gst\s*\.\*query_new_duration', r'Gst.Query.new_duration', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # audio/x-raw, video/x-raw
         # "audio/x-raw-int" and "audio/x-raw-float" have been condensed into a unified "audio/x-raw" with a flexible format description.
@@ -351,13 +359,13 @@ with open(sys.argv[1]) as f:
         # As you're only interested in specifying the rate anyway, it's much nicer to be truly abstracted from the format details. 
         (mod_line, mod_num) = re.subn(r'x-raw-int', r'x-raw', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         (mod_line, mod_num) = re.subn(r'x-raw-float', r'x-raw', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # element_register()
         # The gst.element_register() function had some magic to create an in-process plugin on the fly if needed (assuming Jason understood this detail correctly when talking with Edward Hervey about it).
@@ -385,12 +393,12 @@ with open(sys.argv[1]) as f:
         #     )
         m = re.search('type_register', line)
         if m != None:
-            mod_str='# ** Found type_register in line: ['+str(line)+']'
+            mod_str=' # MOD: Found type_register in line: ['+str(line)+']'
             modded=True
 
         m = re.search('element_register', line)
         if m != None:
-            modstr='# ** Found element_register in line: ['+ str(line)+ ']'
+            modstr=' # MOD: Found element_register in line: ['+ str(line)+ ']'
             modded=True
 
         # PAD_SRC, PAD_ALWAYS
@@ -402,24 +410,24 @@ with open(sys.argv[1]) as f:
         #     gst.PAD_SOMETIMES => Gst.PadPresence.SOMETIMES
         (mod_line, mod_num) = re.subn(r'\.\s*PAD_SRC', r'.PadDirection.SRC', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
         (mod_line, mod_num) = re.subn(r'\.\s*PAD_SINK', r'.PadDirection.SINK', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
         (mod_line, mod_num) = re.subn(r'\.\s*PAD_ALWAYS', r'.PadPresence.ALWAYS', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
         (mod_line, mod_num) = re.subn(r'\.\s*PAD_REQUEST', r'.PadPresence.REQUEST', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
         (mod_line, mod_num) = re.subn(r'\.\s*PAD_SOMETIMES', r'.PadPresence.SOMETIMES', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
         
         # URIHandler
         # With PyGST, you can do something like this to implement the GstUriHandler interface in a custom element:
@@ -439,45 +447,74 @@ with open(sys.argv[1]) as f:
         #             return self.uri
         # (Note many details were left out above, see plugin-0.10 for the full working example.)
         # Currently it seems this isn't possible with PyGI + GStreamer 1.0. See bug 679181.
-        m = re.search('URI', line)
-        if m != None:
-            mod_str='Found URI in line: [',+str(line)+']'
-            modded=True
+        # m = re.search('URI', line)
+        # if m != None:
+        #     mod_str=' MOD: Found URI in line: ['+line+']'
+        #     modded=True
 
         # decodebin2
         # The "decodebin2" element has been renamed to "decodebin", and the old "decodebin" element has been removed. 
         (mod_line, mod_num) = re.subn(r'decodebin2', r'decodebin', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # playbin2
         # The "playbin2" element has been renamed to "playbin", and the old "playbin" element has been removed. 
         (mod_line, mod_num) = re.subn(r'playbin2', r'playbin', line)
         if mod_num != 0:
-            print mod_line+mod_str_def
-            continue
+            line=mod_line
+            modded=True
 
         # ffmpegcolorspace
         # The "ffmpegcolorspace" element has been replaced with the new "videoconvert" element. 
         m = re.search('ffmpegcolorspace', line)
         if m != None:
-            mod_str='# ** Found ffmpegcolorspace in line: ['+str(line)+']'
+            mod_str=' # MOD: Found ffmpegcolorspace in line: ['+str(line)+']'
             modded=True
 
-        # 
 
         # Still any gst's? Change them to Gst
-        (mod_line, mod_num) = re.subn(r'gst([^l])', r'Gst\1', line)
+        (mod_line, mod_num) = re.subn(r'gst\s*\.', r'Gst.', line)
         if mod_num != 0:
             line = mod_line
             modded = True
+            
+        # Still any gst's? Change them to Gst
+        # (mod_line, mod_num) = re.subn(r'gst([^l])', r'Gst\1', line)
+        # if mod_num != 0:
+        #     # Wait: if this line has an "import", then do not do anything
+        #     m = re.search('import', line)
+        #     if m == None:
+        #         # Also: do not modify if comes after a comment
+        #         m = re.search('\#.*gst([^l])', line)
+        #         if m == None:
+        #             # And do not change if appears in quotation marks
+        #             m = re.search('"\s*gst([^l])\s*"', line)
+        #             if m == None:
+        #                 line = mod_line
+        #                 modded = True
 
         # Still any gobject's? Change them to GObject
-        (mod_line, mod_num) = re.subn(r'gobject', r'GObject', line)
+        (mod_line, mod_num) = re.subn(r'gobject\s*\.', r'GObject.', line)
         if mod_num != 0:
             line = mod_line
             modded = True
+        
+        # Still any gobject's? Change them to GObject
+        # (mod_line, mod_num) = re.subn(r'gobject', r'GObject', line)
+        # if mod_num != 0:
+        #     # Wait: if this line has an "import", then do not do anything
+        #     m = re.search('import', line)
+        #     if m == None:
+        #         # Also: do not modify if comes after a comment
+        #         m = re.search('\#.*gobject', line)
+        #         if m == None:
+        #             # And to not change if appears in quotation marks
+        #             m = re.search('"\s*gobject\s*"', line)
+        #             if m == None:
+        #                 line = mod_line
+        #                 modded = True
 
         # Does not match any rule above, just print
         if cut_line == False:

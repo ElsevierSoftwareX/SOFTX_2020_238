@@ -53,11 +53,11 @@ import time
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 from gstlal import bottle
 from gstlal import pipeparts
@@ -281,7 +281,7 @@ def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "frame
 
 def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	"""!
-	Create a new seek event, i.e., Gst.Event.new_seek()  for a given
+	Create a new seek event, i.e., gst.event_new_seek()  for a given
 	gps_start_time and gps_end_time, with optional flags.  
 
 	@param gps_start_time start time as LIGOTimeGPS, double or float
@@ -294,16 +294,16 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 		"""
 
 		if gps_time is None or gps_time == -1:
-			return (Gst.SeekType.NONE, -1) # -1 == Gst.CLOCK_TIME_NONE
+			return (gst.SEEK_TYPE_NONE, -1) # -1 == gst.CLOCK_TIME_NONE
 		elif hasattr(gps_time, 'ns'):
-			return (Gst.SeekType.SET, gps_time.ns())
+			return (gst.SEEK_TYPE_SET, gps_time.ns())
 		else:
-			return (Gst.SeekType.SET, long(float(gps_time) * Gst.SECOND))
+			return (gst.SEEK_TYPE_SET, long(float(gps_time) * gst.SECOND))
 
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
 
-	return Gst.Event.new_seek(1., Gst.Format.TIME, flags, start_type, start_time, stop_type, stop_time)
+	return gst.event_new_seek(1., gst.FORMAT_TIME, flags, start_type, start_time, stop_type, stop_time)
 
 
 class GWDataSourceInfo(object):
@@ -373,7 +373,7 @@ class GWDataSourceInfo(object):
 			## Segment from gps start and stop time if given
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			## Seek event from the gps start and stop time if given
-			self.seekevent = Gst.Event.new_seek(1., Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, Gst.SeekType.SET, self.seg[0].ns(), Gst.SeekType.SET, self.seg[1].ns())
+			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
 		elif options.gps_end_time is not None:
 			raise ValueError("must provide both --gps-start-time and --gps-end-time")
 		elif options.data_source not in self.live_sources:
@@ -547,7 +547,7 @@ def do_seek(pipeline, seekevent):
 	# FIXME:  remove.  seek the pipeline instead
 	# DO NOT USE IN NEW CODE!!!!
 	for src in pipeline.iterate_sources():
-		if src.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
 		if not src.send_event(seekevent):
 			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
@@ -680,13 +680,13 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
-		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
-			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_static_pad("src"), gw_data_source_info.frame_segments[instrument])
+			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	elif gw_data_source_info.data_source in ("framexmit", "lvshm"):
@@ -706,12 +706,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
 		# strain
-		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1) # 1 minutes of buffering
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_pad("sink"))
 		# state vector
 		# FIXME:  don't hard-code channel name
-		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1) # 1 minutes of buffering
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_static_pad("sink"))
+		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
 		if gw_data_source_info.dq_channel_type == "ODC" or gw_data_source_info.dq_channel_dict[instrument] == "Hrec_Flag_Quality":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
@@ -738,7 +738,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# 10 minutes of buffering
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
@@ -766,7 +766,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
 		# let the injection code run in a different thread than the
 		# whitener, etc.,
-		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = gst.SECOND * 64)
 
 	#
 	# seek the pipeline
@@ -815,7 +815,7 @@ def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
 	if control is None:
 		control = src = pipeparts.mktee(pipeline, src)
-	src = pipeparts.mkqueue(pipeline, src, max_size_time = Gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	src = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	return pipeparts.mkgate(pipeline, src, control = control, threshold = threshold, attack_length = -attack_length, hold_length = -hold_length, invert_control = True, **kwargs)
 
 # Unit tests

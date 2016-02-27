@@ -30,11 +30,11 @@ import os
 
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 import signal
 
 
@@ -124,16 +124,16 @@ class Handler(object):
 	def on_message(self, bus, message):
 		if self.do_on_message(bus, message):
 			pass
-		elif message.type == Gst.MessageType.EOS:
-			self.pipeline.set_state(Gst.State.NULL)
+		elif message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
 			self.quit(bus)
-		elif message.type == Gst.MESSAGE_INFO:
+		elif message.type == gst.MESSAGE_INFO:
 			gerr, dbgmsg = message.parse_info()
 			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == Gst.MESSAGE_WARNING:
+		elif message.type == gst.MESSAGE_WARNING:
 			gerr, dbgmsg = message.parse_warning()
 			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == Gst.MESSAGE_ERROR:
+		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
 			# FIXME:  this deadlocks.  shouldn't we be doing this?
 			#self.pipeline.set_state(gst.STATE_NULL)
@@ -165,7 +165,7 @@ class OneTimeSignalHandler(object):
 			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
 			try:
 				self.do_on_call(signum, frame)
-				if not self.pipeline.send_event(Gst.event_new_eos()):
+				if not self.pipeline.send_event(gst.event_new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception, e:
 				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)

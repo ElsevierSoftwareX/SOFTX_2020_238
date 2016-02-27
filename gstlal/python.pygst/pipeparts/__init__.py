@@ -32,11 +32,11 @@ import threading
 
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 
 from glue import iterutils
@@ -82,13 +82,13 @@ __date__ = "FIXME"
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
 	if "name" in properties:
-		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"), None)
+		elem = gst.element_factory_make(elem_type_name, properties.pop("name"))
 	else:
-		elem = Gst.ElementFactory.make(elem_type_name, None)
+		elem = gst.element_factory_make(elem_type_name)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
-	if isinstance(src, Gst.Pad):
+	if isinstance(src, gst.Pad):
 		src.get_parent_element().link_pads(src, elem, None)
 	elif src is not None:
 		src.link(elem)
@@ -193,8 +193,8 @@ class framecpp_channeldemux_check_segments(object):
 
 	@staticmethod
 	def probe(pad, obj, (seglist, jitter)):
-		if isinstance(obj, Gst.Buffer):
-			if not obj.flag_is_set(Gst.BUFFER_FLAG_GAP):
+		if isinstance(obj, gst.Buffer):
+			if not obj.flag_is_set(gst.BUFFER_FLAG_GAP):
 				# remove the current buffer from the data
 				# we're expecting to see
 				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
@@ -206,7 +206,7 @@ class framecpp_channeldemux_check_segments(object):
 			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
 			if seglist.intersects_segment(preceding):
 				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
-		elif isinstance(obj, Gst.Event) and obj.type == Gst.EVENT_EOS:
+		elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_EOS:
 			if seglist:
 				raise ValueError("%s: at EOS detected missing data: %s" % (pad.get_name(), seglist))
 		return True
@@ -224,7 +224,7 @@ def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
 	>>> filesinkelem.connect("notify::timestamp", framecpp_filesink_ldas_path_handler, (".", 5))
 	"""
 	# get timestamp and truncate to integer seconds
-	timestamp = elem.get_property("timestamp") // Gst.SECOND
+	timestamp = elem.get_property("timestamp") // gst.SECOND
 
 	# extract leading digits
 	leading_digits = timestamp // 10**int(math.log10(timestamp) + 1 - dir_digits)
@@ -305,7 +305,7 @@ def mkigwdparse(pipeline, src, **properties):
 
 ## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-uridecodebin.html">uridecodebin</a> element to a pipeline with useful default properties
 def mkuridecodebin(pipeline, uri, caps = "application/x-igwd-frame,framed=true", **properties):
-	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else Gst.Caps(caps), **properties)
+	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else gst.Caps(caps), **properties)
 
 
 def mkframecppchanneldemux(pipeline, src, **properties):
@@ -317,7 +317,7 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	if channel_src_map is not None:
 		for channel, src in channel_src_map.items():
 			for srcpad in src.src_pads():
-				if srcpad.link(elem.get_static_pad(channel)) == Gst.PAD_LINK_OK:
+				if srcpad.link(elem.get_pad(channel)) == gst.PAD_LINK_OK:
 					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
@@ -349,12 +349,12 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-capsfilter.html">capsfilter</a> element to a pipeline with useful default properties
 def mkcapsfilter(pipeline, src, caps):
-	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps(caps))
+	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-capssetter.html">capssetter</a> element to a pipeline with useful default properties
 def mkcapssetter(pipeline, src, caps, **properties):
-	return mkgeneric(pipeline, src, "capssetter", caps = Gst.Caps(caps), **properties)
+	return mkgeneric(pipeline, src, "capssetter", caps = gst.Caps(caps), **properties)
 
 
 ## Adds a <a href="@gstlalgtkdoc/GSTLALStateVector.html">lal_statevector</a> element to a pipeline with useful default properties
@@ -378,7 +378,7 @@ def mkfakesrc(pipeline, instrument, channel_name, blocksize = None, volume = 1e-
 		# default blocksize is 1 second * rate samples/second * 8
 		# bytes/sample (assume double-precision floats)
 		blocksize = 1 * rate * 8
-	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw, width=64, rate=%d" % rate), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=%d" % rate), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiofirfilter.html">audiofirfilter</a> element to a pipeline with useful default properties
@@ -565,7 +565,7 @@ def mkgate(pipeline, src, threshold = None, control = None, **properties):
 	else:
 		elem = mkgeneric(pipeline, None, "lal_gate", **properties)
 	for peer, padname in ((src, "sink"), (control, "control")):
-		if isinstance(peer, Gst.Pad):
+		if isinstance(peer, gst.Pad):
 			peer.get_parent_element().link_pads(peer, elem, padname)
 		elif peer is not None:
 			peer.link_pads(None, elem, padname)
@@ -659,7 +659,7 @@ def mkvorbisenc(pipeline, src):
 
 
 def mkcolorspace(pipeline, src):
-	return mkgeneric(pipeline, src, "ffmpegcolorspace") # MOD: Found ffmpegcolorspace in line: [	return mkgeneric(pipeline, src, "ffmpegcolorspace")]
+	return mkgeneric(pipeline, src, "ffmpegcolorspace")
 
 
 def mktheoraenc(pipeline, src, **properties):
@@ -702,7 +702,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, width=32, depth=24")).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw-int, width=32, depth=24")).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
@@ -719,18 +719,18 @@ def mkautoaudiosink(pipeline, src):
 
 def mkplaybacksink(pipeline, src, amplification = 0.1):
 	elems = (
-		Gst.ElementFactory.make("audioconvert", None),
-		Gst.ElementFactory.make("capsfilter", None),
-		Gst.ElementFactory.make("audioamplify", None),
-		Gst.ElementFactory.make("audioconvert", None),
-		Gst.ElementFactory.make("queue", None),
-		Gst.ElementFactory.make("autoaudiosink", None)
+		gst.element_factory_make("audioconvert"),
+		gst.element_factory_make("capsfilter"),
+		gst.element_factory_make("audioamplify"),
+		gst.element_factory_make("audioconvert"),
+		gst.element_factory_make("queue"),
+		gst.element_factory_make("autoaudiosink")
 	)
-	elems[1].set_property("caps", Gst.Caps("audio/x-raw, width=64"))
+	elems[1].set_property("caps", gst.Caps("audio/x-raw-float, width=64"))
 	elems[2].set_property("amplification", amplification)
-	elems[4].set_property("max-size-time", 1 * Gst.SECOND)
+	elems[4].set_property("max-size-time", 1 * gst.SECOND)
 	pipeline.add(*elems)
-	Gst.element_link_many(src, *elems) # MOD: Error line [733]: element_link_many not yet implemented. See web page **
+	gst.element_link_many(src, *elems)
 
 # FIXME no specific alias for this url since this library only has one element.
 # DO NOT DOCUMENT OTHER CODES THIS WAY! Use @gstdoc @gstpluginsbasedoc etc.
@@ -869,7 +869,7 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = 
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
 	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
 	for peer, padname in ((H1src, "H1sink"), (H2src, "H2sink")):
-		if isinstance(peer, Gst.Pad):
+		if isinstance(peer, gst.Pad):
 			peer.get_parent_element().link_pads(peer, elem, padname)
 		elif peer is not None:
 			peer.link_pads(None, elem, padname)
@@ -878,7 +878,7 @@ def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse
 def mkcomputegamma(pipeline, dctrl, exc, cos, sin, **properties):
 	elem = mkgeneric(pipeline, None, "lal_compute_gamma", **properties)
 	for peer, padname in ((dctrl, "dctrl_sink"), (exc, "exc_sink"), (cos, "cos"), (sin, "sin")):
-		if isinstance(peer, Gst.Pad):
+		if isinstance(peer, gst.Pad):
 			peer.get_parent_element().link_pads(peer, elem, padname)
 		elif peer is not None:
 			peer.link_pads(None, elem, padname)
@@ -927,13 +927,13 @@ def audioresample_variance_gain(quality, num, den):
 	...			quality, filt_len, num, den, std)
 	...
 	>>> for quality in range(11):
-	...		pipeline = Gst.Pipeline()
+	...		pipeline = gst.Pipeline()
 	...		correction = 1/numpy.sqrt(audioresample_variance_gain(quality, num, den))
 	...		elems = mkelems_in_bin(pipeline,
 	...			('audiotestsrc', {'wave':'gaussian-noise','volume':1}),
-	...			('capsfilter', {'caps':Gst.Caps('audio/x-raw,width=64,rate=%d' % num)}),
+	...			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d' % num)}),
 	...			('audioresample', {'quality':quality}),
-	...			('capsfilter', {'caps':Gst.Caps('audio/x-raw,width=64,rate=%d' % den)}),
+	...			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d' % den)}),
 	...			('audioamplify', {'amplification':correction,'clipping-method':'none'}),
 	...			('fakesink', {'signal-handoffs':True, 'num-buffers':1})
 	...		)
@@ -942,12 +942,12 @@ def audioresample_variance_gain(quality, num, den):
 	...		if elems[-1].connect_after('handoff', handoff_handler, (quality, filt_len, num, den)) < 1:
 	...			raise RuntimeError
 	...		try:
-	...			if pipeline.set_state(Gst.State.PLAYING) is not Gst.State.CHANGE_ASYNC:
+	...			if pipeline.set_state(gst.STATE_PLAYING) is not gst.STATE_CHANGE_ASYNC:
 	...				raise RuntimeError
-	...			if not pipeline.get_bus().poll(Gst.MessageType.EOS, -1):
+	...			if not pipeline.get_bus().poll(gst.MESSAGE_EOS, -1):
 	...				raise RuntimeError
 	...		finally:
-	...			if pipeline.set_state(Gst.State.NULL) is not Gst.StateChangeReturn.SUCCESS:
+	...			if pipeline.set_state(gst.STATE_NULL) is not gst.STATE_CHANGE_SUCCESS:
 	...				raise RuntimeError
 	...
 	quality= 0, filt_len=  8, num=2, den=1, stdev=1.00
@@ -1017,6 +1017,6 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError("cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set")
-	Gst.DEBUG_BIN_TO_DOT_FILE(pipeline, Gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)

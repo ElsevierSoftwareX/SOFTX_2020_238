@@ -31,6 +31,7 @@ from gstlal import pipeio
 from gstlal import pipeparts
 
 import test_common
+from test_common import gst
 import cmp_nxydumps
 
 
@@ -47,7 +48,7 @@ def segmentsrc_test_01(pipeline, name, seg):
 	segs = segments.segmentlist([segments.segment(LIGOTimeGPS(100), LIGOTimeGPS(200)), segments.segment(LIGOTimeGPS(250), LIGOTimeGPS(300))])
 
 	head = pipeparts.mksegmentsrc(pipeline, segs, blocksize = 1)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=4")
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-int, rate=4")
 	head = pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
 
 	f = open("%s_in.dump" % name, "w")

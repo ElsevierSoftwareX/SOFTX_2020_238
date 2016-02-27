@@ -32,11 +32,11 @@ __all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkel
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 
 def gstlal_element_register(clazz):
@@ -46,25 +46,25 @@ def gstlal_element_register(clazz):
 	saying::
 
 		@gstlal_element_register
-		class foo(Gst.Element):
+		class foo(gst.Element):
 			...
 	
 	Until then, you have to do::
 
-		class foo(Gst.Element):
+		class foo(gst.Element):
 			...
 		gstlal_element_register(foo)
 	"""
 	from inspect import getmodule
-	GObject.type_register(clazz) # MOD: Found type_register in line: [	gobject.type_register(clazz)]
-	getmodule(clazz).__gstelementfactory__ = (clazz.__name__, Gst.RANK_NONE, clazz)
+	gobject.type_register(clazz)
+	getmodule(clazz).__gstelementfactory__ = (clazz.__name__, gst.RANK_NONE, clazz)
 	return clazz
 
 
 def mkelem(elemname, props={}):
 	"""Instantiate an element named elemname and optionally set some of its 
 	properties from the dictionary props."""
-	elem = Gst.ElementFactory.make(elemname, None)
+	elem = gst.element_factory_make(elemname)
 	for (k, v) in props.iteritems():
 		elem.set_property(k, v)
 	return elem
@@ -84,7 +84,7 @@ def mkelems_in_bin(bin, *pipedesc):
 	for elem in elems:
 		bin.add(elem)
 	if len(elems) > 1:
-		Gst.element_link_many(*elems) # MOD: Error line [87]: element_link_many not yet implemented. See web page **
+		gst.element_link_many(*elems)
 	return elems
 
 
@@ -94,7 +94,7 @@ def splice(bin, pad, element):
 
 	If necessary, a tee is added to the pipeline in order to splice the new element.
 
-	bin is an instance of Gst.Bin or Gst.Pipeline.  pad is a string that
+	bin is an instance of gst.Bin or gst.Pipeline.  pad is a string that
 	describes any pad inside that bin.  The syntax used in gst-launch is
 	understood.  For example, the string 'foo.bar.bat' means the pad called 'bat'
 	on the element called 'bar' in the bin called 'foo' inside bin.  'foo.bar.'
@@ -113,18 +113,18 @@ def splice(bin, pad, element):
 		if elem is None:
 			raise NameError("no such element: '%s'" % name)
 
-	pad = elem.get_static_pad(padname)
+	pad = elem.get_pad(padname)
 	if pad is None:
 		raise NameError("no such pad: '%s'" % padname)
 
-	tee_type = Gst.element_factory_find('tee').get_element_type()
+	tee_type = gst.element_factory_find('tee').get_element_type()
 
 	tee = pad.get_parent_element()
 	if tee.__gtype__ != tee_type:
 		peer_pad = pad.get_peer()
 		if peer_pad is None:
 			if hasattr(element, 'get_direction'):
-				elem.get_static_pad('src').link(element)
+				elem.get_pad('src').link(element)
 			else:
 				elem.link(element)
 			return
@@ -133,10 +133,10 @@ def splice(bin, pad, element):
 			if peer_element.__gtype__ == tee_type:
 				tee = peer_element
 			else:
-				if pad.get_direction() == Gst.PadDirection.SINK:
+				if pad.get_direction() == gst.PAD_SINK:
 					pad, peer_pad = peer_pad, pad
 				pad.unlink(peer_pad)
-				tee = Gst.ElementFactory.make("tee", None)
+				tee = gst.element_factory_make("tee")
 				bin.add(tee)
 				pad.link(tee.get_static_pad('sink'))
 				tee.get_request_pad('src%d').link(peer_pad)

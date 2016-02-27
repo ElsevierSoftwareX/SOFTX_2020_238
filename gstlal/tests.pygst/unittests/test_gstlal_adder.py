@@ -33,11 +33,11 @@ __copyright__    = "Copyright 2013, Karsten Wiesner"
 # http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-import gi
-gi.require_version('Gst', '0.10')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
 
 from gstlal import simplehandler
 from gstlal import pipeparts
@@ -98,8 +98,8 @@ class TestGstLALAdder(unittest.TestCase):
             print "setUp with bps={0} np-preci={1}".format(self.bits_per_sample, 
                                                            self.numpy_float_width)
 
-        self.pipeline = Gst.Pipeline("test_gstlal_adder")
-        self.mainloop = GObject.MainLoop()
+        self.pipeline = gst.Pipeline("test_gstlal_adder")
+        self.mainloop = gobject.MainLoop()
         self.handler =  simplehandler.Handler(self.mainloop, self.pipeline)
         
         self.dut_out_buf = np.array([])
@@ -113,7 +113,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          num_buffers = self.num_of_buffers, 
                                          name= "InputA")
 	capsfilt_a = pipeparts.mkcapsfilter(self.pipeline, src_a, 
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
+        "audio/x-raw-float, width={0}, rate={1}".format(self.bits_per_sample, 
                                                         self.sample_rate))
         tee_a = pipeparts.mktee(self.pipeline, capsfilt_a)
         if(self.quiet==False): 
@@ -128,7 +128,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          name= "InputB", 
                                          timestamp_offset= self.timestamp_offs_B)
 	capsfilt_b = pipeparts.mkcapsfilter(self.pipeline, src_b,
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
+        "audio/x-raw-float, width={0}, rate={1}".format(self.bits_per_sample, 
                                                         self.sample_rate))
         tee_b = pipeparts.mktee(self.pipeline, capsfilt_b)
         if(self.quiet==False):               
@@ -136,7 +136,7 @@ class TestGstLALAdder(unittest.TestCase):
                                     tee_b), "gstlal_adder_unittest_InputB.dump")
 
         # DUT (Device Under Test)
-        adder = Gst.ElementFactory.make(self.DUT, None)
+        adder = gst.element_factory_make(self.DUT)
         adder.set_property("name", "DUT")
 
         if (self.DUT == "lal_adder"):
@@ -153,7 +153,7 @@ class TestGstLALAdder(unittest.TestCase):
         if (not self.quiet) and (self.bits_per_sample==32): # autoaudiosink can negotiate on 32 bps only
             pipeparts.mknxydumpsink(self.pipeline, pipeparts.mkqueue(self.pipeline, 
                                     tee_out), "gstlal_adder_unittest_Output.dump")
-            sink = Gst.ElementFactory.make("autoaudiosink", None)
+            sink = gst.element_factory_make("autoaudiosink")
             self.pipeline.add(sink)
             pipeparts.mkqueue(self.pipeline, tee_out).link(sink)
 
@@ -226,7 +226,7 @@ class TestGstLALAdder(unittest.TestCase):
         """
         Test 1
         """
-        self.pipeline.set_state(Gst.State.PLAYING)
+        self.pipeline.set_state(gst.STATE_PLAYING)
         pipeparts.write_dump_dot(self.pipeline, "test_1_plot_signals", 
                                 verbose = True)        
         self.mainloop.run()
@@ -303,7 +303,7 @@ class TestGstLALAdder(unittest.TestCase):
         """
         Test 1
         """
-        self.pipeline.set_state(Gst.State.PLAYING)
+        self.pipeline.set_state(gst.STATE_PLAYING)
 
         if(self.quiet==False):
             pipeparts.write_dump_dot(self.pipeline, "test_2_quiet_at_32bps", 
@@ -332,7 +332,7 @@ class TestGstLALAdder(unittest.TestCase):
         """
         Test 1
         """
-        self.pipeline.set_state(Gst.State.PLAYING)
+        self.pipeline.set_state(gst.STATE_PLAYING)
 
         if(self.quiet==False):
             pipeparts.write_dump_dot(self.pipeline, "test_3_quiet_at_64bps", 
