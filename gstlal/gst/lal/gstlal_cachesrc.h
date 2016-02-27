@@ -38,6 +38,7 @@
 
 
 #include <lal/LALCache.h>
+#include <gstlal/gstlal_mmap_allocator.h>
 
 
 G_BEGIN_DECLS
@@ -87,6 +88,10 @@ struct _GstLALCacheSrc {
 	guint index;
 	guint last_index;
 	gboolean need_discont;
+
+	GstLALMmapAllocator *allocator;
+
+	guint64 offset;
 };
 
 
