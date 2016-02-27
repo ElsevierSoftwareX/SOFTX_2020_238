@@ -82,7 +82,7 @@ __date__ = "FIXME"
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
 	if "name" in properties:
-		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"), None)
+		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"))
 	else:
 		elem = Gst.ElementFactory.make(elem_type_name, None)
 	for name, value in properties.items():
