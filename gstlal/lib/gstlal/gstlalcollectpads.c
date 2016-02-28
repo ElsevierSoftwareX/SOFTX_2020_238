@@ -104,23 +104,6 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
 }
 
 
-/**
- * gstlal_collect_pads_remove_pad:
- * @pads:  passed to #gst_collect_pads_remove_pad()
- * @pad:  passed to #gst_collect_pads_remove_pad()
- *
- * Equivalent to #gst_collect_pads_remove_pad().
- *
- * Returns:  TRUE if #GstPad was removed successfully, FALSE if not.
- */
-
-
-gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
-{
-	return gst_collect_pads_remove_pad(pads, pad);
-}
-
-
 /*
  * ============================================================================
  *

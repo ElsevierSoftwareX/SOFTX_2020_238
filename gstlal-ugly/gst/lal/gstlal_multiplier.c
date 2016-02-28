@@ -944,7 +944,7 @@ static GstPad *gstlal_multiplier_request_new_pad(GstElement * element, GstPadTem
 	 */
 
 could_not_add_to_element:
-	gstlal_collect_pads_remove_pad(multiplier->collect, newpad);
+	gst_collect_pads_remove_pad(multiplier->collect, newpad);
 could_not_add_to_collectpads:
 	gst_object_unref(newpad);
 not_sink:
@@ -958,7 +958,7 @@ static void gstlal_multiplier_release_pad(GstElement * element, GstPad * pad)
 
 	GST_DEBUG_OBJECT(multiplier, "release pad %s:%s", GST_DEBUG_PAD_NAME(pad));
 
-	gstlal_collect_pads_remove_pad(multiplier->collect, pad);
+	gst_collect_pads_remove_pad(multiplier->collect, pad);
 	gst_element_remove_pad(element, pad);
 }
 

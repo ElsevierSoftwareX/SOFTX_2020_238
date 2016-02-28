@@ -16,8 +16,8 @@
  *
  * You should have received a copy of the GNU Library General Public
  * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
  */
 
 #ifndef __GST_ADDER_H__
@@ -25,35 +25,29 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
+#include <gst/audio/audio.h>
 
 G_BEGIN_DECLS
 
 #define GST_TYPE_ADDER            (gstlal_adder_get_type())
-#define GST_ADDER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER,GstLALAdder))
+#define GST_ADDER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER,GstAdder))
 #define GST_IS_ADDER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ADDER))
-#define GST_ADDER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_ADDER,GstLALAdderClass))
+#define GST_ADDER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_ADDER,GstAdderClass))
 #define GST_IS_ADDER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_ADDER))
-#define GST_ADDER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_ADDER,GstLALAdderClass))
+#define GST_ADDER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_ADDER,GstAdderClass))
 
-typedef struct _GstLALAdder             GstLALAdder;
-typedef struct _GstLALAdderClass        GstLALAdderClass;
-typedef struct _GstLALAdderInputChannel GstLALAdderInputChannel;
+typedef struct _GstAdder             GstAdder;
+typedef struct _GstAdderClass        GstAdderClass;
 
-typedef enum {
-  GST_ADDER_FORMAT_UNSET,
-  GST_ADDER_FORMAT_INT,
-  GST_ADDER_FORMAT_FLOAT,
-  GST_ADDER_FORMAT_COMPLEX
-} GstAdderFormat;
-
-typedef void (*GstAdderFunction) (gpointer out, gpointer in, guint size);
+typedef struct _GstAdderPad GstAdderPad;
+typedef struct _GstAdderPadClass GstAdderPadClass;
 
 /**
  * GstAdder:
  *
  * The adder object structure.
  */
-struct _GstLALAdder {
+struct _GstAdder {
   GstElement      element;
 
   GstPad         *srcpad;
@@ -62,47 +56,59 @@ struct _GstLALAdder {
   gint            padcount;
 
   /* the next are valid for both int and float */
-  GstAdderFormat  format;
-  gint            rate;
-  gint            channels;
-  gint            width;
-  gint            endianness;
-  int             sample_size;
+  GstAudioInfo    info;
 
-  /* the next are valid only for format == GST_ADDER_FORMAT_INT */
-  gint            depth;
-  gboolean        is_signed;
-
-  /* number of bytes per sample, actually width/8 * channels */
-  gint            bps;
-
-  /* function to add samples */
-  GstAdderFunction func;
-
-  /* counters to keep track of timestamps */
-  GstClockTime    timestamp;
-  guint64         offset;
+  /* counters to keep track of timestamps.  the timestamp of the next
+   * output buffer is stored in the .position filed of segment */
+  GstSegment      segment;
   gboolean        synchronous;
+  guint64         offset;
 
   /* sink event handling */
-  GstPadEventFunction  collect_event;
-  GstSegment      segment;
-  gboolean        segment_pending;
-  /* src event handling */
-  gboolean        flush_stop_pending;
-  
-  /* target caps */
+  volatile gboolean new_segment_pending;
+  volatile gboolean flush_stop_pending;
+
+  /* current caps */
+  GstCaps *current_caps;
+
+  /* target caps (set via property) */
   GstCaps *filter_caps;
 
   /* Pending inline events */
   GList *pending_events;
+
+  gboolean send_stream_start;
+  gboolean send_caps;
 };
 
-struct _GstLALAdderClass {
+struct _GstAdderClass {
   GstElementClass parent_class;
 };
 
 GType    gstlal_adder_get_type (void);
+
+#define GST_TYPE_ADDER_PAD            (gst_adder_pad_get_type())
+#define GST_ADDER_PAD(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER_PAD,GstAdderPad))
+#define GST_IS_ADDER_PAD(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ADDER_PAD))
+#define GST_ADDER_PAD_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_ADDER_PAD,GstAdderPadClass))
+#define GST_IS_ADDER_PAD_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_ADDER_PAD))
+#define GST_ADDER_PAD_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_ADDER_PAD,GstAdderPadClass))
+
+struct _GstAdderPad {
+  GstPad parent;
+
+  gdouble volume;
+  gint volume_i32;
+  gint volume_i16;
+  gint volume_i8;
+  gboolean mute;
+};
+
+struct _GstAdderPadClass {
+  GstPadClass parent_class;
+};
+
+GType gst_adder_pad_get_type (void);
 
 G_END_DECLS
 

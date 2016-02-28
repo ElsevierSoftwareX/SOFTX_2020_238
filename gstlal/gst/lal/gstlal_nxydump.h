@@ -53,8 +53,7 @@ struct _GstTSVEnc
 {
   GstBaseTransform element;
 
-  gint rate;
-  gint channels;
+  GstAudioInfo audio_info;
   gint unit_size;
   int (*printsample) (char *, const void **);
 

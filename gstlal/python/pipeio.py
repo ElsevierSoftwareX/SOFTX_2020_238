@@ -34,7 +34,7 @@ import sys
 import pygtk
 pygtk.require("2.0")
 import gi
-gi.require_version('Gst', '0.10')
+gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
@@ -129,25 +129,25 @@ def numpy_dtype_from_caps(caps):
 
 def caps_from_numpy_dtype(dtype):
 	if dtype.char == 'f':
-		caps = Gst.Caps("audio/x-raw, width=32")
+		caps = Gst.Caps.from_string("audio/x-raw, width=32")
 	elif dtype.char == 'd':
-		caps = Gst.Caps("audio/x-raw, width=64")
+		caps = Gst.Caps.from_string("audio/x-raw, width=64")
 	elif dtype.char == 'b':
-		caps = Gst.Caps("audio/x-raw, width=8, signed=true")
+		caps = Gst.Caps.from_string("audio/x-raw, width=8, signed=true")
 	elif dtype.char == 'B':
-		caps = Gst.Caps("audio/x-raw, width=8, signed=false")
+		caps = Gst.Caps.from_string("audio/x-raw, width=8, signed=false")
 	elif dtype.char == 'h':
-		caps = Gst.Caps("audio/x-raw, width=16, signed=true")
+		caps = Gst.Caps.from_string("audio/x-raw, width=16, signed=true")
 	elif dtype.char == 'H':
-		caps = Gst.Caps("audio/x-raw, width=16, signed=false")
+		caps = Gst.Caps.from_string("audio/x-raw, width=16, signed=false")
 	elif dtype.char == 'i':
-		caps = Gst.Caps("audio/x-raw, width=32, signed=true")
+		caps = Gst.Caps.from_string("audio/x-raw, width=32, signed=true")
 	elif dtype.char == 'I':
-		caps = Gst.Caps("audio/x-raw, width=32, signed=false")
+		caps = Gst.Caps.from_string("audio/x-raw, width=32, signed=false")
 	elif dtype.char == 'l':
-		caps = Gst.Caps("audio/x-raw, width=64, signed=true")
+		caps = Gst.Caps.from_string("audio/x-raw, width=64, signed=true")
 	elif dtype.char == 'L':
-		caps = Gst.Caps("audio/x-raw, width=64, signed=false")
+		caps = Gst.Caps.from_string("audio/x-raw, width=64, signed=false")
 	else:
 		raise ValueError(dtype)
 	caps[0]["endianness"] = {

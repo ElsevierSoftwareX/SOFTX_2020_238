@@ -33,7 +33,7 @@ import threading
 import pygtk
 pygtk.require("2.0")
 import gi
-gi.require_version('Gst', '0.10')
+gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
@@ -82,7 +82,7 @@ __date__ = "FIXME"
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
 	if "name" in properties:
-		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"), None)
+		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"))
 	else:
 		elem = Gst.ElementFactory.make(elem_type_name, None)
 	for name, value in properties.items():
@@ -305,7 +305,7 @@ def mkigwdparse(pipeline, src, **properties):
 
 ## Adds a <a href="@gstpluginsbasedoc/gst-plugins-base-plugins-uridecodebin.html">uridecodebin</a> element to a pipeline with useful default properties
 def mkuridecodebin(pipeline, uri, caps = "application/x-igwd-frame,framed=true", **properties):
-	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else Gst.Caps(caps), **properties)
+	return mkgeneric(pipeline, None, "uridecodebin", uri = uri, caps = None if caps is None else Gst.Caps.from_string(caps), **properties)
 
 
 def mkframecppchanneldemux(pipeline, src, **properties):
@@ -349,12 +349,12 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-capsfilter.html">capsfilter</a> element to a pipeline with useful default properties
 def mkcapsfilter(pipeline, src, caps):
-	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps(caps))
+	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps.from_string(caps))
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-capssetter.html">capssetter</a> element to a pipeline with useful default properties
 def mkcapssetter(pipeline, src, caps, **properties):
-	return mkgeneric(pipeline, src, "capssetter", caps = Gst.Caps(caps), **properties)
+	return mkgeneric(pipeline, src, "capssetter", caps = Gst.Caps.from_string(caps), **properties)
 
 
 ## Adds a <a href="@gstlalgtkdoc/GSTLALStateVector.html">lal_statevector</a> element to a pipeline with useful default properties
@@ -726,7 +726,7 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 		Gst.ElementFactory.make("queue", None),
 		Gst.ElementFactory.make("autoaudiosink", None)
 	)
-	elems[1].set_property("caps", Gst.Caps("audio/x-raw, width=64"))
+	elems[1].set_property("caps", Gst.Caps.from_string("audio/x-raw, width=64"))
 	elems[2].set_property("amplification", amplification)
 	elems[4].set_property("max-size-time", 1 * Gst.SECOND)
 	pipeline.add(*elems)
@@ -931,9 +931,9 @@ def audioresample_variance_gain(quality, num, den):
 	...		correction = 1/numpy.sqrt(audioresample_variance_gain(quality, num, den))
 	...		elems = mkelems_in_bin(pipeline,
 	...			('audiotestsrc', {'wave':'gaussian-noise','volume':1}),
-	...			('capsfilter', {'caps':Gst.Caps('audio/x-raw,width=64,rate=%d' % num)}),
+	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,width=64,rate=%d' % num)}),
 	...			('audioresample', {'quality':quality}),
-	...			('capsfilter', {'caps':Gst.Caps('audio/x-raw,width=64,rate=%d' % den)}),
+	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,width=64,rate=%d' % den)}),
 	...			('audioamplify', {'amplification':correction,'clipping-method':'none'}),
 	...			('fakesink', {'signal-handoffs':True, 'num-buffers':1})
 	...		)

@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-void gst_adder_orc_init (void);
-
 
 
 #ifndef _ORC_INTEGER_TYPEDEFS_
@@ -69,13 +67,43 @@ typedef union { orc_int64 i; double f; orc_int32 x2[2]; float x2f[2]; orc_int16 
 #define ORC_RESTRICT
 #endif
 #endif
-void add_int32 (gint32 * ORC_RESTRICT d1, const gint32 * ORC_RESTRICT s1, int n);
-void add_int16 (gint16 * ORC_RESTRICT d1, const gint16 * ORC_RESTRICT s1, int n);
-void add_int8 (gint8 * ORC_RESTRICT d1, const gint8 * ORC_RESTRICT s1, int n);
-void add_uint32 (guint32 * ORC_RESTRICT d1, const guint32 * ORC_RESTRICT s1, int n);
-void add_uint16 (guint16 * ORC_RESTRICT d1, const guint16 * ORC_RESTRICT s1, int n);
-void add_uint8 (guint8 * ORC_RESTRICT d1, const guint8 * ORC_RESTRICT s1, int n);
-void add_float32 (float * ORC_RESTRICT d1, const float * ORC_RESTRICT s1, int n);
+
+#ifndef ORC_INTERNAL
+#if defined(__SUNPRO_C) && (__SUNPRO_C >= 0x590)
+#define ORC_INTERNAL __attribute__((visibility("hidden")))
+#elif defined(__SUNPRO_C) && (__SUNPRO_C >= 0x550)
+#define ORC_INTERNAL __hidden
+#elif defined (__GNUC__)
+#define ORC_INTERNAL __attribute__((visibility("hidden")))
+#else
+#define ORC_INTERNAL
+#endif
+#endif
+
+void adder_orc_add_s32 (gint32 * ORC_RESTRICT d1, const gint32 * ORC_RESTRICT s1, int n);
+void adder_orc_add_s16 (gint16 * ORC_RESTRICT d1, const gint16 * ORC_RESTRICT s1, int n);
+void adder_orc_add_s8 (gint8 * ORC_RESTRICT d1, const gint8 * ORC_RESTRICT s1, int n);
+void adder_orc_add_u32 (guint32 * ORC_RESTRICT d1, const guint32 * ORC_RESTRICT s1, int n);
+void adder_orc_add_u16 (guint16 * ORC_RESTRICT d1, const guint16 * ORC_RESTRICT s1, int n);
+void adder_orc_add_u8 (guint8 * ORC_RESTRICT d1, const guint8 * ORC_RESTRICT s1, int n);
+void adder_orc_add_f32 (float * ORC_RESTRICT d1, const float * ORC_RESTRICT s1, int n);
+void adder_orc_add_f64 (double * ORC_RESTRICT d1, const double * ORC_RESTRICT s1, int n);
+void adder_orc_volume_u8 (guint8 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_s8 (gint8 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_u16 (guint16 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_s16 (gint16 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_u32 (guint32 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_s32 (gint32 * ORC_RESTRICT d1, int p1, int n);
+void adder_orc_volume_f32 (float * ORC_RESTRICT d1, float p1, int n);
+void adder_orc_volume_f64 (double * ORC_RESTRICT d1, double p1, int n);
+void adder_orc_add_volume_u8 (guint8 * ORC_RESTRICT d1, const guint8 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_s8 (gint8 * ORC_RESTRICT d1, const gint8 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_u16 (guint16 * ORC_RESTRICT d1, const guint16 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_s16 (gint16 * ORC_RESTRICT d1, const gint16 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_u32 (guint32 * ORC_RESTRICT d1, const guint32 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_s32 (gint32 * ORC_RESTRICT d1, const gint32 * ORC_RESTRICT s1, int p1, int n);
+void adder_orc_add_volume_f32 (float * ORC_RESTRICT d1, const float * ORC_RESTRICT s1, float p1, int n);
+void adder_orc_add_volume_f64 (double * ORC_RESTRICT d1, const double * ORC_RESTRICT s1, double p1, int n);
 
 #ifdef __cplusplus
 }

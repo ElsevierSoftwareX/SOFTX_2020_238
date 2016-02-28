@@ -40,7 +40,7 @@ import warnings
 import pygtk
 pygtk.require("2.0")
 import gi
-gi.require_version('Gst', '0.10')
+gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
@@ -151,7 +151,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 		print >>sys.stderr, "measuring PSD in segment %s" % str(gw_data_source_info.seg)
 		print >>sys.stderr, "building pipeline ..."
 	mainloop = GObject.MainLoop()
-	pipeline = Gst.Pipeline("psd")
+	pipeline = Gst.Pipeline(name="psd")
 	handler = PSDHandler(mainloop, pipeline)
 
 	head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)

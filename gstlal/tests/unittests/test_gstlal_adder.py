@@ -34,7 +34,7 @@ __copyright__    = "Copyright 2013, Karsten Wiesner"
 import pygtk
 pygtk.require("2.0")
 import gi
-gi.require_version('Gst', '0.10')
+gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
@@ -98,7 +98,7 @@ class TestGstLALAdder(unittest.TestCase):
             print "setUp with bps={0} np-preci={1}".format(self.bits_per_sample, 
                                                            self.numpy_float_width)
 
-        self.pipeline = Gst.Pipeline("test_gstlal_adder")
+        self.pipeline = Gst.Pipeline(name="test_gstlal_adder")
         self.mainloop = GObject.MainLoop()
         self.handler =  simplehandler.Handler(self.mainloop, self.pipeline)
         

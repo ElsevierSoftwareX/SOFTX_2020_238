@@ -1,7 +1,7 @@
 /*
  * GstLALCacheSrc
  *
- * Copyright (C) 2012--2015  Kipp Cannon
+ * Copyright (C) 2012--2016  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -76,6 +76,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
+#include <gst/allocators/gstfdmemory.h>
 
 
 #include <lal/XLALError.h>
@@ -104,20 +105,15 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(handler);
 	GString *uri = g_string_new(URI_SCHEME "://");
@@ -138,7 +134,6 @@ static const gchar *uri_get_uri(GstURIHandler *handler)
 		g_string_append_uri_escaped(uri, element->cache_dsc_regex, NULL, FALSE);
 	}
 
-	/* 1.0:  returning this value won't be a memory leak */
 	return g_string_free(uri, FALSE);
 }
 
@@ -152,9 +147,9 @@ static gchar *g_uri_unescape_string_inplace(gchar **s)
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via err argument */
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	int query_offset;
@@ -212,10 +207,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -245,7 +238,7 @@ static void additional_initializations(GType type)
 }
 
 
-G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, additional_initializations(g_define_type_id));
 
 
 /*
@@ -274,21 +267,23 @@ G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, addi
 
 static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
-	GstPad *pad = GST_BASE_SRC_PAD(basesrc);
+	GstMapInfo mapinfo;
 	size_t read_offset;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	result = gst_pad_alloc_buffer(pad, offset, size, GST_PAD_CAPS(pad), buf);
-	if(result != GST_FLOW_OK)
+	*buf = gst_buffer_new_allocate(NULL, size, NULL);
+	if(!buf) {
+		result = GST_FLOW_ERROR;
 		goto done;
-	g_assert_cmpuint(GST_BUFFER_OFFSET(*buf), ==, offset);
-	g_assert_cmpuint(GST_BUFFER_SIZE(*buf), ==, size);
+	}
 
+	gst_buffer_map(*buf, &mapinfo, GST_MAP_WRITE);
 	read_offset = 0;
 	do {
-		ssize_t bytes_read = read(fd, GST_BUFFER_DATA(*buf) + read_offset, GST_BUFFER_SIZE(*buf) - read_offset);
+		ssize_t bytes_read = read(fd, mapinfo.data + read_offset, mapinfo.size - read_offset);
 		if(bytes_read < 0) {
 			GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("read('%s') failed: %s", path, strerror(errno)));
+			gst_buffer_unmap(*buf, &mapinfo);
 			gst_buffer_unref(*buf);
 			*buf = NULL;
 			result = GST_FLOW_ERROR;
@@ -297,7 +292,9 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 		read_offset += bytes_read;
 	} while(read_offset < size);
 	g_assert_cmpuint(read_offset, ==, size);
+	gst_buffer_unmap(*buf, &mapinfo);
 
+	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_OFFSET_END(*buf) = offset + size;
 
 done:
@@ -305,17 +302,10 @@ done:
 }
 
 
-static void munmap_buffer(GstBuffer *buf)
-{
-	if(buf) {
-		g_assert(GST_IS_BUFFER(buf));
-		munmap(GST_BUFFER_DATA(buf), GST_BUFFER_SIZE(buf));
-	}
-}
-
-
 static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
+	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
+	GstMemory *memory;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	*buf = gst_buffer_new();
@@ -323,29 +313,18 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_READONLY);
-	GST_BUFFER_DATA(*buf) = mmap(NULL, size, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, fd, 0);
-	if(!GST_BUFFER_DATA(*buf)) {
-		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));
+	memory = gst_fd_allocator_alloc(element->fdallocator, fd, size, GST_MEMORY_FLAG_READONLY | GST_FD_MEMORY_FLAG_KEEP_MAPPED | GST_FD_MEMORY_FLAG_MAP_PRIVATE);
+	if(!memory) {
+		/*GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));*/
 		gst_buffer_unref(*buf);
-		*buf = NULL;
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_BUFFER_SIZE(*buf) = size;
+
+	gst_buffer_append_memory(*buf, memory);
+
 	GST_BUFFER_OFFSET(*buf) = offset;
 	GST_BUFFER_OFFSET_END(*buf) = offset + size;
-	gst_buffer_set_caps(*buf, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-
-	/*
-	 * hack to get both the data pointer and the size to the munmap()
-	 * call.  the mallocdata pointer is set to the buffer object
-	 * itself, and the freefunc looks inside to get the real pointer
-	 * and the size.
-	 */
-
-	GST_BUFFER_MALLOCDATA(*buf) = (void *) *buf;
-	GST_BUFFER_FREE_FUNC(*buf) = (GFreeFunc) munmap_buffer;
 
 done:
 	return result;
@@ -455,6 +434,8 @@ static gboolean start(GstBaseSrc *basesrc)
 	g_return_val_if_fail(element->location != NULL, FALSE);
 	g_return_val_if_fail(element->cache == NULL, FALSE);
 
+	element->fdallocator = gst_fd_allocator_new();
+
 	element->cache = XLALCacheImport(element->location);
 	if(!element->cache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("error reading '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
@@ -482,7 +463,6 @@ static gboolean start(GstBaseSrc *basesrc)
 		return FALSE;
 	}
 
-	basesrc->offset = 0;
 	element->last_index = 0;
 	element->index = 0;
 	element->need_discont = TRUE;
@@ -505,6 +485,9 @@ static gboolean stop(GstBaseSrc *basesrc)
 		element->cache = NULL;
 	} else
 		g_assert_not_reached();
+
+	gst_object_unref(element->fdallocator);
+	element->fdallocator = NULL;
 
 	return TRUE;
 }
@@ -562,7 +545,7 @@ next:
 
 	if(element->index >= element->cache->length || (GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop) && cache_entry_start_time(element, element->index) >= (GstClockTime) basesrc->segment.stop)) {
 		GST_DEBUG_OBJECT(element, "EOS");
-		return GST_FLOW_UNEXPECTED;
+		return GST_FLOW_EOS;
 	}
 
 	/*
@@ -608,9 +591,9 @@ next:
 	}
 
 	if(element->use_mmap)
-		result = mmap_buffer(basesrc, path, fd, basesrc->offset, statinfo.st_size, buf);
+		result = mmap_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
 	else
-		result = read_buffer(basesrc, path, fd, basesrc->offset, statinfo.st_size, buf);
+		result = read_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
 	close(fd);
 	if(result != GST_FLOW_OK)
 		goto done;
@@ -623,7 +606,6 @@ next:
 
 	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
-	basesrc->offset = GST_BUFFER_OFFSET_END(*buf);
 	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->last_index)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -650,7 +632,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	guint i;
 	gboolean success = TRUE;
 
-	GST_DEBUG_OBJECT(element, "requested segment is [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), stream time %" GST_TIME_SECONDS_FORMAT ", accum %" GST_TIME_SECONDS_FORMAT ", last_stop %" GST_TIME_SECONDS_FORMAT ", duration %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->time), GST_TIME_SECONDS_ARGS(segment->accum), GST_TIME_SECONDS_ARGS(segment->last_stop), GST_TIME_SECONDS_ARGS(segment->duration));
+	GST_DEBUG_OBJECT(element, "requested segment is [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), stream time %" GST_TIME_SECONDS_FORMAT ", position %" GST_TIME_SECONDS_FORMAT ", duration %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->time), GST_TIME_SECONDS_ARGS(segment->position), GST_TIME_SECONDS_ARGS(segment->duration));
 
 	if(!element->cache) {
 		GST_ERROR_OBJECT(element, "no file cache loaded");
@@ -679,7 +661,6 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if(i != element->index) {
-		basesrc->offset = 0;
 		element->index = i;
 		element->need_discont = TRUE;
 	}
@@ -699,7 +680,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	gboolean success = TRUE;
 
 	if(!element->cache || !element->cache->length)
-		success = gstlal_cachesrc_parent_class->query(basesrc, query);
+		success = GST_BASE_SRC_CLASS(gstlal_cachesrc_parent_class)->query(basesrc, query);
 	else {
 		switch(GST_QUERY_TYPE(query)) {
 		case GST_QUERY_FORMATS:
@@ -804,7 +785,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			break;
 
 		default:
-			success = gstlal_cachesrc_parent_class->query(basesrc, query);
+			success = GST_BASE_SRC_CLASS(gstlal_cachesrc_parent_class)->query(basesrc, query);
 			break;
 		}
 	}
@@ -1007,6 +988,7 @@ static void gstlal_cachesrc_init(GstLALCacheSrc *element)
 {
 	gst_base_src_set_format(GST_BASE_SRC(element), GST_FORMAT_TIME);
 
+	element->fdallocator = NULL;
 	element->location = NULL;
 	element->cache_src_regex = NULL;
 	element->cache_dsc_regex = NULL;
