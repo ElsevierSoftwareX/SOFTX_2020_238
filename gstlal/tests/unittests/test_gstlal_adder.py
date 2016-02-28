@@ -98,7 +98,7 @@ class TestGstLALAdder(unittest.TestCase):
             print "setUp with bps={0} np-preci={1}".format(self.bits_per_sample, 
                                                            self.numpy_float_width)
 
-        self.pipeline = Gst.Pipeline("test_gstlal_adder")
+        self.pipeline = Gst.Pipeline(name="test_gstlal_adder")
         self.mainloop = GObject.MainLoop()
         self.handler =  simplehandler.Handler(self.mainloop, self.pipeline)
         

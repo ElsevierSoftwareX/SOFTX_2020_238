@@ -22,7 +22,7 @@ opt = sys.argv[1]
 GObject.threads_init()
 Gst.init(None)
 mainloop = GObject.MainLoop()
-pipeline = Gst.Pipeline("gstlal_play_frames")
+pipeline = Gst.Pipeline(name="gstlal_play_frames")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 head = test_common.test_src(pipeline, buffer_length = 10.0, rate = in_rate, width = 32, channels = 1, test_duration = 10000.0, wave = 5, freq = 0, is_live = False, verbose = True)
