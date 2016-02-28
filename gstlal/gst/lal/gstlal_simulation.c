@@ -57,7 +57,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-
+#include <gst/audio/audio.h> // needed for GST_AUDIO_NE macro
 
 /*
  * stuff from LAL
@@ -848,20 +848,21 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <drew.keppel@ligo.org>"
 	);
 
+	GstCaps* caps = gst_caps_from_string(
+	                       "audio/x-raw, " \
+			       "rate = (int) [1, MAX], "	\
+			       "channels = (int) 1, "		\
+			       "format = (string) { " GST_AUDIO_NE(F32) " }, " \
+			       "layout = (string) interleaved"
+                           );
+	
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
 			"sink",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", G_TYPE_INT, 1,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
-			)
+			caps
 		)
 	);
 
@@ -871,14 +872,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", G_TYPE_INT, 1,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
-			)
+			caps
 		)
 	);
 
