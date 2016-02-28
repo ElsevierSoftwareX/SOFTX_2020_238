@@ -306,6 +306,9 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 	 */
 
 	//gst_buffer_set_caps(*buf, caps);
+//    GstCaps *caps;
+//     gst_caps_set_simple (caps, "buf", GST_TYPE_BUFFER, buf, NULL);
+    //gst_buffer_copy_into(caps,*buf,GST_BUFFER_COPY_ALL,0,-1);
 
 	/*
 	 * done

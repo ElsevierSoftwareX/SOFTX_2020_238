@@ -65,6 +65,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -135,28 +136,18 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int, " \
+        "audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 32, " \
 		"depth = (int) 32, " \
 		"signed = {true, false}; " \
 		"audio/x-raw-int, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 16, " \
 		"depth = (int) 16, " \
 		"signed = {true, false}; " \
-		"audio/x-raw-int, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 8, " \
-		"depth = (int) 8, " \
-		"signed = {true, false}"
-	)
+        "format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}, " \
+		"layout = (string) interleaved")
 );
 
 
@@ -165,12 +156,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 8, " \
 		"depth = (int) 1, " \
+         "format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}, " \
 		"signed = false"
 	)
 );
@@ -206,15 +196,18 @@ G_DEFINE_TYPE_WITH_CODE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint width;
-	gboolean success = TRUE;
+//	GstStructure *str;
+//	gint width;
+    GstAudioInfo info;
+//	gboolean success = TRUE;
+    gboolean success = gst_audio_info_from_caps(&info, caps);
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "width", &width);
+//	str = gst_caps_get_structure(caps, 0);
+//	success &= gst_structure_get_int(str, "width", &width);
 
 	if(success)
-		*size = width / 8;
+//		*size = width / 8;
+        *size = GST_AUDIO_INFO_WIDTH(&info) / 8;
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
@@ -279,21 +272,22 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
 	GstStructure *s;
-	gint width;
-	gboolean success = TRUE;
+    GstAudioInfo info;
+//	gint width;
+//	gboolean success = TRUE;
 
 	/*
 	 * parse the caps
 	 */
 
 	s = gst_caps_get_structure(incaps, 0);
-	success &= gst_structure_get_int(s, "width", &width);
+	gboolean success = gst_audio_info_from_caps(&info, incaps);
 
 	/*
 	 * set the sample value function
 	 */
 
-	switch(width) {
+	switch(GST_AUDIO_INFO_WIDTH(&info)) {
 	case 8:
 		element->get_input = get_input_uint8;
 		break;
