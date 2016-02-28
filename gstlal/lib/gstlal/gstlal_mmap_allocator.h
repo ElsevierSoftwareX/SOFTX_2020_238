@@ -49,7 +49,7 @@ G_BEGIN_DECLS
  */
 
 
-#define GSTLAL_MMAP_ALLOCATOR_TYPE (gstlal_mmapallocator_get_type())
+#define GSTLAL_MMAP_ALLOCATOR_TYPE (gstlal_mmap_allocator_get_type())
 #define GSTLAL_MMAP_ALLOCATOR(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_MMAP_ALLOCATOR_TYPE, GstLALMmapAllocator))
 #define GSTLAL_MMAP_ALLOCATOR_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_MMAP_ALLOCATOR_TYPE, GstLALMmapAllocatorClass))
 #define GSTLAL_MMAP_ALLOCATOR_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_MMAP_ALLOCATOR_TYPE, GstLALMmapAllocatorClass))
@@ -94,7 +94,7 @@ struct _GstLALMmapAllocatorClass {
  */
 
 
-GType gstlal_mmapallocator_get_type(void);
+GType gstlal_mmap_allocator_get_type(void);
 
 
 G_END_DECLS
