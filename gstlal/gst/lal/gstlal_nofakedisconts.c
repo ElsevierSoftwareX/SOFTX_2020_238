@@ -57,6 +57,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -251,18 +252,16 @@ static GstCaps *drop_sink_getcaps (GstPad * pad, GstCaps * filter)
 static gboolean drop_sink_setcaps (GSTLALNoFakeDisconts *nofakedisconts, GstPad *pad, GstCaps *caps)
 {
     
-    GstStructure *structure;
-    gint rate, width, channels;
-    gboolean success = TRUE;
+
     
     /*
      * parse caps
      */
     
-    structure = gst_caps_get_structure(caps, 0);
-    success &= gst_structure_get_int(structure, "rate", &rate);
-    success &= gst_structure_get_int(structure, "width", &width);
-    success &= gst_structure_get_int(structure, "channels", &channels);
+
+    
+    GstAudioInfo info;
+    gboolean success = gst_audio_info_from_caps(&info,caps);
     
     /*
      * try setting caps on downstream element
@@ -276,8 +275,9 @@ static gboolean drop_sink_setcaps (GSTLALNoFakeDisconts *nofakedisconts, GstPad 
      */
     
     if(success) {
-        nofakedisconts->rate = rate;
-        nofakedisconts->unit_size = width / 8 * channels;
+
+        nofakedisconts->unit_size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+
     } else
         GST_ERROR_OBJECT(nofakedisconts, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
     
