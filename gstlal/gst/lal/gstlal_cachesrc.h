@@ -83,6 +83,8 @@ struct _GstLALCacheSrc {
 	gchar *cache_dsc_regex;
 	gboolean use_mmap;
 
+	GstAllocator *fdallocator;
+
 	LALCache *cache;
 	guint index;
 	guint last_index;
