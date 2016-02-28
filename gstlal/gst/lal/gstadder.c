@@ -1702,6 +1702,6 @@ plugin_init (GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    "lal_adder",
+    lal_adder,
     "Adds multiple streams",
     plugin_init, VERSION, "LGPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
