@@ -223,7 +223,7 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
 
   g_assert(printsample != NULL);
 
-  gst_buffer_map_range(out, 0, length, &mapinfo, GST_MAP_WRITE);
+  gst_buffer_map(out, &mapinfo, GST_MAP_WRITE);
   location = (char*) mapinfo.data;
 
   for(offset = 0; offset < length; offset++) {
@@ -239,7 +239,7 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
      */
 
     g_assert_cmpuint(((guint8 *) location - (guint8 *) mapinfo.data) +
-        src_bytes_per_sample(channels), <=, gst_buffer_get_size(out));
+        src_bytes_per_sample(channels), <=, mapinfo.size);
 
     /*
      * Print the time.
@@ -354,12 +354,11 @@ static gboolean get_unit_size(GstBaseTransform * trans, GstCaps * caps,
   if(gst_structure_has_name(str, "text/tab-separated-values")) {
     *size = 1;
   } else {
-    gint channels, width;
-    success &= gst_structure_get_int(str, "channels", &channels);
-    success &= gst_structure_get_int(str, "width", &width);
+    GstAudioInfo info;
+    success = gst_audio_info_from_caps(&info, caps);
 
     if(success)
-      *size = width / 8 * channels;
+      *size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
     else
       GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
   }
@@ -581,15 +580,14 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
     
   } else {
       GstMapInfo mapinfo;
-      gst_buffer_map_range(inbuf, start * element->unit_size,
-          (stop - start) * element->unit_size, &mapinfo, GST_MAP_READ);
+      gst_buffer_map(inbuf, &mapinfo, GST_MAP_READ);
 
       result =
           print_samples(outbuf,
 		GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
 		      GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))),
-		mapinfo.data, /* previously was: GST_BUFFER_DATA(inbuf) + start * element->unit_size, */
-		element->printsample, GST_AUDIO_INFO_RATE(&(element->audio_info)), GST_AUDIO_INFO_RATE(&(element->audio_info)), stop - start);
+		mapinfo.data + start * element->unit_size, /* previously was: GST_BUFFER_DATA(inbuf) + start * element->unit_size, */
+		element->printsample, GST_AUDIO_INFO_CHANNELS(&(element->audio_info)), GST_AUDIO_INFO_RATE(&(element->audio_info)), stop - start);
 
       gst_buffer_unmap(inbuf, &mapinfo);
   }
