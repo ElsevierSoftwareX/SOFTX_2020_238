@@ -127,13 +127,13 @@ class Handler(object):
 		elif message.type == Gst.MessageType.EOS:
 			self.pipeline.set_state(Gst.State.NULL)
 			self.quit(bus)
-		elif message.type == Gst.MESSAGE_INFO:
+		elif message.type == Gst.MessageType.INFO:
 			gerr, dbgmsg = message.parse_info()
 			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == Gst.MESSAGE_WARNING:
+		elif message.type == Gst.MessageType.WARNING:
 			gerr, dbgmsg = message.parse_warning()
 			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-		elif message.type == Gst.MESSAGE_ERROR:
+		elif message.type == Gst.MessageType.ERROR:
 			gerr, dbgmsg = message.parse_error()
 			# FIXME:  this deadlocks.  shouldn't we be doing this?
 			#self.pipeline.set_state(gst.STATE_NULL)
