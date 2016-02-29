@@ -62,6 +62,8 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
+#include <gst/audio/audio-format.h>
 
 
 /*
@@ -612,84 +614,76 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
+static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	const gchar *media_type;
 	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
-	gint rate, width;
-	gboolean success = TRUE;
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
+	gint rate = GST_AUDIO_INFO_RATE(&info);
+	GstAudioFormat format = GST_AUDIO_INFO_FORMAT(&info); 
+	const gchar *name = GST_AUDIO_INFO_NAME(&info);
 
 	/*
-	 * parse caps
+	 * parse the format
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "width", &width);
-	media_type = gst_structure_get_name(structure);
-	if(!strcmp(media_type, "audio/x-raw-float")) {
-		switch(width) {
-		case 32:
+	switch (format) {
+		case GST_AUDIO_FORMAT_U8 :
+			control_sample_func = control_sample_uint8;
+			break;
+		case GST_AUDIO_FORMAT_U16 :
+			control_sample_func = control_sample_uint16;
+			break;
+		case GST_AUDIO_FORMAT_U32 :
+			control_sample_func = control_sample_uint32;
+			break;
+		case GST_AUDIO_FORMAT_S8 :
+			control_sample_func = control_sample_int8;
+			break;
+		case GST_AUDIO_FORMAT_S16 :
+			control_sample_func = control_sample_int16;
+			break;
+		case GST_AUDIO_FORMAT_S32 :
+			control_sample_func = control_sample_int32;
+			break;
+		case GST_AUDIO_FORMAT_F32 :
 			control_sample_func = control_sample_float32;
 			break;
-		case 64:
+		case GST_AUDIO_FORMAT_F64 :
 			control_sample_func = control_sample_float64;
 			break;
 		default:
+			/*
+			 * Handle the complex types which are "special" formats
+			 */
+			if (!strncmp(name, "Z64", 3)) {
+				control_sample_func = control_sample_complex64;
+				break;
+			}
+			if (!strncmp(name, "Z128", 4)) {
+				control_sample_func = control_sample_complex128;
+				break;
+			}
 			success = FALSE;
 			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		switch(width) {
-		case 64:
-			control_sample_func = control_sample_complex64;
-			break;
-		case 128:
-			control_sample_func = control_sample_complex128;
-			break;
-		default:
-			success = FALSE;
-			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-int")) {
-		gboolean is_signed;
-		success &= gst_structure_get_boolean(structure, "signed", &is_signed);
-		switch(width) {
-		case 8:
-			control_sample_func = is_signed ? control_sample_int8 : control_sample_uint8;
-			break;
-		case 16:
-			control_sample_func = is_signed ? control_sample_int16 : control_sample_uint16;
-			break;
-		case 32:
-			control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
-			break;
-		default:
-			success = FALSE;
-			break;
-		}
-	} else
-		success = FALSE;
+	}
 
 	/*
 	 * update element
 	 */
 
 	if(success) {
-		g_mutex_lock(element->control_lock);
-		element->control_sample_func = control_sample_func;
-		element->control_rate = rate;
-		g_mutex_unlock(element->control_lock);
+		g_mutex_lock(gate->control_lock);
+		gate->control_sample_func = control_sample_func;
+		gate->control_rate = rate;
+		g_mutex_unlock(gate->control_lock);
 	} else
-		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+		GST_ERROR_OBJECT(gate, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
 	/*
 	 * done.
 	 */
 
-	gst_object_unref(element);
 	return success;
 }
 
@@ -772,7 +766,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 done:
 	gst_buffer_unmap(sinkbuf, &info);
 	gst_buffer_unref(sinkbuf);
-	gst_object_unref(element);
 	return result;
 }
 
@@ -782,9 +775,11 @@ done:
  */
 
 
-static gboolean control_event(GstPad *pad, GstEvent *event)
+static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	GstCaps *caps;
+	gboolean res = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_SEGMENT:
@@ -803,6 +798,10 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 		g_mutex_unlock(element->control_lock);
 		break;
 
+	case GST_EVENT_CAPS:
+		gst_event_parse_caps(event, &caps);
+		res = control_setcaps(element, pad, caps);
+
 	default:
 		break;
 	}
@@ -812,7 +811,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 	 */
 
 	gst_event_unref(event);
-	return TRUE;
+	return res;
 }
 
 
@@ -830,113 +829,96 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstCaps *getcaps(GstPad *pad)
+static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	GstCaps *peercaps, *caps;
+	GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
+	/* take filter */
+	filter_caps = filter ? gst_caps_ref(filter) : NULL;
+
+	/* 
+	 * If the filter caps are empty (but not NULL), there is nothing we can
+	 * do, there will be no intersection
 	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
+	if (filter_caps && gst_caps_is_empty (filter_caps)) {
+		GST_WARNING_OBJECT (pad, "Empty filter caps");
+		return filter_caps;
 	}
 
-	/*
-	 * done
-	 */
+	/* get the downstream possible caps */
+	peercaps = gst_pad_peer_query_caps(gate->srcpad, filter_caps);
 
-	gst_object_unref(element);
-	return caps;
+	/* get the allowed caps on this sinkpad */
+	current_caps = gst_pad_get_pad_template_caps(pad);
+	if (!current_caps)
+			current_caps = gst_caps_new_any();
+
+	if (peercaps) {
+		/* if the peer has caps, intersect */
+		GST_DEBUG_OBJECT(gate, "intersecting peer and our caps");
+		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
+		/* neither peercaps nor current_caps are needed any more */
+		gst_caps_unref(peercaps);
+		gst_caps_unref(current_caps);
+	}
+	else {
+		/* the peer has no caps (or there is no peer), just use the allowed caps
+		* of this sinkpad. */
+		/* restrict with filter-caps if any */
+		if (filter_caps) {
+			GST_DEBUG_OBJECT(gate, "no peer caps, using filtered caps");
+			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
+			/* current_caps are not needed any more */
+			gst_caps_unref(current_caps);
+		}
+		else {
+			GST_DEBUG_OBJECT(gate, "no peer caps, using our caps");
+			result = current_caps;
+		}
+	}
+
+	result = gst_caps_make_writable (result);
+
+	if (filter_caps)
+		gst_caps_unref (filter_caps);
+
+	GST_LOG_OBJECT (gate, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
+
+	return result;
 }
 
 
-/*
- * acceptcaps()
- */
-
-
-static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
-	gboolean success;
-
-	/*
-	 * ask downstream peer
-	 */
-
-	success = gst_pad_peer_accept_caps(otherpad, caps);
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
-}
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
-
-	/*
-	 * parse caps
-	 */
-
-	structure = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
+	gint rate = GST_AUDIO_INFO_RATE(&info);
+	gint width = GST_AUDIO_INFO_WIDTH(&info);
+	gint channels = GST_AUDIO_INFO_CHANNELS(&info);
 
 	/*
 	 * try setting caps on downstream element
 	 */
 
 	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
+		success = gst_pad_set_caps(gate->srcpad, caps);
 
 	/*
 	 * update the element metadata
 	 */
 
 	if(success) {
-		gint old_rate = element->rate;
-		element->rate = rate;
-		element->unit_size = width / 8 * channels;
-		if(element->rate != old_rate)
-			g_signal_emit(G_OBJECT(element), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
-	} else
-		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+		gint old_rate = gate->rate;
+		gate->rate = rate;
+		gate->unit_size = width / 8 * channels;
+		if(gate->rate != old_rate)
+			g_signal_emit(G_OBJECT(gate), signals[SIGNAL_RATE_CHANGED], 0, gate->rate, NULL);
+	}
 
 	/*
 	 * done
 	 */
 
-	gst_object_unref(element);
 	return success;
 }
 
@@ -986,7 +968,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
-			sinkbuf = gst_buffer_make_metadata_writable(sinkbuf);
+			sinkbuf = gst_buffer_make_writable(sinkbuf);
 			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
 		}
 		element->need_discont = FALSE;
@@ -1025,7 +1007,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
-			sinkbuf = gst_buffer_make_metadata_writable(sinkbuf);
+			sinkbuf = gst_buffer_make_writable(sinkbuf);
 			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
 		}
 		element->need_discont = FALSE;
@@ -1093,7 +1075,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 			sinkbuf = NULL;
 		} else {
 			GST_DEBUG_OBJECT(element, "creating sub-buffer from samples [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", start, start + length);
-			srcbuf = gst_buffer_create_sub(sinkbuf, start * element->unit_size, length * element->unit_size);
+			srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 				result = GST_FLOW_ERROR;
@@ -1104,7 +1086,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 			 * set flags, caps, offset, and timestamps.
 			 */
 
-			gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
 			GST_BUFFER_TIMESTAMP(srcbuf) = timestamp;
@@ -1116,7 +1097,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		if(!!element->need_discont != !!GST_BUFFER_IS_DISCONT(srcbuf)) {
-			srcbuf = gst_buffer_make_metadata_writable(srcbuf);
+			srcbuf = gst_buffer_make_writable(srcbuf);
 			if(element->need_discont)
 				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			else
@@ -1130,7 +1111,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		if(!state) {
-			srcbuf = gst_buffer_make_metadata_writable(srcbuf);
+			srcbuf = gst_buffer_make_writable(srcbuf);
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
 
@@ -1155,7 +1136,6 @@ done:
 	 * srcbuf */
 	if(sinkbuf)
 		gst_buffer_unref(sinkbuf);
-	gst_object_unref(element);
 	return result;
 }
 
@@ -1165,9 +1145,11 @@ done:
  */
 
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	GstCaps *caps;
+	gboolean res = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_SEGMENT:
@@ -1178,6 +1160,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		element->last_state = -1;	/* force signal on initial state */
 		element->need_discont = TRUE;
 		g_mutex_unlock(element->control_lock);
+		event = NULL;
 		break;
 
 	case GST_EVENT_EOS:
@@ -1187,6 +1170,14 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		control_flush(element);
 		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
+		event = NULL;
+		break;
+
+	case GST_EVENT_CAPS:
+		gst_event_parse_caps(event, &caps);
+		res = setcaps(element, pad, caps);
+		gst_event_unref(event);
+		event = NULL;
 		break;
 
 	default:
@@ -1197,7 +1188,42 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	return gst_pad_push_event(element->srcpad, event);
+	if (G_LIKELY (event))
+		return gst_pad_event_default(pad, parent, event);
+	else
+		return res;
+}
+
+
+/*
+ * query()
+ */
+
+
+static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
+{
+	GSTLALGate *gate = GSTLAL_GATE(parent);
+	gboolean res = TRUE;
+	GstCaps *filter, *caps;
+
+	switch (GST_QUERY_TYPE (query)) 
+	{
+		case GST_QUERY_CAPS:
+			gst_query_parse_caps (query, &filter);
+			caps = getcaps(gate, pad, filter);
+			gst_query_set_caps_result (query, caps);
+			gst_caps_unref (caps);
+			break;
+		default:
+			break;
+	}
+
+	if (G_LIKELY (query))
+		return gst_pad_query_default (pad, parent, query);
+	else
+		return res;
+
+  return res;
 }
 
 
@@ -1218,16 +1244,41 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
  */
 
 
-static gboolean src_event(GstPad *pad, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
-	gboolean success = TRUE;
+	GSTLALGate *gate = GSTLAL_GATE(parent);
+	gboolean result = TRUE;
+	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
 
-	gst_event_ref(event);
-	success &= gst_pad_push_event(element->sinkpad, event);
-	success &= gst_pad_push_event(element->controlpad, event);
+	switch (GST_EVENT_TYPE (event))
+	{	
+		default:
+			/* just forward the rest for now */
+			GST_DEBUG_OBJECT(gate, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+			gst_pad_event_default(pad, parent, event);
+			break;
+	}
 
-	return success;
+	return result;
+}
+
+
+/*
+ * query()
+ */
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	gboolean res = FALSE;
+
+	switch (GST_QUERY_TYPE (query))
+	{
+		default:
+			res = gst_pad_query_default (pad, parent, query);
+			break;
+	}
+	return res;
 }
 
 
@@ -1272,22 +1323,11 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw-int, " \
+	"audio/x-raw, " \
 	"rate = (int) [1, MAX], " \
 	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64}, " \
-	"signed = (boolean) {true, false}; " \
-	"audio/x-raw-float, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64}; " \
-	"audio/x-raw-complex, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64, 128}"
+	"layout = (string) interleaved, " \
+	"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
 
 
 static void gstlal_gate_class_init(GSTLALGateClass *klass)
@@ -1320,22 +1360,11 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-int, " \
+				"audio/x-raw, " \
 				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {8, 16, 32}, " \
-				"signed = (boolean) {true, false} ; " \
-				"audio/x-raw-float, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64};" \
-				"audio/x-raw-complex, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"layout = (string) interleaved, " \
+				"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
 			)
 		)
 	);
@@ -1461,7 +1490,7 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 		),
 		NULL,
 		NULL,
-		gst_marshal_VOID__INT64,
+		g_cclosure_marshal_VOID__LONG,
 		G_TYPE_NONE,
 		1,
 		G_TYPE_UINT64
@@ -1476,7 +1505,7 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 		),
 		NULL,
 		NULL,
-		gst_marshal_VOID__INT64,
+		g_cclosure_marshal_VOID__LONG,
 		G_TYPE_NONE,
 		1,
 		G_TYPE_UINT64
@@ -1497,25 +1526,21 @@ static void gstlal_gate_init(GSTLALGate *element)
 
 	/* control pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "control");
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(control_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(control_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(control_event));
 	element->controlpad = pad;
 
 	/* sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(sink_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
 	element->sinkpad = pad;
 
 	/* src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
-	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));
 	element->srcpad = pad;
 
 	/* internal data */
