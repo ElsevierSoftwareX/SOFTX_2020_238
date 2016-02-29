@@ -1160,7 +1160,6 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		element->last_state = -1;	/* force signal on initial state */
 		element->need_discont = TRUE;
 		g_mutex_unlock(element->control_lock);
-		event = NULL;
 		break;
 
 	case GST_EVENT_EOS:
@@ -1170,14 +1169,12 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		control_flush(element);
 		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
-		event = NULL;
 		break;
 
 	case GST_EVENT_CAPS:
 		gst_event_parse_caps(event, &caps);
 		res = setcaps(element, pad, caps);
 		gst_event_unref(event);
-		event = NULL;
 		break;
 
 	default:
@@ -1188,10 +1185,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	if (G_LIKELY (event))
-		return gst_pad_event_default(pad, parent, event);
-	else
-		return res;
+	return (res && gst_pad_event_default(pad, parent, event));
 }
 
 
