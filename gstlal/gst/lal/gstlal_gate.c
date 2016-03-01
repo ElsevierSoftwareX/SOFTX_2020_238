@@ -1174,7 +1174,6 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	case GST_EVENT_CAPS:
 		gst_event_parse_caps(event, &caps);
 		res = setcaps(element, pad, caps);
-		gst_event_unref(event);
 		break;
 
 	default:
