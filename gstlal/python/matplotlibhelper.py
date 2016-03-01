@@ -124,7 +124,7 @@ class BaseMatplotlibTransform(Gst.BaseTransform):
 	def do_transform_size(self, direction, caps, size, othercaps):
 		"""GstBaseTransform->transform_size virtual method."""
 		if direction == Gst.PadDirection.SINK:
-			return pipeio.get_unit_size(self.get_static_pad("src").query_caps(None)
+			return pipeio.get_unit_size(self.get_static_pad("src").query_caps(None))
 		raise ValueError(direction)
 
 GObject.type_register(BaseMatplotlibTransform) # MOD: Found type_register in line: [gobject.type_register(BaseMatplotlibTransform)]
