@@ -267,15 +267,10 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
    * Record the actual size of the buffer, but don't bother
    * realloc()ing.  Note that the final size excludes the \0
    * terminator.
+   * FIXME, might do something else for performance
    */
 
-  /*
-   * In gstreamer-0.10 we had to set the size of the resultant
-   * buffer. This is no longer required.
-   * GST_BUFFER_SIZE(out) = (guint8 *) location - GST_BUFFER_DATA(out);
-   * We do have to unmap the buffer, however.
-   */
-
+  gst_buffer_set_size(out, (guint8 *) location - mapinfo.data);
   gst_buffer_unmap(out, &mapinfo);
   
   /*
@@ -470,25 +465,25 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
 
   switch (GST_AUDIO_INFO_FORMAT(&(element->audio_info))) {
     case GST_AUDIO_FORMAT_U8 :
-        printsample = printsample_uint8;
-        break;
+       printsample = printsample_uint8;
+       break;
     case GST_AUDIO_FORMAT_U16 :
-        printsample = printsample_uint16;
-        break;
+       printsample = printsample_uint16;
+       break;
     case GST_AUDIO_FORMAT_U32 :
-        printsample = printsample_uint32;
-        break;
+       printsample = printsample_uint32;
+       break;
     case GST_AUDIO_FORMAT_S8 :
-        printsample = printsample_int8;
-        break;
+       printsample = printsample_int8;
+       break;
     case GST_AUDIO_FORMAT_S16 :
-        printsample = printsample_int16;
-        break;
+       printsample = printsample_int16;
+       break;
     case GST_AUDIO_FORMAT_S32 :
-        printsample = printsample_int32;
-        break;
+       printsample = printsample_int32;
+       break;
     case GST_AUDIO_FORMAT_F32 :
-        printsample = printsample_float;
+       printsample = printsample_float;
        break;
     case GST_AUDIO_FORMAT_F64 :
        printsample = printsample_double;
