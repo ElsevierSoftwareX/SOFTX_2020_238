@@ -48,18 +48,8 @@
  */
 
 
+#include <gstlal/gstlal.h>
 #include <gstlal_shift.h>
-
-
-/*
- * ============================================================================
- *
- *                                 Parameters
- *
- * ============================================================================
- */
-
-
 
 
 /*
@@ -139,13 +129,17 @@ static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
 {
 	GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	/* take filter */
+	/*
+	 * take filter
+	 */
+
 	filter_caps = filter ? gst_caps_ref(filter) : NULL;
 
 	/* 
 	 * If the filter caps are empty (but not NULL), there is nothing we can
 	 * do, there will be no intersection
 	 */
+
 	if (filter_caps && gst_caps_is_empty (filter_caps)) {
 		GST_WARNING_OBJECT (pad, "Empty filter caps");
 		return filter_caps;
@@ -156,18 +150,17 @@ static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
 
 	/* get the allowed caps on this sinkpad */
 	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
-			current_caps = gst_caps_new_any();
+	if(!current_caps)
+		current_caps = gst_caps_new_any();
 
-	if (peercaps) {
+	if(peercaps) {
 		/* if the peer has caps, intersect */
 		GST_DEBUG_OBJECT(shift, "intersecting peer and our caps");
 		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
 		/* neither peercaps nor current_caps are needed any more */
 		gst_caps_unref(peercaps);
 		gst_caps_unref(current_caps);
-	}
-	else {
+	} else {
 		/* the peer has no caps (or there is no peer), just use the allowed caps
 		* of this sinkpad. */
 		/* restrict with filter-caps if any */
@@ -176,19 +169,18 @@ static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
 			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
 			/* current_caps are not needed any more */
 			gst_caps_unref(current_caps);
-		}
-		else {
+		} else {
 			GST_DEBUG_OBJECT(shift, "no peer caps, using our caps");
 			result = current_caps;
 		}
 	}
 
-	result = gst_caps_make_writable (result);
+	result = gst_caps_make_writable(result);
 
-	if (filter_caps)
-		gst_caps_unref (filter_caps);
+	if(filter_caps)
+		gst_caps_unref(filter_caps);
 
-	GST_LOG_OBJECT (shift, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
+	GST_LOG_OBJECT(shift, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
 
 	return result;
 }
@@ -202,7 +194,6 @@ static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
 static gboolean setcaps(GSTLALShift *shift, GstPad *pad, GstCaps *caps)
 {
 	gboolean success = TRUE;
-
 
 	/*
 	 * try setting caps on downstream element
@@ -233,28 +224,27 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	gint64 stop;
 
 	switch(GST_EVENT_TYPE(event)) {
-		case GST_EVENT_SEGMENT:
+	case GST_EVENT_SEGMENT:
+		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
+		gst_event_copy_segment(event, &segment);
 
-			GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
-			gst_event_copy_segment(event, &segment);
+		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
+			start += shift->shift;
+			stop += shift->shift;
+			if (! GST_CLOCK_TIME_IS_VALID(start))
+				start = GST_CLOCK_TIME_NONE;
+			if (! GST_CLOCK_TIME_IS_VALID(stop))
+				stop = GST_CLOCK_TIME_NONE;
+		}
+		return gst_pad_push_event(shift->srcpad, gst_event_new_segment(&segment));
 
-			if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
-				start += shift->shift;
-				stop += shift->shift;
-				if (! GST_CLOCK_TIME_IS_VALID(start))
-					start = GST_CLOCK_TIME_NONE;
-				if (! GST_CLOCK_TIME_IS_VALID(stop))
-					stop = GST_CLOCK_TIME_NONE;
-			}
-			return gst_pad_push_event(shift->srcpad, gst_event_new_segment(&segment));
+	case GST_EVENT_CAPS:
+		gst_event_parse_caps(event, &caps);
+		gst_event_unref(event);
+		return setcaps(shift, pad, caps);
 
-		case GST_EVENT_CAPS:
-			gst_event_parse_caps(event, &caps);
-			gst_event_unref(event);
-			return setcaps(shift, pad, caps);
-
-		default:
-			break;
+	default:
+		break;
 	}
 
 	return gst_pad_event_default(pad, parent, event);
@@ -273,10 +263,9 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_SEGMENT:
-		
 		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
 		gst_event_copy_segment(event, &segment);
-		
+
 		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
 			start += shift->shift;
 			stop += shift->shift;
@@ -287,7 +276,6 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		}
 
 		event = gst_event_new_segment(&segment);
-
 		break;
 
 	default:
@@ -309,11 +297,10 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
 	gboolean res = FALSE;
 
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
+	switch(GST_QUERY_TYPE (query)) {
+	default:
+		res = gst_pad_query_default (pad, parent, query);
+		break;
 	}
 	return res;
 }
@@ -325,24 +312,21 @@ static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
 	gboolean res = TRUE;
 	GstCaps *filter, *caps;
 
-	switch (GST_QUERY_TYPE (query)) 
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps (shift, pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS:
+		gst_query_parse_caps(query, &filter);
+		caps = getcaps(shift, pad, filter);
+		gst_query_set_caps_result(query, caps);
+		gst_caps_unref(caps);
+		break;
+	default:
+		break;
 	}
 
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
+	if(G_LIKELY (query))
+		return gst_pad_query_default(pad, parent, query);
 	else
 		return res;
-
-  return res;
 }
 
 
@@ -428,36 +412,18 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
- */
-
-
-#define CAPS \
-	"audio/x-raw-int, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64}, " \
-	"signed = (boolean) {true, false}; " \
-	"audio/x-raw-float, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64}; " \
-	"audio/x-raw-complex, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64, 128}"
-
-
-/*
  * Class init function.  See
  *
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
  */
+
+
+#define CAPS \
+	"audio/x-raw, " \
+	"rate = " GST_AUDIO_RATE_RANGE ", " \
+	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
+	"layout = (string) interleaved"
 
 
 static void class_init(gpointer class, gpointer class_data)
