@@ -1862,7 +1862,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 		"audio/x-raw, " \
-		"rate = (int) [1, MAX], " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
 		"layout = (string) interleaved"
@@ -1876,8 +1876,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 		"audio/x-raw, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, "
 		"layout = (string) interleaved"
 	)
