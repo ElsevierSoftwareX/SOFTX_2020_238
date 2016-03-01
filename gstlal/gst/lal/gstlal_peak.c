@@ -40,6 +40,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>
 #include <math.h>
 #include <string.h>
@@ -214,22 +215,14 @@ static GstCaps *getcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *filter)
 
 static gboolean setcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *caps)
 {
-	GstStructure *structure;
-	gint rate, width, channels;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
-	 * NOTE: rate, width and channels must be present
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	/*
 	 * try setting caps on downstream element
@@ -243,14 +236,21 @@ static gboolean setcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		peak->channels = channels;
-		peak->rate = rate;
-		g_object_set(peak->adapter, "unit-size", width / 8 * channels, NULL);
-		if (width == 64)
+		peak->channels = GST_AUDIO_INFO_CHANNELS(&info);
+		peak->rate = GST_AUDIO_INFO_RATE(&info);
+		g_object_set(peak->adapter, "unit-size", GST_AUDIO_INFO_BPF(&info), NULL);
+		switch(GST_AUDIO_INFO_WIDTH(&info)) {
+		case 64:
 			peak->peak_type = GSTLAL_PEAK_DOUBLE;
-		if (width == 32)
+			break;
+		case 32:
 			peak->peak_type = GSTLAL_PEAK_FLOAT;
-		peak->maxdata = gstlal_peak_state_new(channels, peak->peak_type);
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
+		peak->maxdata = gstlal_peak_state_new(peak->channels, peak->peak_type);
 	}
 
 	/*
@@ -482,23 +482,16 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * class_init()
  */
 
 
 #define CAPS \
-	"audio/x-raw-float, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64}; "
-
-
-/*
- * class_init()
- */
+	"audio/x-raw, " \
+	"rate = " GST_AUDIO_RATE_RANGE ", " \
+	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
+	"layout = (string) interleaved"
 
 
 static void class_init(gpointer class, gpointer class_data)
