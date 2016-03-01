@@ -459,7 +459,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
-	gst_buffer_copy_into(outbuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS, GST_BUFFER_OFFSET(inbuf), -1);
 	gst_buffer_unmap(outbuf, &out_info);
 	g_mutex_unlock(element->mixmatrix_lock);
 	return result;
