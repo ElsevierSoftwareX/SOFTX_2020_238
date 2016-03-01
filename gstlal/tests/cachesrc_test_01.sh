@@ -11,7 +11,7 @@ ln -s Makefile H-CACHESRC_TEST_01-874018783-128.txt
 mkfifo $fifo1 $fifo2
 
 cat Makefile Makefile Makefile >$fifo1 &
-gst-launch lal_cachesrc location=$cache ! filesink location=$fifo2 &
+gst-launch-1.0 lal_cachesrc location=$cache ! filesink location=$fifo2 &
 
 cmp $fifo1 $fifo2
 
