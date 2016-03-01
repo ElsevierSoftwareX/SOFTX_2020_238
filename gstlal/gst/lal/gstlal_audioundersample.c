@@ -181,22 +181,11 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {8, 16, 32, 64}, " \
-		"signed = (boolean) {true, false}; " \
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64};" \
-		"audio/x-raw-complex, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {64, 128}"
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
+		"layout = (string) interleaved"
 	)
 );
 
@@ -206,22 +195,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {8, 16, 32, 64}, " \
-		"signed = (boolean) {true, false}; " \
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64};" \
-		"audio/x-raw-complex, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {64, 128}"
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
+		"layout = (string) interleaved"
 	)
 );
 
