@@ -29,7 +29,7 @@
  *
  * Example:
  *
- * $ gst-launch audiotestsrc ! audio/x-raw-float, rate=64, width=32 !
+ * $ gst-launch audiotestsrc ! audio/x-raw, format=F32LE, rate=64 !
  * lal_nxydump ! fdsink fd=1
  *
  * Reviewed:  434cd4387c6349e68e764b78ed44e2867839c06d 2014-08-12 K.
