@@ -46,6 +46,12 @@ from gstlal import pipeio
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 
+if sys.byteorder == "little":
+	BYTE_ORDER = "LE"
+else:
+	BYTE_ORDER = "BE"
+
+
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
@@ -378,7 +384,7 @@ def mkfakesrc(pipeline, instrument, channel_name, blocksize = None, volume = 1e-
 		# default blocksize is 1 second * rate samples/second * 8
 		# bytes/sample (assume double-precision floats)
 		blocksize = 1 * rate * 8
-	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw, width=64, rate=%d" % rate), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw, format=F64%s, rate=%d" % (rate, BYTE_ORDER)), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiofirfilter.html">audiofirfilter</a> element to a pipeline with useful default properties
@@ -702,7 +708,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, width=32, depth=24")).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=F32%s, depth=24" % BYTE_ORDER)).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
@@ -726,7 +732,7 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 		Gst.ElementFactory.make("queue", None),
 		Gst.ElementFactory.make("autoaudiosink", None)
 	)
-	elems[1].set_property("caps", Gst.Caps.from_string("audio/x-raw, width=64"))
+	elems[1].set_property("caps", Gst.Caps.from_string("audio/x-raw, format=F32%s" % BYTE_ORDER))
 	elems[2].set_property("amplification", amplification)
 	elems[4].set_property("max-size-time", 1 * Gst.SECOND)
 	pipeline.add(*elems)
@@ -931,9 +937,9 @@ def audioresample_variance_gain(quality, num, den):
 	...		correction = 1/numpy.sqrt(audioresample_variance_gain(quality, num, den))
 	...		elems = mkelems_in_bin(pipeline,
 	...			('audiotestsrc', {'wave':'gaussian-noise','volume':1}),
-	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,width=64,rate=%d' % num)}),
+	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,format=F64LE,rate=%d' % num)}),
 	...			('audioresample', {'quality':quality}),
-	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,width=64,rate=%d' % den)}),
+	...			('capsfilter', {'caps':Gst.Caps.from_string('audio/x-raw,width=F64LE,rate=%d' % den)}),
 	...			('audioamplify', {'amplification':correction,'clipping-method':'none'}),
 	...			('fakesink', {'signal-handoffs':True, 'num-buffers':1})
 	...		)
