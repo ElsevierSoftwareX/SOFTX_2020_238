@@ -1205,10 +1205,12 @@ static void rate_changed(GSTLALFIRBank *element, gint rate, void *data)
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
+	gboolean success = TRUE;
+
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 

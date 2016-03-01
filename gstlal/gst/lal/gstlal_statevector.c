@@ -196,18 +196,13 @@ G_DEFINE_TYPE_WITH_CODE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-//	GstStructure *str;
-//	gint width;
-    GstAudioInfo info;
-//	gboolean success = TRUE;
-    gboolean success = gst_audio_info_from_caps(&info, caps);
+	GstAudioInfo info;
+	gboolean success = TRUE;
 
-//	str = gst_caps_get_structure(caps, 0);
-//	success &= gst_structure_get_int(str, "width", &width);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-//		*size = width / 8;
-        *size = GST_AUDIO_INFO_WIDTH(&info) / 8;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 

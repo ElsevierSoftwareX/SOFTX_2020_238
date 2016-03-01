@@ -57,6 +57,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -182,17 +183,13 @@ DEFINE_SUMSQUARES_FUNC(float)
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint channels;
-	gint width;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = width / 8 * channels;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
@@ -260,22 +257,19 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
-	GstStructure *s;
+	GstAudioInfo info;
 	gint channels, width;
 
 	/*
 	 * parse the caps
 	 */
 
-	s = gst_caps_get_structure(incaps, 0);
-	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_ERROR_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+	if(!gst_audio_info_from_caps(&info, incaps)) {
+		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
 		return FALSE;
 	}
-	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
+	channels = GST_AUDIO_INFO_CHANNELS(&info);
+	width = GST_AUDIO_INFO_WIDTH(&info);
 
 	/*
 	 * if applicable, check that the number of channels is valid

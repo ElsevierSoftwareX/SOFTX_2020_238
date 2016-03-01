@@ -85,6 +85,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -1036,15 +1037,13 @@ static void release_pad(GstElement *element, GstPad *pad)
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint channels;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = sizeof(double) * channels;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
