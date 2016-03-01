@@ -61,6 +61,7 @@
  */
 
 
+#include <gstlal/gstlal.h>
 #include <gstlal_drop.h>
 
 
@@ -434,34 +435,11 @@ static void finalize(GObject *object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
- */
-
-
-#define CAPS \
-	"audio/x-raw-int, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64}, " \
-	"signed = (boolean) {true, false}; " \
-	"audio/x-raw-float, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64}; " \
-	"audio/x-raw-complex, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64, 128}"
-
-
-/*
  * class_init()
  */
+
+
+#define CAPS GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL)
 
 
 static void class_init(gpointer class, gpointer class_data)
