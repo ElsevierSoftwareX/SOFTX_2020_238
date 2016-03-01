@@ -634,6 +634,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, 
 		"channels", G_TYPE_INT, 1,
 		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
 		"rate", GST_TYPE_FRACTION, period_D, period_N,
+		"layout", G_TYPE_STRING, "interleaved",
 		NULL
 	);
 
@@ -1620,7 +1621,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) " GST_AUDIO_NE(F64)
+		"format = (string) " GST_AUDIO_NE(F64) ", " \
+		"layout = (string) interleaved"
 	)
 );
 
@@ -1633,7 +1635,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) " GST_AUDIO_NE(F64)
+		"format = (string) " GST_AUDIO_NE(F64) ", " \
+		"layout = (string) interleaved"
 	)
 );
 
@@ -1647,7 +1650,8 @@ static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = (fraction) [0/1, MAX], " \
 		"channels = (int) 1, " \
 		"format = (string) " GST_AUDIO_NE(F64) ", " \
-		"delta-f = (double) [0, MAX]"
+		"delta-f = (double) [0, MAX], " \
+		"layout = (string) interleaved"
 	)
 );
 

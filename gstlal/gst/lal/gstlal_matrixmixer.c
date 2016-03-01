@@ -631,7 +631,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+		"layout = (string) interleaved"
 	)
 );
 
@@ -644,7 +645,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+		"layout = (string) interleaved"
 	)
 );
 

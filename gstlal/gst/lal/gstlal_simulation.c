@@ -828,6 +828,14 @@ static void finalize(GObject * object)
  */
 
 
+#define CAPS \
+	"audio/x-raw, " \
+	"rate = " GST_AUDIO_RATE_RANGE ", " \
+	"channels = (int) 1, " \
+	"format = (string) " GST_AUDIO_NE(F64) ", " \
+	"layout = (string) interleaved"
+
+
 static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -849,21 +857,13 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <drew.keppel@ligo.org>"
 	);
 
-	GstCaps* caps = gst_caps_from_string(
-	                       "audio/x-raw, " \
-			       "rate = (int) [1, MAX], "	\
-			       "channels = (int) 1, "		\
-			       "format = (string) { " GST_AUDIO_NE(F32) " }, " \
-			       "layout = (string) interleaved"
-                           );
-	
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
 			"sink",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
-			caps
+			gst_caps_from_string(CAPS)
 		)
 	);
 
@@ -873,7 +873,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			caps
+			gst_caps_from_string(CAPS)
 		)
 	);
 
