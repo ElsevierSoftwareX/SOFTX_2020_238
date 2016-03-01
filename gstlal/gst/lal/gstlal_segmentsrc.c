@@ -90,13 +90,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS(
-        "audio/x-raw-int, " \
-        "rate = (int) [1, MAX], " \
+        "audio/x-raw, " \
+        "rate = " GST_AUDIO_RATE_RANGE ", " \
         "channels = (int) 1, " \
-        "endianness = (int) BYTE_ORDER, " \
-        "width = (int) 8," \
-        "depth = (int) 1," \
-        "signed = false"
+        "format = (string) " GST_AUDIO_NE(U8) ", " \
+        "layout = (string) interleaved"
     )
 );
 
