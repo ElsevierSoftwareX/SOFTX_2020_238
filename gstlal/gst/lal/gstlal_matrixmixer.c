@@ -525,8 +525,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * renegotiation
 		 */
 
-		if(num_input_channels(element) != in_channels || (element->data_type && num_output_channels(element, element->data_type) != out_channels))
-			gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));
+		if(num_input_channels(element) != in_channels)
+			gst_base_transform_reconfigure_sink(GST_BASE_TRANSFORM(object));
+		if(element->data_type && num_output_channels(element, element->data_type) != out_channels)
+			gst_base_transform_reconfigure_src(GST_BASE_TRANSFORM(object));
 
 		g_cond_broadcast(element->mixmatrix_available);
 		g_mutex_unlock(element->mixmatrix_lock);
