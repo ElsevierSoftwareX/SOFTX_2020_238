@@ -34,7 +34,7 @@
  *
  * Example (assumes 44.1 kHz source material):
  *
- * $ gst-launch filesrc location="song.mp3" ! decodebin ! lal_audioundersample ! audio/x-raw-int, rate=7350 ! audioresample ! autoaudiosink
+ * $ gst-launch filesrc location="song.mp3" ! decodebin ! lal_audioundersample ! audio/x-raw, rate=7350 ! audioresample ! autoaudiosink
  */
 
 
