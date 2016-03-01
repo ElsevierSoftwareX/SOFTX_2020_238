@@ -363,31 +363,21 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_SRC:
 		/*
 		 * sink pad's format is the same as the source pad's except
-		 * the type is complex and each sample has twice the width
+		 * the type is complex double
 		 */
 
-		for(n = 0; n < gst_caps_get_size(caps); n++) {
-			gint width;
-			GstStructure *s = gst_caps_get_structure(caps, n);
-			gst_structure_set_name(s, "audio/x-raw-complex");
-			gst_structure_get_int(s, "width", &width);
-			gst_structure_set(s, "width", G_TYPE_INT, width * 2, NULL);
-		}
+		for(n = 0; n < gst_caps_get_size(caps); n++)
+			gst_structure_set(gst_caps_get_structure(caps, n), "format", G_TYPE_STRING, GST_AUDIO_NE(Z128), NULL);
 		break;
 
 	case GST_PAD_SINK:
 		/*
 		 * source pad's format is the same as the sink pad's except
-		 * the type is float and each sample has half the width
+		 * the type is double
 		 */
 
-		for(n = 0; n < gst_caps_get_size(caps); n++) {
-			gint width;
-			GstStructure *s = gst_caps_get_structure(caps, n);
-			gst_structure_set_name(s, "audio/x-raw-float");
-			gst_structure_get_int(s, "width", &width);
-			gst_structure_set(s, "width", G_TYPE_INT, width / 2, NULL);
-		}
+		for(n = 0; n < gst_caps_get_size(caps); n++)
+			gst_structure_set(gst_caps_get_structure(caps, n), "format", G_TYPE_STRING, GST_AUDIO_NE(F64), NULL);
 		break;
 
 	case GST_PAD_UNKNOWN:
