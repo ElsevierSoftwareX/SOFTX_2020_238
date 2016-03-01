@@ -61,6 +61,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -185,8 +186,7 @@ static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
 
 static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
 {
-	GstStructure *structure;
-	gint rate, width, channels;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
 	/*
@@ -194,13 +194,7 @@ static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
 	 * NOTE: rate, width and channels must be present
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	/*
 	 * try setting caps on downstream element
@@ -214,8 +208,8 @@ static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		reblock->rate = rate;
-		reblock->unit_size = width / 8 * channels;
+		reblock->rate = GST_AUDIO_INFO_RATE(&info);
+		reblock->unit_size = GST_AUDIO_INFO_BPF(&info);
 	}
 
 	/*

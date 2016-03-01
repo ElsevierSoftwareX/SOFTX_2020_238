@@ -266,17 +266,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
-	GstStructure *s;
-    GstAudioInfo info;
-//	gint width;
-//	gboolean success = TRUE;
+	GstAudioInfo info;
 
 	/*
 	 * parse the caps
 	 */
 
-	s = gst_caps_get_structure(incaps, 0);
-	gboolean success = gst_audio_info_from_caps(&info, incaps);
+	if(!gst_audio_info_from_caps(&info, incaps))
+		return FALSE;
 
 	/*
 	 * set the sample value function
@@ -296,14 +293,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		break;
 
 	default:
-		success = FALSE;
-		break;
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
+		return FALSE;
 	}
 
-	if(!success)
-		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
-
-	return success;
+	return TRUE;
 }
 
 
@@ -329,10 +323,8 @@ static gboolean start(GstBaseTransform *trans)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-    
-    GstMapInfo in_info;
-    GstMapInfo out_info;
-    
+	GstMapInfo in_info;
+	GstMapInfo out_info;
 	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 	guint64 on_samples = element->on_samples;
@@ -348,20 +340,17 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not GAP.
 		 */
 
-		//void *in = GST_BUFFER_DATA(inbuf);
-        gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
-        gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
-        guint8 *out = out_info.data;
-		//void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
-        guint8 *end = in_info.data + in_info.size;
+		gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
+		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+		guint8 *out = out_info.data;
+		guint8 *end = in_info.data + in_info.size;
 		guint required_on = element->required_on;
 		guint required_off = element->required_off;
 
 		for(; in_info.data < end; out_info.data++) {
 			guint input = element->get_input(in_info.data);
 			if(((input & required_on) == required_on) && ((~input & required_off) == required_off)) {
-                //gst_buffer_map(0x80, out_info.data, GST_MAP_WRITE);
-                *out_info.data = 0x80;
+				*out_info.data = 0x80;
 				element->on_samples++;
 			} else {
 				*out = 0x00;
@@ -374,7 +363,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-        gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
+		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		memset(out_info.data, 0, out_info.size);
 		element->gap_samples += GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	}
@@ -393,9 +382,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/*
 	 * done
 	 */
-    
-    gst_buffer_unmap(inbuf, &in_info);
-    gst_buffer_unmap(outbuf, &out_info);
+
+	gst_buffer_unmap(inbuf, &in_info);
+	gst_buffer_unmap(outbuf, &out_info);
 
 	return result;
 }

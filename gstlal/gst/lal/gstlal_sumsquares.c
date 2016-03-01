@@ -204,7 +204,6 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
-	// FIXME filter is unused. It was added in 1.0. It should probably be fixed
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
 	guint n;
 
@@ -258,7 +257,6 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
 	GstAudioInfo info;
-	gint channels, width;
 
 	/*
 	 * parse the caps
@@ -268,8 +266,6 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
 		return FALSE;
 	}
-	channels = GST_AUDIO_INFO_CHANNELS(&info);
-	width = GST_AUDIO_INFO_WIDTH(&info);
 
 	/*
 	 * if applicable, check that the number of channels is valid
@@ -277,8 +273,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	g_mutex_lock(element->weights_lock);
 	if(!element->weights)
-		element->channels = channels;
-	else if(channels != element->channels) {
+		element->channels = GST_AUDIO_INFO_CHANNELS(&info);
+	else if(GST_AUDIO_INFO_CHANNELS(&info) != element->channels) {
 		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
 		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
 		g_mutex_unlock(element->weights_lock);
@@ -289,7 +285,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * set the sum-of-squares function
 	 */
 
-	switch(width) {
+	switch(GST_AUDIO_INFO_WIDTH(&info)) {
 	case 32:
 		element->make_weights_native_func = make_weights_native_float;
 		element->sumsquares_func = sumsquares_float;

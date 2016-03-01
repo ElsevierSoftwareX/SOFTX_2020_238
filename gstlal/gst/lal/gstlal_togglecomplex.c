@@ -70,6 +70,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -151,20 +152,17 @@ G_DEFINE_TYPE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-    GstStructure *str;
-    gint channels, width;
-    gboolean success = TRUE;
+	GstAudioInfo info;
+	gboolean success = TRUE;
 
-    str = gst_caps_get_structure(caps, 0);
-    success &= gst_structure_get_int(str, "channels", &channels);
-    success &= gst_structure_get_int(str, "width", &width);
+	success &= gst_audio_info_from_caps(&info, caps);
 
-    if(success)
-        *size = width / 8 * channels;
-    else
-        GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
+	if(success)
+		*size = GST_AUDIO_INFO_BPF(&info);
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-    return success;
+	return success;
 }
 
 
@@ -274,51 +272,6 @@ error:
 
 
 /*
- * prepare_output_buffer()
- *
- * FIXME:  the logic here results in a copy being made of the buffer's
- * metadata even if this element is the only element with a reference to
- * the input buffer.  it migh be possible to avoid this in 0.11
- */
-
-
-static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, GstBuffer **buf)
-{
-	/*
-	 * start by making output a reference to the input
-	 */
-
-	gst_buffer_ref(input);
-	*buf = input;
-
-	/*
-	 * make metadata writeable
-	 */
-
-	*buf = gst_buffer_make_writable(*buf);
-	if(!*buf) {
-		GST_DEBUG_OBJECT(trans, "failure creating sub-buffer from input");
-		return GST_FLOW_ERROR;
-	}
-
-	/*
-	 * replace caps with output caps
-	 */
-
-	//gst_buffer_set_caps(*buf, caps);
-//    GstCaps *caps;
-//     gst_caps_set_simple (caps, "buf", GST_TYPE_BUFFER, buf, NULL);
-    //gst_buffer_copy_into(caps,*buf,GST_BUFFER_COPY_ALL,0,-1);
-
-	/*
-	 * done
-	 */
-
-	return GST_FLOW_OK;
-}
-
-
-/*
  * ============================================================================
  *
  *                          GObject Method Overrides
@@ -349,7 +302,6 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
@@ -361,8 +313,7 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 
 static void gstlal_togglecomplex_init(GSTLALToggleComplex *element)
 {
-	//GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
-    gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
+	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

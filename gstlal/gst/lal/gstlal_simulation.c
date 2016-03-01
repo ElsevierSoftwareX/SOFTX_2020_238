@@ -57,7 +57,8 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/audio/audio.h> // needed for GST_AUDIO_NE macro
+#include <gst/audio/audio.h>
+
 
 /*
  * stuff from LAL

@@ -53,6 +53,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -74,19 +75,14 @@
 
 static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
 {
-
-	GstStructure *structure;
-	gint rate, width, channels;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	/*
 	 * try setting caps on downstream element
@@ -100,8 +96,8 @@ static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		drop->rate = rate;
-		drop->unit_size = width / 8 * channels;
+		drop->rate = GST_AUDIO_INFO_RATE(&info);
+		drop->unit_size = GST_AUDIO_INFO_WIDTH(&info);
 	} else
 		GST_ERROR_OBJECT(drop, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
