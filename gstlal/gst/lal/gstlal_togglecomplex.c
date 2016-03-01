@@ -70,8 +70,8 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -96,7 +96,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [2, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
@@ -115,7 +115,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [2, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
@@ -152,17 +152,17 @@ G_DEFINE_TYPE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstAudioInfo info;
-	gboolean success = TRUE;
+    
+    GstAudioInfo info;
+    
+    gboolean success = gst_audio_info_from_caps(&info, caps);
 
-	success &= gst_audio_info_from_caps(&info, caps);
+    if(success)
+        *size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+    else
+        GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
-	if(success)
-		*size = GST_AUDIO_INFO_BPF(&info);
-	else
-		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
-
-	return success;
+    return success;
 }
 
 
@@ -238,7 +238,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 				success &= g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 0.5) != NULL;
 				success &= g_value_scale_int(gst_structure_get_value(str, "width"), &width, 2.0) != NULL;
 			} else if(name && !strcmp(name, "audio/x-raw-complex")) {
-				gst_structure_set_name(str, "audio/x-raw-float");
+				gst_structure_set_name(str, "audio/x-raw");
 				success &= g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 2.0) != NULL;
 				success &= g_value_scale_int(gst_structure_get_value(str, "width"), &width, 0.5) != NULL;
 			} else {
@@ -268,6 +268,51 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 error:
 	gst_caps_unref(caps);
 	return GST_CAPS_NONE;
+}
+
+
+/*
+ * prepare_output_buffer()
+ *
+ * FIXME:  the logic here results in a copy being made of the buffer's
+ * metadata even if this element is the only element with a reference to
+ * the input buffer.  it migh be possible to avoid this in 0.11
+ */
+
+
+static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, GstBuffer **buf)
+{
+	/*
+	 * start by making output a reference to the input
+	 */
+
+	gst_buffer_ref(input);
+	*buf = input;
+
+	/*
+	 * make metadata writeable
+	 */
+
+	*buf = gst_buffer_make_writable(*buf);
+	if(!*buf) {
+		GST_DEBUG_OBJECT(trans, "failure creating sub-buffer from input");
+		return GST_FLOW_ERROR;
+	}
+
+	/*
+	 * replace caps with output caps
+	 */
+
+	//gst_buffer_set_caps(*buf, caps);
+//    GstCaps *caps;
+//     gst_caps_set_simple (caps, "buf", GST_TYPE_BUFFER, buf, NULL);
+    //gst_buffer_copy_into(caps,*buf,GST_BUFFER_COPY_ALL,0,-1);
+
+	/*
+	 * done
+	 */
+
+	return GST_FLOW_OK;
 }
 
 
@@ -302,6 +347,7 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
@@ -313,7 +359,8 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 
 static void gstlal_togglecomplex_init(GSTLALToggleComplex *element)
 {
-	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
+	//GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
+    gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
