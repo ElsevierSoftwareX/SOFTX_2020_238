@@ -284,11 +284,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-complex, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 128"
+		GST_AUDIO_CAPS_MAKE("Z128")
 	)
 );
 
@@ -298,11 +294,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		GST_AUDIO_CAPS_MAKE("F64")
 	)
 );
 
@@ -363,7 +355,6 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
-	// FIXME filter was added in 1.0.  Currently not used here, it should be fixed.
 	guint n;
 
 	caps = gst_caps_copy(caps);
@@ -490,28 +481,22 @@ done:
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
-	GstStructure *s;
-	gint channels;
-	gint width;
-	gint rate;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	s = gst_caps_get_structure(incaps, 0);
-	success &= gst_structure_get_int(s, "channels", &channels);
-	success &= gst_structure_get_int(s, "width", &width);
-	success &= gst_structure_get_int(s, "rate", &rate);
+	success &= gst_audio_info_from_caps(&info, incaps);
 
-	if(success && element->autocorrelation_matrix && (channels != (gint) autocorrelation_channels(element))) {
+	if(success && element->autocorrelation_matrix && (GST_AUDIO_INFO_CHANNELS(&info) != (gint) autocorrelation_channels(element))) {
 		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, autocorrelation_channels(element), incaps);
 		success = FALSE;
 	}
 
 	if(success) {
 		gint old_rate = element->rate;
-		element->rate = rate;
+		element->rate = GST_AUDIO_INFO_RATE(&info);
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
-		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
+		g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_BPF(&info), NULL);
 	} else
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 
