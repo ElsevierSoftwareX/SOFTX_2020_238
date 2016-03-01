@@ -1618,11 +1618,10 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"format = (string) " GST_AUDIO_NE(F64)
 	)
 );
 
@@ -1632,11 +1631,10 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"format = (string) " GST_AUDIO_NE(F64)
 	)
 );
 
@@ -1646,12 +1644,11 @@ static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
+		"rate = (fraction) [0/1, MAX], " \
 		"channels = (int) 1, " \
-		"delta-f = (double) [0, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64, " \
-		"rate = (fraction) [0/1, MAX]"
+		"format = (string) " GST_AUDIO_NE(F64) ", " \
+		"delta-f = (double) [0, MAX]"
 	)
 );
 
