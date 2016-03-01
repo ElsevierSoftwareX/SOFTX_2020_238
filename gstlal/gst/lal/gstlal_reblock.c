@@ -69,6 +69,7 @@
  */
 
 
+#include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_reblock.h>
 
@@ -124,14 +125,18 @@ static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
 {
 	GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	/* take filter */
+	/*
+	 * take filter
+	 */
+
 	filter_caps = filter ? gst_caps_ref(filter) : NULL;
 
 	/* 
 	 * If the filter caps are empty (but not NULL), there is nothing we can
 	 * do, there will be no intersection
 	 */
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
+
+	if(filter_caps && gst_caps_is_empty (filter_caps)) {
 		GST_WARNING_OBJECT (pad, "Empty filter caps");
 		return filter_caps;
 	}
@@ -141,37 +146,35 @@ static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
 
 	/* get the allowed caps on this sinkpad */
 	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
+	if(!current_caps)
 			current_caps = gst_caps_new_any();
 
-	if (peercaps) {
+	if(peercaps) {
 		/* if the peer has caps, intersect */
 		GST_DEBUG_OBJECT(reblock, "intersecting peer and our caps");
 		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
 		/* neither peercaps nor current_caps are needed any more */
 		gst_caps_unref(peercaps);
 		gst_caps_unref(current_caps);
-	}
-	else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
-		/* restrict with filter-caps if any */
+	} else {
+		/* the peer has no caps (or there is no peer), just use the
+		 * allowed caps of this sinkpad.  restrict with filter-caps
+		 * if any */
 		if (filter_caps) {
 			GST_DEBUG_OBJECT(reblock, "no peer caps, using filtered caps");
 			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
 			/* current_caps are not needed any more */
 			gst_caps_unref(current_caps);
-		}
-		else {
+		} else {
 			GST_DEBUG_OBJECT(reblock, "no peer caps, using our caps");
 			result = current_caps;
 		}
 	}
 
-	result = gst_caps_make_writable (result);
+	result = gst_caps_make_writable(result);
 
 	if (filter_caps)
-		gst_caps_unref (filter_caps);
+		gst_caps_unref(filter_caps);
 
 	GST_LOG_OBJECT (reblock, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
 
@@ -233,11 +236,10 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
 	gboolean res = FALSE;
 
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
+	switch(GST_QUERY_TYPE (query)) {
+	default:
+		res = gst_pad_query_default(pad, parent, query);
+		break;
 	}
 	return res;
 }
@@ -249,13 +251,12 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	gboolean result = TRUE;
 	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
 
-	switch (GST_EVENT_TYPE (event))
-	{	
-		default:
-			/* just forward the rest for now */
-			GST_DEBUG_OBJECT(reblock, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-			gst_pad_event_default(pad, parent, event);
-			break;
+	switch(GST_EVENT_TYPE(event)) {
+	default:
+		/* just forward the rest for now */
+		GST_DEBUG_OBJECT(reblock, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+		gst_pad_event_default(pad, parent, event);
+		break;
 	}
 
 	return result;
@@ -268,24 +269,21 @@ static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
 	gboolean res = TRUE;
 	GstCaps *filter, *caps;
 
-	switch (GST_QUERY_TYPE (query)) 
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps(reblock, pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS:
+		gst_query_parse_caps(query, &filter);
+		caps = getcaps(reblock, pad, filter);
+		gst_query_set_caps_result(query, caps);
+		gst_caps_unref(caps);
+		break;
+	default:
+		break;
 	}
 
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
+	if(G_LIKELY(query))
+		return gst_pad_query_default(pad, parent, query);
 	else
 		return res;
-
-  return res;
 }
 
 
@@ -297,18 +295,17 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
 
-	switch (GST_EVENT_TYPE (event))
-	{
-		case GST_EVENT_CAPS:
-			gst_event_parse_caps(event, &caps);
-			res = setcaps(reblock, pad, caps);
-			gst_event_unref(event);
-			event = NULL;
-		default:
-			break;
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_CAPS:
+		gst_event_parse_caps(event, &caps);
+		res = setcaps(reblock, pad, caps);
+		gst_event_unref(event);
+		event = NULL;
+	default:
+		break;
 	}
 
-	if (G_LIKELY (event))
+	if(G_LIKELY(event))
 		return gst_pad_event_default(pad, parent, event);
 	else
 		return res;
@@ -378,7 +375,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		 * set flags, caps, offset, and timestamps.
 		 */
 
-		gst_buffer_copy_into(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_META, offset * element->unit_size, block_length * element->unit_size);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + block_length;
 		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
@@ -497,22 +493,11 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw-int, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64}, " \
-	"signed = (boolean) {true, false}; " \
-	"audio/x-raw-float, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64}; " \
-	"audio/x-raw-complex, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64, 128}"
+	"audio/x-raw, " \
+	"rate = " GST_AUDIO_RATE_RANGE ", " \
+	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
+	"layout = (string) interleaved"
 
 
 static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
