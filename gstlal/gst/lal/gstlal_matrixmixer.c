@@ -141,33 +141,24 @@ G_DEFINE_TYPE_WITH_CODE(
 
 static enum gstlal_matrixmixer_media_type get_media_type(GstCaps *caps)
 {
-	GstStructure *s = gst_caps_get_structure(caps, 0);
-	const char *media_type = gst_structure_get_name(s);
-	gint width;
+	GstAudioInfo info;
 
-	if(!gst_structure_get_int(s, "width", &width))
+	if(!gst_audio_info_from_caps(&info, caps))
 		return GSTLAL_MATRIXMIXER_NONE;
 
-	if(!strcmp(media_type, "audio/x-raw-float")) {
-		switch(width) {
-		case 32:
+	if(GST_AUDIO_FORMAT_INFO_IS_FLOAT(&info)) {
+		if(GST_AUDIO_INFO_WIDTH(&info) == 32)
 			return GSTLAL_MATRIXMIXER_FLOAT;
-		case 64:
+		else if(GST_AUDIO_INFO_WIDTH(&info) == 64)
 			return GSTLAL_MATRIXMIXER_DOUBLE;
-		default:
-			return GSTLAL_MATRIXMIXER_NONE;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		switch(width) {
-		case 64:
+	} else if(GST_AUDIO_FORMAT_INFO_IS_COMPLEX(&info)) {
+		if(GST_AUDIO_INFO_WIDTH(&info) == 64)
 			return GSTLAL_MATRIXMIXER_COMPLEX_FLOAT;
-		case 128:
+		else if(GST_AUDIO_INFO_WIDTH(&info) == 128)
 			return GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
-		default:
-			return GSTLAL_MATRIXMIXER_NONE;
-		}
-	} else
-		return GSTLAL_MATRIXMIXER_NONE;
+	}
+
+	return GSTLAL_MATRIXMIXER_NONE;
 }
 
 
@@ -330,10 +321,6 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
-	/* FIXME new argument *filter in 1.0 should be used for what??
- 	 * Presently not used
-	 */
-
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
 	enum gstlal_matrixmixer_media_type data_type = get_media_type(caps);
 	guint n;
@@ -394,13 +381,16 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
+	GstAudioInfo info;
 	enum gstlal_matrixmixer_media_type data_type = get_media_type(incaps);
 	gint in_channels;
 	gint out_channels;
 	gboolean success = data_type != GSTLAL_MATRIXMIXER_NONE;
 
-	success &= gst_structure_get_int(gst_caps_get_structure(incaps, 0), "channels", &in_channels);
-	success &= gst_structure_get_int(gst_caps_get_structure(outcaps, 0), "channels", &out_channels);
+	success &= gst_audio_info_from_caps(&info, incaps);
+	in_channels = GST_AUDIO_INFO_CHANNELS(&info);
+	success &= gst_audio_info_from_caps(&info, outcaps);
+	out_channels = GST_AUDIO_INFO_CHANNELS(&info);
 
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse incaps %" GST_PTR_FORMAT ", outcaps %" GST_PTR_FORMAT, incaps, outcaps);
@@ -535,16 +525,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * renegotiation
 		 */
 
-		if(num_input_channels(element) != in_channels) {
-			/* FIXME:  is this right? */
-			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
-			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
-		}
-		if(element->data_type && num_output_channels(element, element->data_type) != out_channels) {
-			/* FIXME:  is this right? */
-			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
-			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
-		}
+		if(num_input_channels(element) != in_channels || (element->data_type && num_output_channels(element, element->data_type) != out_channels))
+			gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));
 
 		g_cond_broadcast(element->mixmatrix_available);
 		g_mutex_unlock(element->mixmatrix_lock);
