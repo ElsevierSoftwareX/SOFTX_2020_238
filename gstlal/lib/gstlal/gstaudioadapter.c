@@ -390,7 +390,7 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 		 * but in memory blocks.
 		 */
 		gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
-		memcpy(dst, mapinfo.data, mapinfo.size);
+		memcpy(dst, mapinfo.data + (adapter->skip * adapter->unit_size), n * adapter->unit_size);
 		gst_buffer_unmap(buf, &mapinfo);
 		_copied_nongap = TRUE;
 	}
@@ -412,7 +412,7 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 			 * but in memory blocks.
 			 */
 			gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
-			memcpy(dst, mapinfo.data, mapinfo.size);
+			memcpy(dst, mapinfo.data, n * adapter->unit_size);
 			gst_buffer_unmap(buf, &mapinfo);
 			_copied_nongap = TRUE;
 		}
