@@ -504,20 +504,19 @@ static void free_fds_workspace(GSTLALFIRBank *element)
 
 static void free_workspace(GSTLALFIRBank *element)
 {
-	if GST_AUDIO_INFO_IS_VALID(&(element->audio_info)) {
-		if(element->time_domain) {
-			if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
-				return;	/* no-op */
-			else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
-				return free_tds_workspace(element);
-			/* if width not valid, assume workspace is not initialized */
-		} else {
-			if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
-				free_fdd_workspace(element);
-			else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
-				free_fds_workspace(element);
-		}
-	} /* if width not valid, assume workspace is not initialized */
+	if(element->time_domain) {
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
+			return;	/* no-op */
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
+			return free_tds_workspace(element);
+		/* if width not valid, assume workspace is not initialized */
+	} else {
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
+			free_fdd_workspace(element);
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
+			free_fds_workspace(element);
+		/* if width not valid, assume workspace is not initialized */
+	}
 }
 
 
