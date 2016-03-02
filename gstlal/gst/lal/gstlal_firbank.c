@@ -504,6 +504,8 @@ static void free_fds_workspace(GSTLALFIRBank *element)
 
 static void free_workspace(GSTLALFIRBank *element)
 {
+	if(!GST_AUDIO_INFO_IS_VALID(&element->audio_info))
+		return;	/* assume workspace in not initialized */
 	if(element->time_domain) {
 		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
 			return;	/* no-op */
@@ -1992,7 +1994,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter)
 {
-	filter->audio_info.finfo = NULL;/* impossible --> force workspace reset on first caps */
+	filter->audio_info.bpf = 0;	/* impossible --> force workspace reset on first caps */
 	filter->block_stride = 0;	/* must != DEFAULT_BLOCK_STRIDE */
 	filter->latency = 0;
 	filter->adapter = NULL;
