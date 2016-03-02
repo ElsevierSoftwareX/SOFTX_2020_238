@@ -384,7 +384,12 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 		_copied_gap = TRUE;
 	} else {
 		GstMapInfo mapinfo;
-		gst_buffer_map_range(buf, adapter->skip * adapter->unit_size, n * adapter->unit_size, &mapinfo, GST_MAP_READ);
+		/*
+		 * FIXME: this could maybe be map_range, but have to figure out
+		 * how to use it first.  It appears that the index and length are not in bytes
+		 * but in memory blocks.
+		 */
+		gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
 		memcpy(dst, mapinfo.data, mapinfo.size);
 		gst_buffer_unmap(buf, &mapinfo);
 		_copied_nongap = TRUE;
@@ -401,7 +406,12 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 			_copied_gap = TRUE;
 		} else {
 			GstMapInfo mapinfo;
-			gst_buffer_map_range(buf, 0, n * adapter->unit_size, &mapinfo, GST_MAP_READ);
+			/*
+			 * FIXME: this could maybe be map_range, but have to figure out
+			 * how to use it first.  It appears that the index and length are not in bytes
+			 * but in memory blocks.
+			 */
+			gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
 			memcpy(dst, mapinfo.data, mapinfo.size);
 			gst_buffer_unmap(buf, &mapinfo);
 			_copied_nongap = TRUE;
