@@ -1436,7 +1436,7 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 		element->last_new_segment = gst_segment_new();
 		gst_event_copy_segment(event, element->last_new_segment);
 		element->need_new_segment = TRUE;
-		return FALSE;
+		break;
 
 	case GST_EVENT_EOS:
 		/*
@@ -1452,11 +1452,13 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 		} else
 			gst_audioadapter_clear(element->adapter);
 		g_mutex_unlock(element->fir_matrix_lock);
-		return TRUE;
+		break;
 
 	default:
-		return TRUE;
+		break;
 	}
+
+	return GST_BASE_TRANSFORM_CLASS (gstlal_firbank_parent_class)->sink_event (trans, event);
 }
 
 
