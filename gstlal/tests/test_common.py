@@ -144,18 +144,24 @@ def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
 	head = pipeparts.mkgeneric(pipeline, None, "appsrc", caps = pipeio.caps_from_array(input_arrays[0], rate = rate))
 	def need_data(elem, arg, (input_arrays, rate)):
 		if input_arrays:
-			elem.emit("push-buffer", pipeio.audio_buffer_from_array(input_arrays.pop(0), 0, 0, rate))
+			arr = input_arrays.pop(0)
+			elem.set_property("caps", pipeio.caps_from_array(arr, rate))
+			buf = pipeio.audio_buffer_from_array(arr, 0, 0, rate)
+			elem.emit("push-buffer", pipeio.audio_buffer_from_array(arr, 0, 0, rate))
+			return Gst.FlowReturn.OK
 		else:
 			elem.emit("end-of-stream")
+			return Gst.FlowReturn.EOS
 	head.connect("need-data", need_data, (input_arrays, rate))
 
 	head = elemfunc(pipeline, head, **elemfunc_kwargs)
 
 	head = pipeparts.mkappsink(pipeline, head)
 	def appsink_get_array(elem, output_arrays):
-		output_arrays.append(pipeio.array_from_audio_buffer(elem.get_last_buffer()))
-	head.connect("new-buffer", appsink_get_array, output_arrays)
+		output_arrays.append(pipeio.array_from_audio_sample(elem.emit("pull-sample")))
+		return Gst.FlowReturn.OK
 
+	head.connect("new-sample", appsink_get_array, output_arrays)
 	build_and_run((lambda *args, **kwargs: pipeline), name)
 
 	return output_arrays
