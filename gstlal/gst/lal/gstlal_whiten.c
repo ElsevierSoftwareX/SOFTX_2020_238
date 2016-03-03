@@ -1060,8 +1060,6 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	GstStructure *s;
-	gint width;
-	gint channels;
 	gint rate;
 	gboolean success = TRUE;
 
@@ -1071,9 +1069,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 */
 
 	s = gst_caps_get_structure(incaps, 0);
-	success &= gst_structure_get_int(s, "width", &width);
-	success &= gst_structure_get_int(s, "channels", &channels);
-	success &= gst_structure_get_int(s, "rate", &rate);
+	success = gst_structure_get_int(s, "rate", &rate);
 
 	/*
 	 * record the sample rate
@@ -1158,24 +1154,13 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 			element->sample_units = sample_units;
 		}
 
-		/*
-		 * push the tags downstream.  gst_event_new_tag() takes
-		 * ownership of the tags, and gst_pad_push_event() takes
-		 * ownership of the event.
-		 */
-
-		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), gst_event_new_tag(taglist));
-
-		/*
-		 * don't forward the event (we did it)
-		 */
-
-		return FALSE;
+		break;
 	}
 
 	default:
 		/*
 		 * gst_pad_push_event() consumes the reference count
+		 * FIXME, is this necessary?
 		 */
 
 		if(element->mean_psd_pad) {
@@ -1183,12 +1168,13 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 			gst_pad_push_event(element->mean_psd_pad, event);
 		}
 
-		/*
-		 * forward the event
-		 */
-
-		return TRUE;
 	}
+
+	/*
+	 * forward the event
+	 */
+
+	return GST_BASE_TRANSFORM_CLASS (gstlal_whiten_parent_class)->sink_event (trans, event);
 }
 
 
@@ -1622,7 +1608,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
 		"format = (string) " GST_AUDIO_NE(F64) ", " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -1636,7 +1623,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
 		"format = (string) " GST_AUDIO_NE(F64) ", " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -1651,7 +1639,7 @@ static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
 		"channels = (int) 1, " \
 		"format = (string) " GST_AUDIO_NE(F64) ", " \
 		"delta-f = (double) [0, MAX], " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved" \
 	)
 );
 
