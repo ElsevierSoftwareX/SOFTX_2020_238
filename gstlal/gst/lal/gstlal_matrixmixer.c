@@ -143,20 +143,18 @@ static enum gstlal_matrixmixer_media_type get_media_type(GstCaps *caps)
 {
 	GstAudioInfo info;
 
-	if(!gst_audio_info_from_caps(&info, caps))
-		return GSTLAL_MATRIXMIXER_NONE;
+	/* NOTE this assumes only a single relevant caps structure */
+	GstStructure *str = gst_caps_get_structure(caps, 0);
+	const gchar *name = gst_structure_get_string(str, "format");
 
-	if(GST_AUDIO_FORMAT_INFO_IS_FLOAT(&info)) {
-		if(GST_AUDIO_INFO_WIDTH(&info) == 32)
-			return GSTLAL_MATRIXMIXER_FLOAT;
-		else if(GST_AUDIO_INFO_WIDTH(&info) == 64)
-			return GSTLAL_MATRIXMIXER_DOUBLE;
-	} else if(GST_AUDIO_FORMAT_INFO_IS_COMPLEX(&info)) {
-		if(GST_AUDIO_INFO_WIDTH(&info) == 64)
-			return GSTLAL_MATRIXMIXER_COMPLEX_FLOAT;
-		else if(GST_AUDIO_INFO_WIDTH(&info) == 128)
-			return GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
-	}
+	if (!strcmp(name, GST_AUDIO_NE(F32)))
+		return GSTLAL_MATRIXMIXER_FLOAT;
+	if (!strcmp(name, GST_AUDIO_NE(F64)))
+		return GSTLAL_MATRIXMIXER_DOUBLE;
+	if (!strcmp(name, GST_AUDIO_NE(Z64)))
+		return GSTLAL_MATRIXMIXER_COMPLEX_FLOAT;
+	if (!strcmp(name, GST_AUDIO_NE(Z128)))
+		return GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
 
 	return GSTLAL_MATRIXMIXER_NONE;
 }
@@ -322,10 +320,9 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(trans);
-	enum gstlal_matrixmixer_media_type data_type = get_media_type(caps);
 	guint n;
 
-	caps = gst_caps_copy(caps);
+	caps = gst_caps_normalize(gst_caps_copy(caps));
 
 	switch(direction) {
 	case GST_PAD_SRC:
@@ -356,8 +353,11 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 		g_mutex_lock(element->mixmatrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++)
-			if(element->mixmatrix_d)
-				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_output_channels(element, data_type), NULL);
+			if(element->mixmatrix_d) {
+				GstCaps *caps_nth = gst_caps_copy_nth(caps, n);
+				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_output_channels(element, get_media_type(caps_nth)), NULL);
+				gst_caps_unref(caps_nth);
+			}
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		g_mutex_unlock(element->mixmatrix_lock);
@@ -422,7 +422,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result;
 	GstMapInfo out_info;
 
-	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_DTS(inbuf));
+	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
 	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 
 	g_mutex_lock(element->mixmatrix_lock);
@@ -632,7 +632,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, "
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -646,7 +647,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, "
+		"channel-mask = (bitmask) 0"
 	)
 );
 
