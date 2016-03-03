@@ -1,4 +1,4 @@
-%define gstreamername gstreamer_lscsoft
+%define gstreamername gstreamer1
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
@@ -6,8 +6,8 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= @MIN_GSTLAL_VERSION@ python >= @MIN_PYTHON_VERSION@ glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ gsl ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@ gds-core >= @MIN_GDS_VERSION@ gds-crtools >= @MIN_GDS_VERSION@ gds-services >= @MIN_GDS_VERSION@ cyrus-sasl-lib nds2-client >= @MIN_NDS_VERSION@ orc >= 0.4.16 dbus-python avahi-ui-tools
-BuildRequires: doxygen graphviz gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ gsl-devel ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@ gds-devel >= @MIN_GDS_VERSION@ cyrus-sasl-devel nds2-client-devel >= @MIN_NDS_VERSION@ nds2-client-headers >= @MIN_NDS_VERSION@ orc >= 0.4.16
+Requires: gstlal >= @MIN_GSTLAL_VERSION@ python >= @MIN_PYTHON_VERSION@ glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 1.2.4 %{gstreamername}-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@ gsl ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@ gds-core >= @MIN_GDS_VERSION@ gds-crtools >= @MIN_GDS_VERSION@ gds-services >= @MIN_GDS_VERSION@ cyrus-sasl-lib nds2-client >= @MIN_NDS_VERSION@ orc >= @MIN_ORC_VERSION@ dbus-python avahi-ui-tools
+BuildRequires: doxygen graphviz gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ gsl-devel ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@ gds-devel >= @MIN_GDS_VERSION@ cyrus-sasl-devel nds2-client-devel >= @MIN_NDS_VERSION@ nds2-client-headers >= @MIN_NDS_VERSION@ orc >= @MIN_ORC_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
@@ -85,10 +85,10 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 # commented out until RPM-based reference platform can be relied upon to
 # have a new-enough doxygen installed
 #%{_docdir}/gstlal-*
-%{_libdir}/gstreamer-0.10/*.so
-%{_libdir}/gstreamer-0.10/python/*
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
 
 %files devel
 %defattr(-,root,root)
-%{_libdir}/gstreamer-0.10/*.a
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.a

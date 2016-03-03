@@ -208,8 +208,8 @@ AC_SUBST([NDS_LIBS])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
@@ -239,8 +239,8 @@ AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
 #
 
 
-AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_VIDEO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}])
 AC_SUBST([gstreamer_video_CFLAGS])
 AC_SUBST([gstreamer_video_LIBS])
@@ -251,11 +251,30 @@ AC_SUBST([gstreamer_video_LIBS])
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
+
+
+#
+# Check for GObject Introspection
+#
+
+
+GOBJECT_INTROSPECTION_CHECK([1.30.0])
+AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
+AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+	$typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
 
 
 #
@@ -424,7 +443,8 @@ AC_SUBST([GSL_LIBS])
 #
 
 
-PKG_CHECK_MODULES([ORC], [orc-0.4], , [
+AC_SUBST([MIN_ORC_VERSION], [0.4.16])
+PKG_CHECK_MODULES([ORC], [orc-0.4 >= ${MIN_ORC_VERSION}], , [
 	AC_MSG_WARN([ORC not found;  using potentially slower code paths.])
 	ORC_CFLAGS="-DDISABLE_ORC"
 ])
