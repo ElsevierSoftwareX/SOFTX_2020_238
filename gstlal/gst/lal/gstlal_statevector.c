@@ -104,19 +104,19 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  */
 
 
-static guint get_input_uint8(guint8 *in)
+static guint get_input_uint8(void **in)
 {
 	return *(*(guint8 **) in)++;
 }
 
 
-static guint get_input_uint16(guint8 *in)
+static guint get_input_uint16(void **in)
 {
 	return *(*(guint16 **) in)++;
 }
 
 
-static guint get_input_uint32(guint8 *in)
+static guint get_input_uint32(void **in)
 {
 	return *(*(guint32 **) in)++;
 }
@@ -139,8 +139,9 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U32) "}, " \
-		"layout = (string) interleaved"
+		"format = (string) { U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) "}, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -153,16 +154,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) " GST_AUDIO_NE(U8) ", " \
-		"layout = (string) interleaved"
+		"format = (string) U8, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
-
-
-//static void additional_initializations(GType type)
-//{
-//	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_statevector", 0, "lal_statevector element");
-//}
 
 
 G_DEFINE_TYPE_WITH_CODE(
@@ -192,7 +188,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success = gst_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
@@ -226,7 +222,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * the structures on the sink pad
 		 */
 
-		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
+		othercaps = gst_caps_normalize(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
 		for(i = 0; i < gst_caps_get_size(othercaps); i++)
 			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "rate", gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 		break;
@@ -236,9 +232,11 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * source pad's format must be 8-bit boolean
 		 */
 
-		othercaps = gst_caps_copy(caps);
-		for(i = 0; i < gst_caps_get_size(othercaps); i++)
-			gst_structure_set(gst_caps_get_structure(othercaps, i), "format", G_TYPE_STRING, GST_AUDIO_NE(U8), NULL);
+		othercaps = gst_caps_normalize(gst_caps_copy(caps));
+		for(i = 0; i < gst_caps_get_size(othercaps); i++) {
+			gst_structure_set(gst_caps_get_structure(othercaps, i), "channels", G_TYPE_INT, 1, NULL);
+			gst_structure_set(gst_caps_get_structure(othercaps, i), "format", G_TYPE_STRING, "U8", NULL);
+			}
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -246,6 +244,8 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		gst_caps_unref(caps);
 		return GST_CAPS_NONE;
 	}
+
+	othercaps = gst_caps_simplify(othercaps);
 
 	return othercaps;
 }
@@ -265,8 +265,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * parse the caps
 	 */
 
-	if(!gst_audio_info_from_caps(&info, incaps))
+
+	if(!gst_audio_info_from_caps(&info, incaps)) {
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, incaps);
 		return FALSE;
+	}
 
 	/*
 	 * set the sample value function
@@ -336,20 +339,23 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
 		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		guint8 *out = out_info.data;
-		guint8 *end = in_info.data + in_info.size;
+		void *in = in_info.data;
+		void *end = in_info.data + in_info.size;
 		guint required_on = element->required_on;
 		guint required_off = element->required_off;
 
-		for(; in_info.data < end; out_info.data++) {
-			guint input = element->get_input(in_info.data);
+		for(; in < end; out++) {
+			guint input = element->get_input(&in);
 			if(((input & required_on) == required_on) && ((~input & required_off) == required_off)) {
-				*out_info.data = 0x80;
+				*out = 0x80;
 				element->on_samples++;
 			} else {
 				*out = 0x00;
 				element->off_samples++;
 			}
 		}
+		gst_buffer_unmap(inbuf, &in_info);
+		gst_buffer_unmap(outbuf, &out_info);
 	} else {
 		/*
 		 * input is GAP.
@@ -359,6 +365,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 		memset(out_info.data, 0, out_info.size);
 		element->gap_samples += GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+		gst_buffer_unmap(outbuf, &out_info);
 	}
 
 	/*
@@ -376,8 +383,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * done
 	 */
 
-	gst_buffer_unmap(inbuf, &in_info);
-	gst_buffer_unmap(outbuf, &out_info);
 
 	return result;
 }

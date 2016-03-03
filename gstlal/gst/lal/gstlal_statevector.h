@@ -66,7 +66,7 @@ struct _GSTLALStateVector {
 	guint64 off_samples;
 	guint64 gap_samples;
 
-	guint (*get_input)(guint8 *);
+	guint (*get_input)(void **);
 };
 
 
