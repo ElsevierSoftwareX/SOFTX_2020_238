@@ -27,12 +27,12 @@
 import sys
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstAudio', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+from gi.repository import GstAudio
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -67,12 +67,12 @@ def printable_timestamp(timestamp):
 	"""!
 	A function to nicely format a timestamp for printing
 	"""
-	if timestamp is None or timestamp == gst.CLOCK_TIME_NONE:
+	if timestamp is None or timestamp == Gst.CLOCK_TIME_NONE:
 		return "(none)"
-	return "%d.%09d s" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
+	return "%d.%09d s" % (timestamp // Gst.SECOND, timestamp % Gst.SECOND)
 
 
-class lal_checktimestamps(gst.BaseTransform):
+class lal_checktimestamps(Gst.BaseTransform):
 	"""!
 	A class representing a gstreamer element that will verify that the
 	timestamps agree with incoming buffers based on tracking the buffer offsets.
@@ -86,96 +86,54 @@ class lal_checktimestamps(gst.BaseTransform):
 
 	__gproperties__ = {
 		"timestamp-fuzz": (
-			gobject.TYPE_UINT64,
+			GObject.TYPE_UINT64,
 			"timestamp fuzz",
 			"Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.",
 			# FIXME:  why isn't G_MAXUINT64 defined in 2.18?
-			#0, gobject.G_MAXUINT64, 1,
+			#0, GObject.G_MAXUINT64, 1,
 			0, 18446744073709551615L, 1,
-			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+			GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
 		),
 		"silent": (
-			gobject.TYPE_BOOLEAN,
+			GObject.TYPE_BOOLEAN,
 			"silent",
 			"Only report errors.",
 			False,
-			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+			GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
 		)
 	}
 
 	__gsttemplates__ = (
-		gst.PadTemplate("sink",
-			gst.PAD_SINK,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
-				"audio/x-raw-float, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) {32, 64};" +
-				"audio/x-raw-complex, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) {64, 128};" +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 16," +
-				"depth = (int) 16," +
-				"signed = (bool) {true, false}; " +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 32," +
-				"depth = (int) 32," +
-				"signed = (bool) {true, false}; " +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 64," +
-				"depth = (int) 64," +
-				"signed = (bool) {true, false}"
+		Gst.PadTemplate("sink",
+			Gst.PAD_SINK,
+			Gst.PAD_ALWAYS,
+			Gst.caps_from_string(
+				"audio/x-raw, " +
+				"rate = " + GstAudio.AUDIO_RATE_RANGE + ", " +
+				"channels = " + GstAudio.AUDIO_CHANNELS_RANGE + ", " +
+				"format = (string) { Z64LE, Z64BE, Z128LE, Z128BE }, " +
+				"layout = (string) interleaved;" +
+				"audio/x-raw, " +
+				"rate = " + GstAudio.AUDIO_RATE_RANGE + ", " +
+				"channels = " + GstAudio.AUDIO_CHANNELS_RANGE + ", " +
+				"format = " + GstAudio.AUDIO_FORMATS_ALL + ", " +
+				"layout = (string) interleaved"
 			)
 		),
-		gst.PadTemplate("src",
-			gst.PAD_SRC,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
-				"audio/x-raw-float, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) {32, 64};" +
-				"audio/x-raw-complex, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) {64, 128};" +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 16," +
-				"depth = (int) 16," +
-				"signed = (bool) {true, false}; " +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 32," +
-				"depth = (int) 32," +
-				"signed = (bool) {true, false}; " +
-				"audio/x-raw-int, " +
-				"rate = (int) [1, MAX], " +
-				"channels = (int) [1, MAX], " +
-				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 64," +
-				"depth = (int) 64," +
-				"signed = (bool) {true, false}"
+		Gst.PadTemplate("src",
+			Gst.PAD_SRC,
+			Gst.PAD_ALWAYS,
+			Gst.caps_from_string(
+				"audio/x-raw, " +
+				"rate = " + GstAudio.AUDIO_RATE_RANGE + ", " +
+				"channels = " + GstAudio.AUDIO_CHANNELS_RANGE + ", " +
+				"format = (string) { Z64LE, Z64BE, Z128LE, Z128BE }, " +
+				"layout = (string) interleaved;" +
+				"audio/x-raw, " +
+				"rate = " + GstAudio.AUDIO_RATE_RANGE + ", " +
+				"channels = " + GstAudio.AUDIO_CHANNELS_RANGE + ", " +
+				"format = " + GstAudio.AUDIO_FORMATS_ALL + ", " +
+				"layout = (string) interleaved"
 			)
 		)
 	)
@@ -201,8 +159,9 @@ class lal_checktimestamps(gst.BaseTransform):
 
 
 	def do_set_caps(self, incaps, outcaps):
-		self.unit_size = incaps[0]["width"] // 8 * incaps[0]["channels"]
-		self.units_per_second = incaps[0]["rate"]
+		info = GstAudio.AudioInfo(incaps)
+		self.unit_size = info.bpf
+		self.units_per_second = info.rate
 		return True
 
 
@@ -215,21 +174,21 @@ class lal_checktimestamps(gst.BaseTransform):
 
 
 	def check_time_offset_mismatch(self, buf):
-		expected_offset = self.offset0 + int(round((buf.timestamp - self.t0) * float(self.units_per_second) / gst.SECOND))
-		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * gst.SECOND / float(self.units_per_second)))
+		expected_offset = self.offset0 + int(round((buf.pts - self.t0) * float(self.units_per_second) / Gst.SECOND))
+		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * Gst.SECOND / float(self.units_per_second)))
 		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), buf.offset, printable_timestamp(buf.timestamp), expected_offset, buf.offset - expected_offset)
-		elif abs(buf.timestamp - expected_timestamp) > self.timestamp_fuzz:
-			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(expected_timestamp), buf.timestamp - expected_timestamp)
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), buf.offset, printable_timestamp(buf.pts), expected_offset, buf.offset - expected_offset)
+		elif abs(buf.pts - expected_timestamp) > self.timestamp_fuzz:
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), printable_timestamp(buf.pts), buf.offset, printable_timestamp(expected_timestamp), buf.pts - expected_timestamp)
 
 
 	def do_transform_ip(self, buf):
-		if self.t0 is None or buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
+		if self.t0 is None or buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT):
 			if self.t0 is None:
 				if not self.silent:
-					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
-			elif buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
-				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset)
+			elif buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT):
+				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
 
 				#
 				# check for timestamp/offset mismatch
@@ -241,17 +200,17 @@ class lal_checktimestamps(gst.BaseTransform):
 			# reset/initialize timestamp book-keeping
 			#
 
-			self.next_timestamp = self.t0 = buf.timestamp
+			self.next_timestamp = self.t0 = buf.pts
 			self.next_offset = self.offset0 = buf.offset
 		else:
 			#
 			# check for timestamp/offset discontinuities
 			#
 
-			if buf.timestamp != self.next_timestamp:
-				print >>sys.stderr, "%s: got timestamp %s expected %s (discont flag is %s)" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp), buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
+			if buf.pts != self.next_timestamp:
+				print >>sys.stderr, "%s: got timestamp %s expected %s (discont flag is %s)" % (self.get_property("name"), printable_timestamp(buf.pts), printable_timestamp(self.next_timestamp), buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
 			if buf.offset != self.next_offset:
-				print >>sys.stderr, "%s: got offset %d expected %d (discont flag is %s)" % (self.get_property("name"), buf.offset, self.next_offset, buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
+				print >>sys.stderr, "%s: got offset %d expected %d (discont flag is %s)" % (self.get_property("name"), buf.offset, self.next_offset, buf.flag_is_set(Gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
 
 			#
 			# check for timestamp/offset mismatch
@@ -265,7 +224,7 @@ class lal_checktimestamps(gst.BaseTransform):
 
 		length = buf.offset_end - buf.offset
 		allowed_sizes = [length * self.unit_size]
-		if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+		if buf.flag_is_set(Gst.BUFFER_FLAG_GAP):
 			allowed_sizes.append(0)
 		if buf.size not in allowed_sizes:
 			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.size, length, length * self.unit_size)
@@ -275,13 +234,13 @@ class lal_checktimestamps(gst.BaseTransform):
 		#
 
 		self.next_offset = buf.offset_end
-		self.next_timestamp = buf.timestamp + buf.duration
+		self.next_timestamp = buf.pts + buf.duration
 
 		#
 		# done
 		#
 
-		return gst.FLOW_OK
+		return Gst.FLOW_OK
 
 
 #
@@ -289,10 +248,10 @@ class lal_checktimestamps(gst.BaseTransform):
 #
 
 
-gobject.type_register(lal_checktimestamps)
+GObject.type_register(lal_checktimestamps)
 
 __gstelementfactory__ = (
 	lal_checktimestamps.__name__,
-	gst.RANK_NONE,
+	Gst.RANK_NONE,
 	lal_checktimestamps
 )
