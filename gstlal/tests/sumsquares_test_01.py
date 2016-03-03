@@ -81,7 +81,7 @@ def sumsquares_test_01(pipeline, name, width):
 #
 
 
-def sumsquares_test_02(name, dtype, samples, channels_in):
+def sumsquares_test_02(name, dtype, samples, channels_in, sample_fuzz = cmp_nxydumps.default_sample_fuzz):
 	numpy.random.seed(0)
 	input_array = numpy.random.random((samples, channels_in)).astype(dtype)
 	# element always ingests weights matrix as double-precision floats
@@ -92,8 +92,9 @@ def sumsquares_test_02(name, dtype, samples, channels_in):
 
 	output_array, = test_common.transform_arrays([input_array], pipeparts.mksumsquares, name, weights = weights)
 
-	if (output_array != output_reference).any():
-		raise ValueError("incorrect output:  expected %s, got %s\ndifference = %s" % (output_reference, output_array, output_array - output_reference))
+	residual = abs((output_array - output_reference))
+	if residual[residual > sample_fuzz].any():
+		raise ValueError("incorrect output:  expected %s, got %s\ndifference = %s" % (output_reference, output_array, residual))
 
 
 #
@@ -111,5 +112,5 @@ test_common.build_and_run(sumsquares_test_01, "sumsquares_test_01b", width = 32)
 cmp_nxydumps.compare("sumsquares_test_01b_in.dump", "sumsquares_test_01b_out.dump", flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS)
 
 
-sumsquares_test_02("sumsquares_test_02a", "float64", samples = 6, channels_in = 4)
-sumsquares_test_02("sumsquares_test_02b", "float32", samples = 6, channels_in = 4)
+sumsquares_test_02("sumsquares_test_02a", "float64", samples = 6, channels_in = 4, sample_fuzz = cmp_nxydumps.default_sample_fuzz)
+sumsquares_test_02("sumsquares_test_02b", "float32", samples = 6, channels_in = 4, sample_fuzz = cmp_nxydumps.default_sample_fuzz**.5)
