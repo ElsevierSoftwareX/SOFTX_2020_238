@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
-plugin_LTLIBRARIES = libgstlal.la libgstlaladder.la
+plugin_LTLIBRARIES = libgstlal.la
 
 libgstlal_la_SOURCES = \
 	gstlal.c \
@@ -25,10 +25,3 @@ libgstlal_la_SOURCES = \
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
 libgstlal_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltags.la $(top_builddir)/lib/gstlal/libgstlaltypes.la
 libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
-
-libgstlaladder_la_SOURCES = \
-	gstadder.h gstadder.c \
-	gstadderorc.h gstadderorc-dist.h gstadderorc-dist.c
-libgstlaladder_la_CFLAGS = $(AM_CFLAGS) $(ORC_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) -DGST_PACKAGE_NAME=\"gstlal\" -DGST_PACKAGE_ORIGIN=\"\"
-libgstlaladder_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlaltypes.la
-libgstlaladder_la_LDFLAGS = $(AM_LDFLAGS) $(ORC_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)

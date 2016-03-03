@@ -1,1 +1,1 @@
-SUBDIRS = lal debug python
+SUBDIRS = lal gst debug python

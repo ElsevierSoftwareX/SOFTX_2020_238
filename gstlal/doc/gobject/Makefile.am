@@ -35,7 +35,7 @@ DOC_MAIN_SGML_FILE=$(DOC_MODULE)-docs.sgml
 # gtk-doc will search all .c and .h files beneath these paths
 # for inline comments documenting functions and macros.
 # e.g. DOC_SOURCE_DIR=$(top_srcdir)/gtk $(top_srcdir)/gdk
-DOC_SOURCE_DIR=$(top_srcdir)/lib/gstlal $(top_srcdir)/gst/lal
+DOC_SOURCE_DIR=$(top_srcdir)/lib/gstlal $(top_srcdir)/gst/gst $(top_srcdir)/gst/lal
 
 # Extra options to pass to gtkdoc-scangobj. Not normally needed.
 SCANGOBJ_OPTIONS=--type-init-func="gst_init(&argc, &argv)"
@@ -62,8 +62,8 @@ FIXXREF_OPTIONS=
 # Used for dependencies. The docs will be rebuilt if any of these change.
 # e.g. HFILE_GLOB=$(top_srcdir)/gtk/*.h
 # e.g. CFILE_GLOB=$(top_srcdir)/gtk/*.c
-HFILE_GLOB=$(top_srcdir)/lib/gstlal/*.h $(top_srcdir)/gst/lal/*.h
-CFILE_GLOB=$(top_srcdir)/lib/gstlal/*.c $(top_srcdir)/gst/lal/*.c
+HFILE_GLOB=$(top_srcdir)/lib/gstlal/*.h $(top_srcdir)/gst/gst/*.h $(top_srcdir)/gst/lal/*.h
+CFILE_GLOB=$(top_srcdir)/lib/gstlal/*.c $(top_srcdir)/gst/gst/*.c $(top_srcdir)/gst/lal/*.c
 
 # Extra header to include when scanning, which are not under DOC_SOURCE_DIR
 # e.g. EXTRA_HFILES=$(top_srcdir}/contrib/extra.h
@@ -93,13 +93,13 @@ expand_content_files=
 # signals and properties.
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
-GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/lib -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+GTKDOC_CFLAGS = $(AM_CFLAGS) -I$(top_srcdir)/lib -I$(top_srcdir)/gst/gst -I$(top_srcdir)/gst/lal $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 GTKDOC_LIBS = $(AM_LDFLAGS) -static \
 	$(top_builddir)/lib/gstlal/libgstlal.la \
 	$(top_builddir)/lib/gstlal/libgstlaltags.la \
 	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
 	$(top_builddir)/gst/lal/libgstlal.la \
-	$(top_builddir)/gst/lal/libgstlaladder.la \
+	$(top_builddir)/gst/gst/libgstlaladder.la \
 	$(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
