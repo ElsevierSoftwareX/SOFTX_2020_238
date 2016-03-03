@@ -415,9 +415,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 */
 
 		if(element->channels != channels) {
-			/* FIXME:  is this right? */
-			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
-			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+			gst_base_transform_reconfigure_sink(GST_BASE_TRANSFORM(object));
 		}
 
 		g_mutex_unlock(element->weights_lock);
@@ -492,7 +490,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -506,7 +505,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
 		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
