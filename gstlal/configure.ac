@@ -227,6 +227,24 @@ to your GI_TYPELIB_PATH environment variable.])
 
 
 #
+# Check for pygobject (for gstpythonplugin from gstreamer)
+#
+
+
+PKG_CHECK_MODULES([PYGOBJECT], [pygobject-3.0])
+AC_SUBST([PYGOBJECT_CFLAGS])
+AC_SUBST([PYGOBJECT_LIBS])
+#AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found.]))
+
+# the file is
+#
+# /usr/lib/x86_64-linux-gnu/libpython2.7.so.1
+AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
+AC_SUBST([PYTHON_ABI_FLAGS], [])
+AC_SUBST([PYTHON_LIB_SUFFIX], [so.1])
+
+
+#
 # Check for NumPy
 #
 
