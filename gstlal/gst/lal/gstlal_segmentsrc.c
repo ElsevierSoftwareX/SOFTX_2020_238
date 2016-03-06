@@ -164,7 +164,7 @@ static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
-    GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(basesrc);
+    GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(gstlal_segmentsrc_parent_class);
     GstFlowReturn result = GST_FLOW_OK;
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint64 numsamps = blocksize;
@@ -265,7 +265,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
 	
 	GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-	GstBaseSrcClass		*basesrc_class = GST_BASE_SRC_CLASS(basesrc);
+	GstBaseSrcClass		*basesrc_class = GST_BASE_SRC_CLASS(gstlal_segmentsrc_parent_class);
 
 	switch(GST_QUERY_TYPE(query)) {
 
