@@ -93,8 +93,9 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
         "audio/x-raw, " \
         "rate = " GST_AUDIO_RATE_RANGE ", " \
         "channels = (int) 1, " \
-        "format = (string) " GST_AUDIO_NE(U8) ", " \
-        "layout = (string) interleaved"
+        "format = (string) U8, " \
+        "layout = (string) interleaved, " \
+        "channel-mask = (bitmask) 0"
     )
 );
 
