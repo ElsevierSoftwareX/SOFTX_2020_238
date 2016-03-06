@@ -125,16 +125,14 @@ enum property {
  */
 
 
-static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
+static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer, GstMapInfo *info)
 {
-    GstMapInfo info;
     guint8 *data;
     GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
     GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
     gint i;
 
-    gst_buffer_map(buffer, &info, GST_MAP_WRITE);
-    data = info.data; 
+    data = info->data;
     /* This is ridiculous, but doesn't require sorted or coalesced
      * segments.  Could some fancy data structure help? */
     for (i = 0; i < element->seglist->length; i++) {
@@ -151,7 +149,6 @@ static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer)
 		data[startix] = element->invert_output ? 0 : 0x80;
     }
 
-    gst_buffer_unmap(buffer, &info);
     return 0;
 }
 
@@ -186,6 +183,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     result = basesrc_class->alloc(basesrc, element->offset, blocksize, buffer);
+    /* FIXME: why doesn't alloc() set the offset ???*/
+    GST_BUFFER_OFFSET(*buffer) = element->offset;
     if(result != GST_FLOW_OK)
         return result;
 
@@ -204,7 +203,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      * Mark the buffer according to the segments
      */
 
-    mark_segments(element, *buffer);
+    mark_segments(element, *buffer, &info);
     if(element->offset == 0)
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 
