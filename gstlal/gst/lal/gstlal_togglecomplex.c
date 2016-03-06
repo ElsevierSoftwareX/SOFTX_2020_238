@@ -97,12 +97,14 @@
 	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = (int) [2, MAX], " \
-	"layout = (string) interleaved; " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0; " \
 	"audio/x-raw, " \
 	"format = (string) {" GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = (int) [1, MAX], " \
-	"layout = (string) interleaved"
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
@@ -209,7 +211,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	gboolean success = TRUE;
 	guint n;
 
-	caps = gst_caps_copy(caps);
+	caps = gst_caps_normalize(gst_caps_copy(caps));
 
 	switch(direction) {
 	case GST_PAD_SRC:
@@ -262,7 +264,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		goto error;
 	}
 
-	return caps;
+	return gst_caps_simplify(caps);
 
 error:
 	gst_caps_unref(caps);
