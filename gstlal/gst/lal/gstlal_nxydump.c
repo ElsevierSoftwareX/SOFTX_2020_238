@@ -297,7 +297,7 @@ static GstStaticPadTemplate sink_factory =
     GST_STATIC_CAPS("audio/x-raw, "
         "rate = " GST_AUDIO_RATE_RANGE ", " \
         "channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}, "
+	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", S8, " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", U8, " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}, "
 	"layout = (string) interleaved")
     );
 
