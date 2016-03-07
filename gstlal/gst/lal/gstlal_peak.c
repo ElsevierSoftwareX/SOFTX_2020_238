@@ -68,6 +68,8 @@ static guint64 output_num_bytes(GSTLALPeak *element)
 
 static int reset_time_and_offset(GSTLALPeak *element)
 {
+	element->samples_since_last_discont = 0;
+	element->timestamp_at_last_discont = GST_CLOCK_TIME_NONE;
 	element->next_output_offset = 0;
 	element->next_output_timestamp = GST_CLOCK_TIME_NONE;
 	return 0;
@@ -216,13 +218,12 @@ static GstCaps *getcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *filter)
 static gboolean setcaps(GSTLALPeak *peak, GstPad *pad, GstCaps *caps)
 {
 	GstAudioInfo info;
-	gboolean success = TRUE;
 
 	/*
 	 * parse caps
 	 */
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 
 	/*
 	 * try setting caps on downstream element
@@ -359,7 +360,11 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 static void update_state(GSTLALPeak *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	gint samples = GST_BUFFER_OFFSET_END(srcbuf) - GST_BUFFER_OFFSET(srcbuf);
+	GST_BUFFER_TIMESTAMP(srcbuf) = gst_util_uint64_scale_int_round(element->samples_since_last_discont, GST_SECOND, element->rate) + element->timestamp_at_last_discont;
+	GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, element->rate);
+	element->next_output_timestamp = gst_util_uint64_scale_int_round(element->samples_since_last_discont + samples, GST_SECOND, element->rate) + element->timestamp_at_last_discont;;
+	element->samples_since_last_discont += samples;
 }
 
 static GstFlowReturn push_buffer(GSTLALPeak *element, GstBuffer *srcbuf)
@@ -400,7 +405,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
+		element->timestamp_at_last_discont = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
 	}
 
 	/* put the incoming buffer into an adapter, handles gaps */
@@ -474,7 +480,8 @@ static void finalize(GObject *object)
 	element->srcpad = NULL;
 	gst_audioadapter_clear(element->adapter);
 	g_object_unref(element->adapter);
-	gstlal_peak_state_free(element->maxdata);
+	if (element->maxdata)
+		gstlal_peak_state_free(element->maxdata);
 	if (!element->data)
 		g_free(element->data);  
 	G_OBJECT_CLASS(gstlal_peak_parent_class)->finalize(object);
@@ -576,7 +583,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	reset_time_and_offset(element);
-
+	element->maxdata = NULL;
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 }
 

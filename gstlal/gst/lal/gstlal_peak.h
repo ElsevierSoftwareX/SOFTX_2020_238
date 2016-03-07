@@ -68,6 +68,8 @@ struct _GSTLALPeak {
 	GstPad *srcpad;
 
 	gint rate;
+	gint samples_since_last_discont;
+	guint64 timestamp_at_last_discont;
 	guint n;
 	guint channels;
 	GstAudioAdapter *adapter;
