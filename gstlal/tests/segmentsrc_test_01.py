@@ -47,7 +47,7 @@ def segmentsrc_test_01(pipeline, name, seg):
 	segs = segments.segmentlist([segments.segment(LIGOTimeGPS(100), LIGOTimeGPS(200)), segments.segment(LIGOTimeGPS(250), LIGOTimeGPS(300))])
 
 	head = pipeparts.mksegmentsrc(pipeline, segs, blocksize = 1)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=4")
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=(string)U8, rate=(int)4, channels=(int)1, layout=(string)interleaved, channel-mask=(bitmask)0")
 	head = pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
 
 	f = open("%s_in.dump" % name, "w")
