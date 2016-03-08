@@ -98,7 +98,7 @@ static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		drop->rate = GST_AUDIO_INFO_RATE(&info);
-		drop->unit_size = GST_AUDIO_INFO_WIDTH(&info);
+		drop->unit_size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
 	} else
 		GST_ERROR_OBJECT(drop, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
@@ -354,7 +354,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * process buffer
 	 */
 
-	if(!dropsize) {
+	if(dropsize <= 0) {
 		/* pass entire buffer */
 		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
 			sinkbuf = gst_buffer_make_writable(sinkbuf);
@@ -367,14 +367,13 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	} else if(gst_buffer_get_size(sinkbuf) <= dropsize) {
 		/* drop entire buffer */
 		gst_buffer_unref(sinkbuf);
-		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		element->drop_samples -= (GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf));
 		element->need_discont = TRUE;
 		result = GST_FLOW_OK;
 	} else {
 		/* drop part of buffer, pass the rest */
 		GstBuffer *srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_MEMORY, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
 		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
-		gst_buffer_unref(sinkbuf);
 		gst_buffer_copy_into(srcbuf, sinkbuf, GST_BUFFER_COPY_METADATA, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
@@ -388,6 +387,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		/* never come back */
 		element->drop_samples = 0;
 		element->need_discont = FALSE;
+		gst_buffer_unref(sinkbuf);
 	}
 
 	/*
