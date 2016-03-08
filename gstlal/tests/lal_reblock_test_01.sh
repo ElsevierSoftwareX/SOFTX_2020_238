@@ -7,5 +7,4 @@ function run_lal_reblock() {
 
 echo === Running Test ${name} ===
 #{ ! run_lal_reblock 2>&1 | grep -q "lal_checktimestamps" ; } &&
-{ ! run_lal_reblock 2>&1 ; } &&
-${srcdir}/cmp_nxydumps.py ${name}_{in,out}.dump
+run_lal_reblock 2>&1 && ${srcdir}/cmp_nxydumps.py ${name}_{in,out}.dump
