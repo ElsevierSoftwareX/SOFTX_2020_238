@@ -70,7 +70,7 @@ def firbank_test_01(pipeline, name, width, time_domain):
 	fir_matrix[0, (fir_matrix.shape[1] - 1) - latency] = 1.0
 
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency, time_domain = time_domain)
-	head = pipeparts.mkchecktimestamps(pipeline, head)
+	#head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 
