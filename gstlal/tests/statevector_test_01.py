@@ -53,7 +53,7 @@ def statevector_test_01(name, width, samples):
 		required_on = int(sum(1 << bit for bit in numpy.random.randint(width - 1, size = bits))) & (imax - 1)
 		required_off = int(sum(1 << bit for bit in numpy.random.randint(width - 1, size = bits))) & (imax - 1)
 
-	input_samples = numpy.random.randint(imax, size=(samples, 1)).astype("i%d" % (width // 8))
+	input_samples = numpy.random.randint(imax, size=(samples, 1)).astype("u%d" % (width // 8))
 	output_reference = ((input_samples & required_on) == required_on) & ((~input_samples & required_off) == required_off)
 	output_array, = test_common.transform_arrays([input_samples], pipeparts.mkstatevector, name, required_on = required_on, required_off = required_off)
 	output_array.dtype = bool
