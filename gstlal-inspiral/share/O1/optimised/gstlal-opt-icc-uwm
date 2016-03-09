@@ -1,0 +1,24 @@
+#%Module#
+
+proc ModulesHelp { } {
+puts stderr "Set environment variables to build optimized version of gstlal"
+}
+
+set             LAL_PATH                /home/gstlalcbc/modules/O1-icc/opt
+set             DEPENDENCIES_PATH       /home/gstlalcbc/modules/O1-icc/dep
+setenv          INSTALL_FILES_PATH      /home/gstlalcbc/modules/O1-icc/src
+
+setenv          CC              icc
+setenv          CXX             icpc
+setenv          CFLAGS          "-O3 -march=native -lfftw3f -lfftw3 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings"
+setenv          LDFLAGS         -L/opt/intel/composer_xe_2015.5.223/mkl/lib/intel64
+
+prepend-path    PATH            $LAL_PATH/bin:$DEPENDENCIES_PATH/bin
+prepend-path    PKG_CONFIG_PATH $LAL_PATH/lib/pkgconfig:$LAL_PATH/lib64/pkgconfig:$DEPENDENCIES_PATH/lib/pkgconfig:$DEPENDENCIES_PATH/lib64/pkgconfig
+setenv          PYTHONPATH      $LAL_PATH/lib/python2.7/site-packages:$LAL_PATH/lib64/python2.7/site-packages:$DEPENDENCIES_PATH/lib/python2.7/site-packages:$DEPENDENCIES_PATH/lib64/python2.7/site-packages
+setenv          GST_PLUGIN_PATH $LAL_PATH/lib/gstreamer-0.10:$LAL_PATH/lib64/gstreamer-0.10:$DEPENDENCIES_PATH/lib/gstreamer-0.10:$DEPENDENCIES_PATH/lib64/gstreamer-0.10
+setenv          GST_REGISTRY    $LAL_PATH/registry..bin
+
+setenv          LAL_PATH                $LAL_PATH
+setenv          DEPENDENCIES_PATH       $DEPENDENCIES_PATH
+#setenv          INSTALL_FILES_PATH      /home/gstlalcbc/modules/O1/Haswell/install
