@@ -144,7 +144,7 @@ def caps_from_array(arr, rate = None):
 def array_from_audio_sample(sample):
 	caps = sample.get_caps()
 	bufmap = sample.get_buffer().map(Gst.MapFlags.READ)[1]
-	channels = caps[0]["channels"]
+	(success, channels) = caps.get_structure(0).get_int("channels")
 	# FIXME:  conditional is work-around for broken handling of
 	# zero-length buffers in numpy < 1.7.  remove and use frombuffer()
 	# unconditionally when we can rely on numpy >= 1.7
