@@ -31,10 +31,9 @@
 from optparse import OptionParser
 import pygtk
 pygtk.require("2.0")
-import pygst
-pygst.require("0.10")
-import gobject
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
 
 
 from gstlal import simplehandler
@@ -115,10 +114,10 @@ instrument, = gw_data_source_info.channel_dict.keys()
 
 def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, (f_min, f_max), verbose = False):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % sample_rate)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % sample_rate)
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
 	pipeparts.mkfakesink(pipeline, head)
-	head = pipeparts.mkqueue(pipeline, head.get_pad("mean-psd"), max_size_buffers = 4)
+	head = pipeparts.mkqueue(pipeline, head.get_static_pad("mean-psd"), max_size_buffers = 4)
 
 	head = pipeparts.mkspectrumplot(pipeline, head, f_min = f_min, f_max = f_max)
 	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
@@ -130,8 +129,8 @@ def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_len
 #
 
 
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("spectrum-movie")
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline(name="spectrum-movie")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 
@@ -158,7 +157,7 @@ else:
 #
 
 
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
 
