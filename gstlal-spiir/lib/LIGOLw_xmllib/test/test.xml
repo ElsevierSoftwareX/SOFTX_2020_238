@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE LIGO_LW
+SYSTEM "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt">
+<LIGO_LW>
+	<LIGO_LW Name="gstlal_iir_bank_Bank">
+		<Array Type="real_8" Name="e:array">
+			<Dim>2</Dim>
+			<Dim>10</Dim>
+			<Stream Type="Local" Delimiter=" ">
+				0.000000 1.000000 2.000000 3.000000 4.000000 5.000000 6.000000 0.000000 1.000000 2.000000 
+				3.000000 4.000000 5.000000 6.000000 0.000000 1.000000 2.000000 3.000000 4.000000 5.000000 
+			</Stream>
+		</Array>
+		<Param Type="real_4" Name="FLOAT">1.200000</Param>
+		<Param Type="real_8" Name="DOUBLE">2.300000</Param>
+		<Param Type="int_4s" Name="INT">7</Param>
+		<Param Type="lstring" Name="STRING">Hello</Param>
+		<Table Name="sngl_inspiral:table">
+			<Column Type="real_4" Name="sngl_inspiral:cont_chisq"/>
+			<Column Type="real_4" Name="sngl_inspiral:bank_chisq"/>
+			<Column Type="int_4s" Name="sngl_inspiral:chisq_dof"/>
+			<Column Type="real_8" Name="sngl_inspiral:end_time_gmst"/>
+			<Column Type="real_8" Name="sngl_inspiral:event_duration"/>
+			<Column Type="ilwd:char" Name="sngl_inspiral:event_id"/>
+			<Column Type="lstring" Name="sngl_inspiral:channel"/>
+			<Stream Delimiter="," Type="Local" Name="sngl_inspiral:table">
+				0.100000,0.200000,3,0.400000,0.500000,"sngl_inspiral:event_id:0","FAKE-STRAIN",
+				0.300000,0.400000,6,0.800000,0.900000,"sngl_inspiral:event_id:1","FAKE-STRAIN",
+				0.200000,0.700000,9,0.500000,0.600000,"sngl_inspiral:event_id:0","FAKE-STRAIN",
+			</Stream>
+		</Table>
+		<HEADER>
+			<X_ORDER_ID>0000053535</X_ORDER_ID>
+			<CUSTOMER_ID>1010</CUSTOMER_ID>
+			<NAME_1>Müller</NAME_1>
+			<NAME_2>Jörg</NAME_2>
+		</HEADER>
+		<ENTRIES>
+			<ENTRY>
+				<ARTICLE>&lt;Test&gt;</ARTICLE>
+				<ENTRY_NO>10</ENTRY_NO>
+			</ENTRY>
+			<ENTRY>
+				<ARTICLE>&lt;Test 2&gt;</ARTICLE>
+				<ENTRY_NO>20</ENTRY_NO>
+			</ENTRY>
+		</ENTRIES>
+		<FOOTER>
+			<TEXT>This is a text.</TEXT>
+		</FOOTER>
+	</LIGO_LW>
+</LIGO_LW>

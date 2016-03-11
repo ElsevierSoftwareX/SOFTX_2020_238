@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+# Copyright (C) 2015 Qi Chu
+# Modified from :
+# Copyright (C) 2012  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
+
+import sys, os
+import logging
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import copy
+from gstlal import lvalert_helper
+import time
+from glue.ligolw import ligolw, lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+import urllib
+import urlparse
+import httplib
+import subprocess
+from ligo.gracedb import rest as gracedb
+import glob
+import json
+from optparse import OptionParser
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+
+	options, gid_list = parser.parse_args()
+	
+	if len(gid_list) > 1:
+		raise ValueError("%d graceids specified, no more than one allowed" % len(gid_list))
+
+	if len(gid_list) == 0:
+		lvalert_data = json.loads(sys.stdin.read())
+		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+		logging.info("lvalert data: %s" % repr(lvalert_data))
+		alert_type = lvalert_data["alert_type"]
+		if alert_type != "new":
+			logging.info("not a new-type alert.  skipping")
+			sys.exit()
+		gid = str(lvalert_data["uid"])
+	else:
+		gid = gid_list[0]
+
+	return options, gid
+	
+
+options, gid = parse_command_line()
+
+try:
+	os.mkdir("gracedb/" + gid)
+except OSError:
+	pass
+
+gracedb = gracedb.GraceDb(options.gracedb_service_url)
+xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
+coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+ifos = coinc_inspiral_row.ifos
+path = sngl_inspiral_table[0].search
+outfname = 'gracedb/%s/%s_%s_snrchi.png' % (gid, gid, ifos)
+
+cohsnr = coinc_inspiral_row.snr
+for r in sngl_inspiral_table:
+	if r.chisq > 0:
+		combchisq = r.chisq
+
+# 
+# invoke the program to plot stats
+#
+input_stats_fname = "%s/%s_marginalized_stats.xml.gz" % (path, path)
+cmd = []
+cmd += ["gstlal_cohfar_plot_stats"]
+cmd += ["--output-filename", outfname]
+cmd += ["--input-stats-filename", input_stats_fname]
+cmd += ["--zerolag-format", "single"]
+cmd += ["--cohsnr", str(cohsnr)]
+cmd += ["--combchisq", str(combchisq)]
+cmd += ["--ifos", ifos]
+
+proc = subprocess.Popen(cmd)
+proc_out, proc_err = proc.communicate()
+#
+# Background plots
+#
+
+gracedb.writeLog(gid, "%s CohSNR/CombChisq" % ifos, filename = outfname, filecontents = open(outfname).read(), tagname = "background")
+
+
