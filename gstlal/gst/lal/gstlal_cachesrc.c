@@ -448,6 +448,7 @@ static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
 static gboolean start(GstBaseSrc *basesrc)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
+	gboolean result = TRUE;
 
 	g_return_val_if_fail(element->location != NULL, FALSE);
 	g_return_val_if_fail(element->cache == NULL, FALSE);
@@ -458,7 +459,8 @@ static gboolean start(GstBaseSrc *basesrc)
 	if(!element->cache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("error reading '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 	GST_DEBUG_OBJECT(element, "loaded '%s': %d item(s) in cache", element->location, element->cache->length);
 
@@ -467,7 +469,8 @@ static gboolean start(GstBaseSrc *basesrc)
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);
 		element->cache = NULL;
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 	GST_DEBUG_OBJECT(element, "%d item(s) remain in cache after sieve", element->cache->length);
 
@@ -478,13 +481,16 @@ static gboolean start(GstBaseSrc *basesrc)
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);
 		element->cache = NULL;
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 
 	element->last_index = 0;
 	element->index = 0;
 	element->need_discont = TRUE;
 
+done:
+	gst_base_src_start_complete(basesrc, result ? GST_FLOW_OK : GST_FLOW_ERROR);
 	return TRUE;
 }
 

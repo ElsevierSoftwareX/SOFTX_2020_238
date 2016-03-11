@@ -644,29 +644,37 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean start(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
+	gboolean result = TRUE;
 
 	if (!element->host)
 	{
 		GST_ERROR_OBJECT(element, "required property `host' not specified");
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 
 	daq_t* daq = malloc(sizeof(daq_t));
-	if (!daq)
+	if (!daq) {
 		GST_ERROR_OBJECT(element, "out of memory");
-	else {
-		GST_INFO_OBJECT(element, "daq_connect(daq_t*, \"%s\", %d, %d)", element->host, element->port, element->version);
-		int retval = daq_connect(daq, element->host, element->port, element->version);
-		if (retval)
-			DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
-		else {
-			element->daq = daq;
-			element->needs_seek = TRUE;
-			return TRUE;
-		}
-		free(daq);
+		result = FALSE;
+		goto done;
 	}
-	return FALSE;
+
+	GST_INFO_OBJECT(element, "daq_connect(daq_t*, \"%s\", %d, %d)", element->host, element->port, element->version);
+	int retval = daq_connect(daq, element->host, element->port, element->version);
+	if (retval) {
+		DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
+		free(daq);
+		result = FALSE;
+		goto done;
+	}
+
+	element->daq = daq;
+	element->needs_seek = TRUE;
+
+done:
+	gst_base_src_start_complete(object, result ? GST_FLOW_OK : GST_FLOW_ERROR);
+	return result;
 }
 
 
