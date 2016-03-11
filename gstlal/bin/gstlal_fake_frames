@@ -21,13 +21,11 @@ import os
 import numpy
 import sys
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -254,10 +252,10 @@ if options.output_channel_name is None:
 injections, gw_data_source.injection_filename = options.injections, None
 
 ## Setup the pipeline
-pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
+pipeline = Gst.Pipeline(name=os.path.split(sys.argv[0])[1])
 
 ## Main loop 
-mainloop = gobject.MainLoop()
+mainloop = GObject.MainLoop()
 
 ## An instance of the python.simplehandler.Handler class
 handler = simplehandler.Handler(mainloop, pipeline)
@@ -287,7 +285,7 @@ if options.whiten_reference_psd or options.whiten_track_psd:
 	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd)[options.sample_rate]
 else:
 	## 6) Otherwise simply add a pipeparts.mkcapsfilter() and pipeparts.mkresample()
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % options.sample_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw, rate=%d" % options.sample_rate)
 	# FIXME this is a bit hacky, should datasource.mkbasicsrc be patched to change the sample rate?
 	# FIXME don't hardcode sample rate (though this is what datasource generates for all fake data, period 
 	# Renormalize if datasource is "white"
@@ -343,7 +341,7 @@ head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_t
 head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, digits(options.gps_start_time) - digits(options.frame_duration * options.frames_per_file * 100)))
 
 # Run it
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
 ## Debugging output

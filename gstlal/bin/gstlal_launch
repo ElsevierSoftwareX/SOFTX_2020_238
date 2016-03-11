@@ -27,11 +27,11 @@ opts, rest = parser.parse_args()
 # Initialization
 #
 
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-import gobject, gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 from gstlal import simplehandler
 
 
@@ -39,8 +39,8 @@ from gstlal import simplehandler
 # Create the pipeline (yes, it's *that* easy)
 #
 
-mainloop = gobject.MainLoop()
-pipeline = gst.parse_launch(' '.join(rest))
+mainloop = GObject.MainLoop()
+pipeline = Gst.parse_launch(' '.join(rest))
 
 
 #
@@ -48,21 +48,21 @@ pipeline = gst.parse_launch(' '.join(rest))
 #
 
 if opts.start is not None:
-    start_seektype = gst.SEEK_TYPE_SET
+    start_seektype = Gst.SeekType.SET
     start_ns = opts.start * 1e9
 else:
-    start_seektype = gst.SEEK_TYPE_NONE
+    start_seektype = Gst.SeekType.NONE
     start_ns = 0  # not used anyway
 
 if opts.end is not None:
-    end_seektype = gst.SEEK_TYPE_SET
+    end_seektype = Gst.SeekType.SET
     end_ns = opts.end * 1e9
 else:
-    end_seektype = gst.SEEK_TYPE_NONE
+    end_seektype = Gst.SeekType.NONE
     end_ns = 0  # not used anyway
 
 for src in pipeline.iterate_sources():
-    src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+    src.seek(1.0, Gst.Format.TIME, Gst.SeekFlags.FLUSH,
              start_seektype, start_ns,
              end_seektype, end_ns)
 
@@ -72,6 +72,6 @@ for src in pipeline.iterate_sources():
 #
 
 handler = simplehandler.Handler(mainloop, pipeline)
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()

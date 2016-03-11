@@ -20,15 +20,11 @@
 from optparse import OptionParser
 import sys
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
-import signal
-
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 from pylal import series as lalseries
 from glue.ligolw import ligolw
@@ -203,9 +199,8 @@ else:
 
 
 # building the event loop and pipeline
-gobject.threads_init()
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("gstlal_play_frames")
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline("gstlal_play_frames")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 #
@@ -219,7 +214,7 @@ if options.whiten:
 	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd)[options.rate]
 else:
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % options.rate)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.rate)
 
 # handle filtering
 if options.high_pass_filter is not None and options.low_pass_filter is not None:
@@ -253,6 +248,6 @@ if gw_data_source_info.data_source in ("lvshm", "framexmit"):# what about nds on
 	simplehandler.OneTimeSignalHandler(pipeline)
 
 # run
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
