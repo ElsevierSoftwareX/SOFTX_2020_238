@@ -278,7 +278,7 @@ def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "frame
 	return outstr
 
 
-def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
+def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.SeekFlags.FLUSH):
 	"""!
 	Create a new seek event, i.e., Gst.Event.new_seek()  for a given
 	gps_start_time and gps_end_time, with optional flags.  
@@ -302,7 +302,10 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
 
-	return Gst.Event.new_seek(1., Gst.Format.TIME, flags, start_type, start_time, stop_type, stop_time)
+	if pipeline.set_state(Gst.State.PAUSED) == Gst.StateChangeReturn.FAILURE:
+		raise RuntimeError("pipeline failed to enter PLAYING state")
+
+	pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
 
 
 class GWDataSourceInfo(object):
@@ -348,9 +351,6 @@ class GWDataSourceInfo(object):
 			self.framexmit_addr.update( framexmit_dict_from_framexmit_list(options.framexmit_addr) )
 		self.framexmit_iface = options.framexmit_iface
 
-		## Seek event. Default is None, i.e., no seek
-		self.seekevent = None
-
 		## Analysis segment. Default is None
 		self.seg = None
 
@@ -371,8 +371,6 @@ class GWDataSourceInfo(object):
 				raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
 			## Segment from gps start and stop time if given
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
-			## Seek event from the gps start and stop time if given
-			self.seekevent = Gst.Event.new_seek(1., Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, Gst.SeekType.SET, self.seg[0].ns(), Gst.SeekType.SET, self.seg[1].ns())
 		elif options.gps_end_time is not None:
 			raise ValueError("must provide both --gps-start-time and --gps-end-time")
 		elif options.data_source not in self.live_sources:
@@ -541,18 +539,6 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
-## @cond DONTDOCUMENT
-def do_seek(pipeline, seekevent):
-	# FIXME:  remove.  seek the pipeline instead
-	# DO NOT USE IN NEW CODE!!!!
-	for src in pipeline.iterate_sources():
-		if src.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
-			raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
-		if not src.send_event(seekevent):
-			raise RuntimeError("Element %s did not handle seek event" % src.get_name())
-## @endcond
-
-
 ##
 # _Gstreamer graph describing this function:_
 #
@@ -572,7 +558,7 @@ def do_seek(pipeline, seekevent):
 # @enddot
 #
 #
-def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_output = False, **kwargs):
+def mksegmentsrcgate(pipeline, src, segment_list, invert_output = False, **kwargs):
 	"""!
 	Takes a segment list and produces a gate driven by it. Hook up your own input and output.
 
@@ -580,8 +566,6 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 	"""
 	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output = invert_output)
 	# FIXME:  remove
-	if seekevent is not None:
-		do_seek(pipeline, seekevent)
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc, **kwargs)
 
 
@@ -766,14 +750,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# let the injection code run in a different thread than the
 		# whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
-
-	#
-	# seek the pipeline
-	# FIXME:  remove
-	#
-
-	if gw_data_source_info.data_source in ("white", "silence", "LIGO", "AdvLIGO", "AdvVirgo", "frames"):
-		do_seek(pipeline, gw_data_source_info.seekevent)
 
 	#
 	# done
