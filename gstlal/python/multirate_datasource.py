@@ -28,12 +28,10 @@ import sys
 import optparse
 import math
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject
+from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 
@@ -192,7 +190,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, width=%d, rate=%d, channels=1" % (width, max(rates)))
+	if width not in (32, 64):
+		raise ValueError("bad width %d" % width)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=F%dLE, rate=%d, channels=1" % (width, max(rates)))	# FIXME:  need NE macro for format
 
 	# make the buffers going downstream smaller, this can really help with
 	# RAM
