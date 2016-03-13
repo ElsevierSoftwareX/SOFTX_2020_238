@@ -117,72 +117,6 @@ G_DEFINE_TYPE_WITH_CODE(
 
 
 /*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/*
-	 * take filter
-	 */
-
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-
-	if(filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(reblock->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if(!current_caps)
-			current_caps = gst_caps_new_any();
-
-	if(peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(reblock, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	} else {
-		/* the peer has no caps (or there is no peer), just use the
-		 * allowed caps of this sinkpad.  restrict with filter-caps
-		 * if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(reblock, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		} else {
-			GST_DEBUG_OBJECT(reblock, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable(result);
-
-	if (filter_caps)
-		gst_caps_unref(filter_caps);
-
-	GST_LOG_OBJECT (reblock, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-/*
  * setcaps()
  */
 
@@ -232,16 +166,88 @@ static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 {
-	gboolean res = FALSE;
+	gboolean ret;
+	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
 
-	switch(GST_QUERY_TYPE (query)) {
-	default:
-		res = gst_pad_query_default(pad, parent, query);
+	switch (GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS:
+	{
+		GstCaps *temp, *caps, *filt, *tcaps = NULL;
+		/* Get the other pads caps */
+		caps = gst_pad_get_current_caps(reblock->sinkpad);
+		if (!caps)
+			caps = gst_pad_get_pad_template_caps(reblock->sinkpad);
+		/* Get the filter caps */
+		gst_query_parse_caps(query, &filt);
+
+		/* make sure we only return results that intersect our padtemplate */
+		tcaps = gst_pad_get_pad_template_caps(pad);
+		temp = gst_caps_intersect(caps, tcaps);
+		gst_caps_unref(caps);
+		gst_caps_unref(tcaps);
+		caps = temp;
+		/* filter against the query filter when needed */
+		if (filt) {
+			temp = gst_caps_intersect(caps, filt);
+			gst_caps_unref(caps);
+			caps = temp;
+		}
+		gst_query_set_caps_result(query, caps);
+		gst_caps_unref(caps);
+		ret = TRUE;
 		break;
 	}
-	return res;
+	default:
+		ret = gst_pad_query_default(pad, parent, query);
+		break;
+	}
+	return ret;
+}
+
+
+static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
+{
+	gboolean ret;
+	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
+
+	switch (GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS:
+	{
+		GstCaps *temp, *caps, *filt, *tcaps;
+
+		caps = gst_pad_get_allowed_caps(reblock->srcpad);
+		/* If the caps are NULL, there is probably not a peer yet */
+		if (!caps) {
+			caps = gst_pad_get_pad_template_caps(reblock->srcpad);
+		}
+		gst_query_parse_caps(query, &filt);
+
+		/* make sure we only return results that intersect our padtemplate */
+		tcaps = gst_pad_get_pad_template_caps(pad);
+		if (tcaps) {
+			temp = gst_caps_intersect(caps, tcaps);
+			gst_caps_unref(caps);
+			gst_caps_unref(tcaps);
+			caps = temp;
+		}
+		/* filter against the query filter when needed */
+		if (filt) {
+			temp = gst_caps_intersect(caps, filt);
+			gst_caps_unref(caps);
+			caps = temp;
+		}
+		gst_query_set_caps_result(query, caps);
+		gst_caps_unref(caps);
+		ret = TRUE;
+		break;
+	}
+	default:
+		ret = gst_pad_query_default(pad, parent, query);
+		break;
+	}
+	return ret;
 }
 
 
@@ -260,30 +266,6 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	}
 
 	return result;
-}
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-		gst_query_parse_caps(query, &filter);
-		caps = getcaps(reblock, pad, filter);
-		gst_query_set_caps_result(query, caps);
-		gst_caps_unref(caps);
-		break;
-	default:
-		break;
-	}
-
-	if(G_LIKELY(query))
-		return gst_pad_query_default(pad, parent, query);
-	else
-		return res;
 }
 
 
@@ -498,7 +480,7 @@ static void finalize(GObject *object)
 	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
 	"layout = (string) interleaved, " \
-	"channel-mask = (bitmask) 0x"
+	"channel-mask = (bitmask) 0"
 
 
 static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
