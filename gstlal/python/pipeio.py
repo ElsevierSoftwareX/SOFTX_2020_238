@@ -33,7 +33,10 @@ import sys
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst, GstAudio
+gi.require_version('GstAudio', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+from gi.repository import GstAudio
 GObject.threads_init()
 Gst.init(None)
 
@@ -98,12 +101,12 @@ def repack_real_array_to_complex(arr):
 def get_unit_size(caps):
 	struct = caps[0]
 	name = struct.get_name()
-	if name in ("audio/x-raw-complex", "audio/x-raw", "audio/x-raw"):
-		assert struct["width"] % 8 == 0
-		return struct["channels"] * struct["width"] // 8
-	elif name == "video/x-raw-rgb":
-		assert struct["bpp"] % 8 == 0
-		return struct["width"] * struct["height"] * struct["bpp"] // 8
+	if name == "audio/x-raw":
+		info = GstAudio.AudioInfo()
+		info.from_caps(caps)
+		return info.bpf
+	elif name == "video/x-raw" and struct["format"] in ("RGB", "RGBA", "ARGB", "ABGR"):
+		return struct["width"] * struct["height"] * (3 if struct["format"] == "RGB" else 4)
 	raise ValueError(caps)
 
 
