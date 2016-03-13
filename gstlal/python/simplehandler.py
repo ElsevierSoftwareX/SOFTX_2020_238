@@ -28,11 +28,10 @@ import sys
 import os
 
 
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject
+from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 import signal
