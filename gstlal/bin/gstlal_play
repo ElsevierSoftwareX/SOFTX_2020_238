@@ -247,6 +247,9 @@ else:
 if gw_data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
 	simplehandler.OneTimeSignalHandler(pipeline)
 
+# Seek
+datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
+
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
