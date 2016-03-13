@@ -1,4 +1,4 @@
-# Copyright (C) 2015 Yan Wang (yan.wang@ligo.org)
+# Copyright (C) 2015-2016 Yan Wang (yan.wang@ligo.org)
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -225,6 +225,36 @@ class OptimizerIIR(Optimizer):
 			self.getSetIIR()
 			pSNR = numpy.abs(numpy.dot(numpy.conj(self.template), self._iir_set_res)) 
 		return pSNR
+
+	def numberFilter(self, len_low = 3):
+		""" Merge IIR filters with length (diff of delays) less than the shreshold.
+		Reduce the number of IIR filters further.
+		"""
+		filter_len = numpy.diff(self.delay)
+		pass
+
+	def cleanFreqMode(self, f_low=20, f_high=1400):
+		""" Return the index of IIR filters with frequencies beyond the scope.
+		Normalization is not required.
+		"""
+		pass
+
+	def cleanAmpMode(self, relative_amp=5e-5):
+		""" Return the index of IIR filters with relative snr below a shrehold.
+		Normalization should be done beforehand.
+		"""
+		return numpy.where(self.percentSNR < relative_amp)
+
+	def cleanIndex(self, index):
+		""" Remove IIR filters with the specified index
+		
+		index : a list
+		"""
+		self.a1 = numpy.delete(self.a1, index)
+		self.b0 = numpy.delete(self.b0, index)
+		self.delay = numpy.delete(self.delay, index)
+
+		self.n_iir = len(self.a1)
 
 	@timethis
 	def runLagrangeOp(self):
