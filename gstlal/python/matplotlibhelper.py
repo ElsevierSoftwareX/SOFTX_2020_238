@@ -34,29 +34,11 @@ padtemplate = Gst.PadTemplate(
 	"src",
 	Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS,
 	Gst.caps_from_string("""
-		video/x-raw-rgb,
-		bpp        = (int) {24,32},
-		depth      = (int) 24,
-		endianness = (int) BIG_ENDIAN,
-		red_mask   = (int) 0xFF0000,
-		green_mask = (int) 0x00FF00,
-		blue_mask  = (int) 0x0000FF;
-		video/x-raw-rgb,
-		bpp        = (int) 32,
-		depth      = (int) {24,32},
-		endianness = (int) BIG_ENDIAN,
-		red_mask   = (int) 0x00FF0000,
-		green_mask = (int) 0x0000FF00,
-		blue_mask  = (int) 0x000000FF,
-		alpha_mask = (int) 0xFF000000;
-		video/x-raw-rgb,
-		bpp        = (int) 32,
-		depth      = (int) {24,32},
-		endianness = (int) BIG_ENDIAN,
-		red_mask   = (int) 0x0000FF00,
-		green_mask = (int) 0x00FF0000,
-		blue_mask  = (int) 0xFF000000,
-		alpha_mask = (int) 0x000000FF;
+		video/x-raw,
+		format = (string) {RGB, ARGB, RGBA, BGRA},
+		width = (int) [1, MAX],
+		height = (int) [1, MAX],
+		framerate = (fraction) [0/1, MAX]
 	""")
 )
 
@@ -83,22 +65,23 @@ def figure():
 	return figure
 
 
-def render(fig, buf):
+def render(fig, buf, (width, height), fmt):
 	"""Render a Matplotlib figure to a GStreamer buffer."""
-	caps = buf.caps[0]
 	fig.set_size_inches(
-		caps['width'] / float(fig.get_dpi()),
-		caps['height'] / float(fig.get_dpi())
+		width / float(fig.get_dpi()),
+		height / float(fig.get_dpi())
 	)
 	fig.canvas.draw()
-	if caps['bpp'] == 24: # RGB
+	if fmt == "RGB":
 		imgdata = fig.canvas.renderer._renderer.tostring_rgb()
-	elif caps['alpha_mask'] & 0xFF000000 == 0xFF000000: # ARGB
+	elif fmt == "ARGB":
 		imgdata = fig.canvas.renderer._renderer.tostring_argb()
-	elif caps['red_mask'] == 0xFF: # RGBA
+	elif fmt == "RGBA":
 		imgdata = fig.canvas.renderer._renderer.buffer_rgba()
-	else: # BGRA
+	elif fmt == "BGRA":
 		imgdata = fig.canvas.renderer._renderer.tostring_bgra()
+	else:
+		raise ValueError('invalid format "%s"' % fmt)
 	datasize = len(imgdata)
 	buf[:datasize] = imgdata
 	buf.datasize = datasize

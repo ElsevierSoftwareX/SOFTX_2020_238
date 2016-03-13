@@ -99,6 +99,11 @@ class lal_timeseriesplotter(matplotlibhelper.BaseMatplotlibTransform):
 			return self.axes.get_ylim()[1]
 
 
+	def do_set_caps(self, incaps, outcaps):
+		self.size = outcaps['width'], outcaps['height']
+		self.fmt = outcaps['format']
+
+
 	def do_transform(self, inbuf, outbuf):
 		"""GstBaseTransform->transform virtual method."""
 
@@ -111,7 +116,7 @@ class lal_timeseriesplotter(matplotlibhelper.BaseMatplotlibTransform):
 		self.axes.set_xlabel("samples since %d.%08d" % (inbuf.timestamp / gst.SECOND, inbuf.timestamp % gst.SECOND))
 
 		# Render to output buffer.
-		matplotlibhelper.render(self.figure, outbuf)
+		matplotlibhelper.render(self.figure, outbuf, self.size, self.fmt)
 
 		# Erase old lines.
 		self.axes.lines = []
