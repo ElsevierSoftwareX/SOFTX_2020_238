@@ -30,8 +30,7 @@ import math
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject
-from gi.repository import Gst
+from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
 
@@ -190,9 +189,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 	head = pipeparts.mkaudioconvert(pipeline, head)
-	if width not in (32, 64):
-		raise ValueError("bad width %d" % width)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=F%dLE, rate=%d, channels=1" % (width, max(rates)))	# FIXME:  need NE macro for format
+	if width == 64:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.F64))
+	else:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.F32))
 
 	# make the buffers going downstream smaller, this can really help with
 	# RAM
