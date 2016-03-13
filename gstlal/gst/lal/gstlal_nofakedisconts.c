@@ -173,7 +173,7 @@ static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 	gboolean ret;
 	GSTLALNoFakeDisconts *discont = GSTLAL_NOFAKEDISCONTS(parent);
 
-	switch (GST_QUERY_TYPE (query)) {
+	switch (GST_QUERY_TYPE(query)) {
 	case GST_QUERY_CAPS:
 	{
 		GstCaps *temp, *caps, *filt, *tcaps = NULL;
@@ -182,7 +182,7 @@ static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		if (!caps)
 			caps = gst_pad_get_pad_template_caps(discont->sinkpad);
 		/* Get the filter caps */
-		gst_query_parse_caps (query, &filt);
+		gst_query_parse_caps(query, &filt);
 
 		/* make sure we only return results that intersect our padtemplate */
 		tcaps = gst_pad_get_pad_template_caps (pad);
@@ -193,7 +193,7 @@ static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		/* filter against the query filter when needed */
 		if (filt) {
 			temp = gst_caps_intersect(caps, filt);
-			gst_caps_unref (caps);
+			gst_caps_unref(caps);
 			caps = temp;
 		}
 		gst_query_set_caps_result(query, caps);
@@ -202,7 +202,7 @@ static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		break;
 	}
 	default:
-		ret = gst_pad_query_default (pad, parent, query);
+		ret = gst_pad_query_default(pad, parent, query);
 		break;
 	}
 	return ret;
@@ -214,22 +214,20 @@ static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
 	gboolean ret;
 	GSTLALNoFakeDisconts *discont = GSTLAL_NOFAKEDISCONTS(parent);
 
-	switch (GST_QUERY_TYPE (query)) {
+	switch (GST_QUERY_TYPE(query)) {
 	case GST_QUERY_CAPS:
 	{
-		GstPad *otherpad;
 		GstCaps *temp, *caps, *filt, *tcaps;
 
-		otherpad = (pad == discont->srcpad) ? discont->sinkpad : discont->srcpad;
-		caps = gst_pad_get_allowed_caps (otherpad);
+		caps = gst_pad_get_allowed_caps (discont->srcpad);
 		/* If the caps are NULL, there is probably not a peer yet */
 		if (!caps) {
-			caps = gst_pad_get_pad_template_caps(otherpad);
+			caps = gst_pad_get_pad_template_caps(discont->srcpad);
 		}
-		gst_query_parse_caps (query, &filt);
+		gst_query_parse_caps(query, &filt);
 
 		/* make sure we only return results that intersect our padtemplate */
-		tcaps = gst_pad_get_pad_template_caps (pad);
+		tcaps = gst_pad_get_pad_template_caps(pad);
 		if (tcaps) {
 			temp = gst_caps_intersect(caps, tcaps);
 			gst_caps_unref(caps);
@@ -239,7 +237,7 @@ static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		/* filter against the query filter when needed */
 		if (filt) {
 			temp = gst_caps_intersect(caps, filt);
-			gst_caps_unref (caps);
+			gst_caps_unref(caps);
 			caps = temp;
 		}
 		gst_query_set_caps_result(query, caps);
@@ -248,7 +246,7 @@ static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		break;
 	}
 	default:
-		ret = gst_pad_query_default (pad, parent, query);
+		ret = gst_pad_query_default(pad, parent, query);
 		break;
 	}
 	return ret;
