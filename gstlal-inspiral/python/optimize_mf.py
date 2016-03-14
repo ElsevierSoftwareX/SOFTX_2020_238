@@ -51,7 +51,7 @@ def timethis(func):
 		if not __debug__:
 			return func
 	
-		@wrap(func)
+		@wraps(func)
 		def wrapper(*args, **kwargs):
 			start = time.time()
 			result = func(*args, **kwargs)
