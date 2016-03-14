@@ -233,11 +233,12 @@ class OptimizerIIR(Optimizer):
 		filter_len = numpy.diff(self.delay)
 		pass
 
-	def cleanFreqMode(self, f_low=20, f_high=1400):
+	def cleanFreqMode(self, f_low=20, f_high=1400, sample_rate=4096):
 		""" Return the index of IIR filters with frequencies beyond the scope.
 		Normalization is not required.
 		"""
-		pass
+		freq = numpy.abs(numpy.angle(self.a1)) * sample_rate
+		return numpy.where((freq < f_low) & (freq>f_high))
 
 	def cleanAmpMode(self, relative_amp=5e-5):
 		""" Return the index of IIR filters with relative snr below a shrehold.
