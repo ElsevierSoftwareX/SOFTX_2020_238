@@ -25,6 +25,7 @@
 #
 
 
+from __future__ import division
 import commands
 import sys
 import os
@@ -40,7 +41,6 @@ import lalsimulation
 
 import time
 from functools import wraps
-from __future__ import division
 
 def timethis(func):
 	'''
