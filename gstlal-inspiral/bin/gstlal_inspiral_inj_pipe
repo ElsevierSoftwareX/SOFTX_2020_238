@@ -583,8 +583,8 @@ lloid_output = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
 #keyed by chunk. Has to have all hte dist stats plus the prior files plus the SNR pdf
 lloid_diststats = {}
-for filename in [os.path.basename(lal.CacheEntry(f).path) for f in open(options.dist_stats_cache)]:
-	lloid_diststats.setdefault(filename.split("-")[1].split("_")[0], []).append(filename)
+for filename in [lal.CacheEntry(f).path for f in open(options.dist_stats_cache)]:
+	lloid_diststats.setdefault(os.path.basename(filename).split("-")[1].split("_")[0], []).append(filename)
 for tmpbin in lloid_diststats:
 	lloid_diststats[tmpbin].extend([lal.CacheEntry(f).path for f in open(options.prior_cache) if "%s_CREATE_PRIOR_DIST_STATS" % tmpbin in f])
 	lloid_diststats[tmpbin].extend([lal.CacheEntry(f).path for f in open(options.prior_cache) if "SNR_PDFS_CREATE_PRIOR_DIST_STATS" in f])
