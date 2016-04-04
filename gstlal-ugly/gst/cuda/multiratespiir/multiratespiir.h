@@ -88,7 +88,7 @@ typedef struct _SpiirState {
   gint queue_len;
   gint queue_first_sample;  	/* queue start position */
   gint queue_last_sample;  	/* queue end position */
-  gint pre_out_spiir_len;
+  gint pre_out_spiir_len;	/* previous output length for spiir filtering */
 } SpiirState;
 
 /* single-precision bank */

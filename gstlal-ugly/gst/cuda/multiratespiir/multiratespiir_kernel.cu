@@ -81,11 +81,11 @@ __global__ void downsample2x (const float amplifier,
 					const int len_out
 )
 {
-	unsigned int tx = threadIdx.x;
-	unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x;
-	unsigned int tdx = blockDim.x;
-	unsigned int bdx = gridDim.x;
-	unsigned int bx = blockIdx.x;
+	unsigned int tx = threadIdx.x; // thread order in a block
+	unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x; // thread ID
+	unsigned int tdx = blockDim.x; // number of threads in a block
+	unsigned int bdx = gridDim.x; // number of blocksa in a grid
+	unsigned int bx = blockIdx.x; // block order in a grid
 	int tx2, tid2, tdx2,	in_start, in_end, tmp_mem_end;
 	int tail_len = last_sample;
 	int i;
@@ -105,11 +105,12 @@ __global__ void downsample2x (const float amplifier,
 	for (i=tx; i < filt_len; i+=tdx)
 		tmp_sinc[i] = sinc[i];
 
+	/* for the first block, get the head filt_len -1data from mem */
 	if (bx < 1) {
 		for (i=tx;	i<filt_len-1; i+=tdx) 
 			tmp_mem[i] = mem[i];
 	}
-	else {
+	else { /* get the first filt_len-1 from queue_in */
 		in_start = 2 * bx * tdx + last_sample_in;
 		for (i=tx;	i<filt_len-1; i+=tdx) 
 			tmp_mem[i] = queue_in[ (in_start - (filt_len - 1) + i) % len_in] ;
@@ -117,8 +118,7 @@ __global__ void downsample2x (const float amplifier,
 
 	if (tid < len) {
 	/*
-	 * grab filt_len-1 data,
-	 * for the first block, grab data from mem 
+	 * copy the chunk data from queue_in
 	 */
 
 
@@ -126,6 +126,7 @@ __global__ void downsample2x (const float amplifier,
 		tmp_mem[tx2 + filt_len]	= queue_in[(tid2 + 1 + last_sample_in) % len_in];
 
 	}
+	/* copy the  tail filt_len -1 data */
 	if (bx == bdx - 1) {
 		tmp_mem_end = (len - bx * tdx) * 2;
 		in_end = len * 2 + last_sample_in;
@@ -140,6 +141,7 @@ __global__ void downsample2x (const float amplifier,
 		tmp_mem[tmp_mem_end + filt_len - 1 + i] = queue_in[(in_end + i) % len_in];
 	__syncthreads();	
 
+	/* filter and store the result */
 	if (tid < len) {
 
 		for (int j = 0; j < filt_len; ++j) {
