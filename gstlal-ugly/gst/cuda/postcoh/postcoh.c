@@ -828,7 +828,7 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int hist_trials, int max_npeak, float cohsnr_thresh)
+static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo, int hist_trials, int max_npeak, float cohsnr_thresh)
 {
 	int ipeak, npeak, peak_cur, itrial, background_cur, left_backgrounds = 0;
 	npeak = pklist->npeak[0];
@@ -836,7 +836,7 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int his
 		peak_cur = pklist->peak_pos[ipeak];
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
-			if ( sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh)
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
 				left_backgrounds++;
 			else
 				pklist->cohsnr_bg[background_cur] = -1;
@@ -864,7 +864,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 			 * we abandon this peak
 			 * */
 			peak_cur = peak_pos[ipeak];
-			if (pklist->cohsnr[peak_cur] > 0 && sqrt(pklist->cohsnr[peak_cur]) > cohsnr_thresh) {
+			if (sqrt(pklist->cohsnr[peak_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
 				tmp_peak_pos[final_peaks++] = peak_cur;
 			}
 
@@ -876,7 +876,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		/* mark background triggers which do not pass the test */
 		left_entries += npeak;
 		if (npeak > 0 && state->cur_nifo == state->nifo)
-			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, state->hist_trials, state->max_npeak, cohsnr_thresh);
+			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
 	
 		}
 	}
