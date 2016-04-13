@@ -1530,7 +1530,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"cohsnr-thresh",
 			"coherent snr threshold",
 			"coherent snr threshold",
-			0.0, G_MAXFLOAT, 5.0,
+			0.0, G_MAXFLOAT, 1.05,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
