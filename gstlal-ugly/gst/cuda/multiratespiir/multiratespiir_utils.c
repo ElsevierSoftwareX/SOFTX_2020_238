@@ -70,18 +70,22 @@ cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, 
 	parseFile(fname, &xns, 1);
 
 	int ndepth = 0;
-	int maxrate = 1;
+	int maxrate = 0, minrate = 0;
 	int temp;
 	gchar **rates = g_strsplit((const gchar*)xparam.data, (const gchar*)",", 16);
+	temp = atoi((const char*)rates[0]);
+	maxrate = temp;
+	minrate = temp;
 	while (rates[ndepth])
 	{
 		temp = atoi((const char*)rates[ndepth]);
 		maxrate = maxrate > temp ? maxrate : temp;
+		minrate = minrate < temp ? minrate : temp;
 		++ndepth;	
 	}
 	g_strfreev(rates);
 	freeParam(&xparam);
-	*num_depths = (guint)ndepth;
+	*num_depths = (guint)(log(maxrate)/log(2) - log(minrate)/log(2)) + 1;
 	*rate = (gint)maxrate;
 
 	xmlCleanupParser();

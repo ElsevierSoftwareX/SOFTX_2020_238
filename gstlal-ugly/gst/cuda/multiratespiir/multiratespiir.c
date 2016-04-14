@@ -1233,14 +1233,14 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       cuda_multirate_spiir_read_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
 
       cuda_multirate_spiir_init_cover_samples(&element->num_head_cover_samples, &element->num_tail_cover_samples, element->rate, element->num_depths, DOWN_FILT_LEN*2, UP_FILT_LEN);
-      if (element->num_head_cover_samples > 0)
-        cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->num_head_cover_samples);
-      else
-        cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
+
+      /* we consider the num_exe_samples equals to rate unless it is at the first or last buffer */
+      cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
 
       element->spstate = spiir_state_create (element->bank_fname, element->num_depths, element->rate,
 		    element->num_head_cover_samples, element->num_exe_samples,
 		    element->stream);
+
 
       GST_DEBUG_OBJECT (element, "number of cover samples set to (%d, %d), number of exe samples set to %d", element->num_head_cover_samples, element->num_tail_cover_samples, element->num_exe_samples);
 
