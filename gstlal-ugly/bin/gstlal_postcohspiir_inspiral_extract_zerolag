@@ -1,0 +1,87 @@
+#! /usr/bin/env python
+import os
+import numpy as np
+import scipy
+import math
+import csv
+import logging
+from optparse import OptionParser
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot
+
+from gstlal.postcoh_table_def import PostcohInspiralTable
+from glue import iterutils
+from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from pylal import datatypes as laltypes
+from pylal import git_version
+import pdb
+
+Attributes = ligolw.sax.xmlreader.AttributesImpl
+
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+		result = array.get_array(root, array_name).array 
+	return result
+
+def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	postcoh = PostcohInspiralTable.get_table(xmldoc)
+	return postcoh
+
+def append_missing_options(missing_options, options, option):
+	if getattr(options, option) is None:
+		missing_options.append("--%s" % option.replace("_", "-"))
+
+
+def parse_command_line():
+	parser = OptionParser(version = git_version.verbose_msg, usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
+	parser.add_option("--output-zerolag-filename", default = "", metavar = "name", help = "Set the output file name")
+	parser.add_option("--input-zerolag-filename", default = "", metavar = "name", help = "Set the input file name")
+	parser.add_option("--min-mchirp", type = "float", help = "min chirp mass")
+	parser.add_option("--max-mchirp", type = "float", help = "max chirp mass")
+	options, tmp = parser.parse_args()
+
+	missing_options = []
+	append_missing_options(missing_options, options, "output_zerolag_filename")
+	append_missing_options(missing_options, options, "input_zerolag_filename")
+	append_missing_options(missing_options, options, "min_mchirp")
+	append_missing_options(missing_options, options, "max_mchirp")
+
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	return options
+
+options = parse_command_line()
+
+
+zerolags = postcoh_table_from_xml(options.input_zerolag_filename)
+iterutils.inplace_filter(lambda row: row.mchirp < options.max_mchirp and row.mchirp > options.min_mchirp, zerolags)
+
+# setup the xml doc
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohInspiralTable))
+
+# assemble the table
+postcoh_table = PostcohInspiralTable.get_table(xmldoc)
+postcoh_table.extend(zerolags)
+
+# write to the output
+utils.write_filename(xmldoc, options.output_zerolag_filename, gz = (options.output_zerolag_filename or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
