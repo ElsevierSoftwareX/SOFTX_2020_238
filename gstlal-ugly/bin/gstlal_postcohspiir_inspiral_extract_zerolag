@@ -70,18 +70,20 @@ def parse_command_line():
 
 options = parse_command_line()
 
-
-zerolags = postcoh_table_from_xml(options.input_zerolag_filename)
-iterutils.inplace_filter(lambda row: row.mchirp < options.max_mchirp and row.mchirp > options.min_mchirp, zerolags)
-
 # setup the xml doc
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 xmldoc.childNodes[-1].appendChild(lsctables.New(PostcohInspiralTable))
 
-# assemble the table
 postcoh_table = PostcohInspiralTable.get_table(xmldoc)
-postcoh_table.extend(zerolags)
+
+
+for fn in options.input_zerolag_filename.split(','):
+	zerolags = postcoh_table_from_xml(fn)
+	iterutils.inplace_filter(lambda row: row.mchirp < options.max_mchirp and row.mchirp > options.min_mchirp, zerolags)
+
+	# assemble the table
+	postcoh_table.extend(zerolags)
 
 # write to the output
 utils.write_filename(xmldoc, options.output_zerolag_filename, gz = (options.output_zerolag_filename or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
