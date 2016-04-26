@@ -76,13 +76,13 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},
+		/*{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},*/
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
-		{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},
-		{"lal_mean", GSTLAL_MEAN_TYPE},
-		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
-		{"lal_pad", GST_TYPE_LALPAD},
-		{"lal_trim", GST_TYPE_LALTRIM},
+		/*{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},*/
+		/*{"lal_mean", GSTLAL_MEAN_TYPE},*/
+		/*{"lal_specgram", GSTLAL_SPECGRAM_TYPE},*/
+		/*{"lal_pad", GST_TYPE_LALPAD},
+		{"lal_trim", GST_TYPE_LALTRIM},*/
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},
 		{NULL, 0},
