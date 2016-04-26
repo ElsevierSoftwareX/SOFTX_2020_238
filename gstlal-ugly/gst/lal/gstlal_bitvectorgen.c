@@ -33,6 +33,7 @@
 
 #include <complex.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -43,6 +44,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -52,10 +54,6 @@
 
 
 #include <gstlal_bitvectorgen.h>
-
-
-#define GST_CAT_DEFAULT gstlal_bitvectorgen_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -73,7 +71,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define DEFAULT_HOLD_LENGTH 0
 #define DEFAULT_INVERT FALSE
 #define DEFAULT_NONGAP_IS_CONTROL FALSE
-#define DEFAULT_BIT_VECTOR 0xffffffffffffffff
+#define DEFAULT_BIT_VECTOR 0xffffffff
 
 
 /*
@@ -85,18 +83,15 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  */
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_bitvectorgen", 0, "lal_bitvectorgen element");
-}
+#define GST_CAT_DEFAULT gstlal_bitvectorgen_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALBitVectorGen,
 	gstlal_bitvectorgen,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_bitvectorgen", 0, "lal_bitvectorgen element")
 );
 
 
@@ -220,27 +215,21 @@ static gdouble get_input_complex128(void **in)
  */
 
 
-static void set_output_uint8(void **out, guint64 bit_vector)
+static void set_output_uint8(void **out, guint32 bit_vector)
 {
 	*(*(guint8 **) out)++ = bit_vector;
 }
 
 
-static void set_output_uint16(void **out, guint64 bit_vector)
+static void set_output_uint16(void **out, guint32 bit_vector)
 {
 	*(*(guint16 **) out)++ = bit_vector;
 }
 
 
-static void set_output_uint32(void **out, guint64 bit_vector)
+static void set_output_uint32(void **out, guint32 bit_vector)
 {
 	*(*(guint32 **) out)++ = bit_vector;
-}
-
-
-static void set_output_uint64(void **out, guint64 bit_vector)
-{
-	*(*(guint64 **) out)++ = bit_vector;
 }
 
 
@@ -258,18 +247,15 @@ static void set_output_uint64(void **out, guint64 bit_vector)
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint channels, width;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = width / 8 * channels;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
@@ -282,7 +268,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	GstCaps *othercaps = NULL;
 	guint i;
@@ -322,6 +308,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		return GST_CAPS_NONE;
 	}
 
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(othercaps, filter);
+		gst_caps_unref(othercaps);
+		othercaps = intersection;
+	}
+
 	return othercaps;
 }
 
@@ -334,11 +326,10 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALBitVectorGen *element = GSTLAL_BITVECTORGEN(trans);
-	GstStructure *s;
-	const gchar *media_type;
-	gint rate, width;
+	GstAudioInfo info;
+	gint rate;
 	gdouble (*get_input_func)(void **) = NULL;
-	void (*set_output_func)(void **, guint64) = NULL;
+	void (*set_output_func)(void **, guint32) = NULL;
 	guint64 mask;
 	gboolean success = TRUE;
 
@@ -346,84 +337,75 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * parse the input caps
 	 */
 
-	s = gst_caps_get_structure(incaps, 0);
-	success &= gst_structure_get_int(s, "rate", &rate);
-	success &= gst_structure_get_int(s, "width", &width);
-	media_type = gst_structure_get_name(s);
-	if(!strcmp(media_type, "audio/x-raw-float")) {
-		switch(width) {
-		case 32:
+	success &= gst_audio_info_from_caps(&info, incaps);
+	if(success) {
+		const gchar *name = GST_AUDIO_INFO_NAME(&info);
+		rate = GST_AUDIO_INFO_RATE(&info);
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_S8:
+			get_input_func = get_input_int8;
+			break;
+		case GST_AUDIO_FORMAT_U8:
+			get_input_func = get_input_uint8;
+			break;
+		case GST_AUDIO_FORMAT_S16:
+			get_input_func = get_input_int16;
+			break;
+		case GST_AUDIO_FORMAT_U16:
+			get_input_func = get_input_uint16;
+			break;
+		case GST_AUDIO_FORMAT_S32:
+			get_input_func = get_input_int32;
+			break;
+		case GST_AUDIO_FORMAT_U32:
+			get_input_func = get_input_uint32;
+			break;
+		case GST_AUDIO_FORMAT_F32:
 			get_input_func = get_input_float32;
 			break;
-		case 64:
+		case GST_AUDIO_FORMAT_F64:
 			get_input_func = get_input_float64;
 			break;
 		default:
-			success = FALSE;
+			/*
+			 * Handle the complex types which are "special" formats
+			 */
+			if(!strncmp(name, "Z64", 3))
+				get_input_func = get_input_complex64;
+			else if(!strncmp(name, "Z128", 4))
+				get_input_func = get_input_complex128;
+			else
+				success = FALSE;
 			break;
 		}
-	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		switch(width) {
-		case 64:
-			get_input_func = get_input_complex64;
-			break;
-		case 128:
-			get_input_func = get_input_complex128;
-			break;
-		default:
-			success = FALSE;
-			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-int")) {
-		gboolean is_signed;
-		success &= gst_structure_get_boolean(s, "signed", &is_signed);
-		switch(width) {
-		case 8:
-			get_input_func = is_signed ? get_input_int8 : get_input_uint8;
-			break;
-		case 16:
-			get_input_func = is_signed ? get_input_int16 : get_input_uint16;
-			break;
-		case 32:
-			get_input_func = is_signed ? get_input_int32 : get_input_uint32;
-			break;
-		default:
-			success = FALSE;
-			break;
-		}
-	} else
-		success = FALSE;
+	}
 
 	/*
 	 * parse the output caps
 	 */
 
-	s = gst_caps_get_structure(outcaps, 0);
-	success &= gst_structure_get_int(s, "width", &width);
-	switch(width) {
-	case 8:
-		set_output_func = set_output_uint8;
-		mask = 0xff;
-		break;
+	success &= gst_audio_info_from_caps(&info, outcaps);
+	if(success) {
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_U8:
+			set_output_func = set_output_uint8;
+			mask = 0xff;
+			break;
 
-	case 16:
-		set_output_func = set_output_uint16;
-		mask = 0xffff;
-		break;
+		case GST_AUDIO_FORMAT_U16:
+			set_output_func = set_output_uint16;
+			mask = 0xffff;
+			break;
 
-	case 32:
-		set_output_func = set_output_uint32;
-		mask = 0xffffffff;
-		break;
+		case GST_AUDIO_FORMAT_U32:
+			set_output_func = set_output_uint32;
+			mask = 0xffffffff;
+			break;
 
-	case 64:
-		set_output_func = set_output_uint64;
-		mask = 0xffffffffffffffff;
-		break;
-
-	default:
-		success = FALSE;
-		break;
+		default:
+			success = FALSE;
+			break;
+		}
 	}
 
 	/*
@@ -467,25 +449,27 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALBitVectorGen *element = GSTLAL_BITVECTORGEN(trans);
 	guint64 bit_vector = element->bit_vector & element->mask;
+	GstMapInfo outmap;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(element->get_input_func != NULL);
 	g_assert(element->set_output_func != NULL);
 
+	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+
 	/* FIXME:  implement attack and hold */
 	/* FIXME:  add support for disconts in nongap-is-control mode */
-	/* FIXME:  use sample count instead of size to measure buffer lengths */
 
 	if(GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) || element->nongap_is_control) {
 		gboolean state = (element->nongap_is_control && !GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) ^ element->invert_control;
 
 		if(state) {
-			guint8 *out = GST_BUFFER_DATA(outbuf);
-			guint8 *end = GST_BUFFER_DATA(outbuf) + GST_BUFFER_SIZE(outbuf);
+			guint8 *out = outmap.data;
+			guint8 *end = outmap.data + outmap.size;
 			while(out < end)
 				element->set_output_func((void **) &out, bit_vector);
 		} else
-			memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+			memset(outmap.data, 0, outmap.size);
 
 		if(!element->nongap_is_control && GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP))
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
@@ -494,20 +478,30 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(inbuf), NULL);
 		element->last_state = state;
 	} else {
-		guint8 *in = GST_BUFFER_DATA(inbuf);
-		guint8 *out = GST_BUFFER_DATA(outbuf);
-		guint8 *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
+		GstMapInfo inmap;
+		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
+
+		guint8 *in = inmap.data;
+		guint8 *out = outmap.data;
+		guint8 *end = inmap.data + inmap.size;
 
 		while(in < end) {
+			guint8 *in_saved = in;	/* for computing timestamps */
 			gboolean state = (element->get_input_func((void **) &in) >= element->threshold) ^ element->invert_control;
 			element->set_output_func((void **) &out, state ? bit_vector : 0);
 			if(element->emit_signals && state != element->last_state) {
-				GstClockTime timestamp = GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(in - GST_BUFFER_DATA(inbuf), GST_BUFFER_DURATION(inbuf), GST_BUFFER_SIZE(inbuf));
+				/* need to use in_saved because in has been
+				 * incremented */
+				GstClockTime timestamp = GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(in_saved - inmap.data, GST_BUFFER_DURATION(inbuf), inmap.size);
 				g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 			}
 			element->last_state = state;
 		}
+
+		gst_buffer_unmap(inbuf, &inmap);
 	}
+
+	gst_buffer_unmap(outbuf, &outmap);
 
 	/*
 	 * done
@@ -534,8 +528,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 enum property {
 	ARG_EMIT_SIGNALS = 1,
 	ARG_THRESHOLD,
-	ARG_ATTACK_LENGTH,
-	ARG_HOLD_LENGTH,
 	ARG_INVERT,
 	ARG_NONGAP_IS_CONTROL,
 	ARG_BIT_VECTOR
@@ -557,14 +549,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->threshold = g_value_get_double(value);
 		break;
 
-	case ARG_ATTACK_LENGTH:
-		element->attack_length = g_value_get_int64(value);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		element->hold_length = g_value_get_int64(value);
-		break;
-
 	case ARG_INVERT:
 		element->invert_control = g_value_get_boolean(value);
 		break;
@@ -574,7 +558,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_BIT_VECTOR:
-		element->bit_vector = g_value_get_uint64(value);
+		element->bit_vector = g_value_get_uint(value);
 		break;
 
 	default:
@@ -601,14 +585,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->threshold);
 		break;
 
-	case ARG_ATTACK_LENGTH:
-		g_value_set_int64(value, element->attack_length);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		g_value_set_int64(value, element->hold_length);
-		break;
-
 	case ARG_INVERT:
 		g_value_set_boolean(value, element->invert_control);
 		break;
@@ -618,7 +594,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_BIT_VECTOR:
-		g_value_set_uint64(value, element->bit_vector);
+		g_value_set_uint(value, element->bit_vector);
 		break;
 
 	default:
@@ -627,16 +603,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	}
 
 	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gstlal_bitvectorgen_base_init(gpointer gclass)
-{
 }
 
 
@@ -679,22 +645,11 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {8, 16, 32, 64}, " \
-				"signed = (boolean) {true, false}; " \
-				"audio/x-raw-float, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64};" \
-				"audio/x-raw-complex, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"audio/x-raw, " \
+				"rate = " GST_AUDIO_RATE_RANGE ", " \
+				"channels = 1, " \
+				"format = (string) {" GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+				"layout = (string) interleaved"
 			)
 		)
 	);
@@ -705,34 +660,11 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64, " \
-				"depth = (int) 64, " \
-				"signed = false; " \
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 32, " \
-				"depth = (int) 32, " \
-				"signed = false; " \
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 16, " \
-				"depth = (int) 16, " \
-				"signed = false; " \
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 8, " \
-				"depth = (int) 8, " \
-				"signed = false"
+				"audio/x-raw, " \
+				"rate = " GST_AUDIO_RATE_RANGE ", " \
+				"channels = 1, " \
+				"format = (string) {" GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) "}, " \
+				"layout = (string) interleaved"
 			)
 		)
 	);
@@ -761,28 +693,6 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ATTACK_LENGTH,
-		g_param_spec_int64(
-			"attack-length",
-			"Attack",
-			"Number of samples ahead of off-to-on transitions for which to generate \"on\" output.",
-			G_MININT64, G_MAXINT64, DEFAULT_ATTACK_LENGTH,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_HOLD_LENGTH,
-		g_param_spec_int64(
-			"hold-length",
-			"Hold",
-			"Number of samples following \"on\"-to-\"off\" transitions for which to generate \"on\" output.",
-			G_MININT64, G_MAXINT64, DEFAULT_HOLD_LENGTH,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
 		ARG_INVERT,
 		g_param_spec_boolean(
 			"invert-control",
@@ -806,11 +716,11 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		ARG_BIT_VECTOR,
-		g_param_spec_uint64(
+		g_param_spec_uint(
 			"bit-vector",
 			"Bit Vector",
 			"Value to generate when output is \"on\" (output is 0 otherwise).  Only as many low-order bits as are needed by the output word size will be used.",
-			0, G_MAXUINT64, DEFAULT_BIT_VECTOR,
+			0, G_MAXUINT32, DEFAULT_BIT_VECTOR,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -840,7 +750,7 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 		),
 		NULL,
 		NULL,
-		gst_marshal_VOID__INT64,
+		g_cclosure_marshal_VOID__LONG,
 		G_TYPE_NONE,
 		1,
 		G_TYPE_UINT64
@@ -855,7 +765,7 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
 		),
 		NULL,
 		NULL,
-		gst_marshal_VOID__INT64,
+		g_cclosure_marshal_VOID__LONG,
 		G_TYPE_NONE,
 		1,
 		G_TYPE_UINT64
@@ -868,7 +778,7 @@ static void gstlal_bitvectorgen_class_init(GSTLALBitVectorGenClass *klass)
  */
 
 
-static void gstlal_bitvectorgen_init(GSTLALBitVectorGen *element, GSTLALBitVectorGenClass *klass)
+static void gstlal_bitvectorgen_init(GSTLALBitVectorGen *element)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
