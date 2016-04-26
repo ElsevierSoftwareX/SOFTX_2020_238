@@ -627,45 +627,42 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 	 * parse the format
 	 */
 
-	switch (format) {
-		case GST_AUDIO_FORMAT_U8 :
-			control_sample_func = control_sample_uint8;
-			break;
-		case GST_AUDIO_FORMAT_U16 :
-			control_sample_func = control_sample_uint16;
-			break;
-		case GST_AUDIO_FORMAT_U32 :
-			control_sample_func = control_sample_uint32;
-			break;
-		case GST_AUDIO_FORMAT_S8 :
-			control_sample_func = control_sample_int8;
-			break;
-		case GST_AUDIO_FORMAT_S16 :
-			control_sample_func = control_sample_int16;
-			break;
-		case GST_AUDIO_FORMAT_S32 :
-			control_sample_func = control_sample_int32;
-			break;
-		case GST_AUDIO_FORMAT_F32 :
-			control_sample_func = control_sample_float32;
-			break;
-		case GST_AUDIO_FORMAT_F64 :
-			control_sample_func = control_sample_float64;
-			break;
-		default:
-			/*
-			 * Handle the complex types which are "special" formats
-			 */
-			if (!strncmp(name, "Z64", 3)) {
-				control_sample_func = control_sample_complex64;
-				break;
-			}
-			if (!strncmp(name, "Z128", 4)) {
-				control_sample_func = control_sample_complex128;
-				break;
-			}
+	switch(format) {
+	case GST_AUDIO_FORMAT_U8:
+		control_sample_func = control_sample_uint8;
+		break;
+	case GST_AUDIO_FORMAT_U16:
+		control_sample_func = control_sample_uint16;
+		break;
+	case GST_AUDIO_FORMAT_U32:
+		control_sample_func = control_sample_uint32;
+		break;
+	case GST_AUDIO_FORMAT_S8:
+		control_sample_func = control_sample_int8;
+		break;
+	case GST_AUDIO_FORMAT_S16:
+		control_sample_func = control_sample_int16;
+		break;
+	case GST_AUDIO_FORMAT_S32:
+		control_sample_func = control_sample_int32;
+		break;
+	case GST_AUDIO_FORMAT_F32:
+		control_sample_func = control_sample_float32;
+		break;
+	case GST_AUDIO_FORMAT_F64:
+		control_sample_func = control_sample_float64;
+		break;
+	default:
+		/*
+		 * Handle the complex types which are "special" formats
+		 */
+		if(!strncmp(name, "Z64", 3))
+			control_sample_func = control_sample_complex64;
+		else if(!strncmp(name, "Z128", 4))
+			control_sample_func = control_sample_complex128;
+		else
 			success = FALSE;
-			break;
+		break;
 	}
 
 	/*
@@ -840,7 +837,8 @@ static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
 	 * If the filter caps are empty (but not NULL), there is nothing we can
 	 * do, there will be no intersection
 	 */
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
+
+	if(filter_caps && gst_caps_is_empty (filter_caps)) {
 		GST_WARNING_OBJECT (pad, "Empty filter caps");
 		return filter_caps;
 	}
@@ -850,28 +848,26 @@ static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
 
 	/* get the allowed caps on this sinkpad */
 	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
-			current_caps = gst_caps_new_any();
+	if(!current_caps)
+		current_caps = gst_caps_new_any();
 
-	if (peercaps) {
+	if(peercaps) {
 		/* if the peer has caps, intersect */
 		GST_DEBUG_OBJECT(gate, "intersecting peer and our caps");
 		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
 		/* neither peercaps nor current_caps are needed any more */
 		gst_caps_unref(peercaps);
 		gst_caps_unref(current_caps);
-	}
-	else {
+	} else {
 		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
+		 * of this sinkpad. */
 		/* restrict with filter-caps if any */
-		if (filter_caps) {
+		if(filter_caps) {
 			GST_DEBUG_OBJECT(gate, "no peer caps, using filtered caps");
 			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
 			/* current_caps are not needed any more */
 			gst_caps_unref(current_caps);
-		}
-		else {
+		} else {
 			GST_DEBUG_OBJECT(gate, "no peer caps, using our caps");
 			result = current_caps;
 		}
@@ -879,8 +875,8 @@ static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
 
 	result = gst_caps_make_writable (result);
 
-	if (filter_caps)
-		gst_caps_unref (filter_caps);
+	if(filter_caps)
+		gst_caps_unref(filter_caps);
 
 	GST_LOG_OBJECT (gate, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
 
