@@ -35,6 +35,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 
@@ -69,7 +70,7 @@ typedef struct {
 	 * input stream
 	 */
 
-	gint rate, width;
+	GstAudioInfo audio_info;
 	GstAdapter *adapter;
 	guint zeros_in_adapter;
 

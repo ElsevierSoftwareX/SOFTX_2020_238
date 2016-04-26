@@ -33,6 +33,7 @@
 
 #include <complex.h>
 #include <string.h>
+#include <time.h>
 
 
 /*
@@ -56,7 +57,6 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 
-#include <time.h>
 
 /*
  * ============================================================================
@@ -66,9 +66,11 @@
  * ============================================================================
  */
 
+
 /*
  * return the number of IIR channels
  */
+
 
 static unsigned iir_channels(const GSTLALIIRBank *element)
 {
@@ -85,12 +87,11 @@ static unsigned iir_channels(const GSTLALIIRBank *element)
 
 static int push_zeros(GSTLALIIRBank *element, unsigned samples)
 {
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * (element->width / 8));
+	GstBuffer *zerobuf = gst_buffer_new_allocate(NULL, samples * (GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8), NULL);
 	if(!zerobuf) {
 		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 		return -1;
 	}
-	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
 	gst_adapter_push(element->adapter, zerobuf);
 	element->zeros_in_adapter += samples;
 	return 0;
@@ -104,13 +105,12 @@ static int push_zeros(GSTLALIIRBank *element, unsigned samples)
 
 static void set_metadata(GSTLALIIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean isgap)
 {
-        GST_BUFFER_SIZE(buf) = outsamples * iir_channels(element) * element->width / 8;
         GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
-	if(element->need_discont) {
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info)));
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))) - GST_BUFFER_TIMESTAMP(buf);
+	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
@@ -128,19 +128,20 @@ static void set_metadata(GSTLALIIRBank *element, GstBuffer *buf, guint64 outsamp
 
 static guint64 get_available_samples(GSTLALIIRBank *element)
 {
-	return gst_adapter_available(element->adapter) / ( element->width / 8 );
+	return gst_adapter_available(element->adapter) / (GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8);
 }
+
 
 /*
  * transform input samples to output samples using a time-domain algorithm
  */
 
 
-static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf, gboolean isgap)
+static GstFlowReturn filter_d(GSTLALIIRBank *element, GstMapInfo *map, gboolean isgap, unsigned *out_length)
 {
 	unsigned available_length;
 	unsigned output_length;
-	double * restrict input;
+	const double * restrict input;
 	complex double * restrict output;
 	int dmax, dmin;
 	complex double * restrict y, * restrict a1, * restrict b0;
@@ -158,37 +159,36 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf, gboolea
 	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 	dmin = 0;
 	available_length = get_available_samples(element);
-	output_length = available_length - (dmax - dmin);
+	output_length = *out_length = available_length - (dmax - dmin);
 
 	if(!output_length)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
-	 * wrap the adapter's contents in a GSL vector view.
+	 * wrap the adapter's contents in an array
 	 */
 
-	input = (double *) gst_adapter_peek(element->adapter, available_length * sizeof(double));
+	input = (const double *) gst_adapter_map(element->adapter, available_length * sizeof(double));
 
 	/*
 	 * wrap output buffer in a complex double array.
 	 */
 
-	output = (complex double *) GST_BUFFER_DATA(outbuf);
-	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= GST_BUFFER_SIZE(outbuf));
+	output = (complex double *) map->data;
+	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= map->size);
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
 	uint num_templates, num_filters;
 	num_templates = element->a1->size1;
 	num_filters = element->a1->size2;
-	complex double ytemp;
 
-	uint iter_tplts, iter_flts, iter_length, y_index, out_index; 
+	uint iter_tplts, iter_flts, iter_length; 
 
 	for (iter_tplts = 0; iter_tplts < num_templates; iter_tplts++) {
 		for (iter_flts = 0; iter_flts < num_filters; iter_flts++) {
-			ytemp = *y;
-			double *in = &input[dmax -*d];
+			complex double ytemp = *y;
+			const double *in = &input[dmax -*d];
 			complex double *out = output;
 
 			for(iter_length = 0; iter_length < output_length; iter_length++) { /* sample # */
@@ -217,12 +217,6 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf, gboolea
 		element->zeros_in_adapter = available_length - output_length;
 
 	/*
-	 * set buffer metadata
-	 */
-
-	set_metadata(element, outbuf, output_length, isgap);
-
-	/*
 	 * done
 	 */
 
@@ -235,11 +229,11 @@ static GstFlowReturn filter_d(GSTLALIIRBank *element, GstBuffer *outbuf, gboolea
  */
 
 
-static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf, gboolean isgap)
+static GstFlowReturn filter_s(GSTLALIIRBank *element, GstMapInfo *map, gboolean isgap, unsigned *out_length)
 {
 	unsigned available_length;
 	unsigned output_length;
-	float * restrict input;
+	const float * restrict input;
 	complex float * restrict output;
 	int dmax, dmin;
 	complex double * restrict y, * restrict a1, * restrict b0;
@@ -256,37 +250,36 @@ static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf, gboolea
 	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 	dmin = 0;
 	available_length = get_available_samples(element);
-	output_length = available_length - (dmax - dmin);
+	output_length = *out_length = available_length - (dmax - dmin);
 
 	if(!output_length)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
-	 * wrap the adapter's contents in a GSL vector view.
+	 * wrap the adapter's contents in an array
 	 */
 
-	input = (float *) gst_adapter_peek(element->adapter, available_length * (element->width / 8));
+	input = (const float *) gst_adapter_map(element->adapter, available_length * sizeof(float));
 
 	/*
 	 * wrap output buffer in a complex double array.
 	 */
 
-	output = (complex float *) GST_BUFFER_DATA(outbuf);
-	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex float) <= GST_BUFFER_SIZE(outbuf));
+	output = (complex float *) map->data;
+	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex float) <= map->size);
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
 	uint num_templates, num_filters;
 	num_templates = element->a1->size1;
 	num_filters = element->a1->size2;
-	complex double ytemp;
 
-	uint iter_tplts, iter_flts, iter_length, y_index, out_index; 
+	uint iter_tplts, iter_flts, iter_length; 
 
 	for (iter_tplts = 0; iter_tplts < num_templates; iter_tplts++) {
 		for (iter_flts = 0; iter_flts < num_filters; iter_flts++) {
-			ytemp = *y;
-			float *in = &input[dmax -*d];
+			complex double ytemp = *y;
+			const float *in = &input[dmax -*d];
 			complex float *out = output;
 
 			for(iter_length = 0; iter_length < output_length; iter_length++) { /* sample # */
@@ -306,21 +299,15 @@ static GstFlowReturn filter_s(GSTLALIIRBank *element, GstBuffer *outbuf, gboolea
 	/*
 	 * flush the data from the adapter
 	 */
-	g_assert(gst_adapter_available(element->adapter) >= (output_length * element->width / 8));
 
-	gst_adapter_flush(element->adapter, output_length * (element->width / 8));
+	g_assert(gst_adapter_available(element->adapter) >= (output_length * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8));
+	gst_adapter_flush(element->adapter, output_length * (GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8));
 	if(element->zeros_in_adapter > available_length - output_length)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
 		element->zeros_in_adapter = available_length - output_length;
-
-	/*
-	 * set buffer metadata
-	 */
-
-	set_metadata(element, outbuf, output_length, isgap);
 
 	/*
 	 * done
@@ -370,11 +357,11 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
+		"layout = (string) interleaved"
 	)
 );
 
@@ -384,19 +371,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
+		"layout = (string) interleaved"
 	)
 );
 
 
-GST_BOILERPLATE(
+G_DEFINE_TYPE(
 	GSTLALIIRBank,
 	gstlal_iirbank,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM
 );
 
@@ -425,18 +411,15 @@ enum property {
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint width, channels;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	success &= gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = width / 8 * channels;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 
@@ -450,7 +433,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
  */
 
 
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
 	guint n;
@@ -493,6 +476,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		return GST_CAPS_NONE;
 	}
 
+	if(filter) {
+		GstCaps *result = gst_caps_intersect(caps, filter);
+		gst_caps_unref(caps);
+		caps = result;
+	}
+
 	return caps;
 }
 
@@ -502,17 +491,17 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 	int dmin, dmax;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_DEBUG_OBJECT(element, "size not a multiple of %zu", unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -570,34 +559,26 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
-	GstStructure *s;
-	gint rate;
-	gint channels;
-	gint width;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	s = gst_caps_get_structure(outcaps, 0);
-	success &= gst_structure_get_int(s, "channels", &channels);
-	success &= gst_structure_get_int(s, "width", &width);
-	success &= gst_structure_get_int(s, "rate", &rate);
+	success &= gst_audio_info_from_caps(&info, outcaps);
 
-	if(success && element->delay && (channels != (gint) iir_channels(element))) {
+	if(success && element->delay && (GST_AUDIO_INFO_CHANNELS(&info) != (gint) iir_channels(element))) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, iir_channels(element), outcaps);
 		success = FALSE;
 	}
 
 	if(success) {
-		gboolean format_changed = element->rate != rate || element->width != width;
-		gint old_rate = element->rate;
-		element->rate = rate;
-		element->width = width;
-		if(format_changed){
+		gint old_rate = GST_AUDIO_INFO_IS_VALID(&(element->audio_info)) ? GST_AUDIO_INFO_RATE(&(element->audio_info)) : 0;
+		if(!gst_audio_info_is_equal(&info, &(element->audio_info))) {
 			gst_adapter_clear(element->adapter);
 			element->zeros_in_adapter = 0;
 			element->t0 = GST_CLOCK_TIME_NONE;	/* force discont */
 		}
-		if(element->rate != old_rate)
-			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+		element->audio_info = info;
+		if(GST_AUDIO_INFO_RATE(&(element->audio_info)) != old_rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, GST_AUDIO_INFO_RATE(&(element->audio_info)), NULL);
 
 	} else
 		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
@@ -631,11 +612,10 @@ static gboolean start(GstBaseTransform *trans)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	guint64 length;
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
-	GstFlowReturn result;
-
-	gboolean isgap;
+	GstMapInfo mapinfo;
+	unsigned output_length;
+	GstFlowReturn result = GST_FLOW_ERROR;
 
 	/*
 	 * wait for IIR matrix
@@ -699,7 +679,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * FIXME:  gap handling is busted
 	 */
 
-	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
 		 * input is not 0s
@@ -708,37 +688,29 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
-		isgap = FALSE;
-		if (element->width == 64)
-			result = filter_d(element, outbuf, isgap);
-		else if (element->width == 32){
-			result = filter_s(element, outbuf, isgap);
-		}
-	} else if(TRUE) {
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
+			result = filter_d(element, &mapinfo, FALSE, &output_length);
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
+			result = filter_s(element, &mapinfo, FALSE, &output_length);
+	} else {
 		/*
 		 * input is 0s, FIXME here. Make dependent on decay rate.
 		 */
 
-		push_zeros(element, length);
-		isgap = TRUE;
-		if (element->width == 64)
-			result = filter_d(element, outbuf, isgap);
-		else if (element->width == 32){
-			result = filter_s(element, outbuf, isgap);
-		}
+		push_zeros(element, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
+		if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 64)
+			result = filter_d(element, &mapinfo, TRUE, &output_length);
+		else if(GST_AUDIO_INFO_WIDTH(&(element->audio_info)) == 32)
+			result = filter_s(element, &mapinfo, TRUE, &output_length);
 	}
-	//fprintf(stderr, "TIMESTAMP %f, BUFFERSIZE %d\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_SIZE(inbuf) / sizeof(double));
+	gst_buffer_unmap(outbuf, &mapinfo);
 
-	int dmin, dmax;
-	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
-	dmin = 0;
-	/*fprintf(stderr, "IIR elem %29s : input timestamp %llu, input offset %llu, input next offset %llu\n",
-		GST_ELEMENT_NAME(element),
-		GST_BUFFER_TIMESTAMP(inbuf),
-		GST_BUFFER_OFFSET(inbuf),
-		GST_BUFFER_OFFSET_END(inbuf)
-		); */
-	//fprintf(stderr, "IIR elem %17s : input offset %llu, output offset %llu, %d, %d\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), GST_BUFFER_OFFSET(outbuf), dmin, dmax);
+	/*
+	 * set buffer metadata
+	 */
+
+	set_metadata(element, outbuf, output_length, FALSE);
+
 	/*
 	 * done
 	 */
@@ -913,17 +885,7 @@ static void finalize(GObject *object)
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gstlal_iirbank_base_init(gpointer gclass)
-{
+	G_OBJECT_CLASS(gstlal_iirbank_parent_class)->finalize(object);
 }
 
 
@@ -1051,7 +1013,7 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
  */
 
 
-static void gstlal_iirbank_init(GSTLALIIRBank *filter, GSTLALIIRBankClass *kclass)
+static void gstlal_iirbank_init(GSTLALIIRBank *filter)
 {
 	filter->adapter = gst_adapter_new();
 	filter->iir_matrix_lock = g_mutex_new();
