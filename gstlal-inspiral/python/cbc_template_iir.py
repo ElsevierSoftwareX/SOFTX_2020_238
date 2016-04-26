@@ -29,6 +29,8 @@ import tempfile
 
 import lal
 import lalsimulation
+import matplotlib
+matplotlib.use('Agg')
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from pylal import datatypes as laltypes
 from pylal import lalfft
