@@ -43,6 +43,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -65,7 +66,7 @@
  */
 
 
-GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
+G_DEFINE_TYPE(GstFrPad, gst_frpad, GST_TYPE_PAD);
 
 
 /*
@@ -135,21 +136,16 @@ GType gst_frpad_type_get_type(void)
 
 static gint get_bitrate(GstFrPad *pad)
 {
-	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstStructure *s;
-	gint samples_per_second, channels, bits_per_sample;
+	GstCaps *caps = gst_pad_get_current_caps(GST_PAD(pad));
+	GstAudioInfo info;
 	gboolean success = caps != NULL;
 
-	if(success)
-		success = (s = gst_caps_get_structure(caps, 0)) != NULL;
 	if(success) {
-		success &= gst_structure_get_int(s, "rate", &samples_per_second);
-		success &= gst_structure_get_int(s, "channels", &channels);
-		if(!gst_structure_get_int(s, "depth", &bits_per_sample))
-			success &= gst_structure_get_int(s, "width", &bits_per_sample);
+		success &= gst_audio_info_from_caps(&info, caps);
+		gst_caps_unref(caps);
 	}
 
-	return success ? bits_per_sample * samples_per_second * channels : -1;
+	return success ? GST_AUDIO_INFO_BPF(&info) * 8 * GST_AUDIO_INFO_RATE(&info) : -1;
 }
 
 
@@ -160,7 +156,7 @@ static void update_tag_list(GstFrPad *pad)
 
 	GST_OBJECT_LOCK(pad);
 
-	new_tags = gst_tag_list_new_full(
+	new_tags = gst_tag_list_new(
 		GST_TAG_CODEC, "RAW",
 		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
 		GSTLAL_TAG_INSTRUMENT, pad->instrument && g_strcmp0(pad->instrument, "") ? pad->instrument : " ",
@@ -443,13 +439,7 @@ static void finalize(GObject *object)
 	g_value_array_free(pad->history);
 	pad->history = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-static void gst_frpad_base_init(gpointer klass)
-{
-	/* no-op */
+	G_OBJECT_CLASS(gst_frpad_parent_class)->finalize(object);
 }
 
 
@@ -625,9 +615,9 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 }
 
 
-static void gst_frpad_init(GstFrPad *pad, GstFrPadClass *klass)
+static void gst_frpad_init(GstFrPad *pad)
 {
 	pad->history = g_value_array_new(0);
-	pad->tags = gst_tag_list_new();
+	pad->tags = gst_tag_list_new_empty();
 	g_signal_connect_after(pad, "notify::caps", (GCallback) caps_notify_handler, NULL);
 }

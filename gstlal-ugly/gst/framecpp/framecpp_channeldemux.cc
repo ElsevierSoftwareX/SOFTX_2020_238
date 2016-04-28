@@ -91,13 +91,12 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
-}
-
-
-GST_BOILERPLATE_FULL(GstFrameCPPChannelDemux, framecpp_channeldemux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstFrameCPPChannelDemux,
+	framecpp_channeldemux,
+	GST_TYPE_ELEMENT,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element")
+);
 
 
 /*
@@ -175,68 +174,61 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
 static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, gint *rate, guint *unit_size)
 {
 	GstCaps *caps;
-	gint width = vect->GetTypeSize() * 8;
-	*rate = round(1.0 / vect->GetDim(0).GetDx());
 
+	*unit_size = vect->GetTypeSize() * 1;	/* 1 channel */
+	*rate = round(1.0 / vect->GetDim(0).GetDx());
 	/* check that the sample period corresponds exactly to an integer
 	 * sample rate */
-
 	g_assert(1.0 / *rate == vect->GetDim(0).GetDx());
 
+	caps = gst_caps_new_simple("audio/x-raw",
+		"rate", G_TYPE_INT, *rate,
+		"channels", G_TYPE_INT, 1,
+		"layout", G_TYPE_STRING, "itnerleaved",
+		NULL
+	);
+
 	switch(vect->GetType()) {
-	case FrameCPP::FrVect::FR_VECT_4R:
-	case FrameCPP::FrVect::FR_VECT_8R:
-		caps = gst_caps_new_simple("audio/x-raw-float",
-			"rate", G_TYPE_INT, *rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
-	case FrameCPP::FrVect::FR_VECT_8C:
-	case FrameCPP::FrVect::FR_VECT_16C:
-		caps = gst_caps_new_simple("audio/x-raw-complex",
-			"rate", G_TYPE_INT, *rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
 	case FrameCPP::FrVect::FR_VECT_C:
-	case FrameCPP::FrVect::FR_VECT_2S:
-	case FrameCPP::FrVect::FR_VECT_4S:
-	case FrameCPP::FrVect::FR_VECT_8S:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, *rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,	/* FIXME:  for Adc use nBits */
-			"signed", G_TYPE_BOOLEAN, TRUE,
-			NULL);
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S8), NULL);
 		break;
-
 	case FrameCPP::FrVect::FR_VECT_1U:
-	case FrameCPP::FrVect::FR_VECT_2U:
-	case FrameCPP::FrVect::FR_VECT_4U:
-	case FrameCPP::FrVect::FR_VECT_8U:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, *rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,	/* FIXME;  for Adc use nBits */
-			"signed", G_TYPE_BOOLEAN, FALSE,
-			NULL);
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(U8), NULL);
 		break;
-
+	case FrameCPP::FrVect::FR_VECT_2S:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S16), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_2U:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(U16), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_4S:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S32), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_4U:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(U32), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_8S:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S64), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_8U:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(U64), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_4R:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(F32), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_8R:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(F64), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_8C:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(Z64), NULL);
+		break;
+	case FrameCPP::FrVect::FR_VECT_16C:
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(Z128), NULL);
+		break;
 	default:
 		g_assert_not_reached();
+		break;
 	}
-
-	*unit_size = 1 * width / 8;	/* 1 channel */
 
 	return caps;
 }
@@ -254,7 +246,7 @@ static void vectdata_free(FrameCPP::FrVect::data_type *ptr)
 }
 
 
-static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint *rate, guint *unit_size)
+static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint rate)
 {
 	GstBuffer *buffer;
 	FrameCPP::FrVect::data_type *data = new FrameCPP::FrVect::data_type;
@@ -262,41 +254,28 @@ static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect>
 	g_assert_cmpuint(vect->GetNDim(), ==, 1);
 
 	/*
-	 * allocate buffer
+	 * wrap data in buffer
 	 */
-
-	buffer = gst_buffer_new();
-	if(!buffer) {
-		/* silence possibly-uninitialized warnings */
-		*rate = *unit_size = 0;
-		return NULL;
-	}
-
-	/*
-	 * point buffer to data
-	 */
-
-	GST_BUFFER_MALLOCDATA(buffer) = (guint8 *) data;
-	buffer->free_func = (GFreeFunc) vectdata_free;
 
 	*data = vect->GetDataUncompressed();
-
-	GST_BUFFER_DATA(buffer) = data->get();
-	GST_BUFFER_SIZE(buffer) = vect->GetNBytes();
-
-	/*
-	 * set buffer format
-	 */
-
-	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect, rate, unit_size);
-	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
+	buffer = gst_buffer_new_wrapped_full(
+		(GstMemoryFlags) (GST_MEMORY_FLAG_READONLY | GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS),
+		data->get(),	/* address */
+		vect->GetNBytes(),	/* size */
+		0, vect->GetNBytes(),	/* byte range to use */
+		data, (GDestroyNotify) vectdata_free	/* parameter and func to free */
+	);
+	if(!buffer) {
+		vectdata_free(data);
+		return NULL;
+	}
 
 	/*
 	 * set timestamp and duration
 	 */
 
 	GST_BUFFER_TIMESTAMP(buffer) = timestamp + (GstClockTime) round(vect->GetDim(0).GetStartX() * GST_SECOND);
-	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, *rate);
+	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
 	GST_BUFFER_OFFSET(buffer) = offset;
 	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
 
@@ -314,11 +293,11 @@ static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect>
  */
 
 
-static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, GstSegment *segment, gint rate, gint unit_size)
+static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, const GstSegment *segment, gint rate, gint unit_size)
 {
 	guint offset, offset_end;
 
-	g_assert_cmpuint((GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) * unit_size, ==, GST_BUFFER_SIZE(buffer));
+	g_assert_cmpuint((GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) * unit_size, ==, gst_buffer_get_size(buffer));
 
 	if(GST_CLOCK_TIME_IS_VALID(segment->start)) {
 		if(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer) <= (guint64) segment->start) {
@@ -343,20 +322,18 @@ static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, GstSegment *segmen
 	g_assert_cmpuint(offset, <=, offset_end);
 
 	if(offset_end - offset != GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) {
-		/* buffer lies partially outside requested segment */
-		GstBuffer *newbuf = gst_buffer_create_sub(buffer, offset * unit_size, (offset_end - offset) * unit_size);
-		gst_buffer_copy_metadata(newbuf, buffer, (GstBufferCopyFlags) (GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS));
-		GST_BUFFER_TIMESTAMP(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
-		GST_BUFFER_DURATION(newbuf) = GST_BUFFER_TIMESTAMP(buffer) + gst_util_uint64_scale_int_round(offset_end, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(newbuf);
-		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buffer) + offset;
-		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(buffer) + offset_end;
-		GST_DEBUG("clipped buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT " to %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer), GST_BUFFER_BOUNDARIES_ARGS(newbuf));
-		gst_buffer_unref(buffer);
-		buffer = newbuf;
+		GST_DEBUG("clipping buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT " ...", GST_BUFFER_BOUNDARIES_ARGS(buffer));
+		gst_buffer_resize(buffer, offset * unit_size, (offset_end - offset) * unit_size);
+		GST_BUFFER_TIMESTAMP(buffer) += gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
+		GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int_round(offset_end, GST_SECOND, rate) - gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
+		GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET(buffer) + offset_end;
+		GST_BUFFER_OFFSET(buffer) += offset;
+		GST_DEBUG("... to %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	}
 
 	return buffer;
 }
+
 
 
 /*
@@ -544,10 +521,10 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 	 * forward most recent new segment event
 	 */
 
-	if(pad_state->need_new_segment && element->last_new_segment_event) {
-		GST_LOG_OBJECT(pad, "push %" GST_PTR_FORMAT, element->last_new_segment_event);
-		gst_event_ref(element->last_new_segment_event);
-		success = gst_pad_push_event(pad, element->last_new_segment_event);
+	if(pad_state->need_new_segment && element->last_segment_event) {
+		GST_LOG_OBJECT(pad, "push %" GST_PTR_FORMAT, element->last_segment_event);
+		gst_event_ref(element->last_segment_event);
+		success = gst_pad_push_event(pad, element->last_segment_event);
 		if(!success)
 			GST_ERROR_OBJECT(pad, "failed to push new segment");
 		else
@@ -563,7 +540,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 		g_object_get(pad, "tags", &tag_list, NULL);
 		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
 		GST_LOG_OBJECT(pad, "push new %" GST_PTR_FORMAT, tag_list);
-		gst_element_found_tags_for_pad(GST_ELEMENT(element), pad, tag_list);
+		gst_pad_push_event(pad, gst_event_new_tag(tag_list));
 		pad_state->need_tags = FALSE;
 	}
 
@@ -579,6 +556,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp)
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+	GstCaps *caps, *current_caps;
 	GstBuffer *buffer;
 	gint rate;
 	guint unit_size;
@@ -587,31 +565,34 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	g_assert(pad_state != NULL);
 
 	/*
+	 * retrieve caps
+	 */
+
+	caps = FrVect_get_caps(vect, &rate, &unit_size);
+
+	/*
 	 * convert FrVect to GstBuffer
 	 */
 
-	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, &rate, &unit_size);
+	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, rate);
 	g_assert(buffer != NULL);
 
 	/*
-	 * if the format matches the pad's replace the buffer's caps with
-	 * the pad's to reduce the number of objects in memory and simplify
-	 * subsequent comparisons.  NOTE:  the caps on the source pad get
-	 * set explicitly, here, to trigger any pipeline graph adjustments
-	 * that might happen as a result of the format discovery and to
-	 * trigger an update of the tags before pending segments and tags
-	 * are pushed downstream.
+	 * update the source pad's caps if needed.  this is done before
+	 * other events to allow the tag list to get updated if needed.
 	 */
 
-	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
-		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+	current_caps = gst_pad_get_current_caps(pad);
+	if(gst_caps_is_equal(caps, current_caps))
+		gst_caps_unref(caps);
 	else {
-		GST_LOG_OBJECT(pad, "new caps: %P", GST_BUFFER_CAPS(buffer));
-		gst_pad_set_caps(pad, GST_BUFFER_CAPS(buffer));
+		GST_LOG_OBJECT(pad, "new caps: %" GST_PTR_FORMAT, caps);
+		gst_pad_push_event(pad, gst_event_new_caps(caps));
 	}
+	gst_caps_unref(current_caps);
 
 	/*
-	 * do pending events.  FIXME:  check for errors?
+	 * do other pending events.  FIXME:  check for errors?
 	 */
 
 	src_pad_do_pending_events(element, pad);
@@ -620,12 +601,12 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * clip buffer to configured segment
 	 */
 
-	if(element->last_new_segment_event && element->segment.format == GST_FORMAT_TIME) {
+	if(element->last_segment_event && element->segment->format == GST_FORMAT_TIME) {
 #if 0
-		/* FIXME:  this function segfaults sometimes.  my guess is bad rounding because it happens more often for very low sample rates */
-		buffer = gst_audio_buffer_clip(buffer, &element->segment, rate, unit_size);
+		/* FIXME:  can we now rely on this? */
+		buffer = gst_audio_buffer_clip(buffer, element->segment, rate, unit_size);
 #else
-		buffer = my_gst_audio_buffer_clip(buffer, &element->segment, rate, unit_size);
+		buffer = my_gst_audio_buffer_clip(buffer, element->segment, rate, unit_size);
 #endif
 		if(!buffer) {
 			GST_WARNING_OBJECT(pad, "buffer outside of configured segment: dropped");
@@ -686,15 +667,6 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	src_pad_do_pending_events(element, pad);
 
 	/*
-	 * don't push a heart beat if the caps aren't set yet
-	 */
-
-	if(!GST_PAD_CAPS(pad)) {
-		GST_WARNING_OBJECT(pad, "caps not set, not pushing heart beat;  if this is a problem, consider setting caps on this pad manually");
-		return GST_FLOW_OK;
-	}
-
-	/*
 	 * create heartbeat buffer for this pad
 	 */
 
@@ -702,7 +674,6 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
 	GST_BUFFER_DURATION(buffer) = 0;
 	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
-	gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
 
 	/*
 	 * check for disconts
@@ -735,9 +706,9 @@ struct push_heart_beat_data {
 };
 
 
-static void push_heart_beat_iter_wrapper(gpointer object, gpointer anon_data)
+static void push_heart_beat_iter_wrapper(const GValue *item, gpointer anon_data)
 {
-	GstPad *pad = GST_PAD(object);
+	GstPad *pad = GST_PAD(g_value_get_object(item));
 	struct push_heart_beat_data *data = (struct push_heart_beat_data *) anon_data;
 
 	if(gst_pad_is_linked(pad))
@@ -747,8 +718,6 @@ static void push_heart_beat_iter_wrapper(gpointer object, gpointer anon_data)
 		 */
 
 		push_heart_beat(data->element, pad, data->timestamp);
-
-	gst_object_unref(pad);
 }
 
 
@@ -779,21 +748,9 @@ static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClo
  */
 
 
-static void gst_event_parse_new_segment_segment(GstEvent *event, GstSegment *segment)
+static void forward_sink_event(const GValue *item, gpointer data)
 {
-	gboolean update;
-	gdouble rate, applied_rate;
-	GstFormat format;
-	gint64 start, stop, position;
-
-	gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
-	gst_segment_set_newsegment_full(segment, update, rate, applied_rate, format, start, stop, position);
-}
-
-
-static void forward_sink_event(gpointer object, gpointer data)
-{
-	GstPad *pad = GST_PAD(object);
+	GstPad *pad = GST_PAD(g_value_get_object(item));
 	GstEvent *event = GST_EVENT(data);
 	if(gst_pad_is_linked(pad)) {
 		/*
@@ -803,29 +760,29 @@ static void forward_sink_event(gpointer object, gpointer data)
 		gst_event_ref(event);
 		gst_pad_push_event(pad, event);
 	}
-	gst_object_unref(pad);
 }
 
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(parent);
 	GstIterator *iter;
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
-		if(element->last_new_segment_event)
-			gst_event_unref(element->last_new_segment_event);
+	case GST_EVENT_SEGMENT:
+		if(element->last_segment_event)
+			gst_event_unref(element->last_segment_event);
 		gst_event_ref(event);
-		element->last_new_segment_event = event;
-		gst_event_parse_new_segment_segment(event, &element->segment);
+		element->last_segment_event = event;
+		gst_event_parse_segment(event, &element->segment);
 		break;
 
 	case GST_EVENT_EOS:
-		if(element->last_new_segment_event)
-			gst_event_unref(element->last_new_segment_event);
-		element->last_new_segment_event = NULL;
+		if(element->last_segment_event)
+			gst_event_unref(element->last_segment_event);
+		element->last_segment_event = NULL;
+		element->segment = NULL;
 		/*
 		 * if there are no source pads, the EOS event will not be
 		 * recieved by any sink elements, it will not get posted to
@@ -848,7 +805,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	gst_iterator_free(iter);
 
 	gst_event_unref(event);
-	gst_object_unref(element);
 	return success;
 }
 
@@ -858,19 +814,22 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 {
-	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(parent);
+	GstMapInfo mapinfo;
 	gboolean pads_added = FALSE;
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
+
+	gst_buffer_map(inbuf, &mapinfo, GST_MAP_READ);
 
 	/*
 	 * special case:  0-length input buffers are treated as heart
 	 * beats, we forward a heart beat out each source pad
 	 */
 
-	if(!GST_BUFFER_SIZE(inbuf)) {
+	if(!mapinfo.size) {
 		result = forward_heart_beat(element, GST_BUFFER_TIMESTAMP(inbuf));
 		goto done;
 	}
@@ -886,19 +845,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			/*
 			 * File Checksum verification
 			 *
-			 * This additional scope allows for cleanup of variables used
-			 * only for the file checksum validation.
-			 * Resources are returned to the system as the variables go
-			 * out of scope.
+			 * This additional scope allows for cleanup of
+			 * variables used only for the file checksum
+			 * validation.  Resources are returned to the
+			 * system as the variables go out of scope.
 			 */
 
 			FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
-			ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
+			ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
 			FrameCPP::IFrameStream ifs(ibuf);
 
 			FrameCPP::Common::Verify verifier;
 
-			verifier.BufferSize(GST_BUFFER_SIZE(inbuf));
+			verifier.BufferSize(mapinfo.size);
 			verifier.UseMemoryMappedIO(false);
 			verifier.CheckDataValid(false);	/* FIXME:  what's this? */
 			verifier.Expandability(false);
@@ -907,12 +866,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			verifier.ValidateMetadata(false);
 			verifier.CheckFileChecksumOnly(true);
 
+			/* FIXME:  this no longer compiles
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo());
+			*/
 		}
 
 		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
-		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
+		ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
 		FrameCPP::IFrameStream ifs(ibuf);
 
 		/*
@@ -1278,8 +1239,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 done:
 	if(pads_added)
 		gst_element_no_more_pads(GST_ELEMENT(element));
+	gst_buffer_unmap(inbuf, &mapinfo);
 	gst_buffer_unref(inbuf);
-	gst_object_unref(element);
 	return result;
 }
 
@@ -1430,9 +1391,10 @@ static void finalize(GObject * object)
 {
 	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
 
-	if(element->last_new_segment_event)
-		gst_event_unref(element->last_new_segment_event);
-	element->last_new_segment_event = NULL;
+	if(element->last_segment_event)
+		gst_event_unref(element->last_segment_event);
+	element->last_segment_event = NULL;
+	element->segment = NULL;
 	g_hash_table_unref(element->channel_list);
 	element->channel_list = NULL;
 	gst_tag_list_free(element->tag_list);
@@ -1444,7 +1406,7 @@ static void finalize(GObject * object)
 	g_value_array_free(element->frame_history);
 	element->frame_history = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(framecpp_channeldemux_parent_class)->finalize(object);
 }
 
 
@@ -1458,51 +1420,13 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_SOMETIMES,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) {32, 64}; "\
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 8, " \
-			"depth = (int) [1, 8], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 16, " \
-			"depth = (int) [1, 16], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 32, " \
-			"depth = (int) [1, 32], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 64, " \
-			"depth = (int) [1, 64], " \
-			"signed = (boolean) {true, false};" \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = (int) 1, " \
+		"format = (string) {" GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+		"layout = (string) interleaved"
 	)
 );
-
-
-/*
- * base_init()
- */
-
-
-static void framecpp_channeldemux_base_init(gpointer klass)
-{
-}
 
 
 /*
@@ -1677,7 +1601,7 @@ static void framecpp_channeldemux_class_init(GstFrameCPPChannelDemuxClass *klass
  */
 
 
-static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element, GstFrameCPPChannelDemuxClass *klass)
+static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element)
 {
 	GstPad *pad;
 
@@ -1690,9 +1614,9 @@ static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element, GstFram
 	gst_object_unref(pad);
 
 	/* internal data */
-	element->last_new_segment_event = NULL;
+	element->last_segment_event = NULL;
 	element->channel_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-	element->tag_list = gst_tag_list_new();
+	element->tag_list = gst_tag_list_new_empty();
 	element->frame_format_version = DEFAULT_FRAME_FORMAT_VERSION;
 	element->frame_library_version = DEFAULT_FRAME_LIBRARY_VERSION;
 	element->frame_library_name = g_strdup(DEFAULT_FRAME_LIBRARY_NAME);

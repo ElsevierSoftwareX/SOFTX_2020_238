@@ -65,7 +65,20 @@ typedef struct {
 
 	GstClockTime file_start_time;
 	GstClockTime file_stop_time;
+
+	/*
+	 * location of structure currently being decoded
+	 */
+
 	size_t offset;
+
+	/*
+	 * current determination of file size.  grows as additional
+	 * structures are identified in the byte stream until an
+	 * end-of-file structure is found
+	 */
+
+	size_t filesize;
 } GstFrameCPPIGWDParse;
 
 

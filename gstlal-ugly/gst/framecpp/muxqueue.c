@@ -46,7 +46,7 @@
  */
 
 
-GST_BOILERPLATE(FrameCPPMuxQueue, framecpp_muxqueue, GstAudioAdapter, GST_TYPE_AUDIOADAPTER);
+G_DEFINE_TYPE(FrameCPPMuxQueue, framecpp_muxqueue, GST_TYPE_AUDIOADAPTER);
 
 
 /*
@@ -240,7 +240,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 		/* correct timestamp and duration of first buffer */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
 		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_TIMESTAMP(origbuf);
-		result->data = gst_buffer_make_metadata_writable(GST_BUFFER(result->data));
+		result->data = gst_buffer_make_writable(GST_BUFFER(result->data));
 		g_assert_cmpint(delta, >=, 0);
 		g_assert_cmpuint(delta, <=, GST_BUFFER_DURATION(origbuf));
 		GST_BUFFER_TIMESTAMP(result->data) = GST_BUFFER_TIMESTAMP(origbuf) + delta;
@@ -256,7 +256,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	}
 	if(head) {
 		/* correct duration of last buffer */
-		GstBuffer *buf = head->data = gst_buffer_make_metadata_writable(GST_BUFFER(head->data));
+		GstBuffer *buf = head->data = gst_buffer_make_writable(GST_BUFFER(head->data));
 		GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf), GST_SECOND, queue->rate);
 	}
 
@@ -326,7 +326,7 @@ static void dispose(GObject *object)
 {
 	framecpp_muxqueue_set_flushing(FRAMECPP_MUXQUEUE(object), TRUE);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(framecpp_muxqueue_parent_class)->dispose(object);
 }
 
 
@@ -339,13 +339,7 @@ static void finalize(GObject *object)
 	g_cond_free(queue->activity);
 	queue->activity = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-static void framecpp_muxqueue_base_init(gpointer klass)
-{
-	/* no-op */
+	G_OBJECT_CLASS(framecpp_muxqueue_parent_class)->finalize(object);
 }
 
 
@@ -398,7 +392,7 @@ static void framecpp_muxqueue_class_init(FrameCPPMuxQueueClass *klass)
 }
 
 
-static void framecpp_muxqueue_init(FrameCPPMuxQueue *queue, FrameCPPMuxQueueClass *klass)
+static void framecpp_muxqueue_init(FrameCPPMuxQueue *queue)
 {
 	queue->lock = g_mutex_new();
 	queue->activity = g_cond_new();

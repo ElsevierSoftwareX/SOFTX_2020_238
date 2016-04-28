@@ -46,6 +46,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -95,13 +96,12 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channelmux", 0, "framecpp_channelmux element");
-}
-
-
-GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstFrameCPPChannelMux,
+	framecpp_channelmux,
+	GST_TYPE_ELEMENT,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channelmux", 0, "framecpp_channelmux element")
+);
 
 
 /*
@@ -173,14 +173,14 @@ static void update_instruments(GstFrameCPPChannelMux *mux)
 	g_hash_table_remove_all(mux->instruments);
 
 	while(TRUE) {
-		GstPad *pad;
+		GValue item = {0,};
 		gchar *instrument = NULL;
-		switch(gst_iterator_next(it, (void **) &pad)) {
+		switch(gst_iterator_next(it, &item)) {
 		case GST_ITERATOR_OK:
-			g_object_get(pad, "instrument", &instrument, NULL);
+			g_object_get(g_value_get_object(&item), "instrument", &instrument, NULL);
 			if(instrument)
 				g_hash_table_replace(mux->instruments, instrument, instrument);
-			gst_object_unref(pad);
+			g_value_reset(&item);
 			break;
 
 		case GST_ITERATOR_RESYNC:
@@ -233,7 +233,7 @@ static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data
 
 static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 {
-	GstTagList *tag_list = gst_tag_list_new();
+	GstTagList *tag_list = gst_tag_list_new_empty();
 	GHashTableIter it;
 	gchar *instrument;
 
@@ -255,6 +255,7 @@ static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstClockTime gwf_t_start, GstClockTime gwf_t_end)
 {
 	GstBuffer *outbuf = NULL;
+	GstMapInfo mapinfo;	/* used for input and output buffers */
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert_cmpuint(gwf_t_start, <=, gwf_t_end);
@@ -429,7 +430,9 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					GST_LOG_OBJECT(data->pad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
 					appdata->dims[0].SetNx(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
 					appdata->dims[0].SetStartX((double) GST_CLOCK_DIFF(frame_t_start, buffer_t_start) / GST_SECOND - timeOffset);
-					container->append(FrameCPP::FrVect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, GST_BUFFER_DATA(buffer), frpad->units));
+					gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
+					container->append(FrameCPP::FrVect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, mapinfo.data, frpad->units));
+					gst_buffer_unmap(buffer, &mapinfo);
 					gst_buffer_unref(buffer);
 				}
 			}
@@ -451,20 +454,24 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		ofs.Close();
 
 		/* FIXME:  can this be done without a memcpy()? */
-		result = gst_pad_alloc_buffer(mux->srcpad, mux->next_out_offset, obuf->str().length(), GST_PAD_CAPS(mux->srcpad), &outbuf);
-		if(result != GST_FLOW_OK) {
+		outbuf = gst_buffer_new_allocate(NULL, obuf->str().length(), NULL);
+		if(!outbuf) {
 			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_alloc_buffer() failed (%s)", gst_flow_get_name(result)));
+			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		memcpy(mapinfo.data, &(obuf->str()[0]), mapinfo.size);
 		if(mux->need_discont) {
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 			mux->need_discont = FALSE;
 		}
 		GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
 		GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
-		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
+		GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + mapinfo.size;
 		mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
+		gst_buffer_unmap(outbuf, &mapinfo);
 	} catch(const std::exception& Exception) {
 		GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
 		result = GST_FLOW_ERROR;
@@ -528,7 +535,7 @@ static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
 	if(mux->need_tag_list) {
 		update_instruments(mux);
 		if(g_hash_table_size(mux->instruments))
-			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+			gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)));
 		else
 			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
 		mux->need_tag_list = FALSE;
@@ -581,7 +588,7 @@ static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data
 		/* quick hack to unflush the pads. ideally we need  a way
 		 * to just unflush this single collect pad */
 		if(data->flush)
-			gst_pad_send_event(pad, gst_event_new_flush_stop());
+			gst_pad_send_event(pad, gst_event_new_flush_stop(FALSE));
 	} else {
 		g_value_set_boolean(ret, TRUE);
 	}
@@ -634,9 +641,9 @@ done:
  */
 
 
-static gboolean src_event(GstPad *pad, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -669,7 +676,6 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 		break;
 	}
 
-	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
 
@@ -688,78 +694,68 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
  */
 
 
-static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
+static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
 	framecpp_channelmux_appdata *appdata = get_appdata(data);
-	GstStructure *structure;
+	GstAudioInfo info;
 	FrameCPP::FrVect::data_types_type type;
-	int width, channels, rate;
-	const gchar *media_type;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	media_type = gst_structure_get_name(structure);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	if(!success)
-		GST_ERROR_OBJECT(pad, "cannot parse width, channels, and/or rate from %" GST_PTR_FORMAT, caps);
-	if(!strcmp(media_type, "audio/x-raw-int")) {
-		gboolean is_signed;
-		success &= gst_structure_get_boolean(structure, "signed", &is_signed);
-		switch(width) {
-		case 8:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_C : FrameCPP::FrVect::FR_VECT_1U;
+	success &= gst_audio_info_from_caps(&info, caps);
+	if(success) {
+		const gchar *name = GST_AUDIO_INFO_NAME(&info);
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_S8:
+			type = FrameCPP::FrVect::FR_VECT_C;
 			break;
-		case 16:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_2S : FrameCPP::FrVect::FR_VECT_2U;
+		case GST_AUDIO_FORMAT_U8:
+			type = FrameCPP::FrVect::FR_VECT_1U;
 			break;
-		case 32:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_4S : FrameCPP::FrVect::FR_VECT_4U;
+		case GST_AUDIO_FORMAT_S16:
+			type = FrameCPP::FrVect::FR_VECT_2S;
 			break;
-		case 64:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_8S : FrameCPP::FrVect::FR_VECT_8U;
+		case GST_AUDIO_FORMAT_U16:
+			type = FrameCPP::FrVect::FR_VECT_2U;
 			break;
-		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
-			success = FALSE;
+		case GST_AUDIO_FORMAT_S32:
+			type = FrameCPP::FrVect::FR_VECT_4S;
 			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-float")) {
-		switch(width) {
-		case 32:
+		case GST_AUDIO_FORMAT_U32:
+			type = FrameCPP::FrVect::FR_VECT_4U;
+			break;
+		/* FIXME no longer natively supported by gstreamer */
+		/*case GST_AUDIO_FORMAT_S64:
+			type = FrameCPP::FrVect::FR_VECT_8S;
+			break;
+		case GST_AUDIO_FORMAT_U64:
+			type = FrameCPP::FrVect::FR_VECT_8U;
+			break;*/
+		case GST_AUDIO_FORMAT_F32:
 			type = FrameCPP::FrVect::FR_VECT_4R;
 			break;
-		case 64:
+		case GST_AUDIO_FORMAT_F64:
 			type = FrameCPP::FrVect::FR_VECT_8R;
 			break;
 		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
-			success = FALSE;
+			/*
+			 * Handle the complex types which are "special" formats
+			 */
+			if(!strncmp(name, "Z64", 3))
+				type = FrameCPP::FrVect::FR_VECT_8C;
+			else if(!strncmp(name, "Z128", 4))
+				type = FrameCPP::FrVect::FR_VECT_16C;
+			else {
+				GST_ERROR_OBJECT(pad, "unsupported format %" GST_PTR_FORMAT, caps);
+				success = FALSE;
+			}
 			break;
 		}
-	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		switch(width) {
-		case 64:
-			type = FrameCPP::FrVect::FR_VECT_8C;
-			break;
-		case 128:
-			type = FrameCPP::FrVect::FR_VECT_16C;
-			break;
-		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
-			success = FALSE;
-			break;
-		}
-	} else {
-		GST_ERROR_OBJECT(pad, "unsupported media type %s", media_type);
-		success = FALSE;
 	}
 
 	if(success) {
@@ -769,15 +765,14 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 		FRAMECPP_MUXQUEUE_LOCK(data->queue);
 		/* FIXME:  flush queue on format change */
 		appdata->type = type;
-		appdata->dims[0].SetDx(1.0 / (double) rate);
-		appdata->rate = rate;
-		appdata->unit_size = width / 8 * channels;
+		appdata->dims[0].SetDx(1.0 / (double) GST_AUDIO_INFO_RATE(&info));
+		appdata->rate = GST_AUDIO_INFO_RATE(&info);
+		appdata->unit_size = GST_AUDIO_INFO_BPF(&info);
 		g_object_set(queue, "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
 		FRAMECPP_MUXQUEUE_UNLOCK(data->queue);
 		GST_OBJECT_UNLOCK(mux->collect);
 	}
 
-	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
 
@@ -787,14 +782,20 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
+	case GST_EVENT_SEGMENT:
 		mux->need_discont = TRUE;
+		break;
+
+	case GST_EVENT_CAPS:
+		GstCaps *caps;
+		gst_event_parse_caps(event, &caps);
+		sink_setcaps(pad, parent, caps);
 		break;
 
 	case GST_EVENT_TAG: {
@@ -858,7 +859,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	gst_pad_push_event(mux->srcpad, event);
 
 done:
-	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
 
@@ -883,8 +883,9 @@ static void notify_instrument_handler(GObject *object, GParamSpec *pspec, gpoint
  * already in use
  */
 
+/* FIXME:  should the caps be used somehow? */
 
-static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const gchar *name)
+static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const gchar *name, const GstCaps *caps)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(element);
 	FrameCPPMuxCollectPadsData *data;
@@ -897,7 +898,6 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	pad = gst_frpad_new_from_template(templ, name);
 	if(!pad)
 		goto no_pad;
-	gst_pad_set_setcaps_function(GST_PAD(pad), GST_DEBUG_FUNCPTR(sink_setcaps));
 	g_signal_connect(G_OBJECT(pad), "notify::instrument", G_CALLBACK(notify_instrument_handler), NULL);
 
 	/*
@@ -984,7 +984,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 	if(mux->need_tag_list) {
 		update_instruments(mux);
 		if(g_hash_table_size(mux->instruments))
-			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+			gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)));
 		else
 			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
 		mux->need_tag_list = FALSE;
@@ -1033,7 +1033,7 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 		break;
 	}
 
-	result = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+	result = GST_ELEMENT_CLASS(framecpp_channelmux_parent_class)->change_state(element, transition);
 
 	return result;
 }
@@ -1180,7 +1180,7 @@ static void finalize(GObject * object)
 	g_value_array_free(element->frame_history);
 	element->frame_history = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(framecpp_channelmux_parent_class)->finalize(object);
 }
 
 
@@ -1194,51 +1194,13 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) {32, 64}; "\
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 8, " \
-			"depth = (int) [1, 8], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 16, " \
-			"depth = (int) [1, 16], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 32, " \
-			"depth = (int) [1, 32], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 64, " \
-			"depth = (int) [1, 64], " \
-			"signed = (boolean) {true, false};" \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = (int) 1, " \
+		"format = (string) {" GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+		"layout = (string) interleaved"
 	)
 );
-
-
-/*
- * base_init()
- */
-
-
-static void framecpp_channelmux_base_init(gpointer klass)
-{
-}
 
 
 /*
@@ -1391,7 +1353,7 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
  */
 
 
-static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChannelMuxClass *kclass)
+static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux)
 {
 	gst_element_create_all_pads(GST_ELEMENT(mux));
 

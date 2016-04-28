@@ -69,18 +69,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
-}
-
-
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GstFrameCPPIGWDParse,
 	framecpp_igwdparse,
-	GstBaseParse,
 	GST_TYPE_BASE_PARSE,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_igwdparse", 0, "framecpp_igwdparse element")
 );
 
 
@@ -249,6 +242,8 @@ static gboolean start(GstBaseParse *parse)
 	/*
 	 * GstBaseParse lobotomizes itself on paused-->ready transitions,
 	 * so this stuff needs to be set here every time
+	 *
+	 * FIXME:  see if this can now be moved to init()
 	 */
 
 	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
@@ -281,9 +276,7 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 	success &= gst_structure_get_boolean(s, "framed", &framed);
 
 	if(success) {
-		GstCaps *srccaps = gst_caps_copy(gst_pad_get_pad_template_caps(srcpad));
-		success &= gst_pad_set_caps(srcpad, srccaps);
-		gst_caps_unref(srccaps);
+		gst_pad_push_event(srcpad, gst_event_new_caps(gst_pad_get_pad_template_caps(srcpad)));
 
 		/*
 		 * pass-through if input is already framed
@@ -300,15 +293,17 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 
 
 /*
- * check_valid_frame()
+ * handle_frame()
  */
 
 
-static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame, guint *framesize, gint *skipsize)
+static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame, gint *skipsize)
 {
 	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
-	const guchar *data = GST_BUFFER_DATA(frame->buffer);
-	gboolean file_is_complete = FALSE;
+	GstMapInfo mapinfo;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	gst_buffer_map(frame->buffer, &mapinfo, GST_MAP_READ);
 
 	*skipsize = 0;
 
@@ -326,19 +321,19 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * FIXME:  use framecpp to parse / validate header?
 			 */
 
-			g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);
+			g_assert_cmpuint(mapinfo.size, >=, SIZEOF_FRHEADER);
 
 			/*
 			 * word sizes and endianness
 			 */
 
-			element->sizeof_int_2 = *(data + 7);
-			element->sizeof_int_4 = *(data + 8);
-			element->sizeof_int_8 = *(data + 9);
-			g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
-			if(GST_READ_UINT16_LE(data + 12) == 0x1234)
+			element->sizeof_int_2 = *(mapinfo.data + 7);
+			element->sizeof_int_4 = *(mapinfo.data + 8);
+			element->sizeof_int_8 = *(mapinfo.data + 9);
+			g_assert_cmpuint(*(mapinfo.data + 11), ==, 8);	/* sizeof(REAL_8) */
+			if(GST_READ_UINT16_LE(mapinfo.data + 12) == 0x1234)
 				element->endianness = G_LITTLE_ENDIAN;
-			else if(GST_READ_UINT16_BE(data + 12) == 0x1234)
+			else if(GST_READ_UINT16_BE(mapinfo.data + 12) == 0x1234)
 				element->endianness = G_BIG_ENDIAN;
 			else {
 				GST_ERROR_OBJECT(element, "unable to determine endianness");
@@ -371,7 +366,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 */
 
 			element->offset = SIZEOF_FRHEADER;
-			*framesize = element->offset + element->sizeof_table_6;
+			element->filesize = element->offset + element->sizeof_table_6;
 		} else {
 			guint64 structure_length;
 			guint16 klass;
@@ -380,8 +375,8 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * parse table 6, update file size
 			 */
 
-			parse_table_6(element, data + element->offset, &structure_length, &klass);
-			*framesize = element->offset + structure_length;
+			parse_table_6(element, mapinfo.data + element->offset, &structure_length, &klass);
+			element->filesize = element->offset + structure_length;
 
 			/*
 			 * what to do?
@@ -395,13 +390,13 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 * next structure
 				 */
 
-				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+				if(element->filesize <= mapinfo.size) {
 					GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
-					parse_table_7(element, data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
+					parse_table_7(element, mapinfo.data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
 					element->offset += structure_length;
-					*framesize += element->sizeof_table_6;
+					element->filesize += element->sizeof_table_6;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
 			} else if(klass == element->frameh_klass) {
 				/*
 				 * found frame header structure.  if it's complete,
@@ -409,30 +404,73 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 * next structure
 				 */
 
-				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+				if(element->filesize <= mapinfo.size) {
 					GstClockTime start_time, stop_time;
 					GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
-					parse_table_9(element, data + element->offset, structure_length, &start_time, &stop_time);
+					parse_table_9(element, mapinfo.data + element->offset, structure_length, &start_time, &stop_time);
 
 					element->file_start_time = MIN(element->file_start_time, start_time);
 					element->file_stop_time = MAX(element->file_stop_time, stop_time);
 
 					element->offset += structure_length;
-					*framesize += element->sizeof_table_6;
+					element->filesize += element->sizeof_table_6;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
 			} else if(klass == element->eof_klass) {
 				/*
 				 * found end-of-file structure.  if it's complete
 				 * then the file is complete
 				 */
 
-				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) structure_length, element->offset, *framesize);
+				if(element->filesize <= mapinfo.size) {
+					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %zu byte frame file", (guint) structure_length, element->offset, element->filesize);
+
+					/*
+					 * the base class sets offset and
+					 * offset end to the byte offsets
+					 * spanned by this file.  we are
+					 * responsible for the timestamp
+					 * and duration
+					 */
+
+					GST_BUFFER_TIMESTAMP(frame->buffer) = element->file_start_time;
+					GST_BUFFER_DURATION(frame->buffer) = element->file_stop_time - element->file_start_time;
+
+					/*
+					 * mark this frame file's timestamp
+					 * in the bytestream.  the start of
+					 * a file is equivalent to the
+					 * concept of a "key frame"
+					 */
+
+					gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_TIMESTAMP(frame->buffer), TRUE, FALSE);
+
+					/*
+					 * in practice, a collection of
+					 * frame files will all be the same
+					 * duration, so once we've measured
+					 * the duration of one we've got a
+					 * good guess for the mean frame
+					 * rate
+					 */
+
+					gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(frame->buffer), 0, 0);
+
+					/*
+					 * done
+					 */
+
+					GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
+					result = gst_base_parse_finish_frame(parse, frame, element->filesize);
+
+					/*
+					 * reset for next file, and exit loop
+					 */
+
 					element->offset = 0;
-					file_is_complete = TRUE;
+					break;
 				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) structure_length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
 			} else {
 				/*
 				 * found something else.  skip to next structure
@@ -440,55 +478,13 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 				GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) structure_length, element->offset);
 				element->offset += structure_length;
-				*framesize += element->sizeof_table_6;
+				element->filesize += element->sizeof_table_6;
 			}
 		}
-	} while(!file_is_complete && *framesize <= GST_BUFFER_SIZE(frame->buffer));
+	} while(element->filesize <= mapinfo.size);
 
-	return file_is_complete;
-}
+	gst_buffer_unmap(frame->buffer, &mapinfo);
 
-
-/*
- * parse_frame()
- */
-
-
-static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
-{
-	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
-	GstBuffer *buffer = frame->buffer;
-	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * the base class sets offset and offset end to the byte offsets
-	 * spanned by this file.  we are responsible for the timestamp and
-	 * duration
-	 */
-
-	GST_BUFFER_TIMESTAMP(buffer) = element->file_start_time;
-	GST_BUFFER_DURATION(buffer) = element->file_stop_time - element->file_start_time;
-
-	/*
-	 * mark this frame file's timestamp in the bytestream.  the start
-	 * of a file is equivalent to the concept of a "key frame"
-	 */
-
-	gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(buffer), GST_BUFFER_TIMESTAMP(buffer), TRUE, FALSE);
-
-	/*
-	 * in practice, a collection of frame files will all be the same
-	 * duration, so once we've measured the duration of one we've got a
-	 * good guess for the mean frame rate
-	 */
-
-	gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(buffer), 0, 0);
-
-	/*
-	 * done
-	 */
-
-	GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	return result;
 }
 
@@ -511,17 +507,7 @@ static void finalize(GObject *object)
 {
 	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(object);
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void framecpp_igwdparse_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(framecpp_igwdparse_parent_class)->finalize(object);
 }
 
 
@@ -562,8 +548,7 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 
 	parse_class->start = GST_DEBUG_FUNCPTR(start);
 	parse_class->set_sink_caps = GST_DEBUG_FUNCPTR(set_sink_caps);
-	parse_class->check_valid_frame = GST_DEBUG_FUNCPTR(check_valid_frame);
-	parse_class->parse_frame = GST_DEBUG_FUNCPTR(parse_frame);
+	parse_class->handle_frame = GST_DEBUG_FUNCPTR(handle_frame);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -583,6 +568,7 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
  */
 
 
-static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *element, GstFrameCPPIGWDParseClass *klass)
+static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *element)
 {
+	/* see start() override */
 }
